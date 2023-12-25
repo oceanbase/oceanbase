@@ -46,7 +46,7 @@ public:
     meta_handler_(nullptr),
     mutex_() {}
 
-  ~ObTenantSnapshot() {}
+  ~ObTenantSnapshot() { reset(); }
   int destroy();
 
   int init(const share::ObTenantSnapshotID& tenant_snapshot_id,
@@ -55,15 +55,17 @@ public:
 
   void reset()
   {
-    is_inited_ = false;
-    is_running_ = false;
-    tenant_snapshot_id_.reset();
-    has_unfinished_create_dag_ = false;
-    has_unfinished_gc_dag_ = false;
-    clone_ref_ = 0;
-    meta_existed_ = false;
-    ls_snapshot_mgr_ = nullptr;
-    meta_handler_ = nullptr;
+    if (IS_INIT) {
+      is_running_ = false;
+      tenant_snapshot_id_.reset();
+      has_unfinished_create_dag_ = false;
+      has_unfinished_gc_dag_ = false;
+      clone_ref_ = 0;
+      meta_existed_ = false;
+      ls_snapshot_mgr_ = nullptr;
+      meta_handler_ = nullptr;
+      is_inited_ = false;
+    }
   }
 
 public:

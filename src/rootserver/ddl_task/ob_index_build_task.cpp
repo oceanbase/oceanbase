@@ -21,6 +21,8 @@
 #include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
 #include "share/scn.h"
+#include "share/schema/ob_mlog_info.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -1309,6 +1311,9 @@ int ObIndexBuildTask::enable_index()
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("index status not match", K(ret), K(index_table_id_), K(index_status));
         }
+      } else if ((ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_)
+          && OB_FAIL(update_mlog_last_purge_scn())) {
+        LOG_WARN("failed to update mlog last purge scn", KR(ret));
       } else if (OB_FAIL(update_index_status_in_schema(*index_schema, INDEX_STATUS_AVAILABLE))) {
         LOG_WARN("fail to try notify index take effect", K(ret), K(index_table_id_));
       } else {
@@ -1694,4 +1699,40 @@ int64_t ObIndexBuildTask::get_serialize_param_size() const
       + serialization::encoded_length_i64(check_unique_snapshot_)
       + ObDDLTask::get_serialize_param_size()
       + serialization::encoded_length_i64(target_cg_cnt_);
+}
+
+int ObIndexBuildTask::update_mlog_last_purge_scn()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    ObMySQLTransaction trans;
+    ObMLogInfo mlog_info;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+      LOG_WARN("failed to start trans", KR(ret), K_(tenant_id));
+    } else if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans,
+        tenant_id_, index_table_id_, mlog_info, true/*for_update*/))) {
+      LOG_WARN("failed to fetch mlog info", KR(ret));
+    } else {
+      mlog_info.set_last_purge_scn(snapshot_version_);
+      mlog_info.set_last_purge_date(ObTimeUtility::current_time());
+      mlog_info.set_last_purge_time(0);
+      mlog_info.set_last_purge_rows(0);
+      if (OB_FAIL(mlog_info.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str()))) {
+        LOG_WARN("failed to set last purge trace id", KR(ret));
+      } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans, mlog_info))) {
+        LOG_WARN("failed to update mlog last purge info", KR(ret), K(mlog_info));
+      }
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+  }
+  return ret;
 }

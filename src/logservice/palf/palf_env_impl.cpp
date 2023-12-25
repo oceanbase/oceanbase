@@ -182,6 +182,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_rpc_(),
                              cb_thread_pool_(),
                              log_io_worker_wrapper_(),
+                             log_shared_queue_th_(),
                              block_gc_timer_task_(),
                              log_updater_(),
                              monitor_(NULL),
@@ -243,6 +244,8 @@ int PalfEnvImpl::init(
                                                  cb_thread_pool_.get_tg_id(),
                                                  log_alloc_mgr, this))) {
     PALF_LOG(ERROR, "LogIOWorker init failed", K(ret));
+  } else if (OB_FAIL(log_shared_queue_th_.init(this))) {
+    PALF_LOG(ERROR, "LogSharedQueueTh init failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.init(this))) {
     PALF_LOG(ERROR, "ObCheckLogBlockCollectTask init failed", K(ret));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", base_dir)) && false) {
@@ -293,6 +296,8 @@ int PalfEnvImpl::start()
     PALF_LOG(ERROR, "LogIOTaskThreadPool start failed", K(ret));
   } else if (OB_FAIL(log_io_worker_wrapper_.start())) {
     PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
+  } else if (OB_FAIL(log_shared_queue_th_.start())) {
+    PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.start())) {
     PALF_LOG(ERROR, "FileCollectTimerTask start failed", K(ret));
 	} else if (OB_FAIL(fetch_log_engine_.start())) {
@@ -314,6 +319,7 @@ void PalfEnvImpl::stop()
     PALF_LOG(INFO, "PalfEnvImpl begin stop", KPC(this));
     is_running_ = false;
     log_io_worker_wrapper_.stop();
+    log_shared_queue_th_.stop();
     cb_thread_pool_.stop();
     block_gc_timer_task_.stop();
     fetch_log_engine_.stop();
@@ -327,6 +333,7 @@ void PalfEnvImpl::wait()
 {
   PALF_LOG(INFO, "PalfEnvImpl begin wait", KPC(this));
   log_io_worker_wrapper_.wait();
+  log_shared_queue_th_.wait();
   cb_thread_pool_.wait();
   block_gc_timer_task_.wait();
   fetch_log_engine_.wait();
@@ -342,6 +349,7 @@ void PalfEnvImpl::destroy()
   is_inited_ = false;
   palf_handle_impl_map_.destroy();
   log_io_worker_wrapper_.destroy();
+  log_shared_queue_th_.destroy();
   cb_thread_pool_.destroy();
   log_loop_thread_.destroy();
   block_gc_timer_task_.destroy();
@@ -419,7 +427,8 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PALF_LOG(WARN, "prepare_directory_for_creating_ls failed!!!", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_,
-      log_io_worker_wrapper_.get_log_io_worker(palf_id), this, self_, &election_timer_, palf_epoch))) {
+      log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_, this,
+      self_, &election_timer_, palf_epoch))) {
     PALF_LOG(ERROR, "IPalfHandleImpl init failed", K(ret), K(palf_id));
     // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
@@ -436,7 +445,7 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PalfHandleImplFactory::free(palf_handle_impl);
     palf_handle_impl = NULL;
     if (OB_ENTRY_NOT_EXIST == palf_handle_impl_map_.contains_key(hash_map_key)) {
-      remove_directory(base_dir);
+      remove_directory_while_exist_(base_dir);
     }
   }
 
@@ -560,8 +569,8 @@ int PalfEnvImpl::create_directory(const char *base_dir)
     PALF_LOG(INFO, "prepare_directory_for_creating_ls success", K(ret), K(base_dir));
   }
   if (OB_FAIL(ret)) {
-    remove_directory(tmp_base_dir);
-    remove_directory(base_dir);
+    remove_directory_while_exist_(tmp_base_dir);
+    remove_directory_while_exist_(base_dir);
   }
   return ret;
 }
@@ -585,9 +594,9 @@ int PalfEnvImpl::remove_directory(const char *log_dir)
     bool result = true;
     do {
       if (OB_FAIL(FileDirectoryUtils::is_exists(tmp_log_dir, result))) {
-        CLOG_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
+        PALF_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
       } else if (!result) {
-        CLOG_LOG(WARN, "directory not exists", KPC(this), K(log_dir));
+        PALF_LOG(WARN, "directory not exists", KPC(this), K(log_dir));
         break;
       } else if (OB_FAIL(remove_directory_rec(tmp_log_dir, log_block_pool_))) {
         PALF_LOG(WARN, "remove_directory_rec failed", K(tmp_log_dir), KP(log_block_pool_));
@@ -1045,8 +1054,8 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloc ipalf_handle_impl failed", K(ret));
   } else if (OB_FAIL(tmp_palf_handle_impl->load(palf_id, &fetch_log_engine_, base_dir, log_alloc_mgr_,
-          log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), this, self_,
-          &election_timer_, palf_epoch, is_integrity))) {
+          log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_,
+          this, self_, &election_timer_, palf_epoch, is_integrity))) {
     PALF_LOG(ERROR, "PalfHandleImpl init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));
@@ -1221,6 +1230,7 @@ int PalfEnvImpl::move_incomplete_palf_into_tmp_dir_(const int64_t palf_id)
     PALF_LOG(WARN, "del palf from map failed, unexpected", K(ret),
         K(palf_id), KPC(this));;
   } else if (OB_FAIL(check_tmp_log_dir_exist_(tmp_dir_exist))) {
+    PALF_LOG(WARN, "check_tmp_log_dir_exist_ failed", K(ret), KPC(this), K(tmp_log_dir_));
   } else if (false == tmp_dir_exist && (-1 == ::mkdir(tmp_log_dir_, mode))) {
     ret = convert_sys_errno();
     PALF_LOG(ERROR, "mkdir tmp log dir failed", K(ret), KPC(this), K(tmp_log_dir_));
@@ -1388,6 +1398,20 @@ int PalfEnvImpl::check_can_update_log_disk_options_(const PalfDiskOptions &disk_
     PALF_LOG(WARN, "can not hold current palf instance", K(curr_palf_instance_num),
              K(curr_min_log_disk_size), K(disk_opts));
   }
+  return ret;
+}
+
+int PalfEnvImpl::remove_directory_while_exist_(const char *log_dir)
+{
+  int ret = OB_SUCCESS;
+  bool result = true;
+  if (OB_FAIL(FileDirectoryUtils::is_exists(log_dir, result))) {
+    PALF_LOG(WARN, "check directory exists failed", KPC(this), K(log_dir));
+  } else if (!result) {
+    PALF_LOG(WARN, "directory not exist, remove_directory success!", K(log_dir), K(result));
+  } else if (OB_FAIL(remove_directory(log_dir))) {
+    PALF_LOG(WARN, "remove_directory failed", K(log_dir), K(result));
+  } else {}
   return ret;
 }
 

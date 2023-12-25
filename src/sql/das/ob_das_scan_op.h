@@ -126,6 +126,7 @@ public:
       is_for_foreign_check_(false)
   { }
   virtual ~ObDASScanRtDef();
+  bool enable_rich_format() const { return scan_flag_.enable_rich_format_; }
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASBaseRtDef,
                        K_(tenant_schema_version),
                        K_(limit_param),
@@ -211,6 +212,7 @@ public:
   ObExpr *get_group_id_expr() { return scan_ctdef_->group_id_expr_; }
   bool is_group_scan() { return NULL != scan_ctdef_->group_id_expr_; }
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
+  bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
   virtual bool need_all_output() { return false; }
   virtual int switch_scan_group() { return common::OB_SUCCESS; };
   virtual int set_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; };
@@ -218,7 +220,8 @@ public:
                        KPC_(scan_ctdef),
                        KPC_(scan_rtdef),
                        "scan_range", scan_param_.key_ranges_,
-                       KPC_(result));
+                       KPC_(result),
+                       "scan_flag", scan_param_.scan_flag_);
 protected:
   common::ObITabletScan &get_tsc_service();
   virtual int do_local_index_lookup();
@@ -267,17 +270,24 @@ public:
   virtual int link_extra_result(ObDASExtraData &extra_result) override;
   int init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx);
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
+  ObTempRowStore &get_vec_row_store() { return vec_row_store_; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                        K_(datum_store),
-                       KPC_(output_exprs));
+                       KPC_(output_exprs),
+                       K_(enable_rich_format),
+                       K_(vec_row_store));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
+  ObTempRowStore vec_row_store_;
+  ObTempRowStore::Iterator vec_result_iter_;
   const ExprFixedArray *output_exprs_;
   ObEvalCtx *eval_ctx_;
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
+  bool enable_rich_format_;
 };
+
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl
 {
 public:

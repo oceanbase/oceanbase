@@ -198,8 +198,7 @@ inline int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_(
     last_frozen_memtable->resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on leader", KPC(last_frozen_memtable));
     if (new_memtable != last_frozen_memtable) {
-      const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
-      new_memtable->resolve_left_boundary(new_start_scn);
+      new_memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
     }
   } else if (unsubmitted_cnt > 0 || write_ref > 0) {
     new_memtable->set_logging_blocked();
@@ -305,9 +304,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
           last_frozen_memtable->resolve_right_boundary();
           TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on replay", KPC(last_frozen_memtable));
           if (memtable != last_frozen_memtable) {
-            const SCN start_scn = MAX(last_frozen_memtable->get_end_scn(),
-                                      last_frozen_memtable->get_migration_clog_checkpoint_scn());
-            memtable->resolve_left_boundary(start_scn);
+            memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
           }
         }
         // for leader, decide the right boundary of frozen memtable

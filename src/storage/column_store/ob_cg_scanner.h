@@ -118,6 +118,7 @@ public:
   ObCGRowScanner() :
       ObCGScanner(),
       row_ids_(nullptr),
+      len_array_(nullptr),
       cell_data_ptrs_(nullptr),
       filter_bitmap_(nullptr),
       read_info_(nullptr)
@@ -146,6 +147,7 @@ private:
 
 protected:
   int64_t *row_ids_;
+  uint32_t *len_array_;
   // for projection in vectorize, need to remove later
   const char **cell_data_ptrs_;
   const ObCGBitmap *filter_bitmap_;

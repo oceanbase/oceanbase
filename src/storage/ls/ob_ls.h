@@ -340,6 +340,7 @@ public:
   // create all the inner tablet.
   int create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
                              const share::SCN &create_scn);
+  int remove_ls_inner_tablet();
 
   // get the meta package of ls: ObLSMeta, PalfBaseInfo
   // @param[in] check_archive, if need check archive,
@@ -407,6 +408,15 @@ private:
       ObTabletHandle &handle);
   int offline_advance_epoch_();
   int online_advance_epoch_();
+  int register_to_service_();
+  int register_common_service();
+  int register_sys_service();
+  int register_user_service();
+
+  void unregister_from_service_();
+  void unregister_common_service_();
+  void unregister_sys_service_();
+  void unregister_user_service_();
 public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,

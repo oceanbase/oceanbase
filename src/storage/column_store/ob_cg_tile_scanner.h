@@ -79,7 +79,7 @@ private:
   int64_t sql_batch_size_;
   ObTableAccessContext* access_ctx_;
   common::ObFixedArray<ObICGIterator*, common::ObIAllocator> cg_scanners_;
-  ObDatumRow datum_row_;
+  blocksstable::ObDatumRow datum_row_;
 };
 }
 }

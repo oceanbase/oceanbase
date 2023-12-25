@@ -15,6 +15,7 @@
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
 
 namespace oceanbase
 {
@@ -65,9 +66,23 @@ int ObNestedLoopJoinOp::inner_open()
   } else if (OB_FAIL(ObBasicNestedLoopJoinOp::inner_open())) {
     LOG_WARN("failed to open in base class", K(ret));
   }
+  int64_t simulate_group_size = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_GROUP_SIZE);
+  int64_t group_size = 0;
+  if (simulate_group_size > 0) {
+    max_group_size_ = simulate_group_size;
+    group_size = simulate_group_size;
+    LOG_TRACE("simulate group size is", K(simulate_group_size));
+  } else {
+    group_size = MY_SPEC.group_size_;
+  }
   if (OB_SUCC(ret) && is_vectorized()) {
     if (MY_SPEC.group_rescan_) {
-      max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
+      if (simulate_group_size > 0) {
+        max_group_size_ = simulate_group_size + MY_SPEC.plan_->get_batch_size();
+      } else {
+        max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
+      }
+      LOG_TRACE("max group size of NLJ is", K(max_group_size_), K(MY_SPEC.plan_->get_batch_size()));
     }
     if (OB_ISNULL(batch_mem_ctx_)) {
       ObSQLSessionInfo *session = ctx_.get_my_session();
@@ -113,7 +128,7 @@ int ObNestedLoopJoinOp::inner_open()
   if (OB_SUCC(ret) && MY_SPEC.group_rescan_) {
     if (OB_FAIL(group_join_buffer_.init(this,
                                         max_group_size_,
-                                        MY_SPEC.group_size_,
+                                        group_size,
                                         &MY_SPEC.rescan_params_,
                                         &MY_SPEC.left_rescan_params_,
                                         &MY_SPEC.right_rescan_params_))) {
@@ -372,6 +387,12 @@ int ObNestedLoopJoinOp::rescan_right_operator()
     // FIXME bin.lb: handle monitor dump + material ?
     if (PHY_MATERIAL == right_->get_spec().type_) {
       if (OB_FAIL(static_cast<ObMaterialOp*>(right_)->rewind())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("rewind failed", K(ret));
+        }
+      }
+    } else if (PHY_VEC_MATERIAL == right_->get_spec().type_) {
+      if (OB_FAIL(static_cast<ObMaterialVecOp*>(right_)->rewind())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("rewind failed", K(ret));
         }

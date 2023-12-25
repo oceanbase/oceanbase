@@ -177,7 +177,7 @@ int ListAppendableObjectFragmentOp::gen_object_meta(ObStorageObjectMeta &obj_met
   int64_t i = 0;
   int64_t last_end_offset = 0;
   obj_meta.reset();
-  obj_meta.type_ = ObStorageObjectType::OB_OBJ_SIMULATE_APPEND;
+  obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND;
   std::sort(meta_arr_.begin(), meta_arr_.end(), ObStorageObjectMeta::fragment_meta_cmp_func);
   while (OB_SUCC(ret) && i < meta_arr_.size()) {
     ObAppendableFragmentMeta &tmp_meta = meta_arr_[i];
@@ -400,10 +400,10 @@ int ObStorageUtil::detect_storage_obj_meta(
   } else if (OB_FAIL(util_->head_object_meta(uri, obj_meta))) {
     STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(uri));
   } else if (obj_meta.is_exist_) {
-    if (ObStorageObjectType::OB_FS_DIR != obj_meta.type_) {
+    if (ObStorageObjectMetaType::OB_FS_DIR != obj_meta.type_) {
       // just return directly
       need_detect_appendable = false;
-      obj_meta.type_ = ObStorageObjectType::OB_OBJ_NORMAL;
+      obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_NORMAL;
     }
   }
 
@@ -432,9 +432,9 @@ int ObStorageUtil::detect_storage_obj_meta(
       } else if (OB_FAIL(util_->head_object_meta(format_meta_uri, obj_meta))) {
         STORAGE_LOG(WARN, "fail to head object meta", K(ret), K(format_meta_uri));
       } else if (obj_meta.is_exist_) {
-        obj_meta.type_ = ObStorageObjectType::OB_OBJ_SIMULATE_APPEND;
+        obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND;
       } else {
-        if (ObStorageObjectType::OB_FS_DIR == obj_meta.type_) {
+        if (ObStorageObjectMetaType::OB_FS_DIR == obj_meta.type_) {
           ret = OB_INVALID_ARGUMENT;
           OB_LOG(WARN, "please set is_adaptive as false when want to check a common dir exist or not",
             K(ret), K(uri), K(is_adaptive));
@@ -518,7 +518,7 @@ int ObStorageUtil::list_appendable_file_fragments(
     ret = OB_BACKUP_FILE_NOT_EXIST;
     OB_LOG(WARN, "not exist valid appendable file, cuz lack of format_meta", K(ret), K(uri));
   } else if (FALSE_IT(obj_meta.is_exist_ = true)) {
-  } else if (FALSE_IT(obj_meta.type_ = ObStorageObjectType::OB_OBJ_SIMULATE_APPEND)) {
+  } else if (FALSE_IT(obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND)) {
   } else if (OB_FAIL(op.gen_object_meta(obj_meta))) {
     OB_LOG(WARN, "fail to gen object meta based on the listed meta info", K(ret), K(uri));
   }

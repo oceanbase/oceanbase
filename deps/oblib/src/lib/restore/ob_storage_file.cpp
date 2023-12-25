@@ -191,11 +191,11 @@ int ObStorageFileUtil::head_object_meta(const common::ObString &uri, ObStorageOb
   } else if (S_ISDIR(file_info.st_mode)) {
     obj_meta.is_exist_ = true;
     obj_meta.length_ = -1;
-    obj_meta.type_ = ObStorageObjectType::OB_FS_DIR;
+    obj_meta.type_ = ObStorageObjectMetaType::OB_FS_DIR;
   } else {
     obj_meta.is_exist_ = true;
     obj_meta.length_ = file_info.st_size;
-    obj_meta.type_ = ObStorageObjectType::OB_FS_FILE;
+    obj_meta.type_ = ObStorageObjectMetaType::OB_FS_FILE;
   }
 
   return ret;

@@ -1145,7 +1145,9 @@ bool ObTableColumns::can_rewrite_error_code(const int ret)
 {
   bool res = true;
   if (OB_ALLOCATE_MEMORY_FAILED == ret
-      || OB_SQL_RESOLVER_NO_MEMORY == ret) {
+      || OB_SQL_RESOLVER_NO_MEMORY == ret
+      || OB_TIMEOUT == ret
+      || OB_EAGAIN == ret) {
     res = false;
   }
   return res;

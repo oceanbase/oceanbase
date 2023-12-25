@@ -1341,7 +1341,8 @@ const char * ObAdaptiveMergeReasonStr[] = {
   "FREQUENT_WRITE",
   "TENANT_MAJOR",
   "USER_REQUEST",
-  "REBUILD_COLUMN_GROUP"
+  "REBUILD_COLUMN_GROUP",
+  "CRAZY_MEDIUM_FOR_TEST"
 };
 
 const char* ObAdaptiveMergePolicy::merge_reason_to_str(const int64_t merge_reason)
@@ -1541,14 +1542,22 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool crazy_medium_flag = false;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
 
+#ifdef ENABLE_DEBUG_LOG
+  crazy_medium_flag = GCONF.enable_crazy_medium_compaction;
+#endif
+
   if (tablet_id.is_special_merge_tablet()) {
     // do nothing
+  } else if (crazy_medium_flag) {
+    reason = AdaptiveMergeReason::CRAZY_MEDIUM_FOR_TEST;
+    LOG_DEBUG("check crazy medium situation", K(ret), K(ls_id), K(tablet_id), K(reason), K(crazy_medium_flag));
   } else if (OB_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(ls_id, tablet_id, tablet_analyzer))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get tablet analyzer stat", K(ret), K(ls_id), K(tablet_id));
@@ -1573,7 +1582,7 @@ int ObAdaptiveMergePolicy::get_adaptive_merge_reason(
   }
 
   if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000 /*10s*/)) {
-    LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer));
+    LOG_INFO("Check tablet adaptive merge reason", K(ret), K(ls_id), K(tablet_id),  K(reason), K(tablet_analyzer), K(crazy_medium_flag));
   }
   return ret;
 }

@@ -113,6 +113,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_ps_rewrite_sql_(false),
       spm_ts_timeout_us_(0),
       subschema_ctx_(allocator_),
+      enable_rich_format_(false),
       all_local_session_vars_(allocator)
 {
 }
@@ -441,9 +442,12 @@ int ObPhysicalPlanCtx::extend_datum_param_store(DatumParamStore &ext_datum_store
 
 void ObPhysicalPlanCtx::reset_datum_frame(char *frame, int64_t expr_cnt)
 {
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  if (enable_rich_format_) {
+    item_size += sizeof(VectorHeader);
+  }
   for (int64_t j = 0; j < expr_cnt; ++j) {
-    ObDatum *datum = reinterpret_cast<ObDatum *>(frame + j * datum_eval_info_size);
+    ObDatum *datum = reinterpret_cast<ObDatum *>(frame + j * item_size);
     datum->set_null();
   }
 }
@@ -452,8 +456,13 @@ int ObPhysicalPlanCtx::reserve_param_frame(const int64_t input_capacity)
 {
   int ret = OB_SUCCESS;
   if (input_capacity > param_frame_capacity_) {
-    const int64_t cnt_per_frame = ObExprFrameInfo::EXPR_CNT_PER_FRAME;
-    const int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    int64_t item_size = 0;
+    if (enable_rich_format_) {
+      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+    } else {
+      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    }
+    int64_t cnt_per_frame = common::MAX_FRAME_SIZE / item_size;
     auto calc_frame_cnt = [&](int64_t cap) { return (cap + cnt_per_frame - 1) / cnt_per_frame; };
     // reserve original param frames first
     if (param_frame_capacity_ < original_param_cnt_) {
@@ -537,28 +546,38 @@ int ObPhysicalPlanCtx::extend_param_frame(const int64_t old_size)
     for (int64_t i = old_size; i < datum_param_store_.count(); i++) {
       ObDatum *datum = nullptr;
       ObEvalInfo *eval_info = nullptr;
-      get_param_frame_info(i, datum, eval_info);
+      VectorHeader *vec_header = nullptr;
+      get_param_frame_info(i, datum, eval_info, vec_header);
       *datum = datum_param_store_.at(i).datum_;
       eval_info->evaluated_ = false;
+      LOG_TRACE("extend param frame", K(i), K(*datum), K(enable_rich_format_));
     }
   }
+
   return ret;
 }
 
 OB_INLINE void ObPhysicalPlanCtx::get_param_frame_info(int64_t param_idx,
                                                        ObDatum *&datum,
-                                                       ObEvalInfo *&eval_info)
+                                                       ObEvalInfo *&eval_info,
+                                                       VectorHeader *&vec_header)
 {
-  const int64_t cnt_per_frame = ObExprFrameInfo::EXPR_CNT_PER_FRAME;
-  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t item_size = 0;
+  if (enable_rich_format_) {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
+  } else {
+    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  }
+  int64_t cnt_per_frame = common::MAX_FRAME_SIZE / item_size;
   int64_t datum_idx = param_idx < original_param_cnt_ ? param_idx : param_idx - original_param_cnt_;
   int64_t idx = datum_idx / cnt_per_frame;
-  int64_t off = (datum_idx % cnt_per_frame) * datum_eval_info_size;
+  int64_t off = (datum_idx % cnt_per_frame) * item_size;
   if (original_param_cnt_ > 0 && param_idx >= original_param_cnt_) {
     idx += (original_param_cnt_ + cnt_per_frame - 1) / cnt_per_frame;
   }
   datum = reinterpret_cast<ObDatum*>(param_frame_ptrs_.at(idx) + off);
   eval_info = reinterpret_cast<ObEvalInfo *>(param_frame_ptrs_.at(idx) + off + sizeof(ObDatum));
+  LOG_DEBUG("get_param_frame_info", K(param_idx), K(off), K(datum), K(item_size), K(enable_rich_format_), K(lbt()));
 }
 
 int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
@@ -576,7 +595,8 @@ int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
         //need to expand the real param to param frame
         ObDatum *datum = nullptr;
         ObEvalInfo *eval_info = nullptr;
-        get_param_frame_info(i, datum, eval_info);
+        VectorHeader *vec_header = nullptr;
+        get_param_frame_info(i, datum, eval_info, vec_header);
         const ObSqlDatumArray *datum_array = datum_param_store_.at(i).get_sql_datum_array();;
         if (OB_UNLIKELY(cur_group_id < 0) || OB_UNLIKELY(cur_group_id >= datum_array->count_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -734,6 +754,7 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_ENCODE(array_param_groups_.at(i));
     }
   }
+  OB_UNIS_ENCODE(enable_rich_format_);
   OB_UNIS_ENCODE(all_local_session_vars_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars_.count(); ++i) {
     OB_UNIS_ENCODE(*all_local_session_vars_.at(i));
@@ -828,6 +849,7 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
       OB_UNIS_ADD_LEN(array_param_groups_.at(i));
     }
   }
+  OB_UNIS_ADD_LEN(enable_rich_format_);
   OB_UNIS_ADD_LEN(all_local_session_vars_.count());
   for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
     OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i));
@@ -943,6 +965,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       }
     }
   }
+  OB_UNIS_DECODE(enable_rich_format_);
   OB_UNIS_DECODE(local_var_array_cnt);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(all_local_session_vars_.reserve(local_var_array_cnt))) {

@@ -35,7 +35,9 @@ public:
                     const int64_t pos,
                     const int64_t len,
                     common::ObCollationType cs_type,
-                    const bool do_ascii_optimize_check);
+                    const bool do_ascii_optimize_check,
+                    const bool is_arg_batch_ascii,
+                    bool &is_result_batch_ascii);
 
   static int calc(common::ObObj &result,
                   const common::ObString &text,
@@ -48,12 +50,18 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 
-  static int eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  static int eval_substr_batch(
-             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  static int eval_substr(EVAL_FUNC_ARG_DECL);
+  static int eval_substr_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int eval_substr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 
 private:
+  template <typename ArgVec, typename ResVec>
+  static int vector_substr(const ObExpr &expr,
+                           ObEvalCtx &ctx,
+                           const ObBitVector &skip,
+                           const EvalBound &bound);
+
   int calc_result_length(ObExprResType *types_array,
                          int64_t param_num,
                          common::ObCollationType cs_type,

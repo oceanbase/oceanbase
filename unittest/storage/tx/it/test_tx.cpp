@@ -210,7 +210,7 @@ TEST_F(ObTestTx, start_trans_expired)
   tx_param.isolation_ = ObTxIsolationLevel::RC;
   tx_param.cluster_id_ = 100;
   ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
-  usleep(5000); // 5ms
+  usleep(100000); // 100ms
   // create tx ctx failed caused by trans_timeout
   ASSERT_EQ(OB_TRANS_TIMEOUT, n1->write(tx, 100, 112));
   ASSERT_EQ(OB_SUCCESS, n1->rollback_tx(tx));
@@ -1953,9 +1953,11 @@ TEST_F(ObTestTx, distributed_tx_coordinator_switch_to_follower_forcedly_in_prepa
   n1->add_drop_msg_type(TX_2PC_PREPARE_RESP);
 
   int commit_ret = OB_SUCCESS;
+  // async start commit
   std::thread t(do_async_commit, n1, std::ref(tx), std::ref(commit_ret));
   usleep(100 * 1000);
 
+  // wait coordinator into prepare state
   ObPartTransCtx *n1_ctx = NULL;
   ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(n1->ls_id_, tx.tx_id_, n1_ctx));
   int i = 0;
@@ -1965,28 +1967,27 @@ TEST_F(ObTestTx, distributed_tx_coordinator_switch_to_follower_forcedly_in_prepa
   ASSERT_NE(i, 1001);
   ASSERT_EQ(OB_SUCCESS, n1->revert_tx_ctx(n1_ctx));
 
+  // switch coordinator to follower forcedly
   ObLSTxCtxMgr *ls_tx_ctx_mgr1 = NULL;
   ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr1));
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr1->switch_to_follower_forcedly());
   n1->wait_all_redolog_applied();
 
+  // n3 takeover as leader
   ReplayLogEntryFunctor functor(n3);
   ASSERT_EQ(OB_SUCCESS, n3->fake_tx_log_adapter_->replay_all(functor));
-
   ObLSTxCtxMgr *ls_tx_ctx_mgr3 = NULL;
   ASSERT_EQ(OB_SUCCESS, n3->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n3->ls_id_, ls_tx_ctx_mgr3));
-
   ObTxNode::get_location_adapter_().update_localtion(n3->ls_id_, n3->addr_);
-
   ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr3->switch_to_leader());
   n3->wait_all_redolog_applied();
 
   ASSERT_EQ(OB_SUCCESS, n2->wait_all_tx_ctx_is_destoryed());
 
+  // wait commit complete on scheduler
   t.join();
   ASSERT_EQ(OB_SUCCESS, commit_ret);
 
-  n3->del_drop_msg_type(TX_2PC_CLEAR_REQ);
   ASSERT_EQ(OB_SUCCESS, n3->wait_all_tx_ctx_is_destoryed());
 
   ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));

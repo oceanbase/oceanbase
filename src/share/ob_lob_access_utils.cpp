@@ -19,6 +19,7 @@
 #include "storage/lob/ob_lob_util.h"
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/tx/ob_trans_service.h"
+#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {

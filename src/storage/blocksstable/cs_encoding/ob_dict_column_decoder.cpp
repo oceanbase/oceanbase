@@ -231,7 +231,7 @@ int ObDictColumnDecoder::extract_ref_and_null_count_(
     uint32_t ref;
     while (trav_cnt < row_cap) {
       row_id = row_ids[trav_idx];
-      uint32_t *curr_ref = nullptr != ref_buf ? &ref_buf[trav_cnt] : nullptr == datums ? &ref : &datums[trav_idx].pack_;
+      uint32_t *curr_ref = nullptr != ref_buf ? &ref_buf[trav_idx] : nullptr == datums ? &ref : &datums[trav_idx].pack_;
       if (except_table_pos == ref_desc.exception_cnt_ || row_id < next_except_row_id) {
         *curr_ref = ref_desc.const_ref_;
       } else if (row_id == next_except_row_id) {
@@ -339,7 +339,7 @@ int ObDictColumnDecoder::pushdown_operator(
 {
   int ret = OB_SUCCESS;
   filter_applied = false;
-
+  const bool enable_rich_format = filter.get_op().enable_rich_format_;
   if (!GCONF.enable_cs_encoding_filter) {
     ret = OB_NOT_SUPPORTED;
   } else if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
@@ -372,8 +372,11 @@ int ObDictColumnDecoder::pushdown_operator(
 
       if (OB_SUCC(ret)) {
         if (0 == dict_val_cnt) {  // empty dict, all datum is null
-          datums[0].set_null();
-          if (OB_FAIL(filter.filter_batch(nullptr, 0, 1, *ref_bitmap))) {
+          // use uniform base currently, support new format later
+          //if (enable_rich_format && OB_FAIL(storage::init_exprs_vector_header(filter.get_filter_node().column_exprs_, filter.get_op().get_eval_ctx(), 1))) {
+          //  LOG_WARN("Failed to init exprs vector header", K(ret));
+          if (FALSE_IT(datums[0].set_null())) {
+          } else if (OB_FAIL(filter.filter_batch(nullptr, 0, 1, *ref_bitmap))) {
             LOG_WARN("fail to filter batch", KR(ret), K(pd_filter_info));
           } else {
             if (ref_bitmap->test(0)) {
@@ -381,11 +384,16 @@ int ObDictColumnDecoder::pushdown_operator(
             }
             filter_applied = true;
           }
-          LOG_DEBUG("dict black filter pushdown", K(ret), K(ctx), K(filter_applied), K(pd_filter_info));
+          LOG_TRACE("dict black filter pushdown", K(ret), K(ctx), K(filter_applied), K(pd_filter_info));
         } else {
           for (int64_t index = 0; OB_SUCC(ret) && (index < distinct_ref_cnt); ) {
             int64_t upper_bound = MIN(index + pd_filter_info.batch_size_, distinct_ref_cnt);
             const int64_t cur_ref_cnt = upper_bound - index;
+            // use uniform base currently, support new format later
+            //if (enable_rich_format && OB_FAIL(storage::init_exprs_vector_header(filter.get_filter_node().column_exprs_, filter.get_op().get_eval_ctx(), cur_ref_cnt))) {
+            //  LOG_WARN("Failed to init exprs vector header", K(ret));
+            //  break;
+            //}
             for (int64_t dict_ref = index; dict_ref < upper_bound; dict_ref++) {
               datums[dict_ref - index].pack_ = dict_ref;
             }
@@ -430,7 +438,7 @@ int ObDictColumnDecoder::pushdown_operator(
               filter_applied = true;
             }
           }
-          LOG_DEBUG("dict black filter pushdown", K(ret), K(ctx),
+          LOG_TRACE("dict black filter pushdown", K(ret), K(ctx),
               K(filter_applied), K(pd_filter_info), K(result_bitmap.popcnt()));
         }
       }
@@ -546,7 +554,7 @@ int ObDictColumnDecoder::pushdown_operator(
         }
       }
     }
-    LOG_DEBUG("dict white filter pushdown", K(ret), K(is_const_encoding),
+    LOG_TRACE("dict white filter pushdown", K(ret), K(is_const_encoding),
         K(ctx), K(op_type), K(pd_filter_info), K(result_bitmap.popcnt()));
   }
   return ret;
@@ -629,7 +637,7 @@ int ObDictColumnDecoder::eq_ne_operator(
 	        }
         } else {
           const ObObjType col_type = ctx.col_header_->get_store_obj_type();
-          const sql::ObPushdownWhiteFilterNode filter_node = filter.get_filter_node();
+          const sql::ObPushdownWhiteFilterNode &filter_node = filter.get_filter_node();
           bool is_col_signed = false;
           bool is_filter_signed = false;
           uint64_t filter_val = 0;
@@ -1128,13 +1136,13 @@ void ObDictColumnDecoder::integer_dict_val_in_op(
     int64_t &matched_ref_cnt)
 {
   MEMSET(filter_vals_valid, 1, datums_cnt);
-  const sql::ObPushdownWhiteFilterNode filter_node = filter.get_filter_node();
+  const sql::ObPushdownWhiteFilterNode &filter_node = filter.get_filter_node();
   const uint32_t val_width_size =ctx.int_ctx_->meta_.get_uint_width_size();
   const ObObjType col_type = ctx.col_header_->get_store_obj_type();
   const bool is_col_signed = ObCSDecodingUtil::is_signed_object_type(col_type);
 
   for (int64_t i = 0; i < datums_cnt; ++i) {
-    const ObObjType filter_type = filter_node.expr_->args_[i]->obj_meta_.get_type();
+    const ObObjType filter_type = filter_node.get_filter_arg_obj_type(i);
     uint64_t filter_val = 0;
     int64_t filter_val_size = 0;
     bool is_filter_signed = false;
@@ -1267,9 +1275,9 @@ int ObDictColumnDecoder::integer_dict_val_bt_op(
   const ObIntegerStreamMeta &stream_meta = ctx.int_ctx_->meta_;
   const uint64_t dict_val_base = stream_meta.is_use_base() * stream_meta.base_value();
 
-  const sql::ObPushdownWhiteFilterNode filter_node = filter.get_filter_node();
-  const ObObjType left_filter_type = filter_node.expr_->args_[0]->obj_meta_.get_type();
-  const ObObjType right_filter_type = filter_node.expr_->args_[1]->obj_meta_.get_type();
+  const sql::ObPushdownWhiteFilterNode &filter_node = filter.get_filter_node();
+  ObObjType left_filter_type = filter_node.get_filter_arg_obj_type(0);
+  ObObjType right_filter_type = filter_node.get_filter_arg_obj_type(1);
   bool is_left_signed = false;
   bool is_right_signed = false;
   int64_t left_filter_size = 0;
@@ -1863,7 +1871,12 @@ int ObDictColumnDecoder::cmp_ref_and_set_result(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ref_width_size), K(dict_ref), KP(ref_buf));
   } else {
-    ObFPIntCmpOpType cmp_op_type = get_white_op_int_op_map()[op_type];
+    ObGetFilterCmpRetFunc get_cmp_ret = get_filter_cmp_ret_func(op_type);
+    auto dict_ref_cmp = [&] (const uint64_t cur_val, const uint64_t dict_ref)
+    {
+      return cur_val == dict_ref ? 0
+          : cur_val < dict_ref ? -1 : 1;
+    };
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {
       const int64_t row_id = i + row_start;
       if ((nullptr != parent) && parent->can_skip_filter(i)) {
@@ -1871,7 +1884,7 @@ int ObDictColumnDecoder::cmp_ref_and_set_result(
       } else {
         uint64_t cur_val = 0;
         ENCODING_ADAPT_MEMCPY(&cur_val, ref_buf + row_id * ref_width_size, ref_width_size);
-        bool matched = fp_int_cmp<int64_t>(cur_val, dict_ref, cmp_op_type);
+        bool matched = get_cmp_ret(dict_ref_cmp(cur_val, dict_ref));
         if (has_null) {
           matched = matched && (cur_val != null_replaced_val);
         }

@@ -13,6 +13,10 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_expr.h"
+#include "share/vector/ob_fixed_length_vector.h"
+#include "share/vector/ob_continuous_vector.h"
+#include "share/vector/ob_uniform_vector.h"
+#include "share/vector/ob_discrete_vector.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_operator.h"
@@ -20,6 +24,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+
 
 namespace oceanbase
 {
@@ -136,6 +141,14 @@ OB_DEF_SERIALIZE(ObExpr)
       OB_UNIS_ENCODE(*extra_info_);
     }
     OB_UNIS_ENCODE(dyn_buf_header_offset_)
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                vector_header_off_,
+                offset_off_,
+                len_arr_off_,
+                cont_buf_off_,
+                null_bitmap_off_,
+                vec_value_tc_,
+                ser_eval_vector_func_);
     OB_UNIS_ENCODE(local_session_var_id_);
   }
 
@@ -196,6 +209,15 @@ OB_DEF_DESERIALIZE(ObExpr)
     batch_idx_mask_ = UINT64_MAX;
   }
   OB_UNIS_DECODE(dyn_buf_header_offset_);
+  LST_DO_CODE(OB_UNIS_DECODE,
+              vector_header_off_,
+              offset_off_,
+              len_arr_off_,
+              cont_buf_off_,
+              null_bitmap_off_,
+              vec_value_tc_,
+              ser_eval_vector_func_);
+
   OB_UNIS_DECODE(local_session_var_id_);
   return ret;
 }
@@ -236,6 +258,15 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
     OB_UNIS_ADD_LEN(*extra_info_);
   }
   OB_UNIS_ADD_LEN(dyn_buf_header_offset_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              vector_header_off_,
+              offset_off_,
+              len_arr_off_,
+              cont_buf_off_,
+              null_bitmap_off_,
+              vec_value_tc_,
+              ser_eval_vector_func_);
+
   OB_UNIS_ADD_LEN(local_session_var_id_);
   return len;
 }
@@ -250,6 +281,7 @@ ObExpr::ObExpr()
     flag_(0),
     eval_func_(NULL),
     eval_batch_func_(NULL),
+    eval_vector_func_(NULL),
     inner_functions_(NULL),
     inner_func_cnt_(0),
     args_(NULL),
@@ -269,6 +301,12 @@ ObExpr::ObExpr()
     basic_funcs_(NULL),
     batch_idx_mask_(0),
     extra_info_(NULL),
+    vector_header_off_(UINT32_MAX),
+    offset_off_(UINT32_MAX),
+    len_arr_off_(UINT32_MAX),
+    cont_buf_off_(UINT32_MAX),
+    null_bitmap_off_(UINT32_MAX),
+    vec_value_tc_(MAX_VEC_TC),
     local_session_var_id_(OB_INVALID_INDEX_INT64)
 {
   is_called_in_sql_ = 1;
@@ -338,6 +376,9 @@ int ObExpr::eval_enumset(ObEvalCtx &ctx,
         eval_info->cnt_ = ctx.get_batch_size();
         eval_info->point_to_frame_ = true;
         eval_info->notnull_ = true;
+        if (enable_rich_format()) {
+          ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
+        }
       }
       if (!evaluated_flags->at(ctx.get_batch_idx())) {
         need_evaluate = true;
@@ -573,6 +614,40 @@ DEF_TO_STRING(ObToStringExprRow)
   return pos;
 }
 
+DEF_TO_STRING(ObExprArrayVecStringer)
+{
+  int64_t pos = 0;
+  const char *payload = nullptr;
+  int32_t payload_len = 0;
+  ObDatum d;
+  J_ARRAY_START();
+  for (int i = 0; i < exprs_.count(); i++) {
+    ObExpr *expr = exprs_.at(i);
+    if (OB_LIKELY(expr != NULL)) {
+      J_OBJ_START();
+      J_KV(KP(expr));
+      J_COMMA();
+      if (expr->get_vector(ctx_)->is_null(ctx_.get_batch_idx())) {
+        d.set_null();
+      } else {
+        expr->get_vector(ctx_)->get_payload(ctx_.get_batch_idx(), payload, payload_len);
+        d.ptr_ = payload;
+        d.len_ = payload_len;
+      }
+      pos += ObToStringDatum(*expr, d).to_string(buf + pos, buf_len - pos);
+      J_OBJ_END();
+    } else {
+      J_OBJ_START();
+      J_OBJ_END();
+    }
+    if (i != exprs_.count() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  return pos;
+}
+
 void ObExpr::reset_datums_ptr(char *frame, const int64_t size) const
 {
   // TODO bin.lb: on reset ptr from info->cnt_ to size if info->point_to_frame_ ?
@@ -597,6 +672,18 @@ void ObExpr::reset_datum_ptr(char *frame, const int64_t size, const int64_t idx)
   }
 }
 
+void ObExpr::reset_discretes_ptr(char *frame, const int64_t size, char** ptrs) const
+{
+  char *ptr = frame + res_buf_off_;
+  for (int64_t i = 0; i < size; i += 1) {
+    if (ptrs[i] != ptr) {
+      ptrs[i] = ptr;
+    }
+    ptr += res_buf_len_;
+  }
+}
+
+
 int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
   int ret = OB_SUCCESS;
@@ -604,7 +691,13 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
   bool need_evaluate = false;
 
-  if (info->projected_ || NULL == eval_func_) {
+  if (info->projected_ || NULL == eval_func_ || info->evaluated_) {
+    if (UINT32_MAX != vector_header_off_) {
+      ret = cast_to_uniform(ctx.get_batch_size(), ctx);
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if ((info->projected_ || NULL == eval_func_)) {
     // do nothing
   } else if (!info->evaluated_) {
     need_evaluate = true;
@@ -614,6 +707,9 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     info->cnt_ = ctx.get_batch_size();
     info->point_to_frame_ = true;
     info->notnull_ = true;
+    if (enable_rich_format()) {
+      ret = init_vector(ctx, VEC_UNIFORM, ctx.get_batch_size());
+    }
   } else {
     ObBitVector *evaluated_flags = to_bit_vector(frame + eval_flags_off_);
     if (!evaluated_flags->at(ctx.get_batch_idx())) {
@@ -621,7 +717,7 @@ int ObExpr::eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) con
     }
   }
   datum = reinterpret_cast<ObDatum *>(frame + datum_off_) + ctx.get_batch_idx();
-  if (need_evaluate) {
+  if (OB_SUCC(ret) && need_evaluate) {
     if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
@@ -647,7 +743,6 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
                           const ObBitVector &skip,
                           const int64_t size) const
 {
-
   int ret = OB_SUCCESS;
   char *frame = ctx.frames_[frame_idx_];
   ObEvalInfo *info = reinterpret_cast<ObEvalInfo *>(frame + eval_info_off_);
@@ -672,11 +767,24 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
       reset_datums_ptr(frame, size);
       info->notnull_ = false;
       info->point_to_frame_ = true;
+      if (enable_rich_format()) {
+        ret = init_vector(ctx, VEC_UNIFORM, size);
+      }
     }
-    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
       SQL_LOG(WARN, "failed to check stack overflow", K(ret));
     } else {
-      ret = (*eval_batch_func_)(*this, ctx, skip, size);
+      if (OB_UNLIKELY(enable_rich_format())) {
+        ret = (*eval_vector_func_)(*this, ctx, skip, EvalBound(size));
+        // for shared expr, may be not use uniform format when first time eval expr
+        // so, we should cast to uniform here
+        if (OB_SUCC(ret)) {
+          ret = cast_to_uniform(size, ctx);
+        }
+      } else {
+        ret = (*eval_batch_func_)(*this, ctx, skip, size);
+      }
       if (OB_SUCC(ret)) {
         if (!info->evaluated_) {
           info->cnt_ = size;
@@ -700,14 +808,393 @@ int ObExpr::do_eval_batch(ObEvalCtx &ctx,
         }
       }
     }
+  } else {
+    // no need evaluate more, cast to uniform for use rich format,
+    // because this expr may calc by eval_vector
+    if (UINT32_MAX != vector_header_off_) {
+      ret = cast_to_uniform(size, ctx);
+    }
   }
   return ret;
+}
+
+int ObExpr::cast_to_uniform(const int64_t size, ObEvalCtx &ctx) const
+{
+  int ret = OB_SUCCESS;
+  VectorHeader &vec_header = get_vector_header(ctx);
+  LOG_DEBUG("cast to uniform", K(this), K(*this), K(vec_header.format_), K(size), K(ctx), K(lbt()));
+  if (VEC_INVALID == vec_header.format_) {
+    // do nothing
+  } else {
+    ObIVector *vec = reinterpret_cast<ObIVector *>(vec_header.vector_buf_);
+    ObDatum *datums = locate_batch_datums(ctx);
+    switch(vec_header.format_) {
+      case VEC_FIXED:{
+        ObFixedLengthBase *fix_vec = static_cast<ObFixedLengthBase *>(vec);
+        char *ptr = fix_vec->get_data();
+        ObLength len = fix_vec->get_length();
+        const ObBitVector *nulls = fix_vec->get_nulls();
+        for (int i = 0; i < size; i++) {
+          ObDatum *datum = datums + i;
+          if (datum->ptr_ != ptr) {
+            datum->ptr_ = ptr;
+          }
+          ptr += len;
+          datum->pack_ = (nulls->at(i) ? 0 : len);
+          datum->null_ = nulls->at(i);
+        }
+        OZ(init_vector(ctx, VEC_UNIFORM, size));
+        break;
+      }
+      case VEC_DISCRETE: {
+        ObDiscreteBase *disc_vec = static_cast<ObDiscreteBase *>(vec);
+        char **ptrs = disc_vec->get_ptrs();
+        int32_t *lens = disc_vec->get_lens();
+        const ObBitVector *nulls = disc_vec->get_nulls();
+        for (int i = 0; i < size; i++) {
+          ObDatum *datum = datums + i;
+          datum->ptr_ = ptrs[i];
+          datum->pack_ = (nulls->at(i) ? 0 : lens[i]);
+          datum->null_ = nulls->at(i);
+        }
+        OZ(init_vector(ctx, VEC_UNIFORM, size));
+        break;
+      }
+      case VEC_CONTINUOUS: {
+        ObContinuousBase *cont_vec = static_cast<ObContinuousBase *>(vec);
+        const uint32_t *offsets = cont_vec->get_offsets();
+        const char *data = cont_vec->get_data();
+        const ObBitVector *nulls = cont_vec->get_nulls();
+        for (int i = 0; i < size; i++) {
+          ObDatum *datum = datums + i;
+          datum->ptr_ = data + offsets[i];
+          datum->pack_ = (nulls->at(i) ? 0 : offsets[i + 1] - offsets[i]);
+          datum->null_ = nulls->at(i);
+        }
+        OZ(init_vector(ctx, VEC_UNIFORM, size));
+        break;
+      }
+      case VEC_UNIFORM:
+      case VEC_UNIFORM_CONST : {
+        ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+        ObDatum *src = uni_vec->get_datums();
+        ObDatum *dst = locate_batch_datums(ctx);
+        if (src != dst) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expected the src and dst to be equal", K(ret), K(src), K(dst));
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid vector format", K(vec_header.format_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExpr::init_vector(ObEvalCtx &ctx,
+                        const VectorFormat format,
+                        const int64_t size,
+                        const bool use_reserve_buf/*false*/) const
+{
+  int ret = OB_SUCCESS;
+  VectorHeader &vec_header = get_vector_header(ctx);
+  vec_header.set_format(format);
+  char *vector_buf = vec_header.vector_buf_;
+  const VecValueTypeClass value_tc = get_vec_value_tc();
+  common::ObIVector *vec = NULL;
+  if (OB_UNLIKELY(!batch_result_ && format != VEC_UNIFORM_CONST)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected format", K(ret), K(format), KPC(this));
+  } else if (VEC_FIXED == format) {
+    char *data = get_res_buf(ctx);
+    ObBitVector &nulls = get_nulls(ctx);
+    nulls.reset(size);
+    switch(value_tc) {
+      #define FIXED_VECTOR_INIT_SWITCH(value_tc) \
+      case value_tc:                             \
+        static_assert(sizeof(RTVectorType<VEC_FIXED, value_tc>) <= ObIVector::MAX_VECTOR_STRUCT_SIZE,\
+                      "vector size exceeds MAX_VECTOR_STRUCT_SIZE");                                 \
+        new(vector_buf)RTVectorType<VEC_FIXED, value_tc>(data, &nulls);       \
+        break;
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_INTEGER);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_UINTEGER);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_FLOAT);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DOUBLE);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_FIXED_DOUBLE);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DATETIME);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DATE);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_TIME);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_YEAR);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_UNKNOWN);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_BIT);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TZ);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TINY);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_YM);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_DS);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT32);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT64);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
+      FIXED_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+      #undef FIXED_VECTOR_INIT_SWITCH
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid vector value type class", K(value_tc), K(format), K(ret));
+    }
+  } else if (VEC_CONTINUOUS == format) {
+    char *data = get_continuous_vector_data(ctx);
+    uint32_t *offsets = get_continuous_vector_offsets(ctx);
+    ObBitVector &nulls = get_nulls(ctx);
+    nulls.reset(size);
+    switch(value_tc) {
+      #define CONTINUOUS_VECTOR_INIT_SWITCH(value_tc)                                  \
+      case value_tc:                                                                         \
+        static_assert(sizeof(RTVectorType<VEC_CONTINUOUS, value_tc>)                   \
+                      <= ObIVector::MAX_VECTOR_STRUCT_SIZE, "vector size exceeds MAX_VECTOR_STRUCT_SIZE"); \
+        new(vector_buf)RTVectorType<VEC_CONTINUOUS, value_tc>(                         \
+                               offsets, data, &nulls);                       \
+        break;
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+      CONTINUOUS_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      #undef CONTINUOUS_VECTOR_INIT_SWITCH
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        SQL_LOG(WARN, "invalid vector value type class", K(value_tc), K(format), K(ret));
+    }
+  } else if (VEC_DISCRETE == format) {
+    char **ptrs = get_discrete_vector_ptrs(ctx);
+    int32_t *lens = get_discrete_vector_lens(ctx);
+    ObBitVector &nulls = get_nulls(ctx);
+    nulls.reset(size);
+    if (use_reserve_buf) {
+      reset_discretes_ptr(ctx.frames_[frame_idx_], size, get_discrete_vector_ptrs(ctx));
+    }
+    switch(value_tc) {
+      #define DISCRETE_VECTOR_INIT_SWITCH(value_tc)                                          \
+      case value_tc:                                                                         \
+        static_assert(sizeof(RTVectorType<VEC_DISCRETE, value_tc>)                       \
+                      <= ObIVector::MAX_VECTOR_STRUCT_SIZE, "vector size exceeds MAX_VECTOR_STRUCT_SIZE"); \
+        new(vector_buf)RTVectorType<VEC_DISCRETE, value_tc>(                             \
+                               lens, ptrs, &nulls);                          \
+        break;
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+      DISCRETE_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      #undef DISCRETE_VECTOR_INIT_SWITCH
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        SQL_LOG(WARN, "invalid vector value type class", K(value_tc), K(format), K(ret));
+    }
+  } else if (VEC_UNIFORM == format) {
+    if (use_reserve_buf) {
+      reset_datums_ptr(ctx.frames_[frame_idx_], size);
+    }
+    switch(value_tc) {
+      #define UNIFORM_VECTOR_INIT_SWITCH(value_tc)                 \
+      case value_tc:                                                \
+        static_assert(sizeof(RTVectorType<VEC_UNIFORM, value_tc>) <= ObIVector::MAX_VECTOR_STRUCT_SIZE, \
+                      "vector size exceeds MAX_VECTOR_STRUCT_SIZE");       \
+        new(vector_buf)RTVectorType<VEC_UNIFORM, value_tc>(         \
+                               locate_batch_datums(ctx), &get_eval_info(ctx));                  \
+        break;
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_NULL);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_INTEGER);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_UINTEGER);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_FLOAT);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DOUBLE);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_FIXED_DOUBLE);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DATETIME);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DATE);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_TIME);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_YEAR);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_UNKNOWN);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_BIT);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TZ);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TINY);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_YM);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_DS);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT32);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT64);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+      UNIFORM_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+      #undef UNIFORM_VECTOR_INIT_SWITCH
+      default:
+        ret = OB_INVALID_ARGUMENT;
+        SQL_LOG(WARN, "invalid vector value type class", K(value_tc), K(format), K(ret));
+    }
+  } else if (VEC_UNIFORM_CONST == format) {
+    if (use_reserve_buf) {
+      reset_datums_ptr(ctx.frames_[frame_idx_], 1/*size*/);
+    }
+    ObDatum *datums = locate_batch_datums(ctx);
+    ObEvalInfo *eval_info = &get_eval_info(ctx);
+    ret = vec_header.init_uniform_const_vector(get_vec_value_tc(), datums, eval_info);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_LOG(WARN, "invalid vector format", K(format), K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObVectorBase *vector = reinterpret_cast<ObVectorBase *> (vector_buf);
+    vector->set_max_row_cnt(size);
+  }
+  return ret;
+}
+
+int VectorHeader::init_uniform_const_vector(VecValueTypeClass vec_value_tc,
+                                            ObDatum *datum,
+                                            ObEvalInfo *eval_info)
+{
+  int ret = OB_SUCCESS;
+  format_ = VEC_UNIFORM_CONST;
+  switch(vec_value_tc) {
+    #define UNIFORM_CONST_VECTOR_INIT_SWITCH(value_tc)                  \
+    case value_tc:                                                \
+      new(vector_buf_)RTVectorType<VEC_UNIFORM_CONST, value_tc>(datum, eval_info); \
+      break;
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_NULL);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_INTEGER);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_UINTEGER);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_FLOAT);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DOUBLE);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_FIXED_DOUBLE);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DATETIME);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DATE);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_TIME);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_YEAR);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_UNKNOWN);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_BIT);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TZ);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_TIMESTAMP_TINY);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_YM);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_INTERVAL_DS);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT32);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT64);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT128);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT256);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_DEC_INT512);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_NUMBER);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_EXTEND);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_STRING);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ENUM_SET_INNER);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_RAW);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_ROWID);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_LOB);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_JSON);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_GEO);
+    UNIFORM_CONST_VECTOR_INIT_SWITCH(VEC_TC_UDT);
+    #undef UNIFORM_CONST_VECTOR_INIT_SWITCH
+    default:
+      ret = OB_INVALID_ARGUMENT;
+      SQL_LOG(WARN, "invalid vector value type class", K(vec_value_tc), K(ret));
+  }
+
+  return ret;
+}
+
+int ObExpr::eval_vector(ObEvalCtx &ctx,
+                        const ObBitVector &skip,
+                        const EvalBound &bound) const
+{
+  int ret = common::OB_SUCCESS;
+  #define BATCH_SIZE() batch_result_ ? bound.batch_size() : 1
+  //TODO shengle CHECK_BOUND(bound); check skip and all_rows_active wheth match
+  ObEvalInfo &info = get_eval_info(ctx);
+  char *frame = ctx.frames_[frame_idx_];
+  int64_t const_skip = 0;
+  const ObBitVector *rt_skip = batch_result_ ? &skip : to_bit_vector(&const_skip);
+  bool need_evaluate = false;
+  // in old operator, rowset_v2 expr eval param use eval_vector,
+  // the param expr has been evaluated by old eval_batch interface,
+  // and not init vector, here we should init vector
+  if (VEC_INVALID == get_format(ctx)
+      && (info.projected_ || true == info.evaluated_ || NULL == eval_vector_func_)) {
+    ret = init_vector(ctx, batch_result_ ? VEC_UNIFORM : VEC_UNIFORM_CONST, BATCH_SIZE());
+  }
+  if (OB_FAIL(ret)) {
+  } else if (info.projected_ || NULL == eval_batch_func_
+             || (!batch_result_ && info.evaluated_)) {
+    // expr values is projected by child or has no evaluate func, do nothing.
+  } else if (!info.evaluated_) {
+    need_evaluate = true;
+    get_evaluated_flags(ctx).reset(BATCH_SIZE());
+    info.notnull_ = false;
+    info.point_to_frame_ = true;
+    VectorFormat format = (expr_default_eval_vector_func == eval_vector_func_ && is_batch_result())
+                          ? VEC_UNIFORM
+                          : get_default_res_format();
+    ret = init_vector_for_write(ctx, format, BATCH_SIZE());
+  } else {
+    // check all datum evaluated
+    const ObBitVector &evaluated_vec = get_evaluated_flags(ctx);
+    need_evaluate = !ObBitVector::bit_op_zero(
+        *rt_skip, evaluated_vec, BATCH_SIZE(),
+        [](const uint64_t l, const uint64_t r) { return ~(l | r); });
+  }
+  LOG_DEBUG("need evaluate", K(need_evaluate));
+  if (OB_SUCC(ret) && need_evaluate) {
+    if (OB_UNLIKELY(need_stack_check_) && OB_FAIL(check_stack_overflow())) {
+      SQL_LOG(WARN, "failed to check stack overflow", K(ret));
+    } else if (OB_FAIL(
+                 (*eval_vector_func_)(*this, ctx, *rt_skip, batch_result_ ? bound : EvalBound(1)))) {
+      set_all_null(ctx, BATCH_SIZE());
+    } else {
+      info.evaluated_ = true;
+    }
+  }
+
+  return ret;
+}
+
+void ObExpr::set_all_null(ObEvalCtx &ctx, const int64_t size) const {
+  if (is_uniform_format(get_format(ctx))) {
+    char *frame = ctx.frames_[frame_idx_];
+    ObDatum *datum = reinterpret_cast<ObDatum *>(frame + datum_off_);
+    ObDatum *datum_end = datum + size;
+    for (; datum < datum_end; datum += 1) {
+      datum->set_null();
+    }
+  } else {
+    get_nulls(ctx).set_all(size);
+  }
+  get_vector(ctx)->set_has_null();
 }
 
 int expr_default_eval_batch_func(const ObExpr &expr,
                                  ObEvalCtx &ctx,
                                  const ObBitVector &skip,
-                                 const int64_t size)
+                                 const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
 
@@ -715,9 +1202,9 @@ int expr_default_eval_batch_func(const ObExpr &expr,
   ObBitVector *evaluated_flags = to_bit_vector(frame + expr.eval_flags_off_);
   ObDatum *datum = reinterpret_cast<ObDatum *>(frame + expr.datum_off_);
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
-  batch_info_guard.set_batch_size(size);
+  batch_info_guard.set_batch_size(bound.batch_size());
   bool got_null = false;
-  for (int64_t i = 0; OB_SUCC(ret) && i < size; i++) {
+  for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
     if (!skip.contain(i) && !evaluated_flags->contain(i)) {
       // set current evaluate index
       batch_info_guard.set_batch_idx(i);
@@ -733,6 +1220,32 @@ int expr_default_eval_batch_func(const ObExpr &expr,
   if (got_null) {
     expr.get_eval_info(ctx).notnull_ = false;
   }
+  return ret;
+}
+
+int expr_default_eval_batch_func(const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const int64_t size)
+{
+  return expr_default_eval_batch_func(expr, ctx, skip, EvalBound(size));
+}
+
+int expr_default_eval_vector_func(const ObExpr &expr,
+                             ObEvalCtx &ctx,
+                             const ObBitVector &skip,
+                             const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (!expr.batch_result_) {
+    ObDatum *datum = NULL;
+    ret = expr.eval(ctx, datum);
+  } else if (OB_LIKELY(bound.is_full_size())) {
+    ret = (*expr.eval_batch_func_)(expr, ctx, skip, bound.batch_size());
+  } else {
+    ret = expr_default_eval_batch_func(expr, ctx, skip, bound);
+  }
+
   return ret;
 }
 
@@ -815,6 +1328,79 @@ int eval_assign_question_mark_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     }
   }
   return ret;
+}
+
+template <typename VectorType>
+int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  const VectorType *vector = reinterpret_cast<const VectorType *>(header_.vector_buf_);
+  J_COMMA();
+  BUF_PRINTF("meta: ");
+  pos += vector->to_string(buf + pos, buf_len - pos);
+  BUF_PRINTF(", data: ");
+  J_ARRAY_START();
+  for (int64_t i = bound_.start(); i < bound_.end(); i++) {
+    J_OBJ_START();
+    if (nullptr != skip_ && skip_->at(i)) {
+      BUF_PRINTF("idx: %ld, data: skipped", i);
+    } else {
+      BUF_PRINTF("idx: %ld, null: %d", i, vector->is_null(i));
+      if (!vector->is_null(i)) {
+        ObLength length = vector->get_length(i);
+        BUF_PRINTF(", len: %d, ptr: %p, hex: ", length, vector->get_payload(i));
+        hex_print(vector->get_payload(i), length, buf, buf_len, pos);
+        ObObj tmp_obj;
+        ObDatum* tmp_datum = new ObDatum(vector->get_payload(i), length, vector->is_null(i));
+        if (OB_SUCCESS == tmp_datum->to_obj(tmp_obj, expr_.obj_meta_, expr_.obj_datum_map_)) {
+          BUF_PRINTF(", value: ");
+          pos += tmp_obj.to_string(buf + pos, buf_len - pos);
+        }
+      }
+    }
+    J_OBJ_END();
+    if (VEC_UNIFORM_CONST == header_.format_) {
+      break;
+    }
+    if (i != bound_.end() - 1) {
+      J_COMMA();
+    }
+  }
+  J_ARRAY_END();
+  return pos;
+}
+
+DEF_TO_STRING(ToStrVectorHeader)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  switch (header_.format_) {
+    case VEC_FIXED: {
+      J_KV("format", "VEC_FIXED");
+      pos += to_string_helper<ObFixedLengthBase>(buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_DISCRETE: {
+      J_KV("format", "VEC_DISCRETE");
+      pos += to_string_helper<ObDiscreteBase>(buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_UNIFORM: {
+      J_KV("format", "VEC_UNIFORM");
+      ObDatum d;
+      pos += to_string_helper<UniformFormat>(buf + pos, buf_len - pos);
+      break;
+    }
+    case VEC_UNIFORM_CONST: {
+      J_KV("format", "VEC_UNIFORM_CONST");
+      pos += to_string_helper<ConstUniformFormat>(buf + pos, buf_len - pos);
+      break;
+    }
+    default:
+      J_KV(K_(header_.format));
+  }
+  J_OBJ_END();
+  return pos;
 }
 
 } // end namespace sql

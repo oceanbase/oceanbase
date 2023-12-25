@@ -57,6 +57,10 @@ public:
       const int64_t row_cap,
       common::ObDatum *datums);
 
+  int decode_vector(
+      const ObIRowIndex* row_index,
+      ObVectorDecodeCtx &vector_ctx);
+
   int get_row_count(
       const ObIRowIndex *row_index,
       const int64_t *row_ids,
@@ -301,8 +305,10 @@ public:
       const bool contains_null,
       int64_t &count) override final;
   virtual int get_aggregate_result(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_offset,
-      const share::schema::ObColumnParam *col_param,
+      const share::schema::ObColumnParam &col_param,
       const int64_t *row_ids,
       const int64_t row_cap,
       storage::ObAggDatumBuf &agg_datum_buf,
@@ -313,6 +319,9 @@ public:
     return header_->column_count_;
   }
   virtual int get_column_datum(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
+      const share::schema::ObColumnParam &col_param,
       const int32_t col_offset,
       const int64_t row_index,
       ObStorageDatum &datum) override;
@@ -342,6 +351,18 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       storage::ObGroupByCell &group_by_cell) override;
+  virtual int get_rows(
+      const common::ObIArray<int32_t> &cols,
+      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      const int64_t *row_ids,
+      const int64_t row_cap,
+      const char **cell_datas,
+      const int64_t vec_offset,
+      uint32_t *len_array,
+      sql::ObEvalCtx &eval_ctx,
+      sql::ObExprPtrIArray &exprs) override;
+  virtual bool has_lob_out_row() const override final
+  { return nullptr != header_ && header_->has_lob_out_row(); }
 
 private:
   // use inner_reset to reuse the decoder buffer
@@ -393,6 +414,7 @@ private:
       const share::schema::ObColumnParam *col_param,
       ObStorageDatum &decoded_datum,
       common::ObBitmap &result_bitmap);
+  int get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx);
 
 private:
   const ObMicroBlockHeader *header_;

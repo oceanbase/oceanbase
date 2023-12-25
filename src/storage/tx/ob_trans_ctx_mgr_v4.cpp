@@ -246,11 +246,13 @@ int ObLSTxCtxMgr::offline()
   return ret;
 }
 
-int ObLSTxCtxMgr::process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const
+int ObLSTxCtxMgr::process_callback_(ObTxCommitCallback *&cb_list) const
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < cb_array.count(); i++) {
-    cb_array.at(i).callback();
+  ObTxCommitCallback *next = NULL;
+  for (ObTxCommitCallback *iter = cb_list; iter != NULL; iter = next) {
+    ObTxCommitCallback *next = iter->get_link_next();
+    iter->callback();
   }
   return ret;
 }
@@ -727,7 +729,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("ObLSTxCtxMgr::switch_to_follower_forcedly");
-  ObSEArray<ObTxCommitCallback, 4> cb_array;
+  ObTxCommitCallback *cb_list = NULL;
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
     StateHelper state_helper(ls_id_, state_);
@@ -736,13 +738,10 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
       ret = OB_NOT_INIT;
     } else if (is_follower_()) {
       // already follower, do nothing
-    } else if (OB_FAIL(cb_array.reserve(ls_tx_ctx_map_.count()))) {
-      TRANS_LOG(ERROR, "reserve callback array error", KR(ret));
-      ret = OB_EAGAIN;
     } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_REVOKE))) {
       TRANS_LOG(ERROR, "switch state error", KR(ret), "manager", *this);
     } else {
-      SwitchToFollowerForcedlyFunctor fn(cb_array);
+      SwitchToFollowerForcedlyFunctor fn(cb_list);
       if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
         TRANS_LOG(ERROR, "for each transaction context error", KR(ret), "manager", *this);
       } else {
@@ -756,7 +755,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   }
   timeguard.click();
   // run callback out of lock, ignore ret
-  (void)process_callback_(cb_array);
+  (void)process_callback_(cb_list);
   if (timeguard.get_diff() > 3 * 1000000) {
     TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
   }
@@ -838,7 +837,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   }
   timeguard.click();
 
-  ObSEArray<ObTxCommitCallback, 4> cb_array;
+  ObTxCommitCallback *cb_list = NULL;
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
     timeguard.click();
@@ -850,14 +849,11 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
     } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_REVOKE))) {
       TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(state_));
-    } else if (OB_FAIL(cb_array.reserve(ls_tx_ctx_map_.count()))) {
-      TRANS_LOG(ERROR, "reserve callback array error", KR(ret));
-      ret = OB_EAGAIN;
     } else {
       timeguard.click();
       // TODO
       const int64_t abs_expired_time = INT64_MAX;
-      SwitchToFollowerGracefullyFunctor fn(abs_expired_time, cb_array);
+      SwitchToFollowerGracefullyFunctor fn(abs_expired_time, cb_list);
       if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
         TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
         ret = fn.get_ret();
@@ -882,7 +878,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       timeguard.click();
     }
   }
-  (void)process_callback_(cb_array);
+  (void)process_callback_(cb_list);
   timeguard.click();
   TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
   if (timeguard.get_diff() > 1000000) {
@@ -941,7 +937,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
 {
   int ret = OB_SUCCESS;
   StateHelper state_helper(ls_id_, state_);
-  ObSEArray<ObTxCommitCallback, 4> cb_array;
+  ObTxCommitCallback *cb_list = NULL;
   const KillTransArg arg(graceful);
   ObTimeGuard timeguard("ctxmgr stop");
   {
@@ -961,7 +957,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
       }
 
       if (OB_SUCC(ret)) {
-        KillTxCtxFunctor fn(arg, cb_array);
+        KillTxCtxFunctor fn(arg, cb_list);
         fn.set_release_audit_mgr_lock(true);
         if (OB_FAIL(ls_retain_ctx_mgr_.force_gc_retain_ctx())) {
           TRANS_LOG(WARN, "force gc retain ctx mgr", K(ret));
@@ -977,7 +973,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
   if (timeguard.get_diff() > 3 * 1000000) {
     TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "stop trans use too much time", K(timeguard), "manager", *this);
   }
-  process_callback_(cb_array);
+  process_callback_(cb_list);
   TRANS_LOG(INFO, "[LsTxCtxMgr] stop done", K(timeguard), "manager", *this);
   return ret;
 }
@@ -986,12 +982,12 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("ctxmgr kill_all_tx");
-  ObSEArray<ObTxCommitCallback, 4> cb_array;
+  ObTxCommitCallback *cb_list = NULL;
   const KillTransArg arg(graceful);
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
     const int64_t total_active_readonly_request_count = get_total_active_readonly_request_count();
-    KillTxCtxFunctor fn(arg, cb_array);
+    KillTxCtxFunctor fn(arg, cb_list);
     if (OB_FAIL(ls_retain_ctx_mgr_.force_gc_retain_ctx())) {
       TRANS_LOG(WARN, "force gc retain ctx mgr", K(ret));
     } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
@@ -1002,7 +998,7 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
   if (timeguard.get_diff() > 3 * 1000000) {
     TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "kill_all_tx use too much time", K(timeguard), "manager", *this);
   }
-  (void)process_callback_(cb_array);
+  (void)process_callback_(cb_list);
   TRANS_LOG(INFO, "[LsTxCtxMgr] kill_all_tx done", K(timeguard), "manager", *this);
   return ret;
 }

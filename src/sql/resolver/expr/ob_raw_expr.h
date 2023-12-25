@@ -1684,6 +1684,7 @@ public:
        partition_id_calc_type_(CALC_INVALID),
        may_add_interval_part_(MayAddIntervalPart::NO),
        runtime_filter_type_(NOT_INIT_RUNTIME_FILTER_TYPE),
+       with_null_equal_cond_(false),
        local_session_var_(&alloc),
        local_session_var_id_(OB_INVALID_INDEX_INT64)
   {
@@ -1782,6 +1783,7 @@ public:
   inline bool is_rand_func_expr() const { return has_flag(IS_RAND_FUNC); }
   inline bool is_obj_access_expr() const { return T_OBJ_ACCESS_REF == get_expr_type(); }
   inline bool is_assoc_index_expr() const { return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type(); }
+  virtual inline bool is_white_runtime_filter_expr() const { return false; }
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;
@@ -1895,6 +1897,8 @@ public:
   { return may_add_interval_part_;}
   RuntimeFilterType get_runtime_filter_type() const { return runtime_filter_type_; }
   void set_runtime_filter_type(RuntimeFilterType type) { runtime_filter_type_ = type; }
+  inline bool with_null_equal_cond() const { return with_null_equal_cond_; }
+  inline void set_with_null_equal_cond(bool val) { with_null_equal_cond_ = val; }
   VIRTUAL_TO_STRING_KV(N_ITEM_TYPE, type_,
                        N_RESULT_TYPE, result_type_,
                        N_EXPR_INFO, info_,
@@ -1958,6 +1962,9 @@ protected:
   PartitionIdCalcType partition_id_calc_type_; //for calc_partition_id func to mark calc part type
   MayAddIntervalPart may_add_interval_part_; // for calc_partition_id
   RuntimeFilterType runtime_filter_type_; // for runtime filter
+  // when join with '<=>' in mysql mode, mark runtime filter with null equal condition,
+  // and can not be pushed down as storege white filter
+  bool with_null_equal_cond_;
   share::schema::ObLocalSessionVar local_session_var_;
   int64_t local_session_var_id_;
 private:
@@ -2948,6 +2955,7 @@ public:
                                    int64_t buf_len,
                                    int64_t &pos,
                                    ExplainType type) const;
+  bool is_white_runtime_filter_expr() const override;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,

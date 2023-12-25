@@ -79,9 +79,7 @@ int ObCloneTenantExecutor::wait_clone_tenant_finished_(ObExecContext &ctx,
   const int64_t abs_timeout = ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT; // 102 years
   THIS_WORKER.set_timeout_ts(abs_timeout);
 
-  if (OB_UNLIKELY(ERRSIM_WAIT_CLONE_TENANT_FINISHED_ERROR)) {
-    ret = ERRSIM_WAIT_CLONE_TENANT_FINISHED_ERROR;
-  } else if (OB_UNLIKELY(job_id < 0)) {
+  if (OB_UNLIKELY(job_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(job_id));
   } else if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
@@ -100,16 +98,17 @@ int ObCloneTenantExecutor::wait_clone_tenant_finished_(ObExecContext &ctx,
     // the according record will be moved to __all_clone_job_history from __all_clone_job;
     // if the clone job is failed,
     // the according record will be set as failed status in __all_clone_job and
-    // will be moved to __all_clone_job_history after user executes the "recycle" sql
+    // will be moved to __all_clone_job_history after the related resource is recycled
     bool clone_over = false;
     while (OB_SUCC(ret) && !clone_over) {
       job.reset();
       ob_usleep(2 * 1000 * 1000L);  // 2s
       ObTenantCloneTableOperator table_op;
       ObMySQLTransaction trans;
-      bool exist_in_history = false;
 
-      if (THIS_WORKER.is_timeout()) {
+      if (OB_UNLIKELY(ERRSIM_WAIT_CLONE_TENANT_FINISHED_ERROR)) {
+        ret = ERRSIM_WAIT_CLONE_TENANT_FINISHED_ERROR;
+      } else if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
         LOG_WARN("wait clone tenant timeout", KR(ret), K(job_id));
       } else if (OB_FAIL(ctx.check_status())) {
@@ -119,36 +118,25 @@ int ObCloneTenantExecutor::wait_clone_tenant_finished_(ObExecContext &ctx,
       } else if (OB_FAIL(table_op.init(OB_SYS_TENANT_ID, &trans))) {
         LOG_WARN("failed to init table op", KR(ret));
       } else if (OB_FAIL(table_op.get_sys_clone_job_history(job_id, job))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
+        if (OB_ENTRY_NOT_EXIST == ret) { // clone job is running
           ret = OB_SUCCESS;
+
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(ObTenantCloneUtil::notify_clone_scheduler(OB_SYS_TENANT_ID))) {
+            LOG_WARN("notify clone scheduler failed", KR(tmp_ret));
+          }
         } else {
           LOG_WARN("failed to get clone job history", KR(ret), K(job_id));
         }
+      } else if (job.get_status().is_sys_success_status()) {
+        clone_over = true;
+        LOG_INFO("clone tenant successful", K(job));
+      } else if (job.get_status().is_sys_failed_status()) {
+        ret = OB_ERR_CLONE_TENANT;
+        LOG_WARN("clone tenant failed", KR(ret), K(job));
       } else {
-        exist_in_history = true;
-        if (job.get_status().is_sys_success_status()) {
-          clone_over = true;
-          LOG_INFO("clone tenant successful", K(job));
-        } else if (job.get_status().is_sys_failed_status()) {
-          ret = OB_ERR_CLONE_TENANT;
-          LOG_WARN("clone tenant failed", KR(ret), K(job));
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected status", KR(ret), K(job));
-        }
-      }
-
-      if (OB_SUCC(ret) && !exist_in_history) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_FAIL(table_op.get_clone_job_by_job_id(job_id, job))) {
-          LOG_WARN("failed to get clone job", KR(ret), K(job));
-        } else if (job.get_status().is_sys_failed_status()) {
-          ret = OB_ERR_CLONE_TENANT;
-          LOG_WARN("clone tenant failed", KR(ret), K(job));
-        } else if (OB_TMP_FAIL(ObTenantCloneUtil::notify_clone_scheduler(OB_SYS_TENANT_ID))) {
-          // clone job is running
-          LOG_WARN("notify clone scheduler failed", KR(tmp_ret));
-        }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected status", KR(ret), K(job));
       }
 
       if (OB_UNLIKELY(OB_TIMEOUT == ret)) {

@@ -5037,7 +5037,7 @@ struct ObCreateUserArg : public ObDDLArg
 
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
-                      creator_id_(common::OB_INVALID_ID), primary_zone_()
+                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false)
   {}
   virtual ~ObCreateUserArg()
   {}
@@ -5051,6 +5051,7 @@ public:
   common::ObSArray<share::schema::ObUserInfo> user_infos_;
   uint64_t creator_id_;
   common::ObString primary_zone_; // only used in oracle mode
+  bool is_create_role_;
 };
 
 struct ObDropUserArg : public ObDDLArg

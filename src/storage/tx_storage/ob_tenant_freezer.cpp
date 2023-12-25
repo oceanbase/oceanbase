@@ -1059,6 +1059,7 @@ int ObTenantFreezer::get_tenant_mem_stat_(ObTenantStatistic &stat)
   stat.tenant_memory_limit_ = get_tenant_memory_limit(tenant_id);
   stat.tenant_memory_hold_ = get_tenant_memory_hold(tenant_id);
   stat.max_cached_memstore_size_ = max_cached_memstore_size;
+  stat.memstore_can_get_now_ = ctx.max_mem_memstore_can_get_now_;
 
   stat.memstore_allocated_pos_ = memstore_allocated_pos;
   stat.memstore_frozen_pos_ = memstore_frozen_pos;

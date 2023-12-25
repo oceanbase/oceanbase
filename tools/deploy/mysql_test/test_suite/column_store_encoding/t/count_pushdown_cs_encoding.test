@@ -10,6 +10,7 @@ connection default;
 set @@recyclebin = off;
 set ob_query_timeout=1000000000;
 set ob_trx_timeout=1000000000;
+set session _enable_rich_vector_format = true;
 
 --disable_warnings
 drop table if exists t1,t2,t3,t4,nn1,nn2,t_default_value,t_empty,pt1,pt2,pt3;

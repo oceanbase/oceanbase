@@ -1104,8 +1104,17 @@ int ObPartTransCtx::post_tx_commit_resp_(const int status)
         TRANS_LOG(INFO, "report tx commit result to local scheduler succeed", K(status), KP(this));
 #endif
       }
-    } else { has_skip = true; }
-  } else {
+    } else if (commit_cb_.get_cb_ret() == status) {
+      has_skip = true;
+    } else {
+      // maybe has been callbacked due to switch to follower
+      // the callback status is not final commit status:
+      //   either OB_NOT_MASTER or OB_SWITCH_TO_FOLLOWER_GRACEFULLY
+      // in these case should callback the scheduler with final status again
+      use_rpc = true;
+    }
+  }
+  if (use_rpc) {
     ObTxCommitRespMsg msg;
     build_tx_common_msg_(SCHEDULER_LS, msg);
     msg.commit_version_ = commit_version;

@@ -27,7 +27,7 @@ namespace sql
 {
 
 
-int ObCompactBlockWriter::CurRowInfo::init(const RowMeta *row_meta, const uint8_t offset_width, char* buf)
+int ObCompactBlockWriter::CurRowInfo::init(const ChunkRowMeta *row_meta, const uint8_t offset_width, char* buf)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row_meta) || OB_ISNULL(buf)) {
@@ -253,7 +253,7 @@ int ObCompactBlockWriter::inner_add_row(const common::ObIArray<ObExpr*> &exprs, 
 
 template <typename T>
 int ObCompactBlockWriter::inner_process_datum(const ObDatum &src_datum, const int64_t cur_pos,
-                                              const RowMeta &row_meta, CurRowInfo &row_info)
+                                              const ChunkRowMeta &row_meta, CurRowInfo &row_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(row_info.buf_)) {
@@ -299,7 +299,7 @@ int ObCompactBlockWriter::inner_process_datum(const ObDatum &src_datum, const in
 int ObCompactBlockWriter::get_row_stored_size(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, uint64_t &size)
 {
   int ret = OB_SUCCESS;
-  const RowMeta &row_meta = *get_meta();
+  const ChunkRowMeta &row_meta = *get_meta();
   int64_t bit_map_size = sql::ObBitVector::memory_size(row_meta.col_cnt_);
   int64_t data_size = 0;
   int64_t offset_size = 0;
@@ -340,7 +340,7 @@ int ObCompactBlockWriter::get_row_stored_size(const common::ObIArray<ObExpr*> &e
 int ObCompactBlockWriter::get_row_stored_size(const ObChunkDatumStore::StoredRow &sr, uint64_t &size)
 {
   int ret = OB_SUCCESS;
-  const RowMeta &row_meta = *get_meta();
+  const ChunkRowMeta &row_meta = *get_meta();
   int64_t bit_map_size = sql::ObBitVector::memory_size(row_meta.col_cnt_);
   int64_t data_size = 0;
   int64_t offset_size = 0;
@@ -373,7 +373,7 @@ int ObCompactBlockWriter::get_row_stored_size(const blocksstable::ObStorageDatum
 {
   int ret = OB_SUCCESS;
   int64_t head_size = sizeof(ObChunkDatumStore::StoredRow);
-  const RowMeta &row_meta = *get_meta();
+  const ChunkRowMeta &row_meta = *get_meta();
   int64_t bit_map_size = sql::ObBitVector::memory_size(row_meta.col_cnt_);
   int64_t datum_size = sizeof(ObDatum) * cnt;
   int64_t data_size = 0;

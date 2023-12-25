@@ -16,6 +16,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
+#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
 #include "share/ob_rpc_struct.h"
 
 namespace oceanbase
@@ -172,12 +173,15 @@ int ObSortOp::get_topn_count(int64_t &topn_cnt)
       topn_cnt = std::max(MY_SPEC.minimum_row_count_, limit + offset);
       int64_t row_count = 0;
       ObPhyOperatorType op_type = child_->get_spec().type_;
-      if (PHY_HASH_GROUP_BY != op_type) {
+      if (PHY_HASH_GROUP_BY != op_type && PHY_VEC_HASH_GROUP_BY != op_type) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid child_op_", K(op_type), K(ret));
       } else {
-        ObHashGroupByOp *hash_groupby_op = static_cast<ObHashGroupByOp *>(child_);
-        row_count = hash_groupby_op->get_hash_groupby_row_count();
+        if (op_type == PHY_VEC_HASH_GROUP_BY) {
+          row_count = static_cast<ObHashGroupByVecOp *>(child_)->get_hash_groupby_row_count();
+        } else {
+          row_count = static_cast<ObHashGroupByOp *>(child_)->get_hash_groupby_row_count();
+        }
       }
       if (OB_SUCC(ret)) {
         topn_cnt = std::max(topn_cnt,

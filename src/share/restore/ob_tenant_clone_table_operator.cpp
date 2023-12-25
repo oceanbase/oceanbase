@@ -216,6 +216,20 @@ bool ObTenantCloneStatus::is_sys_release_resource_status() const
   return b_ret;
 }
 
+bool ObTenantCloneStatus::is_sys_release_clone_resource_status() const
+{
+  bool b_ret = false;
+
+  if (ObTenantCloneStatus::Status::CLONE_SYS_CREATE_INNER_RESOURCE_POOL_FAIL <= status_ &&
+      ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL > status_) {
+    // CLONE_SYS_RELEASE_RESOURCE means the clone_tenant has been created and restored successful.
+    // thus, if the clone_job is in or is failed in this status, we just need to release the according snapshot.
+    b_ret = true;
+  }
+
+  return b_ret;
+}
+
 ObCloneJob::ObCloneJob() :
   trace_id_(),
   tenant_id_(OB_INVALID_TENANT_ID),

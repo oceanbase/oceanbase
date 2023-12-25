@@ -82,8 +82,8 @@ public:
   {
     CREATE_OP = 0,
     DROP_OP = 1,
-    RESTORE_OP = 2,
-    FORK_OP = 3,
+    RESTORE_OP = 2,   // a type of clone job
+    FORK_OP = 3,      // a type of clone job
     MAX,
   };
 public:
@@ -137,11 +137,11 @@ public:
                                       const uint64_t source_tenant_id,
                                       const share::ObTenantSnapshotID &snapshot_id,
                                       share::ObTenantSnapItem &item);
-  static int add_restore_tenant_task(ObMySQLTransaction &trans,
-                                     const uint64_t tenant_id,
-                                     const share::ObTenantSnapshotID &tenant_snapshot_id);
-  static int add_restore_tenant_task(ObMySQLTransaction &trans,
-                                     const share::ObTenantSnapItem &snap_item);
+  static int add_clone_tenant_task(ObMySQLTransaction &trans,
+                                   const uint64_t tenant_id,
+                                   const share::ObTenantSnapshotID &tenant_snapshot_id);
+  static int add_clone_tenant_task(ObMySQLTransaction &trans,
+                                   const share::ObTenantSnapItem &snap_item);
   static int generate_tenant_snapshot_name(const uint64_t tenant_id,
                                            ObSqlString &tenant_snapshot_name,
                                            bool is_inner = false);
@@ -149,10 +149,6 @@ public:
                                          share::ObTenantSnapshotID &tenant_snapshot_id);
   static int check_and_get_data_version(const uint64_t tenant_id,
                                         uint64_t &data_version);
-  static int get_sys_ls_info(common::ObISQLClient &sql_client,
-                             const uint64_t tenant_id,
-                             const share::ObTenantSnapshotID &tenant_snapshot_id,
-                             ObArray<share::ObTenantSnapLSReplicaSimpleItem> &simple_items);
   static int check_tenant_has_snapshot(common::ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
                                        bool &has_snapshot);

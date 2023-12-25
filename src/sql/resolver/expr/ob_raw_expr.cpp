@@ -2758,6 +2758,35 @@ void ObOpRawExpr::set_expr_type(ObItemType type)
   }
 }
 
+bool ObOpRawExpr::is_white_runtime_filter_expr() const
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = true;
+  if (OB_FAIL(OB_E(EventTable::EN_PX_DISABLE_WHITE_RUNTIME_FILTER) OB_SUCCESS)) {
+    LOG_WARN("disable push down white filter", K(ret));
+    return false;
+  }
+  // FIXME: @zhouhaiyu.zhy
+  // The in runtime filter is forbidden to push down as white filter because
+  // the white pushdown filter with type WHITE_OP_IN is not available now
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+    bool_ret = false;
+  } else if (with_null_equal_cond()) {
+    // <=> join is not allowed to pushdown as white filter
+    bool_ret = false;
+  } else if (RANGE == runtime_filter_type_ /*|| IN == runtime_filter_type_*/) {
+    for (int i = 0; i < exprs_.count(); ++i) {
+      if (T_REF_COLUMN != exprs_.at(i)->get_expr_type()) {
+        bool_ret = false;
+        break;
+      }
+    }
+  } else {
+    bool_ret = false;
+  }
+  return bool_ret;
+}
+
 ////////////////////////////////////////////////////////////////
 
 int ObPLAssocIndexRawExpr::assign(const ObRawExpr &other)

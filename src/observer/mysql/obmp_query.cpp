@@ -131,6 +131,7 @@ int ObMPQuery::process()
     ObSQLSessionInfo &session = *sess;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
+    session.init_use_rich_format();
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
 

@@ -155,7 +155,6 @@ int ObSSTableIndexFilter::extract_skipping_filter_from_tree(
     sql::ObPushdownFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
-  // We maybe use skipping index for black filter in the future, such as like('abc%'), a + b > 3.
   if (filter.is_filter_white_node()) {
     auto &white_filter = static_cast<sql::ObWhiteFilterExecutor &>(filter);
     IndexList index_list;

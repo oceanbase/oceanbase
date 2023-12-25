@@ -159,7 +159,7 @@ int ObVirtualCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       ret = OB_ITER_END;
     }
   } else {
-    if (OB_FAIL(cg_agg_cells_->process(0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/,
+    if (OB_FAIL(cg_agg_cells_->process(*iter_param_, *access_ctx_, 0/*col_idx*/, nullptr/*reader*/, nullptr/*row_ids*/,
                                        current_group_size_))) {
       LOG_WARN("Fail to process agg cells", K(ret));
     } else {
@@ -315,7 +315,7 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
     STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
   } else if (OB_FAIL(add_lob_header_if_need(*column_param, default_row_.local_allocator_, default_row_.storage_datums_[0]))) {
     STORAGE_LOG(WARN, "Failed to add lob header to default value", K(ret));
-  } else if (!iter_param.enable_pd_aggregate()) {
+  } else if (iter_param.vectorized_enabled_ && !iter_param.enable_pd_aggregate()) {
     const int64_t expr_count = iter_param.output_exprs_->count();
     datum_infos_.set_allocator(access_ctx.stmt_allocator_);
     sql::ObEvalCtx &eval_ctx = iter_param.op_->get_eval_ctx();
@@ -341,7 +341,7 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
       }
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(datum_infos_.push_back(blocksstable::ObSqlDatumInfo(datums, iter_param.output_exprs_->at(i)->obj_datum_map_)))) {
+      } else if (OB_FAIL(datum_infos_.push_back(blocksstable::ObSqlDatumInfo(datums, iter_param.output_exprs_->at(i))))) {
         LOG_WARN("fail to push back datum", K(ret), K(datums));
       }
     }
@@ -450,6 +450,10 @@ int ObDefaultCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
     }
   } else {
     count = query_range_valid_row_count_ > capacity ? capacity : query_range_valid_row_count_;
+    if (iter_param_->op_->enable_rich_format_ &&
+        OB_FAIL(init_exprs_uniform_header(iter_param_->output_exprs_, iter_param_->op_->get_eval_ctx(), count))) {
+      LOG_WARN("Failed to init exprs vector header", K(ret));
+    }
     for(int64_t curr_row = 0; OB_SUCC(ret) && curr_row < count; curr_row++) {
       for (int64_t i = 0; OB_SUCC(ret) && i < iter_param_->out_cols_project_->count(); i++) {
         common::ObDatum &datum = datum_infos_.at(i).datum_ptr_[curr_row];
@@ -457,8 +461,8 @@ int ObDefaultCGScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
         if (OB_UNLIKELY(col_idx >= default_row_.get_column_count())) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected col idx", K(ret), K(col_idx), K(default_row_), KPC(iter_param_));
-        } else if (OB_FAIL(datum.from_storage_datum(default_row_.storage_datums_[col_idx], datum_infos_.at(i).map_type_))) {
-          LOG_WARN("Failed to from storage datum", K(ret), K(col_idx), K(default_row_), K(datum_infos_.at(i).map_type_));
+        } else if (OB_FAIL(datum.from_storage_datum(default_row_.storage_datums_[col_idx], datum_infos_.at(i).get_obj_datum_map()))) {
+          LOG_WARN("Failed to from storage datum", K(ret), K(col_idx), K(default_row_), K(datum_infos_.at(i).get_obj_datum_map()));
         }
       }
     }
@@ -629,7 +633,7 @@ int ObDefaultCGGroupByScanner::read_distinct(const int32_t group_by_col)
   UNUSED(group_by_col);
   int ret = OB_SUCCESS;
   common::ObDatum *datums = group_by_cell_->get_group_by_col_datums_to_fill();
-  if (OB_FAIL(datums[0].from_storage_datum(default_row_.storage_datums_[0], datum_infos_.at(0).map_type_))) {
+  if (OB_FAIL(datums[0].from_storage_datum(default_row_.storage_datums_[0], datum_infos_.at(0).get_obj_datum_map()))) {
     LOG_WARN("Failed to from storage datum", K(ret));
   } else {
     group_by_cell_->set_distinct_cnt(1);

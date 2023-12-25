@@ -28,6 +28,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -261,6 +262,7 @@ int ObCloneScheduler::process_user_clone_job(const share::ObCloneJob &job)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_LOCK_ERROR);
 int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -273,7 +275,10 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
   const ObTenantSnapshotUtil::TenantSnapshotOp op = ObTenantCloneJobType::RESTORE == job_type ?
                                                     ObTenantSnapshotUtil::RESTORE_OP :
                                                     ObTenantSnapshotUtil::FORK_OP;
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_LOCK_ERROR)) {
+    ret = ERRSIM_CLONE_LOCK_ERROR;
+    LOG_WARN("mock clone lock failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -306,7 +311,7 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
           if (ObTenantSnapStatus::CREATING == original_global_state_status) {
             ret = OB_SUCCESS;
             need_wait = true;
-            LOG_INFO("need wait for current tenant restore operation", KR(ret), K(source_tenant_id));
+            LOG_INFO("need wait for current tenant snapshot creation", KR(ret), K(source_tenant_id));
           } else {
             LOG_WARN("GLOBAL_STATE snapshot lock conflict", KR(ret), K(source_tenant_id),
                                                                 K(original_global_state_status));
@@ -315,10 +320,10 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
       } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_has_no_conflict_tasks(source_tenant_id))) {
         LOG_WARN("fail to check tenant has conflict tasks", KR(ret), K(source_tenant_id));
       } else if (ObTenantCloneJobType::RESTORE == job_type &&
-                 OB_FAIL(ObTenantSnapshotUtil::add_restore_tenant_task(trans, source_tenant_id,
-                                                                       snapshot_id))) {
-        // if job_type is FORK, the snapshot will be updated as RESTORE when it is created successful
-        LOG_WARN("failed to add restore tenant snapshot task", KR(ret), K(source_tenant_id), K(snapshot_id));
+                 OB_FAIL(ObTenantSnapshotUtil::add_clone_tenant_task(trans, source_tenant_id,
+                                                                     snapshot_id))) {
+        // if job_type is FORK, the snapshot will be updated as CLONING when it is created successful
+        LOG_WARN("failed to add clone tenant snapshot task", KR(ret), K(source_tenant_id), K(snapshot_id));
       }
       if (trans.is_started()) {
         int tmp_ret = OB_SUCCESS;
@@ -342,10 +347,6 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
     }
   }
 
-  // if (FAILEDx(wait_source_relative_task_finished_(source_tenant_id))) {
-  //   LOG_WARN("wait source relative task finished failed", KR(ret), KR(source_tenant_id));
-  // }
-
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
     LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), K(job));
@@ -354,6 +355,7 @@ int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_RESOURCE_POOL_ERROR);
 int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -362,7 +364,10 @@ int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
   uint64_t resource_pool_id = job.get_resource_pool_id();
   const int64_t job_id = job.get_job_id();
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_RESOURCE_POOL_ERROR)) {
+    ret = ERRSIM_CLONE_RESOURCE_POOL_ERROR;
+    LOG_WARN("mock clone resource pool failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -402,6 +407,7 @@ int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_CREATE_SNAPSHOT_ERROR);
 int ObCloneScheduler::clone_create_snapshot_for_fork_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -416,7 +422,10 @@ int ObCloneScheduler::clone_create_snapshot_for_fork_tenant(const share::ObClone
   ObSqlString snapshot_name;
   ObTenantSnapshotID tenant_snapshot_id;
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_CREATE_SNAPSHOT_ERROR)) {
+    ret = ERRSIM_CLONE_CREATE_SNAPSHOT_ERROR;
+    LOG_WARN("mock clone create snapshot failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -498,6 +507,7 @@ int ObCloneScheduler::clone_create_snapshot_for_fork_tenant(const share::ObClone
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_WAIT_CREATE_SNAPSHOT_ERROR);
 int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -510,7 +520,10 @@ int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::Ob
   ObMySQLTransaction trans;
   bool need_wait = false;
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_WAIT_CREATE_SNAPSHOT_ERROR)) {
+    ret = ERRSIM_CLONE_WAIT_CREATE_SNAPSHOT_ERROR;
+    LOG_WARN("mock clone wait create snapshot failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -534,14 +547,14 @@ int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::Ob
   } else if (ObTenantSnapStatus::CREATING == item.get_status() ||
              ObTenantSnapStatus::DECIDED == item.get_status()) {
     need_wait = true;
-  } else if (ObTenantSnapStatus::RESTORING == item.get_status()) {
+  } else if (ObTenantSnapStatus::CLONING == item.get_status()) {
     // no need to update snapshot status
   } else if (ObTenantSnapStatus::NORMAL != item.get_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid status for fork tenant snapshot", KR(ret), K(source_tenant_id),
                                                         K(tenant_snapshot_id), K(item));
-  } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::add_restore_tenant_task(trans, item))) {
-    LOG_WARN("fail to update fork tenant snapshot to restoring", KR(ret), K(item));
+  } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::add_clone_tenant_task(trans, item))) {
+    LOG_WARN("fail to update fork tenant snapshot to cloning", KR(ret), K(item));
   }
 
   if (trans.is_started()) {
@@ -572,6 +585,7 @@ int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::Ob
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_CREATE_TENANT_ERROR);
 int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -583,7 +597,10 @@ int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
   const int64_t timeout = GCONF._ob_ddl_timeout;
   ObTenantCloneTableOperator clone_op;
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_CREATE_TENANT_ERROR)) {
+    ret = ERRSIM_CLONE_CREATE_TENANT_ERROR;
+    LOG_WARN("mock clone create tenant failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -603,6 +620,7 @@ int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
       LOG_WARN("fail to update clone tenant id", KR(ret), K(max_id), K(job));
     } else {
       clone_tenant_id = max_id;
+      FLOG_INFO("fetch clone_tenant_id success", K(clone_tenant_id), K(job));
     }
   }
 
@@ -621,15 +639,22 @@ int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_WAIT_CREATE_TENANT_ERROR);
 int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  bool user_finished = false;
+
   ObTenantCloneTableOperator clone_op;
   ObCloneJob user_job_history;
   const uint64_t clone_tenant_id = job.get_clone_tenant_id();
   bool need_wait = false;
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_WAIT_CREATE_TENANT_ERROR)) {
+    ret = ERRSIM_CLONE_WAIT_CREATE_TENANT_ERROR;
+    need_wait = OB_EAGAIN == ret ? true : false;
+    LOG_WARN("mock clone wait create tenant failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -668,9 +693,20 @@ int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
       LOG_WARN("tenant status not match", KR(ret), K(tenant_schema));
     }
   } else {
+    user_finished = true;
     int user_ret_code = user_job_history.get_ret_code();
-    ret = OB_SUCCESS == user_ret_code ? OB_ERR_CLONE_TENANT : user_ret_code;
+    if (OB_SUCCESS == user_ret_code) {
+      ret = OB_ERR_CLONE_TENANT;
+      LOG_WARN("user job is not in success status, but it's ret_code is OB_SUCCESS",
+          KR(ret), K(user_job_history));
+    } else {
+      ret = user_ret_code;
+    }
     LOG_WARN("user_job_history status is not SUCCESS", KR(ret), K(user_job_history));
+  }
+
+  if (OB_FAIL(ret) && !user_finished) {
+    need_wait = true;
   }
 
   if (!need_wait) {
@@ -678,11 +714,12 @@ int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
     if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
       LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), K(job));
     }
-    LOG_INFO("[RESTORE] clone wait tenant restore finish", KR(ret), K(job));
   }
+  LOG_INFO("[RESTORE] clone wait tenant restore finish", KR(ret), K(job));
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_RELEASE_RESOURCE_ERROR);
 int ObCloneScheduler::clone_release_resource(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -691,8 +728,13 @@ int ObCloneScheduler::clone_release_resource(const share::ObCloneJob &job)
   const ObTenantSnapshotID snapshot_id = job.get_tenant_snapshot_id();
   const ObTenantCloneJobType job_type = job.get_job_type();
   int tmp_ret = OB_SUCCESS;
+  bool need_retry = false;
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_RELEASE_RESOURCE_ERROR)) {
+    ret = ERRSIM_CLONE_RELEASE_RESOURCE_ERROR;
+    need_retry = OB_EAGAIN == ret ? true : false;
+    LOG_WARN("mock clone release resource failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -708,16 +750,19 @@ int ObCloneScheduler::clone_release_resource(const share::ObCloneJob &job)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(job));
   } else if (OB_FAIL(ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(*sql_proxy_, job))) {
+    need_retry = true;
     LOG_WARN("failed to release source tenant resource", KR(ret), K(job));
   }
 
-  if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
+  if (OB_FAIL(ret) && need_retry) {
+  } else if (OB_TMP_FAIL(try_update_job_status_(ret, job))) {
     LOG_WARN("fail to update job status", KR(ret), KR(tmp_ret), K(job));
   }
-  LOG_INFO("[RESTORE] clone_release_resource", KR(ret), K(job));
+  LOG_INFO("[RESTORE] clone_release_resource", KR(ret), K(need_retry), K(job));
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CLONE_SYS_FINISH_ERROR);
 int ObCloneScheduler::clone_sys_finish(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -727,7 +772,10 @@ int ObCloneScheduler::clone_sys_finish(const share::ObCloneJob &job)
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantSnapshotID &snapshot_id = job.get_tenant_snapshot_id();
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_SYS_FINISH_ERROR)) {
+    ret = ERRSIM_CLONE_SYS_FINISH_ERROR;
+    LOG_WARN("mock clone sys finish failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -1116,6 +1164,7 @@ int ObCloneScheduler::clone_user_finish(const share::ObCloneJob &job)
 // 1. for clone_tenant, gc the resource of resource_pool and clone_tenant
 // 2. for source_tenant, release global_lock and tenant snapshot
 // 3. for sys_tenant, finish the clone job
+ERRSIM_POINT_DEF(ERRSIM_CLONE_RECYCLE_FAILED_JOB_ERROR);
 int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
@@ -1123,7 +1172,10 @@ int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantCloneStatus job_status = job.get_status();
 
-  if (IS_NOT_INIT) {
+  if (OB_UNLIKELY(ERRSIM_CLONE_RECYCLE_FAILED_JOB_ERROR)) {
+    ret = ERRSIM_CLONE_RECYCLE_FAILED_JOB_ERROR;
+    LOG_WARN("mock clone recycle failed job failed", KR(ret), K(job));
+  } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
   } else if (has_set_stop()) {
@@ -1139,10 +1191,8 @@ int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
   } else if (!job_status.is_sys_failed_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("try to recycle a processing or successful job", KR(ret), K(job));
-  } else if (ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL != job_status &&
+  } else if (job_status.is_sys_release_clone_resource_status() &&
              OB_FAIL(ObTenantCloneUtil::release_clone_tenant_resource_of_clone_job(job))) {
-    // CLONE_SYS_RELEASE_RESOURCE means the clone_tenant has been created and restored successful.
-    // thus, if the clone_job is failed in this status, we just need to release the according snapshot.
     LOG_WARN("fail to release resource of clone tenant", KR(ret), K(job));
   } else if (OB_FAIL(ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(*sql_proxy_, job))) {
     LOG_WARN("fail to release resource of source tenant", KR(ret), K(job));
@@ -1440,48 +1490,6 @@ int ObCloneScheduler::check_meta_tenant_(const uint64_t tenant_id)
 
   if (OB_SUCC(ret) && !is_clone_tenant) {
     stop();
-  }
-
-  return ret;
-}
-
-int ObCloneScheduler::wait_source_relative_task_finished_(
-    const uint64_t source_tenant_id)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  const int64_t timeout = DEFAULT_TIMEOUT;
-  observer::ObInnerSQLConnection *conn = NULL;
-
-  if (!is_user_tenant(source_tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(source_tenant_id));
-  } else if (OB_FAIL(trans.start(sql_proxy_, source_tenant_id))) {
-    LOG_WARN("failed to start trans in user tenant", KR(ret), K(source_tenant_id));
-  } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("conn_ is NULL", KR(ret));
-  //TODO: __all_unit is not in white list
-  } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_table(source_tenant_id,
-                                                           OB_ALL_UNIT_TID,
-                                                           EXCLUSIVE,
-                                                           timeout,
-                                                           conn))) {
-    LOG_WARN("lock dest table failed", KR(ret), K(source_tenant_id));
-  }
-
-  /*If we successfully lock, we can assure that there are currently
-    no related tasks being executed, so we can roll back the lock.
-    Afterwards, new related tasks will not be allowed to be executed
-    because we previously locked the record GLOBAL_STATE (snapshot_id = 0)
-    in the internal table __all_tenant_snapshot */
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    //rollback
-    if (OB_TMP_FAIL(trans.end(false))) {
-      LOG_WARN("trans abort failed", KR(tmp_ret));
-      ret = (OB_SUCC(ret)) ? tmp_ret : ret;
-    }
   }
 
   return ret;

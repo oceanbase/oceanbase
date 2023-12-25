@@ -69,12 +69,32 @@ void ObTenantCloneService::stop()
 
 void ObTenantCloneService::wait()
 {
-  startup_accel_handler_.wait();
+  int ret = OB_SUCCESS;
+  while(OB_FAIL(wait_())) {
+    usleep(100000);
+  }
+}
+
+int ObTenantCloneService::wait_()
+{
+  int ret = OB_SUCCESS;
+
+  if (is_started_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObTenantCloneService is running when wait function is called", KR(ret), KPC(this));
+    stop();
+  } else {
+    startup_accel_handler_.wait();
+  }
+  return ret;
 }
 
 void ObTenantCloneService::destroy()
 {
-  startup_accel_handler_.destroy();
+  if (IS_INIT) {
+    startup_accel_handler_.destroy();
+    is_inited_ = false;
+  }
 }
 
 int ObTenantCloneService::get_clone_job_(ObArray<ObCloneJob>& clone_jobs)

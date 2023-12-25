@@ -151,6 +151,7 @@ int ObMPStmtPrexecute::before_process()
       uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
+      session->init_use_rich_format();
       session->set_proxy_version(get_proxy_version());
       int64_t packet_len = (reinterpret_cast<const ObMySQLRawPacket &>
                                 (req_->get_packet())).get_clen();

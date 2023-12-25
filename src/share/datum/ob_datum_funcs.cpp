@@ -18,6 +18,8 @@
 #include "sql/engine/ob_serializable_function.h"
 #include "sql/engine/ob_bit_vector.h"
 #include "share/ob_cluster_version.h"
+#include "share/vector/vector_op_util.h"
+#include "share/vector/expr_cmp_func.h"
 
 namespace oceanbase {
 using namespace sql;
@@ -807,15 +809,6 @@ struct DatumFixedDoubleHashCalculator : public DefHashMethod<T>
   }
 };
 
-template <typename T, bool IS_VEC>
-struct VectorIter
-{
-  explicit VectorIter(T *vec) : vec_(vec) {}
-  T &operator[](const int64_t i) const { return IS_VEC ? vec_[i] : vec_[0]; }
-private:
-  T *vec_;
-};
-
 template <typename DatumHashFunc>
 struct DefHashFunc
 {
@@ -1269,7 +1262,15 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
       res = &DECINT_BASIC_FUNCS[width];
     } else {
       res = &EXPR_BASIC_FUNCS[type];
+      // set row cmp funcs
+      // FIXME: add precision here
     }
+    sql::ObDatumMeta meta(type, cs_type, scale, precision);
+    NullSafeRowCmpFunc null_first_cmp = nullptr, null_last_cmp = nullptr;
+    // for inner enum, cmp function is null
+    VectorCmpExprFuncsHelper::get_cmp_set(meta, meta, null_first_cmp, null_last_cmp);
+    res->row_null_first_cmp_ = null_first_cmp;
+    res->row_null_last_cmp_ = null_last_cmp;
   } else {
     LOG_WARN_RET(common::OB_INVALID_ARGUMENT, "invalid obj type", K(type));
   }
@@ -1432,8 +1433,9 @@ bool split_basic_func_for_ser(void)
 }
 bool g_split_basic_func_for_ser = split_basic_func_for_ser();
 
-static_assert(sizeof(sql::ObExprBasicFuncs) == 12 * sizeof(void *)
-              && ObMaxType * 12 == sizeof(EXPR_BASIC_FUNCS) / sizeof(void *),
+static const int EXPR_BASIC_FUNC_MEMBER_CNT  = sizeof(ObExprBasicFuncs) / sizeof(void *);
+
+static_assert(ObMaxType * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_BASIC_PART1,
                    EXPR_BASIC_FUNCS_PART1,
@@ -1443,7 +1445,8 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_BASIC_PART2,
                    EXPR_BASIC_FUNCS_PART2,
                    sizeof(EXPR_BASIC_FUNCS_PART2) / sizeof(void *));
 
-static_assert(CS_TYPE_MAX * 2 * 2 * 12 == sizeof(EXPR_BASIC_STR_FUNCS) / sizeof(void *),
+static_assert(CS_TYPE_MAX * 2 * 2 * EXPR_BASIC_FUNC_MEMBER_CNT
+                == sizeof(EXPR_BASIC_STR_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART1,
                    EXPR_BASIC_STR_FUNCS_PART1,
@@ -1452,7 +1455,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_STR_BASIC_PART2,
                    EXPR_BASIC_STR_FUNCS_PART2,
                    sizeof(EXPR_BASIC_STR_FUNCS_PART2) / sizeof(void *));
 
-static_assert(2 * 12 == sizeof(EXPR_BASIC_JSON_FUNCS) / sizeof(void *),
+static_assert(2 * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_JSON_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_JSON_BASIC_PART1,
                    EXPR_BASIC_JSON_FUNCS_PART1,
@@ -1461,7 +1464,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_JSON_BASIC_PART2,
                    EXPR_BASIC_JSON_FUNCS_PART2,
                    sizeof(EXPR_BASIC_JSON_FUNCS_PART2) / sizeof(void *));
 
-static_assert(2 * 12 == sizeof(EXPR_BASIC_GEO_FUNCS) / sizeof(void *),
+static_assert(2 * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_GEO_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_GEO_BASIC_PART1,
                    EXPR_BASIC_GEO_FUNCS_PART1,
@@ -1470,7 +1473,8 @@ REG_SER_FUNC_ARRAY(OB_SFA_EXPR_GEO_BASIC_PART2,
                    EXPR_BASIC_GEO_FUNCS_PART2,
                    sizeof(EXPR_BASIC_GEO_FUNCS_PART2) / sizeof(void *));
 
-static_assert(OB_NOT_FIXED_SCALE * 12 == sizeof(FIXED_DOUBLE_BASIC_FUNCS) / sizeof(void *),
+static_assert(OB_NOT_FIXED_SCALE * EXPR_BASIC_FUNC_MEMBER_CNT
+                == sizeof(FIXED_DOUBLE_BASIC_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_FIXED_DOUBLE_BASIC_PART1,
                    EXPR_BASIC_FIXED_DOUBLE_FUNCS_PART1,
@@ -1486,7 +1490,7 @@ REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_BASIC_PART1, EXPR_BASIC_DECINT_FUNCS_PART1
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_BASIC_PART2, EXPR_BASIC_DECINT_FUNCS_PART2,
                    sizeof(EXPR_BASIC_DECINT_FUNCS_PART2) / sizeof(void *));
 
-static_assert(1 * 12 == sizeof(EXPR_BASIC_UDT_FUNCS) / sizeof(void *),
+static_assert(1 * EXPR_BASIC_FUNC_MEMBER_CNT == sizeof(EXPR_BASIC_UDT_FUNCS) / sizeof(void *),
               "unexpected size");
 REG_SER_FUNC_ARRAY(OB_SFA_EXPR_UDT_BASIC_PART1,
                    EXPR_BASIC_UDT_FUNCS_PART1,

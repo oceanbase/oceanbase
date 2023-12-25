@@ -340,8 +340,10 @@ public:
   {
     int ret = OB_SUCCESS;
 
-    if (!bl_key.is_valid()) {
+    if (OB_UNLIKELY(!bl_key.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
+    } else if (0 == map_.size()) {
+      in_black_list = false;
     } else if (OB_ENTRY_EXIST == map_.contains_key(bl_key)) {
       in_black_list = true;
     } else {

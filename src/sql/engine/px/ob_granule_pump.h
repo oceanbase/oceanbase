@@ -68,7 +68,10 @@ public :
       pruning_status_(READY_PRUNING),
       pruning_ret_(OB_SUCCESS),
       partitions_info_(), parallelism_(0),
-      tablet_size_(0), gi_attri_flag_(0) {}
+      tablet_size_(0), gi_attri_flag_(0),
+      lucky_one_(true),
+      query_range_by_runtime_filter_(),
+      extract_finished_(false) {}
   virtual ~ObGranulePumpArgs() { reset(); };
 
   TO_STRING_KV(K(partitions_info_),
@@ -86,6 +89,7 @@ public :
     tablet_arrays_.reset();
     run_time_pruning_flags_.reset();
     external_table_files_.reset();
+    query_range_by_runtime_filter_.reset();
   }
 
 
@@ -105,6 +109,11 @@ public :
   int64_t parallelism_;
   int64_t tablet_size_;
   uint64_t gi_attri_flag_;
+  // -----for runtime filter extract query range
+  bool lucky_one_; // atomic, indicatee which thread is luckly to do extract query range
+  ObSEArray<ObNewRange, 16> query_range_by_runtime_filter_;
+  bool extract_finished_;
+  //-----end
 };
 
 // 引入 TaskSet 的概念，是为了处理一个 GI 下管多张表的场景。

@@ -1169,6 +1169,8 @@ int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &
     LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, memory_size, allowed_mem_limit))) {
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
+  } else if (OB_FAIL(update_throttle_config_(tenant_id))) {
+    LOG_WARN("update throttle config failed", K(ret), K(tenant_id));
   } else if (FALSE_IT(tenant->set_unit_memory_size(allowed_mem_limit))) {
     // unreachable
   }
@@ -1309,8 +1311,8 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
-      if (OB_TMP_FAIL(update_throttle_config_())) {
-
+      if (OB_TMP_FAIL(update_throttle_config_(tenant_id))) {
+        LOG_WARN("update throttle config failed", K(ret), K(tenant_id));
       }
     }
   }
@@ -1376,16 +1378,19 @@ int ObMultiTenant::update_tenant_freezer_config_()
   return ret;
 }
 
-int ObMultiTenant::update_throttle_config_()
+int ObMultiTenant::update_throttle_config_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
 
-  if (OB_ISNULL(share_mem_alloc_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("share mem alloc mgr should not be null", K(ret));
-  } else {
-    (void)share_mem_alloc_mgr->update_throttle_config();
+  MTL_SWITCH(tenant_id) {
+    ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
+
+    if (OB_ISNULL(share_mem_alloc_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("share mem alloc mgr should not be null", K(ret));
+    } else {
+      (void)share_mem_alloc_mgr->update_throttle_config();
+    }
   }
   return ret;
 }

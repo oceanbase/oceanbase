@@ -83,7 +83,7 @@ bool ObLSSnapshotReportInfo::scn_range_is_valid(const ObTenantSnapItem &tenant_s
   int ret = OB_SUCCESS;
   bool bret = true;
 
-  if ((ObTenantSnapStatus::RESTORING == tenant_snap_item.get_status() ||
+  if ((ObTenantSnapStatus::CLONING == tenant_snap_item.get_status() ||
        ObTenantSnapStatus::NORMAL == tenant_snap_item.get_status())) {
     if (begin_interval_scn_ < tenant_snap_item.get_clog_start_scn() ||
         end_interval_scn_ > tenant_snap_item.get_snapshot_scn()) {

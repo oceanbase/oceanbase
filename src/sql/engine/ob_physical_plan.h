@@ -345,6 +345,8 @@ public:
   inline void set_enable_append(const bool enable_append) { enable_append_ = enable_append; }
   inline bool get_enable_append() const { return enable_append_; }
   inline void set_append_table_id(const uint64_t append_table_id) { append_table_id_ = append_table_id; }
+  inline void set_use_rich_format(const bool v) { use_rich_format_ = v; }
+  inline bool get_use_rich_format() const { return use_rich_format_; }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
@@ -662,6 +664,7 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;

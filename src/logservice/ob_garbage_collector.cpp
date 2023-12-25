@@ -1683,7 +1683,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
       } else if (OB_SUCCESS != (tmp_ret = switch_leader_adapter.remove_from_election_blacklist(id.id(), self_addr_))) {
         CLOG_LOG(WARN, "remove_from_election_blacklist failed", K(tmp_ret), K(id), K_(self_addr));
-      } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id, false))) {
+      } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id))) {
         CLOG_LOG(WARN, "remove_ls failed", K(tmp_ret), K(id));
       } else {
         CLOG_LOG(INFO, "remove_ls success", K(id), K(gc_reason));

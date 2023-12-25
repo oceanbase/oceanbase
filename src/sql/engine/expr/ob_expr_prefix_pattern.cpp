@@ -78,6 +78,7 @@ int ObExprPrefixPattern::eval_prefix_pattern(const ObExpr &expr, ObEvalCtx &ctx,
       prefix_len = len_param->get_int();
     }
   }
+  bool is_result_batch_ascii = false;
   if (OB_FAIL(ret)) {
   } else if (is_valid && OB_FAIL(calc_prefix_pattern(pattern->get_string(),
                                             expr.args_[0]->datum_meta_.cs_type_,
@@ -89,9 +90,11 @@ int ObExprPrefixPattern::eval_prefix_pattern(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("fail to calc prefix pattern", K(ret));
   } else if (!is_valid) {
     expr_datum.set_null();
-  } else if (OB_FAIL(ObExprSubstr::substr(result_str, pattern->get_string(), 1, result_len,
-                                          expr.args_[0]->datum_meta_.cs_type_,
-                                          storage::can_do_ascii_optimize(expr.args_[0]->datum_meta_.cs_type_)))) {
+  } else if (OB_FAIL(ObExprSubstr::substr(
+               result_str, pattern->get_string(), 1, result_len,
+               expr.args_[0]->datum_meta_.cs_type_,
+               storage::can_do_ascii_optimize(expr.args_[0]->datum_meta_.cs_type_), false,
+               is_result_batch_ascii))) {
     LOG_WARN("get substr failed", K(ret));
   } else if (OB_UNLIKELY(result_str.length() <= 0) && lib::is_oracle_mode()) {
     expr_datum.set_null();

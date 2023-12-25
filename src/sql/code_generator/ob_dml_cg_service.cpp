@@ -1195,6 +1195,24 @@ int ObDmlCgService::append_all_pk_column_id(ObSchemaGetterGuard *schema_guard,
   return ret;
 }
 
+int ObDmlCgService::append_shadow_pk_dependent_cid(const ObTableSchema *table_schema,
+                                                   ObIArray<uint64_t> &minimal_column_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+    const ObRowkeyColumn *rowkey_column = rowkey_info.get_column(i);
+    if (!is_shadow_column(rowkey_column->column_id_)) {
+      // do nothing
+    } else if (OB_FAIL(add_var_to_array_no_dup(minimal_column_ids,
+                                               rowkey_column->column_id_ - OB_MIN_SHADOW_COLUMN_ID))) {
+      LOG_WARN("store column id failed", K(ret),
+          "column_id", rowkey_column->column_id_ - OB_MIN_SHADOW_COLUMN_ID);
+    }
+  }
+  return ret;
+}
+
 int ObDmlCgService::append_heap_table_part_id(const ObTableSchema *table_schema,
                                               ObIArray<uint64_t> &part_key_ids)
 {
@@ -1515,9 +1533,16 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
     // append all PK
     LOG_WARN("fail to append all pk to column_id", K(ret), K(table_schema->get_table_name_str()));
   } else if (!is_primary_index) {
-    // append update column
+    // append update column and shadow_pk dependent column
+    //
+    // When defensive_check verifies shadow_pk,
+    // it will use the shadow_pk column and the columns that shadow_pk depends on for comparison. However,
+    // in minimal mode, the columns that shadow_pk depends on will be cut out,
+    // and the verification will fail, so shadow_pk dependency is needed here. The columns are also passed on
     if (OB_FAIL(append_upd_assignment_column_id(table_schema, das_upd_ctdef, minimal_column_ids))) {
       LOG_WARN("fail to append upd assignment column_id", K(ret), K(index_dml_info));
+    } else if (OB_FAIL(append_shadow_pk_dependent_cid(table_schema, minimal_column_ids))) {
+      LOG_WARN("fail to append shadow_pk dependent cid", K(ret), K(table_schema->get_table_name_str()));
     }
   } else if (OB_FAIL(is_table_has_unique_key(schema_guard, table_schema, has_uk))) {
     LOG_WARN("fail to check table has UK", K(ret));
@@ -1654,7 +1679,15 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
     // append PK
     LOG_WARN("fail to append all pk to column_id", K(ret), K(index_tid));
   } else if (!is_primary_index) {
-    // index_table only record PK
+    // index_table record PK and the dependent columns of shadow_pk
+    //
+    // When defensive_check verifies shadow_pk,
+    // it will use the shadow_pk column and the columns that shadow_pk depends on for comparison. However,
+    // in minimal mode, the columns that shadow_pk depends on will be cut out,
+    // and the verification will fail, so shadow_pk dependency is needed here. The columns are also passed on
+    if (OB_FAIL(append_shadow_pk_dependent_cid(table_schema, minimal_column_ids))) {
+      LOG_WARN("fail to append shadow_pk dependent cid", K(ret), K(table_schema->get_table_name_str()));
+    }
   } else if (OB_FAIL(append_all_uk_column_id(schema_guard, table_schema, minimal_column_ids))) {
     // append unique key
     LOG_WARN("fail to append all unique key column_id");

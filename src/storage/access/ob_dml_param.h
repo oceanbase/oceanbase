@@ -21,7 +21,6 @@
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define_v4.h"
-#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {

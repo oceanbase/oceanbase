@@ -31,7 +31,7 @@ public:
                char *out, int64_t &out_size);
   int decompress(const char *in, const int64_t in_size, const int64_t uncomp_size,
       char *out, int64_t &out_size);
-  ObCompressorType get_compressor_type() { return compressor_type_; }
+  ObCompressorType get_compressor_type() const { return compressor_type_; }
 
   int calc_need_size(int64_t in_size, int64_t &need_size);
 private:

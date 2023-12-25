@@ -144,16 +144,16 @@ TEST_F(TestLSService, basic)
   // 1. remove not exist.
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(not_exist_id, exist));
   EXPECT_FALSE(exist);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(not_exist_id, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(not_exist_id));
 
   // 2. remove exist.
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_100, exist));
   EXPECT_TRUE(exist);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_100, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_100));
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_100, exist));
   EXPECT_FALSE(exist);
 
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_102, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_102));
 
   // 3. check empty iter.
   iter.reset();
@@ -221,7 +221,7 @@ TEST_F(TestLSService, tablet_test)
   remove_tablet_arg.tablet_ids_.push_back(tablet_id);
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::remove_tablet(handle, tablet_id));
 
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
 }
 
 TEST_F(TestLSService, ls_safe_destroy)
@@ -256,7 +256,7 @@ TEST_F(TestLSService, ls_safe_destroy)
 
   // 3. remove ls
   LOG_INFO("TestLSService::ls_safe_destroy 1.3");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104, true));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104));
   ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_104, exist));
   ASSERT_FALSE(exist);
 
@@ -287,10 +287,67 @@ TEST_F(TestLSService, ls_safe_destroy)
 
   // 7. remove ls
   LOG_INFO("TestLSService::ls_safe_destroy 1.7");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104, true));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104));
   ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_104, exist));
   ASSERT_FALSE(exist);
 }
+
+TEST_F(TestLSService, create_and_clean)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObCreateLSArg arg;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  bool exist = false;
+  bool waiting = false;
+  ObLSID id_105(105);
+  int64_t MAX_CREATE_STEP = 100;
+  int cnt = 0;
+
+  LOG_INFO("TestLSService::create_and_clean");
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_105, arg));
+  for (int64_t i = 1; i < MAX_CREATE_STEP; i++) {
+    LOG_INFO("create ls break point", K(i));
+    ls_svr->break_point = i;
+    if (OB_FAIL(ls_svr->create_ls(arg)) && OB_BREAK_BY_TEST == ret) {
+      // check exist
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_FALSE(exist);
+      // wait safe destroy
+      cnt = 0;
+      while (cnt++ < 20) {
+        ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+        if (waiting) {
+          ::sleep(1);
+        } else {
+          break;
+        }
+      }
+      ASSERT_FALSE(waiting);
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("create failed but not break by test", K(ret), K(id_105));
+    } else {
+      // create success and finish the break test
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_TRUE(exist);
+      ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_105));
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_FALSE(exist);
+      break;
+    }
+  }
+  cnt = 0;
+  while (cnt++ < 20) {
+    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+    if (waiting) {
+      ::sleep(1);
+    } else {
+      break;
+    }
+  }
+  ASSERT_FALSE(waiting);
+}
+
 
 } // namespace storage
 } // namespace oceanbase

@@ -517,7 +517,6 @@ public:
       int64_t &required_size,
       const bool need_checksums = true);
   int check_and_set_initial_state();
-  int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
   int read_mds_table(
       common::ObIAllocator &allocator,
       ObTabletMdsData &mds_data,
@@ -811,7 +810,7 @@ private:
   int rebuild_memtable(
       const share::SCN &clog_checkpoint_scn,
       common::ObIArray<ObTableHandleV2> &handle_array);
-  int add_memtable(memtable::ObMemtable* const table);
+  int add_memtable(memtable::ObIMemtable* const table);
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
   int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
   int assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_count);

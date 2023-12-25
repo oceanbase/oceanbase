@@ -115,8 +115,10 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
     if (OB_FAIL(ret)) {
     } else if (ob_is_decimal_int(cmp_type.get_calc_type())) {
       ObAccuracy calc_acc;
-      calc_acc.precision_ = MAX(type1.get_precision(), type2.get_precision());
       calc_acc.scale_ = MAX(type1.get_scale(), type2.get_scale());
+      const int64_t int_len1 = type1.get_precision() - type1.get_scale();
+      const int64_t int_len2 = type2.get_precision() - type2.get_scale();
+      calc_acc.precision_ = MIN(MAX(int_len1, int_len2), OB_MAX_DECIMAL_POSSIBLE_PRECISION);
       cmp_type.set_calc_accuracy(calc_acc);
     }
     if (OB_SUCC(ret)) {

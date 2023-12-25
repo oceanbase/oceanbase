@@ -7150,20 +7150,23 @@ int ObPartitionUtils::get_hash_tablet_and_part_id_(
 {
   int ret = OB_SUCCESS;
   indexes.reset();
+   const ObObj *obj = NULL;
   if (OB_UNLIKELY(
       OB_ISNULL(partition_array)
       || partition_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition_array is null or partition_num is invalid",
              KR(ret), KP(partition_array), K(partition_num));
-  } else if (OB_UNLIKELY(
-             1 != row.get_count()
-             || (!row.get_cell(0).is_int() && !row.get_cell(0).is_null()))) {
+  } else if (OB_UNLIKELY(1 != row.get_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is invalid", K(row), KR(ret));
+  } else if (FALSE_IT(obj = &(row.get_cell(0)))) {
+  } else if (OB_UNLIKELY(!obj->is_int() && !obj->is_null())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is invalid", K(row), KR(ret));
   } else {
     // Hash the null value to partition 0
-    int64_t val = row.get_cell(0).is_int() ? row.get_cell(0).get_int() : 0;
+    int64_t val = obj->is_int() ? obj->get_int() : 0;
     int64_t part_idx = OB_INVALID_INDEX;
     const ObPartition *partition = NULL;
     if (OB_UNLIKELY(val < 0)) {

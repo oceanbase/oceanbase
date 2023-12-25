@@ -404,10 +404,10 @@ int ObSimpleServer::simple_close()
       SERVER_LOG(INFO, "safe quit need remove ls", K(MTL_ID()), K(ls_ids));
       for (int i = 0; i < ls_ids.count(); i++) {
         if (ls_ids.at(i).id() > share::ObLSID::SYS_LS_ID) {
-          MTL(ObLSService*)->remove_ls(ls_ids.at(i), false);
+          MTL(ObLSService*)->remove_ls(ls_ids.at(i));
         }
       }
-      MTL(ObLSService*)->remove_ls(share::ObLSID{share::ObLSID::SYS_LS_ID}, false);
+      MTL(ObLSService*)->remove_ls(share::ObLSID{share::ObLSID::SYS_LS_ID});
     }
 
   };

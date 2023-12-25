@@ -773,6 +773,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       }
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(start_time + plan_timeout);
+      phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());
       reference_my_plan(&plan);
       phy_plan_ctx_->set_ignore_stmt(plan.is_ignore());
       phy_plan_ctx_->set_foreign_key_checks(0 != foreign_key_checks);

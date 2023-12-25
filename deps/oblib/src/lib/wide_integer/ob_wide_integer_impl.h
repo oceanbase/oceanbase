@@ -157,7 +157,7 @@ struct ObWideInteger<Bits, Signed>::_impl
     return false;
   }
 
-  static bool add_sub_overflow(bool l_neg, bool r_neg, bool res_neg)
+  static bool add_overflow(bool l_neg, bool r_neg, bool res_neg)
   {
     // positive + positive = negative => overflow
     // negative + negative = positive => overflow
@@ -165,6 +165,18 @@ struct ObWideInteger<Bits, Signed>::_impl
       return !res_neg;
     } else if (!l_neg && !r_neg) {
       return res_neg;
+    }
+    return false;
+  }
+
+  static bool sub_overflow(bool l_neg, bool r_neg, bool res_neg)
+  {
+    // positive - negative = negative => overflow
+    // negative - positive = positive => overflow
+    if (!l_neg && r_neg) {
+      return res_neg;
+    } else if (l_neg && !r_neg) {
+      return !res_neg;
     }
     return false;
   }
@@ -295,28 +307,26 @@ struct ObWideInteger<Bits, Signed>::_impl
   {
     int ret = OB_SUCCESS;
     if (Bits >= Bits2) {
-      constexpr const unsigned op_items = ObWideInteger<Bits2, Signed2>::ITEM_COUNT;
-      if ((void *)&res != (void *)&lhs) {
-        res = lhs;
-      }
-      bool l_neg = is_negative(lhs);
-      bool r_neg = is_negative(rhs);
-      bool overflow = false;
-      for (unsigned i = 0; i < op_items; i++) {
-        uint64_t r_val = rhs.items_[i];
-        if (overflow) {
-          res.items_[i]++;
-          overflow = (res.items_[i] == 0);
+      if (Bits == 128) {
+        dw_type l = *reinterpret_cast<const dw_type *>(lhs.items_);
+        dw_type r = *reinterpret_cast<const dw_type *>(rhs.items_);
+        dw_type result = l + r;
+        res.items_[1] = static_cast<uint64_t>(result>>BASE_BITS);
+        res.items_[0] = static_cast<uint64_t>(result);
+      } else {
+        constexpr const unsigned op_items = ObWideInteger<Bits2, Signed2>::ITEM_COUNT;
+        bool overflows[ITEM_COUNT] = {false};
+        for (unsigned i = 0; i < op_items; i++) {
+          res.items_[i] = lhs.items_[i] + rhs.items_[i];
+          overflows[i] = (rhs.items_[i] > res.items_[i]);
         }
-        res.items_[i] += r_val;
-        overflow = (overflow || (res.items_[i] < r_val));
-      }
-      for (unsigned i = op_items; overflow && i < ITEM_COUNT; i++) {
-        res.items_[i]++;
-        overflow = (res.items_[i] == 0);
-      }
-      if (check_overflow && add_sub_overflow(l_neg, r_neg, is_negative(res))) {
-        ret = OB_OPERATE_OVERFLOW;
+        for (unsigned i = op_items; i < ITEM_COUNT; i++) { res.items_[i] = lhs.items_[i]; }
+        for (unsigned i = 1; i < ITEM_COUNT; i++) {
+          if (overflows[i - 1]) {
+            res.items_[i]++;
+            if (res.items_[i] == 0) { overflows[i] = true; }
+          }
+        }
       }
     } else {
       using calc_type =
@@ -325,11 +335,6 @@ struct ObWideInteger<Bits, Signed>::_impl
       calc_type xres;
       ret = calc_type::_impl::template add<check_overflow>(calc_type(lhs), rhs, xres);
       res = xres;
-      if (check_overflow && OB_SUCCESS == ret) {
-        if (!within_limits(xres)) {
-          ret = OB_OPERATE_OVERFLOW;
-        }
-      }
     }
     return ret;
   }
@@ -347,8 +352,6 @@ struct ObWideInteger<Bits, Signed>::_impl
       if ((void *)&res != (void *)&self) {
         res = self;
       }
-      bool l_neg = is_negative(self);
-      bool r_neg = is_negative(rhs);
       bool overflow = false;
       for (unsigned i = 0; i < op_items; i++) {
         uint64_t r_val = get_item(rhs, i);
@@ -363,19 +366,11 @@ struct ObWideInteger<Bits, Signed>::_impl
         res.items_[i]++;
         overflow = (res.items_[i] == 0);
       }
-      if (check_overflow && add_sub_overflow(l_neg, r_neg, is_negative(res))) {
-        ret = OB_OPERATE_OVERFLOW;
-      }
     } else {
       using calc_type = typename CommonType<ObWideInteger<Bits, Signed>, T>::type;
       calc_type xres;
       ret = calc_type::_impl::template add<check_overflow>(calc_type(self), rhs, xres);
       res = xres;
-      if (check_overflow && OB_SUCCESS == ret) {
-        if (!within_limits(xres)) {
-          ret = OB_OPERATE_OVERFLOW;
-        }
-      }
     }
     return ret;
   }
@@ -408,7 +403,7 @@ struct ObWideInteger<Bits, Signed>::_impl
         res.items_[i]--;
         borrow = (res.items_[i] == BASE_MAX);
       }
-      if (check_overflow && add_sub_overflow(l_neg, r_neg, is_negative(res))) {
+      if (check_overflow && sub_overflow(l_neg, r_neg, is_negative(res))) {
         ret = OB_OPERATE_OVERFLOW;
       }
     } else {
@@ -418,11 +413,6 @@ struct ObWideInteger<Bits, Signed>::_impl
       calc_type xres;
       ret = calc_type::_impl::template sub<check_overflow>(calc_type(lhs), rhs, xres);
       res = xres;
-      if (check_overflow && OB_SUCCESS == ret) {
-        if (!within_limits(xres)) {
-          ret = OB_OPERATE_OVERFLOW;
-        }
-      }
     }
     return ret;
   }
@@ -475,11 +465,6 @@ struct ObWideInteger<Bits, Signed>::_impl
       calc_type xres;
       ret = calc_type::_impl::template sub<check_overflow>(calc_type(self), rhs, xres);
       res = xres;
-      if (check_overflow && OB_SUCCESS == ret) {
-        if (!within_limits(xres)) {
-          ret = OB_OPERATE_OVERFLOW;
-        }
-      }
     }
     return ret;
   }
@@ -589,10 +574,9 @@ struct ObWideInteger<Bits, Signed>::_impl
           //  if h0 > 0 & h1 > 0 => must overflow
           //  else if h0*l1 overflow uint64 or h1*l0 overflow uint64 => must overflow
           //  otherwise cast to int256 to calculate result and check overflow
-          if (h0 > 0 && h1 > 0) {
-            ret = OB_OPERATE_OVERFLOW;
-          } else if (__builtin_mul_overflow(h0, l1, &tmp) || __builtin_mul_overflow(h1, l0, &tmp)) {
-            ret = OB_OPERATE_OVERFLOW;
+          bool overflow1 = false, overflow2 = false;
+          if (h0 == 0 && h1 == 0 && (l0 <= (1ULL << 63)) && (l1 <= (1ULL<<63))) {
+            // do nothing
           } else {
             using calc_type = typename PromotedInteger<ObWideInteger<Bits, Signed>>::type;
             calc_type xres;

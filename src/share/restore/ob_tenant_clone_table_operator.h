@@ -93,6 +93,7 @@ public:
   bool is_sys_processing_status() const;
   bool is_sys_valid_snapshot_status_for_fork() const;
   bool is_sys_release_resource_status() const;
+  bool is_sys_release_clone_resource_status() const;
 
   TO_STRING_KV(K_(status));
 

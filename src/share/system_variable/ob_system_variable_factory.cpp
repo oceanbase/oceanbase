@@ -131,6 +131,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_enable_rich_vector_format",
   "_enable_storage_cardinality_estimation",
   "_force_order_preserve_set",
   "_force_parallel_ddl_dop",
@@ -378,6 +379,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,
   SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION,
   SYS_VAR__FORCE_ORDER_PRESERVE_SET,
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
@@ -849,6 +851,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "runtime_filter_wait_time_ms",
   "runtime_filter_max_in_num",
   "runtime_bloom_filter_max_size",
+  "_enable_rich_vector_format",
   "optimizer_features_enable",
   "_ob_proxy_weakread_feedback",
   "ncharacter_set_connection",
@@ -1261,6 +1264,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarRuntimeFilterWaitTimeMs)
         + sizeof(ObSysVarRuntimeFilterMaxInNum)
         + sizeof(ObSysVarRuntimeBloomFilterMaxSize)
+        + sizeof(ObSysVarEnableRichVectorFormat)
         + sizeof(ObSysVarOptimizerFeaturesEnable)
         + sizeof(ObSysVarObProxyWeakreadFeedback)
         + sizeof(ObSysVarNcharacterSetConnection)
@@ -3367,6 +3371,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_RUNTIME_BLOOM_FILTER_MAX_SIZE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarRuntimeBloomFilterMaxSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableRichVectorFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableRichVectorFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_RICH_VECTOR_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableRichVectorFormat));
       }
     }
     if (OB_SUCC(ret)) {
@@ -6036,6 +6049,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRuntimeBloomFilterMaxSize())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarRuntimeBloomFilterMaxSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ENABLE_RICH_VECTOR_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableRichVectorFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableRichVectorFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableRichVectorFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableRichVectorFormat", K(ret));
       }
       break;
     }

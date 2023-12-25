@@ -54,6 +54,11 @@ public:
       const int64_t row_cap,
       common::ObDatum *datums) const override;
 
+  virtual int decode_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const ObIRowIndex *row_index,
+      ObVectorDecodeCtx &vector_ctx) const override;
+
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
@@ -130,12 +135,15 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
+  template <typename T>
   int extract_ref_and_null_count(
       const int64_t *row_ids,
       const int64_t row_cap,
-      common::ObDatum *datums,
-      int64_t &null_count,
-      uint32_t *ref_buf = nullptr) const;
+      T ref_buf,
+      int64_t &null_count) const;
+
+  template <typename T>
+  void load_ref_to_buf(T ref_buf, const int64_t trav_idx, const uint32_t ref) const;
 
   virtual int get_distinct_count(int64_t &distinct_count) const override;
 

@@ -143,27 +143,36 @@ public:
 
   static int add_int_int(EVAL_FUNC_ARG_DECL);
   static int add_int_int_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_int_int_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_int_uint(EVAL_FUNC_ARG_DECL);
   static int add_int_uint_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_int_uint_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_uint_uint(EVAL_FUNC_ARG_DECL);
   static int add_uint_uint_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_uint_uint_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_uint_int(EVAL_FUNC_ARG_DECL);
   static int add_uint_int_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_uint_int_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_float_float(EVAL_FUNC_ARG_DECL);
   static int add_float_float_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_float_float_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_double_double(EVAL_FUNC_ARG_DECL);
   static int add_double_double_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_double_double_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_number_number(EVAL_FUNC_ARG_DECL);
   static int add_number_number_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
+  static int add_number_number_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+
   static int add_intervalym_intervalym(EVAL_FUNC_ARG_DECL);
   static int add_intervalym_intervalym_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_intervalym_intervalym_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   static int add_intervalym_datetime_common(EVAL_FUNC_ARG_DECL, bool interval_left);
   OB_INLINE static int add_intervalym_datetime(EVAL_FUNC_ARG_DECL)
@@ -275,22 +284,31 @@ public:
   static int add_datetime_datetime_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int add_decimalint32(EVAL_FUNC_ARG_DECL);
   static int add_decimalint32_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint64(EVAL_FUNC_ARG_DECL);
   static int add_decimalint64_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint64_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint128(EVAL_FUNC_ARG_DECL);
   static int add_decimalint128_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint256(EVAL_FUNC_ARG_DECL);
   static int add_decimalint256_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint256_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint512(EVAL_FUNC_ARG_DECL);
   static int add_decimalint512_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint512_with_check(EVAL_FUNC_ARG_DECL);
   static int add_decimalint512_with_check_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint512_with_check_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint32_oracle(EVAL_FUNC_ARG_DECL);
   static int add_decimalint32_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint32_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint64_oracle(EVAL_FUNC_ARG_DECL);
   static int add_decimalint64_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+    static int add_decimalint64_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   static int add_decimalint128_oracle(EVAL_FUNC_ARG_DECL);
   static int add_decimalint128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int add_decimalint128_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
 private:
   static ObArithFunc add_funcs_[common::ObMaxTC];

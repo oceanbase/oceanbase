@@ -30,6 +30,10 @@
 #include "share/ob_rs_mgr.h"
 #include "share/config/ob_server_config.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
+#include "share/vector/ob_fixed_length_vector.h"
+#include "share/vector/ob_continuous_vector.h"
+#include "share/vector/ob_uniform_vector.h"
+#include "share/vector/ob_discrete_vector.h"
 #include "sql/ob_sql_context.h"
 #include "sql/ob_result_set.h"
 #include "sql/optimizer/ob_log_plan_factory.h"
@@ -3111,6 +3115,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
       LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
     } else {
       // update is_use_jit flag
+      phy_plan->set_use_rich_format(sql_ctx.session_info_->use_rich_format());
       phy_plan->stat_.is_use_jit_ = use_jit;
       phy_plan->stat_.enable_early_lock_release_ = sql_ctx.session_info_->get_early_lock_release();
       // if phy_plan's tenant id, which refers the tenant who create this plan,
@@ -3753,6 +3758,8 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
       context.session_info_->get_query_timeout(query_timeout);
       exec_ctx.get_physical_plan_ctx()->set_timeout_timestamp(
         context.session_info_->get_query_start_time() + query_timeout);
+      exec_ctx.get_physical_plan_ctx()->set_rich_format(
+         context.session_info_->use_rich_format());
     }
   }
   return ret;

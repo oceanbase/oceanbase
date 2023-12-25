@@ -130,7 +130,7 @@ TEST_F(TestCreateTabletClog, replay_create_tablet_clog_test)
 
   // 4. remove tablet
   ASSERT_EQ(OB_SUCCESS, ls_service->delete_tablet(ls_id, tablet_id));
-  EXPECT_EQ(OB_SUCCESS, ls_service->remove_ls(ls_id, true));
+  EXPECT_EQ(OB_SUCCESS, ls_service->remove_ls(ls_id));
 
   if (buffer != nullptr) {
     ob_free(buffer);

@@ -214,7 +214,7 @@ public:
   {
     // remove ls
     ObLSID ls_id(1001);
-    ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
+    ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
 
     MockTenantModuleEnv::get_instance().destroy();
     TRANS_LOG(INFO, "TearDownTestCase");

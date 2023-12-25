@@ -30,10 +30,6 @@ namespace oceanbase
 {
 namespace sql
 {
-namespace dtl
-{
-class ObDtlLocalFirstBufferCache;
-} // namespace dtl
 
 class ObSqcLeaderTokenGuard
 {
@@ -159,11 +155,6 @@ public:
   void get_self_dfo_key(dtl::ObDtlDfoKey &key);
 
   void get_parent_dfo_key(dtl::ObDtlDfoKey &key);
-
-  void set_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache *first_buffer_cache)
-  { first_buffer_cache_ = first_buffer_cache; }
-  dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return first_buffer_cache_; }
-
   // 向qc汇报sqc的结束
   int report(int end_ret) const;
 
@@ -217,7 +208,6 @@ private:
   ObPxRpcInitSqcArgs &sqc_arg_;
   // 所有 worker 都抢这个锁，抢到者为 leader，负责推进 msg loop
   common::ObSpinLock leader_token_lock_;
-  dtl::ObDtlLocalFirstBufferCache *first_buffer_cache_;
 
   // 这个锁是临时用，用于互斥多个线程同时用 sqc channel 发数据，
   // Dtl 支持并发访问后可以删掉

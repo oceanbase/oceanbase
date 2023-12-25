@@ -439,7 +439,9 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     if (OB_FAIL(cg_.generate_rt_exprs(scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pushdown_filters_))) {
       LOG_WARN("generate scan ctdef pushdown filter");
     } else if (pd_filter) {
-      ObPushdownFilterConstructor filter_constructor(&cg_.phy_plan_->get_allocator(), cg_);
+      ObPushdownFilterConstructor filter_constructor(
+          &cg_.phy_plan_->get_allocator(), cg_,
+          scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           scan_pushdown_filters, scan_ctdef.pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));
@@ -451,7 +453,9 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
     if (OB_FAIL(cg_.generate_rt_exprs(lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pushdown_filters_))) {
       LOG_WARN("generate lookup ctdef pushdown filter failed", K(ret));
     } else if (pd_filter) {
-      ObPushdownFilterConstructor filter_constructor(&cg_.phy_plan_->get_allocator(), cg_);
+      ObPushdownFilterConstructor filter_constructor(
+          &cg_.phy_plan_->get_allocator(), cg_,
+          lookup_ctdef->pd_expr_spec_.pd_storage_flag_.is_use_column_store());
       if (OB_FAIL(filter_constructor.apply(
           lookup_pushdown_filters, lookup_ctdef->pd_expr_spec_.pd_storage_filters_.get_pushdown_filter()))) {
         LOG_WARN("failed to apply filter constructor", K(ret));

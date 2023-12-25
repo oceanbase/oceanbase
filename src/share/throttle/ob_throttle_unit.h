@@ -153,7 +153,8 @@ public: // throttle configs setter
   void set_resource_limit(const int64_t resource_limit);
   void update_throttle_config(const int64_t resource_limit,
                               const int64_t throttle_trigger_percentage,
-                              const int64_t throttle_max_duration);
+                              const int64_t throttle_max_duration,
+                              bool &config_changed);
 
 private:
   int get_throttle_info_(const ThrottleID &throttle_id, share::ObThrottleInfoGuard &ti_guard);

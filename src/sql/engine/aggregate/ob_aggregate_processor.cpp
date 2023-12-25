@@ -1942,7 +1942,212 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
             aggr_cell.set_extra(result);
             const bool need_rewind = (in_window_func_ || group_id > 0);
+            if (-1 == dir_id_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("dir id is not init", K(ret), K(aggr_info.get_expr_type()));
+            } else if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                                     aggr_info,
+                                     eval_ctx_,
+                                     need_rewind, dir_id_,
+                                     io_event_observer_))) {
+              LOG_WARN("init GroupConcatExtraResult failed", K(ret));
+            } else if (aggr_info.separator_expr_ != NULL && aggr_info.separator_expr_->is_const_expr()) {
+              ObDatum *separator_result = NULL;
+              if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+              } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+                LOG_WARN("eval failed", K(ret));
+              } else {
+                int64_t pos = sizeof(ObDatum);
+                int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+                char *buf = (char*)aggr_alloc_.alloc(len);
+                if (OB_ISNULL(buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fall to alloc buff", K(len), K(ret));
+                } else {
+                  ObDatum **separator_datum = const_cast<ObDatum**>(&result->get_separator_datum());
+                  *separator_datum = new (buf) ObDatum;
+                  if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                    LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                  } else {
+                    LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
+        case T_FUN_HYBRID_HIST: {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(HybridHistExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", "size", sizeof(HybridHistExtraResult));
+          } else {
+            HybridHistExtraResult *result = new (tmp_buf) HybridHistExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+            const bool need_rewind = (in_window_func_ || group_id > 0);
             if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+                                     aggr_info,
+                                     eval_ctx_,
+                                     need_rewind,
+                                     io_event_observer_,
+                                     profile_,
+                                     op_monitor_info_))) {
+              LOG_WARN("init hybrid hist extra result failed");
+            }
+          }
+          break;
+        }
+        case T_FUN_TOP_FRE_HIST: {
+          void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(TopKFreHistExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            TopKFreHistExtraResult *result = new (tmp_buf) TopKFreHistExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+          }
+          break;
+        }
+
+        case T_FUN_AGG_UDF: {
+          CK(NULL != aggr_info.dll_udf_);
+          DllUdfExtra *extra = NULL;
+          if (OB_SUCC(ret)) {
+            void *tmp_buf = NULL;
+            if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(DllUdfExtra)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("allocate memory failed", K(ret));
+            } else {
+              DllUdfExtra *extra = new (tmp_buf) DllUdfExtra(aggr_alloc_, op_monitor_info_);
+              aggr_cell.set_extra(extra);
+              OZ(ObUdfUtil::init_udf_args(aggr_alloc_,
+                                        aggr_info.dll_udf_->udf_attributes_,
+                                        aggr_info.dll_udf_->udf_attributes_types_,
+                                        extra->udf_ctx_.udf_args_));
+              OZ(aggr_info.dll_udf_->udf_func_.process_init_func(extra->udf_ctx_));
+              if (OB_SUCC(ret)) { // set func after udf ctx inited
+                extra->udf_fun_ = &aggr_info.dll_udf_->udf_func_;
+              }
+              OZ(extra->udf_fun_->process_clear_func(extra->udf_ctx_));
+            }
+          }
+          break;
+        }
+        default:
+          break;
+      }
+
+      if (OB_SUCC(ret) && aggr_info.has_distinct_) {
+        set_need_advance_collect();
+        aggr_cell.set_need_advance_collect();
+        if (NULL == aggr_cell.get_extra()) {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(ExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            ExtraResult *result = new (tmp_buf) ExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          // In window function, get result will be called more than once, rewind is needed.
+          //
+          // The distinct set will iterate twice with rollup, for rollup processing and aggregation,
+          // rewind is needed for the second iteration.
+          //
+          // Rollup is supported and only supported in sort based group by with multi-groups,
+          // only groups with group id greater than zero need to rewind.
+          // The groupid of hash groupby also is greater then 0, then need rewind ???
+          const bool need_rewind = (in_window_func_ || group_id > 0);
+          if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
+              eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
+              aggr_info,
+              eval_ctx_,
+              need_rewind,
+              io_event_observer_))) {
+            LOG_WARN("init_distinct_set failed", K(ret));
+          }
+        }
+      }
+    }//end of for
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
+                                         const int64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t alloc_size = GROUP_CELL_SIZE * aggr_infos_.count();
+  if (alloc_size > 0 && 0 == cur_batch_group_idx_ % BATCH_GROUP_SIZE) {
+    if (OB_ISNULL(cur_batch_group_buf_ = (char *)aggr_alloc_.alloc(
+                alloc_size * BATCH_GROUP_SIZE))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc stored row failed", K(alloc_size), K(group_id), K(ret));
+    } else {
+      // The memset is not needed here because the object will be constructed by NEW.
+      // But we memset first then NEW got a better performance because of better CPU cache locality.
+      MEMSET(cur_batch_group_buf_, 0, alloc_size * BATCH_GROUP_SIZE);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    AggrCell *aggr_cells = new (cur_batch_group_buf_)AggrCell[aggr_infos_.count()];
+    new_group_row->n_cells_ = aggr_infos_.count();
+    new_group_row->aggr_cells_ = aggr_cells;
+
+    cur_batch_group_buf_ += alloc_size;
+    ++cur_batch_group_idx_;
+    cur_batch_group_idx_ %= BATCH_GROUP_SIZE;
+  }
+
+  if (OB_SUCC(ret) && has_extra_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_infos_.count(); ++i) {
+      const ObAggrInfo &aggr_info = aggr_infos_.at(i);
+      AggrCell &aggr_cell = new_group_row->aggr_cells_[i];
+      switch (aggr_info.get_expr_type()) {
+        case T_FUN_GROUP_CONCAT:
+        case T_FUN_GROUP_RANK:
+        case T_FUN_GROUP_DENSE_RANK:
+        case T_FUN_GROUP_PERCENT_RANK:
+        case T_FUN_GROUP_CUME_DIST:
+        case T_FUN_MEDIAN:
+        case T_FUN_GROUP_PERCENTILE_CONT:
+        case T_FUN_GROUP_PERCENTILE_DISC:
+        case T_FUN_KEEP_MAX:
+        case T_FUN_KEEP_MIN:
+        case T_FUN_KEEP_SUM:
+        case T_FUN_KEEP_COUNT:
+        case T_FUN_KEEP_WM_CONCAT:
+        case T_FUN_WM_CONCAT:
+        case T_FUN_PL_AGG_UDF:
+        case T_FUN_JSON_ARRAYAGG:
+        case T_FUN_ORA_JSON_ARRAYAGG:
+        case T_FUN_JSON_OBJECTAGG:
+        case T_FUN_ORA_JSON_OBJECTAGG:
+        case T_FUN_ORA_XMLAGG:
+        {
+          void *tmp_buf = NULL;
+          set_need_advance_collect();
+          aggr_cell.set_need_advance_collect();
+          if (OB_ISNULL(tmp_buf = aggr_alloc_.alloc(sizeof(GroupConcatExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else {
+            GroupConcatExtraResult *result = new (tmp_buf) GroupConcatExtraResult(aggr_alloc_, op_monitor_info_);
+            aggr_cell.set_extra(result);
+            const bool need_rewind = (in_window_func_ || group_id > 0);
+            if (-1 == dir_id_) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("dir id is not init", K(ret), K(aggr_info.get_expr_type()));
+            } else if (OB_FAIL(result->init(eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
                                      aggr_info,
                                      eval_ctx_,
                                      need_rewind, dir_id_,
@@ -2096,6 +2301,23 @@ int ObAggregateProcessor::init_one_group(const int64_t group_id,
     LOG_WARN("push_back failed", K(group_id), K(group_row), K(ret));
   } else {
     LOG_DEBUG("succ init group_row", K(group_id), KPC(group_row), K(ret));
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::add_one_group(const int64_t group_id,
+                                        GroupRow *new_group_row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(new_group_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid row", K(ret));
+  } else if (OB_FAIL(fill_group_row(new_group_row, group_id))) {
+    LOG_WARN("failed to generate group row", K(ret));
+  } else if (OB_FAIL(group_rows_.push_back(new_group_row))) {
+    LOG_WARN("push_back failed", K(group_id), K(new_group_row), K(ret));
+  } else {
+    LOG_DEBUG("succ init group_row", K(group_id), K(ret), K(group_rows_.count()));
   }
   return ret;
 }

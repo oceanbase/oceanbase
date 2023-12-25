@@ -93,9 +93,9 @@ public:
     tg_id_(0),
     local_schema_version_(OB_INVALID_VERSION),
     has_start_(false),
-    is_paused_(false),
+    is_leader_(true),
     dag_ref_cnt_(0),
-    need_reuse_for_switch_(false)
+    need_do_for_switch_(true)
   {
   }
 
@@ -157,6 +157,7 @@ public:
   int64_t get_dag_ref() const { return ATOMIC_LOAD(&dag_ref_cnt_); }
   int safe_to_destroy(bool &is_safe);
   int sync_all_dirty_task(common::ObIArray<ObTabletID>& dirty_tasks);
+  void run_task();
 private:
   typedef common::hash::ObHashMap<ObTabletID, ObTTLTaskCtx*> TabletTaskMap;
   typedef TabletTaskMap::iterator tablet_task_iter;
@@ -254,11 +255,10 @@ private:
   void mark_tenant_checked();
   int refresh_tablet_task(ObTTLTaskCtx &ttl_task, bool refresh_status, bool refresh_retcode = false);
   int check_schema_version();
-  void resume();
-  void pause();
+  OB_INLINE bool need_skip_run() { return ATOMIC_LOAD(&need_do_for_switch_); }
 private:
   static const int64_t DEFAULT_TTL_BUCKET_NUM = 100;
-  static const int64_t TTL_PERIODIC_DELAY = 5*1000*1000; //5s
+  static const int64_t TTL_PERIODIC_DELAY = 10*1000*1000; //10s
   static const int64_t TBALE_GENERATE_BATCH_SIZE = 200;
   static const int64_t DEFAULT_TABLE_ARRAY_SIZE = 200;
   static const int64_t DEFAULT_TABLET_PAIR_SIZE = 1024;
@@ -278,9 +278,10 @@ private:
   ObArray<share::ObTabletTablePair> tablet_table_pairs_;
   int64_t local_schema_version_;
   bool has_start_;
-  bool is_paused_;
+  bool is_leader_; // current tenant ttl mgr is in leader ls or not
   volatile int64_t dag_ref_cnt_; // ttl dag ref count for current ls
-  bool need_reuse_for_switch_;
+  // after leader switch, need wait and reset status
+  bool need_do_for_switch_;
 };
 
 } // end namespace table

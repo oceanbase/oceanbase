@@ -3310,8 +3310,21 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "optimizer_features_enable": {
+  "_enable_rich_vector_format": {
     "id": 10150,
+    "name": "_enable_rich_vector_format",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "whether use rich vector format in vectorized execution engine",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | INVISIBLE",
+    "publish_version": "430",
+    "info_cn": "在向量化引擎中, 开启/关闭使用多种列格式描述功能",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "optimizer_features_enable": {
+    "id": 10151,
     "name": "optimizer_features_enable",
     "default_value": "",
     "base_value": "",
@@ -3324,7 +3337,7 @@
     "ref_url": ""
   },
   "_ob_proxy_weakread_feedback": {
-    "id": 10151,
+    "id": 10152,
     "name": "_ob_proxy_weakread_feedback",
     "default_value": "0",
     "base_value": "0",
@@ -3337,7 +3350,7 @@
     "ref_url": ""
   },
   "ncharacter_set_connection": {
-    "id": 10152,
+    "id": 10153,
     "name": "ncharacter_set_connection",
     "default_value": "0",
     "base_value": "0",
@@ -3355,7 +3368,7 @@
     "ref_url": ""
   },
   "automatic_sp_privileges": {
-    "id": 10153,
+    "id": 10154,
     "name": "automatic_sp_privileges",
     "default_value": "1",
     "base_value": "1",
@@ -3368,7 +3381,7 @@
     "ref_url": ""
   },
   "privilege_features_enable": {
-    "id": 10154,
+    "id": 10155,
     "name": "privilege_features_enable",
     "default_value": "",
     "base_value": "",
@@ -3381,7 +3394,7 @@
     "ref_url": ""
   },
   "_priv_control": {
-    "id": 10155,
+    "id": 10156,
     "name": "_priv_control",
     "default_value": "",
     "base_value": "",
@@ -3394,7 +3407,7 @@
     "ref_url": ""
   },
   "_enable_mysql_pl_priv_check": {
-    "id": 10156,
+    "id": 10157,
     "name": "_enable_mysql_pl_priv_check",
     "default_value": "0",
     "base_value": "0",
@@ -3407,7 +3420,7 @@
     "ref_url": ""
   },
   "ob_enable_pl_cache": {
-    "id": 10157,
+    "id": 10158,
     "name": "ob_enable_pl_cache",
     "default_value": "1",
     "base_value": "1",
@@ -3420,7 +3433,7 @@
     "ref_url": ""
   },
   "ob_default_lob_inrow_threshold": {
-    "id": 10158,
+    "id": 10159,
     "name": "ob_default_lob_inrow_threshold",
     "default_value": "4096",
     "base_value": "4096",
@@ -3434,7 +3447,7 @@
     "ref_url": ""
   },
   "_enable_storage_cardinality_estimation": {
-    "id": 10159,
+    "id": 10160,
     "name": "_enable_storage_cardinality_estimation",
     "default_value": "1",
     "base_value": "1",
@@ -3447,7 +3460,7 @@
     "ref_url": ""
   },
     "lc_time_names": {
-    "id": 10160,
+    "id": 10161,
     "name": "lc_time_names",
     "default_value": "en_US",
     "base_value": "en_US",
@@ -3461,7 +3474,7 @@
     "ref_url": ""
   },
   "activate_all_roles_on_login": {
-    "id": 10161,
+    "id": 10162,
     "name": "activate_all_roles_on_login",
     "default_value": "0",
     "base_value": "0",

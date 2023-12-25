@@ -2114,7 +2114,9 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
         }
       }
 
-      if (OB_SUCC(ret) && proxy_stat != 0) {
+      if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID()) {
+        // standby and restore tenant not feedback
+      } else if (OB_SUCC(ret) && proxy_stat != 0) {
         ObObj val;
         val.set_int(proxy_stat);
         if (OB_FAIL(session->update_sys_variable(SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK, val))) {
@@ -6659,7 +6661,9 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                          origin_child_card,
                                          is_partition_wise,
                                          true,
-                                         is_partition_wise))) {
+                                         is_partition_wise,
+                                         ObRollupStatus::NONE_ROLLUP,
+                                         true))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
     } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
@@ -7162,6 +7166,8 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
                  !pushdown_groupby_columns.empty()) {
         can_push = false;
       }
+    } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+      can_push = false;
     } else if (group_exprs.count() != 1) {
       can_push = false;
     } else if (aggrs.count() > 5) {
@@ -8252,7 +8258,8 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
                                         const bool is_partition_wise,
                                         const bool is_push_down,
                                         const bool is_partition_gi,
-                                        const ObRollupStatus rollup_status)
+                                        const ObRollupStatus rollup_status,
+                                        bool force_use_scalar /*false*/)
 {
   int ret = OB_SUCCESS;
   ObLogGroupBy *group_by = NULL;
@@ -8276,6 +8283,9 @@ int ObLogPlan::allocate_group_by_as_top(ObLogicalOperator *&top,
     group_by->set_rollup_status(rollup_status);
     group_by->set_is_partition_wise(is_partition_wise);
     group_by->set_force_push_down((FORCE_GPD & get_optimizer_context().get_aggregation_optimization_settings()) || has_dbms_stats);
+    if (algo == MERGE_AGGREGATE && force_use_scalar) {
+      group_by->set_pushdown_scalar_aggr();
+    }
     if (OB_FAIL(group_by->set_group_by_exprs(group_by_exprs))) {
       LOG_WARN("failed to set group by columns", K(ret));
     } else if (OB_FAIL(group_by->set_rollup_exprs(rollup_exprs))) {
@@ -9973,8 +9983,8 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
     AllocGIContext gi_ctx;
     ObPxPipeBlockingCtx pipe_block_ctx(get_allocator());
     ObLocationConstraintContext location_constraints;
-    AllocMDContext md_ctx;
     AllocBloomFilterContext bf_ctx;
+    AllocOpContext alloc_op_ctx;
     SMART_VAR(ObBatchExecParamCtx, batch_exec_param_ctx) {
       // set up context
       switch (operation) {
@@ -9998,8 +10008,12 @@ int ObLogPlan::plan_tree_traverse(const TraverseOp &operation, void *ctx)
         }
         break;
       }
-      case ALLOC_MONITORING_DUMP: {
-        ctx = &md_ctx;
+      case ALLOC_OP: {
+        if (OB_FAIL(alloc_op_ctx.init())) {
+          LOG_WARN("fail to init alloc op ctx", K(ret));
+        } else {
+          ctx = &alloc_op_ctx;
+        }
         break;
       }
       case RUNTIME_FILTER: {
@@ -11503,7 +11517,7 @@ int ObLogPlan::generate_plan()
   } else if (OB_FAIL(plan_traverse_loop(RUNTIME_FILTER,
                                         ALLOC_GI,
                                         PX_PIPE_BLOCKING,
-                                        ALLOC_MONITORING_DUMP,
+                                        ALLOC_OP,
                                         OPERATOR_NUMBERING,
                                         PX_RESCAN,
                                         EXCHANGE_NUMBERING,

@@ -519,6 +519,9 @@ DEF_BOOL(_enable_parallel_table_creation, OB_TENANT_PARAMETER, "True", "specifie
 DEF_BOOL(enable_major_freeze, OB_CLUSTER_PARAMETER, "True", "specifies whether major_freeze function is turned on. "
          "Value:  True:turned on;  False: turned off",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_BOOL(v4.3, enable_crazy_medium_compaction, OB_CLUSTER_PARAMETER, "False",
+              "enables triggering medium compaction repeatly. The default value is False.",
+              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(ob_event_history_recycle_interval, OB_CLUSTER_PARAMETER, "7d", "[1d, 180d]",
          "the time to recycle event history. Range: [1d, 180d]",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
