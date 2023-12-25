@@ -72,6 +72,7 @@ ObPxMSReceiveVecOp::ObPxMSReceiveVecOp(ObExecContext &exec_ctx, const ObOpSpec &
 void ObPxMSReceiveVecOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
+  output_store_.~ObTempRowStore();
   if (nullptr != mem_context_) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;

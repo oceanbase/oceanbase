@@ -106,7 +106,7 @@ ObPxMSCoordVecOp::ObPxMSCoordVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec
   reader_cnt_(0),
   alloc_(),
   single_row_brs_(),
-  output_store_(&exec_ctx.get_allocator())
+  output_store_()
 {
 }
 
@@ -117,6 +117,7 @@ void ObPxMSCoordVecOp::destroy()
   store_rows_.reset();
   destroy_readers();
   alloc_.reset();
+  output_store_.~ObTempRowStore();
   // no need to reset receive_order_
   // no need to reset interrupt_proc_
   // no need to reset sqc_init_msg_proc_
