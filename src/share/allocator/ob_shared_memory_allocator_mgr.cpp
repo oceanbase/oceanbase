@@ -51,41 +51,60 @@ void ObSharedMemAllocMgr::update_throttle_config()
     int64_t tx_data_limit = total_memory * tx_data_limit_percentage / 100LL;
     int64_t mds_limit = total_memory * mds_limit_percentage / 100LL;
 
+    bool share_config_changed = false;
     (void)share_resource_throttle_tool_.update_throttle_config<FakeAllocatorForTxShare>(
-        share_mem_limit, trigger_percentage, max_duration);
-    (void)share_resource_throttle_tool_.update_throttle_config<ObMemstoreAllocator>(
-        memstore_limit, trigger_percentage, max_duration);
-    (void)share_resource_throttle_tool_.update_throttle_config<ObTenantTxDataAllocator>(
-        tx_data_limit, trigger_percentage, max_duration);
-    (void)share_resource_throttle_tool_.update_throttle_config<ObTenantMdsAllocator>(
-        mds_limit, trigger_percentage, max_duration);
+        share_mem_limit, trigger_percentage, max_duration, share_config_changed);
 
-    SHARE_LOG(INFO,
-              "[Throttle] Update Config",
-              K(share_mem_limit_percentage),
-              K(memstore_limit_percentage),
-              K(tx_data_limit_percentage),
-              K(mds_limit_percentage),
-              K(trigger_percentage),
-              K(max_duration));
-    SHARE_LOG(INFO,
-              "[Throttle] Update Config",
-              THROTTLE_CONFIG_LOG(FakeAllocatorForTxShare, share_mem_limit, trigger_percentage, max_duration));
-    SHARE_LOG(INFO,
-              "[Throttle] Update Config",
-              THROTTLE_CONFIG_LOG(ObMemstoreAllocator, memstore_limit, trigger_percentage, max_duration));
-    SHARE_LOG(INFO,
-              "[Throttle] Update Config",
-              THROTTLE_CONFIG_LOG(ObTenantTxDataAllocator, tx_data_limit, trigger_percentage, max_duration));
-    SHARE_LOG(INFO,
-              "[Throttle] Update Config",
-              THROTTLE_CONFIG_LOG(ObTenantMdsAllocator, mds_limit, trigger_percentage, max_duration));
+    bool memstore_config_changed = false;
+    (void)share_resource_throttle_tool_.update_throttle_config<ObMemstoreAllocator>(
+        memstore_limit, trigger_percentage, max_duration, memstore_config_changed);
+
+    bool tx_data_config_changed = false;
+    (void)share_resource_throttle_tool_.update_throttle_config<ObTenantTxDataAllocator>(
+        tx_data_limit, trigger_percentage, max_duration, tx_data_config_changed);
+
+    bool mds_config_changed = false;
+    (void)share_resource_throttle_tool_.update_throttle_config<ObTenantMdsAllocator>(
+        mds_limit, trigger_percentage, max_duration, mds_config_changed);
+
+    if (share_config_changed || memstore_config_changed || tx_data_config_changed || mds_config_changed) {
+      SHARE_LOG(INFO,
+                "[Throttle] Update Config",
+                K(share_mem_limit_percentage),
+                K(memstore_limit_percentage),
+                K(tx_data_limit_percentage),
+                K(mds_limit_percentage),
+                K(trigger_percentage),
+                K(max_duration));
+
+      if (share_config_changed) {
+        SHARE_LOG(INFO,
+                  "[Throttle] Update Config",
+                  THROTTLE_CONFIG_LOG(FakeAllocatorForTxShare, share_mem_limit, trigger_percentage, max_duration));
+      }
+
+      if (memstore_config_changed) {
+        SHARE_LOG(INFO,
+                  "[Throttle] Update Config",
+                  THROTTLE_CONFIG_LOG(ObMemstoreAllocator, memstore_limit, trigger_percentage, max_duration));
+      }
+
+      if (tx_data_config_changed) {
+        SHARE_LOG(INFO,
+                  "[Throttle] Update Config",
+                  THROTTLE_CONFIG_LOG(ObTenantTxDataAllocator, tx_data_limit, trigger_percentage, max_duration));
+      }
+
+      if (mds_config_changed) {
+        SHARE_LOG(INFO,
+                  "[Throttle] Update Config",
+                  THROTTLE_CONFIG_LOG(ObTenantMdsAllocator, mds_limit, trigger_percentage, max_duration));
+      }
+    }
   } else {
     SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "invalid tenant config", K(tenant_id), K(total_memory));
   }
 }
-
-#undef UPDATE_BY_CONFIG_NAME
 
 }  // namespace share
 }  // namespace oceanbase
