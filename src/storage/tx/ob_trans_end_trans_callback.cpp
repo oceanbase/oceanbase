@@ -77,9 +77,11 @@ int ObTxCommitCallback::callback()
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "tx ctx should not be null for linked commit cb", K(ret), KPC(this));
     } else {
+      linked_ = false;
       tx_ctx_->release_ctx_ref();
+      // _carefully_, DO NOT write code here
+      // Current obj has been free
     }
-    linked_ = false;
   }
   return ret;
 }
