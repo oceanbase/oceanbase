@@ -101,6 +101,8 @@ Password need to be input everytime. If you want to skip this action, please con
 
 ## C/C++ Plugin
 
+We do **not** recommend using C/C++ plugins as they do not provide good indexing capabilities for OceanBase, and they are not compatible with the ccls plugin.
+
 C/C++ plugin can be download and installed in VSCode extension store in the case of simple scenarios:
 
 ![cpp plugins](images/ide-settings-cpp-plugins.png)
