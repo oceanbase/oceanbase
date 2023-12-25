@@ -110,6 +110,7 @@ TEST_F(TestIndexUsageInfo, test_sample_filter)
   // about 10% sample ratio
   bool is_filter = true;
   int64_t count = 0;
+  mgr_.is_sample_mode_=true;
   for (int64_t i = 0; i < 20; i++) {
     int64_t random_num = common::ObClockGenerator::getClock();
     is_filter = mgr_.sample_filterd(random_num);
@@ -118,6 +119,16 @@ TEST_F(TestIndexUsageInfo, test_sample_filter)
     }
   }
   ASSERT_TRUE(count < 20);
+  mgr_.is_sample_mode_=false;
+  count = 0;
+  for (int64_t i = 0; i < 20; i++) {
+    int64_t random_num = common::ObClockGenerator::getClock();
+    is_filter = mgr_.sample_filterd(random_num);
+    if (!is_filter) {
+      count++;
+    }
+  }
+  ASSERT_TRUE(count == 20);
 }
 
 TEST_F(TestIndexUsageInfo, test_refresh_config)
