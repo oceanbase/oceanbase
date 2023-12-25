@@ -367,7 +367,7 @@ int LogEngine::submit_handle_submit_task()
       PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
     }
   } else {
-    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this), KPC(handle_submit_task));
+    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(handle_submit_task)) {
     alloc_mgr_->free_log_handle_submit_task(handle_submit_task);
