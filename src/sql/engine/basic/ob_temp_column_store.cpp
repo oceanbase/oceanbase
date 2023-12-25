@@ -171,6 +171,7 @@ int ObTempColumnStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
                                                 int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
+  read_rows = 0;
   if (OB_UNLIKELY(exprs.count() != column_store_->get_col_cnt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column count mismatch", K(ret), K(exprs.count()), K(column_store_->get_col_cnt()));
