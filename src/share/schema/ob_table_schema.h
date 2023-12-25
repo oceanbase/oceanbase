@@ -2128,6 +2128,9 @@ int ObTableSchema::add_column(const ColumnType &column)
           index_column.type_ = column.get_meta_type();
           index_column.fulltext_flag_ = column.is_fulltext_column();
           index_column.spatial_flag_ = column.is_spatial_generated_column();
+          if (index_column.type_.is_decimal_int()) {
+            index_column.type_.set_scale(column.get_accuracy().get_scale());
+          }
           if (OB_FAIL(index_info_.set_column(column.get_index_position() - 1, index_column))) {
             SHARE_SCHEMA_LOG(WARN, "Fail to set column to index info", KR(ret));
           } else {
