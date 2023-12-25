@@ -68,13 +68,9 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
-  ObExecContext *exec_ctx = nullptr;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
-  } else if (OB_ISNULL(exec_ctx = session->get_cur_exec_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exec context is NULL", K(ret));
   } else if (session->is_varparams_sql_prepare()) {
     // the ps prepare stage does not do type deduction, and directly gives a default type.
     type.set_char();
