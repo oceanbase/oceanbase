@@ -348,6 +348,7 @@ int ObTenantSnapshotScheduler::build_tenant_snapshot_delete_job_(const ObTenantS
 //*************************************************************************
 //Last, insert data into inner table:__all_tenant_snapshot_ls_replica
 //*************************************************************************
+ERRSIM_POINT_DEF(ERRSIM_PREPARE_CREATE_SNAPSHOT_ERROR);
 int ObTenantSnapshotScheduler::prepare_for_create_tenant_snapshot_(
     const ObCreateSnapshotJob &create_job)
 {
@@ -388,6 +389,8 @@ int ObTenantSnapshotScheduler::prepare_for_create_tenant_snapshot_(
         LOG_WARN("failed to insert snapshot ls items", KR(ret), K(snap_ls_items));
       } else if (OB_FAIL(second_table_op.insert_tenant_snap_ls_replica_simple_items(ls_replica_items))) {
         LOG_WARN("failed to insert snapshot ls replica simple items", KR(ret), K(ls_replica_items));
+      } else if (OB_UNLIKELY(ERRSIM_PREPARE_CREATE_SNAPSHOT_ERROR)) {
+        ret = ERRSIM_PREPARE_CREATE_SNAPSHOT_ERROR;
       }
       if (trans.is_started()) {
         int tmp_ret = OB_SUCCESS;
@@ -531,8 +534,8 @@ int ObTenantSnapshotScheduler::get_ls_valid_replicas_(
         const ObIArray<ObLSReplica> &replicas = ls_info.get_replicas();
         ARRAY_FOREACH_N(replicas, j, cnt) {
           const ObLSReplica &replica = replicas.at(j);
-          if (replica.get_replica_type() == REPLICA_TYPE_FULL
-              && replica.get_replica_status() == REPLICA_STATUS_NORMAL) {
+          if (REPLICA_TYPE_FULL == replica.get_replica_type()
+              && REPLICA_STATUS_NORMAL == replica.get_replica_status()) {
             if (OB_FAIL(valid_replicas.push_back(&replica))) {
               LOG_WARN("fail to push back", KR(ret), K(replica), KP(&replica));
             }
@@ -552,6 +555,7 @@ int ObTenantSnapshotScheduler::get_ls_valid_replicas_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_PROCESS_CREATE_SNAPSHOT_ERROR);
 int ObTenantSnapshotScheduler::process_create_tenant_snapshot_(
     const ObCreateSnapshotJob &create_job)
 {
@@ -604,6 +608,8 @@ int ObTenantSnapshotScheduler::process_create_tenant_snapshot_(
     } else if (OB_FAIL(check_log_archive_finish_(user_tenant_id, snapshot_scn, need_wait_archive_finish))) {
       LOG_WARN("failed to execute check_log_archive_finish", KR(ret), K(user_tenant_id), K(snapshot_scn));
     } else if (need_wait_archive_finish) {
+    } else if (OB_UNLIKELY(ERRSIM_PROCESS_CREATE_SNAPSHOT_ERROR)) {
+      ret = ERRSIM_PROCESS_CREATE_SNAPSHOT_ERROR;
     } else if (OB_FAIL(finish_create_tenant_snapshot_(tenant_snapshot_id, user_tenant_id,
                                                       clog_start_scn, snapshot_scn))) {
       LOG_WARN("failed to execute finish_create_tenant_snapshot", KR(ret), K(tenant_snapshot_id),
@@ -803,9 +809,9 @@ int ObTenantSnapshotScheduler::check_create_tenant_snapshot_result_(
       if (OB_SUCC(ret)) {
         int32_t failed_member = failed_addrs.count();
         int32_t creating_member = processing_addrs.count();
-        if (arbitration_service_status.is_enable_like()) {
-          succ_member++;
-        }
+        // if (arbitration_service_status.is_enable_like()) {
+        //   succ_member++;
+        // }
         // attention:
         // in normal case, creating_member + succ_member + failed_member == paxos_replica_num
         // in transfer case, it might happened that creating_member + succ_member + failed_member > paxos_replica_num
@@ -1145,6 +1151,9 @@ int ObTenantSnapshotScheduler::process_delete_tenant_snapshots_(
       const ObTenantSnapshotID &tenant_snapshot_id = delete_job.get_tenant_snapshot_id();
       if (OB_FAIL(table_op.get_tenant_snap_related_addrs(tenant_snapshot_id, addr_array))) {
         LOG_WARN("failed to get snapshot related addrs", KR(ret), K(tenant_snapshot_id));
+      } else if (addr_array.empty()) {
+        //may be that creating the snapshot failed during the preparation phase.
+        LOG_INFO("addr_array in __all_tenant_snapshot_ls_replica is empty", KR(ret), K(tenant_snapshot_id));
       } else if (OB_FAIL(send_delete_tenant_snapshot_rpc_(tenant_snapshot_id, user_tenant_id, addr_array))) {
         LOG_WARN("failed to send delete snapshot rpc", KR(ret), K(tenant_snapshot_id),
                                                             K(user_tenant_id), K(addr_array));

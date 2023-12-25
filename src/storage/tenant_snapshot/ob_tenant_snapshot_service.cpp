@@ -946,7 +946,7 @@ void ObTenantSnapshotService::notify_unit_is_deleting()
     ObThreadCondGuard guard(cond_);
     cond_.signal();
   }
-  LOG_INFO("try_set_running_mode_to_gc finished", KR(ret), KPC(this));
+  LOG_INFO("notify_unit_is_deleting finished", KR(ret), KPC(this));
 }
 
 bool ObTenantSnapshotService::DumpTenantSnapInfoFunctor::operator()(
