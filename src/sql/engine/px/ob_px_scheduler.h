@@ -251,6 +251,9 @@ private:
                         ObArray<ObPxSqcMeta *> &sqcs);
   int wait_for_dfo_finish(ObDfoMgr &dfo_mgr);
 
+  int process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinishSqcResultMsg &pkt,
+                             ObPxSqcMeta *sqc, ObDfo *edge);
+
 private:
   ObPxCoordInfo &coord_info_;
   ObIPxCoordEventListener &listener_;

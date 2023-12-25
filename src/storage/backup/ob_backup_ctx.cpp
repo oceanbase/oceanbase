@@ -825,7 +825,8 @@ ObLSBackupCtx::ObLSBackupCtx()
       sql_proxy_(NULL),
       rebuild_seq_(),
       check_tablet_info_cost_time_(),
-      backup_tx_table_filled_tx_scn_(share::SCN::min_scn())
+      backup_tx_table_filled_tx_scn_(share::SCN::min_scn()),
+      tablet_checker_()
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
@@ -834,7 +835,8 @@ ObLSBackupCtx::~ObLSBackupCtx()
 }
 
 int ObLSBackupCtx::open(
-    const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy)
+    const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
+    common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache)
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObTabletID> tablet_list;
@@ -856,6 +858,8 @@ int ObLSBackupCtx::open(
     LOG_WARN("failed to init stat", K(ret));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
+  } else if (OB_FAIL(tablet_checker_.init(param, sql_proxy, index_kv_cache))) {
+    LOG_WARN("failed to init tablet checker", K(ret), K(param));
   } else {
     max_file_id_ = 0;
     prefetch_task_id_ = 0;
@@ -1032,16 +1036,6 @@ int ObLSBackupCtx::set_max_file_id(const int64_t file_id)
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   max_file_id_ = std::max(file_id, max_file_id_);
-  return ret;
-}
-
-int ObLSBackupCtx::get_prefetch_task_id(int64_t &prefetch_task_id)
-{
-  int ret = OB_SUCCESS;
-  ObMutexGuard guard(mutex_);
-  prefetch_task_id = prefetch_task_id_;
-  prefetch_task_id_++;
-  LOG_INFO("get prefetch task id", K(prefetch_task_id));
   return ret;
 }
 

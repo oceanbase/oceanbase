@@ -326,13 +326,11 @@ public:
   TO_STRING_KV(K_(load_shedding_factor), K_(last_cpu_time), K_(cpu_usage), K_(min_cpu_cnt), K_(max_cpu_cnt), K_(effect_time));
 private:
   int refresh_cpu_utility();
-  int refresh_cpu_usage();
 
 public:
   static const int64_t DEFAULT_LOAD_SHEDDING_FACTOR = 2;
   static const int64_t CPU_TIME_SAMPLING_INTERVAL = 20_s; //20 * 1000 * 1000 us
-  static constexpr double CPU_TIME_THRESHOLD = 0.6; // 60%
-  static constexpr double CPU_USAGE_THRESHOLD = 0.8; // 80%
+  static constexpr double CPU_TIME_THRESHOLD = 0.8; // 80%
   static const int64_t SHEDDER_EXPIRE_TIME = 2_min;
 private:
   int64_t effect_time_;

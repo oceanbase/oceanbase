@@ -1948,7 +1948,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
                                      need_rewind, dir_id_,
                                      io_event_observer_))) {
               LOG_WARN("init GroupConcatExtraResult failed", K(ret));
-            } else if (aggr_info.separator_expr_ != NULL) {
+            } else if (aggr_info.separator_expr_ != NULL && aggr_info.separator_expr_->is_const_expr()) {
               ObDatum *separator_result = NULL;
               if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
                 ret = OB_ERR_UNEXPECTED;
@@ -2120,7 +2120,7 @@ int ObAggregateProcessor::rollup_process(
   } else if (OB_ISNULL(group_row) || OB_ISNULL(rollup_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("group_row is null", KP(group_row), KP(rollup_row), K(ret));
-  } else if (OB_FAIL(rollup_base_process(group_row, rollup_row, diff_expr, group_id))) {
+  } else if (OB_FAIL(rollup_base_process(group_row, rollup_row, diff_expr, group_id, max_group_cnt))) {
     LOG_WARN("failed to rollup process", K(ret));
   }
   LOG_DEBUG("debug rollup process", K(group_id), K(rollup_group_id), K(max_group_cnt));
@@ -2371,6 +2371,63 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
             }
           }
         }
+        if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL && !aggr_info.separator_expr_->is_const_expr()) {
+          ObDatum *separator_result = NULL;
+          aggr_info.separator_expr_->clear_evaluated_flag(eval_ctx_);
+          if (aggr_extra->get_separator_datum() == NULL ||
+              aggr_extra->get_separator_datum()->is_null()) {
+            //do nothing
+          } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                 K(aggr_info.separator_expr_->obj_meta_));
+          } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+            LOG_WARN("eval failed", K(ret));
+          } else if (separator_result->is_null()) {
+            aggr_extra->get_separator_datum() = NULL;
+            rollup_extra->get_separator_datum() = NULL;
+          } else {
+            int64_t pos = sizeof(ObDatum);
+            int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+            int cmp_ret = 0;
+            //need update origin aggr separator expr
+            if (OB_FAIL(aggr_info.separator_expr_->basic_funcs_->null_first_cmp_(*separator_result,
+                                                                                 *aggr_extra->get_separator_datum(),
+                                                                                 cmp_ret))) {
+              LOG_WARN("compare failed", K(ret));
+            } else if (0 != cmp_ret) {
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                ObDatum **separator_datum = const_cast<ObDatum**>(&aggr_extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+                }
+              }
+            }
+            //update rollup extra separator expr
+            if (OB_SUCC(ret) && max_group_cnt != INT64_MIN && cur_rollup_group_idx - max_group_cnt > 1) {
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                ObDatum **separator_datum = const_cast<ObDatum**>(&rollup_extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+                }
+              }
+            }
+          }
+        }
         while (OB_SUCC(ret) && OB_SUCC(aggr_extra->get_next_row(stored_row))) {
           if (OB_ISNULL(stored_row)) {
             ret = OB_ERR_UNEXPECTED;
@@ -2592,6 +2649,39 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
                   if (OB_FAIL(extra->set_bool_mark(i, is_bool))){
                     LOG_WARN("fail to set_bool_mark", K(ret));
                   }
+                }
+              }
+            }
+          }
+          if (OB_SUCC(ret) && aggr_info.separator_expr_ != NULL && !aggr_info.separator_expr_->is_const_expr()) {
+            ObDatum *separator_result = NULL;
+            if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                   K(aggr_info.separator_expr_->obj_meta_));
+            } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+            } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+              LOG_WARN("eval failed", K(ret));
+            } else {
+              int64_t pos = sizeof(ObDatum);
+              int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+              char *buf = (char*)aggr_alloc_.alloc(len);
+              if (OB_ISNULL(buf)) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fall to alloc buff", K(len), K(ret));
+              } else {
+                if (extra->get_separator_datum() != NULL) {//free above ptr.
+                  aggr_alloc_.free(extra->get_separator_datum());
+                  extra->get_separator_datum() = NULL;
+                }
+                ObDatum **separator_datum = const_cast<ObDatum**>(&extra->get_separator_datum());
+                *separator_datum = new (buf) ObDatum;
+                if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+                  LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+                } else {
+                  LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
                 }
               }
             }
@@ -3475,8 +3565,26 @@ int ObAggregateProcessor::collect_aggr_result(
       } else {
         if (aggr_info.separator_expr_ != NULL) {
           if (OB_ISNULL(extra->get_separator_datum())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("seperator is nullptr", K(ret));
+            if (OB_UNLIKELY(aggr_info.separator_expr_->is_const_expr())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("seperator is nullptr", K(ret));
+            } else if (cur_group_id == max_group_cnt) {//last rollup
+              ObDatum *separator_result = NULL;
+              if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                                     K(aggr_info.separator_expr_->obj_meta_));
+              } else if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+              } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+                LOG_WARN("eval failed", K(ret));
+              } else {
+                sep_str = separator_result->get_string();
+              }
+            } else {
+              sep_str = ObString::make_empty_string();
+            }
           } else {
             sep_str = extra->get_separator_datum()->get_string();
           }
@@ -4740,9 +4848,11 @@ int ObAggregateProcessor::sub_calc(
   return ret;
 }
 
+template <typename T>
 int ObAggregateProcessor::init_group_extra_aggr_info(
   AggrCell &aggr_cell,
-  const ObAggrInfo &aggr_info
+  const ObAggrInfo &aggr_info,
+  const T &selector
 )
 {
   int ret = OB_SUCCESS;
@@ -4754,26 +4864,53 @@ int ObAggregateProcessor::init_group_extra_aggr_info(
     extra->reuse_self();
     if (aggr_info.separator_expr_ != NULL) {
       ObDatum *separator_result = NULL;
-      if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
-      } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
-        LOG_WARN("eval failed", K(ret));
-      } else {
-        // prepare阶段解析分隔符，如果到collect阶段，则seperate_expr已经是下一组的值，导致结果错误
-        int64_t pos = sizeof(ObDatum);
-        int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
-        char *buf = (char*)aggr_alloc_.alloc(len);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fall to alloc buff", K(len), K(ret));
+      if (aggr_info.separator_expr_->is_const_expr()) {
+        if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expr node is null", K(ret), KPC(aggr_info.separator_expr_));
+        } else if (OB_FAIL(aggr_info.separator_expr_->eval(eval_ctx_, separator_result))) {
+          LOG_WARN("eval failed", K(ret));
         } else {
-          ObDatum **separator_datum = const_cast<ObDatum**>(&extra->separator_datum_);
-          *separator_datum = new (buf) ObDatum;
-          if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
-            LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+          // prepare阶段解析分隔符，如果到collect阶段，则seperate_expr已经是下一组的值，导致结果错误
+          int64_t pos = sizeof(ObDatum);
+          int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+          char *buf = (char*)aggr_alloc_.alloc(len);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fall to alloc buff", K(len), K(ret));
           } else {
-            LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+            ObDatum **separator_datum = const_cast<ObDatum**>(&extra->separator_datum_);
+            *separator_datum = new (buf) ObDatum;
+            if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+              LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+            } else {
+              LOG_DEBUG("succ to calc separator", K(ret), KP(*separator_datum));
+            }
+          }
+        }
+      } else if (!aggr_info.separator_expr_->is_const_expr()) {
+        if (OB_UNLIKELY(!aggr_info.separator_expr_->obj_meta_.is_string_type() ||
+                        selector.begin() >= selector.end())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param sexprs not be null", K(ret), KPC(aggr_info.separator_expr_),
+                                               K(aggr_info.separator_expr_->obj_meta_));
+        } else {
+          uint16_t batch_idx = selector.get_batch_index(selector.begin());
+          ObDatum *separator_result = &(aggr_info.separator_expr_->locate_expr_datum(eval_ctx_, batch_idx));
+          int64_t pos = sizeof(ObDatum);
+          int64_t len = pos + (separator_result->null_ ? 0 : separator_result->len_);
+          char *buf = (char*)aggr_alloc_.alloc(len);
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fall to alloc buff", K(len), K(ret));
+          } else {
+            ObDatum **separator_datum = const_cast<ObDatum**>(&extra->get_separator_datum());
+            *separator_datum = new (buf) ObDatum;
+            if (OB_FAIL((*separator_datum)->deep_copy(*separator_result, buf, len, pos))) {
+              LOG_WARN("failed to deep copy datum", K(ret), K(pos), K(len));
+            } else {
+              LOG_TRACE("succ to calc separator", K(ret), KPC(*separator_datum));
+            }
           }
         }
       }
@@ -4956,7 +5093,7 @@ int ObAggregateProcessor::group_extra_aggr_calc_batch(
 {
   int ret = OB_SUCCESS;
   if (!aggr_cell.get_is_evaluated()) {
-    if (OB_FAIL(init_group_extra_aggr_info(aggr_cell, aggr_info))) {
+    if (OB_FAIL(init_group_extra_aggr_info(aggr_cell, aggr_info, selector))) {
       LOG_WARN("failed to init group extra aggr info", K(ret));
     } else {
       aggr_cell.set_is_evaluated(true);

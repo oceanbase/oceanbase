@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_DDL_INDEX_BLOCK_ROW_ITERATOR_H
 
 #include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,56 @@ private:
   storage::ObBlockMetaTreeValue *cur_tree_value_;
 };
 
+// for ddl_merge_sstable with index_tree_height > 2
+class ObDDLSStableAllRangeIterator : public ObIndexBlockRowIterator
+{
+public:
+  ObDDLSStableAllRangeIterator();
+  virtual ~ObDDLSStableAllRangeIterator();
+  virtual int init(const ObMicroBlockData &idx_block_data,
+                   const ObStorageDatumUtils *datum_utils,
+                   ObIAllocator *allocator,
+                   const bool is_reverse_scan,
+                   const bool set_iter_end,
+                   const ObIndexBlockIterParam &iter_param) override;
+  virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
+                          const ObDatumRowkey *&endkey) override;
+  virtual int get_next(const ObIndexBlockRowHeader *&idx_row_header,
+                       const ObDatumRowkey *&endkey,
+                       bool &is_scan_left_border,
+                       bool &is_scan_right_border,
+                       const ObIndexBlockRowMinorMetaInfo *&idx_minor_info,
+                       const char *&agg_row_buf,
+                       int64_t &agg_buf_size,
+                       int64_t &row_offset) override;
+  virtual int locate_key(const ObDatumRowkey &rowkey) override;
+  virtual int locate_range(const ObDatumRange &range,
+                           const bool is_left_border,
+                           const bool is_right_border,
+                           const bool is_normal_cg) override;
+  virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
+  virtual bool end_of_block() const override;
+  virtual int get_index_row_count(const ObDatumRange &range,
+                                  const bool is_left_border,
+                                  const bool is_right_border,
+                                  int64_t &index_row_count) override;
+  virtual void reuse() override;
+  virtual void reset() override;
+  INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLSStableAllRangeIterator", K(is_iter_start_), K(is_iter_finish_),
+      KP(allocator_), KPC(rowkey_read_info_), K(index_macro_iter_), K(iter_param_), KP(cur_rowkey_), KP(cur_header_));
+
+private:
+  bool is_iter_start_;
+  bool is_iter_finish_;
+  ObIAllocator *allocator_;
+  const ObITableReadInfo *rowkey_read_info_;
+  const blocksstable::ObDatumRowkey *cur_rowkey_;
+  const blocksstable::ObIndexBlockRowHeader *cur_header_;
+  ObIndexBlockMacroIterator index_macro_iter_;
+  ObIndexBlockIterParam iter_param_;
+};
+
+// for empty ddl_merge_sstable
 class ObDDLMergeEmptyIterator : public ObIndexBlockRowIterator
 {
 public:
@@ -152,8 +203,8 @@ public:
   virtual void reuse() override;
   virtual int switch_context(ObStorageDatumUtils *datum_utils) override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLMergeBlockRowIterator",
-                       KP(raw_iter_), KP(transformed_iter_), KP(empty_merge_iter_), K(iters_), KP(allocator_), KP(consumers_), K(consumer_cnt_),
-                       K(compare_), KPC(simple_merge_), KPC(loser_tree_), KPC(endkey_merger_), K(is_single_sstable_),
+                       KP(raw_iter_), KP(transformed_iter_), KP(empty_merge_iter_), KP(all_range_iter_), K(iters_), KP(allocator_), KP(consumers_),
+                       K(consumer_cnt_), K(compare_), KPC(simple_merge_), KPC(loser_tree_), KPC(endkey_merger_), K(is_single_sstable_),
                        K(is_iter_start_), K(is_iter_finish_), K(query_range_), KP(idx_block_data_), K(first_index_item_), K(iter_param_));
   struct MergeIndexItem final
   {
@@ -228,6 +279,7 @@ private:
   ObRAWIndexBlockRowIterator *raw_iter_;
   ObTFMIndexBlockRowIterator *transformed_iter_;
   ObDDLMergeEmptyIterator *empty_merge_iter_;
+  ObDDLSStableAllRangeIterator *all_range_iter_;
   ObArray<ObIndexBlockRowIterator *> iters_;
   int64_t *consumers_;
   int64_t consumer_cnt_;

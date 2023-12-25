@@ -2407,6 +2407,7 @@ DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey
 DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
+DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
@@ -2423,6 +2424,8 @@ DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT,
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
 DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query range memory exhausted");
+
+DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
 
 ////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)

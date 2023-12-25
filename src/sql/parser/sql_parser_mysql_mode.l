@@ -1463,272 +1463,45 @@ BEGIN(in_c_comment);
 }
 ":"{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
-  if (p->question_mark_ctx_.by_defined_name_) {
-    yylval->node->value_ = get_question_mark_by_defined_name(&p->question_mark_ctx_, yytext);
-    if (yylval->node->value_ < 0) {
-      YY_UNEXPECTED_ERROR("Invalid question mark idx\n");
-    }
-  } else {
-    yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
-  }
-  p->question_mark_ctx_.by_name_ = true;
-  if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
-    YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
-  }
-  if (IS_FAST_PARAMETERIZE) {
-    yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
-    yylval->node->sql_str_off_ = yylloc->first_column - 1;
-    check_malloc(yylval->node->raw_text_);
-    STORE_PARAM_NODE();
-  } else {
-    yylval->node->sql_str_off_ = yylloc->first_column - 1;
-    yylval->node->pos_ = yylloc->first_column - 1;
-    return QUESTIONMARK;
-  }
-}
-
-
-
-
-{identifier}":"{identifier} {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
   if (IS_FOR_REMAP) {
-    char *colon_p = strstr(yytext, ":");
-    if (NULL == colon_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
+    ParseNode *node = NULL;
+    malloc_new_node(node, p->malloc_pool_, T_IDENT, 0);
+    yylval->node = node;
+    if (p->is_not_utf8_connection_) {
+      node->str_value_ = parse_str_convert_utf8(p->charset_info_, yytext + 1, p->malloc_pool_, &(node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
     } else {
-      size_t src_len = colon_p - yytext;
-      ParseNode *node = NULL, *src_node = NULL, *target_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 2);
-      yylval->node = node;
-      malloc_new_node(src_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_node, p->malloc_pool_, T_INT, 0);
-      src_node->str_value_ = parse_strndup(yytext, src_len, p->malloc_pool_);
-      src_node->str_len_ = src_len;
-      check_malloc(src_node->str_value_);
-      target_node->str_value_ = parse_strdup(colon_p + 1, p->malloc_pool_, &(target_node->str_len_));
-      check_malloc(target_node->str_value_);
-      node->children_[0] = src_node;
-      node->children_[1] = target_node;
-      return REMAP_TABLE_VAL;
+      node->str_value_ = parse_strdup(yytext + 1, p->malloc_pool_, &(node->str_len_));
     }
-
+    check_malloc(node->str_value_);
+    return REMAP_TABLE_NAME;
   } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
+    check_value(yylval);
+    malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);
+    if (p->question_mark_ctx_.by_defined_name_) {
+      yylval->node->value_ = get_question_mark_by_defined_name(&p->question_mark_ctx_, yytext);
+      if (yylval->node->value_ < 0) {
+        YY_UNEXPECTED_ERROR("Invalid question mark idx\n");
+      }
+    } else {
+      yylval->node->value_ = get_question_mark(&p->question_mark_ctx_, p->malloc_pool_, yytext);
+    }
+    p->question_mark_ctx_.by_name_ = true;
+    if (OB_UNLIKELY(p->question_mark_ctx_.by_ordinal_)) {
+      YY_UNEXPECTED_ERROR("Ordinal binding and Named binding cannot be combined\n");
+    }
+    if (IS_FAST_PARAMETERIZE) {
+      yylval->node->raw_text_ = parse_strdup(yytext, p->malloc_pool_, &(yylval->node->text_len_));
+      yylval->node->sql_str_off_ = yylloc->first_column - 1;
+      check_malloc(yylval->node->raw_text_);
+      STORE_PARAM_NODE();
+    } else {
+      yylval->node->sql_str_off_ = yylloc->first_column - 1;
+      yylval->node->pos_ = yylloc->first_column - 1;
+      return QUESTIONMARK;
+    }
   }
 }
-
-{identifier}"."{identifier}":"{identifier} {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  if (IS_FOR_REMAP) {
-    char *colon_p = strstr(yytext, ":");
-    char *point_p = strstr(yytext, ".");
-    if (NULL == colon_p || NULL == point_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
-    } else {
-      size_t src_db_len = point_p - yytext;
-      size_t src_table_len = colon_p - point_p - 1;
-      ParseNode *node = NULL, *src_db_node = NULL, *src_table_node = NULL, *target_table_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 5);
-      yylval->node = node;
-      malloc_new_node(src_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_table_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_table_node, p->malloc_pool_, T_INT, 0);
-      src_db_node->str_value_ = parse_strndup(yytext, src_db_len, p->malloc_pool_);
-      src_db_node->str_len_ = src_db_len;
-      check_malloc(src_db_node->str_value_);
-      src_table_node->str_value_ = parse_strndup(point_p + 1, src_table_len, p->malloc_pool_);
-      src_table_node->str_len_ = src_table_len;
-      check_malloc(src_table_node->str_value_);
-      target_table_node->str_value_ = parse_strdup(colon_p + 1, p->malloc_pool_, &(target_table_node->str_len_));
-      check_malloc(target_table_node->str_value_);
-      node->children_[0] = src_db_node;
-      node->children_[1] = src_table_node;
-      node->children_[4] = target_table_node;
-      return REMAP_TABLE_VAL;
-    }
-  } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
-  }
-}
-
-{identifier}"."{identifier}":"{identifier}"."{identifier} {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  if (IS_FOR_REMAP) {
-    char *first_point_p = strstr(yytext, ".");
-    char *colon_p = strstr(yytext, ":");
-    char *final_point_p = strrchr(yytext, '.');
-    if (NULL == first_point_p || NULL == colon_p || NULL == final_point_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
-    } else {
-      size_t src_db_len = first_point_p - yytext;
-      size_t src_table_len = colon_p - first_point_p - 1;
-      size_t target_db_len = final_point_p - colon_p - 1;
-      ParseNode *node = NULL, *src_db_node = NULL, *src_table_node = NULL, *target_db_node = NULL, *target_table_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 5);
-      yylval->node = node;
-      malloc_new_node(src_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_table_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_table_node, p->malloc_pool_, T_INT, 0);
-      src_db_node->str_value_ = parse_strndup(yytext, src_db_len, p->malloc_pool_);
-      src_db_node->str_len_ = src_db_len;
-      check_malloc(src_db_node->str_value_);
-      src_table_node->str_value_ = parse_strndup(first_point_p + 1, src_table_len, p->malloc_pool_);
-      src_table_node->str_len_ = src_table_len;
-      check_malloc(src_table_node->str_value_);
-      target_db_node->str_value_ = parse_strndup(colon_p + 1, target_db_len, p->malloc_pool_);
-      target_db_node->str_len_ = target_db_len;
-      check_malloc(target_db_node->str_value_);
-      target_table_node->str_value_ = parse_strdup(final_point_p + 1, p->malloc_pool_, &(target_table_node->str_len_));
-      check_malloc(target_table_node->str_value_);
-      node->children_[0] = src_db_node;
-      node->children_[1] = src_table_node;
-      node->children_[3] = target_db_node;
-      node->children_[4] = target_table_node;
-      return REMAP_TABLE_VAL;
-    }
-  } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
-  }
-}
-
-{identifier}".*:"{identifier}".*" {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  if (IS_FOR_REMAP) {
-    char *first_point_p = strstr(yytext, ".");
-    char *colon_p = strstr(yytext, ":");
-    char *final_point_p = strrchr(yytext, '.');
-    if (NULL == first_point_p || NULL == colon_p || NULL == final_point_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
-    } else {
-      size_t src_db_len = first_point_p - yytext;
-      size_t target_db_len = final_point_p - colon_p - 1;
-      ParseNode *node = NULL, *src_db_node = NULL, *target_db_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 5);
-      yylval->node = node;
-      malloc_new_node(src_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_db_node, p->malloc_pool_, T_INT, 0);
-      src_db_node->str_value_ = parse_strndup(yytext, src_db_len, p->malloc_pool_);
-      src_db_node->str_len_ = src_db_len;
-      check_malloc(src_db_node->str_value_);
-      target_db_node->str_value_ = parse_strndup(colon_p + 1, target_db_len, p->malloc_pool_);
-      target_db_node->str_len_ = target_db_len;
-      check_malloc(target_db_node->str_value_);
-      node->children_[0] = src_db_node;
-      node->children_[3] = target_db_node;
-      return REMAP_TABLE_VAL;
-    }
-  } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
-  }
-}
-
-{identifier}"."{identifier}":"{identifier}":"{identifier}"."{identifier} {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  if (IS_FOR_REMAP) {
-    char *first_point_p = strstr(yytext, ".");
-    char *first_colon_p = strstr(yytext, ":");
-    char *final_colon_p = strrchr(yytext, ':');
-    char *final_point_p = strrchr(yytext, '.');
-    if (NULL == first_point_p || NULL == first_colon_p || NULL == final_colon_p || NULL == final_point_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
-    } else {
-      size_t src_db_len = first_point_p - yytext;
-      size_t src_table_len = first_colon_p - first_point_p - 1;
-      size_t src_part_len = final_colon_p - first_colon_p - 1;
-      size_t target_db_len = final_point_p - final_colon_p - 1;
-      ParseNode *node = NULL, *src_db_node = NULL, *src_table_node = NULL, *src_part_node = NULL;
-      ParseNode *target_db_node = NULL, *target_table_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 5);
-      yylval->node = node;
-      malloc_new_node(src_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_table_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_part_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_table_node, p->malloc_pool_, T_INT, 0);
-      src_db_node->str_value_ = parse_strndup(yytext, src_db_len, p->malloc_pool_);
-      src_db_node->str_len_ = src_db_len;
-      check_malloc(src_db_node->str_value_);
-      src_table_node->str_value_ = parse_strndup(first_point_p + 1, src_table_len, p->malloc_pool_);
-      src_table_node->str_len_ = src_table_len;
-      check_malloc(src_table_node->str_value_);
-      src_part_node->str_value_ = parse_strndup(first_colon_p + 1, src_part_len, p->malloc_pool_);
-      src_part_node->str_len_ = src_part_len;
-      check_malloc(src_part_node->str_value_);
-      target_db_node->str_value_ = parse_strndup(final_colon_p + 1, target_db_len, p->malloc_pool_);
-      target_db_node->str_len_ = target_db_len;
-      check_malloc(target_db_node->str_value_);
-      target_table_node->str_value_ = parse_strdup(final_point_p + 1, p->malloc_pool_, &(target_table_node->str_len_));
-      check_malloc(target_table_node->str_value_);
-      node->children_[0] = src_db_node;
-      node->children_[1] = src_table_node;
-      node->children_[2] = src_part_node;
-      node->children_[3] = target_db_node;
-      node->children_[4] = target_table_node;
-      return REMAP_TABLE_VAL;
-    }
-  } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
-  }
-}
-
-{identifier}"."{identifier}":"{identifier}":"{identifier} {
-  ParseResult *p = (ParseResult *)yyextra;
-  check_value(yylval);
-  if (IS_FOR_REMAP) {
-    char *first_point_p = strstr(yytext, ".");
-    char *first_colon_p = strstr(yytext, ":");
-    char *final_colon_p = strrchr(yytext, ':');
-    if (NULL == first_point_p || NULL == first_colon_p || NULL == final_colon_p) {
-      YY_UNEXPECTED_ERROR("invalid remap table name\n");
-    } else {
-      size_t src_db_len = first_point_p - yytext;
-      size_t src_table_len = first_colon_p - first_point_p - 1;
-      size_t src_part_len = final_colon_p - first_colon_p - 1;
-      ParseNode *node = NULL, *src_db_node = NULL, *src_table_node = NULL, *src_part_node = NULL;
-      ParseNode *target_table_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_RELATION_FACTOR, 5);
-      yylval->node = node;
-      malloc_new_node(src_db_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_table_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(src_part_node, p->malloc_pool_, T_INT, 0);
-      malloc_new_node(target_table_node, p->malloc_pool_, T_INT, 0);
-      src_db_node->str_value_ = parse_strndup(yytext, src_db_len, p->malloc_pool_);
-      src_db_node->str_len_ = src_db_len;
-      check_malloc(src_db_node->str_value_);
-      src_table_node->str_value_ = parse_strndup(first_point_p + 1, src_table_len, p->malloc_pool_);
-      src_table_node->str_len_ = src_table_len;
-      check_malloc(src_table_node->str_value_);
-      src_part_node->str_value_ = parse_strndup(first_colon_p + 1, src_part_len, p->malloc_pool_);
-      src_part_node->str_len_ = src_part_len;
-      check_malloc(src_part_node->str_value_);
-      target_table_node->str_value_ = parse_strdup(final_colon_p + 1, p->malloc_pool_, &(target_table_node->str_len_));
-      check_malloc(target_table_node->str_value_);
-      node->children_[0] = src_db_node;
-      node->children_[1] = src_table_node;
-      node->children_[2] = src_part_node;
-      node->children_[4] = target_table_node;
-      return REMAP_TABLE_VAL;
-    }
-  } else {
-    yyerror(yylloc, yyextra, "Named binding is only for remap\n");
-    return PARSER_SYNTAX_ERROR;
-  }
-}
-
 
 ":"{identifier}"."{identifier} {
   ParseResult *p = (ParseResult *)yyextra;
@@ -1743,7 +1516,7 @@ BEGIN(in_c_comment);
     } else {
       size_t db_len = dot_p - yytext - 1;
       ParseNode *node = NULL, *db_node = NULL, *tb_node = NULL;
-      malloc_new_node(node, p->malloc_pool_, T_IDENT, 2);
+      malloc_new_node(node, p->malloc_pool_, T_LINK_NODE, 2);
       yylval->node = node;
       malloc_new_node(db_node, p->malloc_pool_, T_IDENT, 0);
       malloc_new_node(tb_node, p->malloc_pool_, T_IDENT, 0);
@@ -1754,7 +1527,7 @@ BEGIN(in_c_comment);
       check_malloc(tb_node->str_value_);
       node->children_[0] = db_node;
       node->children_[1] = tb_node;
-      return REMAP_TABLE_VAL;
+      return REMAP_DATABASE_TABLE_NAME;
     }
   } else if (is_for_trigger) {
     malloc_new_node(yylval->node, p->malloc_pool_, T_QUESTIONMARK, 0);

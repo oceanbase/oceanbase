@@ -21,7 +21,7 @@
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_index_block_micro_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_table_access_param.h"

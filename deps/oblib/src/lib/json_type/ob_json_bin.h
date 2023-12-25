@@ -185,6 +185,7 @@ public:
   OB_INLINE ObJsonInType get_internal_type() const override { return ObJsonInType::JSON_BIN; }
   OB_INLINE uint64_t element_count() const override { return element_count_; }
   OB_INLINE uint64_t get_used_bytes() const { return bytes_; } // return acutal used bytes for curr iter
+  uint64_t get_serialize_size() const;
   OB_INLINE ObJsonNodeType json_type() const override
   {
     return static_cast<ObJsonNodeType>(ObJsonVerType::get_json_type(get_vertype()));

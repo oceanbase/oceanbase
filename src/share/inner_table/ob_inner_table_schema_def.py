@@ -14189,12 +14189,12 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
-def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15417', all_def_keywords['__all_virtual_column_group_mapping']))
+# 15417: __all_virtual_column_group_mapping abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418', all_def_keywords['__all_virtual_cgroup_config'])))
 
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15419', all_def_keywords['__all_virtual_column_group_history']))
-def_table_schema(**gen_oracle_mapping_virtual_table_def('15420', all_def_keywords['__all_virtual_column_group_mapping_history']))
+# 15419: __all_virtual_column_group_history abandoned
+# 15420: __all_virtual_column_group_mapping_history abandoned
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
 # 15423: __all_tenant_scheduler_running_job
@@ -31737,6 +31737,24 @@ FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 #21522 CDB_UNUSED_COL_TABS
 #21523 DBA_OB_LS_REPLICA_TASK_HISTORY
 #21524 CDB_OB_LS_REPLICA_TASK_HISTORY
+
+# 21525: CDB_MVIEW_LOGS
+# 21526: DBA_MVIEW_LOGS
+# 21527: CDB_MVIEWS
+# 21528: DBA_MVIEWS
+# 21529: CDB_MVREF_STATS_SYS_DEFAULTS
+# 21530: DBA_MVREF_STATS_SYS_DEFAULTS
+# 21531: CDB_MVREF_STATS_PARAMS
+# 21532: DBA_MVREF_STATS_PARAMS
+# 21533: CDB_MVREF_RUN_STATS
+# 21534: DBA_MVREF_RUN_STATS
+# 21535: CDB_MVREF_STATS
+# 21536: DBA_MVREF_STATS
+# 21537: CDB_MVREF_CHANGE_STATS
+# 21538: DBA_MVREF_CHANGE_STATS
+# 21539: CDB_MVREF_STMT_STATS
+# 21540: DBA_MVREF_STMT_STATS
+
 # 余留位置
 
 ################################################################################
@@ -50597,6 +50615,9 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
+# 25280: ALL_UNUSED_COL_TABS
+# 25281: DBA_UNUSED_COL_TABS
+# 25282: USER_UNUSED_COL_TABS
 
 # 余留位置
 
@@ -56878,9 +56899,25 @@ def_table_schema(
 
 # 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
-# 28219: ALL_UNUSED_COL_TABS
-# 28220: DBA_UNUSED_COL_TABS
-# 28221: USER_UNUSED_COL_TABS
+
+# 28222: DBA_MVIEW_LOGS
+# 28223: ALL_MVIEW_LOGS
+# 28224: USER_MVIEW_LOGS
+# 28225: DBA_MVIEWS
+# 28226: ALL_MVIEWS
+# 28227: USER_MVIEWS
+# 28228: DBA_MVREF_STATS_SYS_DEFAULTS
+# 28229: USER_MVREF_STATS_SYS_DEFAULTS
+# 28230: DBA_MVREF_STATS_PARAMS
+# 28231: USER_MVREF_STATS_PARAMS
+# 28232: DBA_MVREF_RUN_STATS
+# 28233: USER_MVREF_RUN_STATS
+# 28234: DBA_MVREF_STATS
+# 28235: USER_MVREF_STATS
+# 28236: DBA_MVREF_CHANGE_STATS
+# 28237: USER_MVREF_CHANGE_STATS
+# 28238: DBA_MVREF_STMT_STATS
+# 28239: USER_MVREF_STMT_STATS
 
 ################################################################################
 # Lob Table (50000, 70000)

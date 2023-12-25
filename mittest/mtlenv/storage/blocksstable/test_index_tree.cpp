@@ -32,7 +32,7 @@
 #include "storage/memtable/ob_memtable_interface.h"
 #include "storage/ob_i_store.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "share/scn.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"

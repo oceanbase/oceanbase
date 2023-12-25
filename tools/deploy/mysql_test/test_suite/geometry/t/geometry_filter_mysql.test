@@ -312,19 +312,19 @@ INSERT INTO t (g) VALUES
   (ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')),
   (ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
 
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
-select st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
-select st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
 
 
 select /*+index(t idx)*/ st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
@@ -488,3 +488,25 @@ select id, st_astext(g) from geo_t1 IGNORE INDEX(g_idx) where _st_covers(ST_Geom
 select id, st_astext(g) from geo_t1 FORCE INDEX(g_idx) where _st_covers(ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))', 4326, 'axis-order=long-lat'), g);
 
 drop table geo_t1;
+
+--echo bugfix: 53822176
+--disable_warnings
+drop table if exists spatial_point_in_line;
+--enable_warnings
+create table spatial_point_in_line (
+    `id` int unsigned not null auto_increment primary key ,
+    `min` int unsigned not null default 0,
+    `max` int unsigned not null default 0,
+    `line_geo` geometry  not null srid 0,
+    SPATIAL INDEX index_spatial_line_geo(`line_geo`)
+    );
+insert into spatial_point_in_line (min, max, line_geo) values
+   (80, 90,  LineString(Point(min, 0), Point(max, 0))),
+   (80, 100, LineString(Point(min, 0), Point(max, 0))),
+   (90, 100, LineString(Point(min, 0), Point(max, 0))),
+   (100, 110, LineString(Point(min, 0), Point(max, 0))),
+   (100, 120, LineString(Point(min, 0), Point(max, 0)));
+
+select id, min, max, st_astext(line_geo) from spatial_point_in_line where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
+explain select id, min, max, st_astext(line_geo) from spatial_point_in_line where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
+select id, min, max, st_astext(line_geo) from spatial_point_in_line ignore index(geom_idx_1) where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
