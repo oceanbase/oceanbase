@@ -6799,7 +6799,8 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
-      if (routine_info->is_modifies_sql_data() ||
+      if (!routine_info->is_valid() ||
+          routine_info->is_modifies_sql_data() ||
           routine_info->is_wps() ||
           routine_info->is_rps() ||
           routine_info->is_has_sequence() ||
