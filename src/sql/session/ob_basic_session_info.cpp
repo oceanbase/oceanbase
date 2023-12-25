@@ -6497,16 +6497,17 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
 
 void ObBasicSessionInfo::on_get_session()
 {
-  LockGuard lock_guard(thread_data_mutex_);
   const char *str = lbt();
   int len = STRLEN(str);
-  if (sess_bt_buff_pos_ + len + 2 < MAX_SESS_BT_BUFF_SIZE) {
-    MEMCPY(sess_bt_buff_ + sess_bt_buff_pos_, str, len);
-    sess_bt_buff_pos_ += len;
-    sess_bt_buff_[sess_bt_buff_pos_] = ';';
-    sess_bt_buff_pos_ += 1;
-    sess_bt_buff_[sess_bt_buff_pos_] = '\0';
+  int pos = sess_bt_buff_pos_;
+  if (pos + len + 2 < MAX_SESS_BT_BUFF_SIZE) {
+    MEMCPY(sess_bt_buff_ + pos, str, len);
+    pos += len;
+    sess_bt_buff_[pos] = ';';
+    pos += 1;
+    sess_bt_buff_[pos] = '\0';
   }
+  sess_bt_buff_pos_ = pos;
   (void)ATOMIC_AAF(&sess_ref_cnt_, 1);
   (void)ATOMIC_AAF(&sess_ref_seq_, 1);
   LOG_INFO("on get session", KP(this), K(sess_ref_cnt_), K(sess_ref_seq_),
@@ -6515,7 +6516,6 @@ void ObBasicSessionInfo::on_get_session()
 
 void ObBasicSessionInfo::on_revert_session()
 {
-  LockGuard lock_guard(thread_data_mutex_);
   int32_t v = ATOMIC_AAF(&sess_ref_cnt_, -1);
   if (v <= 0) {
     sess_bt_buff_pos_ = 0;
