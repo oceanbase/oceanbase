@@ -91,8 +91,7 @@ int ObLogLsGetter::init(const common::ObIArray<uint64_t> &tenant_ids, const int6
     ARRAY_FOREACH_N(tenant_ids, idx, count) {
       const uint64_t tenant_id = tenant_ids.at(idx);
 
-      if (OB_SYS_TENANT_ID == tenant_id
-          || is_meta_tenant(tenant_id)) {
+      if (OB_SYS_TENANT_ID == tenant_id || is_meta_tenant(tenant_id)) {
         // do nothing
       } else if (OB_FAIL(query_and_set_tenant_ls_info_(tenant_id, start_tstamp_ns))) {
         LOG_ERROR("query_and_set_tenant_ls_info_ failed", KR(ret), K(tenant_id), K(start_tstamp_ns));
@@ -137,6 +136,9 @@ int ObLogLsGetter::get_ls_ids(
       }
     }
   } else {
+  }
+
+  if (OB_SUCC(ret)) {
     ARRAY_FOREACH_N(ls_ids, idx, count) {
       if (OB_FAIL(ls_id_array.push_back(ls_ids.at(idx)))) {
         LOG_ERROR("ls_id_array push_back failed", KR(ret), K(ls_id_array));
