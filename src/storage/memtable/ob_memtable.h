@@ -25,6 +25,7 @@
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_row_compactor.h"
 #include "storage/memtable/ob_multi_source_data.h"
+#include "storage/ob_i_memtable_mgr.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
@@ -331,9 +332,8 @@ public:
   int set_freezer(storage::ObFreezer *handler);
   storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
-  void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { ATOMIC_STORE(&memtable_mgr_, mgr); }
-  void clear_memtable_mgr() { ATOMIC_STORE(&memtable_mgr_, nullptr); }
-  storage::ObTabletMemtableMgr *get_memtable_mgr() { return ATOMIC_LOAD(&memtable_mgr_); }
+  int set_memtable_mgr_(storage::ObTabletMemtableMgr *mgr);
+  storage::ObTabletMemtableMgr *get_memtable_mgr_();
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
@@ -405,9 +405,6 @@ public:
   ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
   const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
   OB_INLINE bool is_inited() const { return is_inited_;}
-  int64_t get_memtable_mgr_op_cnt() { return ATOMIC_LOAD(&memtable_mgr_op_cnt_); }
-  int64_t inc_memtable_mgr_op_cnt() { return ATOMIC_AAF(&memtable_mgr_op_cnt_, 1); }
-  int64_t dec_memtable_mgr_op_cnt() { return ATOMIC_SAF(&memtable_mgr_op_cnt_, 1); }
   void pre_batch_destroy_keybtree();
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
@@ -505,7 +502,7 @@ public:
   int dump2text(const char *fname);
   // TODO(handora.qc) ready_for_flush interface adjustment
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
-  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), KP_(memtable_mgr), K_(timestamp), K_(state),
+  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt),
                        K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolved_active_memtable_left_boundary),
@@ -627,7 +624,7 @@ private:
   bool is_inited_;
   storage::ObLSHandle ls_handle_;
   storage::ObFreezer *freezer_;
-  storage::ObTabletMemtableMgr *memtable_mgr_;
+  storage::ObMemtableMgrHandle memtable_mgr_handle_;
   mutable uint32_t freeze_clock_;
   ObSingleMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
@@ -638,7 +635,6 @@ private:
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log
   int64_t unsubmitted_cnt_; // number of trans node to be submitted logs
-  int64_t memtable_mgr_op_cnt_; // number of operations for memtable_mgr
   bool logging_blocked_; // flag whether the memtable can submit log, cannot submit if true
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
@@ -681,31 +677,6 @@ private:
   uint32_t modify_count_;
   uint32_t acc_checksum_;
 };
-
-class MemtableMgrOpGuard
-{
-public:
-  explicit MemtableMgrOpGuard(ObMemtable *memtable): memtable_(memtable),
-                                                     memtable_mgr_(nullptr)
-  {
-    if (OB_NOT_NULL(memtable_)) {
-      memtable_->inc_memtable_mgr_op_cnt();
-      memtable_mgr_ = memtable_->get_memtable_mgr();
-    }
-  }
-  ~MemtableMgrOpGuard()
-  {
-    if (OB_NOT_NULL(memtable_)) {
-      memtable_->dec_memtable_mgr_op_cnt();
-      memtable_mgr_ = nullptr;
-    }
-  }
-  storage::ObTabletMemtableMgr *get_memtable_mgr() { return memtable_mgr_; }
-private:
-  ObMemtable *memtable_;
-  storage::ObTabletMemtableMgr *memtable_mgr_;
-};
-
 }
 }
 

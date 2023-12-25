@@ -67,7 +67,6 @@ void ObTabletMemtableMgr::destroy()
       STORAGE_LOG(WARN, "memtable is nullptr", K(ret), KP(imemtable), K(pos));
     } else if (imemtable->is_data_memtable()) {
       memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->remove_from_data_checkpoint();
       memtable->set_frozen();
     }
@@ -694,7 +693,6 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       if (!memtable->is_empty()) {
         memtable->set_read_barrier();
       }
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
@@ -710,36 +708,6 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
   }
 
   return ret;
-}
-
-void ObTabletMemtableMgr::unlink_memtable_mgr_and_memtable_(memtable::ObMemtable *memtable)
-{
-  // unlink memtable_mgr and memtable
-  // and wait the running ops about memtable_mgr in the memtable
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(memtable)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("memtable is null", K(ret), KPC(this));
-  } else {
-    memtable->clear_memtable_mgr();
-    wait_memtable_mgr_op_cnt_(memtable);
-  }
-}
-
-void ObTabletMemtableMgr::wait_memtable_mgr_op_cnt_(memtable::ObMemtable *memtable)
-{
-  if (OB_NOT_NULL(memtable)) {
-    const int64_t start = ObTimeUtility::current_time();
-    int ret = OB_SUCCESS;
-    while (0 != memtable->get_memtable_mgr_op_cnt()) {
-      const int64_t cost_time = ObTimeUtility::current_time() - start;
-      if (cost_time > 1000 * 1000) {
-        if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
-          LOG_WARN("wait_memtable_mgr_op_cnt costs too much time", KPC(memtable));
-        }
-      }
-    }
-  }
 }
 
 int ObTabletMemtableMgr::get_first_frozen_memtable(ObTableHandleV2 &handle) const
@@ -815,7 +783,6 @@ void ObTabletMemtableMgr::clean_tail_memtable_()
   if (memtable_tail_ > memtable_head_) {
     ObMemtable *memtable = get_memtable_(memtable_tail_ - 1);
     if (OB_NOT_NULL(memtable)) {
-      unlink_memtable_mgr_and_memtable_(memtable);
       memtable->set_frozen();
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "memtable is null when clean_tail_memtable_", KPC(this));
