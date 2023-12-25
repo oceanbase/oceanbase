@@ -362,7 +362,6 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
     if (0 == write_ref) {
       SCN clog_checkpoint_scn;
       bool need_create_memtable = true;
-      SCN migration_clog_checkpoint_scn;
       ObTabletHandle tmp_handle;
       ObLSHandle ls_handle;
       if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
@@ -374,13 +373,9 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObITable *table, bool &bo
           tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
         LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
       } else if (FALSE_IT(clog_checkpoint_scn = tmp_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_)) {
-      } else if (FALSE_IT(migration_clog_checkpoint_scn = static_cast<memtable::ObMemtable *>(memtable)->get_migration_clog_checkpoint_scn())) {
-      } else if (for_replay_ && !migration_clog_checkpoint_scn.is_min()) {
-        static_cast<memtable::ObMemtable *>(memtable)->resolve_right_boundary();
-        if (replay_scn_ <= clog_checkpoint_scn) {
-          for_replace_tablet_meta = true;
-          need_create_memtable = false;
-        }
+      } else if (for_replay_ && replay_scn_ <= clog_checkpoint_scn) {
+        for_replace_tablet_meta = true;
+        need_create_memtable = false;
       }
 
       // create a new memtable if no write in the old memtable
