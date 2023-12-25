@@ -136,6 +136,7 @@ public:
       ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
 
   static int get_compact_scn(
+      const share::SCN &ddl_start_scn,
       ObTableStoreIterator &ddl_sstable_iter,
       const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
       share::SCN &compact_start_scn,
