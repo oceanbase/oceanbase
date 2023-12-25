@@ -2156,7 +2156,7 @@ int ObMultiVersionSchemaService::add_schema(
       }
     }
     int64_t end_time = ObTimeUtility::current_time();
-    LOG_INFO("finish add schema", KR(ret), K(tenant_id), K(new_schema_version), "cost_ts", start_time - end_time);
+    LOG_INFO("finish add schema", KR(ret), K(tenant_id), K(new_schema_version), "cost_ts", end_time - start_time);
   }
   return ret;
 }

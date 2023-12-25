@@ -24,7 +24,7 @@ int get_rs_status_str(const ObRootServiceStatus status,
                       const char *&str)
 {
   int ret = OB_SUCCESS;
-  static const char *strs[] = {"invalid", "init", "starting", "in_service", "full_service", "started",
+  static const char *strs[] = {"init", "starting", "in_service", "full_service", "started",
     "need_stop", "stopping", "max"};
   if (status < 0 || status >= MAX) {
     ret = OB_INVALID_ARGUMENT;
