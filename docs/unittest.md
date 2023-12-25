@@ -1,10 +1,10 @@
 # Write and run unittest
 
-## How to run unittest
+## How to build and run all unittest?
 
 [OceanBase](https://github.com/oceanbase/oceanbase) has two unittest directories.
 
-- `unittest` . This is the main unittest cases, and it tests the code in the `src` directory.
+- `unittest` . These are the main unittest cases, and it tests the code in the `src` directory.
 
 - `deps/oblib/unittest`. Cases for oblib.
 
@@ -13,7 +13,7 @@ First, you should build `unittest`. You should enter the `unittest` directory in
 ```bash
 bash build.sh --init --make # init and build a debug mode project
 cd build_debug/unittest  # or cd build_debug/deps/oblib/unittest
-make # build unittest
+make -j4 # build unittest
 ```
 
 Then you can execute the script file `run_tests.sh` to run all test cases.
@@ -25,7 +25,7 @@ You can also build and test a single unittest case. You can enter the `build_deb
 ```bash
 cd build_debug
 # **NOTE**: don't enter the unittest directory
-make test_chunk_row_store
+make -j4 test_chunk_row_store
 find . -name "test_chunk_row_store"
 # got ./unittest/sql/engine/basic/test_chunk_row_store
 ./unittest/sql/engine/basic/test_chunk_row_store
@@ -91,7 +91,7 @@ TEST(RARowStore, alloc_project_fail)
 Please refer to [google test document](https://google.github.io/googletest/) to get more details about `TEST`, `ASSERT` and `EXPECT`.
 
 
-## unittest on GitHub CI
+## Unittest on GitHub CI
 
 Before a pull request is merged, the CI will test your pull request. The `Farm` will test the `mysql test` and `unittest`. You can see the details follow the `Details` link like below.
 
