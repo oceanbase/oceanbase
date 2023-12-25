@@ -207,9 +207,12 @@ public:
       is_first_result_(true),
       has_more_rows_(true),
       row_idx_(0),
-      agg_calculator_(query)
+      agg_calculator_(query),
+      full_column_name_()
   {}
-  virtual ~ObTableFilterOperator() {}
+  virtual ~ObTableFilterOperator() {
+    full_column_name_.reset();
+  }
   virtual int get_next_result(ObTableQueryResult *&next_result) override;
   virtual bool has_more_result() const override { return has_more_rows_; }
   virtual void set_one_result(ObTableQueryResult *result) override { one_result_ = result; }
@@ -220,6 +223,8 @@ public:
   int get_aggregate_result(table::ObTableQueryResult *&next_result);
   int get_normal_result(table::ObTableQueryResult *&next_result);
   bool is_aggregate_query() { return agg_calculator_.is_exist(); }
+  int add_row(table::ObTableQueryResult *next_result, ObNewRow *row);
+  int init_full_column_name(const ObIArray<ObString>& col_arr);
 private:
   int check_limit_param();
 private:
@@ -234,6 +239,7 @@ private:
   bool has_more_rows_;
   int64_t row_idx_; // not filtered row index
   ObTableAggCalculator agg_calculator_;
+  ObSEArray<ObString, 64> full_column_name_;
 };
 
 } // end namespace table

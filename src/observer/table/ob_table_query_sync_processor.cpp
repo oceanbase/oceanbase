@@ -397,6 +397,7 @@ int ObTableQuerySyncP::init_tb_ctx(ObTableCtx &ctx)
   ObExprFrameInfo &expr_frame_info = query_ctx.expr_frame_info_;
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   ctx.set_scan(true);
+  ctx.set_entity_type(arg_.entity_type_);
 
   if (ctx.is_init()) {
     LOG_INFO("tb ctx has been inited", K(ctx));

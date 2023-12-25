@@ -339,6 +339,10 @@ public:
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
   }
+  OB_INLINE bool is_inc() const
+  {
+    return ObTableOperationType::Type::INCREMENT == operation_type_;
+  }
   OB_INLINE bool is_dml() const
   {
     return ObTableOperationType::Type::GET != operation_type_ && !is_scan_;

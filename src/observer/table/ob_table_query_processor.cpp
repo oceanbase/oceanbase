@@ -128,6 +128,7 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   ObExprFrameInfo *expr_frame_info = nullptr;
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   tb_ctx_.set_scan(true);
+  tb_ctx_.set_entity_type(arg_.entity_type_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));

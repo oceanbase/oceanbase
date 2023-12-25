@@ -221,6 +221,7 @@ int ObTableQueryAndMutateP::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
   const ObTableQuery &query = arg_.query_and_mutate_.get_query();
   bool is_weak_read = false;
   tb_ctx_.set_scan(true);
+  tb_ctx_.set_entity_type(arg_.entity_type_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));

@@ -9904,7 +9904,17 @@ TEST_F(TestBatchExecute, table_query_with_filter)
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
     ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(<, 'C2:50')")));
     int ret = the_table->execute_query(query, iter);
-    ASSERT_NE(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      result_cnt++;
+      ObObj v1, v3;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, v3));
+      ASSERT_LE(v1.get_int(), 50);
+      // fprintf(stderr, "(%ld,%ld,%s)\n", v1.get_int(), v2.get_int(), S(v3));
+    }
+    ASSERT_EQ(10, result_cnt);
     // fprintf(stderr, "query ret=%d\n", ret);
   } // end case 6
   {
