@@ -136,7 +136,7 @@ int ObCdcStartLsnLocator::do_req_start_lsn_(const ObLocateLSNByTsReq &req,
       ret = OB_IN_STOP_STATE;
     }
 
-    EXTLOG_LOG(INFO, "locator req success", KR(ret), K(tenant_id_), K(req), K(resp), K(is_hurry_quit));
+    EXTLOG_LOG(INFO, "locator req done", KR(ret), K(tenant_id_), K(req), K(resp), K(is_hurry_quit));
   }
 
   return ret;
@@ -185,7 +185,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     need_seek_archive = true;
   } else {
     if (OB_FAIL(init_palf_handle_guard_(ls_id, palf_handle_guard))) {
-      if (OB_LS_NOT_EXIST == ret) {
+      if (OB_LS_NOT_EXIST == ret && OB_SYS_TENANT_ID != tenant_id_) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
@@ -195,7 +195,7 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
     // - OB_ENTRY_NOT_EXIST: there is no log's log_ts is higher than ts_ns
     // - OB_ERR_OUT_OF_LOWER_BOUND: ts_ns is too old, log files may have been recycled
     } else if (OB_FAIL(palf_handle_guard.seek(start_scn, group_iter))) {
-      if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      if (OB_ERR_OUT_OF_LOWER_BOUND == ret && OB_SYS_TENANT_ID != tenant_id_) {
         ret = OB_SUCCESS;
         need_seek_archive = true;
       } else {
@@ -207,10 +207,6 @@ int ObCdcStartLsnLocator::do_locate_ls_(const bool fetch_archive_only,
       LOG_WARN("group_iter get_entry fail", KR(ret), K_(tenant_id), K(ls_id));
     } else {
       result_ts_ns = log_group_entry.get_scn().get_val_for_logservice();
-    }
-
-    if (OB_SYS_TENANT_ID == tenant_id_) {
-      need_seek_archive = false;
     }
   // Note: us
   }

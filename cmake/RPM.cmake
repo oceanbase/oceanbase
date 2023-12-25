@@ -119,6 +119,12 @@ install(
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   COMPONENT cdc
   )
+install(
+  DIRECTORY
+    ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/scripts/
+    DESTINATION ${CMAKE_INSTALL_RUNSTATEDIR}
+  COMPONENT cdc
+  )
 
 if(OB_BUILD_OPENSOURCE)
 install(
