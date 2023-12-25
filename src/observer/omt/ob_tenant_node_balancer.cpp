@@ -516,7 +516,11 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
 
         bool is_tenant_snapshot_released = false;
         if (is_user_tenant(tenant_config.tenant_id_)) {
-          MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
+          const int64_t now_time = ObTimeUtility::current_time();
+          const int64_t life_time = now_time - tenant_config.create_timestamp_;
+          if (tenant_config.is_removed_ || life_time >= RECYCLE_LATENCY) {
+            MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
+          }
           if (OB_FAIL(MTL(ObTenantSnapshotService*)->
                 check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
             LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_config));
