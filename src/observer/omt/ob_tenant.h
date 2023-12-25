@@ -53,7 +53,7 @@ namespace omt
 class ObPxPool
     : public share::ObThreadPool
 {
-  using RunFuncT = std::function<void ()>;
+  using RunFuncT = std::function<void (bool)>;
   void run(int64_t idx) final;
   void run1() final;
   static const int64_t QUEUE_WAIT_TIME = 100 * 1000;
@@ -68,12 +68,14 @@ public:
       concurrency_(0),
       active_threads_(0)
   {}
+  virtual void stop();
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_group_id(uint64_t group_id) { group_id_ = group_id; }
   void set_cgroup_ctrl(share::ObCgroupCtrl *cgroup_ctrl) { cgroup_ctrl_ = cgroup_ctrl; }
   int64_t get_pool_size() const { return get_thread_count(); }
   int submit(const RunFuncT &func);
   void set_px_thread_name();
+  int64_t get_queue_size() const { return queue_.size(); }
 private:
   void handle(common::ObLink *task);
   void try_recycle(int64_t idle_time);
@@ -110,6 +112,13 @@ public:
 class ObPxPools
 {
 public:
+  class StopPoolFunc
+  {
+  public:
+    StopPoolFunc() {}
+    virtual ~StopPoolFunc() = default;
+    int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
+  };
   class DeletePoolFunc
   {
   public:
@@ -117,7 +126,6 @@ public:
     virtual ~DeletePoolFunc() = default;
     int operator()(common::hash::HashMapPair<int64_t, ObPxPool*> &kv);
   };
-
   class ThreadRecyclePoolFunc
   {
   public:
@@ -137,6 +145,7 @@ public:
     }
     return ret;
   }
+  static void mtl_stop(ObPxPools *&pools);
   static void mtl_destroy(ObPxPools *&pools)
   {
     common::ob_delete(pools);

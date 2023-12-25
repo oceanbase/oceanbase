@@ -523,7 +523,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantCGReadInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObDecodeResourcePool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
 
-    MTL_BIND(ObPxPools::mtl_init, ObPxPools::mtl_destroy);
+    MTL_BIND2(nullptr, ObPxPools::mtl_init, nullptr, ObPxPools::mtl_stop, nullptr, ObPxPools::mtl_destroy);
     MTL_BIND(ObTenantDfc::mtl_init, ObTenantDfc::mtl_destroy);
     MTL_BIND(init_compat_mode, nullptr);
     MTL_BIND2(ObMySQLRequestManager::mtl_new, ObMySQLRequestManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObMySQLRequestManager::mtl_destroy);
