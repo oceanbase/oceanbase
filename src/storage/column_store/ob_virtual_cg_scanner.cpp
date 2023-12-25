@@ -315,7 +315,7 @@ int ObDefaultCGScanner::init_datum_infos_and_default_row(const ObTableIterParam 
     STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
   } else if (OB_FAIL(add_lob_header_if_need(*column_param, default_row_.local_allocator_, default_row_.storage_datums_[0]))) {
     STORAGE_LOG(WARN, "Failed to add lob header to default value", K(ret));
-  } else if (!iter_param.enable_pd_aggregate()) {
+  } else if (iter_param.vectorized_enabled_ && !iter_param.enable_pd_aggregate()) {
     const int64_t expr_count = iter_param.output_exprs_->count();
     datum_infos_.set_allocator(access_ctx.stmt_allocator_);
     sql::ObEvalCtx &eval_ctx = iter_param.op_->get_eval_ctx();
