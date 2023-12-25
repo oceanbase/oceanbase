@@ -157,6 +157,11 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
   --   SKIP_EXT_DATA
   --     Provides you an option to skip the MV data refresh corresponding to
   --     the external partitions.
+  --   REFRESH_PARALLEL
+  --     Max degree of parallelism for executing refresh. Now only works on
+  --     complete refresh.
+  --     n <= 1 specifies serial executing.
+  --     n > 1  specifies parallel executing with n parallel processes.
   --
   --  EXCEPTIONS
   --
@@ -173,7 +178,8 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     atomic_refresh         IN     BOOLEAN        := true,
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
-    skip_ext_data          IN     BOOLEAN        := false);
+    skip_ext_data          IN     BOOLEAN        := false,
+    refresh_parallel       IN     BINARY_INTEGER := 1);
 
   PROCEDURE refresh(
     tab                    IN     DBMS_UTILITY.UNCL_ARRAY,
@@ -187,7 +193,8 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     atomic_refresh         IN     BOOLEAN        := true,
     nested                 IN     BOOLEAN        := false,
     out_of_place           IN     BOOLEAN        := false,
-    skip_ext_data          IN     BOOLEAN        := false);
+    skip_ext_data          IN     BOOLEAN        := false,
+    refresh_parallel       IN     BINARY_INTEGER := 1);
 
 END dbms_mview;
 //
