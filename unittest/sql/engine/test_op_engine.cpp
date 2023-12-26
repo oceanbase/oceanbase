@@ -79,7 +79,7 @@ void TestOpEngine::destory()
   ObIOManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   ObClusterVersion::get_instance().destroy();
-  ObTmpFileManager::get_instance().destroy();
+  oceanbase::blocksstable::ObTmpFileManager::get_instance().destroy();
 
   // THE_IO_DEVICE->destroy();
 }
