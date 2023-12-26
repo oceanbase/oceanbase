@@ -604,6 +604,9 @@ OB_INLINE void ObResultSet::store_affected_rows(ObPhysicalPlanCtx &plan_ctx)
     affected_row = get_affected_rows();
   }
   NG_TRACE_EXT(affected_rows, OB_ID(affected_rows), affected_row);
+  if (my_session_.is_session_sync_support()) {
+    my_session_.set_affected_rows_is_changed(affected_row);
+  }
   my_session_.set_affected_rows(affected_row);
 }
 
