@@ -103,6 +103,7 @@ int ObSSTableSecMetaIterator::open(
   }
   if (OB_FAIL(ret) || is_prefetch_end_) {
   } else if (is_ddl_mem_sstable) {
+    const bool is_normal_cg = sstable.is_normal_cg_sstable();
     const ObMicroBlockData &root_block = sstable_meta_hdl_.get_sstable_meta().get_root_info().get_block_data();
     if (ObMicroBlockData::DDL_BLOCK_TREE != root_block.type_ || nullptr == root_block.buf_) {
       ret = OB_ERR_UNEXPECTED;
@@ -110,7 +111,7 @@ int ObSSTableSecMetaIterator::open(
     } else {
       block_meta_tree_ = reinterpret_cast<ObBlockMetaTree *>(const_cast<char *>(root_block.buf_));
       const int64_t step = max(1, sample_step);
-      if (OB_FAIL(ddl_iter_.set_iter_param(const_cast<ObStorageDatumUtils *>(&rowkey_read_info.get_datum_utils()), is_reverse_scan, block_meta_tree_, step))) {
+      if (OB_FAIL(ddl_iter_.set_iter_param(const_cast<ObStorageDatumUtils *>(&rowkey_read_info.get_datum_utils()), is_reverse_scan, block_meta_tree_, is_normal_cg, step))) {
         LOG_WARN("fail to set ddl iter param", K(ret));
       } else if (OB_FAIL(ddl_iter_.locate_range(query_range,
                                                 true, /*is_left_border*/

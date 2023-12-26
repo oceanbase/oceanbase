@@ -61,11 +61,12 @@ public:
   virtual void reset() override;
   virtual void reuse() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLIndexBlockRowIterator",
-                       K_(is_iter_start), K_(is_iter_finish), KP(cur_tree_value_), KP(block_meta_tree_));
+                       K_(is_iter_start), K_(is_iter_finish), KP(cur_tree_value_), KP(block_meta_tree_), K(is_normal_cg_));
 public:
   int set_iter_param(const ObStorageDatumUtils *datum_utils,
                      bool is_reverse_scan,
                      const storage::ObBlockMetaTree *block_meta_tree,
+                     const bool is_normal_cg,
                      const int64_t iter_step = INT64_MAX);
   bool is_valid() { return OB_NOT_NULL(block_meta_tree_); }
   void set_iter_end() { is_iter_finish_ = true; }
@@ -73,6 +74,7 @@ public:
 private:
   bool is_iter_start_;
   bool is_iter_finish_;
+  bool is_normal_cg_;
   DDLBtreeIterator btree_iter_;
   const storage::ObBlockMetaTree *block_meta_tree_;
   storage::ObBlockMetaTreeValue *cur_tree_value_;
