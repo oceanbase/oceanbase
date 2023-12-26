@@ -263,6 +263,7 @@ int ObTempRowStore::Iterator::get_next_batch(const ObExprPtrIArray &exprs,
                                              const ObCompactRow **stored_rows)
 {
   int ret = OB_SUCCESS;
+  read_rows = 0;
   if (OB_FAIL(row_store_->init_batch_ctx())) {
     LOG_WARN("init batch ctx failed", K(ret));
   } else if (OB_UNLIKELY(NULL == cur_blk_ || !cur_blk_->contain(cur_blk_id_))) {
@@ -340,6 +341,7 @@ int ObTempRowStore::Iterator::get_next_batch(const int64_t max_rows,
                                              int64_t &read_rows,
                                              const ObCompactRow **stored_rows) {
   int ret = OB_SUCCESS;
+  read_rows = 0;
   if (OB_ISNULL(stored_rows)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stored rows is null", K(ret));

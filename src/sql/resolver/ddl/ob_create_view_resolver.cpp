@@ -341,6 +341,13 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
           }
         }
         if (OB_SUCC(ret)) {
+          if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, container_table_schema))) {
+            LOG_WARN("resolve hints failed", K(ret));
+          } else {
+            mv_ainfo.mv_refresh_info_.parallel_ = stmt->get_parallelism();
+          }
+        }
+        if (OB_SUCC(ret)) {
           ObViewSchema &view_schema = table_schema.get_view_schema();
           if (OB_FAIL(resolve_mv_refresh_info(parse_tree.children_[MVIEW_NODE], mv_ainfo.mv_refresh_info_))) {
             LOG_WARN("fail to resolve mv refresh info", KR(ret));

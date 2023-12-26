@@ -543,6 +543,9 @@ int ObExprLowerUpper::vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCo
           char *buf = expr.get_str_res_mem(ctx, m_text.length() * multiply, idx);
           if (m_text.empty()) {
             str_result.reset();
+          } else if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed", "size", m_text.length() * multiply);
           } else if (is_arg_batch_ascii || (do_ascii_optimize_check
                       && storage::is_ascii_str(m_text.ptr(), m_text.length()))) {
             if (IsLower) {

@@ -913,7 +913,6 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
 {
   int ret = OB_SUCCESS;
   scn_range.reset();
-
   ObArray<ObSSTableWrapper> sstables;
   scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
   scn_range.end_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
@@ -941,8 +940,14 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
 
     if (OB_SUCC(ret)) {
       //need copy src all minor sstables for tablet meta merge, do not need calculate sstable version range.
-      scn_range.start_scn_.set_base();
-      scn_range.end_scn_.set_max();
+      //here set end scn just for compatible
+      if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_1_1) {
+        scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
+        scn_range.end_scn_ = sstables.empty() ? tablet->get_tablet_meta().clog_checkpoint_scn_ : sstables.at(0).get_sstable()->get_start_scn();
+      } else {
+        scn_range.start_scn_.set_base();
+        scn_range.end_scn_.set_max();
+      }
     }
   }
   return ret;

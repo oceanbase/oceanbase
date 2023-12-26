@@ -8026,7 +8026,8 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     refresh_mode_,
     start_time_,
     next_time_expr_,
-    exec_env_);
+    exec_env_,
+    parallel_);
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------

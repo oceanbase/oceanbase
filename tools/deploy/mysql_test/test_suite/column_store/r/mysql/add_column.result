@@ -1,5 +1,3 @@
-set session _enable_rich_vector_format = true;
-alter system enable_table_without_all_cg = false;
 create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
 create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);
 select count(*) from t1;
@@ -329,10 +327,9 @@ select count(*),count(c1),min(c1),max(c1),sum(c1),count(c2),min(c2),max(c2) from
 count(*)	count(c1)	min(c1)	max(c1)	sum(c1)	count(c2)	min(c2)	max(c2)
 250	250	0	498	39900	100	300300300300300	498498498498498
 drop table t1,t2;
-alter system enable_table_without_all_cg = true;
 alter system flush plan cache;
-create table t1(a int, b varchar(3048), primary key (a), c int) with column group (all columns, each column);
-create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (all columns, each column);
+create table t1(a int, b varchar(3048), primary key (a), c int) with column group (each column);
+create table t2(pk int, c1 int, c2 int unsigned, c3 varchar(100)) block_size=2048 with column group (each column);
 select count(*) from t1;
 count(*)
 150

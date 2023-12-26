@@ -3324,13 +3324,15 @@ public:
   common::ObObj start_time_;
   ObString next_time_expr_;
   ObString exec_env_;
+  int64_t parallel_;
 
   ObMVRefreshInfo() :
   refresh_method_(ObMVRefreshMethod::NEVER),
   refresh_mode_(ObMVRefreshMode::DEMAND),
   start_time_(),
   next_time_expr_(),
-  exec_env_() {}
+  exec_env_(),
+  parallel_(OB_INVALID_COUNT) {}
 
   void reset() {
     refresh_method_ = ObMVRefreshMethod::NEVER;
@@ -3338,6 +3340,7 @@ public:
     start_time_.reset();
     next_time_expr_.reset();
     exec_env_.reset();
+    parallel_ = OB_INVALID_COUNT;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -3345,7 +3348,8 @@ public:
       && refresh_mode_ == other.refresh_mode_
       && start_time_ == other.start_time_
       && next_time_expr_ == other.next_time_expr_
-      && exec_env_ == other.exec_env_;
+      && exec_env_ == other.exec_env_
+      && parallel_ == other.parallel_;
   }
 
 
@@ -3353,7 +3357,8 @@ public:
       K_(refresh_method),
       K_(start_time),
       K_(next_time_expr),
-      K_(exec_env));
+      K_(exec_env),
+      K_(parallel));
 };
 
 class ObViewSchema : public ObSchema
@@ -7583,14 +7588,6 @@ enum ObSAuditOperationType : uint64_t
 
   //privilege ....
   AUDIT_OP_MAX
-};
-
-enum ObStorageEncodingMode : uint64_t
-{
-  ROW_ENCODING_COL_CSENCODIGN = 0,
-  ALL_ENCODING,
-  ALL_CSENCODING,
-  MAX_ENCODING
 };
 
 const char *get_audit_operation_type_str(const ObSAuditOperationType type);

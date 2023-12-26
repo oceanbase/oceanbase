@@ -37,7 +37,8 @@ public:
       atomic_refresh_(false),
       nested_(false),
       out_of_place_(false),
-      skip_ext_data_(false)
+      skip_ext_data_(false),
+      refresh_parallel_(0)
   {
   }
   bool is_valid() const { return !list_.empty(); }
@@ -56,6 +57,7 @@ public:
   bool nested_;
   bool out_of_place_;
   bool skip_ext_data_;
+  int64_t refresh_parallel_;
 };
 
 class ObMViewRefreshExecutor

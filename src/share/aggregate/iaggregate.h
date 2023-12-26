@@ -222,10 +222,15 @@ public:
             agg_ctx, agg_col_id, cur_group_id, output_start_idx, loop_cnt, skip);
           break;
         }
-        case common::VEC_UNIFORM_CONST:
+        case common::VEC_UNIFORM_CONST: {
+          // must be null
+          ret = ret = collect_group_results<uniform_fmt<VEC_TC_NULL, true>>(
+            agg_ctx, agg_col_id, cur_group_id, output_start_idx, loop_cnt, skip);
+          break;
+        }
         case common::VEC_UNIFORM: {
           // must be null
-          ret = collect_group_results<uniform_fmt<VEC_TC_NULL, true>>(
+          ret = collect_group_results<uniform_fmt<VEC_TC_NULL, false>>(
             agg_ctx, agg_col_id, cur_group_id, output_start_idx, loop_cnt, skip);
           break;
         }
@@ -272,10 +277,15 @@ public:
             agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
           break;
         }
-        case VEC_UNIFORM_CONST:
-        case VEC_UNIFORM: {
+        case VEC_UNIFORM_CONST: {
           // must be null type
           ret = collect_group_results<uniform_fmt<VEC_TC_NULL, true>>(
+            agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
+          break;
+        }
+        case VEC_UNIFORM: {
+          // must be null type
+          ret = collect_group_results<uniform_fmt<VEC_TC_NULL, false>>(
             agg_ctx, agg_col_id, output_start_idx, batch_size, rows, row_meta);
           break;
         }

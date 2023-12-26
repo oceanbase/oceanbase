@@ -1136,7 +1136,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
   tx.inc_op_sn();
-  bool reset_tx = false, normal_rollback = false, reset_tx_state = false;
+  bool reset_tx = false, normal_rollback = false, reset_active_scn = false;
   // merge extra touched ls
   if (OB_NOT_NULL(extra_touched_ls) && !extra_touched_ls->empty()) {
     if (OB_FAIL(tx.update_parts(*extra_touched_ls))) {
@@ -1164,13 +1164,13 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
         /*
-         * if sql execute error code don't need reset(abort) tx but need rollback stmt and retry
+         * if sql execute error code don't need reset(abort) tx but need retry
          * e.g. "lock conflict error"
-         * to ensure next retry can still recognize it is first stmt in transaction
-         * we should reset tx state
+         * to ensure next retry can still recognize it is the first stmt in transaction
+         * we should reset tx's acitve_scn
          */
-        reset_tx = true; // tx_need_reset_(exec_errcode);
-        reset_tx_state = !reset_tx;
+        reset_tx = tx_need_reset_(exec_errcode);
+        reset_active_scn = !reset_tx;
         normal_rollback = !reset_tx;
       } else {
         normal_rollback = true;
@@ -1207,10 +1207,7 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       tx.inc_op_sn();
       abort_tx_(tx, ObTxAbortCause::SAVEPOINT_ROLLBACK_FAIL);
     } else {
-      if (reset_tx_state) {
-        // first stmt retry need reset tx state
-        tx.state_ = ObTxDesc::State::IDLE;
-        tx.parts_.reset();
+      if (reset_active_scn) {
         tx.active_scn_.reset();
       }
        /*

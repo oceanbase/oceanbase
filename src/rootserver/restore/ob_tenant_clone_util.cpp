@@ -481,6 +481,7 @@ int ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(common::ObISQ
           LOG_WARN("fail to recycle tenant snapshot ls replicas", KR(ret), K(clone_job));
         } else {
           need_notify_tenant_snapshot_scheduler = true;
+          LOG_INFO("release source tenant resource", KR(ret), K(clone_job));
         }
       }
     }

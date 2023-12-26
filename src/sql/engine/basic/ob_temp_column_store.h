@@ -288,15 +288,18 @@ template<>
 inline int ObTempColumnStore::from_vector(ObBitmapNullVectorBase *vec, ObExpr *expr, ObEvalCtx &ctx,
                                           const int64_t start_pos, const int64_t size)
 {
-  const uint16_t flag = vec->get_flag();
-  ObBitVector &nulls = expr->get_nulls(ctx);
-  nulls.reset(size);
-  for (int64_t idx = start_pos; idx < size; ++idx) {
-    if (vec->is_null(idx)) {
-      nulls.set(idx - start_pos);
+  // reuse null vector memory if there is no null data
+  if (vec->has_null()) {
+    const uint16_t flag = vec->get_flag();
+    ObBitVector &nulls = expr->get_nulls(ctx);
+    nulls.reset(size - start_pos);
+    for (int64_t idx = start_pos; idx < size; ++idx) {
+      if (vec->is_null(idx)) {
+        nulls.set(idx - start_pos);
+      }
     }
+    vec->from(&nulls, flag);
   }
-  vec->from(&nulls, flag);
   return common::OB_SUCCESS;
 }
 

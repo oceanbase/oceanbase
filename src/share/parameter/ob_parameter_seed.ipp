@@ -160,6 +160,12 @@ DEF_STR_WITH_CHECKER(default_compress, OB_CLUSTER_PARAMETER, "archive",
                      "default compress strategy for create new table within oracle mode",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_STR_WITH_CHECKER(default_table_store_format, OB_TENANT_PARAMETER, "row",
+                     common::ObConfigTableStoreFormatChecker,
+                     "Specify the default storage format of creating table: row, column, compound format of row and column"
+                     "values: row, column, compound",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME(weak_read_version_refresh_interval, OB_CLUSTER_PARAMETER, "100ms", "[50ms,)",
          "the time interval to refresh cluster weak read version "
          "Range: [50ms, +∞)",
@@ -1716,24 +1722,9 @@ DEF_BOOL(_enable_column_store, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_skip_index, OB_TENANT_PARAMETER, "True",
         "enable the skip index in storage engine",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_cs_encoding_filter, OB_CLUSTER_PARAMETER, "True",
-              "enables using column_store encoding filter logic. The default value is True.",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_INT(v4.3, storage_encoding_mode, OB_TENANT_PARAMETER, "0", "[0, 2]",
-             "0: row_store uses encoding, column_store used cs_encoding; 1: all use encoding; 2: all use cs_encoding. Range: [0, 2] in integer",
-             ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_table_with_cg, OB_TENANT_PARAMETER, "False",
-              "enables creating table with all column_group and each column_group. The default value is True.",
-              ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_INT(v4.3, encoding_test_seed, OB_CLUSTER_PARAMETER, "0", "[0,)"
-            "The seed is used to test encoding algorithm. The default is 0, indicating that it is not test, the production environment must keep the default value",
-              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-TEMP_DEF_BOOL(v4.3, enable_table_without_all_cg, OB_TENANT_PARAMETER, "True",
-              "enables creating table without all column_group. The default value is False.",
-              ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 TEMP_DEF_BOOL(v4.3, enable_store_compression, OB_TENANT_PARAMETER, "False",
-                "enable compression in ObTempBlockStore",
-                ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+              "enable compression in ObTempBlockStore",
+              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          "enable limiting memory in prefetch for single query",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

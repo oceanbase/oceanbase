@@ -1130,5 +1130,11 @@ bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
   return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
 }
 
+bool ObConfigTableStoreFormatChecker::check(const ObConfigItem &t) const {
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("ROW") || 0 == tmp_str.case_compare("COLUMN") ||
+      0 == tmp_str.case_compare("COMPOUND");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

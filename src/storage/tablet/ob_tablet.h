@@ -629,15 +629,10 @@ private:
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
-  int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
   int self_serialize(char *buf, const int64_t len, int64_t &pos) const;
   int64_t get_self_serialize_size() const;
-  int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
-  int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
-
-  int64_t get_self_size() const;
-  int check_schema_version(const int64_t schema_version);
-  int check_snapshot_readable(const int64_t snapshot_version);
+  static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
+  static int check_snapshot_readable(const ObDDLInfoCache& ddl_info_cache, const int64_t snapshot_version);
   int get_column_store_sstable_checksum(common::ObIArray<int64_t> &column_checksums, ObCOSSTableV2 &co_sstable);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle

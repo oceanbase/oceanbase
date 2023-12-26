@@ -340,9 +340,7 @@ int ObDictColumnDecoder::pushdown_operator(
   int ret = OB_SUCCESS;
   filter_applied = false;
   const bool enable_rich_format = filter.get_op().enable_rich_format_;
-  if (!GCONF.enable_cs_encoding_filter) {
-    ret = OB_NOT_SUPPORTED;
-  } else if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
+  if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(result_bitmap.size()), K(pd_filter_info));
   } else {
@@ -457,9 +455,7 @@ int ObDictColumnDecoder::pushdown_operator(
 {
   int ret = OB_SUCCESS;
 
-  if (!GCONF.enable_cs_encoding_filter) {
-    ret = OB_NOT_SUPPORTED;
-  } else if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
+  if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "result_map size", result_bitmap.size(), K(pd_filter_info));
   } else {

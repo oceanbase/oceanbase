@@ -455,7 +455,7 @@ private:
 class ObDASDMLIterator : public common::ObNewRowIterator
 {
 public:
-  static const int64_t DEFAULT_BATCH_SIZE = 256;
+  static const int64_t DEFAULT_BATCH_SIZE = 1;
 public:
   ObDASDMLIterator(const ObDASDMLBaseCtDef *das_ctdef,
                    ObDASWriteBuffer &write_buffer,

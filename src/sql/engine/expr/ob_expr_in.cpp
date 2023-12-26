@@ -1654,6 +1654,7 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
   bool right_has_null = false;
   const char *fixed_base_l_payload = nullptr;
   bool is_exist = false;
+  bool right_all_null = false;
   if (OB_FAIL(build_right_hash_without_row(in_id, right_param_num, expr,
                                             ctx, exec_ctx, in_ctx, right_has_null))) {
       LOG_WARN("failed to build hash table for right params", K(ret));
@@ -1685,13 +1686,25 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
         left_datum.len_ = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
       }
       if (0 == in_ctx->get_static_engine_hashset_size()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("static_engine_hashset_size unexpected", K(ret),
+        // Scenarios where in_list contains only null.
+        if (right_has_null) {
+          for (int64_t left_idx = bound.start(); left_idx < bound.end(); ++left_idx) {
+            if (skip.at(left_idx) || eval_flags.at(left_idx)) { continue; }
+            res_vec->set_null(left_idx);
+            eval_flags.set(left_idx);
+          }
+          right_all_null = true;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("static_engine_hashset_size unexpected", K(ret), K(right_has_null),
                   K(in_ctx->get_static_engine_hashset_size()));
+        }
       }
     }
   }
-  if (!fallback) {
+  if (OB_FAIL(ret)) {
+  } else if (right_all_null) {
+  } else if (!fallback) {
     for (int64_t left_idx = bound.start(); OB_SUCC(ret) && left_idx < bound.end(); ++left_idx) {
       if (skip.at(left_idx) || eval_flags.at(left_idx)) {
         continue;

@@ -470,7 +470,7 @@ int ObSQLSessionMgr::create_session(const uint64_t tenant_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to alloc session info", K(last_sessid),
           K(client_sessid), K(ret));
-      } else if (proxy_sessid != last_server_session->get_proxy_sessid()) {
+      } else if (last_server_session->get_session_state() != SESSION_KILLED && proxy_sessid != last_server_session->get_proxy_sessid()) {
         LOG_ERROR("conclude same client session", K(client_sessid), K(proxy_sessid),
           K(last_server_session->get_proxy_sessid()));
       }

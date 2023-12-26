@@ -2678,6 +2678,7 @@ int ObDDLService::start_mview_complete_refresh_task(
   int ret = OB_SUCCESS;
   int64_t max_dependency_version = 0;
   uint64_t tenant_id = mview_schema.get_tenant_id();
+  const ObMVRefreshInfo *mv_refresh_info = mview_schema.get_view_schema().get_mv_refresh_info();
   ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> time_zone;
   const ObSysVarSchema *data_format_schema = nullptr;
   const ObSysVarSchema *nls_timestamp_format = nullptr;
@@ -2687,11 +2688,10 @@ int ObDDLService::start_mview_complete_refresh_task(
   arg.table_id_ = mview_schema.get_table_id();
   arg.consumer_group_id_ = THIS_WORKER.get_group_id();
   arg.session_id_ = 100;// FIXME
-  arg.parallelism_ = container_table_schema.get_dop();
   arg.exec_tenant_id_ = tenant_id;
-  if (dep_infos == nullptr) {
+  if (OB_UNLIKELY(nullptr == dep_infos || nullptr == mv_refresh_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dep_infos is nullptr", KR(ret) , KP(dep_infos));
+    LOG_WARN("dep_infos is nullptr", KR(ret) , KP(dep_infos), KP(mv_refresh_info));
   } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(tenant_id,
                                                                   time_zone,
                                                                   arg.tz_info_wrap_))) {
@@ -2712,6 +2712,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("var schema must not be null", K(ret));
   } else {
+    arg.parallelism_ = mv_refresh_info->parallel_;
     arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
     arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = data_format_schema->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();

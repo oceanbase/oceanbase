@@ -549,6 +549,10 @@ int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::Ob
     need_wait = true;
   } else if (ObTenantSnapStatus::CLONING == item.get_status()) {
     // no need to update snapshot status
+  } else if (ObTenantSnapStatus::FAILED == item.get_status()) {
+    ret = OB_ERR_TENANT_SNAPSHOT;
+    LOG_WARN("create snapshot for fork tenant failed", KR(ret), K(source_tenant_id),
+                                                        K(tenant_snapshot_id), K(item));
   } else if (ObTenantSnapStatus::NORMAL != item.get_status()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid status for fork tenant snapshot", KR(ret), K(source_tenant_id),
@@ -1208,6 +1212,7 @@ int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
                           K(ret),
                           "cur_clone_status", status_str);
   }
+  LOG_INFO("[RESTORE] clone recycle failed job", KR(ret), K(job));
   return ret;
 }
 

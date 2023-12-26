@@ -182,10 +182,13 @@ int ObCloneTenantResolver::resolve_option_list_(const ParseNode *node,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
       const ParseNode *option_node = node->children_[i];
-      if (OB_UNLIKELY(NULL == option_node)) {
+      if (OB_ISNULL(option_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid node", KR(ret));
       } else if (OB_UNLIKELY(1 != option_node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid node", KR(ret));
+      } else if (OB_ISNULL(option_node->children_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid node", KR(ret));
       } else if (T_RESOURCE_POOL_LIST == option_node->type_) {

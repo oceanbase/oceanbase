@@ -10,7 +10,6 @@ connect (conn1,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 
 connection conn1;
 --disable_query_log
-alter system enable_table_without_all_cg = true;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
 set @@recyclebin = off;
@@ -20,9 +19,7 @@ set @@recyclebin = off;
 drop table if exists ct1;
 --enable_warnings
 set session ob_trx_timeout=100000000000;
-set session _enable_rich_vector_format = true;
-# create table without all column group
-create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (each column);
 
 --disable_query_log
 --let $count = 0
@@ -120,7 +117,6 @@ select c1,c2,c3 from ct1 where c2 <= 9 and ((c1 >= 0 and c1 <= 3000) or (c1 >= 4
 select count(*) from ct1;
 
 drop table ct1;
-alter system enable_table_without_all_cg = false;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
 
@@ -225,7 +221,6 @@ drop table ct1;
 
 --disable_query_log
 set @@recyclebin = on;
-alter system enable_table_without_all_cg = false;
 alter system set _rowsets_enabled = true;
 alter system set _pushdown_storage_level = 4;
 alter system flush plan cache;

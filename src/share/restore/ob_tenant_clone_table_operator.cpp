@@ -246,6 +246,7 @@ ObCloneJob::ObCloneJob() :
   restore_scn_(),
   status_(ObTenantCloneStatus::Status::CLONE_MAX_STATUS),
   job_type_(ObTenantCloneJobType::CLONE_JOB_MAX_TYPE),
+  ret_code_(OB_SUCCESS),
   allocator_("CloneJob")
 {}
 
@@ -344,7 +345,7 @@ int ObCloneJob::assign(const ObCloneJob &other)
     restore_scn_ = other.restore_scn_;
     status_ = other.status_;
     job_type_ = other.job_type_;
-    ret_code_ = ret_code_;
+    ret_code_ = other.ret_code_;
   }
   return ret;
 }

@@ -50,7 +50,7 @@ int ObDBMSMViewMysql::purge_log(ObExecContext &ctx, ParamStore &params, ObObj &r
 PROCEDURE refresh(
     IN     mv_name                VARCHAR(65535),
     IN     method                 VARCHAR(65535) DEFAULT NULL,
-    IN     parallelism            INT            DEFAULT 1);
+    IN     refresh_parallel       INT            DEFAULT 1);
 */
 int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &result)
 {
@@ -59,13 +59,13 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
   CK(OB_LIKELY(3 == params.count()));
   CK(OB_LIKELY(params.at(0).is_varchar()) /*mv_name*/,
      OB_LIKELY(params.at(1).is_null() || params.at(1).is_varchar()) /*method*/,
-     OB_LIKELY(params.at(2).is_int32()) /*parallelism*/);
+     OB_LIKELY(params.at(2).is_int32()) /*refresh_parallel*/);
   if (OB_SUCC(ret)) {
     ObMViewRefreshArg refresh_params;
     ObMViewRefreshExecutor refresh_executor;
     refresh_params.list_ = params.at(0).get_varchar();
     params.at(1).is_varchar() ? refresh_params.method_ = params.at(1).get_varchar() : NULL;
-    refresh_params.parallelism_ = params.at(2).get_int();
+    refresh_params.refresh_parallel_ = params.at(2).get_int();
     if (OB_FAIL(refresh_executor.execute(ctx, refresh_params))) {
       LOG_WARN("fail to execute mview refresh", KR(ret), K(refresh_params));
     }

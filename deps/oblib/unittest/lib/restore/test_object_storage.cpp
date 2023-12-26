@@ -761,6 +761,50 @@ TEST_F(TestObjectStorage, test_append_rw)
 
     {
       ObStorageAppender appender;
+      const char write_content[] = "123";
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/a.b/%ld.back",
+                                            dir_uri, ObTimeUtility::current_time()));
+      ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, appender.pwrite(write_content, strlen(write_content), 0));
+      ASSERT_EQ(OB_SUCCESS, appender.seal_for_adaptive());
+      ASSERT_EQ(OB_SUCCESS, appender.close());
+
+      ObStorageAdaptiveReader reader;
+      char read_buf[5] = {0};
+      int64_t read_size = 0;
+      ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, reader.pread(read_buf, 5, 0, read_size));
+      ASSERT_EQ(strlen(write_content), read_size);
+      ASSERT_EQ('2', read_buf[1]);
+      ASSERT_EQ(OB_SUCCESS, reader.close());
+      ASSERT_EQ(OB_SUCCESS, util.del_file(uri, true));
+    }
+
+    {
+      ObStorageAppender appender;
+      const char write_content[] = "123";
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/a.b/%ld",
+                                            dir_uri, ObTimeUtility::current_time()));
+      ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, appender.pwrite(write_content, strlen(write_content), 0));
+      ASSERT_EQ(OB_SUCCESS, appender.seal_for_adaptive());
+      ASSERT_EQ(OB_SUCCESS, appender.close());
+
+      ObStorageAdaptiveReader reader;
+      char read_buf[5] = {0};
+      int64_t read_size = 0;
+      ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, reader.pread(read_buf, 5, 0, read_size));
+      ASSERT_EQ(strlen(write_content), read_size);
+      ASSERT_EQ('2', read_buf[1]);
+      ASSERT_EQ(OB_SUCCESS, reader.close());
+      ASSERT_EQ(OB_SUCCESS, util.del_file(uri, true));
+    }
+
+    {
+      ObStorageAppender appender;
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_append_file_%ld.back",
+                                            dir_uri, ObTimeUtility::current_time()));
       ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
       // first append
       const char first_write[] = "123";

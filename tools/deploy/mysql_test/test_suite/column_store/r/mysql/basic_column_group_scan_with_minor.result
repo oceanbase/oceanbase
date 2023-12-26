@@ -1,7 +1,6 @@
 drop table if exists ct1;
 set session ob_trx_timeout=100000000000;
-set session _enable_rich_vector_format = true;
-create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (each column);
 alter system minor freeze;
 alter system major freeze;
 update ct1 set c3 = 0 where c1 = 0;
@@ -447,7 +446,6 @@ select count(*) from ct1;
 count(*)
 10002
 drop table ct1;
-alter system enable_table_without_all_cg = false;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
 create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);

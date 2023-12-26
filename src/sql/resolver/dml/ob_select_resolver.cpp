@@ -6553,6 +6553,7 @@ int ObSelectResolver::recursive_update_column_name(ObSelectStmt *select_stmt,
     TableItem *table_item = NULL;
     ObSelectStmt *ref_stmt = NULL;
     SelectItem *ref_select_item = NULL;
+    int64_t select_item_idx = col_ref_expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
     ObString col_name;
     if (OB_ISNULL(table_item = select_stmt->get_table_item_by_id(col_ref_expr->get_table_id()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -6562,7 +6563,9 @@ int ObSelectResolver::recursive_update_column_name(ObSelectStmt *select_stmt,
     } else if (OB_ISNULL(ref_stmt = table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ref query stmt is null", K(ret));
-    } else if (OB_ISNULL(ref_select_item = &ref_stmt->get_select_item(col_ref_expr->get_column_id() - OB_APP_MIN_COLUMN_ID))) {
+    } else if (select_item_idx < 0 || select_item_idx >= ref_stmt->get_select_item_size()) {
+      // do nothing, maybe col_ref_expr is ROWID or other pseudo column
+    } else if (OB_ISNULL(ref_select_item = &ref_stmt->get_select_item(select_item_idx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select item is null", K(ret));
     } else if (OB_FAIL(ob_write_string(*allocator_, ref_select_item->alias_name_, col_name))) {

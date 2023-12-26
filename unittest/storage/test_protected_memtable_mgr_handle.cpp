@@ -81,6 +81,9 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(1, scn1));
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->create_memtable(2, scn2));
 
+  ObSEArray<ObTableHandleV2, 64> handles;
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_all_memtables(handles));
+
   // memtable_mgr exist
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(handle));
   ASSERT_EQ(1, pool->count_);
@@ -97,6 +100,17 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
 
   // memtable_mgr not exist
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, protected_handle->get_active_memtable(handle));
+  // memtable mgr is not destroyed so memtable also hold an reference
+  ASSERT_EQ(1, pool->count_);
+
+  // remove memtable mgr reference from memtable
+  ASSERT_EQ(1, handles.count());
+  for (int i = 0; i < handles.count(); i++) {
+    memtable::ObIMemtable *i_mt = nullptr;
+    EXPECT_EQ(OB_SUCCESS, handles[i].get_memtable(i_mt));
+    memtable::ObMemtable *mt = (memtable::ObMemtable *)(i_mt);
+    mt->memtable_mgr_handle_.reset();
+  }
   ASSERT_EQ(0, pool->count_);
 
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));

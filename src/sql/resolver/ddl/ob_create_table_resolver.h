@@ -134,7 +134,7 @@ private:
   uint64_t gen_column_group_id();
   int resolve_column_group(const ParseNode *cg_node);
 
-  bool need_column_group(const ObTableSchema &table_schema);
+  bool can_add_column_group(const ObTableSchema &table_schema);
   int add_inner_index_for_heap_gtt();
 
 private:
