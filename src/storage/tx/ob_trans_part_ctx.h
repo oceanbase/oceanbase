@@ -24,6 +24,7 @@
 #include "ob_tx_ctx_mds.h"
 #include "ob_one_phase_committer.h"
 #include "ob_two_phase_committer.h"
+#include "ob_dup_table_base.h"
 #include <cstdint>
 #include "storage/multi_data_source/buffer_ctx.h"
 
@@ -301,7 +302,9 @@ public:
   // ========================================================
   // newly added for 4.0
 
-  int retry_dup_trx_before_prepare(const share::SCN &before_prepare_version);
+  int retry_dup_trx_before_prepare(
+      const share::SCN &before_prepare_version,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   // int merge_tablet_modify_record(const common::ObTabletID &tablet_id);
   int set_scheduler(const common::ObAddr &scheduler);
   const common::ObAddr &get_scheduler() const;
@@ -493,7 +496,10 @@ private:
     exec_info_.is_dup_tx_ = true;
     exec_info_.trans_type_ = TransType::DIST_TRANS;
   }
-  int dup_table_before_preapre_(const share::SCN &before_prepare_version, const bool before_replay  = false);
+  int dup_table_before_preapre_(
+      const share::SCN &before_prepare_version,
+      const bool after_redo_completed,
+      const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
   int clear_dup_table_redo_sync_result_();
 
   int do_local_tx_end_(TxEndAction tx_end_action);

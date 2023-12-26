@@ -739,9 +739,11 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
   share::SCN tmp_max_read_version;
   tmp_max_read_version.set_invalid();
 
-  const int64_t GET_GTS_TIMEOUT = 100 * 1000; // 50ms
+  const int64_t GET_GTS_TIMEOUT = 100 * 1000; // 100ms
   share::SCN before_prepare_gts;
   before_prepare_gts.set_invalid();
+  ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src =
+      ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::UNKNOWN;
   int64_t start_us = OB_INVALID_TIMESTAMP;
 
   if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
@@ -787,43 +789,56 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
           share::SCN tmp_gts;
           tmp_gts.set_invalid();
           start_us = ObTimeUtility::fast_current_time();
-          const MonotonicTs stc = MonotonicTs(ObTimeUtility::fast_current_time());
+          const MonotonicTs stc = MonotonicTs(start_us);
           MonotonicTs rts(0);
-          do {
-            const int64_t now = ObTimeUtility::fast_current_time();
-            if (now >= start_us + GET_GTS_TIMEOUT) {
-              tmp_ret = OB_TIMEOUT;
-              DUP_TABLE_LOG(WARN, "wait gts for too long time", K(now), K(start_us),
-                            K(before_prepare_gts));
-            } else if (OB_TMP_FAIL(MTL(ObTransService *)
-                                       ->get_ts_mgr()
-                                       ->get_gts(MTL_ID(), stc, NULL, tmp_gts, rts))) {
-              if (OB_EAGAIN == tmp_ret) {
-                ob_usleep(1000);
-              } else {
-                DUP_TABLE_LOG(WARN, "get gts fail", K(tmp_ret), K(now));
-              }
-            } else if (OB_UNLIKELY(!tmp_gts.is_valid())) {
-              tmp_ret = OB_ERR_UNEXPECTED;
-              TRANS_LOG(WARN, "invalid snapshot from gts", K(tmp_gts), K(now));
-            } else {
-              // do nothing
-            }
-          } while (tmp_ret == OB_EAGAIN);
-
-          if (OB_SUCCESS == tmp_ret) {
-            before_prepare_gts = tmp_gts;
-          }
-        }
-
-        if (OB_SUCCESS == tmp_ret && before_prepare_gts > redo_completed_scn) {
-          const common::ObAddr self_addr = MTL(ObTransService *)->get_server();
-          ObDupTableBeforePrepareRequest before_prepare_req(tx_id, before_prepare_gts);
-          before_prepare_req.set_header(self_addr, lease_addrs[i], self_addr, ls_id_);
           if (OB_TMP_FAIL(MTL(ObTransService *)
-                              ->get_dup_table_rpc_impl()
-                              .post_msg(lease_addrs[i], before_prepare_req))) {
-            DUP_TABLE_LOG(WARN, "post ts sync request failed", K(tmp_ret));
+                              ->get_ts_mgr()
+                              ->get_gts(MTL_ID(), stc, NULL, tmp_gts, rts))) {
+            if (OB_EAGAIN != tmp_ret) {
+              DUP_TABLE_LOG(WARN, "get gts failed", K(tmp_ret), K(start_us));
+            } else {
+              if (OB_TMP_FAIL(
+                      MTL(ObTransService *)->get_ts_mgr()->get_gts(MTL_ID(), NULL, tmp_gts))) {
+
+                DUP_TABLE_LOG(WARN, "get gts from the cache failed", K(tmp_ret), K(start_us));
+              }
+            }
+          }
+
+          if (OB_TMP_FAIL(tmp_ret) || !tmp_gts.is_valid_and_not_min()) {
+            if (OB_ISNULL(log_handler_)) {
+              tmp_ret = OB_INVALID_ARGUMENT;
+              DUP_TABLE_LOG(WARN, "invalid log handler ptr", K(tmp_ret), K(ls_id_),
+                            KP(log_handler_));
+            } else if (OB_TMP_FAIL(log_handler_->get_max_decided_scn(before_prepare_gts))) {
+              DUP_TABLE_LOG(WARN, "get max decided scn failed", K(tmp_ret), K(ls_id_),
+                            K(before_prepare_gts));
+              before_prepare_gts.set_invalid();
+            } else {
+              before_prepare_src =
+                  ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::MAX_DECIDED_SCN;
+            }
+          } else {
+            before_prepare_gts = tmp_gts;
+            before_prepare_src = ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::GTS;
+          }
+
+          if (OB_SUCCESS == tmp_ret && before_prepare_gts > redo_completed_scn) {
+            const common::ObAddr self_addr = MTL(ObTransService *)->get_server();
+            ObDupTableBeforePrepareRequest before_prepare_req(tx_id, before_prepare_gts,
+                                                              before_prepare_src);
+            before_prepare_req.set_header(self_addr, lease_addrs[i], self_addr, ls_id_);
+            if (before_prepare_req.get_before_prepare_scn_src()
+                <= ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::UNKNOWN) {
+              DUP_TABLE_LOG(ERROR, "UNKOWN before prepare src", K(ret), K(tmp_ret),
+                            K(before_prepare_req), K(redo_completed_scn), K(tx_id), K(ls_id_));
+            }
+
+            if (OB_TMP_FAIL(MTL(ObTransService *)
+                                ->get_dup_table_rpc_impl()
+                                .post_msg(lease_addrs[i], before_prepare_req))) {
+              DUP_TABLE_LOG(WARN, "post ts sync request failed", K(tmp_ret));
+            }
           }
         }
       }
