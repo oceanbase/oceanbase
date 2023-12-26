@@ -403,6 +403,7 @@ public:
                                  const bool try_lock,
                                  const ObRegisterMdsFlag &register_flag);
 
+  int dup_table_tx_redo_sync(const bool need_retry_by_task);
   const share::SCN get_start_log_ts()
   {
     return ctx_tx_data_.get_start_log_ts();
@@ -480,7 +481,7 @@ private:
   int fix_redo_lsns_(const ObTxLogCb *log_cb);
 
   int search_unsubmitted_dup_table_redo_() __attribute__((__noinline__));
-  int dup_table_tx_redo_sync_();
+  int dup_table_tx_redo_sync_(const bool need_retry_by_task = true);
   int check_dup_trx_with_submitting_all_redo(ObTxLogBlock &log_block,
                                              memtable::ObRedoLogSubmitHelper &helper);
   bool is_dup_table_redo_sync_completed_();

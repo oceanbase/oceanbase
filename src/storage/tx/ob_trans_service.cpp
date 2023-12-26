@@ -528,6 +528,12 @@ void ObTransService::handle(void *task)
         mtl_free(standby_cleanup_task);
         standby_cleanup_task = nullptr;
       }
+    } else if(ObTransRetryTaskType::DUP_TABLE_TX_REDO_SYNC_RETRY_TASK == trans_task->get_task_type()) {
+      ObTxRedoSyncRetryTask *redo_sync_task = static_cast<ObTxRedoSyncRetryTask *>(trans_task);
+      redo_sync_task->clear_in_thread_pool_flag();
+      if (OB_FAIL(redo_sync_task->iter_tx_retry_redo_sync())) {
+        TRANS_LOG(WARN, "execute redo sync task failed", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected trans task type!!!", KR(ret), K(*trans_task));
@@ -641,6 +647,21 @@ int ObTransService::check_dup_table_lease_valid(const ObLSID ls_id,
     is_dup_ls = true;
     is_lease_valid = true;
     ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
+int ObTransService::retry_redo_sync_by_task(ObTransID tx_id, share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t redo_sync_index = (ls_id.hash() + tx_id.hash()) % MAX_REDO_SYNC_TASK_COUNT;
+
+  if (OB_FAIL(redo_sync_task_array_[redo_sync_index].push_back_redo_sync_object(tx_id, ls_id))) {
+    TRANS_LOG(WARN, "retry redo sync task failed", K(ret), K(tx_id), K(ls_id), K(redo_sync_index));
+  } else {
+    TRANS_LOG(DEBUG, "start to retry redo sync task successfully", K(ret), K(tx_id), K(ls_id),
+              K(redo_sync_index));
   }
 
   return ret;
