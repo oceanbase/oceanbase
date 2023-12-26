@@ -448,5 +448,65 @@ int64_t ObInsertStmt::get_instead_of_trigger_column_count() const
   return column_count;
 }
 
+int ObInsertStmt::check_pdml_disabled(const bool is_online_ddl,
+                                      bool &disable_pdml, bool &is_pk_auto_inc) const
+{
+  int ret = OB_SUCCESS;
+  disable_pdml = false;
+  is_pk_auto_inc = false;
+  if (!value_from_select()) {
+    disable_pdml = true;
+  } else if (is_online_ddl) {
+    disable_pdml = false; // keep online ddl use pdml
+  } else {
+    const common::ObIArray<ObRawExpr*> &column_conv_exprs = get_column_conv_exprs();
+    const common::ObIArray<ObColumnRefRawExpr*> &column_exprs = table_info_.column_exprs_;
+    if (OB_UNLIKELY(column_exprs.count() != column_conv_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected column count", K(ret),
+               K(column_exprs.count()), K(column_conv_exprs.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && !disable_pdml && i < column_conv_exprs.count(); ++i) {
+        const ObColumnRefRawExpr *column_expr = column_exprs.at(i);
+        const ObRawExpr *column_conv_expr = column_conv_exprs.at(i);
+        if (OB_ISNULL(column_expr) || OB_ISNULL(column_conv_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null expr", K(ret));
+        } else if (column_expr->is_rowkey_column() || column_expr->is_table_part_key_column()) {
+          const ObRawExpr *auto_inc_expr = NULL;
+          if (OB_FAIL(find_first_auto_inc_expr(column_conv_expr, auto_inc_expr))) {
+            LOG_WARN("fail to find first auto inc expr", K(ret));
+          } else if (auto_inc_expr != NULL) {
+            disable_pdml = auto_inc_expr->get_param_count() > 0; // means the specified value exists
+          }
+        }
+      }
+      if (OB_SUCC(ret) && disable_pdml) {
+        is_pk_auto_inc = true;
+      }
+    }
+  }
+  LOG_TRACE("check insert pdml disabled", K(is_online_ddl), K(disable_pdml), K(is_pk_auto_inc));
+  return ret;
+}
+
+int ObInsertStmt::find_first_auto_inc_expr(const ObRawExpr *expr, const ObRawExpr *&auto_inc) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (T_FUN_SYS_AUTOINC_NEXTVAL == expr->get_expr_type()) {
+    auto_inc = expr;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(find_first_auto_inc_expr(expr->get_param_expr(i), auto_inc))) {
+        LOG_WARN("fail to find first auto inc expr", K(ret), K(i), K(expr));
+      }
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
