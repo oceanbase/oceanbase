@@ -92,7 +92,7 @@ public:
   static const int64_t BACKCROUND_TASK_DELETE_SESS_NUM = 1000; // 后台任务每次删除淘汰的session node数量
 public:
   explicit ObTableApiSessPool()
-      : allocator_(MTL_ID()),
+      : allocator_("TbSessPool", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         is_inited_(false)
   {}
   ~ObTableApiSessPool() { destroy(); };
@@ -112,13 +112,14 @@ private:
   int create_and_add_node_safe(ObTableApiCredential &credential);
   int get_sess_node(uint64_t key, ObTableApiSessNode *&node);
 private:
-  common::ObFIFOAllocator allocator_; // ObFIFOAllocator will lock when alloc()/free()
+  common::ObArenaAllocator allocator_;
+  ObSpinLock allocator_lock_; // for lock allocator_
   bool is_inited_;
   CacheKeyNodeMap key_node_map_;
   // 已经淘汰的node，等待被后台删除
   // 前台login时、后台淘汰时都会操作retired_nodes_，因此需要加锁
   common::ObDList<ObTableApiSessNode> retired_nodes_;
-  ObSpinLock lock_;; // for lock retired_nodes_
+  ObSpinLock retired_nodes_lock_; // for lock retired_nodes_
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessPool);
 };
@@ -160,7 +161,7 @@ friend class ObTableApiSessPool;
 friend class ObTableApiSessNodeVal;
 public:
   explicit ObTableApiSessNode(ObTableApiCredential &credential)
-      : allocator_(MTL_ID()),
+      : allocator_("TbSessNode", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         sess_lists_(),
         last_active_ts_(0),
         credential_(credential)
@@ -185,7 +186,6 @@ public:
     DISALLOW_COPY_AND_ASSIGN(SessList);
   };
 public:
-  int init();
   void destroy();
   bool is_empty() const { return sess_lists_.is_empty(); }
   int get_sess_node_val(ObTableApiSessNodeVal *&val);
@@ -195,7 +195,8 @@ public:
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
-  common::ObFIFOAllocator allocator_; // ObFIFOAllocator will lock when alloc()/free()
+  common::ObArenaAllocator allocator_;
+  ObSpinLock allocator_lock_; // for lock allocator_
   SessList sess_lists_;
   int64_t last_active_ts_;
   ObTableApiCredential credential_;

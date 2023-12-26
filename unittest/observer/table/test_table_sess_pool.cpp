@@ -158,7 +158,8 @@ TEST_F(TestTableSessPool, mgr_update_session)
   ASSERT_NE(nullptr, mgr->pool_);
   ASSERT_TRUE(mgr->pool_->is_inited_);
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
+  ASSERT_EQ(1, mgr->pool_->retired_nodes_.size_);
+  ASSERT_EQ(node, mgr->pool_->retired_nodes_.get_last());
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
@@ -171,7 +172,7 @@ TEST_F(TestTableSessPool, mgr_update_session)
   ASSERT_NE(nullptr, mgr->pool_);
   ASSERT_TRUE(mgr->pool_->is_inited_);
   ASSERT_EQ(2, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
+  ASSERT_EQ(1, mgr->pool_->retired_nodes_.size_);
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
   ASSERT_NE(nullptr, node);
   ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());

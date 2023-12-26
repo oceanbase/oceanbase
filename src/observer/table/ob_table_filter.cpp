@@ -354,11 +354,12 @@ int ObTableFilterOperator::check_limit_param()
 int ObTableFilterOperator::init_full_column_name(const ObIArray<ObString>& col_arr)
 {
   int ret = OB_SUCCESS;
+  bool is_select_column_empty = query_->get_select_columns().empty(); // query select column is empty when do queryAndMutate
   if (is_aggregate_query()) {
     // do nothing
   } else if (OB_FAIL(full_column_name_.assign(col_arr))) {
     LOG_WARN("fail to assign full column name", K(ret));
-  } else if (OB_FAIL(one_result_->assign_property_names(query_->get_select_columns()))) { // normal query should reset select column
+  } else if (!is_select_column_empty && OB_FAIL(one_result_->assign_property_names(query_->get_select_columns()))) { // normal query should reset select column
     LOG_WARN("fail to assign query column name", K(ret));
   }
   return ret;
@@ -369,20 +370,26 @@ int ObTableFilterOperator::add_row(table::ObTableQueryResult *next_result, ObNew
   int ret = OB_SUCCESS;
   ObNewRow new_row;
   const ObIArray<ObString> &select_columns = query_->get_select_columns();
-  size_t new_size = select_columns.count();
-  size_t old_size = full_column_name_.count();
-  ObObj cell_arr[new_size];
-  new_row.assign(cell_arr, new_size);
-  for (size_t i = 0; i < old_size; i ++) {
-    int64_t idx = -1;
-    if (!has_exist_in_array(select_columns, full_column_name_.at(i), &idx)) {
-      // do nothing
-    } else {
-      cell_arr[idx] = row->get_cell(i);
+  if (!select_columns.empty()) {
+    size_t new_size = select_columns.count();
+    size_t old_size = full_column_name_.count();
+    ObObj cell_arr[new_size];
+    new_row.assign(cell_arr, new_size);
+    for (size_t i = 0; i < old_size; i ++) {
+      int64_t idx = -1;
+      if (!has_exist_in_array(select_columns, full_column_name_.at(i), &idx)) {
+        // do nothing
+      } else {
+        cell_arr[idx] = row->get_cell(i);
+      }
     }
-  }
-  if (OB_FAIL(next_result->add_row(new_row))) {
-    LOG_WARN("failed to add row", K(ret));
+    if (OB_FAIL(next_result->add_row(new_row))) {
+      LOG_WARN("failed to add row", K(ret));
+    }
+  } else { // query select column is empty when do queryAndMutate
+    if (OB_FAIL(next_result->add_row(*row))) {
+      LOG_WARN("failed to add row", K(ret));
+    }
   }
   return ret;
 }

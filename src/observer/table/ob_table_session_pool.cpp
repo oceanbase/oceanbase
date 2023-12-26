@@ -97,8 +97,9 @@ void ObTableApiSessPoolMgr::destroy()
       pool_->destroy();
       pool_ = nullptr;
     }
-    allocator_.reset();
+    allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
     is_inited_ = false;
+    LOG_INFO("ObTableApiSessPoolMgr destroy successfully");
   }
 }
 
@@ -266,13 +267,10 @@ int ObTableApiSessPool::init(int64_t hash_bucket/* = SESS_POOL_DEFAULT_BUCKET_NU
   int ret = OB_SUCCESS;
 
   if (!is_inited_) {
-    const ObMemAttr attr(MTL_ID(), "TbSessPool");
-    if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
-      LOG_WARN("fail to init allocator", K(ret));
-    } else if (OB_FAIL(key_node_map_.create(hash::cal_next_prime(hash_bucket),
-                                            "HashBucApiSessP",
-                                            "HasNodApiSess",
-                                            MTL_ID()))) {
+    if (OB_FAIL(key_node_map_.create(hash::cal_next_prime(hash_bucket),
+                                     "HashBucApiSessP",
+                                     "HasNodApiSess",
+                                     MTL_ID()))) {
       LOG_WARN("fail to init sess pool", K(ret), K(hash_bucket), K(MTL_ID()));
     } else {
       is_inited_ = true;
@@ -319,8 +317,9 @@ void ObTableApiSessPool::destroy()
 
   retired_nodes_.clear();
   key_node_map_.destroy();
-  allocator_.reset();
+  allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
   is_inited_ = false;
+  LOG_INFO("ObTableApiSessPool destroy successfully", K(MTL_ID()));
 }
 
 /*
@@ -361,7 +360,7 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
 {
   int ret = OB_SUCCESS;
 
-  ObLockGuard<ObSpinLock> guard(lock_); // lock retired_nodes_
+  ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
   if (OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session node is null", K(ret));
@@ -383,8 +382,9 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
 int ObTableApiSessPool::evict_retired_sess()
 {
   int ret = OB_SUCCESS;
-  int64 delete_count = 0;
+  int64_t delete_count = 0;
   int64_t cur_time = ObTimeUtility::current_time();
+  ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
     if (cur_time - node->get_last_active_ts() < SESS_RETIRE_TIME) {
@@ -393,17 +393,21 @@ int ObTableApiSessPool::evict_retired_sess()
     } else if (OB_FAIL(node->remove_unused_sess())) {
       LOG_WARN("fail to remove unused sess", K(ret), K(*node));
     } else {
-      ObLockGuard<ObSpinLock> guard(lock_); // lock retired_nodes_
       if (node->is_empty()) {
         ObTableApiSessNode *rm_node = retired_nodes_.remove(node);
         if (OB_NOT_NULL(rm_node)) {
           rm_node->~ObTableApiSessNode();
+          ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
           allocator_.free(rm_node);
           rm_node = nullptr;
           delete_count++;
         }
       }
     }
+  }
+
+  if (delete_count != 0) {
+    LOG_INFO("evict retired session node", K(delete_count), K(retired_nodes_.get_size()));
   }
 
   return ret;
@@ -499,6 +503,7 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
 int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node)
 {
   int ret = OB_SUCCESS;
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   ObTableApiSessNode *tmp_node = nullptr;
   void *buf = nullptr;
 
@@ -507,11 +512,8 @@ int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTab
     LOG_WARN("fail to alloc mem for ObTableApiSessNode", K(ret), K(sizeof(ObTableApiSessNode)));
   } else {
     tmp_node = new (buf) ObTableApiSessNode(credential);
-    if (OB_FAIL(tmp_node->init())) {
-      LOG_WARN("fail to init session node", K(ret));
-    } else {
-      node = tmp_node;
-    }
+    tmp_node->last_active_ts_ = ObTimeUtility::current_time();
+    node = tmp_node;
   }
 
   return ret;
@@ -531,6 +533,7 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
       ret = OB_SUCCESS; // replace error code
     }
     // this node has been set by other thread, free it
+    ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
     node->~ObTableApiSessNode();
     allocator_.free(node);
     node = nullptr;
@@ -632,20 +635,6 @@ void ObTableApiSessNodeVal::give_back_to_free_list()
   }
 }
 
-int ObTableApiSessNode::init()
-{
-  int ret = OB_SUCCESS;
-  const ObMemAttr attr(MTL_ID(), "TbSessNode");
-
-  if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
-    LOG_WARN("fail to init allocator", K(ret));
-  } else {
-    last_active_ts_ = ObTimeUtility::current_time();
-  }
-
-  return ret;
-}
-
 void ObTableApiSessNode::destroy()
 {
   int ret = OB_SUCCESS;
@@ -664,6 +653,7 @@ void ObTableApiSessNode::destroy()
       rm_sess->destroy();
     }
   }
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   allocator_.reset();
 }
 
@@ -680,6 +670,7 @@ int ObTableApiSessNode::remove_unused_sess()
       ObTableApiSessNodeVal *rm_sess = free_list.remove(sess);
       if (OB_NOT_NULL(rm_sess)) {
         rm_sess->~ObTableApiSessNodeVal();
+        ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
         allocator_.free(rm_sess);
         rm_sess = nullptr;
       }
@@ -725,8 +716,9 @@ int ObTableApiSessNode::get_sess_node_val(ObTableApiSessNodeVal *&val)
 int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
 {
   int ret = OB_SUCCESS;
-
+  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   void *buf = nullptr;
+
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNodeVal)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc mem for ObTableApiSessNodeVal", K(ret), K(sizeof(ObTableApiSessNodeVal)));
@@ -790,16 +782,8 @@ int ObTableApiSessNodeReplaceOp::operator()(MapKV &entry)
       // 2. replace
       ObTableApiSessNode *old_node = entry.second;
       entry.second = new_node;
-      // 3. try remove unused session in old node， free node when node is empty
-      if (OB_FAIL(old_node->remove_unused_sess())) {
-        LOG_WARN("fail to remove old node unused sess", K(ret), K(*old_node));
-      } else if (old_node->is_empty()) {
-        old_node->~ObTableApiSessNode();
-        pool_.get_allocator().free(old_node);
-      } else {
-        // 4. old node is using by other, move old node to retired list
-        pool_.move_node_to_retired_list(old_node); // 添加到链表末尾，不会出错，故不判断返回值
-      }
+      // 3. move old node to retired list
+      pool_.move_node_to_retired_list(old_node); // 添加到链表末尾，不会出错，故不判断返回值
     }
   }
 
