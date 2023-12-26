@@ -885,7 +885,11 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_multiple(
     }
   }
   if (OB_SUCC(ret) && nullptr != last_rowkey_) {
-    if (last_rowkey_->tablet_id_.compare(tablet_id) == 0) {
+    const int cmp_ret = last_rowkey_->tablet_id_.compare(tablet_id);
+    if (OB_UNLIKELY(cmp_ret < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tablet id", KR(ret), KPC(last_rowkey_), K(tablet_id));
+    } else if (cmp_ret == 0) {
       // the same tablet
       ObDatumRowkey rowkey;
       ObDatumRowkey copied_rowkey;
@@ -916,9 +920,8 @@ int ObDirectLoadMultipleMergeRangeSplitter::get_rowkeys_by_multiple(
           }
         }
       }
-    } else {
-      // the different tablet
-      abort_unless(last_rowkey_->tablet_id_.compare(tablet_id) > 0);
+    } else { /* cmp_ret > 0 */
+      // no rowkey for current tablet_id, do nothing
     }
   }
   return ret;
