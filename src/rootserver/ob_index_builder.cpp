@@ -870,7 +870,6 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
   if (OB_FAIL(GET_MIN_DATA_VERSION(index_table_schema.get_tenant_id(), compat_version))) {
     LOG_WARN("fail to get min data version", K(ret));
   } else if (compat_version >= DATA_VERSION_4_3_0_0) {
-    bool enable_table_with_cg = false;
     ObArray<uint64_t> column_ids; // not include virtual column
     index_table_schema.set_column_store(true);
     if (arg.index_cgs_.count() > 0) {
@@ -923,19 +922,12 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
           }
         }
       }
-    } else {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(index_table_schema.get_tenant_id()));
-      if (OB_SUCC(ret) && OB_LIKELY(tenant_config.is_valid())) {
-        if (tenant_config->enable_table_with_cg) {
-          enable_table_with_cg = true; // which means create each_cg and all_cg default
-        }
-      }
     }
 
     // add default column_group
     if (OB_SUCC(ret)) {
       ObColumnGroupSchema tmp_cg;
-      if (arg.index_cgs_.count() > 0 || enable_table_with_cg) {
+      if (arg.index_cgs_.count() > 0) {
         column_ids.reuse(); // if exists cg node, column_ids in default_type will be empty
       } else {
         ObTableSchema::const_column_iterator tmp_begin = index_table_schema.column_begin();
@@ -958,8 +950,8 @@ int ObIndexBuilder::create_index_column_group(const obrpc::ObCreateIndexArg &arg
           DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
         LOG_WARN("fail to build default type column_group", KR(ret), "table_id", index_table_schema.get_table_id(), K(column_ids));
       } else if (OB_FAIL(index_table_schema.add_column_group(tmp_cg))) {
-        LOG_WARN("fail to add default column group", KR(ret), "table_id", index_table_schema.get_table_id(), K(arg.index_cgs_.count()),
-                                                     K(enable_table_with_cg), K(column_ids));
+        LOG_WARN("fail to add default column group", KR(ret), "table_id", index_table_schema.get_table_id(),
+                 K(arg.index_cgs_.count()), K(column_ids));
       }
     }
   } else if (arg.index_cgs_.count() > 0) {

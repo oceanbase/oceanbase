@@ -7590,14 +7590,6 @@ enum ObSAuditOperationType : uint64_t
   AUDIT_OP_MAX
 };
 
-enum ObStorageEncodingMode : uint64_t
-{
-  ROW_ENCODING_COL_CSENCODIGN = 0,
-  ALL_ENCODING,
-  ALL_CSENCODING,
-  MAX_ENCODING
-};
-
 const char *get_audit_operation_type_str(const ObSAuditOperationType type);
 
 int get_operation_type_from_item_type(const bool is_stmt_audit,
