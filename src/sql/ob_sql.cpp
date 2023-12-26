@@ -2599,7 +2599,7 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
         exec_times = plan->stat_.get_execute_count();
         total_process_time = plan->stat_.total_process_time_;
         if (exec_times > 0
-            && (total_process_time / exec_times) > lqt) {
+            && (0 != lqt && (total_process_time / exec_times) > lqt)) {
           plan->inc_large_querys();
           is_large_query = true;
           lq_from_plan = true;
@@ -2609,7 +2609,7 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
     //实际编译时间判断是否为大请求
     if (OB_SUCC(ret) && is_large_query == false) {
       if (OB_PC_LOCK_CONFLICT == tmp_ret
-          || elapsed_time > lqt) {
+          || (0 != lqt && elapsed_time > lqt)) {
         is_large_query = true;
         lq_from_plan = false;
       }
