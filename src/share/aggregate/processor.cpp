@@ -534,13 +534,9 @@ int Processor::collect_empty_set(bool collect_for_third_stage) const
       case T_FUN_SYS_BIT_AND:
       case T_FUN_SYS_BIT_OR:
       case T_FUN_SYS_BIT_XOR: {
-        // ObDatum &result = aggr_info.expr_->locate_datum_for_write(eval_ctx_);
-        // aggr_info.expr_->set_evaluated_projected(eval_ctx_);
-        // uint64_t init_val =
-        //   aggr_info.get_expr_type() == T_FUN_SYS_BIT_AND ? UINT_MAX_VAL[ObUInt64Type] : 0;
-        // result.set_uint(init_val);
-        ret = OB_NOT_IMPLEMENT;
-        LOG_WARN("not implemented", K(ret));
+        uint64_t init_val =
+          (aggr_info.get_expr_type() == T_FUN_SYS_BIT_AND ? UINT_MAX_VAL[ObUInt64Type] : 0);
+        res_vec->set_uint(output_idx, init_val);
         break;
       }
       default: {
