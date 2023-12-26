@@ -451,11 +451,13 @@ int ObTableExprCgService::generate_calc_tablet_id_exprs(ObTableCtx &ctx)
       LOG_WARN("index schema is NULL", K(ret), K(i));
     } else {
       ObRawExpr *raw_expr = nullptr;
-      if (index_info->is_primary_index_ && ctx.need_lookup_calc_tablet_id_expr()) { // primary index
-        if (OB_FAIL(generate_calc_tablet_id_expr(ctx, *index_schema, raw_expr))) {
-          LOG_WARN("fail to generate calc tablet id expr", K(ret));
-        } else {
-          index_info->lookup_part_id_expr_ = raw_expr;
+      if (index_info->is_primary_index_) { // primary index
+        if (ctx.need_lookup_calc_tablet_id_expr()) {
+          if (OB_FAIL(generate_calc_tablet_id_expr(ctx, *index_schema, raw_expr))) {
+            LOG_WARN("fail to generate calc tablet id expr", K(ret));
+          } else {
+            index_info->lookup_part_id_expr_ = raw_expr;
+          }
         }
       } else { // global index
         // for old row

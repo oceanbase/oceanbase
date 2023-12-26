@@ -169,7 +169,6 @@ int ObTableApiUpdateExecutor::update_row(const ObTableUpdCtDef &upd_ctdef,
   ObChunkDatumStore::StoredRow *old_row = nullptr;
   ObChunkDatumStore::StoredRow *new_row = nullptr;
   ObChunkDatumStore::StoredRow *full_row = nullptr;
-  clear_evaluated_flag();
   if (OB_ISNULL(old_tablet_loc) || OB_ISNULL(new_tablet_loc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet loc is NULL", K(ret), K(old_tablet_loc), K(new_tablet_loc));
