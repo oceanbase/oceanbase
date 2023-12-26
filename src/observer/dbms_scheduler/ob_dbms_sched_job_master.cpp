@@ -267,6 +267,8 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
   ObAddr execute_addr;
   if (OB_FAIL((get_execute_addr(job_info, execute_addr)))) {
     LOG_WARN("failed to get execute addr, retry soon", K(ret), K(job_info));
+  } else if (ObTimeUtility::current_time() > job_info.get_end_date()) {
+    LOG_INFO("job reach end date, not running", K(job_info));
   } else if (OB_FAIL(table_operator_.update_for_start(job_info.get_tenant_id(), job_info, next_date))) {
     LOG_WARN("failed to update for start", K(ret), K(job_info), KPC(job_key));
   } else if (OB_FAIL(job_rpc_proxy_->run_dbms_sched_job(job_key->get_tenant_id(),
@@ -276,9 +278,11 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
       execute_addr,
       self_addr_))) {
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
-    int tmp = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp = table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "send job rpc failed"))) {
-      LOG_WARN("update for end failed for send rpc failed job", K(tmp), K(job_info), KPC(job_key));
+    if (is_server_down_error(ret)) {
+      int tmp = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp = table_operator_.update_for_end(job_info.get_tenant_id(), job_info, 0, "send job rpc failed"))) {
+        LOG_WARN("update for end failed for send rpc failed job", K(tmp), K(job_info), KPC(job_key));
+      }
     }
   }
   return ret;
@@ -582,7 +586,20 @@ int ObDBMSSchedJobMaster::check_all_tenants()
       } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(GCTX.sql_proxy_, tenant_id, is_tenant_standby))) {
         LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id));
       } else if (is_tenant_standby) {
-        LOG_INFO("tenant is standby, not check new jobs", K(tenant_id));
+        LOG_INFO("tenant is standby, not check new jobs, and remove exist jobs", K(tenant_id));
+        for (ObDBMSSchedJobTask::WaitVectorIterator iter = scheduler_task_.wait_vector().begin();
+                OB_SUCC(ret) && iter != scheduler_task_.wait_vector().end(); ++iter) {
+          ObDBMSSchedJobKey *job_key = *iter;
+          if (OB_NOT_NULL(job_key) && tenant_id == job_key->get_tenant_id()) {
+            if (OB_FAIL(scheduler_task_.wait_vector().remove(iter))) {
+              LOG_WARN("failed to remove job key from wait vector", K(ret), KPC(job_key));
+            } else {
+              LOG_INFO("remove job key", KPC(job_key));
+              iter--;
+              free_job_key(job_key);
+            }
+          }
+        }
       } else {
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_ids.at(i), data_version))) {

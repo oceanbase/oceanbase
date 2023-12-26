@@ -94,7 +94,9 @@ int ObDBMSSchedTableOperator::update_for_start(
   OZ (dml.add_time_column("next_date", next_date));
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+  OZ (sql.append_fmt(" and this_date is null"));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+  CK (affected_rows == 1);
   return ret;
 }
 
