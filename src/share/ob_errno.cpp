@@ -26368,10 +26368,10 @@ static const _error _error_OB_CANNOT_USER_IF_EXISTS = {
       .mysql_errno           = ER_CANNOT_USER_IF_EXISTS,
       .sqlstate              = "HY000",
       .str_error             = "User operation failed",
-      .str_user_error        = "Authorization ID '%.*s' does not exist",
+      .str_user_error        = "User %.*s does not exist",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -11012, User operation failed",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -11012, Authorization ID '%.*s' does not exist"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -11012, User %.*s does not exist"
 };
 static const _error _error_OB_TENANT_SNAPSHOT_NOT_EXIST = {
       .error_name            = "OB_TENANT_SNAPSHOT_NOT_EXIST",

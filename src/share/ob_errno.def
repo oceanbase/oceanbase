@@ -2424,7 +2424,7 @@ DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT,
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
 DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query range memory exhausted");
-DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY000", "User operation failed", "Authorization ID '%.*s' does not exist");
+DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY000", "User operation failed", "User %.*s does not exist");
 
 
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
