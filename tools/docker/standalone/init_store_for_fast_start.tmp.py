@@ -25,6 +25,7 @@ def check_file_or_path_exist(bin_abs_path, home_abs_path, store_tar_file_path, e
         logging.warn("invalid store tar file path")
         return False
     if not os.path.isdir(etc_dest_dir):
+        logging.warn(etc_dest_dir)
         logging.warn("invalid etc dest dir")
         return False
     return True
@@ -46,16 +47,15 @@ if __name__ == "__main__":
     parser.add_argument("-z", dest="zone", type=str, default="zone1")
     parser.add_argument("-c", dest="cluster_id", type=str, default="1")
     parser.add_argument("-d", dest="data_path", type=str, default="/data/store")
-    parser.add_argument("-i", dest="devname", type=str, default="lo")
-    parser.add_argument("-r", dest="rootservice", type=str, default="127.0.0.1:@OB_RPC_PORT@")
-    parser.add_argument("-I", dest="ip", type=str, default="127.0.0.1")
+    parser.add_argument("-r", dest="rootservice", type=str, default="@OB_SERVER_IP@:@OB_RPC_PORT@")
+    parser.add_argument("-I", dest="ip", type=str, default="@OB_SERVER_IP@")
     parser.add_argument("-l", dest="log_level", type=str, default="INFO")
     parser.add_argument("-o", dest="opt_str", type=str, default="__min_full_resource_pool_memory=2147483648,memory_limit=6G,system_memory=1G,datafile_size=256M,log_disk_size=5G,cpu_count=16")
     parser.add_argument("-N", dest="daemon", type=str, default="1")
     parser.add_argument("--tenant_name", type=str, default="@OB_TENANT_NAME@")
     parser.add_argument("--tenant_lower_case_table_names", type=int, default="@OB_TENANT_LOWER_CASE_TABLE_NAMES@")
-    parser.add_argument("--max_cpu", type=float, default=14.0)
-    parser.add_argument("--min_cpu", type=float, default=14.0)
+    parser.add_argument("--max_cpu", type=float, default=7.0)
+    parser.add_argument("--min_cpu", type=float, default=7.0)
     parser.add_argument("--memory_size", type=int, default=3221225472)
     parser.add_argument("--log_disk_size", type=int, default=3221225472)
     args = parser.parse_args()
@@ -83,8 +83,8 @@ if __name__ == "__main__":
 
     # prepare observer start parameters
     daemon_option = "-N" if args.daemon=="1" else ""
-    observer_args = "-p %s -P %s -z %s -c %s -d %s -i %s -r %s -I %s -l %s -o %s %s" % (args.mysql_port, args.rpc_port, args.zone, \
-                                                                                  args.cluster_id, data_abs_path, args.devname, \
+    observer_args = "-p %s -P %s -z %s -c %s -d %s -r %s -I %s -l %s -o %s %s" % (args.mysql_port, args.rpc_port, args.zone, \
+                                                                                  args.cluster_id, data_abs_path, \
                                                                                   args.rootservice, args.ip, args.log_level, args.opt_str, \
                                                                                   daemon_option)
     os.chdir(home_abs_path)

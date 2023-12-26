@@ -287,6 +287,8 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
+tools/docker/standalone/boot
+tools/docker/standalone/init_store_for_fast_start.py
 
 ############# unittest #############
 unittest/**/test_*

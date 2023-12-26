@@ -17,7 +17,7 @@ oceanbase-ce:
     datafile_size: @OB_DATAFILE_SIZE@ # Size of the data file.
     log_disk_size: @OB_LOG_DISK_SIZE@ # The size of disk space used by the clog files.
     cpu_count: 16
-    production_mode: true
+    production_mode: false
     syslog_level: INFO # System log level. The default value is INFO.
     enable_syslog_wf: false # Print system logs whose levels are higher than WARNING to a separate log file. The default value is true.
     enable_syslog_recycle: true # Enable auto system log recycling or not. The default value is false.

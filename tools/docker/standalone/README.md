@@ -39,6 +39,9 @@ docker run -p 2881:2881 --name oceanbase-ce -e MODE=slim -e OB_MEMORY_LIMIT=5G -
 
 # deploy an instance of the largest size according to the current container
 docker run -p 2881:2881 --name oceanbase-ce -e MODE=normal -d oceanbase/oceanbase-ce
+
+# deploy a quick-start instance in any mode as desired to the current container
+docker run -p 2881:2881 --name oceanbase-ce -e FASTBOOT=true -d oceanbase/oceanbase-ce
 ```
 
 Two to five minutes are necessary for the boot procedure. To make sure that the boot procedure is successful, run this command:
@@ -73,6 +76,7 @@ This table shows the supported environment variables of the current oceanbase-ce
 | Variable name    | Default value | Description                                                  |
 | ---------------- | ------------- | ------------------------------------------------------------ |
 | MODE             | {mini, slim, normal} | If it is mini, then the docker use mini mode to deploy OceanBase Database instance, it should be used only for research/study/evaluation.  DO NOT use it for production or performance testing. If it is slim, then the docker can run in a smaller instance. It remove the obagent and can run a self tenant initial sql by yourself in the mount volume /root/boot/init.d. If you do not mount the volume path the docker does not init the tenant sql. |
+| FASTBOOT         | false         | The container can run in a quick-start mode when FASTBOOT=true. |
 | EXIT_WHILE_ERROR | true          | Whether quit the container while start observer failed. If start observer failed, you can not explore the logs as the container will exit. But if you set the EXIT_WHILE_ERROR=false, the container will not exit while observer starting fail and you can use docker exec to debug. |
 | OB_CLUSTER_NAME         | obcluster  | The oceanbase cluster name |
 | OB_TENANT_NAME          | test       | The oceanbase mysql tenant name |
@@ -109,14 +113,14 @@ The docker image `oceanbase-ce` saves the data to /root/ob directory default. Yo
 You can view more information about `docker -v` at [docker volume](https://docs.docker.com/storage/volumes/).
 
 ## Fast boot image building for a standalone node
-The `fast_boot_docker_build.sh` script is provided in the `tools/docker/standalone` directory, through which the fast boot image can be built. Before running the script, please first modify the `tools/docker/standalone/boot/_env` environment configuration script:
+The `docker_build.sh` script is provided in the `tools/docker/standalone` directory, through which the fast boot image can be built. Before running the script, please first modify the `tools/docker/standalone/boot/_env` environment configuration script:
 
-- Required: Modify the `MODE` configuration item to `STANDALONE`
 - Optional: Modify the remaining configuration items
 
 After the modification is completed, execute the image build script:
 
-- `./fast_boot_docker_build.sh <oceanbase_rpm_version>`. For example `./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
+- build the image with latest oceanbase version `./docker_build.sh`
+- build the image with specific oceanbase version `./docker_build.sh <oceanbase_rpm_version>`. For example `./docker_build.sh 4.2.1.0-100000102023092807`
 
 After waiting for the build to be completed, you can start and test the instance in the same way as mentioned above.
 
