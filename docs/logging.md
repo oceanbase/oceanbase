@@ -28,6 +28,7 @@ OceanBase 的系统日志存储在observer安装路径下的log目录下面。�
 | election.log.wf    | 只记录election.log的WARN和ERROR    |
 
 > 比较特殊的是，trace.log 没有对应的".wf"日志。
+> wf 日志除了输出普通的日志，还有一条特殊的INFO日志，就是每次日志文件创建时会记录一些当前系统、进程的信息。
 
 ### 日志参数
 
@@ -338,7 +339,7 @@ OceanBase 对WARN级别的日志做了限流，每个错误码每秒钟默认限
 
 ### DBA日志
 
-OceanBase 中还有两类特殊的日志，LOG_DBA_WARN 和 LOG_DBA_ERROR。由于OceanBase日志量特别大，并且大部分只有研发人员才能理解，为DBA运维排查问题带来了一定的负担，因此增加这两种日志，希望让DBA仅关注少量的这两类日志即可排查系统问题。
+OceanBase 中还有两类特殊的日志，LOG_DBA_WARN 和 LOG_DBA_ERROR，分别对应了WARN和ERROR日志。由于OceanBase日志量特别大，并且大部分只有研发人员才能理解，为DBA运维排查问题带来了一定的负担，因此增加这两种日志，希望让DBA仅关注少量的这两类日志即可排查系统问题。而使用 LOG_WARN 和 LOG_ERROR 输出的日志被转换成 WDIAG 和 EDIAG 日志，帮助开发人员排查问题。
 
 ### 输出提示信息到用户终端
 
