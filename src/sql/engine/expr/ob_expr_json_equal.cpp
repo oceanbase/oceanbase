@@ -92,14 +92,6 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   uint8_t option_on_error = 0;
   // json数据解析出错或非标量，此时根据on error参数返回结果
   bool is_cover_by_error = false;
-  bool both_json = false;
-
-  // 检查是否均为 json 类型，如果均为json类型，标量相比不报错
-  // 只要有一个参数不是json类型，标量相比就会报错
-  if (expr.args_[0]->datum_meta_.type_ == ObJsonType
-    || expr.args_[1]->datum_meta_.type_ == ObJsonType) {
-      both_json = true;
-  }
 
   ObExpr *json_arg_l = expr.args_[0];
   ObObjType val_type_l = json_arg_l->datum_meta_.type_;
@@ -116,8 +108,9 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
                                                                        json_candidate, is_null_result))) {
     if (ret == OB_ERR_JSON_SYNTAX_ERROR) is_cover_by_error = true;
     LOG_WARN("get_json_doc failed", K(ret));
-  } else if(!is_null_result && !both_json && (is_json_scalar(json_target)
-                                              || is_json_scalar(json_candidate))) {
+  // if is scalar, must be json type
+  } else if(!is_null_result && ((is_json_scalar(json_target) && expr.args_[0]->datum_meta_.type_ != ObJsonType)
+                              || (is_json_scalar(json_candidate) && expr.args_[1]->datum_meta_.type_ != ObJsonType))) {
     ret = OB_ERR_JSON_SYNTAX_ERROR;
     is_cover_by_error = true;
     LOG_USER_ERROR(OB_ERR_JSON_SYNTAX_ERROR);
