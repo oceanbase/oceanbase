@@ -214,14 +214,13 @@ private:
                                      sql::ObDASLockCtDef &das_lock_ctdef,
                                      const common::ObIArray<sql::ObRawExpr*> &old_row);
   static int generate_updated_column_ids(ObTableCtx &ctx,
-                                         ObTableIndexInfo &index_info,
+                                         const common::ObIArray<uint64_t> &column_ids,
                                          common::ObIArray<uint64_t> &updated_column_ids);
   static int generate_upd_assign_infos(ObTableCtx &ctx,
                                        ObTableIndexInfo &index_info,
                                        ObIAllocator &allocator,
                                        ObTableUpdCtDef &udp_ctdef);
-  static int generate_das_base_ctdef(ObTableIndexInfo &index_info,
-                                     uint64_t index_tid,
+  static int generate_das_base_ctdef(uint64_t index_tid,
                                      ObTableCtx &ctx,
                                      sql::ObDASDMLBaseCtDef &base_ctdef);
   static int generate_column_info(ObTableID index_tid,

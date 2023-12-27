@@ -1823,10 +1823,10 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
                                                 const ObIArray<ObRawExpr*> &full_row)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> dml_column_ids;
-  if (OB_FAIL(generate_das_base_ctdef(index_info, index_tid, ctx, das_upd_ctdef))) {
+  ObSEArray<uint64_t, 64> dml_column_ids;
+  if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_upd_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
-  } else if (OB_FAIL(generate_updated_column_ids(ctx, index_info, das_upd_ctdef.updated_column_ids_))) {
+  } else if (OB_FAIL(generate_updated_column_ids(ctx, das_upd_ctdef.column_ids_, das_upd_ctdef.updated_column_ids_))) {
     LOG_WARN("fail to add updated column ids", K(ret));
   } else if (OB_FAIL(generate_column_ids(ctx, index_info, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
@@ -1843,19 +1843,16 @@ int ObTableDmlCgService::generate_das_upd_ctdef(ObTableCtx &ctx,
 }
 
 int ObTableDmlCgService::generate_updated_column_ids(ObTableCtx &ctx,
-                                                     ObTableIndexInfo &index_info,
+                                                     const ObIArray<uint64_t> &column_ids,
                                                      ObIArray<uint64_t> &updated_column_ids)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
   updated_column_ids.reset();
-  ObSEArray<uint64_t, 8> column_ids;
-  if (OB_ISNULL(index_info.index_schema_)) {
+  if (column_ids.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index schema is NULL", K(ret));
-  } else if (OB_FAIL(index_info.index_schema_->get_column_ids(column_ids))) {
-    LOG_WARN("fail to get column ids", K(ret));
-  } else if (OB_FAIL(updated_column_ids.reserve(assigns.count()))) {
+    LOG_WARN("column_ids is empty", K(ret));
+  } else if (OB_FAIL(updated_column_ids.reserve(column_ids.count()))) {
     LOG_WARN("fail to reserver buffer to update column ids", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
@@ -1970,7 +1967,7 @@ int ObTableDmlCgService::generate_das_del_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObArray<uint64_t> dml_column_ids;
   ObArray<ObRawExpr*> empty_new_row;
-  if (OB_FAIL(generate_das_base_ctdef(index_info, index_tid, ctx, das_del_ctdef))) {
+  if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_del_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
   } else if (OB_FAIL(generate_column_ids(ctx, index_info, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
@@ -2460,7 +2457,7 @@ int ObTableDmlCgService::generate_das_lock_ctdef(ObTableCtx &ctx,
   ObArray<uint64_t> dml_column_ids;
   ObArray<ObRawExpr*> empty_new_row;
 
-  if (OB_FAIL(generate_das_base_ctdef(index_info, index_tid, ctx, das_lock_ctdef))) {
+  if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_lock_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
   } else if (OB_FAIL(generate_column_ids(ctx, index_info, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
@@ -2505,7 +2502,7 @@ int ObTableDmlCgService::generate_das_ins_ctdef(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObArray<uint64_t> dml_column_ids;
   ObArray<ObRawExpr*> empty_old_row;
-  if (OB_FAIL(generate_das_base_ctdef(index_info, index_tid, ctx, das_ins_ctdef))) {
+  if (OB_FAIL(generate_das_base_ctdef(index_tid, ctx, das_ins_ctdef))) {
     LOG_WARN("fail to generate das dml ctdef", K(ret));
   } else if (OB_FAIL(generate_column_ids(ctx, index_info, dml_column_ids))) {
     LOG_WARN("fail to generate dml column ids", K(ret));
@@ -2521,8 +2518,7 @@ int ObTableDmlCgService::generate_das_ins_ctdef(ObTableCtx &ctx,
   return ret;
 }
 
-int ObTableDmlCgService::generate_das_base_ctdef(ObTableIndexInfo &index_info,
-                                                 uint64_t index_tid,
+int ObTableDmlCgService::generate_das_base_ctdef(uint64_t index_tid,
                                                  ObTableCtx &ctx,
                                                  ObDASDMLBaseCtDef &base_ctdef)
 {
@@ -2532,7 +2528,7 @@ int ObTableDmlCgService::generate_das_base_ctdef(ObTableIndexInfo &index_info,
   base_ctdef.is_batch_stmt_ = false;
   base_ctdef.is_table_api_ = true;
   ObSQLSessionInfo &session = ctx.get_session_info();
-  base_ctdef.table_id_ = index_info.data_table_id_;  // loc_table_id
+  base_ctdef.table_id_ = ctx.get_ref_table_id();  // loc_table_id
   if (OB_FAIL(generate_column_info(index_tid, ctx, base_ctdef))) {
     LOG_WARN("fail to generate column info", K(ret), K(index_tid), K(ctx));
   } else if (OB_FAIL(ctx.get_schema_guard().get_schema_version(TABLE_SCHEMA,
