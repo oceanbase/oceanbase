@@ -1240,6 +1240,66 @@ TEST_F(TestObjectStorage, test_cross_testing)
   }
 }
 
+TEST_F(TestObjectStorage, test_read_single_file)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test) {
+    ObStorageUtil util;
+    ASSERT_EQ(OB_SUCCESS, util.open(&info_base));
+    const char *tmp_dir = "test_read_single_file";
+    const int64_t ts = ObTimeUtility::current_time();
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+        bucket, dir_name, tmp_dir, ts));
+
+    {
+      // normal
+      ObStorageWriter writer;
+      ObStorageReader reader;
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_normal", dir_uri));
+      ASSERT_EQ(OB_SUCCESS, writer.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, writer.write("123456", 6));
+      ASSERT_EQ(OB_SUCCESS, writer.close());
+
+      int64_t read_size = -1;
+      char read_buf[100];
+      memset(read_buf, 0, sizeof(read_buf));
+      ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, reader.pread(read_buf, 100, 0, read_size));
+      ASSERT_EQ(6, read_size);
+      ASSERT_EQ(0, strncmp(read_buf, "123456", 6));
+      ASSERT_EQ(OB_SUCCESS, reader.close());
+
+      ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    }
+
+    {
+      // appendable
+      ObStorageAppender appender;
+      ObStorageAdaptiveReader reader;
+
+      const char *write_content = "0123456789";
+      const int64_t first_content_len = 6;
+      ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_appendable", dir_uri));
+      ASSERT_EQ(OB_SUCCESS, appender.open(uri, &info_base));
+      ASSERT_EQ(OB_SUCCESS, appender.pwrite(write_content, first_content_len, 0));
+
+      int64_t read_size = -1;
+      char read_buf[100];
+      memset(read_buf, 0, sizeof(read_buf));
+      ASSERT_EQ(OB_SUCCESS, reader.open(uri, &info_base));
+
+      ASSERT_EQ(OB_SUCCESS, appender.pwrite(write_content, 1, first_content_len));
+
+      ASSERT_EQ(OB_SUCCESS, reader.pread(read_buf, 100, 0, read_size));
+      ASSERT_EQ(first_content_len, read_size);
+      ASSERT_EQ(0, strncmp(read_buf, write_content, first_content_len));
+      ASSERT_EQ(OB_SUCCESS, reader.close());
+
+      ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    }
+  }
+}
+
 TEST_F(TestObjectStorage, test_multipart_write)
 {
   int ret = OB_SUCCESS;
@@ -1265,6 +1325,7 @@ TEST_F(TestObjectStorage, test_multipart_write)
 
     ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/test_multipart", dir_uri));
     ObStorageMultiPartWriter writer;
+    // ObStorageWriter writer;
     ASSERT_EQ(OB_SUCCESS, writer.open(uri, &info_base));
     ASSERT_EQ(OB_SUCCESS, writer.write(write_buf, content_size));
     ASSERT_EQ(content_size, writer.get_length());

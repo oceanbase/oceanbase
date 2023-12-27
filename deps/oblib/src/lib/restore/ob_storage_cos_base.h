@@ -191,6 +191,7 @@ private:
   char *upload_id_;
   int partnum_;
   int64_t file_length_;
+  uint64_t total_crc_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageCosMultiPartWriter);
 };

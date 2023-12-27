@@ -23,6 +23,7 @@
 #include "cos_auth.h"
 #include "cos_sys_util.h"
 #include "apr_errno.h"
+#include "cos_crc64.h"
 
 #include "ob_cos_wrapper.h"
 
@@ -38,6 +39,7 @@ constexpr int OB_INVALID_ARGUMENT                    = -4002;
 constexpr int OB_INIT_TWICE                          = -4005;
 constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
 constexpr int OB_SIZE_OVERFLOW                       = -4019;
+constexpr int OB_CHECKSUM_ERROR                      = -4103;
 constexpr int OB_BACKUP_FILE_NOT_EXIST               = -9011;
 constexpr int OB_COS_ERROR                           = -9060;
 constexpr int OB_IO_LIMIT                            = -9061;
@@ -814,6 +816,7 @@ int ObCosWrapper::pread(
     int64_t offset,
     char *buf,
     int64_t buf_size,
+    const bool is_range_read,
     int64_t &read_size)
 {
   int ret = OB_SUCCESS;
@@ -849,42 +852,57 @@ int ObCosWrapper::pread(
     const char* const COS_RANGE_KEY = "Range";
 
     char range_size[COS_RANGE_SIZE];
-    // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
-    // But what we except is [10, 100) which does not include the end.
-    // So we subtract 1 from the end.
-    int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
-    if (0 >= n || COS_RANGE_SIZE <= n) {
-      ret = OB_SIZE_OVERFLOW;
-      cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
-    } else if (NULL == (headers = cos_table_make(ctx->mem_pool, 1))) {
+    if (NULL == (headers = cos_table_make(ctx->mem_pool, 1))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to make cos headers, ret=%d\n", ret);
     } else {
-      apr_table_set(headers, COS_RANGE_KEY, range_size);
+      if (is_range_read) {
+        // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
+        // But what we except is [10, 100) which does not include the end.
+        // So we subtract 1 from the end.
+        int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
+        if (0 >= n || COS_RANGE_SIZE <= n) {
+          ret = OB_SIZE_OVERFLOW;
+          cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
+        } else {
+          apr_table_set(headers, COS_RANGE_KEY, range_size);
+        }
+      }
 
-      if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, NULL, &buffer, &resp_headers)) ||
-        !cos_status_is_ok(cos_ret)) {
+      if (OB_SUCCESS != ret) {
+      } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, NULL, &buffer, &resp_headers)) ||
+          !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to get object to buffer, ret=%d\n", ret);
         log_status(cos_ret);
       } else {
+        read_size = 0;
         int64_t size = 0;
         int64_t buf_pos = 0;
         cos_buf_t *content = NULL;
+        int64_t needed_size = -1;
         cos_list_for_each_entry(cos_buf_t, content, &buffer, node) {
           size = cos_buf_size(content);
-          if (buf_pos + size > buf_size) {
+          needed_size = size;
+          if (buf_size - buf_pos < size) {
+            needed_size = buf_size - buf_pos;
+          }
+          if (is_range_read && (buf_pos + size > buf_size)) {
             ret = OB_COS_ERROR;
             cos_warn_log("[COS]unexpected error, too much data returned, ret=%d, range_size=%s, buf_pos=%ld, size=%ld, req_id=%s.\n", ret, range_size, buf_pos, size, cos_ret->req_id);
             log_status(cos_ret);
             break;
           } else {
             // copy to buf
-            memcpy(buf + buf_pos, content->pos, (size_t)size);
-            buf_pos += size;
-            read_size += size;
+            memcpy(buf + buf_pos, content->pos, (size_t)needed_size);
+            buf_pos += needed_size;
+            read_size += needed_size;
+
+            if (buf_pos >= buf_size) {
+              break;
+            }
           }
-        }
+        } // end cos_list_for_each_entry
       }
     }
   }
@@ -900,62 +918,8 @@ int ObCosWrapper::get_object(
     int64_t buf_size,
     int64_t &read_size)
 {
-  int ret = OB_SUCCESS;
-
-  CosContext *ctx = reinterpret_cast<CosContext *>(h);
-  read_size = 0;
-
-  if (NULL == h) {
-    ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]cos handle is null, ret=%d\n", ret);
-  } else if (bucket_name.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]bucket name is null, ret=%d\n", ret);
-  } else if (object_name.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]object name is null, ret=%d\n", ret);
-  } else if (NULL == buf || 0 >= buf_size) {
-    ret = OB_INVALID_ARGUMENT;
-    cos_warn_log("[COS]buffer is null, ret=%d\n", ret);
-  } else {
-    cos_string_t bucket;
-    cos_string_t object;
-    cos_str_set(&bucket, bucket_name.data_);
-    cos_str_set(&object, object_name.data_);
-    cos_table_t *headers = NULL;
-    cos_table_t *resp_headers = NULL;
-    cos_status_t *cos_ret = NULL;
-
-    cos_list_t buffer;
-    cos_list_init(&buffer);
-
-    if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, NULL, &buffer, &resp_headers)) ||
-      !cos_status_is_ok(cos_ret)) {
-      convert_io_error(cos_ret, ret);
-      cos_warn_log("[COS]fail to get object to buffer, ret=%d\n", ret);
-      log_status(cos_ret);
-    } else {
-      int64_t size = 0;
-      int64_t buf_pos = 0;
-      cos_buf_t *content = NULL;
-      cos_list_for_each_entry(cos_buf_t, content, &buffer, node) {
-        size = cos_buf_size(content);
-        if (buf_pos + size > buf_size) {
-          ret = OB_COS_ERROR;
-          cos_warn_log("[COS]unexpected error, too much data returned, ret=%d, buf_pos=%ld, size=%ld, buf_size=%ld, req_id=%s.\n", ret, buf_pos, size, buf_size, cos_ret->req_id);
-          log_status(cos_ret);
-          break;
-        } else {
-          // copy to buf
-          memcpy(buf + buf_pos, content->pos, (size_t)size);
-          buf_pos += size;
-          read_size += size;
-        }
-      }
-    }
-  }
-
-  return ret;
+  return ObCosWrapper::pread(h, bucket_name, object_name,
+                             0, buf, buf_size, false/*is_range_read*/, read_size);
 }
 
 int ObCosWrapper::is_object_tagging(
@@ -1444,7 +1408,8 @@ int ObCosWrapper::upload_part_from_buffer(
     const CosStringBuffer &upload_id_str,
     const int part_num,
     const char *buf,
-    const int64_t buf_size)
+    const int64_t buf_size,
+    uint64_t &total_crc)
 {
   int ret = OB_SUCCESS;
   CosContext *ctx = reinterpret_cast<CosContext *>(h);
@@ -1488,6 +1453,9 @@ int ObCosWrapper::upload_part_from_buffer(
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to upload part to cos, ret=%d, part_num=%d\n", ret, part_num);
         log_status(cos_ret);
+      } else {
+        // TODO @fangdan: supports parallel uploads
+        total_crc = cos_crc64(total_crc, (void *)buf, buf_size);
       }
     }
   }
@@ -1498,7 +1466,8 @@ int ObCosWrapper::complete_multipart_upload(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
-    const CosStringBuffer &upload_id_str)
+    const CosStringBuffer &upload_id_str,
+    const uint64_t total_crc)
 {
   int ret = OB_SUCCESS;
   CosContext *ctx = reinterpret_cast<CosContext *>(h);
@@ -1575,6 +1544,16 @@ int ObCosWrapper::complete_multipart_upload(
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
           log_status(cos_ret);
+        } else {
+          const char *expected_crc_str = (const char *)(apr_table_get(resp_headers, COS_HASH_CRC64_ECMA));
+          if (NULL != expected_crc_str) {
+            uint64_t expected_crc = cos_atoui64(expected_crc_str);
+            if (expected_crc != total_crc) {
+              ret = OB_CHECKSUM_ERROR;
+              cos_warn_log("[COS]multipart object crc is not equal to returned crc, ret=%d, upload_id=%s, total_crc=%llu, expected_crc=%llu\n",
+                  ret, upload_id_str.data_, total_crc, expected_crc);
+            }
+          }
         }
       }
 

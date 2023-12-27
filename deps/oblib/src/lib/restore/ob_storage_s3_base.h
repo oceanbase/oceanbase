@@ -63,7 +63,7 @@ int init_s3_env();
 void fin_s3_env();
 
 // default s3 checksum algorithm
-static ObStorageCRCAlgorithm default_s3_crc_algo = ObStorageCRCAlgorithm::OB_INVALID_CRC_ALGO;
+static ObStorageCRCAlgorithm default_s3_crc_algo = ObStorageCRCAlgorithm::OB_CRC32_ALGO;
 // set checksum algorithm for writing object into s3
 void set_s3_checksum_algorithm(const ObStorageCRCAlgorithm crc_algo);
 // get current checksum algorithm
