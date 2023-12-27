@@ -105,6 +105,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
                                                 one_result))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc table query result iterator", K(ret));
+      } else if (OB_FAIL(table_result_iter->init_full_column_name(tb_ctx.get_query_col_names()))) {
+        LOG_WARN("fail to int full column name", K(ret));
       } else if (OB_FAIL(table_result_iter->parse_filter_string(&allocator))) {
         LOG_WARN("fail to parse table filter string", K(ret));
       } else {

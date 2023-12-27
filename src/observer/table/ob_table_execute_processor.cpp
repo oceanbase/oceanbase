@@ -114,6 +114,7 @@ int ObTableApiExecuteP::init_tb_ctx()
   ObTableOperationType::Type op_type = arg_.table_operation_.type();
   tb_ctx_.set_entity(&arg_.table_operation_.entity());
   tb_ctx_.set_operation_type(op_type);
+  tb_ctx_.set_entity_type(arg_.entity_type_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
