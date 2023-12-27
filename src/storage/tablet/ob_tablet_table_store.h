@@ -30,6 +30,42 @@ class ObTableStoreIterator;
 class ObCachedTableHandle;
 class ObStorageMetaHandle;
 
+class ObReadyForReadParam final
+{
+// if you want to add a member variable, please add here.
+#define LIST_MEMBERS                               \
+    DO_SOMETHING(share::SCN, ddl_commit_scn_)      \
+    DO_SOMETHING(share::SCN, clog_checkpoint_scn_)
+public:
+  ObReadyForReadParam() = default;
+  ~ObReadyForReadParam() = default;
+  int assign(const ObReadyForReadParam &other)
+  {
+    int ret = OB_SUCCESS;
+#define DO_SOMETHING(type, name) name = other.name;
+    LIST_MEMBERS
+#undef DO_SOMETHING
+    return ret;
+  }
+  bool operator==(const ObReadyForReadParam &other) const
+  {
+    bool is_equal = false;
+    // check for equality;
+#define DO_SOMETHING(type, name) is_equal = is_equal && (name == other.name);
+    LIST_MEMBERS
+#undef DO_SOMETHING
+    return is_equal;
+  }
+  bool operator!=(const ObReadyForReadParam &other) const { return !(*this == other); }
+public:
+// define member variables
+#define DO_SOMETHING(type, name) type name;
+    LIST_MEMBERS
+#undef DO_SOMETHING
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObReadyForReadParam);
+};
+
 class ObTabletTableStore : public ObIStorageMetaObj
 {
 public:
@@ -145,6 +181,8 @@ public:
       blocksstable::ObSSTableMetaHandle &meta_handle,
       blocksstable::ObSSTable *sstable,
       int64_t &remain_size);
+  int check_ready_for_read(const ObReadyForReadParam &param);
+  static void diagnose_table_count_unsafe(const ObTablet &tablet);
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
   // Load sstable with @addr, loaded object lifetime guaranteed by @handle
@@ -302,7 +340,7 @@ private:
       const blocksstable::ObSSTable *new_sstable,
       const bool keep_old_ddl_sstable,
       const ObTabletTableStore &old_store);
-  bool is_major_sstable_empty(const ObTablet &tablet) const;
+  bool is_major_sstable_empty(const share::SCN &ddl_commit_scn) const;
   int get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const;
 
   int inner_replace_sstables(

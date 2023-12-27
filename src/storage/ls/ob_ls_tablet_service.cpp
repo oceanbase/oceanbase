@@ -1439,6 +1439,21 @@ int ObLSTabletService::update_tablet_release_memtable_for_offline(
   return ret;
 }
 
+int ObLSTabletService::ObUpdateDDLCommitSCN::modify_tablet_meta(ObTabletMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  if (!ddl_commit_scn_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_commit_scn_));
+  } else if (meta.ddl_commit_scn_.is_valid_and_not_min() && ddl_commit_scn_ != meta.ddl_commit_scn_) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("ddl commit scn already set", K(ret), K(meta), K(ddl_commit_scn_));
+  } else {
+    meta.ddl_commit_scn_ = ddl_commit_scn_;
+  }
+  return ret;
+}
+
 int ObLSTabletService::update_tablet_ddl_commit_scn(
     const common::ObTabletID &tablet_id,
     const SCN ddl_commit_scn)
@@ -1452,7 +1467,7 @@ int ObLSTabletService::update_tablet_ddl_commit_scn(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !ddl_commit_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !ddl_commit_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(ddl_commit_scn));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, old_handle))) {

@@ -265,6 +265,7 @@ public:
   bool is_empty_shell() const;
   // major merge or medium merge call
   bool is_data_complete() const;
+  int get_ready_for_read_param(ObReadyForReadParam &parm) const;
 
   // serialize & deserialize
   // TODO: change the impl of serialize and get_serialize_size after rebase
@@ -822,6 +823,7 @@ private:
       ObUpdateTabletPointerParam &param,
       const bool need_tablet_attr = true) const;
   int calc_tablet_attr(ObTabletAttr &attr) const;
+  int check_ready_for_read_if_need(const ObTablet &old_tablet);
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
