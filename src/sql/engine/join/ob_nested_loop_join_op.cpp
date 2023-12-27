@@ -187,6 +187,54 @@ int ObNestedLoopJoinOp::rescan()
   return ret;
 }
 
+int ObNestedLoopJoinOp::do_drain_exch_multi_lvel_bnlj()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(try_open())) {
+    LOG_WARN("fail to open operator", K(ret));
+  } else if (!exch_drained_) {
+    // the drain request is triggered by current NLJ operator, and current NLJ is a multi level Batch NLJ
+    // It will block rescan request for it's child operator, if the drain request is passed to it's child operator
+    // The child operators will be marked as iter-end_, and will not get any row if rescan is blocked
+    // So we block the drain request here; Only set current operator to end;
+    int tmp_ret = inner_drain_exch();
+    exch_drained_ = true;
+    brs_.end_ = true;
+    batch_reach_end_ = true;
+    row_reach_end_ = true;
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
+int ObNestedLoopJoinOp::do_drain_exch()
+{
+  int ret = OB_SUCCESS;
+  if (!MY_SPEC.group_rescan_) {
+    if (OB_FAIL( ObOperator::do_drain_exch())) {
+      LOG_WARN("failed to drain NLJ operator", K(ret));
+    }
+  } else if (!group_join_buffer_.is_multi_level()) {
+    if (OB_FAIL( ObOperator::do_drain_exch())) {
+      LOG_WARN("failed to drain NLJ operator", K(ret));
+    }
+  } else {
+    if (!is_operator_end()) {
+      // the drain request is triggered by parent operator
+      // NLJ needs to pass the drain request to it's child operator
+      LOG_TRACE("The drain request is passed by parent operator");
+      if (OB_FAIL( ObOperator::do_drain_exch())) {
+        LOG_WARN("failed to drain normal NLJ operator", K(ret));
+      }
+    } else if (OB_FAIL(do_drain_exch_multi_lvel_bnlj())) {
+      LOG_WARN("failed to drain multi level NLJ operator", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObNestedLoopJoinOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
