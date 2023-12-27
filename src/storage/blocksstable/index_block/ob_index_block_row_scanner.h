@@ -138,7 +138,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) = 0;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) = 0;
@@ -155,6 +154,7 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) = 0;
+  virtual int locate_range() { return OB_NOT_SUPPORTED; }
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) = 0;
   virtual bool end_of_block() const = 0;
   virtual int get_index_row_count(const ObDatumRange &range,
@@ -173,16 +173,15 @@ public:
                                               const ObCSRange &parent_row_range,
                                               bool &is_certain,
                                               int64_t &found_idx) { return OB_NOT_SUPPORTED; }
-  virtual int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) { return OB_NOT_SUPPORTED; }
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
                                 const bool is_left_border,
                                 const bool is_right_border,
                                 const ObCSRange &parent_row_range,
                                 ObCSRange &cs_range) { return OB_NOT_SUPPORTED; }
   virtual void get_end_key(const ObDatumRowkey *&rowkey) {}
+  virtual void set_iter_end() {}
 public:
   virtual int switch_context(ObStorageDatumUtils *datum_utils)
   {
@@ -210,7 +209,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -227,6 +225,10 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) override;
+  virtual int locate_range() override;
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
+  virtual void set_iter_end() override { current_ = ObIMicroBlockReader::INVALID_ROW_INDEX; }
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual bool end_of_block() const override;
   virtual int get_index_row_count(const ObDatumRange &range,
@@ -240,6 +242,7 @@ public:
 private:
   int init_datum_row(const ObStorageDatumUtils &datum_utils, ObIAllocator *allocator);
   bool is_in_border(bool is_reverse_scan, bool is_left_border, bool is_right_border);
+  int compare_rowkey(const ObDatumRowkey &rowkey, int32_t &cmp_ret);
 protected:
   int64_t current_;
   int64_t start_;               // inclusive
@@ -260,7 +263,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -277,6 +279,7 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) override;
+  virtual int locate_range() override;
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual void reset() override;
   virtual void reuse() override;
@@ -289,10 +292,8 @@ public:
                                               const ObCSRange &parent_row_range,
                                               bool &is_certain,
                                               int64_t &found_idx) override;
-  virtual int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info) override;
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
   virtual int get_idx_row_header_in_target_idx(const int64_t idx,
                                                const ObIndexBlockRowHeader *&idx_row_header) override;
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
@@ -306,10 +307,6 @@ public:
 private:
   int get_cur_row_id_range(const ObCSRange &parent_row_range,
                            ObCSRange &cs_range);
-  int find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info);
 
 private:
   const ObIndexBlockDataHeader *idx_data_header_;
@@ -391,7 +388,7 @@ public:
                K_(is_normal_cg), K_(parent_row_range), K_(filter_constant_type), K_(is_normal_query),
                K_(iter_param));
 private:
-  int init_by_micro_data(const ObMicroBlockData &idx_block_data, bool set_iter_end);
+  int init_by_micro_data(const ObMicroBlockData &idx_block_data);
   int locate_key(const ObDatumRowkey &rowkey);
   int init_datum_row();
   int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
@@ -405,6 +402,7 @@ private:
       ObCSRange &cs_range);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
   void skip_index_rows();
+  int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:
   union {
     const ObDatumRowkey *rowkey_;

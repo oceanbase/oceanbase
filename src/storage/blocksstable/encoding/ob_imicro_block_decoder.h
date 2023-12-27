@@ -30,7 +30,7 @@ public:
   ObIMicroBlockDecoder() : ObIMicroBlockReader() {}
   virtual ~ObIMicroBlockDecoder() {}
   virtual int compare_rowkey(
-    const ObDatumRowkey &rowkey, const int64_t index, int32_t &compare_result) = 0;
+    const ObDatumRowkey &rowkey, const int64_t index, int32_t &compare_result) override = 0;
   virtual int compare_rowkey(const ObDatumRange &range, const int64_t index,
     int32_t &start_key_compare_result, int32_t &end_key_compare_result) = 0;
 

@@ -673,6 +673,42 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
   return ret;
 }
 
+int ObBlockMetaTree::skip_to_next_valid_position(const blocksstable::ObDatumRowkey &rowkey,
+                                                 const blocksstable::ObStorageDatumUtils &datum_utils,
+                                                 blocksstable::DDLBtreeIterator &iter,
+                                                 ObBlockMetaTreeValue *&tree_value) const
+{
+  int ret = OB_SUCCESS;
+  tree_value = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    int cmp_ret = 0;
+    while (OB_SUCC(ret)) {
+      ObDatumRowkeyWrapper rowkey_wrapper;
+      ObBlockMetaTreeValue *tmp_tree_value  = nullptr;
+      if (OB_FAIL(iter.get_next(rowkey_wrapper, tmp_tree_value))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next failed", K(ret));
+        }
+        // just return ITER_END
+      } else if (OB_FAIL(rowkey_wrapper.rowkey_->compare(rowkey, datum_utils, cmp_ret, false/*need_compare_datum_cnt*/))) {
+        LOG_WARN("fail to cmp rowkey", K(ret), K(rowkey), K(rowkey_wrapper));
+      } else if(cmp_ret >= 0) { //lower bound
+        if (OB_ISNULL(tmp_tree_value)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tree_value is null", K(ret), KP(tmp_tree_value));
+        } else {
+          tree_value = tmp_tree_value;
+        }
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBlockMetaTree::get_next_tree_value(blocksstable::DDLBtreeIterator &iter,
                                          const int64_t step,
                                          ObBlockMetaTreeValue *&tree_value) const
