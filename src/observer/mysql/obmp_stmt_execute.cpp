@@ -2544,6 +2544,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
         param.set_param_meta();
+        param.set_length(param.get_val_len());
       }
     }
   } else if (!support_send_long_data(type)) {
@@ -2640,6 +2641,7 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
             param.set_param_meta();
+            param.set_length(param.get_val_len());
           }
         }
         piece->get_allocator()->free(tmp);
