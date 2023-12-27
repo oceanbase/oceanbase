@@ -53,7 +53,8 @@ public:
   ObString location_;
   ObString pattern_;
   sql::ObExprRegexpSessionVariables regexp_vars_;
-  TO_STRING_KV(K_(location));
+public:
+  TO_STRING_KV(K_(location), K_(pattern), K_(regexp_vars));
 };
 
 class ObLoadExternalFileListRes

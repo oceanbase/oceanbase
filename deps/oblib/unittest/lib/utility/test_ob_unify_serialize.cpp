@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <cstdlib>
+#include "lib/utility/ob_print_utils.h"                // TO_STRING_KV
 #include "lib/utility/ob_unify_serialize.h"
 #include "lib/random/ob_random.h"
 
@@ -73,6 +74,7 @@ struct CVirtualTest {
 };
 
 struct CEmptyTest {
+  TO_STRING_KV(KP(this));
   OB_UNIS_VERSION(1);
 };
 
@@ -165,6 +167,7 @@ public:
   uint32_t vu32_;
   int64_t vi64_;
   uint64_t vu64_;
+  TO_STRING_KV(K_(b), K_(vi8), K_(vu8), K_(vi16), K_(vu16), K_(vi32), K_(vu32), K_(vi64), K_(vu64));
 }; // end of class TestObUnifySerialize
 
 OB_SERIALIZE_MEMBER(CIntTest, b_, vi8_, vu8_, vi16_, vu16_, vi32_, vu32_, vi64_, vu64_);
@@ -220,7 +223,7 @@ public:
     n.buf_[rlen] = 0;
     return n;
   }
-
+  TO_STRING_KV(K_(buf));
 private:
   char buf_[32];
 };
@@ -268,6 +271,7 @@ public:
     }
     return right;
   }
+  TO_STRING_KV(K_(ia), K_(uia), K_(i64a), K_(ui64a), K_(ita));
 
   static const CArrayTest RAND()
   {
@@ -318,7 +322,7 @@ public:
 
     return et;
   }
-
+  TO_STRING_KV(K(eval));
 private:
   enum Eval { E0, E1, E2, E3, EMAX } eval;
 };

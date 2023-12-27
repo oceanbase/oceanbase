@@ -487,6 +487,7 @@ protected:
     struct COMPAT_FOR_EXEC {
       uint64_t v_;
       uint64_t get_serialize_v_() const;
+      TO_STRING_KV(K_(v));
       NEED_SERIALIZE_AND_DESERIALIZE;
     } compat_for_exec_;
     struct
