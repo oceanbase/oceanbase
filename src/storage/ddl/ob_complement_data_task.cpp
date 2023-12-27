@@ -1265,6 +1265,7 @@ int ObComplementWriteTask::append_lob(
       slice_info.data_tablet_id_ = param_->dest_tablet_id_;
       slice_info.slice_id_ = iterator.get_lob_slice_id();
       slice_info.context_id_ = context_->context_id_;
+      slice_info.src_tenant_id_ = param_->orig_tenant_id_;
       if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->fill_lob_sstable_slice(lob_allocator, slice_info,
           iterator.get_lob_id_cache(), lob_column_idxs, col_types, write_row_))) {
         LOG_WARN("fill batch lob sstable slice failed", K(ret), K(slice_info), K(write_row_));

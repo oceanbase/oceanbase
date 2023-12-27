@@ -249,6 +249,7 @@ public:
                                blocksstable::ObStorageDatum &datum,
                                const int64_t timeout_ts,
                                const bool has_lob_header,
+                               const uint64_t src_tenant_id,
                                ObLobMetaWriteIter &iter);
 };
 
