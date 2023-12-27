@@ -176,6 +176,9 @@ private:
   int append_time_type_column_id(const ObTableSchema *table_schema,
                                  ObIArray<uint64_t> &minimal_column_ids);
 
+  int append_lob_type_column_id(const ObTableSchema *table_schema,
+                                ObIArray<uint64_t> &minimal_column_ids);
+
   int heap_table_has_not_null_uk(ObSchemaGetterGuard *schema_guard,
                                  const ObTableSchema *table_schema,
                                  bool &need_all_columns);
