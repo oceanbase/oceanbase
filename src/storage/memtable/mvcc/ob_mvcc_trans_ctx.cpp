@@ -1434,7 +1434,11 @@ int ObTransCallbackMgr::get_callback_list_stat(ObIArray<ObTxCallbackListStat> &s
       }
     } else if (OB_SUCC(stats.prepare_allocate(get_callback_list_count()))) {
       CALLBACK_LISTS_FOREACH(idx, list) {
-        ret = list->get_stat_for_display(stats.at(idx));
+        if (list->get_appended() > 0) {
+          ret = list->get_stat_for_display(stats.at(idx));
+        } else {
+          stats.at(idx).id_ = -1; // mark as invalid
+        }
       }
     }
     rwlock_.unlock();
