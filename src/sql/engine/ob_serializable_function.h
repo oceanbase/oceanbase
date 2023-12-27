@@ -120,7 +120,7 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_DECIMAL_INT_BASIC_PART1,                \
   OB_SFA_DECIMAL_INT_BASIC_PART2,                \
   OB_SFA_DECIMAL_INT_NULLSAFE_CMP,               \
-  OB_SFA_CMP_BETWEEN_EXPR_EVAL_VECTOR,           \
+  OB_SFA_VECTOR_CMP,                             \
   OB_SFA_SQL_EXPR_ABS_EVAL_VEC,                  \
   OB_SFA_VECTOR_CAST,                            \
   OB_SFA_VECTOR_EVAL_ARG_CAST,                   \

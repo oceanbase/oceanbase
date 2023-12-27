@@ -239,94 +239,6 @@ template <> int get_cmp_ret<CO_CMP> (const int ret) { return ret; }
     }                                                                                              \
   } while (false)
 
-#define DO_VECTOR_BETWEEN_CMP(LVec, RVec, ResVec)                                                  \
-  do {                                                                                             \
-    LVec *l_vector = static_cast<LVec *>(left.get_vector(ctx));                                    \
-    RVec *r_vector = static_cast<RVec *>(right.get_vector(ctx));                                   \
-    ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));                                 \
-    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);                                       \
-    const char *l_payload = nullptr, *r_payload = nullptr;                                         \
-    ObLength l_len = 0, r_len = 0;                                                                 \
-    int cmp_ret = 0;                                                                               \
-    if (!l_vector->has_null() && !r_vector->has_null()) {                                          \
-      if (OB_LIKELY(bound.get_all_rows_active()                                                    \
-                    && eval_flags.accumulate_bit_cnt(bound) == 0)) {                               \
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                        \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
-          /*  Result priority: false > null > true  */                                             \
-          if (OB_FAIL(ret)) {                                                                      \
-          } else if (Stage == ObExprBetween::BETWEEN_LEFT) {                                       \
-            /* If the current calculation is left<=val, any result is directly filled in.          \
-               If the result is false, the subsequent calculation results are meaningless,         \
-               and skip is set to true. */                                                         \
-            res_vec->set_int(i, (cmp_ret <= 0));                                                   \
-            if (cmp_ret > 0) {                                                                     \
-              skip.set(i);                                                                         \
-            }                                                                                      \
-          } else if (cmp_ret > 0) {    /*BETWEEN_RIGHT*/                                           \
-            /* If currently calculating val<=right,                                                \
-               only when the result is false will it be filled in.                                 \
-               Note that set_null may have been called before,                                     \
-               so unset_null should be called here. */                                             \
-            res_vec->unset_null(i);                                                                \
-            res_vec->set_int(i, 0);                                                                \
-          }                                                                                        \
-        }                                                                                          \
-      } else {                                                                                     \
-        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                        \
-          if (skip.at(i) || eval_flags.at(i)) { continue; }                                        \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
-          if (OB_FAIL(ret)) {                                                                      \
-          } else if (Stage == ObExprBetween::BETWEEN_LEFT) {                                       \
-            res_vec->set_int(i, (cmp_ret <= 0));                                                   \
-            if (cmp_ret > 0) {                                                                     \
-              skip.set(i);                                                                         \
-            }                                                                                      \
-          } else if (cmp_ret > 0) {    /*BETWEEN_RIGHT*/                                           \
-            res_vec->unset_null(i);                                                                \
-            res_vec->set_int(i, 0);                                                                \
-          }                                                                                        \
-        }                                                                                          \
-      }                                                                                            \
-    } else {                                                                                       \
-      for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {                          \
-        if (skip.at(i) || eval_flags.at(i)) { continue; }                                          \
-        if (l_vector->is_null(i) || r_vector->is_null(i)) {                                        \
-          res_vec->set_null(i);                                                                    \
-          /* Cannot set skip here.                                                                 \
-             Because the priority of the "between" results                                         \
-             is consistent with the "and" expression: false > null > true.                         \
-             If the result of the right branch is false,                                           \
-             it should override the null in the left branch. */                                    \
-        } else {                                                                                   \
-          l_vector->get_payload(i, l_payload, l_len);                                              \
-          r_vector->get_payload(i, r_payload, r_len);                                              \
-          ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                              (const void *)l_payload, l_len,                      \
-                                              (const void *)r_payload, r_len, cmp_ret);            \
-          if (OB_FAIL(ret)) {                                                                      \
-          } else if (Stage == ObExprBetween::BETWEEN_LEFT) {                                       \
-            res_vec->set_int(i, (cmp_ret <= 0));                                                   \
-            if (cmp_ret > 0) {                                                                     \
-              skip.set(i);                                                                         \
-            }                                                                                      \
-          } else if (cmp_ret > 0) {    /*BETWEEN_RIGHT*/                                           \
-            res_vec->unset_null(i);                                                                \
-            res_vec->set_int(i, 0);                                                                \
-          }                                                                                        \
-        }                                                                                          \
-      }                                                                                            \
-    }                                                                                              \
-  } while (false)
-
 #define CALC_FORMAT(l, r, res)                                                                     \
   ((int32_t)l + (((int32_t)r) << VEC_MAX_FORMAT) + (((int32_t)res) << (VEC_MAX_FORMAT * 2)))
 template <VecValueTypeClass l_tc, VecValueTypeClass r_tc, ObCmpOp cmp_op>
@@ -451,57 +363,9 @@ struct EvalVectorCmp<VEC_TC_NULL, r_tc, cmp_op>: public EvalVectorCmpWithNull {}
 template<ObCmpOp cmp_op>
 struct EvalVectorCmp<VEC_TC_NULL, VEC_TC_NULL, cmp_op>: public EvalVectorCmpWithNull {};
 
-template <VecValueTypeClass l_tc, VecValueTypeClass r_tc, ObExprBetween::EvalBetweenStage Stage>
-struct EvalVectorBetweenCmp
-{
-  #define VECTOR_BETWEEN_CMP_CASE(l_fmt, r_fmt, res_fmt)                                             \
-    case CALC_FORMAT(l_fmt, r_fmt, res_fmt): {                                                       \
-      DO_VECTOR_BETWEEN_CMP(L_##l_fmt##_FMT, R_##r_fmt##_FMT, RES_##res_fmt##_FMT);                  \
-    } break
-  static int eval_between_vector(const ObExpr &expr, const ObExpr &left, const ObExpr &right,
-                         ObEvalCtx &ctx, ObBitVector &skip, const EvalBound &bound)
-  {
-    using L_VEC_FIXED_FMT = ObFixedLengthFormat<RTCType<l_tc>>;
-    using R_VEC_FIXED_FMT = ObFixedLengthFormat<RTCType<r_tc>>;
-    using RES_VEC_FIXED_FMT = ObFixedLengthFormat<int64_t>;
-    using L_VEC_DISCRETE_FMT = ObDiscreteFormat;
-    using R_VEC_DISCRETE_FMT = ObDiscreteFormat;
-    using L_VEC_UNIFORM_FMT = ObUniformFormat<false>;
-    using R_VEC_UNIFORM_FMT = ObUniformFormat<false>;
-
-    int ret = OB_SUCCESS;
-    VectorFormat left_format = left.get_format(ctx);
-    VectorFormat right_format = right.get_format(ctx);
-    VectorFormat res_format = expr.get_format(ctx);
-    LOG_DEBUG("eval vector cmp", K(expr), K(l_tc), K(r_tc), K(bound),
-                                  K(left_format), K(right_format), K(res_format));
-    if (is_valid_format(left_format) && is_valid_format(right_format)
-        && is_valid_format(res_format)) {
-      switch (CALC_FORMAT(left_format, right_format, res_format)) {
-        VECTOR_BETWEEN_CMP_CASE(VEC_FIXED, VEC_FIXED, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_FIXED, VEC_UNIFORM, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_DISCRETE, VEC_DISCRETE, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_DISCRETE, VEC_UNIFORM, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_UNIFORM, VEC_FIXED, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_UNIFORM, VEC_DISCRETE, VEC_FIXED);
-        VECTOR_BETWEEN_CMP_CASE(VEC_UNIFORM, VEC_UNIFORM, VEC_FIXED);
-        default: {
-          DO_VECTOR_BETWEEN_CMP(ObVectorBase, ObVectorBase, ObVectorBase);
-          break;
-        }
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid format", K(left_format), K(right_format), K(res_format));
-    }
-    return ret;
-  }
-#undef VECTOR_BETWEEN_CMP_CASE
-};
 #undef CALC_FORMAT
 
 static sql::ObExpr::EvalVectorFunc EVAL_VECTOR_EXPR_CMP_FUNCS[MAX_VEC_TC][MAX_VEC_TC][CO_MAX];
-static sql::ObExprBetween::EvalVectorBetweenFunc EVAL_VECTOR_BETWEEN_EXPR_CMP_FUNCS[MAX_VEC_TC][MAX_VEC_TC][ObExprBetween::EvalBetweenStage::BETWEEN_MAX];
 
 template<int X, int Y, bool defined>
 struct VectorExprCmpFuncIniter
@@ -518,9 +382,6 @@ struct VectorExprCmpFuncIniter<X, Y, true>
   template <ObCmpOp cmp_op>
   using EvalFunc =
     EvalVectorCmp<static_cast<VecValueTypeClass>(X), static_cast<VecValueTypeClass>(Y), cmp_op>;
-  template <ObExprBetween::EvalBetweenStage stage>
-  using EvalBetweenFunc =
-    EvalVectorBetweenCmp<static_cast<VecValueTypeClass>(X), static_cast<VecValueTypeClass>(Y), stage>;
   static void init_array()
   {
     auto &funcs = EVAL_VECTOR_EXPR_CMP_FUNCS;
@@ -531,12 +392,6 @@ struct VectorExprCmpFuncIniter<X, Y, true>
     funcs[X][Y][CO_NE] = &EvalFunc<CO_NE>::eval_vector;
     funcs[X][Y][CO_EQ] = &EvalFunc<CO_EQ>::eval_vector;
     funcs[X][Y][CO_CMP] = &EvalFunc<CO_CMP>::eval_vector;
-
-    auto &between_funcs = EVAL_VECTOR_BETWEEN_EXPR_CMP_FUNCS;
-    between_funcs[X][Y][ObExprBetween::EvalBetweenStage::BETWEEN_LEFT] =
-    &EvalBetweenFunc<ObExprBetween::EvalBetweenStage::BETWEEN_LEFT>::eval_between_vector;
-    between_funcs[X][Y][ObExprBetween::EvalBetweenStage::BETWEEN_RIGHT] =
-    &EvalBetweenFunc<ObExprBetween::EvalBetweenStage::BETWEEN_RIGHT>::eval_between_vector;
   }
 };
 
@@ -557,48 +412,35 @@ sql::ObExpr::EvalVectorFunc VectorCmpExprFuncsHelper::get_eval_vector_expr_cmp_f
   return EVAL_VECTOR_EXPR_CMP_FUNCS[l_tc][r_tc][cmp_op];
 }
 
-sql::ObExprBetween::EvalVectorBetweenFunc VectorCmpExprFuncsHelper::get_eval_vector_between_expr_cmp_func(
-  const sql::ObDatumMeta &l_meta, const sql::ObDatumMeta &r_meta,
-  sql::ObExprBetween::EvalBetweenStage stage)
-{
-  LOG_DEBUG("eval vector between_expr_cmp_func", K(l_meta), K(r_meta), K(stage));
-  VecValueTypeClass l_tc = get_vec_value_tc(l_meta.type_, l_meta.scale_, l_meta.precision_);
-  VecValueTypeClass r_tc = get_vec_value_tc(r_meta.type_, r_meta.scale_, r_meta.precision_);
-  return EVAL_VECTOR_BETWEEN_EXPR_CMP_FUNCS[l_tc][r_tc][stage];
-}
-
 } // end namespace common
 
 namespace sql
 {
 void *g_ser_eval_vector_expr_cmp_funcs[MAX_VEC_TC * MAX_VEC_TC * 7];
-void *g_ser_eval_vector_between_expr_cmp_funcs[MAX_VEC_TC * MAX_VEC_TC * 2];
 void *g_ser_nullsafe_rowcmp_funcs[MAX_VEC_TC * MAX_VEC_TC * 2];
+void *g_ser_rowcmp_funcs[MAX_VEC_TC * MAX_VEC_TC];
 
 static_assert(sizeof(g_ser_eval_vector_expr_cmp_funcs) == sizeof(EVAL_VECTOR_EXPR_CMP_FUNCS),
               "unexpected size");
-static_assert(sizeof(g_ser_eval_vector_between_expr_cmp_funcs) == sizeof(EVAL_VECTOR_BETWEEN_EXPR_CMP_FUNCS),
-              "unexpected size");
 static_assert(sizeof(g_ser_nullsafe_rowcmp_funcs) == sizeof(NULLSAFE_ROW_CMP_FUNCS),
+              "unexpected size");
+static_assert(sizeof(g_ser_rowcmp_funcs) == sizeof(ROW_CMP_FUNCS),
               "unexpected size");
 bool g_ser_eval_vector_expr_cmp_funcs_init = ObFuncSerialization::convert_NxN_array(
   g_ser_eval_vector_expr_cmp_funcs, reinterpret_cast<void **>(EVAL_VECTOR_EXPR_CMP_FUNCS),
   MAX_VEC_TC, 7, 0, 7);
-bool g_ser_eval_vector_between_expr_cmp_funcs_init = ObFuncSerialization::convert_NxN_array(
-  g_ser_eval_vector_between_expr_cmp_funcs, reinterpret_cast<void **>(EVAL_VECTOR_BETWEEN_EXPR_CMP_FUNCS),
-  MAX_VEC_TC, 2, 0, 2);
-
 bool g_ser_nullsafe_rowcmp_funcs_init = ObFuncSerialization::convert_NxN_array(
   g_ser_nullsafe_rowcmp_funcs, reinterpret_cast<void **>(NULLSAFE_ROW_CMP_FUNCS),
   MAX_VEC_TC, 2, 0, 2);
-
+bool g_ser_rowcmp_funcs_init = ObFuncSerialization::convert_NxN_array(
+  g_ser_rowcmp_funcs, reinterpret_cast<void **>(ROW_CMP_FUNCS),
+  MAX_VEC_TC, 1, 0, 1);
 REG_SER_FUNC_ARRAY(OB_SFA_CMP_EXPR_EVAL_VECTOR, g_ser_eval_vector_expr_cmp_funcs,
                    sizeof(g_ser_eval_vector_expr_cmp_funcs) / sizeof(void *));
 
-REG_SER_FUNC_ARRAY(OB_SFA_CMP_BETWEEN_EXPR_EVAL_VECTOR, g_ser_eval_vector_between_expr_cmp_funcs,
-                   sizeof(g_ser_eval_vector_between_expr_cmp_funcs) / sizeof(void *));
-
 REG_SER_FUNC_ARRAY(OB_SFA_VECTOR_NULLSAFE_CMP, g_ser_nullsafe_rowcmp_funcs,
                    sizeof(g_ser_nullsafe_rowcmp_funcs) / sizeof(void *));
+REG_SER_FUNC_ARRAY(OB_SFA_VECTOR_CMP, g_ser_rowcmp_funcs,
+                   sizeof(g_ser_rowcmp_funcs) / sizeof(void *));
 } // end namespace sql
 } // end namespace oceanabse

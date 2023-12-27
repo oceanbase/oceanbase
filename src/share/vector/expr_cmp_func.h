@@ -39,15 +39,6 @@ struct VectorCmpExprFuncsHelper
   static sql::ObExpr::EvalVectorFunc get_eval_vector_expr_cmp_func(const sql::ObDatumMeta &l_meta,
                                                                    const sql::ObDatumMeta &r_meta,
                                                                    const common::ObCmpOp cmp_op);
-  // Compared to get_eval_vector_expr_cmp_func,
-  // the obtained function has two additional expr arguments: left and right.
-  // Among the EvalVectorFunc functions,
-  // they directly use the first two arguments of the expr as left and right.
-  // However, in some scenarios, this may not be the case,
-  // so the following functions have been added.
-  static sql::ObExprBetween::EvalVectorBetweenFunc get_eval_vector_between_expr_cmp_func(const sql::ObDatumMeta &l_meta,
-                                                                        const sql::ObDatumMeta &r_meta,
-                                                                        sql::ObExprBetween::EvalBetweenStage stage);
 };
 
 } // end namespace common
