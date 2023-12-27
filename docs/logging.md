@@ -40,19 +40,20 @@ OceanBase 的系统日志存储在observer安装路径下的log目录下面。�
 | enable_async_syslog         | 布尔   |                                           | True   | 是否异步打印日志                              |
 | max_syslog_file_count       | 整型   | \[0, +∞)                                  | 0      | 每种只读日志文件最大保留数量                        |
 | syslog_io_bandwidth_limit   | 字符串  | 0，其他合法大小                                  | "30MB" | 日志IO带宽限制                              |
-| syslog_level                | 字符串  | DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR | INFO   | 日志打印最低等级，该等级及以上的日志都打印                 |
+| syslog_level                | 字符串  | DEBUG, TRACE, WDIAG, EDIAG, INFO, WARN, ERROR | WDIAG | 日志打印最低等级，该等级及以上的日志都打印                 |
 | diag_syslog_per_error_limit | 整型   | \[0, +∞)                                  | 200    | 每个错误码每秒允许的 DIAG 系统日志数，超过该阈值后，日志将不再打印。 |
 
 > 这里所有的参数都是集群级的，并且都是动态生效。
+> 参数定义可以参考 ob_parameter_seed.ipp 文件。
 
 ## 日志回收
 
 OceanBase的日志可以配置文件个数上限，以防止日志文件占用过大的磁盘空间。
 
-如果 `enable_syslog_recycle = true` 且 `max_syslog_file_count > 0` ，每种日志文件的数量不能超过 `max_syslog_file_count`。旧日志文件会在刷新日志到磁盘中时触发。
+如果 `enable_syslog_recycle = true` 且 `max_syslog_file_count > 0` ，每种日志文件的数量不能超过 `max_syslog_file_count`。日志内容刷新到磁盘中时触发旧日志文件回收。
 
-每次执行 flush_logs_to_file 函数写日志时，如果某种文件写入了数据，就要检查是否需要将当前日志文件进行归档（有可能达到了大小上限）。
-在 max_syslog_file_count > 0 的前提下，就可能会调用 ObLogger::rotate_log 函数，如果该种日志文件数量超过上限 max_syslog_file_count，就会删掉最旧的一个日志文件。
+每次执行 `flush_logs_to_file` 函数写日志时，如果某种文件写入了数据，就要检查是否需要将当前日志文件进行归档（有可能达到了大小上限）。
+在 `max_syslog_file_count > 0` 的前提下，就可能会调用 `ObLogger::rotate_log` 函数，如果该种日志文件数量超过上限 `max_syslog_file_count`，就会删掉最旧的一个日志文件。
 
 新日志文件都会在开头打印一个特殊日志，信息包含当前节点的IP和端口、版本号、以及一些系统信息，参考 `ObLogger::log_new_file_info`。
 
@@ -64,13 +65,18 @@ OceanBase的日志可以配置文件个数上限，以防止日志文件占用�
 
 与常见的系统打日志方法类似，OceanBase 也提供了日志宏来打印不同级别的日志：
 
-| 级别    | 代码宏       |
-| ----- | --------- |
-| DEBUG | LOG_DEBUG |
-| TRACE | LOG_TRACE |
-| INFO  | LOG_INFO  |
-| WARN  | LOG_WARN  |
-| ERROR | LOG_ERROR |
+| 级别    | 代码宏       | 说明 |
+| ----- | --------- | ---- |
+| DEBUG | LOG_DEBUG | 开发人员调试日志 |
+| TRACE | LOG_TRACE | 事件跟踪日志，通常也是开发人员查看 |
+| INFO  | LOG_INFO  | 系统状态变化日志 |
+| WARN  | LOG_DBA_WARN  | 面向DBA的日志。出现非预期场景，observer能提供服务，但行为可能不符合预期，比如我们的写入限流 |
+| ERROR | LOG_DBA_ERROR | 面向DBA的日志。observer不能提供正常服务的异常，如磁盘满监听端口被占用等。也可以是我们产品化后的一些内部检查报错，如我们的4377(dml defensive check error), 4103 (data checksum error)等，需DBA干预恢复 |
+| WDIAG | LOG_WARN | Warning Diagnosis, 协助故障排查的诊断信息，预期内的错误，如函数返回失败。级别与WARN相同 |
+| EDIAG | LOG_ERROR | Error Diagnosis, 协助故障排查的诊断信息，非预期的逻辑错误，如函数参数不符合预期等，通常为OceanBase程序BUG。级别与ERROR相同 |
+
+
+> 这里仅介绍了最常用的日志级别，更详细的信息参考 `ob_parameter_seed.ipp` 中关于 `syslog_level` 的配置，以及`ob_log_module.h` 文件中 `LOG_ERROR` 等宏定义。
 
 **如何设置日志级别？**
 
@@ -179,10 +185,15 @@ cflict_txs:[]})
 
 OceanBase 为了避免format string的一些错误，使用自动识别类型然后序列化来解决这个问题。日志任意参数中会识别为多个Key Value对，其中Key是要打印的字段名称，Value是字段的值。比如上面的示例中的 `"consistency_level_in_plan_ctx", plan_ctx->get_consistency_level()` ，就是打印了一个字段的名称和值，OceanBase 自动识别 Value 的类型并转换为字符串。
 
-因为大部分日志都是打印对象的某个字段，所以OceanBase提供了一些宏来简化打印日志的操作。最常用的就是 `K`，以上面的例子 `K(ret)`，其展开后就是：
+因为大部分日志都是打印对象的某个字段，所以OceanBase提供了一些宏来简化打印日志的操作。最常用的就是 `K`，以上面的例子 `K(ret)`，其展开后在代码中是：
 
 ```cpp
 "ret", ret
+```
+
+最终展示在日志中是：
+```cpp
+ret=-5595
 ```
 
 OceanBase 还提供了一些其它的宏，在不同的场景下使用不同的宏。
@@ -196,7 +207,7 @@ OceanBase 还提供了一些其它的宏，在不同的场景下使用不同的�
 | KR                          | KR(ret)                            | 展开后是 `"ret", ret, "ret", common::ob_error_name(ret)`。这个宏是为了方便打印错误码与错误码名称。在 OceanBase 中，通常使用 `ret` 作为函数的返回值，而每个返回值会有一个对应的字符串描述。`ob_error_name` 就可以获得错误码对应的字符串描述。注意，这个宏只能用在非lib代码中          |
 | KCSTRING/<br/>KCSTRING_     | KCSTRING(consistency_level_name)   | 展开后是 `"consistency_level_name", consistency_level_name`。这个宏是为了打印 C 格式的字符串。由于`const char *` 类型的变量在C++中未必表示一个字符串，比如一个二进制buffer，那么打印这个变量的值时，当做C字符串来打印输出的话，会遇到访问非法内存的错误，所以增加了这个宏，用来明确表示打印C字符串 |
 | KP/KP_                      | KP(plan)                           | 展开后是 `"plan", plan`，其中 `plan` 是一个指针。这个宏将会打印出某个指针的十六进制值                                                                                                                                    |
-| KPC/KPC_                    | KPC(session)                       | 将参数当做指针输出。如果是NULL时会输出NULL                                                                                                                                                                 |
+| KPC/KPC_                    | KPC(session)                       | 输入参数是对象指针。如果是NULL时会输出NULL，否则调用指针的to_string方法输出字符串 |
 | KTIME                       | KTIME(cur_time)                    | 时间戳转换为字符串。时间戳单位微秒                                                                                                                                                                         |
 | KTIMERANGE/<br/>KTIMERANGE_ | KTIMERANGE(cur_time, HOUR, SECOND) | 时间戳转换为字符串，仅获取指定范围，比如示例中的获取小时到秒这一段                                                                                                                                                         |
 | KPHEX/KPHEX_                | KPHEX(buf, 20)                     | 十六进制打印buf内容                                                                                                                                                                               |
@@ -297,9 +308,6 @@ OceanBase 支持两种日志限速：一个普通系统日志磁盘IO带宽限�
 
 **系统日志带宽限速**
 
-
-
-
 OceanBase 会按照磁盘带宽来限制日志输出。日志带宽限速不会针对不同的日志级别限速。如果日志限速，可能会打印限速日志，关键字 `REACH SYSLOG RATE LIMIT `。
 
 限速日志示例：
@@ -312,7 +320,7 @@ OceanBase 会按照磁盘带宽来限制日志输出。日志带宽限速不会�
 
 限速的代码细节请参考 `check_tl_log_limiter` 函数。
 
-**WARN 日志限速**
+**WDIAG 日志限速**
 OceanBase 对WARN级别的日志做了限流，每个错误码每秒钟默认限制输出200条日志。超过限制会输出限流日志，关键字 `Throttled WDIAG logs in last second`。可以通过配置项 `diag_syslog_per_error_limit` 来调整限流阈值。
 
 限流日志示例：
@@ -367,3 +375,8 @@ OceanBase 会周期性的输出一些内部状态信息，比如各模块、租�
 ```
 
 这种数据会查找历史问题很有帮助。
+
+### ERROR 日志
+对系统出现的一般错误，比如处理某个请求时，出现了异常，会以WARN级别输出日志。只有影响到OceanBase进程正常运行，或者认为有严重问题时，会以ERROR级别输出日志。因此如果遇到进程异常退出，或者无法启动时，搜索ERROR日志会更有效地查找问题原因。
+
+
