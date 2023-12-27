@@ -739,7 +739,7 @@ Outputs & filters:
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=16
       sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
   1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=16
-      group([skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), agg_func([T_FUN_MAX(skyline_int.v1)])
+      group([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
   2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v1]), filter(nil), rowset=16
       equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
       merge_directions([ASC])
@@ -852,7 +852,7 @@ Outputs & filters:
   0 - output([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), filter(nil), rowset=16
       sort_keys([skyline_int.v3, ASC])
   1 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=16
-      distinct([skyline_int.v4], [skyline_int.v5], [skyline_int.v3])
+      distinct([skyline_int.v5], [skyline_int.v4], [skyline_int.v3])
   2 - output([skyline_int.v3], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=16
       equal_conds([skyline_int.v4 = other.c1]), other_conds(nil)
       merge_directions([ASC])

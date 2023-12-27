@@ -1038,6 +1038,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PQ_DISTRIBUTE_WINDOW { return PQ_DISTRIBUTE_WINDOW; }
 <hint>PQ_MAP { return PQ_MAP; }
 <hint>PQ_SET { return PQ_SET; }
+<hint>PQ_SUBQUERY { return PQ_SUBQUERY; }
 <hint>RANDOM_LOCAL { return RANDOM_LOCAL; }
 <hint>RANDOM { return RANDOM; }
 <hint>BROADCAST { return BROADCAST; }

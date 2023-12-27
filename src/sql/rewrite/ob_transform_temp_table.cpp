@@ -1149,7 +1149,7 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
         if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                      table->ref_query_, temp_table_stmt))) {
           LOG_WARN("failed to deep copy stmt", K(ret));
-        } else if (OB_FAIL(temp_table_stmt->update_stmt_table_id(*table->ref_query_))) {
+        } else if (OB_FAIL(temp_table_stmt->update_stmt_table_id(ctx_->allocator_, *table->ref_query_))) {
           LOG_WARN("failed to update table id", K(ret));
         } else if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_,
                                             temp_table->table_name_,

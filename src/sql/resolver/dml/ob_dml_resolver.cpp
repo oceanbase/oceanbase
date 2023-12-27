@@ -4479,17 +4479,21 @@ int ObDMLResolver::resolve_generate_table_item(ObSelectStmt *ref_query,
   int ret = OB_SUCCESS;
   TableItem *item = NULL;
   ObDMLStmt *dml_stmt = get_stmt();
+  ObString used_alias_name = alias_name;
   if (OB_ISNULL(dml_stmt) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("resolver isn't init");
   } else if (OB_UNLIKELY(NULL == (item = dml_stmt->create_table_item(*allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create table item failed");
+  } else if (used_alias_name.empty()
+             && OB_FAIL(dml_stmt->generate_anonymous_view_name(*allocator_, used_alias_name))) {
+      LOG_WARN("failed to generate view name", K(ret));
   } else {
     item->ref_query_ = ref_query;
     item->table_id_ = generate_table_id();
-    item->table_name_ = alias_name;
-    item->alias_name_ = alias_name;
+    item->table_name_ = used_alias_name;
+    item->alias_name_ = used_alias_name;
     item->type_ = TableItem::GENERATED_TABLE;
     item->is_view_table_ = false;
     if (OB_FAIL(dml_stmt->add_table_item(session_info_, item, params_.have_same_table_name_))) {
@@ -13377,6 +13381,12 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_PQ_SUBQUERY:  {
+      if (OB_FAIL(resolve_pq_subquery_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve pq subquery hint", K(ret));
+      }
+      break;
+    }
     case T_USE_LATE_MATERIALIZATION:
     case T_NO_USE_LATE_MATERIALIZATION:
     case T_GBY_PUSHDOWN:
@@ -13783,6 +13793,66 @@ int ObDMLResolver::get_valid_dist_methods(const ParseNode *dist_methods_node,
   return ret;
 }
 
+int ObDMLResolver::resolve_pq_subquery_hint(const ParseNode &hint_node,
+                                            ObOptHint *&opt_hint)
+{
+  int ret = OB_SUCCESS;
+  opt_hint = NULL;
+  const ParseNode *dist_methods_node = NULL;
+  if (OB_UNLIKELY(3 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pq_subquery hint node", K(ret), K(hint_node.num_child_));
+  } else {
+    DistAlgo dist_algo = DistAlgo::DIST_INVALID_METHOD;
+    if (OB_ISNULL(dist_methods_node = hint_node.children_[2])) {
+      dist_algo = DistAlgo::DIST_BASIC_METHOD;
+    } else if (OB_UNLIKELY(T_DISTRIBUTE_METHOD_LIST != dist_methods_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected pq_subquery hint node", K(ret), K(get_type_name(dist_methods_node->type_)));
+    } else if (OB_UNLIKELY(2 != dist_methods_node->num_child_)
+               || OB_ISNULL(dist_methods_node->children_[0])
+               || OB_ISNULL(dist_methods_node->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected disdist methods node", K(ret));
+    } else {
+      ObItemType outer = dist_methods_node->children_[0]->type_;
+      ObItemType inner = dist_methods_node->children_[1]->type_;
+      //  pq_subquery(@sel$1 (sel$2 sel$3)) basic
+      //  pq_subquery(@sel$1 (sel$2 sel$3) LOCAL LOCAL)
+      //  pq_subquery(@sel$1 (sel$2 sel$3) NONE NONE)
+      //  pq_subquery(@sel$1 (sel$2 sel$3) PARTITION NONE)
+      //  pq_subquery(@sel$1 (sel$2 sel$3) NONE ALL)
+      if (T_DISTRIBUTE_LOCAL == outer && T_DISTRIBUTE_LOCAL == inner) {
+        dist_algo = DistAlgo::DIST_PULL_TO_LOCAL;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_PARTITION_WISE;
+      } else if (T_DISTRIBUTE_PARTITION == outer && T_DISTRIBUTE_NONE == inner) {
+        dist_algo = DistAlgo::DIST_PARTITION_NONE;
+      } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
+        dist_algo = DistAlgo::DIST_NONE_ALL;
+      }
+    }
+
+    if (DistAlgo::DIST_INVALID_METHOD != dist_algo) {
+      ObPQSubqueryHint *pq_subquery_hint = NULL;
+      ObString qb_name;
+      if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, pq_subquery_hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+        LOG_WARN("failed to resolve query block name", K(ret));
+      } else if (hint_node.children_[1] != NULL &&
+                 OB_FAIL(resolve_qb_name_list(hint_node.children_[1], pq_subquery_hint->get_sub_qb_names()))) {
+        LOG_WARN("failed to resolve qb name list", K(ret));
+      } else {
+        pq_subquery_hint->set_qb_name(qb_name);
+        pq_subquery_hint->set_dist_algo(dist_algo);
+        opt_hint = pq_subquery_hint;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_join_filter_hint(const ParseNode &hint_node,
                                             ObOptHint *&opt_hint)
 {
@@ -13969,7 +14039,7 @@ int ObDMLResolver::resolve_count_to_exists_hint(const ParseNode &hint_node,
   } else {
     const ParseNode *qb_name_list_node = hint_node.children_[1];
     if (qb_name_list_node != NULL &&
-        OB_FAIL(resolve_qb_name_list(qb_name_list_node, count_to_exists_hint->get_qb_name_list()))) {
+        OB_FAIL(resolve_qb_name_list(qb_name_list_node, count_to_exists_hint->get_qb_names()))) {
       LOG_WARN("failed to resolve qb name list", K(ret));
     } else {
       count_to_exists_hint->set_qb_name(qb_name);

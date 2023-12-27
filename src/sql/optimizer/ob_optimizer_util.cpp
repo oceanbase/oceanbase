@@ -425,39 +425,142 @@ int ObOptimizerUtil::adjust_exprs_by_ordering(ObIArray<ObRawExpr *> &exprs,
   }
   if (OB_SUCC(ret)) {
     prefix_count = adjusted_exprs.count();
-    ordering_all_used = prefix_count > 0;
-  }
-  for (int64_t j = 0; OB_SUCC(ret) && j < exprs.count(); ++j) {
-    if (expr_idxs.has_member(j)) {
-      //已经和其它序的表达式对应了，不再参与比较
-    } else if (OB_FAIL(adjusted_exprs.push_back(exprs.at(j)))) {
-      LOG_WARN("store ordered expr failed", K(ret), K(j));
-    } else if (OB_FAIL(expr_map.push_back(j))) {
-      LOG_WARN("failed to push back expr index", K(ret));
-    } else if (OB_FAIL(order_types.push_back(directions.at(j)))) {
-      LOG_WARN("failed to push back order type", K(ret));
-    } else if (OB_FAIL(expr_idxs.add_member(j))) {
-     LOG_WARN("add expr idxs member failed", K(ret), K(j));
-    } else {
-      ordering_all_used = false;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (adjusted_exprs.count() != exprs.count()
-        || order_types.count() != exprs.count()) {
+    ordering_all_used = prefix_count > 0 && expr_idxs.num_members() == exprs.count();
+    if (OB_FAIL(generate_stable_ordering(exprs, directions, expr_idxs, expr_map,
+                                         adjusted_exprs, order_types))) {
+      LOG_WARN("failed to generate stable ordering", K(ret));
+    } else if (OB_UNLIKELY(adjusted_exprs.count() != exprs.count()
+                           || order_types.count() != exprs.count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exprs don't covered completely by ordering",
                K(adjusted_exprs.count()), K(exprs.count()), K(order_types.count()));
+    } else if (OB_FAIL(exprs.assign(adjusted_exprs))) {
+      LOG_WARN("assign adjusted exprs failed", K(ret));
+    } else if (OB_FAIL(directions.assign(order_types))) {
+      LOG_WARN("failed to assign order types", K(ret));
+    } else if (match_map != NULL && OB_FAIL(match_map->assign(expr_map))) {
+      LOG_WARN("failed to assign expr indexs", K(ret));
+    }
+  }
+  return ret;
+}
+
+// when there is no input ordering or interesting ordering, generate a stable ordering use this function
+int ObOptimizerUtil::generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                              ObIArray<ObOrderDirection> &directions)
+{
+  int ret = OB_SUCCESS;
+  ObBitSet<64> used_expr_idxs;
+  ObSEArray<int64_t, 8> expr_map;
+  ObSEArray<ObRawExpr *, 8> adjusted_exprs;
+  ObSEArray<ObOrderDirection, 8> adjusted_directions;
+  if (OB_FAIL(generate_stable_ordering(exprs,
+                                       directions,
+                                       used_expr_idxs,
+                                       expr_map,
+                                       adjusted_exprs,
+                                       adjusted_directions))) {
+    LOG_WARN("failed to generate stable ordering", K(ret));
+  } else if (OB_FAIL(exprs.assign(adjusted_exprs))) {
+    LOG_WARN("assign adjusted exprs failed", K(ret));
+  } else if (OB_FAIL(directions.assign(adjusted_directions))) {
+    LOG_WARN("failed to assign order types", K(ret));
+  }
+  return ret;
+}
+
+// when there is no input ordering or interesting ordering, generate a stable ordering use this function
+int ObOptimizerUtil::generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
+                                              ObIArray<ObOrderDirection> &directions,
+                                              ObBitSet<64> &used_expr_idxs,
+                                              ObIArray<int64_t> &expr_map,
+                                              ObIArray<ObRawExpr*> &adjusted_exprs,
+                                              ObIArray<ObOrderDirection> &adjusted_directions)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<std::pair<ObRawExpr*,int64_t>, 8> sort_pairs;
+  int64_t idx = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(exprs.count() != directions.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected array count", K(ret), K(exprs.count()), K(directions.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (!used_expr_idxs.has_member(i) &&
+        OB_FAIL(sort_pairs.push_back(std::pair<ObRawExpr*,int64_t>(exprs.at(i), i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+  // do not generate stable ordering now, remove comment for this sort when need stable ordering
+  // std::sort(sort_pairs.begin(), sort_pairs.end(), stable_expr_cmp_func);
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < sort_pairs.count(); ++i) {
+    idx = sort_pairs.at(i).second;
+    if (OB_UNLIKELY(exprs.count() <= idx)) {
+      LOG_WARN("unexpected idx", K(ret), K(exprs.count()), K(i), K(idx));
+    } else if (OB_FAIL(adjusted_exprs.push_back(exprs.at(idx)))) {
+      LOG_WARN("store ordered expr failed", K(ret), K(idx));
+    } else if (OB_FAIL(expr_map.push_back(idx))) {
+      LOG_WARN("failed to push back expr index", K(ret));
+    } else if (OB_FAIL(adjusted_directions.push_back(directions.at(idx)))) {
+      LOG_WARN("failed to push back order type", K(ret));
+    } else if (OB_FAIL(used_expr_idxs.add_member(idx))) {
+      LOG_WARN("add expr idxs member failed", K(ret), K(idx));
+    }
+  }
+  return ret;
+}
+
+// used to generate specific ordering exprs
+bool ObOptimizerUtil::stable_expr_cmp_func(std::pair<ObRawExpr*,int64_t> l_pair,
+                                           std::pair<ObRawExpr*,int64_t> r_pair)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  int64_t res = 0;
+  if (OB_FAIL(cmp_expr(l_pair.first, r_pair.first, res))) {
+    LOG_WARN("failed to compare two expr", K(ret), K(res), K(lbt()), KPC(l_pair.first), KPC(r_pair.first));
+  } else {
+    bret = (res <= 0);
+  }
+  return bret;
+}
+
+// used to generate specific ordering exprs
+int ObOptimizerUtil::cmp_expr(ObRawExpr *l_expr, ObRawExpr *r_expr, int64_t &res)
+{
+  int ret = OB_SUCCESS;
+  res = 0;
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(l_expr), K(r_expr));
+  } else if (l_expr->get_expr_type() != r_expr->get_expr_type()) {
+    if (l_expr->is_column_ref_expr() || r_expr->is_column_ref_expr()) {
+      res = l_expr->is_column_ref_expr() ? -1 : 1;
     } else {
-      exprs.reuse();
-      if (OB_FAIL(exprs.assign(adjusted_exprs))) {
-        LOG_WARN("assign adjusted exprs failed", K(ret));
-      } else if (OB_FAIL(directions.assign(order_types))) {
-        LOG_WARN("failed to assign order types", K(ret));
-      } else if (match_map != NULL && OB_FAIL(match_map->assign(expr_map))) {
-        LOG_WARN("failed to assign expr indexs", K(ret));
+      res = l_expr->get_expr_type() < r_expr->get_expr_type() ? -1 : 1;
+    }
+  } else if (l_expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *l_col = static_cast<ObColumnRefRawExpr*>(l_expr);
+    ObColumnRefRawExpr *r_col = static_cast<ObColumnRefRawExpr*>(r_expr);
+    if (l_col->get_table_id() != r_col->get_table_id()) {
+      res = l_col->get_table_id() < r_col->get_table_id() ? -1 : 1;
+    } else if (l_col->get_column_id() != r_col->get_column_id()) {
+      res = l_col->get_column_id() < r_col->get_column_id() ? -1 : 1;
+    }
+  } else if (l_expr->is_set_op_expr()) {
+    res = static_cast<ObSetOpRawExpr*>(l_expr)->get_idx() < static_cast<ObSetOpRawExpr*>(r_expr)->get_idx()
+          ? -1 : 1;
+  } else if (l_expr->get_param_count() != r_expr->get_param_count()) {
+    res = l_expr->get_param_count() < r_expr->get_param_count() ? -1 : 1;
+  } else if (0 != l_expr->get_param_count()) {
+    for (int64_t i = 0; 0 == res && OB_SUCC(ret) && i < l_expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(cmp_expr(l_expr->get_param_expr(i), r_expr->get_param_expr(i), res)))) {
+        LOG_WARN("failed to smart call compare two expr", K(ret), K(res));
       }
     }
+  } else {
+    /* do nothing now */
   }
   return ret;
 }
@@ -4615,6 +4718,8 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   ObRawExprSet *min_parent_exprs = NULL;
   bool is_contain = false;
   bool is_in_child = false;
+  ObSqlBitSet<> root_exprs_set;
+  int64_t expr_idx = -1;
   root_exprs.reset();
   // 将 fd item 分为unique的和非unique的
   for (int64_t i = 0; OB_SUCC(ret) && i < fd_item_set.count(); ++i) {
@@ -4647,11 +4752,10 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   }
   // 找到一个unique fd item, 直接从candi exprs里找出匹配parent set的expr
   if (OB_SUCC(ret) && NULL != min_parent_exprs) {
-    int64_t expr_idx = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < min_parent_exprs->count(); ++i) {
       if (find_equal_expr(candi_exprs, min_parent_exprs->at(i), equal_sets, expr_idx)) {
-        if (OB_FAIL(root_exprs.push_back(candi_exprs.at(expr_idx)))) {
-          LOG_WARN("failed to push back root expr", K(ret));
+        if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       } else { /* not find means min_parent_exprs->at(i) is const, do nothing */ }
     }
@@ -4671,7 +4775,6 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
       } else if (is_contain) {
         ObSEArray<ObRawExpr *, 8> left_domain;
         ObSEArray<ObRawExpr *, 8> right_domain;
-        int64_t expr_idx = -1;
         // 生成新的root exprs集合
         for (int64_t j = 0; OB_SUCC(ret) && j < root_exprs.count(); ++j) {
           if (OB_FAIL(left_domain.push_back(root_exprs.at(j)))) {
@@ -4720,18 +4823,35 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
         }
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_exprs.count(); ++i) {
+      if(OB_UNLIKELY(!find_item(candi_exprs, root_exprs.at(i), &expr_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find item", K(ret));
+      } else if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    }
     // 所有non unique fd item都遍历过了, 但是还有其它无法被决定的expr, 直接加入到root exprs中
     if (OB_SUCC(ret) && eliminate_set.num_members() < candi_exprs.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
         if (eliminate_set.has_member(i)) {
           // do nothing
-        } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
-          LOG_WARN("failed to push back candi expr", K(ret));
+        } else if (OB_FAIL(root_exprs_set.add_member(i))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       }
     }
   }
   if (OB_SUCC(ret)) {
+    root_exprs.reuse();
+    // use bitset to keep exprs ordering
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
+      if (!root_exprs_set.has_member(i)) {
+        // do nothing
+      } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
+        LOG_WARN("failed to push back candi expr", K(ret));
+      }
+    }
     LOG_TRACE("succeed to simply exprs", K(fd_item_set), K(equal_sets), K(const_exprs),
         K(candi_exprs), K(root_exprs));
   }

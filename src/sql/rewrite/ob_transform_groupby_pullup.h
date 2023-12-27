@@ -127,7 +127,9 @@ private:
                                 ObRawExpr *&null_propagate_column,
                                 bool &is_valid);
 
-  int do_groupby_pull_up(ObSelectStmt *stmt, PullupHelper &helper);
+  int do_groupby_pull_up(ObSelectStmt *stmt,
+                         PullupHelper &helper,
+                         StmtUniqueKeyProvider &unique_key_provider);
 
   int get_trans_view(ObDMLStmt *stmt, ObSelectStmt *&view_stmt);
 
