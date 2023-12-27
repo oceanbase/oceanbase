@@ -80,6 +80,7 @@ int ObDDLArg::assign(const ObDDLArg &other)
     parallelism_ = other.parallelism_;
     task_id_ = other.task_id_;
     consumer_group_id_ = other.consumer_group_id_;
+    is_parallel_ = other.is_parallel_;
   }
   return ret;
 }
@@ -1265,7 +1266,8 @@ OB_SERIALIZE_MEMBER(ObDDLArg,
                     based_schema_object_infos_,
                     parallelism_,
                     task_id_,
-                    consumer_group_id_);
+                    consumer_group_id_,
+                    is_parallel_);
 
 //////////////////////////////////////////////
 //
