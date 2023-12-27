@@ -1246,7 +1246,6 @@ typedef enum ObItemType
   T_ROLLBACK,
   T_ANY_HOST_NAME,
   T_USER_WITH_HOST_NAME,
-  T_FLUSH_PRIVILEGES,
 
   T_INDEX_COLUMN_LIST,
   T_INDEX_USING_ALGORITHM,
@@ -2382,6 +2381,7 @@ typedef enum ObItemType
   T_ALTER_COLUMN_GROUP_OPTION,
   T_BLOCKING,
   T_PQ_SUBQUERY,
+  T_FLUSH_PRIVILEGES,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
