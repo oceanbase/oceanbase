@@ -138,8 +138,8 @@ void close_builder_and_prepare_sstable(
   param.master_key_id_ = res.master_key_id_;
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
-  param.data_block_ids_ = res.data_block_ids_;
-  param.other_block_ids_ = res.other_block_ids_;
+  ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
+  ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   if (is_major_merge_type(data_store_desc.get_merge_type())) {

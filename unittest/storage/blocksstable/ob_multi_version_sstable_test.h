@@ -501,8 +501,8 @@ void ObMultiVersionSSTableTest::prepare_data_end(
 
   ObTabletCreateSSTableParam param;
   table_key_.table_type_ = table_type;
-  param.data_block_ids_ = res.data_block_ids_;
-  param.other_block_ids_ = res.other_block_ids_;
+  ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
+  ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   param.table_key_ = table_key_;
   param.schema_version_ = SCHEMA_VERSION;
   param.create_snapshot_version_ = 0;
