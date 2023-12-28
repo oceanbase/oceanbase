@@ -95,6 +95,7 @@ public:
       const uint64_t data_format_version,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const share::SCN &end_scn,
+      const ObStorageSchema *storage_schema,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
   static int create_ddl_sstable(
@@ -102,6 +103,7 @@ public:
       const ObTabletDDLParam &ddl_param,
       const ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array,
       const blocksstable::ObSSTable *first_ddl_sstable,
+      const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &sstable_handle);
 
@@ -109,6 +111,7 @@ public:
       ObLS &ls,
       ObTablet &tablet,
       const ObTabletDDLParam &ddl_param,
+      const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       blocksstable::ObSSTable *sstable);
 
@@ -158,6 +161,7 @@ private:
       const ObTabletDDLParam &ddl_param,
       const blocksstable::ObSSTable *first_ddl_sstable,
       const int64_t macro_block_column_count,
+      const ObStorageSchema *storage_schema,
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &sstable_handle);
 

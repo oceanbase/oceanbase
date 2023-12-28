@@ -490,20 +490,17 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
                                              const uint64_t data_format_version,
                                              const ObSSTable *first_ddl_sstable,
                                              const SCN &end_scn,
+                                             const ObStorageSchema *storage_schema,
                                              ObWholeDataStoreDesc &data_desc)
 {
   int ret = OB_SUCCESS;
   data_desc.reset();
   ObLSService *ls_service = MTL(ObLSService *);
-  ObArenaAllocator tmp_arena("DDLIdxDescTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
-  ObStorageSchema *storage_schema = nullptr;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0)) {
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || snapshot_version <= 0 || data_format_version <= 0 || OB_ISNULL(storage_schema))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version));
-  } else if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
-    LOG_WARN("fail to get storage schema", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(data_format_version), KP(storage_schema));
   } else if (cg_idx >= 0) {
     const ObIArray<ObStorageColumnGroupSchema > &cg_schemas = storage_schema->get_column_groups();
     if (cg_idx >= cg_schemas.count()) {
@@ -541,7 +538,6 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
       }
     }
   }
-  ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   LOG_DEBUG("prepare_index_data_desc", K(ret), K(data_desc));
   return ret;
 }
@@ -550,6 +546,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                         const ObTabletDDLParam &ddl_param,
                                         const ObIArray<const ObDataMacroBlockMeta *> &meta_array,
                                         const ObSSTable *first_ddl_sstable,
+                                        const ObStorageSchema *storage_schema,
                                         common::ObArenaAllocator &allocator,
                                         ObTableHandleV2 &sstable_handle)
 {
@@ -568,6 +565,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
             ddl_param.data_format_version_,
             first_ddl_sstable,
             ddl_param.table_key_.get_end_scn(),
+            storage_schema,
             data_desc))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
     } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0)->get_meta_val().column_count_)) {
@@ -595,7 +593,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
       if (OB_FAIL(index_block_rebuilder.close())) {
         LOG_WARN("close index block rebuilder failed", K(ret));
       } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(tablet, &sstable_index_builder, ddl_param, first_ddl_sstable,
-              macro_block_column_count, allocator, sstable_handle))) {
+              macro_block_column_count, storage_schema, allocator, sstable_handle))) {
         LOG_WARN("create ddl sstable failed", K(ret), K(ddl_param));
       }
     }
@@ -610,18 +608,15 @@ int ObTabletDDLUtil::create_ddl_sstable(
     const ObTabletDDLParam &ddl_param,
     const ObSSTable *first_ddl_sstable,
     const int64_t macro_block_column_count,
+    const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &sstable_handle)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_arena("CreateDDLSstTmp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObStorageSchema *storage_schema = nullptr;
   SMART_VAR(ObSSTableMergeRes, res) {
     if (OB_UNLIKELY(nullptr == sstable_index_builder || !ddl_param.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KP(sstable_index_builder), K(ddl_param));
-    } else if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
-      LOG_WARN("failed to load storage schema", K(ret), K(tablet.get_tablet_meta()));
     } else {
       int64_t column_count = 0;
       int64_t full_column_cnt = 0; // only used for co sstable
@@ -774,7 +769,6 @@ int ObTabletDDLUtil::create_ddl_sstable(
         }
       }
     }
-    ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   }
   return ret;
 }
@@ -783,48 +777,42 @@ int ObTabletDDLUtil::update_ddl_table_store(
     ObLS &ls,
     ObTablet &tablet,
     const ObTabletDDLParam &ddl_param,
+    const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
     blocksstable::ObSSTable *sstable)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ddl_param.is_valid() || nullptr == sstable)) {
+  if (OB_UNLIKELY(!ddl_param.is_valid() || OB_ISNULL(storage_schema) || OB_ISNULL(sstable))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ddl_param), KP(sstable));
+    LOG_WARN("invalid argument", K(ret), K(ddl_param), KP(storage_schema), KP(sstable));
   } else {
-    ObArenaAllocator allocator("DDLUtil_update", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObStorageSchema *tablet_storage_schema = nullptr;
-    if (OB_FAIL(tablet.load_storage_schema(allocator, tablet_storage_schema))) {
-      LOG_WARN("fail to load storage schema failed", K(ret));
+    const bool is_major_sstable = ddl_param.table_key_.is_major_sstable();
+    const int64_t rebuild_seq = ls.get_rebuild_seq();
+    const int64_t snapshot_version = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_snapshot_version())
+                                                     : tablet.get_snapshot_version();
+    const int64_t multi_version_start = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_multi_version_start())
+                                            : 0;
+    ObTabletHandle new_tablet_handle;
+    ObUpdateTableStoreParam table_store_param(sstable,
+                                              snapshot_version,
+                                              multi_version_start,
+                                              rebuild_seq,
+                                              storage_schema,
+                                              is_major_sstable, // update_with_major_flag
+                                              /*DDL does not have verification between replicas,
+                                                So using medium merge to force verification between replicas*/
+                                              compaction::MEDIUM_MERGE,
+                                              is_major_sstable// need report checksum
+                                              );
+    table_store_param.ddl_info_.keep_old_ddl_sstable_ = !is_major_sstable;
+    table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
+    table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
+    table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
+    if (OB_FAIL(ls.update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
+      LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
     } else {
-      const bool is_major_sstable = ddl_param.table_key_.is_major_sstable();
-      const int64_t rebuild_seq = ls.get_rebuild_seq();
-      const int64_t snapshot_version = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_snapshot_version())
-                                                       : tablet.get_snapshot_version();
-      const int64_t multi_version_start = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_multi_version_start())
-                                              : 0;
-      ObTabletHandle new_tablet_handle;
-      ObUpdateTableStoreParam table_store_param(sstable,
-                                                snapshot_version,
-                                                multi_version_start,
-                                                rebuild_seq,
-                                                tablet_storage_schema,
-                                                is_major_sstable, // update_with_major_flag
-                                                /*DDL does not have verification between replicas,
-                                                  So using medium merge to force verification between replicas*/
-                                                compaction::MEDIUM_MERGE,
-                                                is_major_sstable// need report checksum
-                                                );
-      table_store_param.ddl_info_.keep_old_ddl_sstable_ = !is_major_sstable;
-      table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
-      table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
-      table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
-      if (OB_FAIL(ls.update_tablet_table_store(ddl_param.table_key_.get_tablet_id(), table_store_param, new_tablet_handle))) {
-        LOG_WARN("failed to update tablet table store", K(ret), K(ddl_param.table_key_), K(table_store_param));
-      } else {
-        LOG_INFO("ddl update table store success", K(ddl_param), K(table_store_param), KPC(sstable));
-      }
+      LOG_INFO("ddl update table store success", K(ddl_param), K(table_store_param), KPC(sstable));
     }
-    ObTabletObjLoadHelper::free(allocator, tablet_storage_schema);
   }
   return ret;
 }
@@ -998,6 +986,7 @@ int compact_sstables(
     ObIArray<ObSSTable *> &sstables,
     const ObTabletDDLParam &ddl_param,
     const ObITableReadInfo &read_info,
+    const ObStorageSchema *storage_schema,
     ObArenaAllocator &allocator,
     ObTableHandleV2 &sstable_handle)
 {
@@ -1005,7 +994,7 @@ int compact_sstables(
   ObArenaAllocator arena("compact_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObBlockMetaTree meta_tree;
   ObArray<const ObDataMacroBlockMeta *> sorted_metas;
-  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_))) {
+  if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
     LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
   } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, arena, sorted_metas))) {
     LOG_WARN("get sorted meta array failed", K(ret), K(read_info), K(sstables));
@@ -1014,6 +1003,7 @@ int compact_sstables(
           ddl_param,
           sorted_metas,
           sstables.empty() ? nullptr : sstables.at(0)/*first ddl sstable*/,
+          storage_schema,
           allocator,
           sstable_handle))) {
     LOG_WARN("create sstable failed", K(ret), K(ddl_param), K(sstables));
@@ -1027,6 +1017,7 @@ int compact_co_ddl_sstable(
     ObTableStoreIterator &ddl_sstable_iter,
     const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
     const ObTabletDDLParam &ddl_param,
+    const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
     ObTablesHandleArray &compacted_cg_sstable_handles,
     ObTableHandleV2 &co_sstable_handle)
@@ -1035,13 +1026,9 @@ int compact_co_ddl_sstable(
   compacted_cg_sstable_handles.reset();
   co_sstable_handle.reset();
   const ObITableReadInfo *cg_index_read_info = nullptr;
-  ObArenaAllocator arena("compact_co_ddl", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObStorageSchema *storage_schema = nullptr;
-  if (OB_UNLIKELY(ddl_sstable_iter.count() == 0 && frozen_ddl_kvs.count() == 0)) {
+  if (OB_UNLIKELY(ddl_sstable_iter.count() == 0 && frozen_ddl_kvs.count() == 0) || OB_ISNULL(storage_schema)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()));
-  } else if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
-    LOG_WARN("load storage schema failed", K(ret), K(ddl_param));
+    LOG_WARN("invalid argument", K(ret), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()), KP(storage_schema));
   } else {
     const int64_t base_cg_idx = ddl_param.table_key_.get_column_group_id();
     ObArray<ObSSTable *> base_sstables;
@@ -1051,7 +1038,7 @@ int compact_co_ddl_sstable(
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
     } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
-    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), allocator, co_sstable_handle))) {
+    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), storage_schema, allocator, co_sstable_handle))) {
       LOG_WARN("compact base sstable failed", K(ret));
     } else {
       // empty major co sstable, no need fill cg sstables
@@ -1074,7 +1061,7 @@ int compact_co_ddl_sstable(
           LOG_WARN("get current cg sstables failed", K(ret));
         } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, cur_cg_idx, cur_cg_sstables))) {
           LOG_WARN("get current cg sstables failed", K(ret));
-        } else if (OB_FAIL(compact_sstables(tablet, cur_cg_sstables, cg_ddl_param, *cg_index_read_info, allocator, target_table_handle))) {
+        } else if (OB_FAIL(compact_sstables(tablet, cur_cg_sstables, cg_ddl_param, *cg_index_read_info, storage_schema, allocator, target_table_handle))) {
           LOG_WARN("compact cg sstable failed", K(ret), K(cur_cg_idx), K(cur_cg_sstables.count()), K(cg_ddl_param), KPC(cg_index_read_info));
         } else if (OB_FAIL(compacted_cg_sstable_handles.add_table(target_table_handle))) {
           LOG_WARN("push back compacted cg sstable failed", K(ret), K(i), KP(target_table_handle.get_table()));
@@ -1090,7 +1077,6 @@ int compact_co_ddl_sstable(
       }
     }
   }
-  ObTabletObjLoadHelper::free(arena, storage_schema);
   LOG_INFO("compact_co_ddl_sstable", K(ret), K(ddl_sstable_iter), K(ddl_param), KP(&tablet), KPC(co_sstable_handle.get_table()));
   return ret;
 }
@@ -1100,6 +1086,7 @@ int compact_ro_ddl_sstable(
     ObTableStoreIterator &ddl_sstable_iter,
     const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs,
     const ObTabletDDLParam &ddl_param,
+    const ObStorageSchema *storage_schema,
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &ro_sstable_handle)
 {
@@ -1115,7 +1102,7 @@ int compact_ro_ddl_sstable(
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
     } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
-    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), allocator, ro_sstable_handle))) {
+    } else if (OB_FAIL(compact_sstables(tablet, base_sstables, ddl_param, tablet.get_rowkey_read_info(), storage_schema, allocator, ro_sstable_handle))) {
       LOG_WARN("compact base sstable failed", K(ret));
     }
   }
@@ -1138,9 +1125,12 @@ int ObTabletDDLUtil::compact_ddl_kv(
   ObArray<const ObDataMacroBlockMeta *> sorted_metas;
   bool is_data_continue = true;
   ObTablesHandleArray compacted_cg_sstable_handles; // for tmp hold handle of macro block until the tablet updated
+  ObStorageSchema *storage_schema = nullptr;
   if (OB_UNLIKELY(!ddl_param.is_valid() || (0 == ddl_sstable_iter.count() && frozen_ddl_kvs.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_param), K(ddl_sstable_iter.count()), K(frozen_ddl_kvs.count()));
+  } else if (OB_FAIL(tablet.load_storage_schema(arena, storage_schema))) {
+    LOG_WARN("load storage schema failed", K(ret), K(ddl_param));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < frozen_ddl_kvs.count(); ++i) {
       if (OB_FAIL(frozen_ddl_kvs.at(i).get_obj()->close())) {
@@ -1159,22 +1149,23 @@ int ObTabletDDLUtil::compact_ddl_kv(
 
     if (OB_FAIL(ret)) {
     } else if (ddl_param.table_key_.is_co_sstable()) {
-      if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, allocator, compacted_cg_sstable_handles, compacted_sstable_handle))) {
+      if (OB_FAIL(compact_co_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, storage_schema, allocator, compacted_cg_sstable_handles, compacted_sstable_handle))) {
         LOG_WARN("compact co ddl sstable failed", K(ret), K(ddl_param));
       }
     } else {
-      if (OB_FAIL(compact_ro_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, allocator, compacted_sstable_handle))) {
+      if (OB_FAIL(compact_ro_ddl_sstable(tablet, ddl_sstable_iter, frozen_ddl_kvs, ddl_param, storage_schema, allocator, compacted_sstable_handle))) {
         LOG_WARN("compact co ddl sstable failed", K(ret), K(ddl_param));
       }
     }
     if (OB_SUCC(ret)) { // update table store
-      if (OB_FAIL(update_ddl_table_store(ls, tablet, ddl_param, allocator, static_cast<ObSSTable *>(compacted_sstable_handle.get_table())))) {
+      if (OB_FAIL(update_ddl_table_store(ls, tablet, ddl_param, storage_schema, allocator, static_cast<ObSSTable *>(compacted_sstable_handle.get_table())))) {
         LOG_WARN("update ddl table store failed", K(ret));
       } else {
         LOG_INFO("compact ddl sstable success", K(ddl_param));
       }
     }
   }
+  ObTabletObjLoadHelper::free(arena, storage_schema);
   return ret;
 }
 

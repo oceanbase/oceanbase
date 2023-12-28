@@ -72,7 +72,8 @@ public:
   int init(ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
-           const uint64_t data_format_version);
+           const uint64_t data_format_version,
+           const ObStorageSchema *storage_schema);
   void destroy();
   void destroy_tree_value();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,

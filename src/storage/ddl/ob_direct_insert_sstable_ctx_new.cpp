@@ -2706,7 +2706,7 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
     param.ddl_info_.ddl_execution_id_ = execution_id_;
     param.ddl_info_.data_format_version_ = data_format_version_;
     if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(*tablet_handle.get_obj(), ddl_param, empty_meta_array, nullptr/*first_ddl_sstable*/,
-        tmp_arena, sstable_handle))) {
+        storage_schema, tmp_arena, sstable_handle))) {
       LOG_WARN("create empty ddl sstable failed", K(ret));
     } else if (ddl_param.table_key_.is_co_sstable()) {
       // add empty cg sstables
@@ -2719,7 +2719,8 @@ int ObTabletFullDirectLoadMgr::init_ddl_table_store(
         cg_ddl_param.table_key_.column_group_idx_ = static_cast<uint16_t>(i);
         if (table_key_.get_column_group_id() == i) {
           // skip base cg idx
-        } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(*tablet_handle.get_obj(), cg_ddl_param, empty_meta_array, nullptr/*first_ddl_sstable*/, tmp_arena, cur_handle))) {
+        } else if (OB_FAIL(ObTabletDDLUtil::create_ddl_sstable(*tablet_handle.get_obj(), cg_ddl_param, empty_meta_array,
+                nullptr/*first_ddl_sstable*/, storage_schema, tmp_arena, cur_handle))) {
           LOG_WARN("create empty cg sstable failed", K(ret), K(i), K(cg_ddl_param));
         } else if (OB_FAIL(empty_cg_sstable_handles.add_table(cur_handle))) {
           LOG_WARN("add table handle failed", K(ret), K(i), K(cur_handle));
