@@ -389,21 +389,21 @@ int ObDTLIntermResultManager::erase_tenant_interm_result_info()
   int ret = OB_SUCCESS;
   MAP::bucket_iterator bucket_it = map_.bucket_begin();
   while (bucket_it != map_.bucket_end()) {
-    MAP::hashtable::bucket_lock_cond blc(*bucket_it);
-    MAP::hashtable::writelocker locker(blc.lock());
-    MAP::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
-    while (node_it != bucket_it->node_end()) {
-      int tmp_ret = OB_SUCCESS;
-      const ObDTLIntermResultKey &key = node_it->first;
-      node_it++;
-      if (OB_SUCCESS != (tmp_ret = erase_interm_result_info(key))) {
-        if (OB_HASH_NOT_EXIST != tmp_ret) {
-          LOG_WARN("fail to erase result info", K(key), K(tmp_ret));
-          ret = tmp_ret;
+    while (true) {
+      ObDTLIntermResultKey key;
+      {
+        MAP::hashtable::bucket_lock_cond blc(*bucket_it);
+        MAP::hashtable::readlocker locker(blc.lock());
+        MAP::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
+        if (node_it == bucket_it->node_end()) {
+          break;
+        } else {
+          key = node_it->first;
         }
       }
+      erase_interm_result_info(key);
     }
-    bucket_it++;
+    ++bucket_it;
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("erase_tenant_interm_result_info", K(MTL_ID()), K(map_.size()));
