@@ -34,7 +34,7 @@ devdeps-s2geometry-0.9.0-12023092021.el8.x86_64.rpm
 devdeps-icu-69.1-72022112416.el8.x86_64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el8.x86_64.rpm
-devdeps-s3-cpp-sdk-1.11.156-62023101011.el8.x86_64.rpm
+devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.x86_64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.x86_64.rpm target=el9
