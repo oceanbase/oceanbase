@@ -1570,7 +1570,7 @@ int ObCloneScheduler::fill_create_tenant_arg_(
         arg.tenant_schema_.set_compatibility_mode(source_tenant_schema.get_compatibility_mode());
         arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
         arg.tenant_schema_.set_tenant_id(clone_tenant_id);
-        arg.if_not_exist_ = true;
+        arg.if_not_exist_ = false;
         arg.palf_base_info_ = sys_ls_meta_package.palf_meta_;
         arg.recovery_until_scn_ = job.get_restore_scn();
         arg.compatible_version_ = snap_item.get_data_version();
