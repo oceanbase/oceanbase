@@ -1678,6 +1678,7 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
             K(could_major_merge), K(enable_adaptive_compaction), K(tablet_could_schedule_merge));
   if (OB_FAIL(ret) || !is_leader || 0 >= last_major_snapshot_version) {
     // follower or no major: do nothing
+    need_diagnose = true;
   } else if (OB_FAIL(tablet.read_medium_info_list(tmp_allocator, medium_list))) {
     LOG_WARN("failed to load medium info list", K(ret), K(tablet_id));
   } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::READ_MEDIUM_INFO))){
