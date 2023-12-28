@@ -117,8 +117,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([substr(cast(3.14159, VARCHAR(1048576)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))]), filter(nil)
-      values({substr(cast(3.14159, VARCHAR(1048576)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))})
+  0 - output([substr(cast(3.14159, VARCHAR(4)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))]), filter(nil)
+      values({substr(cast(3.14159, VARCHAR(4)), cast('2', BIGINT(-1, 0)), cast('3', BIGINT(-1, 0)))})
 select substr(3.14159, '2', '2.1') from dual;
 +-----------------------------+
 | substr(3.14159, '2', '2.1') |
