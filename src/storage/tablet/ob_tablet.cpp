@@ -1166,7 +1166,7 @@ int ObTablet::init_with_new_snapshot_version(
     LOG_WARN("fail to copy table store", K(ret), KPC(old_table_store));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), KPC(old_table_store));
-  } else if (OB_FAIL(mds_data_.init_with_update_medium_info(allocator, old_mds_data))) {
+  } else if (OB_FAIL(mds_data_.init_for_evict_medium_info(allocator, old_mds_data, 0/*finish_medium_scn*/))) {
     LOG_WARN("failed to init mds data", K(ret), K(old_mds_data));
   } else if (OB_FAIL(table_store_cache_.init(table_store_addr_.get_ptr()->get_major_sstables(),
       table_store_addr_.get_ptr()->get_minor_sstables(),
