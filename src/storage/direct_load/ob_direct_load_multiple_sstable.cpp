@@ -173,6 +173,11 @@ int ObDirectLoadMultipleSSTable::init(const ObDirectLoadMultipleSSTableCreatePar
   return ret;
 }
 
+void ObDirectLoadMultipleSSTable::release_data()
+{
+  fragments_.reset();
+}
+
 int ObDirectLoadMultipleSSTable::copy(const ObDirectLoadMultipleSSTable &other)
 {
   int ret = OB_SUCCESS;
