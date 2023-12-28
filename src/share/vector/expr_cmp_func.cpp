@@ -88,6 +88,13 @@ using nullsafe_cmp_initer = InitCmpSet<
 static bool g_init_cmp_set =
   Ob2DArrayConstIniter<MAX_VEC_TC, MAX_VEC_TC, nullsafe_cmp_initer>::init();
 
+static bool init_row_cmp_double_func() {
+  ROW_CMP_FUNCS[VEC_TC_DOUBLE][VEC_TC_FIXED_DOUBLE] = VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>::cmp;
+  ROW_CMP_FUNCS[VEC_TC_FIXED_DOUBLE][VEC_TC_DOUBLE] = VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>::cmp;
+  return true;
+}
+static bool g_init_row_cmp_double_func = init_row_cmp_double_func();
+
 void VectorCmpExprFuncsHelper::get_cmp_set(const sql::ObDatumMeta &l_meta,
                                            const sql::ObDatumMeta &r_meta,
                                            sql::NullSafeRowCmpFunc &null_first_cmp,
