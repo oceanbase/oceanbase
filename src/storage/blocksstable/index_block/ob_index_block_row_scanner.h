@@ -321,8 +321,6 @@ public:
   void reset();
 
   int init(
-      const ObIArray<int32_t> &agg_projector,
-      const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
       const ObStorageDatumUtils &datum_utils,
       ObIAllocator &allocator,
       const common::ObQueryFlag &query_flag,
@@ -379,9 +377,7 @@ public:
   OB_INLINE bool is_ddl_merge_scan() const { return index_format_ == ObIndexFormat::DDL_MERGE; }
   void switch_context(const ObSSTable &sstable,
                       const ObStorageDatumUtils &datum_utils,
-                      const common::ObQueryFlag &query_flag,
-                      const share::ObLSID &ls_id,
-                      const common::ObTabletID &tablet_id);
+                      ObTableAccessContext &access_ctx);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
                K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
@@ -410,8 +406,6 @@ private:
     const ObRowsInfo *rows_info_;
     const void *query_range_;
   };
-  const ObIArray<int32_t> *agg_projector_;
-  const ObIArray<share::schema::ObColumnSchemaV2> *agg_column_schema_;
   MacroBlockId macro_id_;
   ObIAllocator *allocator_;
   ObRAWIndexBlockRowIterator *raw_iter_;

@@ -49,7 +49,7 @@ void ObIndexTreePrefetcher::reset()
 
 void ObIndexTreePrefetcher::reuse()
 {
-  index_scanner_.reset();
+  index_scanner_.reuse();
 }
 
 int ObIndexTreePrefetcher::init(
@@ -117,6 +117,12 @@ int ObIndexTreePrefetcher::init_basic_info(
     data_version_ = sstable_->get_data_version();
     bool is_normal_query = !access_ctx_->query_flag_.is_daily_merge() && !access_ctx_->query_flag_.is_multi_version_minor_merge();
     index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(sstable.is_ddl_merge_sstable() && is_normal_query);
+
+    if (index_scanner_.is_valid()) {
+      index_scanner_.switch_context(sstable, *datum_utils_, *access_ctx_);
+    } else if (OB_FAIL(init_index_scanner(index_scanner_))) {
+      LOG_WARN("Fail to init index_scanner", K(ret));
+    }
   }
   return ret;
 }
@@ -142,9 +148,7 @@ int ObIndexTreePrefetcher::single_prefetch(ObSSTableReadHandle &read_handle)
              OB_FAIL(lookup_in_cache(read_handle))) {
     LOG_WARN("Failed to lookup_in_cache", K(ret));
   } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
-    if (OB_FAIL(init_index_scanner(index_scanner_))) {
-      LOG_WARN("Fail to init index scanner", K(ret));
-    } else if (OB_FAIL(lookup_in_index_tree(read_handle, false))) {
+    if (OB_FAIL(lookup_in_index_tree(read_handle, false))) {
       LOG_WARN("Failed to lookup_in_block", K(ret));
     }
   }
@@ -259,8 +263,6 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(index_scanner.init(
-      agg_projector_,
-      agg_column_schema_,
       *datum_utils_,
       *access_ctx_->stmt_allocator_,
       access_ctx_->query_flag_,
@@ -443,11 +445,6 @@ int ObIndexTreeMultiPrefetcher::switch_context(
         ext_read_handles_.at(i).reset();
       }
     }
-    if (OB_SUCC(ret)) {
-      if (index_scanner_.is_valid()) {
-        index_scanner_.switch_context(sstable, *datum_utils_, access_ctx_->query_flag_, access_ctx_->ls_id_, access_ctx_->tablet_id_);
-      }
-    }
   }
   return ret;
 }
@@ -484,10 +481,6 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
         } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
           if (OB_FAIL(sstable_->get_index_tree_root(index_block_))) {
             LOG_WARN("Fail to get index block root", K(ret), KPC(sstable_), KP(sstable_));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (!index_scanner_.is_valid() && OB_FAIL(init_index_scanner(index_scanner_))) {
-            LOG_WARN("Fail to init index scanner", K(ret));
           } else if (OB_FAIL(drill_down(ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID, read_handle, false, is_rowkey_to_fetched))) {
             LOG_WARN("Fail to prefetch next level", K(ret), K(index_block_), K(read_handle), KPC(this));
           }
@@ -782,7 +775,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::s
   if (OB_SUCC(ret)) {
     for (int64_t level = 0; OB_SUCC(ret) && level < index_tree_height_; level++) {
       if (tree_handles_[level].index_scanner_.is_valid()) {
-        tree_handles_[level].index_scanner_.switch_context(sstable, *datum_utils_, access_ctx_->query_flag_, access_ctx_->ls_id_, access_ctx_->tablet_id_);
+        tree_handles_[level].index_scanner_.switch_context(sstable, *datum_utils_, *access_ctx_);
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {
         LOG_WARN("Fail to init index_scanner", K(ret), K(level));
       }

@@ -1295,8 +1295,7 @@ int ObTFMIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndex
 
 /******************             ObIndexBlockRowScanner              **********************/
 ObIndexBlockRowScanner::ObIndexBlockRowScanner()
-  : query_range_(nullptr), agg_projector_(nullptr), agg_column_schema_(nullptr),
-    macro_id_(), allocator_(nullptr), raw_iter_(nullptr), transformed_iter_(nullptr),
+  : query_range_(nullptr), macro_id_(), allocator_(nullptr), raw_iter_(nullptr), transformed_iter_(nullptr),
     ddl_iter_(nullptr), ddl_merge_iter_(nullptr), iter_(nullptr), datum_utils_(nullptr),
     range_idx_(0), nested_offset_(0), rowkey_begin_idx_(0), rowkey_end_idx_(0),
     index_format_(ObIndexFormat::INVALID), parent_row_range_(), is_get_(false), is_reverse_scan_(false),
@@ -1383,8 +1382,6 @@ void ObIndexBlockRowScanner::reset()
 }
 
 int ObIndexBlockRowScanner::init(
-    const ObIArray<int32_t> &agg_projector,
-    const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
     const ObStorageDatumUtils &datum_utils,
     ObIAllocator &allocator,
     const common::ObQueryFlag &query_flag,
@@ -1398,12 +1395,7 @@ int ObIndexBlockRowScanner::init(
   } else if (OB_UNLIKELY(!datum_utils.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid datum utils", K(ret), K(datum_utils));
-  } else if (OB_UNLIKELY(agg_projector.count() != agg_column_schema.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Agg meta count not same", K(ret), K(agg_projector), K(agg_column_schema));
   } else {
-    agg_projector_ = &agg_projector;
-    agg_column_schema_ = &agg_column_schema;
     allocator_ = &allocator;
     is_reverse_scan_ = query_flag.is_reverse_scan();
     datum_utils_ = &datum_utils;
@@ -1814,18 +1806,16 @@ const ObDatumRowkey &ObIndexBlockRowScanner::get_end_key() const
 
 void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
                                             const ObStorageDatumUtils &datum_utils,
-                                            const common::ObQueryFlag &query_flag,
-                                            const share::ObLSID &ls_id,
-                                            const common::ObTabletID &tablet_id)
+                                            ObTableAccessContext &access_ctx)
 {
   nested_offset_ = sstable.get_macro_offset();
   datum_utils_ = &datum_utils;
   is_normal_cg_ = sstable.is_normal_cg_sstable();
-  is_reverse_scan_ = query_flag.is_reverse_scan();
-  is_normal_query_ = !query_flag.is_daily_merge() && !query_flag.is_multi_version_minor_merge();
+  is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
+  is_normal_query_ = !access_ctx.query_flag_.is_daily_merge() && !access_ctx.query_flag_.is_multi_version_minor_merge();
   iter_param_.sstable_ = &sstable;
-  iter_param_.ls_id_ = ls_id;
-  iter_param_.tablet_id_ = tablet_id;
+  iter_param_.ls_id_ = access_ctx.ls_id_;
+  iter_param_.tablet_id_ = access_ctx.tablet_id_;
   iter_param_.tablet_ = nullptr;
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
