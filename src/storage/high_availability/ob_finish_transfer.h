@@ -261,14 +261,16 @@ private:
   int record_server_event_(
       const int32_t result,
       const bool is_ready,
-      const int64_t round) const;
+      const int64_t round,
+      const share::SCN &start_scn) const;
   int write_server_event_(
       const int32_t result,
       const ObSqlString &extra_info,
       const share::ObTransferStatus &status) const;
 
 private:
-  static const int64_t DEFAULT_WAIT_INTERVAL_US = 10 * 1000;        // 10ms
+  static const int64_t DEFAULT_WAIT_INTERVAL_US = 10_ms;
+  static const int64_t TASK_EXECUTE_LONG_WARNING_THRESHOLD = 60_min;
 
 private:
   bool is_inited_;
