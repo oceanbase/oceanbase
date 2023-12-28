@@ -350,12 +350,29 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
     const bool with_mock_election,
     PalfHandleImplGuard &leader)
 {
+  // if member_cnt_ is 3, arb_replica_idx should be 0,1,2
+  const ObMemberList member_list = get_member_list();
+  const int64_t member_cnt = get_member_cnt();
+  ObMember arb_member;
+  return create_paxos_group_with_arb(id, loc_cb, member_list, member_cnt, arb_member, arb_replica_idx, leader_idx, with_mock_election, leader);
+}
+
+// member_list and member_cnt contain arb member
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
+    const int64_t id,
+    palf::PalfLocationCacheCb *loc_cb,
+    ObMemberList member_list,
+    int64_t member_cnt,
+    ObMember arb_member,
+    int64_t &arb_replica_idx,
+    int64_t &leader_idx,
+    const bool with_mock_election,
+    PalfHandleImplGuard &leader)
+{
   int ret = OB_SUCCESS;
   PalfBaseInfo palf_base_info;
   palf_base_info.generate_by_default();
-  // if member_cnt_ is 3, arb_replica_idx should be 0,1,2
-  ObMemberList member_list = get_member_list();
-  ObMember arb_replica;
+  ObMember arb_replica = arb_member;
   GlobalLearnerList learner_list;
   arb_replica_idx = 2;
   for (int i = 0; i < get_cluster().size(); i++) {
@@ -367,7 +384,8 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   if (-1 == arb_replica_idx) {
     ret = OB_NOT_SUPPORTED;
     PALF_LOG(ERROR, "there is not any arb server");
-  } else if (OB_FAIL(member_list.get_member_by_index(arb_replica_idx, arb_replica))) {
+  } else if (false == arb_replica.is_valid() &&
+      OB_FAIL(member_list.get_member_by_index(arb_replica_idx, arb_replica))) {
     PALF_LOG(ERROR, "get_member_by_index failed", K(ret), K(arb_replica_idx));
   } else {
     member_list.remove_member(arb_replica);
@@ -382,7 +400,7 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
         break;
       } else if (OB_FAIL(svr->get_palf_env()->create_palf_handle_impl(id, palf::AccessMode::APPEND, palf_base_info, handle))) {
         CLOG_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(id), KPC(svr));
-      } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, get_member_cnt()-1, learner_list))) {
+      } else if (!svr->is_arb_server() && OB_FAIL(handle->set_initial_member_list(member_list, arb_replica, member_cnt-1, learner_list))) {
         CLOG_LOG(ERROR, "set_initial_member_list failed", K(ret), K(id), KPC(svr));
       } else {
         common::ObAddr leader_addr;

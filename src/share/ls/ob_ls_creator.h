@@ -125,8 +125,13 @@ private:
  int check_member_list_and_learner_list_all_in_meta_table_(
                 const common::ObMemberList &member_list,
                 const common::GlobalLearnerList &learner_list);
+ int construct_paxos_replica_number_to_persist_(
+                const int64_t paxos_replica_num,
+                const int64_t arb_replica_num,
+                const common::ObMemberList &member_list,
+                int64_t &paxos_replica_number_to_persist);
  int set_member_list_(const common::ObMemberList &member_list,
-                      const common::ObMember &arbitration_service,
+                      const common::ObMember &arb_replica,
                       const int64_t paxos_replica_num,
                       const common::GlobalLearnerList &learner_list);
 #ifdef OB_BUILD_ARBITRATION
@@ -172,7 +177,9 @@ private:
  int check_create_ls_result_(const int64_t paxos_replica_num,
                              const ObIArray<int> &return_code_array,
                              common::ObMemberList &member_list,
-                             common::GlobalLearnerList &learner_list);
+                             common::GlobalLearnerList &learner_list,
+                             const bool with_arbitration_service,
+                             const int64_t arb_replica_num);
  int check_set_memberlist_result_(const ObIArray<int> &return_code_array,
                                   const int64_t paxos_replica_num);
 
