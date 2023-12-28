@@ -843,6 +843,9 @@ typedef enum ObItemType
   T_FUN_SYS_ST_SYMDIFFERENCE = 1729,
   T_FUN_SYS_PRIV_ST_ASMVTGEOM = 1730,
   T_FUN_SYS_PRIV_ST_MAKE_VALID = 1731,
+  T_FUN_SYS_XML_CONCAT = 1732,
+  T_FUN_SYS_XML_FOREST = 1733,
+  T_FUN_SYS_XML_EXISTSNODE = 1734,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
