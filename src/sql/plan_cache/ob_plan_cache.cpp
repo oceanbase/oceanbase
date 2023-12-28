@@ -1342,6 +1342,8 @@ int ObPlanCache::foreach_cache_evict(CallBack &cb)
 }
 
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryOp>(pl::ObGetPLKVEntryOp &);
+template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySchemaIdOp>(pl::ObGetPLKVEntryBySchemaIdOp &);
+template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySQLIDOp>(pl::ObGetPLKVEntryBySQLIDOp &);
 
 // Remove all cache object in the lib cache
 int ObPlanCache::cache_evict_all_obj()
@@ -2567,6 +2569,42 @@ int ObPlanCache::flush_lib_cache_by_ns(const ObLibCacheNameSpace ns)
   return ret;
 }
 
+template<typename GETPLKVEntryOp, typename EvictAttr>
+int ObPlanCache::flush_pl_cache_single_cache_obj(uint64_t db_id, EvictAttr &attr)
+{
+  int ret = OB_SUCCESS;
+  observer::ObReqTimeGuard req_timeinfo_guard;
+  if (OB_FAIL(ObPLCacheMgr::cache_evict_pl_cache_single<GETPLKVEntryOp>(this, db_id, attr))) {
+    SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
+  }
+  ObArray<AllocCacheObjInfo> deleted_objs;
+  int64_t safe_timestamp = INT64_MAX;
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(observer::ObGlobalReqTimeService::get_instance()
+                        .get_global_safe_timestamp(safe_timestamp))) {
+    SQL_PC_LOG(ERROR, "failed to get global safe timestamp", K(ret));
+  } else if (OB_FAIL(dump_deleted_objs<DUMP_PL>(deleted_objs, safe_timestamp))) {
+    SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
+    if (OB_SUCCESS == tmp_ret) {
+      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
+      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
+        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
+                                                            deleted_objs.at(i).obj_id_,
+                                                            this))) {
+            LOG_WARN("failed to destroy cache obj", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySchemaIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
+template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySQLIDOp, common::ObString>(uint64_t db_id, common::ObString &sql_id);
 
 int ObPlanCache::flush_pl_cache()
 {
