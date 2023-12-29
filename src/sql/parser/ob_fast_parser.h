@@ -381,6 +381,7 @@ protected:
 		return is_valid_char(ch) && USER_VAR_CHAR[static_cast<uint8_t>(ch)];
 	}
 	void reset_parser_node(ParseNode *node);
+	int64_t notascii_gb_char(const int64_t pos);
 	//{U}
 	int64_t is_latin1_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
@@ -439,6 +440,11 @@ protected:
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x40 && static_cast<uint8_t>(ch) <= 0xfe;
+	}
+	inline bool notascii(char ch)
+	{
+		return 	is_valid_char(ch) &&
+				(static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF);
 	}
     inline bool is_latin1(char ch)
 	{
