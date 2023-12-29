@@ -4594,13 +4594,30 @@ int ObSPIService::spi_alloc_complex_var(pl::ObPLExecCtx *ctx,
   UNUSEDx(ctx, type, id, var_idx, init_size, addr);
 #else
   void *ptr = NULL;
+  bool need_alloc = true;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->allocator_));
   CK (OB_NOT_NULL(ctx->params_));
   CK (OB_NOT_NULL(ctx->result_));
   CK ((var_idx >= 0 && var_idx < ctx->params_->count())
       || OB_INVALID_INDEX == var_idx); // OB_INVALID_ID代表初始化函数返回值
+
   if (OB_SUCC(ret)) {
+    if (var_idx >= 0 && var_idx < ctx->params_->count()) {
+      if (ctx->params_->at(var_idx).is_pl_extend() &&
+          0 != ctx->params_->at(var_idx).get_ext() &&
+          PL_OPAQUE_TYPE != ctx->params_->at(var_idx).get_meta().get_extend_type()) {
+        need_alloc = false;
+        int tmp = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp = ObUserDefinedType::destruct_obj(ctx->params_->at(var_idx),
+                                                                  ctx->exec_ctx_->get_my_session(),
+                                                                  false))) {
+          LOG_WARN("fail to destruct obj", K(tmp));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_alloc) {
     ptr = ctx->allocator_->alloc(init_size);
     LOG_DEBUG("debug for spi alloc complex var",
               K(var_idx), K(init_size),
