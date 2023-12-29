@@ -51,6 +51,7 @@ public:
   int get_tablet_status(const share::SCN &snapshot,
                         ObTabletCreateDeleteMdsUserData &data,
                         const int64_t timeout = 0) const;
+  int get_latest_ddl_data(ObTabletBindingMdsUserData &data, bool &is_committed) const;
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = 0) const;

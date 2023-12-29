@@ -533,8 +533,11 @@ private:
   int64_t get_self_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
-  int check_schema_version(const int64_t schema_version);
-  int check_snapshot_readable(const int64_t snapshot_version, const int64_t schema_version);
+  static int check_schema_version(const ObDDLInfoCache& ddl_info_cache, const int64_t schema_version);
+  static int check_snapshot_readable(
+      const ObDDLInfoCache& ddl_info_cache,
+      const int64_t snapshot_version,
+      const int64_t schema_version);
   int check_transfer_seq_equal(const ObTablet &old_tablet, const int64_t transfer_seq);
 
   logservice::ObLogHandler *get_log_handler() const { return log_handler_; } // TODO(bowen.gbw): get log handler from tablet pointer handle
