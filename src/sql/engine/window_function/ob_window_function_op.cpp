@@ -1523,16 +1523,19 @@ int ObWindowFunctionOp::inner_close()
     local_allocator_.free(pby_hash_values_.at(i));
     pby_hash_values_.at(i) = NULL;
   }
+  pby_hash_values_.reset();
   for (int64_t i = 0; i < participator_whole_msg_array_.count(); ++i) {
     participator_whole_msg_array_.at(i)->reset();
     local_allocator_.free(participator_whole_msg_array_.at(i));
     participator_whole_msg_array_.at(i) = NULL;
   }
+  participator_whole_msg_array_.reset();
   for (int64_t i = 0; i < pby_hash_values_sets_.count(); ++i) {
     pby_hash_values_sets_.at(i)->destroy();
     local_allocator_.free(pby_hash_values_sets_.at(i));
     pby_hash_values_sets_.at(i) = NULL;
   }
+  pby_hash_values_sets_.reset();
   return ObOperator::inner_close();
 }
 
