@@ -60,6 +60,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     ss_postfix_range_filters_sel_ = est_cost_info.ss_postfix_range_filters_sel_;
     batch_type_ = est_cost_info.batch_type_;
     sample_info_ = est_cost_info.sample_info_;
+    at_most_one_range_ = est_cost_info.at_most_one_range_;
     // no need to copy table scan param
   }
   return ret;
@@ -1641,6 +1642,10 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
     double range_cost = 0;
+    double range_count = est_cost_info.ranges_.count();
+    if (range_count > 1 && est_cost_info.at_most_one_range_) {
+      range_count = 1;
+    }
     range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
                       + range_cost + qual_cost;
@@ -1858,7 +1863,7 @@ int ObOptEstCostModel::cost_table_get_one_batch_inner(double row_count,
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
     double range_cost = 0;
-    if (est_cost_info.ranges_.count() > 1) {
+    if (est_cost_info.ranges_.count() > 1 && !est_cost_info.at_most_one_range_) {
       range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
     }
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
