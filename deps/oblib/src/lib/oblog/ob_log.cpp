@@ -719,7 +719,7 @@ void ObLogger::rotate_log(const int64_t size, const bool redirect_flag,
   if (OB_LIKELY(size > 0) && max_file_size_ > 0 && log_struct.file_size_ >= max_file_size_) {
     if (OB_LIKELY(0 == pthread_mutex_trylock(&file_size_mutex_))) {
       rotate_log(log_struct.filename_, fd_type, redirect_flag, log_struct.fd_,
-                 log_struct.wf_fd_, log_struct.file_list_, log_struct.wf_file_list_);
+                 log_struct.wf_fd_, file_list_, wf_file_list_);
       (void)ATOMIC_SET(&log_struct.file_size_, 0);
       if (fd_type <= FD_ELEC_FILE) {
         (void)log_new_file_info(log_struct);
@@ -1231,16 +1231,16 @@ int ObLogger::record_old_log_file()
   int ret = OB_SUCCESS;
   if (max_file_index_ <= 0 || !rec_old_file_flag_) {
   } else {
+    int tmp_ret = OB_SUCCESS;
+    ObSEArray<FileName, 4> files;
+    ObSEArray<FileName, 4> wf_files;
     for (int type = FD_SVR_FILE; type < FD_AUDIT_FILE; ++type) {
-      ObSEArray<FileName, 4> files;
-      ObSEArray<FileName, 4> wf_files;
-      if (OB_FAIL(get_log_files_in_dir(log_file_[type].filename_, &files, &wf_files))) {
+      if (OB_TMP_FAIL(get_log_files_in_dir(log_file_[type].filename_, &files, &wf_files))) {
         OB_LOG(WARN, "Get log files in log dir error", K(ret));
-      } else if (OB_FAIL(add_files_to_list(&files, &wf_files, log_file_[type].file_list_, log_file_[type].wf_file_list_))) {
-        OB_LOG(WARN, "Add files to list error", K(ret));
-      } else {
-        // do nothing
       }
+    }
+    if (OB_FAIL(add_files_to_list(&files, &wf_files, file_list_, wf_file_list_))) {
+        OB_LOG(WARN, "Add files to list error", K(ret));
     }
   }
   return ret;
@@ -1324,6 +1324,28 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
   return ret;
 }
 
+int compare_log_filename_by_date_suffix(const void *v1, const void *v2)
+{
+  int ret = 0;
+  if (NULL == v1) {
+    ret = -1;
+  } else if (NULL == v2) {
+    ret = 1;
+  } else {
+    const int DATE_LENGTH = 17;
+    const char *str1 = static_cast<const char *>(v1);
+    const char *str2 = static_cast<const char *>(v2);
+    if (strlen(str1) < DATE_LENGTH) {
+      ret = -1;
+    } else if (strlen(str2) < DATE_LENGTH) {
+      ret = 1;
+    } else {
+      ret = str_cmp(str1 + strlen(str1) - DATE_LENGTH, str2 + strlen(str2) - DATE_LENGTH);
+    }
+  }
+  return ret;
+}
+
 int ObLogger::add_files_to_list(void *files,
                                 void *wf_files,
                                 std::deque<std::string> &file_list,
@@ -1338,10 +1360,10 @@ int ObLogger::add_files_to_list(void *files,
     ObIArray<FileName> *wf_files_arr = static_cast<ObIArray<FileName> *>(wf_files);
     //sort files
     if (files_arr->count() > 0) {
-      qsort(&files_arr->at(0), files_arr->count(), sizeof(FileName), str_cmp);
+      qsort(&files_arr->at(0), files_arr->count(), sizeof(FileName), compare_log_filename_by_date_suffix);
     }
     if (wf_files_arr->count() > 0) {
-      qsort(&wf_files_arr->at(0), wf_files_arr->count(), sizeof(FileName), str_cmp);
+      qsort(&wf_files_arr->at(0), wf_files_arr->count(), sizeof(FileName), compare_log_filename_by_date_suffix);
     }
 
     //Add to file_list
