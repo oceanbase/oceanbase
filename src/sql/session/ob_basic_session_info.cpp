@@ -5275,7 +5275,7 @@ int ObBasicSessionInfo::get_optimizer_features_enable_version(uint64_t &version)
   } else if (version_str.empty()
              || OB_FAIL(ObClusterVersion::get_version(version_str, tmp_version))
              || !ObGlobalHint::is_valid_opt_features_version(tmp_version)) {
-    LOG_WARN("fail invalid optimizer features version", K(ret), K(version_str), K(tmp_version));
+    LOG_TRACE("get invalid optimizer features version", K(ret), K(version_str), K(tmp_version));
     ret = OB_SUCCESS;
   } else {
     version = tmp_version;
