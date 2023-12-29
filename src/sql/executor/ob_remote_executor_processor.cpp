@@ -105,10 +105,8 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
   if (OB_FAIL(ret)) {
     //do nothing
   } else if (sys_schema_version > sys_local_version) {
-    if (OB_FAIL(gctx_.schema_service_->async_refresh_schema(
-                OB_SYS_TENANT_ID, sys_schema_version))) {
-      LOG_WARN("fail to push back effective_tenant_id", K(ret),
-               K(sys_schema_version), K(sys_local_version));
+    if (OB_FAIL(try_refresh_schema_(OB_SYS_TENANT_ID, sys_schema_version))) {
+      LOG_WARN("fail to try refresh systenant schema", KR(ret), K(sys_schema_version), K(sys_local_version));
     }
   }
 
@@ -135,9 +133,9 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
       } else if (tenant_schema_version > tenant_local_version) {
         // The local schema version is behind. At this point,
         // you need to refresh the schema version and reacquire schema_guard
-        if (OB_FAIL(gctx_.schema_service_->async_refresh_schema(tenant_id, tenant_schema_version))) {
-          LOG_WARN("fail to push back effective_tenant_id", K(ret), K(tenant_schema_version),
-              K(tenant_id), K(tenant_local_version));
+        if (OB_FAIL(try_refresh_schema_(tenant_id, tenant_schema_version))) {
+          LOG_WARN("fail to try refresh tenant schema", KR(ret), K(tenant_id),
+                    K(tenant_schema_version), K(tenant_local_version));
         } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
             tenant_id, schema_guard_, tenant_schema_version, sys_schema_version))) {
           LOG_WARN("fail to get schema guard", K(ret), K(tenant_schema_version), K(sys_schema_version));
@@ -827,6 +825,40 @@ void ObRemoteBaseExecuteP<T>::base_cleanup()
   exec_errcode_ = OB_SUCCESS;
   obrpc::ObRpcProcessor<T>::cleanup();
   return;
+}
+
+template<typename T>
+int ObRemoteBaseExecuteP<T>::try_refresh_schema_(const uint64_t tenant_id,
+                                                 const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_remain = THIS_WORKER.get_timeout_remain();
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is invalid", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(timeout_remain <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("THIS_WORKER is timeout", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is NULL", KR(ret), K(tenant_id));
+  } else {
+    const int64_t orig_timeout_ts = THIS_WORKER.get_timeout_ts();
+    const int64_t try_refresh_time = std::min(10 * 1000L, timeout_remain);
+    THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + try_refresh_time);
+    if (OB_FAIL(gctx_.schema_service_->async_refresh_schema(
+                tenant_id, schema_version))) {
+      LOG_WARN("fail to refresh schema", KR(ret), K(tenant_id),
+                                         K(schema_version), K(try_refresh_time));
+    }
+    THIS_WORKER.set_timeout_ts(orig_timeout_ts);
+    if (OB_TIMEOUT == ret) {
+      ret = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+      LOG_WARN("fail to refresh schema in try refresh time", KR(ret), K(tenant_id),
+                K(schema_version), K(try_refresh_time));
+    }
+  }
+  return ret;
 }
 
 int ObRpcRemoteExecuteP::init()

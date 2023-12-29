@@ -77,6 +77,10 @@ protected:
                                  int &err,
                                  ObSQLSessionInfo &session,
                                  int64_t &retry_times);
+private:
+  // this func will wait refresh schema 10ms at most
+  int try_refresh_schema_(const uint64_t tenant_id,
+                          const int64_t schema_version);
 
 protected:
   const observer::ObGlobalContext &gctx_;
