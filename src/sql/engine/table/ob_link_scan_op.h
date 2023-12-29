@@ -44,6 +44,7 @@ public:
 private:
   virtual void reset_dblink() override;
   void reset_result();
+  void reset_oci_connection();
   int init_conn_snapshot(bool &new_snapshot);
   int free_snapshot();
   bool need_tx(const ObSQLSessionInfo *my_session) const;
