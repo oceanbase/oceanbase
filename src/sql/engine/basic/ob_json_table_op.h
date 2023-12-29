@@ -23,6 +23,7 @@
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 namespace oceanbase
 {

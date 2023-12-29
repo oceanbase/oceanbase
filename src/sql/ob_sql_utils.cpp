@@ -5452,3 +5452,23 @@ int ObSQLUtils::print_identifier_require_quotes(ObCollationType collation_type,
   }
   return ret;
 }
+
+bool ObSQLUtils::check_json_expr(ObItemType type)
+{
+  bool res = false;
+  switch(type) {
+    case T_FUN_SYS_JSON_ARRAY:
+    case T_FUN_SYS_JSON_OBJECT:
+    case T_FUN_ORA_JSON_ARRAYAGG:
+    case T_FUN_ORA_JSON_OBJECTAGG:
+    case T_FUN_SYS_JSON_QUERY:
+    case T_FUN_SYS_JSON_MERGE_PATCH: {
+      res = true;
+      break;
+    }
+    default : {
+      break;
+    }
+  }
+  return res;
+}

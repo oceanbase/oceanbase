@@ -2233,6 +2233,9 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_XMLPARSE == left_node.type_
              || T_FUN_ORA_XMLAGG == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
+  } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
+    ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
+    LOG_WARN("input invalid arguments", K(ret));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("left node of obj access ref node not T_IDENT/T_QUESTIONMARK/T_FUN_SYS", K(ret), K(left_node.type_));
@@ -5701,7 +5704,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     num = node->num_child_;
-    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr);
+    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_QUERY, func_expr);
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_query")));
   }
