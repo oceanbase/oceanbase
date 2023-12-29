@@ -2018,7 +2018,17 @@ int ObSysVarOnCheckFuncs::check_default_lob_inrow_threshold(sql::ObExecContext &
   } else if (inrow_threshold < OB_MIN_LOB_INROW_THRESHOLD || inrow_threshold > OB_MAX_LOB_INROW_THRESHOLD) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("lob inrow_threshold invalid", KR(ret), K(inrow_threshold));
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow_threshold LOB storage option value");
+    // error msg to user
+    int tmp_ret = OB_SUCCESS;
+    const int64_t ERROR_MSG_LENGTH = 256;
+    char error_msg[ERROR_MSG_LENGTH] = "";
+    int64_t pos = 0;
+    if (OB_SUCCESS != (tmp_ret = databuff_printf(error_msg, ERROR_MSG_LENGTH,
+        pos, "lob inrow threshold, should be [%ld, %ld]", OB_MIN_LOB_INROW_THRESHOLD, OB_MAX_LOB_INROW_THRESHOLD))) {
+      LOG_WARN("print error msg fail", K(ret), K(tmp_ret), K(error_msg), K(pos));
+    } else {
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, error_msg);
+    }
   } else {
     out_val = in_val;
   }
