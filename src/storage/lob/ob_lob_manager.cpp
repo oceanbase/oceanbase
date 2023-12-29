@@ -802,7 +802,7 @@ int ObLobManager::compare(ObLobLocatorV2& lob_left,
                           ObLobCompareParams& cmp_params,
                           int64_t& result) {
   INIT_SUCC(ret);
-  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_READER, OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator tmp_allocator("ObLobCmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   ObLobManager *lob_mngr = MTL(ObLobManager*);
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2420,13 +2420,30 @@ int ObLobManager::write_outrow_inner(ObLobAccessParam& param, ObLobQueryIter *it
           // do append => [old_data][padding][data]
           post_data = old_data;
         } else {
-          // combine data and old data
-          // [old_data][data]
+          // here has four situation
+          // [old][new][old]       --> cover part of old data
+          // [new_data][old_data]  --> cover front part
+          // [old_data][new_data]  --> cover back part
+          // [new_data]            --> full cover old data
           int64_t offset_byte_len = ObCharset::charpos(param.coll_type_,
                                                        old_data.ptr(),
                                                        old_data.length(),
                                                        param.offset_);
-          post_data.assign_ptr(old_data.ptr(), offset_byte_len);
+          if (offset_byte_len > 0) { // offset is not 0, must have some old data at front
+            post_data.assign_ptr(old_data.ptr(), offset_byte_len);
+          }
+          if (param.offset_ + param.len_ < old_char_len) { // not full cover, must have some old data at back
+            int64_t end_byte_len = ObCharset::charpos(param.coll_type_,
+                                                      old_data.ptr(),
+                                                      old_data.length(),
+                                                      param.offset_ + param.len_);
+            if (end_byte_len >= old_data.length()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get byte len is bigger then data length", K(ret), K(end_byte_len), K(old_data.length()), K(param));
+            } else {
+              remain_buf.assign_ptr(old_data.ptr() + end_byte_len, old_data.length() - end_byte_len);
+            }
+          }
         }
       }
 
@@ -2703,6 +2720,8 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
                                          read_data.length(),
                                          replace_byte_len,
                                          replace_byte_st);
+        } else {
+          replace_byte_len = OB_MIN(replace_byte_len, read_data.length() - replace_byte_st);
         }
         ObString temp_read_buf;
         uint32_t temp_read_size = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE - replace_byte_st;
@@ -2730,6 +2749,7 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
           // try copy data to meta
           int64_t max_byte = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE - replace_byte_st;
           int64_t data_char_len = 0;
+          max_byte = OB_MIN(max_byte, temp_read_buf.length());
           size_t data_by_len = ObCharset::max_bytes_charpos(param.coll_type_, temp_read_buf.ptr(), temp_read_buf.length(), max_byte, data_char_len);
           data_by_len = ob_lob_writer_length_validation(param.coll_type_, temp_read_buf.length(), data_by_len, data_char_len);
           MEMCPY(read_data.ptr() + replace_byte_st, temp_read_buf.ptr(), data_by_len);
@@ -2737,6 +2757,7 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
           if (data_by_len == temp_read_buf.length()) {
             // try copy remain data to meta if data has copy fully
             max_byte = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE - read_data.length();
+            max_byte = OB_MIN(max_byte, remain_data.length());
             size_t rdata_by_len = ObCharset::max_bytes_charpos(param.coll_type_, remain_data.ptr(), remain_data.length(), max_byte, data_char_len);
             rdata_by_len = ob_lob_writer_length_validation(param.coll_type_, remain_data.length(), rdata_by_len, data_char_len);
             if (rdata_by_len >= remain_data.length()) {
@@ -2763,6 +2784,8 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
                                           read_data.length(),
                                           by_len,
                                           by_st);
+        } else {
+          by_len = OB_MIN(by_len, read_data.length() - by_st);
         }
         // [0, by_len][by_len, 256K]
         // try copy data to meta in [by_len, 256K]
@@ -2789,6 +2812,7 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
           }
         } else {
           int64_t data_char_len = 0;
+          max_byte = OB_MIN(max_byte, temp_read_buf.length());
           size_t data_by_len = ObCharset::max_bytes_charpos(param.coll_type_, temp_read_buf.ptr(),
                                                             temp_read_buf.length(), max_byte, data_char_len);
           data_by_len = ob_lob_writer_length_validation(param.coll_type_, temp_read_buf.length(), data_by_len, data_char_len);
@@ -2806,6 +2830,8 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
                                           read_data.length(),
                                           by_len,
                                           by_st);
+        } else {
+          by_len = OB_MIN(by_len, read_data.length() - by_st);
         }
         // calc data
         ObString temp_read_buf;
@@ -2833,6 +2859,7 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
         } else {
           // calc data
           int64_t data_char_len = 0;
+          max_byte = OB_MIN(max_byte, temp_read_buf.length());
           size_t data_by_len = ObCharset::max_bytes_charpos(param.coll_type_, temp_read_buf.ptr(), temp_read_buf.length(), max_byte, data_char_len);
           data_by_len = ob_lob_writer_length_validation(param.coll_type_, temp_read_buf.length(), data_by_len, data_char_len);
           MEMMOVE(read_data.ptr() + data_by_len, read_data.ptr() + by_len, piece_byte_len - by_len);
@@ -2883,6 +2910,7 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
       read_data.assign_buffer(tmp_buf.ptr(), tmp_buf.size());
 
       int64_t data_char_len = 0;
+      max_byte = OB_MIN(max_byte, temp_read_buf.length());
       size_t data_by_len = ObCharset::max_bytes_charpos(param.coll_type_, temp_read_buf.ptr(), temp_read_buf.length(), max_byte, data_char_len);
       data_by_len = ob_lob_writer_length_validation(param.coll_type_, temp_read_buf.length(), data_by_len, data_char_len);
       MEMCPY(read_data.ptr(), temp_read_buf.ptr(), data_by_len);
@@ -3092,15 +3120,14 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
               new_meta_row.byte_len_ = read_data.length();
             }
           } else {
+            // here expect read_data read full lob meta data
             read_data.assign_buffer(tmp_buf, tmp_buff.size());
-            if (OB_FAIL(get_real_data(param, result, read_data))) {
-              LOG_WARN("failed to write data to read buf.", K(ret), K(result));
-            } else {
-              new_meta_row.byte_len_ -= (by_len);
-              new_meta_row.char_len_ -= (local_end - local_begin);
-              MEMMOVE(read_data.ptr() + by_st, read_data.ptr() + (by_st + by_len), piece_byte_len - (by_st + by_len));
-              read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
-            }
+            MEMCPY(read_data.ptr(), result.meta_result_.info_.lob_data_.ptr(), result.meta_result_.info_.lob_data_.length());
+            read_data.set_length(result.meta_result_.info_.lob_data_.length());
+            new_meta_row.byte_len_ -= (by_len);
+            new_meta_row.char_len_ -= (local_end - local_begin);
+            MEMMOVE(read_data.ptr() + by_st, read_data.ptr() + (by_st + by_len), piece_byte_len - (by_st + by_len));
+            read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
           }
         } else {
           del_piece = true;
@@ -3155,15 +3182,14 @@ int ObLobManager::erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScan
               new_meta_row.byte_len_ = read_data.length();
             }
           } else {
-            read_data.assign_buffer(tmp_buf, result.meta_result_.info_.byte_len_);
-            if (OB_FAIL(get_real_data(param, result, read_data))) {
-              LOG_WARN("failed to write data to read buf.", K(ret), K(result));
-            } else {
-              new_meta_row.char_len_ = piece_char_len - local_end;
-              new_meta_row.byte_len_ = read_data.length() - by_len;
-              MEMMOVE(read_data.ptr(), read_data.ptr() + by_len, read_data.length() - by_len);
-              read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
-            }
+            // here expect read_data read full lob meta data
+            read_data.assign_buffer(tmp_buf, tmp_buff.size());
+            MEMCPY(read_data.ptr(), result.meta_result_.info_.lob_data_.ptr(), result.meta_result_.info_.lob_data_.length());
+            read_data.set_length(result.meta_result_.info_.lob_data_.length());
+            new_meta_row.char_len_ = piece_char_len - local_end;
+            new_meta_row.byte_len_ = read_data.length() - by_len;
+            MEMMOVE(read_data.ptr(), read_data.ptr() + by_len, read_data.length() - by_len);
+            read_data.assign_ptr(read_data.ptr(), read_data.length() - by_len);
           }
         }
       }
