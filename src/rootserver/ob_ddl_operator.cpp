@@ -1556,36 +1556,34 @@ int ObDDLOperator::sync_version_for_cascade_table(
 {
   int ret = OB_SUCCESS;
   uint64_t id = OB_INVALID_ID;
-  const ObTableSchema *schema = NULL;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
     RS_LOG(ERROR, "schema_service must not null");
   } else {
     for (int64_t i = 0; i < table_ids.count() && OB_SUCC(ret); i++) {
-      ObSchemaGetterGuard schema_guard;
       id = table_ids.at(i);
       int64_t new_schema_version = OB_INVALID_VERSION;
-      ObTableSchema tmp_schema;
-      if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
-        RS_LOG(WARN, "get schema guard failed", K(ret), K(tenant_id), K(id));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, id, schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(id));
-      } else if (!schema) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema is NULL", K(ret));
-      } else if (OB_FAIL(tmp_schema.assign(*schema))) {
-        LOG_WARN("fail to assign schema", K(ret), KPC(schema));
-      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_service->get_table_sql_service().sync_schema_version_for_history(
-              trans,
-              tmp_schema,
-              new_schema_version))) {
-        RS_LOG(WARN, "fail to sync schema version", K(ret));
-      } else {
-        LOG_INFO("synced schema version for depend table", K(id),
-            "from", schema->get_schema_version(), "to", new_schema_version);
+      int64_t old_schema_version = OB_INVALID_VERSION;
+      HEAP_VAR(ObTableSchema, table_schema) {
+        ObRefreshSchemaStatus schema_status;
+        schema_status.tenant_id_ = tenant_id;
+        if (OB_FAIL(schema_service->get_table_schema_from_inner_table(
+                      schema_status, id, trans, table_schema))) {
+          LOG_WARN("get_table_schema failed", K(ret), K(id), K(tenant_id));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(id), K(tenant_id));
+        } else {
+          old_schema_version = table_schema.get_schema_version();
+          if (OB_FAIL(schema_service->get_table_sql_service().sync_schema_version_for_history(
+                      trans,
+                      table_schema,
+                      new_schema_version))) {
+            RS_LOG(WARN, "fail to sync schema version", K(ret), K(id), K(tenant_id));
+          } else {
+            LOG_INFO("synced schema version for depend table", K(id), "from", old_schema_version, "to", new_schema_version);
+          }
+        }
       }
     }
   }
