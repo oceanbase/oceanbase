@@ -428,12 +428,7 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
                           ? table_item->ref_query_->get_view_ref_id()
                           : table_item->get_base_table_item().ref_id_;
     OZ(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), ref_id, table_schema, table_item->is_link_table()));
-
-    if (OB_SUCC(ret) && table_item->is_view_table_ && is_oracle_mode()) {
-      bool has_tg = false;
-      OZ (has_need_fired_trigger_on_view(table_item, has_tg));
-      OX (insert_stmt->set_has_instead_of_trigger(has_tg));
-    }
+    OZ (check_need_fired_trigger(table_item));
 
     if (OB_SUCC(ret)) {
       if (table_schema->is_oracle_tmp_table()) {
