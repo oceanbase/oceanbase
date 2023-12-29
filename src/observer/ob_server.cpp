@@ -871,6 +871,12 @@ int ObServer::start()
       FLOG_INFO("success to start multi tenant");
     }
 
+    if (FAILEDx(wr_service_.start())) {
+      LOG_ERROR("failed to start wr service", K(ret));
+    } else {
+      LOG_INFO("success to start wr service");
+    }
+
     if (FAILEDx(ObServerCheckpointSlogHandler::get_instance().start())) {
       LOG_ERROR("fail to start server checkpoint slog handler", KR(ret));
     } else {
@@ -906,12 +912,6 @@ int ObServer::start()
       LOG_ERROR("fail to start root service monitor", KR(ret));
     } else {
       FLOG_INFO("success to start root service monitor");
-    }
-
-    if (FAILEDx(wr_service_.start())) {
-      LOG_ERROR("failed to start wr service", K(ret));
-    } else {
-      LOG_INFO("success to start wr service");
     }
 
     if (FAILEDx(ob_service_.start())) {
