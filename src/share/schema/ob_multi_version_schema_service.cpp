@@ -5034,13 +5034,13 @@ int ObMultiVersionSchemaService::cal_purge_database_timeout_(
     }
     // cal sequences
     if (OB_SUCC(ret)) {
-      ObArray<const ObSequenceSchema *> sequences;
+      ObArray<const ObSequenceSchema*> sequence_schemas;
       if (OB_FAIL(get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(schema_guard.get_sequence_infos_in_database(tenant_id, database_id, sequences))) {
+      } else if (OB_FAIL(schema_guard.get_sequence_schemas_in_database(tenant_id, database_id, sequence_schemas))) {
         LOG_WARN("fail to get sequences in database failed", KR(ret), K(tenant_id), K(database_id));
       } else {
-        cal_database_timeout += sequences.count() * GCONF.rpc_timeout;
+        cal_database_timeout += sequence_schemas.count() * GCONF.rpc_timeout;
       }
     }
     // cal mock_fk
