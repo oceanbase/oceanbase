@@ -7636,9 +7636,11 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, con
   }
   last_request_ts_ = ObClockGenerator::getClock();
   TRANS_LOG(TRACE, "start_access", K(ret), K(data_scn.support_branch()), K(data_scn), KPC(this));
+  common::ObTraceIdAdaptor trace_id;
+  trace_id.set(ObCurTraceId::get());
   REC_TRANS_TRACE_EXT(tlog_, start_access,
                       OB_ID(ret), ret,
-                      OB_ID(trace_id), *ObCurTraceId::get(),
+                      OB_ID(trace_id), trace_id,
                       OB_ID(opid), tx_desc.op_sn_,
                       OB_ID(data_seq), data_scn.cast_to_int(),
                       OB_ID(pending), pending_write,
