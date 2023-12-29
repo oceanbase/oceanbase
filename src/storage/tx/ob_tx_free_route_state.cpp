@@ -16,17 +16,22 @@ namespace oceanbase {
 namespace transaction {
   // override this.flags_, because different on each node
   // override can_elr_ because it is useless and not synced between node
+  // override abort_cause_ because may be updated by async msg from TxCtx
 #define PRE_ENCODE_DYNAMIC_FOR_VERIFY \
   FLAG flags_ = { .v_ = 0 };          \
-  bool can_elr_ = false;
+  bool can_elr_ = false;              \
+  int abort_cause_ = 0;
 #define PRE_STATIC_DECODE
 #define POST_STATIC_DECODE
 // bookkeep the original before update, then after receive the update,
 // recover flags which should not be overwriten
-#define PRE_DYNAMIC_DECODE \
-  FLAG save_flags = flags_;
-#define POST_DYNAMIC_DECODE \
-  flags_ = save_flags.update_with(flags_);
+#define PRE_DYNAMIC_DECODE                      \
+  FLAG save_flags = flags_;                     \
+  int save_abort_cause = abort_cause_;
+// for txn start node, if current abort_cause was set, use current
+#define POST_DYNAMIC_DECODE                             \
+  flags_ = save_flags.update_with(flags_);              \
+  abort_cause_ = save_abort_cause ?: abort_cause_;
 
 #define PRE_EXTRA_DECODE
 #define POST_EXTRA_DECODE                                               \
