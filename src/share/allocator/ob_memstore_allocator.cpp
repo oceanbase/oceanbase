@@ -234,7 +234,8 @@ void ObMemstoreAllocator::init_throttle_config(int64_t &resource_limit,
   }
 }
 
-void ObMemstoreAllocator::adaptive_update_limit(const int64_t holding_size,
+void ObMemstoreAllocator::adaptive_update_limit(const int64_t tenant_id,
+                                                const int64_t holding_size,
                                                 const int64_t config_specify_resource_limit,
                                                 int64_t &resource_limit,
                                                 int64_t &last_update_limit_ts,

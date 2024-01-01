@@ -24,11 +24,12 @@
 namespace oceanbase {
 namespace share {
 
-#define THROTTLE_UNIT_INFO                                                                                    \
-  "Unit Name", unit_name_, "Config Specify Resource Limit(MB)", config_specify_resource_limit_ / 1024 / 1024, \
-      "Resource Limit(MB)", resource_limit_ / 1024 / 1024, "Throttle Trigger(MB)",                            \
-      resource_limit_ *throttle_trigger_percentage_ / 100 / 1024 / 1024, "Throttle Percentage",               \
-      throttle_trigger_percentage_, "Max Duration(us)", throttle_max_duration_, "Decay Factor", decay_factor_
+#define THROTTLE_UNIT_INFO                                                                                             \
+  KP(this), K(enable_adaptive_limit_), "Unit Name", unit_name_, "Config Specify Resource Limit(MB)",                   \
+      config_specify_resource_limit_ / 1024 / 1024, "Resource Limit(MB)", resource_limit_ / 1024 / 1024,               \
+      "Throttle Trigger(MB)", resource_limit_ *throttle_trigger_percentage_ / 100 / 1024 / 1024,                       \
+      "Throttle Percentage", throttle_trigger_percentage_, "Max Duration(us)", throttle_max_duration_, "Decay Factor", \
+      decay_factor_
 
 template <typename ALLOCATOR>
 int ObThrottleUnit<ALLOCATOR>::init()
@@ -48,9 +49,11 @@ int ObThrottleUnit<ALLOCATOR>::init()
     (void)update_decay_factor_();
     config_specify_resource_limit_ = resource_limit_;
     enable_adaptive_limit_ = false;
+    tenant_id_ = MTL_ID();
     is_inited_ = true;
     SHARE_LOG(INFO,
               "[Throttle]Init throttle config finish",
+              K(tenant_id_),
               K(unit_name_),
               K(resource_limit_),
               K(config_specify_resource_limit_),
@@ -73,11 +76,8 @@ int ObThrottleUnit<ALLOCATOR>::alloc_resource(const int64_t holding_size,
     // do adaptive update resource limit if needed
     if (enable_adaptive_limit_) {
       bool is_updated = false;
-      ALLOCATOR::adaptive_update_limit(holding_size,
-                                       config_specify_resource_limit_,
-                                       resource_limit_,
-                                       last_update_limit_ts_,
-                                       is_updated);
+      ALLOCATOR::adaptive_update_limit(
+          tenant_id_, holding_size, config_specify_resource_limit_, resource_limit_, last_update_limit_ts_, is_updated);
       if (is_updated) {
         (void)update_decay_factor_(true /* is_adaptive_update */);
       }
@@ -165,6 +165,7 @@ void ObThrottleUnit<ALLOCATOR>::print_throttle_info_(const int64_t holding_size,
 
     SHARE_LOG(INFO,
               "[Throttling] (report write throttle info) Size Info",
+              "tenant_id",                  tenant_id_,
               "Throttle Unit Name",         unit_name_,
               "Allocating Resource Size",   alloc_size,
               "Holding Resource Size",      holding_size,
@@ -172,6 +173,7 @@ void ObThrottleUnit<ALLOCATOR>::print_throttle_info_(const int64_t holding_size,
               "Released Sequence",          cur_clock,
               "Release Speed",              release_speed,
               "Total Resource Limit",       resource_limit_,
+              "Config Specify Limit",       config_specify_resource_limit_,
               "Throttle Trigger Threshold", throttle_trigger);
   }
 }
@@ -271,6 +273,15 @@ void ObThrottleUnit<ALLOCATOR>::advance_clock(const int64_t holding_size)
   int64_t old_ts = last_advance_clock_ts_us_;
   const int64_t advance_us = cur_ts - old_ts;
   if ((advance_us > ADVANCE_CLOCK_INTERVAL) && ATOMIC_BCAS(&last_advance_clock_ts_us_, old_ts, cur_ts)) {
+    if (enable_adaptive_limit_) {
+      bool is_updated = false;
+      ALLOCATOR::adaptive_update_limit(
+          tenant_id_, holding_size, config_specify_resource_limit_, resource_limit_, last_update_limit_ts_, is_updated);
+      if (is_updated) {
+        (void)update_decay_factor_(true /* is_adaptive_update */);
+      }
+    }
+
     bool unused = false;
     const int64_t throttle_trigger = resource_limit_ * throttle_trigger_percentage_ / 100;
     const int64_t avaliable_resource = avaliable_resource_after_dt_(holding_size, throttle_trigger, advance_us);
@@ -490,6 +501,12 @@ void ObThrottleUnit<ALLOCATOR>::update_throttle_config(const int64_t resource_li
              throttle_trigger_percentage_ != throttle_trigger_percentage ||
              throttle_max_duration_ != throttle_max_duration) {
     config_changed = true;
+    SHARE_LOG(INFO,
+              "[Throttle] Update Config",
+              THROTTLE_UNIT_INFO,
+              "New Resource Limit(MB)", resource_limit / 1024 / 1024,
+              "New trigger percentage", throttle_trigger_percentage,
+              "New Throttle Duration", throttle_max_duration);
     throttle_trigger_percentage_ = throttle_trigger_percentage;
     throttle_max_duration_ = throttle_max_duration;
     (void)inner_set_resource_limit_(resource_limit);

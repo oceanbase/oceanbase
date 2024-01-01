@@ -31,8 +31,12 @@ namespace share {
 
 void ObSharedMemAllocMgr::update_throttle_config()
 {
-  int64_t tenant_id = MTL_ID();
-  int64_t total_memory = lib::get_tenant_memory_limit(tenant_id);
+  if (MTL_ID() != tenant_id_) {
+    SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "update throttle config in an invalid tenant", K(MTL_ID()), K(tenant_id_));
+    return;
+  }
+
+  int64_t total_memory = lib::get_tenant_memory_limit(tenant_id_);
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
     int64_t share_mem_limit_percentage = tenant_config->_tx_share_memory_limit_percentage;
@@ -46,10 +50,10 @@ void ObSharedMemAllocMgr::update_throttle_config()
       share_mem_limit_percentage = memstore_limit_percentage + 10;
     }
 
-    int64_t share_mem_limit = total_memory * share_mem_limit_percentage / 100LL;
-    int64_t memstore_limit = total_memory * memstore_limit_percentage / 100LL;
-    int64_t tx_data_limit = total_memory * tx_data_limit_percentage / 100LL;
-    int64_t mds_limit = total_memory * mds_limit_percentage / 100LL;
+    int64_t share_mem_limit = total_memory / 100 * share_mem_limit_percentage;
+    int64_t memstore_limit = total_memory / 100 * memstore_limit_percentage;
+    int64_t tx_data_limit = total_memory / 100 * tx_data_limit_percentage;
+    int64_t mds_limit = total_memory / 100 * mds_limit_percentage;
 
     bool share_config_changed = false;
     (void)share_resource_throttle_tool_.update_throttle_config<FakeAllocatorForTxShare>(
@@ -70,39 +74,22 @@ void ObSharedMemAllocMgr::update_throttle_config()
     if (share_config_changed || memstore_config_changed || tx_data_config_changed || mds_config_changed) {
       SHARE_LOG(INFO,
                 "[Throttle] Update Config",
+                K(tenant_id_),
+                K(total_memory),
                 K(share_mem_limit_percentage),
+                K(share_mem_limit),
                 K(memstore_limit_percentage),
+                K(memstore_limit),
                 K(tx_data_limit_percentage),
+                K(tx_data_limit),
                 K(mds_limit_percentage),
+                K(mds_limit),
                 K(trigger_percentage),
                 K(max_duration));
 
-      if (share_config_changed) {
-        SHARE_LOG(INFO,
-                  "[Throttle] Update Config",
-                  THROTTLE_CONFIG_LOG(FakeAllocatorForTxShare, share_mem_limit, trigger_percentage, max_duration));
-      }
-
-      if (memstore_config_changed) {
-        SHARE_LOG(INFO,
-                  "[Throttle] Update Config",
-                  THROTTLE_CONFIG_LOG(ObMemstoreAllocator, memstore_limit, trigger_percentage, max_duration));
-      }
-
-      if (tx_data_config_changed) {
-        SHARE_LOG(INFO,
-                  "[Throttle] Update Config",
-                  THROTTLE_CONFIG_LOG(ObTenantTxDataAllocator, tx_data_limit, trigger_percentage, max_duration));
-      }
-
-      if (mds_config_changed) {
-        SHARE_LOG(INFO,
-                  "[Throttle] Update Config",
-                  THROTTLE_CONFIG_LOG(ObTenantMdsAllocator, mds_limit, trigger_percentage, max_duration));
-      }
     }
   } else {
-    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "invalid tenant config", K(tenant_id), K(total_memory));
+    SHARE_LOG_RET(WARN, OB_INVALID_CONFIG, "invalid tenant config", K(tenant_id_), K(total_memory));
   }
 }
 

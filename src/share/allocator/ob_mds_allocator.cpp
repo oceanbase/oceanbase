@@ -51,7 +51,8 @@ void ObTenantMdsAllocator::init_throttle_config(int64_t &resource_limit, int64_t
     max_duration = MDS_THROTTLE_MAX_DURATION;
   }
 }
-void ObTenantMdsAllocator::adaptive_update_limit(const int64_t holding_size,
+void ObTenantMdsAllocator::adaptive_update_limit(const int64_t tenant_id,
+                                                 const int64_t holding_size,
                                                  const int64_t config_specify_resource_limit,
                                                  int64_t &resource_limit,
                                                  int64_t &last_update_limit_ts,
