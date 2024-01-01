@@ -31819,8 +31819,8 @@ def_table_schema(
       CAST(
         IF((
           SELECT COUNT(*)
-            FROM OCEANBASE.__ALL_VIRTUAL_COLUMN C1,
-                 OCEANBASE.__ALL_VIRTUAL_COLUMN C2
+            FROM oceanbase.__all_virtual_column C1,
+                 oceanbase.__all_virtual_column C2
             WHERE B.TENANT_ID = C1.TENANT_ID
               AND B.TABLE_ID = C1.TABLE_ID
               AND C1.COLUMN_ID >= 16
@@ -31843,10 +31843,10 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG
     FROM
-      OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-      OCEANBASE.__ALL_VIRTUAL_TABLE B,
-      OCEANBASE.__ALL_VIRTUAL_MLOG C,
-      OCEANBASE.__ALL_VIRTUAL_TABLE D
+      oceanbase.__all_virtual_database A,
+      oceanbase.__all_virtual_table B,
+      oceanbase.__all_virtual_mlog C,
+      oceanbase.__all_virtual_table D
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = D.TENANT_ID
@@ -31878,14 +31878,16 @@ def_table_schema(
       CAST(
         IF((
           SELECT COUNT(*)
-            FROM OCEANBASE.__ALL_COLUMN C1,
-                 OCEANBASE.__ALL_COLUMN C2
-            WHERE B.TABLE_ID = C1.TABLE_ID
-            AND C1.COLUMN_ID >= 16
-            AND C1.COLUMN_ID < 65520
-            AND D.TABLE_ID = C2.TABLE_ID
-            AND C2.ROWKEY_POSITION != 0
-            AND C1.COLUMN_ID != C2.COLUMN_ID
+            FROM oceanbase.__all_column C1,
+                 oceanbase.__all_column C2
+            WHERE B.TENANT_ID = C1.TENANT_ID
+              AND B.TABLE_ID = C1.TABLE_ID
+              AND C1.COLUMN_ID >= 16
+              AND C1.COLUMN_ID < 65520
+              AND D.TENANT_ID = C2.TENANT_ID
+              AND D.TABLE_ID = C2.TABLE_ID
+              AND C2.ROWKEY_POSITION != 0
+              AND C1.COLUMN_ID != C2.COLUMN_ID
           ) = 0, 'NO', 'YES') AS CHAR(3)
       ) AS FILTER_COLUMNS,
       CAST('YES' AS CHAR(3)) AS SEQUENCE,
@@ -31900,11 +31902,14 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS COMMIT_SCN_BASED,
       CAST('NO' AS CHAR(3)) AS STAGING_LOG
     FROM
-      OCEANBASE.__ALL_DATABASE A,
-      OCEANBASE.__ALL_TABLE B,
-      OCEANBASE.__ALL_MLOG C,
-      OCEANBASE.__ALL_TABLE D
-    WHERE A.DATABASE_ID = B.DATABASE_ID
+      oceanbase.__all_database A,
+      oceanbase.__all_table B,
+      oceanbase.__all_mlog C,
+      oceanbase.__all_table D
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.DATABASE_ID = B.DATABASE_ID
+      AND B.TENANT_ID = D.TENANT_ID
+      AND C.TENANT_ID = D.TENANT_ID
       AND B.TABLE_ID = C.MLOG_ID
       AND B.TABLE_TYPE = 15
       AND B.DATA_TABLE_ID = D.TABLE_ID
@@ -31990,10 +31995,10 @@ def_table_schema(
       CAST(NULL AS CHAR(100)) AS DEFAULT_COLLATION,
       CAST('N' AS CHAR(1)) AS ON_QUERY_COMPUTATION
     FROM
-      OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-      OCEANBASE.__ALL_VIRTUAL_TABLE B,
-      OCEANBASE.__ALL_VIRTUAL_MVIEW C,
-      OCEANBASE.__ALL_VIRTUAL_TABLE D
+      oceanbase.__all_virtual_database A,
+      oceanbase.__all_virtual_table B,
+      oceanbase.__all_virtual_mview C,
+      oceanbase.__all_virtual_table D
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = C.TENANT_ID
@@ -32083,13 +32088,16 @@ def_table_schema(
       CAST(NULL AS CHAR(100)) AS DEFAULT_COLLATION,
       CAST('N' AS CHAR(1)) AS ON_QUERY_COMPUTATION
     FROM
-      OCEANBASE.__ALL_DATABASE A,
-      OCEANBASE.__ALL_TABLE B,
-      OCEANBASE.__ALL_MVIEW C,
-      OCEANBASE.__ALL_TABLE D
-    WHERE A.DATABASE_ID = B.DATABASE_ID
+      oceanbase.__all_database A,
+      oceanbase.__all_table B,
+      oceanbase.__all_mview C,
+      oceanbase.__all_table D
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.DATABASE_ID = B.DATABASE_ID
+      AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
+      AND B.TENANT_ID = D.TENANT_ID
       AND B.DATA_TABLE_ID = D.TABLE_ID
 """.replace("\n", " ")
 )
@@ -32120,9 +32128,9 @@ def_table_schema(
           ELSE NULL
         END VALUE
       FROM
-        OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+        oceanbase.__all_virtual_mview_refresh_stats_sys_defaults
       RIGHT OUTER JOIN
-        (SELECT TENANT_ID FROM OCEANBASE.__ALL_TENANT WHERE TENANT_NAME NOT LIKE 'META$%')
+        (SELECT TENANT_ID FROM oceanbase.__all_tenant WHERE TENANT_ID = 1 OR (TENANT_ID & 0x1) = 0)
       USING (TENANT_ID)
       GROUP BY TENANT_ID
 
@@ -32134,9 +32142,9 @@ def_table_schema(
         'RETENTION_PERIOD' PARAMETER_NAME,
         CAST(IFNULL(MAX(RETENTION_PERIOD), 31) AS CHAR) VALUE
       FROM
-        OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+        oceanbase.__all_virtual_mview_refresh_stats_sys_defaults
       RIGHT OUTER JOIN
-        (SELECT TENANT_ID FROM OCEANBASE.__ALL_TENANT WHERE TENANT_NAME NOT LIKE 'META$%')
+        (SELECT TENANT_ID FROM oceanbase.__all_tenant WHERE TENANT_ID = 1 OR (TENANT_ID & 0x1) = 0)
       USING (TENANT_ID)
       GROUP BY TENANT_ID
     )
@@ -32169,7 +32177,7 @@ def_table_schema(
           ELSE NULL
         END VALUE
       FROM
-        OCEANBASE.__ALL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+        oceanbase.__all_mview_refresh_stats_sys_defaults
 
       UNION ALL
 
@@ -32178,7 +32186,7 @@ def_table_schema(
         'RETENTION_PERIOD' PARAMETER_NAME,
         CAST(IFNULL(MAX(RETENTION_PERIOD), 31) AS CHAR) VALUE
       FROM
-        OCEANBASE.__ALL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+        oceanbase.__all_mview_refresh_stats_sys_defaults
     )
 """.replace("\n", " ")
 )
@@ -32214,9 +32222,9 @@ def_table_schema(
           IFNULL(MAX(COLLECTION_LEVEL), 1) AS COLLECTION_LEVEL,
           IFNULL(MAX(RETENTION_PERIOD), 31) AS RETENTION_PERIOD
         FROM
-          OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+          oceanbase.__all_virtual_mview_refresh_stats_sys_defaults
         RIGHT OUTER JOIN
-          (SELECT TENANT_ID FROM OCEANBASE.__ALL_TENANT WHERE TENANT_NAME NOT LIKE 'META$%')
+          (SELECT TENANT_ID FROM oceanbase.__all_tenant WHERE TENANT_ID = 1 OR (TENANT_ID & 0x1) = 0)
         USING (TENANT_ID)
         GROUP BY TENANT_ID
       )
@@ -32228,13 +32236,13 @@ def_table_schema(
         IFNULL(C.COLLECTION_LEVEL, D.COLLECTION_LEVEL) COLLECTION_LEVEL,
         IFNULL(C.RETENTION_PERIOD, D.RETENTION_PERIOD) RETENTION_PERIOD
       FROM
-        OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-        OCEANBASE.__ALL_VIRTUAL_TABLE B,
+        oceanbase.__all_virtual_database A,
+        oceanbase.__all_virtual_table B,
         (
-          SELECT TENANT_ID, MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STATS_PARAMS
+          SELECT TENANT_ID, MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM oceanbase.__all_virtual_mview_refresh_stats_params
           RIGHT OUTER JOIN
           (
-            SELECT TENANT_ID, MVIEW_ID FROM OCEANBASE.__ALL_VIRTUAL_MVIEW
+            SELECT TENANT_ID, MVIEW_ID FROM oceanbase.__all_virtual_mview
           )
           USING (TENANT_ID, MVIEW_ID)
         ) C,
@@ -32279,7 +32287,7 @@ def_table_schema(
           IFNULL(MAX(COLLECTION_LEVEL), 1) AS COLLECTION_LEVEL,
           IFNULL(MAX(RETENTION_PERIOD), 31) AS RETENTION_PERIOD
         FROM
-          OCEANBASE.__ALL_MVIEW_REFRESH_STATS_SYS_DEFAULTS
+          oceanbase.__all_mview_refresh_stats_sys_defaults
       )
 
       SELECT
@@ -32288,18 +32296,20 @@ def_table_schema(
         IFNULL(C.COLLECTION_LEVEL, D.COLLECTION_LEVEL) COLLECTION_LEVEL,
         IFNULL(C.RETENTION_PERIOD, D.RETENTION_PERIOD) RETENTION_PERIOD
       FROM
-        OCEANBASE.__ALL_DATABASE A,
-        OCEANBASE.__ALL_TABLE B,
+        oceanbase.__all_database A,
+        oceanbase.__all_table B,
         (
-          SELECT MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM OCEANBASE.__ALL_MVIEW_REFRESH_STATS_PARAMS
+          SELECT TENANT_ID, MVIEW_ID, COLLECTION_LEVEL, RETENTION_PERIOD FROM oceanbase.__all_mview_refresh_stats_params
           RIGHT OUTER JOIN
           (
-            SELECT MVIEW_ID FROM OCEANBASE.__ALL_MVIEW
+            SELECT TENANT_ID, MVIEW_ID FROM oceanbase.__all_mview
           )
-          USING (MVIEW_ID)
+          USING (TENANT_ID, MVIEW_ID)
         ) C,
         DEFVALS D
-      WHERE A.DATABASE_ID = B.DATABASE_ID
+      WHERE A.TENANT_ID = B.TENANT_ID
+        AND A.DATABASE_ID = B.DATABASE_ID
+        AND B.TENANT_ID = C.TENANT_ID
         AND B.TABLE_ID = C.MVIEW_ID
         AND B.TABLE_TYPE = 7
     )
@@ -32340,8 +32350,8 @@ def_table_schema(
       B.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
-      OCEANBASE.__ALL_VIRTUAL_USER A,
-      OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS B
+      oceanbase.__all_virtual_user A,
+      oceanbase.__all_virtual_mview_refresh_run_stats B
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.USER_ID = B.RUN_USER_ID
 """.replace("\n", " ")
@@ -32381,9 +32391,10 @@ def_table_schema(
       B.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
     FROM
-      OCEANBASE.__ALL_USER A,
-      OCEANBASE.__ALL_MVIEW_REFRESH_RUN_STATS B
-    WHERE A.USER_ID = B.RUN_USER_ID
+      oceanbase.__all_user A,
+      oceanbase.__all_mview_refresh_run_stats B
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.USER_ID = B.RUN_USER_ID
 """.replace("\n", " ")
 )
 
@@ -32418,9 +32429,9 @@ def_table_schema(
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
       C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS
     FROM
-      OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-      OCEANBASE.__ALL_VIRTUAL_TABLE B,
-      OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STATS C
+      oceanbase.__all_virtual_database A,
+      oceanbase.__all_virtual_table B,
+      oceanbase.__all_virtual_mview_refresh_stats C
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = C.TENANT_ID
@@ -32460,10 +32471,12 @@ def_table_schema(
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
       C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS
     FROM
-      OCEANBASE.__ALL_DATABASE A,
-      OCEANBASE.__ALL_TABLE B,
-      OCEANBASE.__ALL_MVIEW_REFRESH_STATS C
-    WHERE A.DATABASE_ID = B.DATABASE_ID
+      oceanbase.__all_database A,
+      oceanbase.__all_table B,
+      oceanbase.__all_mview_refresh_stats C
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.DATABASE_ID = B.DATABASE_ID
+      AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
       AND B.TABLE_TYPE = 7
 """.replace("\n", " ")
@@ -32493,11 +32506,11 @@ def_table_schema(
       CAST(NULL AS CHAR(4000)) AS PMOP_DETAILS,
       E.NUM_ROWS AS NUM_ROWS
     FROM
-      OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-      OCEANBASE.__ALL_VIRTUAL_TABLE B,
-      OCEANBASE.__ALL_VIRTUAL_DATABASE C,
-      OCEANBASE.__ALL_VIRTUAL_TABLE D,
-      OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS E
+      oceanbase.__all_virtual_database A,
+      oceanbase.__all_virtual_table B,
+      oceanbase.__all_virtual_database C,
+      oceanbase.__all_virtual_table D,
+      oceanbase.__all_virtual_mview_refresh_change_stats E
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
       AND C.TENANT_ID = D.TENANT_ID
@@ -32533,14 +32546,18 @@ def_table_schema(
       CAST(NULL AS CHAR(4000)) AS PMOP_DETAILS,
       E.NUM_ROWS AS NUM_ROWS
     FROM
-      OCEANBASE.__ALL_DATABASE A,
-      OCEANBASE.__ALL_TABLE B,
-      OCEANBASE.__ALL_DATABASE C,
-      OCEANBASE.__ALL_TABLE D,
-      OCEANBASE.__ALL_MVIEW_REFRESH_CHANGE_STATS E
-    WHERE A.DATABASE_ID = B.DATABASE_ID
+      oceanbase.__all_database A,
+      oceanbase.__all_table B,
+      oceanbase.__all_database C,
+      oceanbase.__all_table D,
+      oceanbase.__all_mview_refresh_change_stats E
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.DATABASE_ID = B.DATABASE_ID
+      AND C.TENANT_ID = D.TENANT_ID
       AND C.DATABASE_ID = D.DATABASE_ID
+      AND E.TENANT_ID = B.TENANT_ID
       AND E.MVIEW_ID = B.TABLE_ID
+      AND E.TENANT_ID = D.TENANT_ID
       AND E.DETAIL_TABLE_ID = D.TABLE_ID
 """.replace("\n", " ")
 )
@@ -32565,9 +32582,9 @@ def_table_schema(
       C.EXECUTION_TIME AS EXECUTION_TIME,
       C.EXECUTION_PLAN AS EXECUTION_PLAN
     FROM
-      OCEANBASE.__ALL_VIRTUAL_DATABASE A,
-      OCEANBASE.__ALL_VIRTUAL_TABLE B,
-      OCEANBASE.__ALL_VIRTUAL_MVIEW_REFRESH_STMT_STATS C
+      oceanbase.__all_virtual_database A,
+      oceanbase.__all_virtual_table B,
+      oceanbase.__all_virtual_mview_refresh_stmt_stats C
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
       AND B.TENANT_ID = C.TENANT_ID
@@ -32595,10 +32612,12 @@ def_table_schema(
       C.EXECUTION_TIME AS EXECUTION_TIME,
       C.EXECUTION_PLAN AS EXECUTION_PLAN
     FROM
-      OCEANBASE.__ALL_DATABASE A,
-      OCEANBASE.__ALL_TABLE B,
-      OCEANBASE.__ALL_MVIEW_REFRESH_STMT_STATS C
-    WHERE A.DATABASE_ID = B.DATABASE_ID
+      oceanbase.__all_database A,
+      oceanbase.__all_table B,
+      oceanbase.__all_mview_refresh_stmt_stats C
+    WHERE A.TENANT_ID = B.TENANT_ID
+      AND A.DATABASE_ID = B.DATABASE_ID
+      AND B.TENANT_ID = C.TENANT_ID
       AND B.TABLE_ID = C.MVIEW_ID
 """.replace("\n", " ")
 )
