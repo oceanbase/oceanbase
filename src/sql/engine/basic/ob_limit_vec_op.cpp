@@ -316,7 +316,7 @@ int ObLimitVecOp::compare_value_in_batch(bool &keep_iterating,
         ObExpr *expr = MY_SPEC.sort_columns_.at(col_idx);
         int cmp_ret = 0;
         if (OB_FAIL(compare_vectors_[col_idx]->null_first_cmp(*expr, row_idx,
-                                                  current_waiting_compare_row->is_null(row_idx),
+                                                  current_waiting_compare_row->is_null(col_idx),
                                                   current_waiting_compare_row->get_cell_payload(pre_sort_columns_.row_meta_, col_idx),
                                                   current_waiting_compare_row->get_length(pre_sort_columns_.row_meta_, col_idx),
                                                   cmp_ret))) {
