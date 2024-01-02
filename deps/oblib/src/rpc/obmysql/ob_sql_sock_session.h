@@ -30,6 +30,7 @@ public:
   ObSqlSessionMemPool(): pool_() {}
   virtual ~ObSqlSessionMemPool() {}
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
+  void set_tenant_id(int64_t tenant_id) { pool_.set_tenant_id(tenant_id); }
   void reset() { pool_.destroy(); }
   void reuse() { pool_.reuse(); }
 private:
