@@ -285,7 +285,8 @@ int ObGroupScanIter::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
     if (OB_SUCC(ret)) {
-      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *row_store_.eval_ctx_, *row_store_.exprs_, storage_count);
+      const ObBitVector *skip = NULL;
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *row_store_.eval_ctx_, *row_store_.exprs_, storage_count, skip);
       ObDatum *group_idx_batch = group_id_expr_->locate_batch_datums(*row_store_.eval_ctx_);
       int64_t i = 0;
       for (i = 0; i < storage_count; i++) {

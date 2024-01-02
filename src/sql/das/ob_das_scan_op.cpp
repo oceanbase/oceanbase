@@ -627,7 +627,8 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
         }
       }
       if (OB_SUCC(ret) && has_more) {
-        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_,
+        const ObBitVector *skip = NULL;
+        PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx, result_output, remain_row_cnt_, skip,
                               K(simulate_row_cnt), K(datum_store.get_row_cnt()),
                               K(has_more));
       }
@@ -806,7 +807,8 @@ int ObDASScanResult::get_next_rows(int64_t &count, int64_t capacity)
       }
     }
   } else {
-    PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count);
+    const ObBitVector *skip = NULL;
+    PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count, skip);
   }
   LOG_DEBUG("das result next rows", K(enable_rich_format_), K(count), K(capacity), K(ret));
   return ret;
