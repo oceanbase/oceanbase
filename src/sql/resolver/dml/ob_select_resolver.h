@@ -19,6 +19,8 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "common/ob_smart_call.h"
 
+# define SYNTHETIC_FIELD_NAME "Name_exp_"
+
 namespace oceanbase
 {
 namespace sql
@@ -87,6 +89,7 @@ public:
                                 ObString &cycle_pseudo_column_name);
   void set_current_recursive_cte_table_item(TableItem *table_item) { current_recursive_cte_table_item_ = table_item; }
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
+  int check_auto_gen_column_names();
 
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
@@ -345,6 +348,8 @@ private:
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
   int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
+  int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
+  int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
 protected:
   // data members
   /*these member is only for with clause*/
