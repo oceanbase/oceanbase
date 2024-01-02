@@ -100,6 +100,13 @@ obd demo
 
 See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
 
+## ☸️ Start with Kubernetes
+
+You can deploy OceanBase Database instance in kubernetes cluster with [ob-operator](https://github.com/oceanbase/ob-operator) quickly. Refer to the following documents to see details.
+
+* [Quick Start](https://oceanbase.github.io/ob-operator) for ob-operator
+* [Manual](https://www.oceanbase.com/docs/community-ob-operator-doc-1000000000486377) for ob-operator (in simplified Chinese)
+
 ## 👨‍💻 Start developing
 
 See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
