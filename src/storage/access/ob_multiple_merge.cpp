@@ -139,6 +139,7 @@ int ObMultipleMerge::init(
     }
     unprojected_row_.count_ = 0;
     get_table_param_ = &get_table_param;
+    access_param_->iter_param_.set_table_param(get_table_param_);
     const ObITableReadInfo *read_info = access_param_->iter_param_.get_read_info();
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(read_info)) {
@@ -180,6 +181,7 @@ int ObMultipleMerge::switch_param(
   access_param_ = &param;
   access_ctx_ = &context;
   get_table_param_ = &get_table_param;
+  access_param_->iter_param_.set_table_param(get_table_param_);
 
   if (OB_FAIL(prepare_read_tables())) {
     STORAGE_LOG(WARN, "Failed to prepare read tables", K(ret), K(*this));

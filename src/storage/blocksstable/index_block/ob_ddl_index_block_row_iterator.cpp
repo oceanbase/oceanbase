@@ -250,7 +250,7 @@ int ObDDLIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndex
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid rows info", K(ret));
   } else {
-    const ObDatumRowkey *cur_rowkey = cur_rowkey = cur_tree_value_->rowkey_;;
+    const ObDatumRowkey *cur_rowkey = cur_tree_value_->rowkey_;
     bool is_decided = false;
     for (; OB_SUCC(ret) && rowkey_begin_idx < rowkey_end_idx; ++rowkey_begin_idx) {
       if (rows_info->is_row_skipped(rowkey_begin_idx)) {
@@ -518,42 +518,21 @@ int ObDDLSStableAllRangeIterator::init(const ObMicroBlockData &idx_block_data,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), KPC(datum_utils), K(iter_param));
   } else {
-    ObTablet *cur_tablet = nullptr;
-    ObTabletHandle tmp_tablet_handle;
-    if (OB_ISNULL(iter_param.tablet_)) {
-      //get tablet handle from ls
-      ObLSService *ls_service = MTL(ObLSService *);
-      ObLSHandle ls_handle;
-      if (OB_FAIL(ls_service->get_ls(iter_param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-        LOG_WARN("get ls failed", K(ret), K(iter_param.ls_id_));
-      } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-                                                    iter_param.tablet_id_,
-                                                    tmp_tablet_handle,
-                                                    ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-        LOG_WARN("get tablet failed", K(ret), K(iter_param));
-      } else {
-        cur_tablet = tmp_tablet_handle.get_obj();
+    ObTablet *cur_tablet = const_cast<ObTablet *>(iter_param.tablet_);
+    if (iter_param.sstable_->is_normal_cg_sstable()) {
+      if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(rowkey_read_info_))) {
+        LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret));
       }
     } else {
-      cur_tablet = const_cast<ObTablet *>(iter_param.tablet_);
+      rowkey_read_info_ = &cur_tablet->get_rowkey_read_info();
     }
-
     if (OB_SUCC(ret)) {
-      if (iter_param.sstable_->is_normal_cg_sstable()) {
-        if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(rowkey_read_info_))) {
-          LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret));
-        }
-      } else {
-        rowkey_read_info_ = &cur_tablet->get_rowkey_read_info();
-      }
-      if (OB_SUCC(ret)) {
-        iter_param_ = iter_param;
+      iter_param_ = iter_param;
 
-        is_reverse_scan_ = is_reverse_scan;
-        iter_step_ = is_reverse_scan_ ? -1 : 1;
-        datum_utils_ = datum_utils;
-        is_inited_ = true;
-      }
+      is_reverse_scan_ = is_reverse_scan;
+      iter_step_ = is_reverse_scan_ ? -1 : 1;
+      datum_utils_ = datum_utils;
+      is_inited_ = true;
     }
   }
   return ret;
@@ -1179,33 +1158,13 @@ int ObDDLMergeBlockRowIterator::get_readable_ddl_kvs(const ObIndexBlockIterParam
 {
   int ret = OB_SUCCESS;
   // todo qilu :get DDLKV from ls or from tablet_handle now, opt this get DDLKV from MTL() after refactor ddl_kv_mgr
-  ObTablet *cur_tablet = nullptr;
   ddl_memtables.reset();
   ObTabletHandle tmp_tablet_handle;
   if (OB_UNLIKELY(!iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid iter param", K(ret), K(iter_param));
+    LOG_WARN("invalid iter param", K(ret), K(iter_param), K(lbt()));
   } else {
-    if (OB_ISNULL(iter_param.tablet_)) {
-      //get tablet handle from ls
-      ObLSService *ls_service = MTL(ObLSService *);
-      ObLSHandle ls_handle;
-      if (OB_FAIL(ls_service->get_ls(iter_param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
-        LOG_WARN("get ls failed", K(ret), K(iter_param.ls_id_));
-      } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
-                                                   iter_param.tablet_id_,
-                                                   tmp_tablet_handle,
-                                                   ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-        LOG_WARN("get tablet failed", K(ret), K(iter_param));
-      } else {
-        cur_tablet = tmp_tablet_handle.get_obj();
-      }
-    } else {
-      cur_tablet = const_cast<ObTablet *>(iter_param.tablet_);
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+    ObTablet *cur_tablet = const_cast<ObTablet *>(iter_param.tablet_);
     const uint16_t sstable_cg_idx = iter_param.sstable_->get_key().get_column_group_id();
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     ObArray<ObDDLKVHandle> ddl_kvs_handle;
