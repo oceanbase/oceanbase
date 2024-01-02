@@ -39,15 +39,14 @@ using namespace transaction;
 namespace sql
 {
 int ObDMLService::check_row_null(const ObExprPtrIArray &row,
-                                       ObEvalCtx &eval_ctx,
-                                       int64_t row_num,
-                                       const ColContentIArray &column_infos,
-                                       const ObDASDMLBaseCtDef &das_ctdef,
-                                       bool is_single_value,
-                                       ObTableModifyOp &dml_op)
+                                 ObEvalCtx &eval_ctx,
+                                 int64_t row_num,
+                                 const ColContentIArray &column_infos,
+                                 bool is_ignore,
+                                 bool is_single_value,
+                                 ObTableModifyOp &dml_op)
 {
   int ret = OB_SUCCESS;
-  const bool is_ignore = das_ctdef.is_ignore_;
   ObSQLSessionInfo *session = NULL;
   CK(row.count() >= column_infos.count());
   if (OB_ISNULL(session = dml_op.get_exec_ctx().get_my_session())) {
@@ -65,6 +64,7 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
       if (is_ignore ||
           (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
         ObObj zero_obj;
+        ObExprStrResAlloc res_alloc(*row.at(col_idx), eval_ctx);
         ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
         bool is_decimal_int = ob_is_decimal_int(row.at(col_idx)->datum_meta_.type_);
         if (is_oracle_mode()) {
@@ -77,8 +77,6 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
         } else if (OB_FAIL(ObObjCaster::get_zero_value(
             row.at(col_idx)->obj_meta_.get_type(),
             row.at(col_idx)->obj_meta_.get_collation_type(),
-            das_ctdef.column_accuracys_.at(col_idx).get_length(),
-            eval_ctx.exec_ctx_.get_allocator(),
             zero_obj))) {
           LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)), K(row.at(col_idx)->max_length_));
         } else if (is_decimal_int) {
@@ -88,6 +86,11 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
           row_datum.set_decimal_int(dec_val.get_decimal_int(), dec_val.get_int_bytes());
         }
         if (OB_FAIL(ret)) {
+          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)));
+        } else if (OB_FAIL(ObDASUtils::padding_fixed_string_value(row.at(col_idx)->max_length_,
+                                                                  res_alloc,
+                                                                  zero_obj))) {
+          LOG_WARN("padding fixed string value failed", K(ret));
         } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
           LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
         } else if (OB_FAIL(!is_decimal_int && row_datum.from_obj(zero_obj))) {
@@ -613,7 +616,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       dml_op.get_eval_ctx(),
                                       ins_rtdef.cur_row_num_,
                                       ins_ctdef.column_infos_,
-                                      ins_ctdef.das_ctdef_,
+                                      ins_ctdef.das_ctdef_.is_ignore_,
                                       ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
@@ -829,7 +832,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
                                         dml_op.get_eval_ctx(),
                                         upd_rtdef.cur_row_num_,
                                         upd_ctdef.assign_columns_,
-                                        upd_ctdef.dupd_ctdef_,
+                                        upd_ctdef.dupd_ctdef_.is_ignore_,
                                         false,
                                         dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));

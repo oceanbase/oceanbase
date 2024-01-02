@@ -28,7 +28,7 @@ public:
                             ObEvalCtx &eval_ctx,
                             int64_t row_num,
                             const ColContentIArray &column_infos,
-                            const ObDASDMLBaseCtDef &das_ctdef,
+                            bool is_ignore,
                             bool is_single_value,
                             ObTableModifyOp &dml_op);
   static int check_column_type(const ExprFixedArray &dml_row,

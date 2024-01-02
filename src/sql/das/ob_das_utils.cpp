@@ -259,8 +259,21 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
                                       ObObj &value)
 {
   int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(value));
+    value.set_null();
+  } else if (OB_FAIL(padding_fixed_string_value(col_accuracy.get_length(), allocator, value))) {
+    LOG_WARN("padding char value failed", K(ret), K(col_accuracy), K(value));
+  }
+  return ret;
+}
+
+int ObDASUtils::padding_fixed_string_value(int64_t max_len, ObIAllocator &allocator, ObObj &value)
+{
+  int ret = OB_SUCCESS;
   if (value.is_binary()) {
-    int32_t binary_len = col_accuracy.get_length();
+    int32_t binary_len = max_len;
     int32_t len = value.get_string_len();
     if (binary_len > len) {
       char *dest_str = NULL;
@@ -275,10 +288,6 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
         value.set_binary(ObString(binary_len, dest_str));
       }
     }
-  } else if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
-    // Oracle compatibility mode: '' as null
-    LOG_DEBUG("reshape empty string to null", K(value));
-    value.set_null();
   } else if (value.is_fixed_len_char_type()) {
     const char *str = value.get_string_ptr();
     int32_t len = value.get_string_len();
