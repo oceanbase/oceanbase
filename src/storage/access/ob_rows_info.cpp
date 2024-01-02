@@ -205,10 +205,12 @@ int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRel
         RowsCompare rows_cmp(*datum_utils_, min_key_, true, ret);
         std::sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
       }
-      for (int64_t i = 0; i < row_count; i++) {
-        permutation_[rowkeys_[i].row_idx_] = i;
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; i < row_count; i++) {
+          permutation_[rowkeys_[i].row_idx_] = i;
+        }
+        min_key_ = rowkeys_.at(0).marked_rowkey_.get_rowkey();
       }
-      min_key_ = rowkeys_.at(0).marked_rowkey_.get_rowkey();
     }
   }
 

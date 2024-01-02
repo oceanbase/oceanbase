@@ -3920,9 +3920,12 @@ int ObLSTabletService::insert_rows_to_tablet(
                                        run_ctx.dml_param_.tz_info_)) {
         LOG_WARN("extract rowkey failed");
       } else {
+        int tmp_ret = OB_SUCCESS;
         ObString index_name = "PRIMARY";
         if (data_table.is_index_table()) {
           data_table.get_index_name(index_name);
+        } else if (lib::is_oracle_mode() && OB_TMP_FAIL(data_table.get_primary_key_name(index_name))) {
+          LOG_WARN("Failed to get pk name", K(ret), K(tmp_ret));
         }
         LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE,
                        rowkey_buffer, index_name.length(), index_name.ptr());
