@@ -38,14 +38,12 @@ extern void obsql_mysql_parser_fatal_error(int32_t errcoyyde, yyscan_t yyscanner
 /* the adq is used to process dq in ANSI_QUOTES sql_mode*/
 %x adq
 
-U  [\x80-\xbf]
-U_2  [\xc2-\xdf]
-U_3  [\xe0-\xef]
-U_4  [\xf0-\xf4]
+NOTASCII [\x80-\xFF]
 GB_1 [\x81-\xfe]
 GB_2 [\x40-\xfe]
 GB_3 [\x30-\x39]
-UTF8_GB_CHAR ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
+NOTASCII_GB_CHAR ({NOTASCII}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
+
 space            [ \t\n\r\f]
 non_newline      [^\n\r]
 sql_comment      ("--"[ \t]+{non_newline}*)|(#{non_newline}*|"--"[\n\r])
@@ -62,7 +60,7 @@ common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
-identifier        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})+)
+identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
 version_num      ([0-9]+\.+[0-9]*)
