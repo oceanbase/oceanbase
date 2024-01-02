@@ -575,9 +575,6 @@ int ObTableLoadMemCompactor::finish()
       LOG_WARN("fail to start parallel merge", KR(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
-  }
   return ret;
 }
 
@@ -608,6 +605,9 @@ int ObTableLoadMemCompactor::build_result_for_heap_table()
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset();
+  }
   return ret;
 }
 
@@ -624,6 +624,9 @@ int ObTableLoadMemCompactor::add_table_to_parallel_merge_ctx()
     } else if (OB_FAIL(parallel_merge_ctx_.add_tablet_sstable(sstable))) {
       LOG_WARN("fail to add tablet sstable", KR(ret));
     }
+  }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
   }
   return ret;
 }
