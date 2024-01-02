@@ -484,7 +484,7 @@ public:
   static int get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& helper, ObPLADTService &adt_service, jit::ObLLVMType &type);
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(ObPLCodeGenerator &generator,
