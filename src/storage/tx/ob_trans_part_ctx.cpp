@@ -7834,14 +7834,17 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
   /*
    * Follower:
    *  1. add UndoAction into tx_ctx's tx_data
-   *  2. insert UndoAction into tx_data_table
+   *  2. insert tx-data into tx_data_table
    * Leader:
    *  1. submit 'RollbackToLog'
    *  2. add UndoAction into tx_ctx's tx_data
-   *  3. insert UndoAction into tx_data_table after log sync success
+   *  3. insert tx-data into tx_data_table after log sync success
    */
+  bool need_update_tx_data = false;
   ObTxDataGuard tmp_tx_data_guard;
+  ObTxDataGuard update_tx_data_guard;
   tmp_tx_data_guard.reset();
+  update_tx_data_guard.reset();
   if (is_follower_()) { /* Follower */
     ObUndoAction undo_action(from_scn, to_scn);
     // _NOTICE_ must load Undo(s) from TxDataTable before overwriten
@@ -7853,9 +7856,62 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
       TRANS_LOG(WARN, "recrod undo info fail", K(ret), K(from_scn), K(to_scn), KPC(this));
     } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
       TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
-    } else if (FALSE_IT(tmp_tx_data_guard.tx_data()->end_scn_ = share::SCN::max(replay_scn, exec_info_.max_applying_log_ts_))) {
-    } else if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data_guard.tx_data()))) {
-      TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+    }
+
+    //
+    // when multiple branch-level savepoints were replayed out of order, to ensure
+    // tx-data with larger end_scn include all undo-actions of others before
+    //
+    // we do deleting in frozen memtable and updating (which with largest end_scn) in active memtable
+    // because distinguish frozen/active memtable is not easy, just always do those two actions.
+    //
+    // following is an illusion of this strategy:
+    //
+    // assume rollback to logs with scn of: 80 90 110
+    //
+    // and frozen scn is 100
+    //
+    // case 1: replay order: 110, 90,  80
+    // case 2: replay order: 110, 80,  90
+    // case 3: replay order: 90,  110, 80
+    // case 4: replay order: 90,  80,  110
+    //
+    // the operations of each case:
+    // case 1: insert 110 -> [insert 90, update 110] -> [insert 80, delete 90, udpate 110]
+    // case 2: insert 110 -> [insert 80  update 110] -> [insert 90, delete 80, update 110]
+    // case 3: insert 90  -> insert 110 -> [insert 80, delete 90, update 110]
+    // case 4: insert 90  -> [insert 80, update 90]  ->  insert 100
+    //
+
+    if (OB_SUCC(ret)) {
+      need_update_tx_data = ctx_tx_data_.get_max_replayed_rollback_scn() > replay_scn;
+      if (need_update_tx_data && OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(update_tx_data_guard))) {
+        TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
+      }
+    }
+    // prepare end_scn for tx-data items
+    if (OB_SUCC(ret)) {
+      tmp_tx_data_guard.tx_data()->end_scn_ = replay_scn;
+      if (need_update_tx_data) {
+        // if the tx-data will be inserted into frozen tx-data-memtable, and it may be not the one with largest end_scn
+        // we must delete others in order to ensure ourself is the valid one with largest end_scn
+        tmp_tx_data_guard.tx_data()->exclusive_flag_ = ObTxData::ExclusiveType::EXCLUSIVE;
+        // for update tx-data, use the same end_scn_
+        update_tx_data_guard.tx_data()->end_scn_ = ctx_tx_data_.get_max_replayed_rollback_scn();
+        update_tx_data_guard.tx_data()->exclusive_flag_ = ObTxData::ExclusiveType::EXCLUSIVE;
+      }
+    }
+    // prepare done, do the final step to insert tx-data-table, this should not fail
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data_guard.tx_data()))) {
+        TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+      } else if (need_update_tx_data && OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(update_tx_data_guard.tx_data()))) {
+        TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+      }
+    }
+    // if this is the largest scn replayed, remember it
+    if (OB_SUCC(ret) && !need_update_tx_data) {
+        ctx_tx_data_.set_max_replayed_rollback_scn(replay_scn);
     }
   } else if (OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) { /* Leader */
     ObUndoAction undo_action(from_scn, to_scn);

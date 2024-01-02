@@ -70,7 +70,6 @@ public:
     ObTxData *tx_data = new (ptr) ObTxData();
     tx_data->ref_cnt_ = 100;
     tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
-    tx_data->flag_ = 269381;
     tx_data_guard.init(tx_data);
     return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
   }
@@ -82,7 +81,6 @@ public:
     ObTxData *from = (ObTxData*)from_guard.tx_data();
     to->ref_cnt_ = 100;
     to->tx_data_allocator_ = FAKE_ALLOCATOR;
-    to->flag_ = 269381;
     to_guard.init(to);
     OX (*to = *from);
     OZ (deep_copy_undo_status_list_(from->undo_status_list_, to->undo_status_list_));
