@@ -144,8 +144,7 @@ int ObTenantSnapshotService::wait_()
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantSnapshotService not inited", KR(ret), KPC(this));
+    LOG_INFO("ObTenantSnapshotService not inited", KPC(this));
   } else if (ATOMIC_LOAD(&is_running_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ObTenantSnapshotService is running when wait function is called", KR(ret), KPC(this));
