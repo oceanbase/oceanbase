@@ -443,8 +443,6 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
       LOG_WARN("table node is null");
     } else if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
       LOG_WARN("failed to resolve table", K(ret));
-    } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-      LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {

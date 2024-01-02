@@ -360,8 +360,6 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("a view is not appropriate here", K(ret));
   } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
     LOG_WARN("failed to resolve basic table");
-  } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-    LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
   } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
     LOG_WARN("failed to check has need fired trigger", K(ret), K(table_item->ref_id_));
   } else {
