@@ -828,7 +828,7 @@ int ObHashJoinVecOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
     // at least hold 1 block in memory
     int64_t memory_bound = std::max(remain_data_memory_size_,
                                     hj_part->get_row_store().get_max_blk_size());
-    const int64_t row_bound = hash_table.get_nbuckets() / 2;
+    const int64_t row_bound = min(hash_table.get_row_count(), hash_table.get_nbuckets() / 2);
     ObTempRowStore::IterationAge iter_age;
     hj_part->set_iteration_age(iter_age);
     JoinPartitionRowIter left_iter(hj_part, row_bound, memory_bound);
