@@ -7118,7 +7118,7 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
       }
     } else {
       if (need_retry_by_task) {
-        (void)MTL(ObTransService *)->retry_redo_sync_by_task(get_trans_id(), get_ls_id());
+        set_need_retry_redo_sync_by_task_();
       }
       ret = OB_EAGAIN;
       TRANS_LOG(INFO, "redo sync will retry", K(ret), K(redo_sync_finish), K(tmp_max_read_version),
