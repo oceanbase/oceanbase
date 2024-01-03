@@ -105,7 +105,7 @@ See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-
 You can deploy OceanBase Database instance in kubernetes cluster with [ob-operator](https://github.com/oceanbase/ob-operator) quickly. Refer to the following documents to see details.
 
 * [Quick Start](https://oceanbase.github.io/ob-operator) for ob-operator
-* [Manual](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001103674) for ob-operator (in simplified Chinese)
+* [Manual](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001103674) for ob-operator
 
 ## 👨‍💻 Start developing
 
