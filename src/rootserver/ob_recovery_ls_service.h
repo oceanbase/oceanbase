@@ -136,6 +136,11 @@ private:
  //thread1
  int do_standby_balance_();
  int do_ls_balance_task_();
+ int try_do_ls_balance_task_(const share::ObBalanceTaskHelper &ls_balance_task,
+     const share::ObAllTenantInfo &tenant_info);
+ int check_transfer_begin_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
+     const share::ObAllTenantInfo &tenant_info,
+     bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
