@@ -3830,7 +3830,10 @@ int ObSchemaPrinter::print_routine_param_type(const ObRoutineParam *param,
                                           param->get_type_owner(),
                                           database_schema));
       if (OB_SUCC(ret))  {
-        if (param->get_type_subname().empty()) {
+        if (OB_ISNULL(database_schema)) {
+          ret = OB_ERR_BAD_DATABASE;
+          LOG_WARN("database not exists", K(ret), KPC(param));
+        } else if (param->get_type_subname().empty()) {
           OZ (databuff_printf(buf, buf_len, pos, " \"%.*s\".\"%.*s\"",
                               database_schema->get_database_name_str().length(),
                               database_schema->get_database_name_str().ptr(),
