@@ -292,16 +292,8 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
         first_created_ctx_ = !tx_ctx_existed;
       }
     }
-    if (OB_NOT_NULL(ctx_)) {
-      if (replaying_log_entry_no_ == 0) {
-        ret = ctx_->set_replay_completeness(true);
-      } else if (is_tx_log_replay_queue() && ctx_->is_replay_completeness_unknown()) {
-        TRANS_LOG(INFO, "tx replay from middle", K(tx_id), K_(replaying_log_entry_no), K_(lsn), K_(log_ts_ns));
-        ret = ctx_->set_replay_completeness(false);
-      }
-      if (OB_SUCC(ret) && is_tx_log_replay_queue()) {
-        ret = ctx_->push_repalying_log_ts(log_ts_ns_, replaying_log_entry_no_ == 0);
-      }
+    if (OB_SUCC(ret) && OB_NOT_NULL(ctx_) && is_tx_log_replay_queue()) {
+      ret = ctx_->push_replaying_log_ts(log_ts_ns_, replaying_log_entry_no_);
     }
   }
   return ret;

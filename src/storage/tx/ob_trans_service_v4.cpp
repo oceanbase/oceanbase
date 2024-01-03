@@ -921,7 +921,7 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
   resp.sender_ = share::SCHEDULER_LS;
   resp.receiver_ = msg.sender_;
   resp.status_ = ret_status;
-  if (OB_FAIL(rpc_->post_msg(resp.receiver_, resp))) {
+  if (OB_FAIL(rpc_->post_msg(msg.sender_addr_, resp))) {
     TRANS_LOG(WARN, "post tx keepalive resp fail", K(ret), K(resp), KPC(this));
   }
   result.reset();
