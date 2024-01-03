@@ -39,21 +39,6 @@ namespace oceanbase
 {
 namespace common
 {
-
-int64_t ObSyslogTimeGuard::to_string(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (click_count_ > 0) {
-    ret = databuff_printf(buf, buf_len, pos, "time dist: %s=%d", click_str_[0], click_[0]);
-    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
-      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
-    }
-  }
-  if (OB_FAIL(ret)) pos = 0;
-  return pos;
-}
-
 void __attribute__((weak)) allow_next_syslog(int64_t)
 {
   // do nothing

@@ -14,6 +14,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "lib/alloc/memory_dump.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "observer/omt/ob_multi_tenant.h"                  // ObMultiTenant
 #include "share/ob_tenant_mgr.h"                           // get_virtual_memory_used
 #include "storage/tx_storage/ob_tenant_freezer.h"          // ObTenantFreezer
@@ -159,6 +160,7 @@ int ObTenantMemoryPrinter::print_tenant_usage()
         memory_used - CHUNK_MGR.get_shadow_hold(), memory_used
 #endif
         );
+    ObMallocTimeMonitor::get_instance().print();
     print_mutex_.unlock();
   }
   return ret;
