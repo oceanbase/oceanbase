@@ -46,7 +46,6 @@ struct ObStorageDatum;
 }
 namespace storage
 {
-class ObIPartitionGroupGuard;
 
 //
 // Project storage output row to expression array, the core project logic is:
@@ -135,7 +134,6 @@ public:
         table_param_(NULL),
         allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         need_scn_(false),
-        partition_guard_(NULL),
         need_switch_param_(false),
         is_thread_scope_(true)
   {}
@@ -150,7 +148,6 @@ public:
   common::ObIAllocator *allocator_; //stmt level allocator, only be free at the end of query
   common::SampleInfo sample_info_;
   bool need_scn_;
-  ObIPartitionGroupGuard *partition_guard_; // remove after SQL adopt tablet
   bool need_switch_param_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid();
