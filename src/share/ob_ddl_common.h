@@ -305,7 +305,11 @@ public:
   ObColumnNameMap() {}
   ~ObColumnNameMap() {}
   int init(const schema::ObTableSchema &orig_table_schema,
+           const schema::ObTableSchema &new_table_schema,
            const schema::AlterTableSchema &alter_table_arg);
+  int init_xml_hidden_column_name_map(
+      const schema::ObTableSchema &orig_table_schema,
+      const schema::ObTableSchema &new_table_schema);
   int assign(const ObColumnNameMap &other);
   int set(const ObString &orig_column_name, const ObString &new_column_name);
   int get(const ObString &orig_column_name, ObString &new_column_name) const;

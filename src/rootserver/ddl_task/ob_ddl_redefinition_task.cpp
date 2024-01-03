@@ -65,6 +65,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
 
 int ObDDLRedefinitionSSTableBuildTask::init(
     const ObTableSchema &orig_table_schema,
+    const ObTableSchema &hidden_table_schema,
     const AlterTableSchema &alter_table_schema,
     const ObTimeZoneInfoWrap &tz_info_wrap,
     const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos)
@@ -77,7 +78,7 @@ int ObDDLRedefinitionSSTableBuildTask::init(
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(tz_info_wrap_.deep_copy(tz_info_wrap))) {
     LOG_WARN("fail to copy time zone info wrap", K(ret), K(tz_info_wrap));
-  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, alter_table_schema))) {
+  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, hidden_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else if (OB_FAIL(based_schema_object_infos_.assign(based_schema_object_infos))) {
     LOG_WARN("fail to assign based schema object infos", K(ret), K(based_schema_object_infos));
@@ -613,7 +614,7 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
     ObColumnNameMap col_name_map;
     if (OB_FAIL(data_table_schema.get_column_ids(column_ids))) {
       LOG_WARN("get column ids failed", K(ret), K(object_id_));
-    } else if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_arg_.alter_table_schema_))) {
+    } else if (OB_FAIL(col_name_map.init(data_table_schema, dest_table_schema, alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("failed to build column name map", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
@@ -1272,7 +1273,7 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
     } else if (OB_ISNULL(orig_table_schema) || OB_ISNULL(new_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schemas should not be null", K(ret), K(orig_table_schema), K(new_table_schema));
-    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *new_table_schema, alter_table_schema))) {
       LOG_WARN("failed to init column name map", K(ret));
     } else if (!is_update_autoinc_end && update_autoinc_job_time_ == 0) {
       ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
@@ -2123,7 +2124,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
   ObColumnNameMap col_name_map;
-  if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_schema))) {
+  if (OB_FAIL(col_name_map.init(data_table_schema, new_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     ObTableSchema::const_column_iterator iter = data_table_schema.column_begin();

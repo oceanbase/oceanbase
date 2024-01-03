@@ -45,6 +45,7 @@ public:
       const int64_t data_format_version = 0);
   int init(
       const ObTableSchema &orig_table_schema,
+      const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
