@@ -101,10 +101,7 @@ obd demo
 
 ## ☸️ 使用 Kubernetes
 
-使用 [ob-operator](https://github.com/oceanbase/ob-operator) 可在 Kubernetes 环境中快速部署 OceanBase 数据库实例，可通过下面的文档了解具体的使用方法：
-
-* [ob-operator 快速上手](https://oceanbase.github.io/ob-operator/README-CN.html)
-* [ob-operator 用户手册](https://www.oceanbase.com/docs/community-ob-operator-doc-1000000000486377)
+使用 [ob-operator](https://github.com/oceanbase/ob-operator) 可在 Kubernetes 环境中快速部署和管理 OceanBase 数据库实例，可参考文档 [ob-operator 快速上手](https://oceanbase.github.io/ob-operator/README-CN.html)了解具体的使用方法。
 
 ## 👨‍💻 使用源码编译部署
 
