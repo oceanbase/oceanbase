@@ -2,7 +2,7 @@
 
 if [ "$#" -gt 1 ]; then
     exit 1
-elif [ "$#" -gt 1 ]; then
+elif [ "$#" -eq 1 ]; then
     BUILD_ARG="--build-arg VERSION=$1"
 else
     BUILD_ARG=""
