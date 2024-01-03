@@ -327,7 +327,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
 {
   int ret = OB_SUCCESS;
   if (col_idx < 0 || col_idx >= fields_.count()) {
-    ret = OB_SIZE_OVERFLOW;
+    ret = OB_ERR_VARIABLE_NOT_IN_SELECT_LIST;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
   } else if (!cast_supported(fields_.at(col_idx).type_.get_type(),
                              static_cast<common::ObCollationType>(fields_.at(col_idx).charsetnr_),
