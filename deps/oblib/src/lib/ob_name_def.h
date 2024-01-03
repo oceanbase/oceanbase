@@ -423,6 +423,7 @@
 #define N_CRC32 "crc32"
 #define N_HEX "hex"
 #define N_UNHEX "unhex"
+#define N_PASSWORD "password"
 #define N_HEXTORAW "hextoraw"
 #define N_RAWTOHEX "rawtohex"
 #define N_RAWTONHEX "rawtonhex"
