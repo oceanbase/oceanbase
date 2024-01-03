@@ -247,6 +247,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                   int min_len = 2;
                   int discard_len = 1;
                   char read_buff[PATH_BUFSIZE];
+                  cgroup_path_buf_[0] = '\0';
                   while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
                     const char* match_begin =  strstr(read_buff, ":/");
                     const char* match_cpu =  strstr(read_buff, "cpu");
@@ -256,12 +257,16 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                       snprintf(cgroup_path_buf_, PATH_BUFSIZE, "%s", match_begin);
                     }
                   }
-                  int cgroup_path_len = strlen(cgroup_path_buf_);
-                  if (is_find && min_len < cgroup_path_len) {
-                    if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
-                      cgroup_path_buf_[cgroup_path_len - 1] = '\0';
+                  if (is_find) {
+                    int cgroup_path_len = strlen(cgroup_path_buf_);
+                    if (min_len < cgroup_path_len) {
+                      if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
+                        cgroup_path_buf_[cgroup_path_len - 1] = '\0';
+                      }
+                      cells[i].set_varchar(cgroup_path_buf_);
+                    } else {
+                      cells[i].set_varchar("");
                     }
-                    cells[i].set_varchar(cgroup_path_buf_);
                   } else {
                     cells[i].set_varchar("");
                   }
