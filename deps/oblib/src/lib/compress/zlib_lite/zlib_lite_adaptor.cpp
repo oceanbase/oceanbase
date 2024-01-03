@@ -12,7 +12,9 @@
 
 #include "zlib_lite_adaptor.h"
 
+#if defined(__x86_64__)
 #include <cpuid.h>
+#endif
 
 #include "codec_deflate_qpl.h"
 #include "zlib_lite_src/deflate.h"
@@ -25,9 +27,11 @@ namespace common
 namespace ZLIB_LITE
 {
 
+
 static bool check_support_qpl(void)
 {
   bool bret = false;
+#if defined(__x86_64__)
   unsigned int eax, ebx, ecx, edx;
   //LEVEL=0: Highest Function Parameter and Manufacturer ID
   __cpuid(0, eax, ebx, ecx, edx);
@@ -62,6 +66,7 @@ static bool check_support_qpl(void)
     }
 
   }
+#endif // __x86_64__
   return bret;
 }
 
