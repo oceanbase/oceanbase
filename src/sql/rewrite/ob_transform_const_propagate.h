@@ -275,6 +275,7 @@ private:
                                  bool &trans_happened);
 
   int check_need_cast_when_replace(ObRawExpr *expr,
+                                   ObRawExpr *const_expr,
                                    ObIArray<ObRawExpr *> &parent_exprs,
                                    bool &need_cast);
 

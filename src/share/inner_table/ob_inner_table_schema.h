@@ -1653,6 +1653,22 @@ public:
   static int gv_ob_ls_snapshots_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ls_snapshots_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_clone_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mview_logs_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mview_logs_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mviews_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mviews_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_stats_sys_defaults_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_sys_defaults_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_stats_params_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_params_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_run_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_run_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_change_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_change_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_mvref_stmt_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stmt_stats_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -1916,6 +1932,24 @@ public:
   static int dba_ob_import_table_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_users_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mviews_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_mviews_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mviews_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_sys_defaults_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_stats_sys_defaults_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_params_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_stats_params_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_run_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_run_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_change_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_change_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_mvref_stmt_stats_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int user_mvref_stmt_stats_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_instance_schema(share::schema::ObTableSchema &table_schema);
@@ -4319,6 +4353,22 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_ls_snapshots_schema,
   ObInnerTableSchema::v_ob_ls_snapshots_schema,
   ObInnerTableSchema::dba_ob_clone_history_schema,
+  ObInnerTableSchema::cdb_mview_logs_schema,
+  ObInnerTableSchema::dba_mview_logs_schema,
+  ObInnerTableSchema::cdb_mviews_schema,
+  ObInnerTableSchema::dba_mviews_schema,
+  ObInnerTableSchema::cdb_mvref_stats_sys_defaults_schema,
+  ObInnerTableSchema::dba_mvref_stats_sys_defaults_schema,
+  ObInnerTableSchema::cdb_mvref_stats_params_schema,
+  ObInnerTableSchema::dba_mvref_stats_params_schema,
+  ObInnerTableSchema::cdb_mvref_run_stats_schema,
+  ObInnerTableSchema::dba_mvref_run_stats_schema,
+  ObInnerTableSchema::cdb_mvref_stats_schema,
+  ObInnerTableSchema::dba_mvref_stats_schema,
+  ObInnerTableSchema::cdb_mvref_change_stats_schema,
+  ObInnerTableSchema::dba_mvref_change_stats_schema,
+  ObInnerTableSchema::cdb_mvref_stmt_stats_schema,
+  ObInnerTableSchema::dba_mvref_stmt_stats_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -4582,6 +4632,24 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
   ObInnerTableSchema::user_users_schema,
+  ObInnerTableSchema::dba_mview_logs_ora_schema,
+  ObInnerTableSchema::all_mview_logs_ora_schema,
+  ObInnerTableSchema::user_mview_logs_ora_schema,
+  ObInnerTableSchema::dba_mviews_ora_schema,
+  ObInnerTableSchema::all_mviews_ora_schema,
+  ObInnerTableSchema::user_mviews_ora_schema,
+  ObInnerTableSchema::dba_mvref_stats_sys_defaults_ora_schema,
+  ObInnerTableSchema::user_mvref_stats_sys_defaults_ora_schema,
+  ObInnerTableSchema::dba_mvref_stats_params_ora_schema,
+  ObInnerTableSchema::user_mvref_stats_params_ora_schema,
+  ObInnerTableSchema::dba_mvref_run_stats_ora_schema,
+  ObInnerTableSchema::user_mvref_run_stats_ora_schema,
+  ObInnerTableSchema::dba_mvref_stats_ora_schema,
+  ObInnerTableSchema::user_mvref_stats_ora_schema,
+  ObInnerTableSchema::dba_mvref_change_stats_ora_schema,
+  ObInnerTableSchema::user_mvref_change_stats_ora_schema,
+  ObInnerTableSchema::dba_mvref_stmt_stats_ora_schema,
+  ObInnerTableSchema::user_mvref_stmt_stats_ora_schema,
   ObInnerTableSchema::gv_ob_sql_audit_ora_schema,
   ObInnerTableSchema::v_ob_sql_audit_ora_schema,
   ObInnerTableSchema::gv_instance_schema,
@@ -5897,6 +5965,14 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_INDEX_USAGE_TID,
   OB_GV_OB_LS_SNAPSHOTS_TID,
   OB_V_OB_LS_SNAPSHOTS_TID,
+  OB_DBA_MVIEW_LOGS_TID,
+  OB_DBA_MVIEWS_TID,
+  OB_DBA_MVREF_STATS_SYS_DEFAULTS_TID,
+  OB_DBA_MVREF_STATS_PARAMS_TID,
+  OB_DBA_MVREF_RUN_STATS_TID,
+  OB_DBA_MVREF_STATS_TID,
+  OB_DBA_MVREF_CHANGE_STATS_TID,
+  OB_DBA_MVREF_STMT_STATS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -6160,6 +6236,24 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TID,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
   OB_USER_USERS_TID,
+  OB_DBA_MVIEW_LOGS_ORA_TID,
+  OB_ALL_MVIEW_LOGS_ORA_TID,
+  OB_USER_MVIEW_LOGS_ORA_TID,
+  OB_DBA_MVIEWS_ORA_TID,
+  OB_ALL_MVIEWS_ORA_TID,
+  OB_USER_MVIEWS_ORA_TID,
+  OB_DBA_MVREF_STATS_SYS_DEFAULTS_ORA_TID,
+  OB_USER_MVREF_STATS_SYS_DEFAULTS_ORA_TID,
+  OB_DBA_MVREF_STATS_PARAMS_ORA_TID,
+  OB_USER_MVREF_STATS_PARAMS_ORA_TID,
+  OB_DBA_MVREF_RUN_STATS_ORA_TID,
+  OB_USER_MVREF_RUN_STATS_ORA_TID,
+  OB_DBA_MVREF_STATS_ORA_TID,
+  OB_USER_MVREF_STATS_ORA_TID,
+  OB_DBA_MVREF_CHANGE_STATS_ORA_TID,
+  OB_USER_MVREF_CHANGE_STATS_ORA_TID,
+  OB_DBA_MVREF_STMT_STATS_ORA_TID,
+  OB_USER_MVREF_STMT_STATS_ORA_TID,
   OB_GV_OB_SQL_AUDIT_ORA_TID,
   OB_V_OB_SQL_AUDIT_ORA_TID,
   OB_GV_INSTANCE_TID,
@@ -8341,6 +8435,14 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_INDEX_USAGE_TNAME,
   OB_GV_OB_LS_SNAPSHOTS_TNAME,
   OB_V_OB_LS_SNAPSHOTS_TNAME,
+  OB_DBA_MVIEW_LOGS_TNAME,
+  OB_DBA_MVIEWS_TNAME,
+  OB_DBA_MVREF_STATS_SYS_DEFAULTS_TNAME,
+  OB_DBA_MVREF_STATS_PARAMS_TNAME,
+  OB_DBA_MVREF_RUN_STATS_TNAME,
+  OB_DBA_MVREF_STATS_TNAME,
+  OB_DBA_MVREF_CHANGE_STATS_TNAME,
+  OB_DBA_MVREF_STMT_STATS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -8604,6 +8706,24 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASKS_ORA_TNAME,
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
   OB_USER_USERS_TNAME,
+  OB_DBA_MVIEW_LOGS_ORA_TNAME,
+  OB_ALL_MVIEW_LOGS_ORA_TNAME,
+  OB_USER_MVIEW_LOGS_ORA_TNAME,
+  OB_DBA_MVIEWS_ORA_TNAME,
+  OB_ALL_MVIEWS_ORA_TNAME,
+  OB_USER_MVIEWS_ORA_TNAME,
+  OB_DBA_MVREF_STATS_SYS_DEFAULTS_ORA_TNAME,
+  OB_USER_MVREF_STATS_SYS_DEFAULTS_ORA_TNAME,
+  OB_DBA_MVREF_STATS_PARAMS_ORA_TNAME,
+  OB_USER_MVREF_STATS_PARAMS_ORA_TNAME,
+  OB_DBA_MVREF_RUN_STATS_ORA_TNAME,
+  OB_USER_MVREF_RUN_STATS_ORA_TNAME,
+  OB_DBA_MVREF_STATS_ORA_TNAME,
+  OB_USER_MVREF_STATS_ORA_TNAME,
+  OB_DBA_MVREF_CHANGE_STATS_ORA_TNAME,
+  OB_USER_MVREF_CHANGE_STATS_ORA_TNAME,
+  OB_DBA_MVREF_STMT_STATS_ORA_TNAME,
+  OB_USER_MVREF_STMT_STATS_ORA_TNAME,
   OB_GV_OB_SQL_AUDIT_ORA_TNAME,
   OB_V_OB_SQL_AUDIT_ORA_TNAME,
   OB_GV_INSTANCE_TNAME,
@@ -12243,10 +12363,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 279;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 776;
-const int64_t OB_SYS_VIEW_COUNT = 830;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1890;
+const int64_t OB_SYS_VIEW_COUNT = 864;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1924;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1893;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1927;
 
 } // end namespace share
 } // end namespace oceanbase

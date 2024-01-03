@@ -2332,6 +2332,9 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       if (OB_ISNULL(record_type.get_record_member_type(member_index))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type is invalid", K(ret));
+      } else if (access_ident.has_brackets_ && 0 == access_ident.params_.count()) {
+        ret = OB_ERR_NOT_FUNC_NAME;
+        LOG_USER_ERROR(OB_ERR_NOT_FUNC_NAME, attr_name.length(), attr_name.ptr());
       } else {
         new(&access_idx)ObObjAccessIdx(*record_type.get_record_member_type(member_index),
             ObObjAccessIdx::IS_CONST, attr_name, *record_type.get_record_member_type(member_index),

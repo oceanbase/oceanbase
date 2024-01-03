@@ -185,7 +185,7 @@ USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION
 PARTITION_SORT NO_PARTITION_SORT WF_TOPN
 USE_LATE_MATERIALIZATION NO_USE_LATE_MATERIALIZATION
 PX_JOIN_FILTER NO_PX_JOIN_FILTER PX_PART_JOIN_FILTER NO_PX_PART_JOIN_FILTER
-PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET RANDOM_LOCAL BROADCAST BC2HOST LIST
+PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY RANDOM_LOCAL BROADCAST BC2HOST LIST
 GBY_PUSHDOWN NO_GBY_PUSHDOWN
 USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
@@ -340,7 +340,7 @@ END_P SET_VAR DELIMITER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
         SET_TP SHARE SHUTDOWN SIGNED SIMPLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
-        SQL_CACHE SQL_NO_CACHE SQL_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
+        SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
@@ -475,7 +475,7 @@ END_P SET_VAR DELIMITER
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
 %type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type
-%type <node> sql_id_expr opt_sql_id
+%type <node> sql_id_or_schema_id_expr opt_sql_id_or_schema_id
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
 %type <node> zone_action upgrade_action
@@ -507,7 +507,7 @@ END_P SET_VAR DELIMITER
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
-%type <node> opt_qb_name parallel_hint pq_set_hint_desc
+%type <node> opt_qb_name opt_qb_name_list_with_quotes parallel_hint pq_set_hint_desc pq_subquery_hint_desc
 %type <node> create_tablespace_stmt drop_tablespace_stmt tablespace rotate_master_key_stmt
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
@@ -968,6 +968,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->sql_str_off_ = @1.first_column;
   @$.first_column = @1.first_column;
   @$.last_column = @1.last_column;
+  $$->is_forbid_parameter_ = $1->is_forbid_parameter_;
 }
 | charset_introducer STRING_VALUE
 {
@@ -977,6 +978,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
   $$->sql_str_off_ = $2->sql_str_off_;
+  $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
 }
 | charset_introducer HEX_STRING_VALUE
 {
@@ -987,6 +989,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
   $$->sql_str_off_ = $2->sql_str_off_;
+  $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
 }
 | STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
@@ -1106,7 +1109,6 @@ literal
 {
   $$ = $1;
   $$->sql_str_off_ = $1->sql_str_off_;
-  CHECK_MYSQL_COMMENT(result, $$);
 }
 | SYSTEM_VARIABLE { $$ = $1; }
 | QUESTIONMARK { $$ = $1; }
@@ -7890,7 +7892,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($2);
   UNUSED($3);
   UNUSED($4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 11,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
                            NULL,    /* opt_materialized */
                            $6,    /* view name */
                            $7,    /* column list */
@@ -7899,7 +7901,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            NULL,
                            $11,    /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL
                );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 1; /* is alter view */
@@ -10434,6 +10436,11 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   $$ = $3;
 }
+| PQ_SUBQUERY '('qb_name_option opt_comma pq_subquery_hint_desc ')'
+{
+  (void)($4);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SUBQUERY, 3, $3, $5->children_[0], $5->children_[1]);
+}
 | GBY_PUSHDOWN opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_GBY_PUSHDOWN, 1, $2);
@@ -10560,6 +10567,26 @@ pq_set_hint_desc:
 | '@' qb_name_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, NULL);
+}
+;
+
+pq_subquery_hint_desc:
+opt_qb_name_list_with_quotes distribute_method_list
+{
+  ParseNode *method_list = NULL;
+  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INVALID, 2, $1, method_list);
+}
+;
+
+opt_qb_name_list_with_quotes:
+'(' qb_name_list ')'
+{
+  merge_nodes($$, result, T_QB_NAME_LIST, $2);
+}
+| /*empty*/
+{
+  $$ = NULL;
 }
 ;
 
@@ -15985,7 +16012,7 @@ ALTER SYSTEM BOOTSTRAP server_info_list
   malloc_non_terminal_node($$, result->malloc_pool_, T_BOOTSTRAP, 1, server_list);
 }
 |
-ALTER SYSTEM FLUSH cache_type CACHE opt_namespace opt_sql_id opt_databases opt_tenant_list flush_scope
+ALTER SYSTEM FLUSH cache_type CACHE opt_namespace opt_sql_id_or_schema_id opt_databases opt_tenant_list flush_scope
 {
   // system tenant use only.
   malloc_non_terminal_node($$, result->malloc_pool_, T_FLUSH_CACHE, 6, $4, $6, $7, $8, $9, $10);
@@ -17650,16 +17677,21 @@ SUSPEND
 }
 ;
 
-sql_id_expr:
+sql_id_or_schema_id_expr:
 SQL_ID opt_equal_mark STRING_VALUE
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SQL_ID, 1, $3);
 }
+| SCHEMA_ID opt_equal_mark INTNUM
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SCHEMA_ID, 1, $3);
+}
 ;
 
-opt_sql_id:
-sql_id_expr
+opt_sql_id_or_schema_id:
+sql_id_or_schema_id_expr
 {
   $$ = $1;
 }
@@ -19779,6 +19811,7 @@ ACCOUNT
 |       SQL_BUFFER_RESULT
 |       SQL_CACHE
 |       SQL_ID
+|       SCHEMA_ID
 |       SQL_NO_CACHE
 |       SQL_THREAD
 |       SQL_TSI_DAY

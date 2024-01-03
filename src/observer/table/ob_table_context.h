@@ -247,6 +247,10 @@ public:
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
   }
+  OB_INLINE bool is_inc() const
+  {
+    return ObTableOperationType::Type::INCREMENT == operation_type_;
+  }
   OB_INLINE bool is_dml() const
   {
     return ObTableOperationType::Type::GET != operation_type_ && !is_scan_;
@@ -556,7 +560,6 @@ public:
         column_infos_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -596,7 +599,6 @@ public:
         related_ins_ctdefs_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(full_row),
                K_(delta_row),
@@ -653,7 +655,6 @@ public:
         related_ctdefs_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef),
                K_(related_ctdefs));
@@ -745,7 +746,6 @@ public:
         das_ctdef_(alloc),
         alloc_(alloc)
   {
-    das_ctdef_.is_table_api_ = true;
   }
   TO_STRING_KV(K_(das_ctdef));
   ObDASLockCtDef das_ctdef_;

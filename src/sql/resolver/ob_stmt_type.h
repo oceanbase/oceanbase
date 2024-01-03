@@ -296,6 +296,12 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_DROP_MLOG, get_drop_mlog_stmt_need_privs, 296)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_FLUSH_PRIVILEGES, no_priv_needed, 298)
 
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_TRANSFER_PARTITION, get_sys_tenant_alter_system_priv, 297)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ADD_LS_REPLICA, get_sys_tenant_alter_system_priv, 299)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_REMOVE_LS_REPLICA, get_sys_tenant_alter_system_priv, 300)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MIGRATE_LS_REPLICA, get_sys_tenant_alter_system_priv, 301)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MODIFY_LS_REPLICA, get_sys_tenant_alter_system_priv, 302)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MODIFY_LS_PAXOS_REPLICA_NUM, get_sys_tenant_alter_system_priv, 303)
+// OB_STMT_TYPE_DEF_UNKNOWN_AT(T_CANCEL_LS_REPLICA_TASK, get_sys_tenant_alter_system_priv, 304)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

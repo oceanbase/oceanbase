@@ -139,8 +139,6 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ObIndexBlockRowParser idx_row_parser;
   ObIndexBlockRowScanner idx_scanner;
   ObIndexBlockRowScanner raw_idx_scanner;
-  ObArray<int32_t> agg_projector;
-  ObArray<ObColumnSchemaV2> agg_column_schema;
   ObQueryFlag query_flag;
   query_flag.set_use_block_cache();
   ObIndexBlockDataTransformer transformer;
@@ -154,9 +152,9 @@ TEST_F(TestIndexBlockRowScanner, prefetch_and_scan)
   ASSERT_TRUE(root_blk_header->is_valid());
 
   ASSERT_EQ(OB_SUCCESS, idx_scanner.init(
-      agg_projector, agg_column_schema, tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
+          tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
   ASSERT_EQ(OB_SUCCESS, raw_idx_scanner.init(
-      agg_projector, agg_column_schema, tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
+          tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(), allocator_, query_flag, 0));
 
   ObMacroBlockHandle macro_handle;
   const ObIndexBlockRowHeader *idx_row_header = nullptr;

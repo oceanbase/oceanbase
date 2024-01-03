@@ -117,14 +117,11 @@ public:
   int assign(const ObIndexBlockIterParam &other);
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(KP(sstable_), KP(tablet_), K(ls_id_), K(tablet_id_));
+  TO_STRING_KV(KP(sstable_), KP(tablet_));
 
 public:
   const ObSSTable *sstable_;
-  // pass ls_id + table_id or directly pass tablet
   const ObTablet *tablet_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
 };
 
 class ObIndexBlockRowIterator
@@ -138,7 +135,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) = 0;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) = 0;
@@ -155,6 +151,7 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) = 0;
+  virtual int locate_range() { return OB_NOT_SUPPORTED; }
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) = 0;
   virtual bool end_of_block() const = 0;
   virtual int get_index_row_count(const ObDatumRange &range,
@@ -173,16 +170,15 @@ public:
                                               const ObCSRange &parent_row_range,
                                               bool &is_certain,
                                               int64_t &found_idx) { return OB_NOT_SUPPORTED; }
-  virtual int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) { return OB_NOT_SUPPORTED; }
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) { return OB_NOT_SUPPORTED; }
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
                                 const bool is_left_border,
                                 const bool is_right_border,
                                 const ObCSRange &parent_row_range,
                                 ObCSRange &cs_range) { return OB_NOT_SUPPORTED; }
   virtual void get_end_key(const ObDatumRowkey *&rowkey) {}
+  virtual void set_iter_end() {}
 public:
   virtual int switch_context(ObStorageDatumUtils *datum_utils)
   {
@@ -190,7 +186,7 @@ public:
     return OB_SUCCESS;
   }
   bool is_inited() { return is_inited_; }
-  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K(iter_step_), K(idx_row_parser_), KPC(datum_utils_));
+  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K(iter_step_), KPC(datum_utils_));
 
 protected:
   bool is_inited_;
@@ -210,7 +206,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -227,6 +222,10 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) override;
+  virtual int locate_range() override;
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
+  virtual void set_iter_end() override { current_ = ObIMicroBlockReader::INVALID_ROW_INDEX; }
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual bool end_of_block() const override;
   virtual int get_index_row_count(const ObDatumRange &range,
@@ -240,6 +239,7 @@ public:
 private:
   int init_datum_row(const ObStorageDatumUtils &datum_utils, ObIAllocator *allocator);
   bool is_in_border(bool is_reverse_scan, bool is_left_border, bool is_right_border);
+  int compare_rowkey(const ObDatumRowkey &rowkey, int32_t &cmp_ret);
 protected:
   int64_t current_;
   int64_t start_;               // inclusive
@@ -260,7 +260,6 @@ public:
                    const ObStorageDatumUtils *datum_utils,
                    ObIAllocator *allocator,
                    const bool is_reverse_scan,
-                   const bool set_iter_end,
                    const ObIndexBlockIterParam &iter_param) override;
   virtual int get_current(const ObIndexBlockRowHeader *&idx_row_header,
                           const ObDatumRowkey *&endkey) override;
@@ -277,6 +276,7 @@ public:
                            const bool is_left_border,
                            const bool is_right_border,
                            const bool is_normal_cg) override;
+  virtual int locate_range() override;
   virtual int check_blockscan(const ObDatumRowkey &rowkey, bool &can_blockscan) override;
   virtual void reset() override;
   virtual void reuse() override;
@@ -289,10 +289,8 @@ public:
                                               const ObCSRange &parent_row_range,
                                               bool &is_certain,
                                               int64_t &found_idx) override;
-  virtual int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info) override;
+  virtual int skip_to_next_valid_position(const ObDatumRowkey &rowkey) override;
+  virtual int find_rowkeys_belong_to_same_idx_row(ObMicroIndexInfo &idx_block_row, int64_t &rowkey_begin_idx, int64_t &rowkey_end_idx, const ObRowsInfo *&rows_info) override;
   virtual int get_idx_row_header_in_target_idx(const int64_t idx,
                                                const ObIndexBlockRowHeader *&idx_row_header) override;
   virtual int advance_to_border(const ObDatumRowkey &rowkey,
@@ -306,10 +304,6 @@ public:
 private:
   int get_cur_row_id_range(const ObCSRange &parent_row_range,
                            ObCSRange &cs_range);
-  int find_rowkeys_belong_to_same_idx_row(int64_t &rowkey_idx,
-                                          int64_t &rowkey_begin_idx,
-                                          int64_t &rowkey_end_idx,
-                                          const ObRowsInfo *&rows_info);
 
 private:
   const ObIndexBlockDataHeader *idx_data_header_;
@@ -324,8 +318,6 @@ public:
   void reset();
 
   int init(
-      const ObIArray<int32_t> &agg_projector,
-      const ObIArray<share::schema::ObColumnSchemaV2> &agg_column_schema,
       const ObStorageDatumUtils &datum_utils,
       ObIAllocator &allocator,
       const common::ObQueryFlag &query_flag,
@@ -356,9 +348,7 @@ public:
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false);
   void set_iter_param(const ObSSTable *sstable,
-                      const share::ObLSID &ls_id,
-                      const common::ObTabletID &tablet_id,
-                      const ObTablet *tablet = nullptr);
+                      const ObTablet *tablet);
   bool end_of_block() const;
   bool is_ddl_merge_type() const;
   int get_index_row_count(int64_t &index_row_count) const;
@@ -381,17 +371,16 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_ddl_merge_scan() const { return index_format_ == ObIndexFormat::DDL_MERGE; }
   void switch_context(const ObSSTable &sstable,
+                      const ObTablet *tablet,
                       const ObStorageDatumUtils &datum_utils,
-                      const common::ObQueryFlag &query_flag,
-                      const share::ObLSID &ls_id,
-                      const common::ObTabletID &tablet_id);
+                      ObTableAccessContext &access_ctx);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
                KPC_(iter), K_(range_idx), K_(is_get), K_(is_reverse_scan), K_(is_left_border), K_(is_right_border),
                K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(is_inited), K_(macro_id), KPC_(datum_utils),
                K_(is_normal_cg), K_(parent_row_range), K_(filter_constant_type), K_(is_normal_query),
                K_(iter_param));
 private:
-  int init_by_micro_data(const ObMicroBlockData &idx_block_data, bool set_iter_end);
+  int init_by_micro_data(const ObMicroBlockData &idx_block_data);
   int locate_key(const ObDatumRowkey &rowkey);
   int init_datum_row();
   int read_curr_idx_row(const ObIndexBlockRowHeader *&idx_row_header, const ObDatumRowkey *&endkey);
@@ -405,6 +394,7 @@ private:
       ObCSRange &cs_range);
   int get_next_idx_row(ObMicroIndexInfo &idx_block_row);
   void skip_index_rows();
+  int skip_to_next_valid_position(ObMicroIndexInfo &idx_block_row);
 private:
   union {
     const ObDatumRowkey *rowkey_;
@@ -412,8 +402,6 @@ private:
     const ObRowsInfo *rows_info_;
     const void *query_range_;
   };
-  const ObIArray<int32_t> *agg_projector_;
-  const ObIArray<share::schema::ObColumnSchemaV2> *agg_column_schema_;
   MacroBlockId macro_id_;
   ObIAllocator *allocator_;
   ObRAWIndexBlockRowIterator *raw_iter_;

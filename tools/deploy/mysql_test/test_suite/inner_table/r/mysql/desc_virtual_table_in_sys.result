@@ -4835,6 +4835,7 @@ execution_id	bigint(20)	NO		0
 ddl_stmt_str	longtext	YES		NULL	
 ret_code	bigint(20)	NO		0	
 message	longtext	YES		NULL	
+consensus_schema_version	bigint(20)	NO		-1	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_task_status;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5900,6 +5901,7 @@ user_message	longtext	YES		NULL
 dba_message	varchar(512)	YES		NULL	
 parent_task_id	bigint(20)	NO		0	
 trace_id	varchar(64)	YES		NULL	
+consensus_schema_version	bigint(20)	NO		-1	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_error_message;
 IF(count(*) >= 0, 1, 0)
 1

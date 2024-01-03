@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
+#include "ob_json_param_type.h"
 
 using namespace oceanbase::common;
 
@@ -163,38 +164,12 @@ private:
   const static uint8_t OB_JSON_ON_ASCII_IMPLICIT    = 0;
   const static uint8_t OB_JSON_ON_ASCII_USE         = 1;
 
-  /* process empty or error */
-  const static uint8_t OB_JSON_ON_RESPONSE_ERROR    = 0;
-  const static uint8_t OB_JSON_ON_RESPONSE_NULL     = 1;
-  const static uint8_t OB_JSON_ON_RESPONSE_DEFAULT  = 2;
-  const static uint8_t OB_JSON_ON_RESPONSE_IMPLICIT = 3;
-
-  /* process on mismatch { error : 0, null : 1, ignore : 2 }*/
-  const static uint8_t OB_JSON_ON_MISMATCH_ERROR    = 0;
-  const static uint8_t OB_JSON_ON_MISMATCH_NULL     = 1;
-  const static uint8_t OB_JSON_ON_MISMATCH_IGNORE   = 2;
-  const static uint8_t OB_JSON_ON_MISMATCH_IMPLICIT = 3;
-
-
   /* process mismatch type { MISSING : 4 (1), EXTRA : 5 (2), TYPE : 6 (4), EMPTY : 7 (0)} make diff with mismatch type  */
   const static uint8_t OB_JSON_TYPE_MISSING_DATA    = 4;
   const static uint8_t OB_JSON_TYPE_EXTRA_DATA      = 5;
   const static uint8_t OB_JSON_TYPE_TYPE_ERROR      = 6;
   const static uint8_t OB_JSON_TYPE_IMPLICIT        = 7;
   const static uint8_t OB_JSON_TYPE_DOT             = 8;
-
-  const static uint8_t json_doc_id      = 0;
-  const static uint8_t json_path_id     = 1;
-  const static uint8_t ret_type_id      = 2;
-  const static uint8_t opt_truncate_id  = 3;
-  const static uint8_t opt_ascii_id     = 4;
-  const static uint8_t empty_type_id    = 5;
-  const static uint8_t empty_val_id     = 6;
-  const static uint8_t empty_val_pre_id = 7;
-  const static uint8_t error_type_id    = 8;
-  const static uint8_t error_val_id     = 9;
-  const static uint8_t error_val_pre_id = 10;
-  const static uint8_t opt_mismatch_id  = 11;
 
   static int get_on_empty_or_error(const ObExpr &expr,
                                    ObEvalCtx &ctx,

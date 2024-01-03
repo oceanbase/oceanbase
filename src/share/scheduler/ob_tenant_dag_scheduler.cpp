@@ -1698,6 +1698,16 @@ bool ObTenantDagWorker::get_force_cancel_flag()
   return flag;
 }
 
+bool ObTenantDagWorker::hold_by_compaction_dag()
+{
+  bool bret = false;
+  ObIDag *dag = nullptr;
+  if (OB_NOT_NULL(task_) && OB_NOT_NULL(dag = task_->get_dag())) {
+    bret = is_compaction_dag(dag->get_type());
+  }
+  return bret;
+}
+
 void ObTenantDagWorker::run1()
 {
   self_ = this;

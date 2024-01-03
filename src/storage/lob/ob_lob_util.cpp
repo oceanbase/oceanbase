@@ -221,6 +221,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                blocksstable::ObStorageDatum &datum,
                                                const int64_t timeout_ts,
                                                const bool has_lob_header,
+                                               const uint64_t src_tenant_id,
                                                ObLobMetaWriteIter &iter)
 {
   int ret = OB_SUCCESS;
@@ -272,6 +273,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.offset_ = 0;
       lob_param.spec_lob_id_ = lob_id;
       lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
+      lob_param.src_tenant_id_ = src_tenant_id;
       if (!src.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid src lob locator.", K(ret));

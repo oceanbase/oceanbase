@@ -619,6 +619,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const int64_t seq_no,
     const int64_t timeout_ts,
     const int64_t lob_inrow_threshold,
+    const uint64_t src_tenant_id,
     ObLobMetaRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
@@ -652,8 +653,9 @@ int ObDirectLoadSliceWriter::prepare_iters(
     lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
     int64_t unused_affected_rows = 0;
     if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-      allocator, nullptr, ls_id, tablet_id, lob_id, cs_type, lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, *meta_write_iter_))) {
-      LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(lob_id));
+      allocator, nullptr, ls_id, tablet_id, lob_id, cs_type, lob_storage_param, datum,
+      timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
+      LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(lob_id), K(src_tenant_id));
     } else if (OB_FAIL(row_iterator_->init(meta_write_iter_, trans_id,
         trans_version, seq_no))) {
       LOG_WARN("fail to lob meta row iterator", K(ret), K(trans_id), K(trans_version), K(seq_no));
@@ -711,7 +713,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_memtable(
     lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
     if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
       allocator, info.ls_id_, info.data_tablet_id_, col_types.at(i).get_collation_type(),
-      lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, MTL_ID()))) {
+      lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
       LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
     }
   }
@@ -748,7 +750,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
         ObLobMetaRowIterator *row_iter = nullptr;
         if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
             info.data_tablet_id_, info.trans_version_, col_types.at(i).get_collation_type(), lob_id,
-            info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, row_iter))) {
+            info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, row_iter))) {
           LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
         } else {
           while (OB_SUCC(ret)) {

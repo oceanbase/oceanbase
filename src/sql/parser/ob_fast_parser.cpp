@@ -449,6 +449,8 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     // Most of the time, if it is not an identifier character, it maybe a space,
     // comma, opening parenthesis, or closing parenthesis. This judgment logic is
     // added here to avoid the next judgment whether it is utf8 char or gbk char
+  } else if (!is_oracle_mode_) {
+    idf_pos = notascii_gb_char(pos);
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
@@ -921,6 +923,17 @@ int ObFastParserBase::get_one_insert_row_str(ObRawSql &raw_sql,
   return ret;
 }
 
+inline int64_t ObFastParserBase::notascii_gb_char(const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (notascii(raw_sql_.char_at(pos))) {
+    idf_pos = pos + 1;
+  } else {
+    idf_pos = is_gbk_char(pos);
+  }
+  return idf_pos;
+}
+
 inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
 {
   int64_t idf_pos = -1;
@@ -1181,7 +1194,7 @@ int64_t ObFastParserBase::is_hint_begin(int64_t pos)
     ch = raw_sql_.char_at(pos);
     next_ch = raw_sql_.char_at(++pos);
     // check and ignore comment
-    while (ch != '*' && next_ch != '/' && !raw_sql_.is_search_end()) {
+    while (ch != '*' && next_ch != '/' && !raw_sql_.is_search_end(pos)) {
       ch = raw_sql_.char_at(pos);
       next_ch = raw_sql_.char_at(++pos);
     }
@@ -1672,6 +1685,8 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     // Most of the time, if it is not an identifier character, it maybe a space,
     // comma, opening parenthesis, or closing parenthesis. This judgment logic is
     // added here to avoid the next judgment whether it is utf8 char or gbk char
+  } else if (!is_oracle_mode_) {
+    idf_pos = notascii_gb_char(pos);
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
@@ -2754,16 +2769,26 @@ int ObFastParserMysql::parse_next_token()
       }
       case '-': {
         // need to deal with sql_comment or negative sign
-        int64_t space_len = 0;
         ch = raw_sql_.scan();
-        if ('-' == ch && IS_MULTI_SPACE(raw_sql_.cur_pos_ + 1, space_len)) {
-          // "--"{space}+{non_newline}*
+        if ('-' == ch &&
+            raw_sql_.cur_pos_ + 1 < raw_sql_.raw_sql_len_ &&
+            (raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == ' ' ||
+             raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\t')) {
+          // "--"[ \t]+{non_newline}*
           cur_token_type_ = IGNORE_TOKEN;
           // skip the second '-' and space
-          raw_sql_.scan(1 + space_len);
+          raw_sql_.scan(1);
           while (!raw_sql_.is_search_end() && is_non_newline(ch)) {
             ch = raw_sql_.scan();
           }
+        } else if ('-' == ch &&
+                   raw_sql_.cur_pos_ + 1 < raw_sql_.raw_sql_len_ &&
+                   (raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\n' ||
+                    raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\r')) {
+          // "--"[\n\r]
+          cur_token_type_ = IGNORE_TOKEN;
+          //skip the second '-' and ('\n' or \r)
+          raw_sql_.scan(1);
         } else {
           OZ (process_negative());
         }

@@ -1102,6 +1102,9 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   eval_questionmark_decint2decint_eqcast,                             /* 660 */
   eval_questionmark_decint2decint_normalcast,                         /* 661 */
   ObExprExtractExpiredTime::eval_extract_cert_expired_time,           /* 662 */
+  NULL, //ObExprXmlConcat::eval_xml_concat,                           /* 663 */
+  NULL, //ObExprXmlForest::eval_xml_forest,                           /* 664 */
+  NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 665 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

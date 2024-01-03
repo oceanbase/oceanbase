@@ -72,7 +72,8 @@ public:
   int init(ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
-           const uint64_t data_format_version);
+           const uint64_t data_format_version,
+           const ObStorageSchema *storage_schema);
   void destroy();
   void destroy_tree_value();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
@@ -89,6 +90,10 @@ public:
                    const bool is_reverse_scan,
                    blocksstable::DDLBtreeIterator &iter,
                    ObBlockMetaTreeValue *&cur_tree_value) const;
+  int skip_to_next_valid_position(const blocksstable::ObDatumRowkey &rowkey,
+                                  const blocksstable::ObStorageDatumUtils &datum_utils,
+                                  blocksstable::DDLBtreeIterator &iter,
+                                  ObBlockMetaTreeValue *&tree_value) const;
   int get_next_tree_value(blocksstable::DDLBtreeIterator &iter,
                           const int64_t step,
                           ObBlockMetaTreeValue *&tree_value) const;

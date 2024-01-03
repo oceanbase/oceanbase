@@ -184,6 +184,7 @@ private:
   int64_t last_advance_clock_ts_us_;
   int64_t last_print_throttle_info_ts_;
   int64_t last_update_limit_ts_;
+  int64_t tenant_id_;
   double decay_factor_;
 
 

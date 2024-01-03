@@ -584,6 +584,7 @@ public:
   {}
   ~ObTenantSqlMemoryManager() {}
 public:
+  static int mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static int mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static void mtl_destroy(ObTenantSqlMemoryManager *&sql_mem_mgr);
 

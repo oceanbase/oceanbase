@@ -545,7 +545,7 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
     if (!is_autoincrement) {
       ret = OB_BAD_NULL_ERROR;
     }
-  } else if (obj.is_null()) {
+  } else if (obj.is_null() || is_inc()) {
     // continue
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
@@ -876,7 +876,9 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   int ret = OB_SUCCESS;
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
-  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || is_ttl_table_;
+  bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || is_ttl_table_
+                                  || (has_filter && !is_htable());
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_

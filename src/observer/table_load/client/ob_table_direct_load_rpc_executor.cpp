@@ -221,6 +221,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
     start_arg.tenant_id_ = tenant_id;
     start_arg.table_id_ = table_id;
     start_arg.parallelism_ = arg_.parallel_;
+    start_arg.is_load_data_ = true;
     if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
                                                     *client_task_->get_session_info()))) {
       LOG_WARN("fail to start redef table", KR(ret), K(start_arg));

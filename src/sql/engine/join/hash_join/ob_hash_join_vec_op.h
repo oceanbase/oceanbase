@@ -315,7 +315,7 @@ private:
 public:
   virtual int inner_open() override;
   virtual int inner_rescan() override;
-  virtual int drain_exch() override;
+  virtual int do_drain_exch() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual int inner_get_next_row() { return common::OB_NOT_IMPLEMENT; };
   virtual void destroy() override;

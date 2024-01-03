@@ -52,20 +52,23 @@ public:
       trans_version_(0),
       direct_load_type_(),
       trans_id_(),
-      seq_no_(0)
+      seq_no_(0),
+      src_tenant_id_(0)
   { }
   ObBatchSliceWriteInfo(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id, const int64_t &trans_version,
-      const ObDirectLoadType &direct_load_type, const transaction::ObTransID &trans_id, const int64_t &seq_no)
+      const ObDirectLoadType &direct_load_type, const transaction::ObTransID &trans_id, const int64_t &seq_no,
+      const uint64_t src_tenant_id)
     : data_tablet_id_(tablet_id),
       ls_id_(ls_id),
       trans_version_(trans_version),
       direct_load_type_(direct_load_type),
       trans_id_(trans_id),
-      seq_no_(seq_no)
+      seq_no_(seq_no),
+      src_tenant_id_(src_tenant_id)
 
   { }
   ~ObBatchSliceWriteInfo() = default;
-  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(trans_version_), K(direct_load_type_));
+  TO_STRING_KV(K(ls_id_), K(data_tablet_id_), K(trans_version_), K(direct_load_type_), K(src_tenant_id_));
 public:
   common::ObTabletID data_tablet_id_;
   share::ObLSID ls_id_;
@@ -73,6 +76,7 @@ public:
   ObDirectLoadType direct_load_type_;
   transaction::ObTransID trans_id_;
   int64_t seq_no_; //
+  uint64_t src_tenant_id_;
 };
 
 struct ObTabletDirectLoadMgrKey final
@@ -103,11 +107,11 @@ struct ObDirectLoadSliceInfo final
 public:
   ObDirectLoadSliceInfo()
     : is_full_direct_load_(false), is_lob_slice_(false), ls_id_(), data_tablet_id_(), slice_id_(-1),
-      context_id_(0)
+      context_id_(0), src_tenant_id_(MTL_ID())
     { }
   ~ObDirectLoadSliceInfo() = default;
-  bool is_valid() const { return ls_id_.is_valid() && data_tablet_id_.is_valid() && slice_id_ >= 0 && context_id_ >= 0; }
-  TO_STRING_KV(K_(is_full_direct_load), K_(is_lob_slice), K_(ls_id), K_(data_tablet_id), K_(slice_id), K_(context_id));
+  bool is_valid() const { return ls_id_.is_valid() && data_tablet_id_.is_valid() && slice_id_ >= 0 && context_id_ >= 0 && src_tenant_id_ > 0; }
+  TO_STRING_KV(K_(is_full_direct_load), K_(is_lob_slice), K_(ls_id), K_(data_tablet_id), K_(slice_id), K_(context_id), K_(src_tenant_id));
 public:
   bool is_full_direct_load_;
   bool is_lob_slice_;
@@ -115,6 +119,7 @@ public:
   common::ObTabletID data_tablet_id_;
   int64_t slice_id_;
   int64_t context_id_;
+  uint64_t src_tenant_id_;
 DISALLOW_COPY_AND_ASSIGN(ObDirectLoadSliceInfo);
 };
 
@@ -527,6 +532,7 @@ private:
       const int64_t seq_no,
       const int64_t timeout_ts,
       const int64_t lob_inrow_threshold,
+      const uint64_t src_tenant_id,
       ObLobMetaRowIterator *&row_iter);
 private:
   bool is_inited_;

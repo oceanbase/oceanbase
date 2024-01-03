@@ -635,13 +635,18 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         // Expr rownum() shows up in both operator 0 and 2, which leads circular
         // dependency and breaks rownum's defination.
         //
-        bool has_rownum_expr = false;
-        for (int64_t i = 0; !has_rownum_expr && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
-          OZ(op->get_child(i)->find_rownum_expr(has_rownum_expr));
+        const ObRawExpr *rownum_expr = NULL;
+        for (int64_t i = 0; rownum_expr == NULL && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+          ObLogicalOperator *child = op->get_child(i);
+          if (OB_ISNULL(child)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("op child is null", K(ret));
+          } else if (OB_FAIL(child->find_rownum_expr(rownum_expr))) {
+            LOG_WARN("find rownum expr error", K(ret));
+          }
         }
-        if (has_rownum_expr) {
-          LOG_DEBUG("rownum expr is in count operator's subplan tree. Stop vectorization execution",
-                    K(has_rownum_expr));
+        if (NULL != rownum_expr) {
+          LOG_DEBUG("rownum expr is in count operator's subplan tree. Stop vectorization exec");
           disable_vectorize = true;
         }
       } else if (log_op_def::LOG_JOIN == op->get_type() &&

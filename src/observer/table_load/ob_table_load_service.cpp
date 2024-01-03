@@ -407,17 +407,22 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     }
-    // check if it is an oracle temporary table
-    else if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+    // check if it is a user table
+    else if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
-    }
-    // check if it is a view
-    else if (table_schema->is_view_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support view table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+        LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+      } else if (table_schema->is_view_table()) {
+        LOG_WARN("direct-load does not support view table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      } else if (table_schema->is_mlog_table()) {
+        LOG_WARN("direct-load does not support materialized view log table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support materialized view log table");
+      } else {
+        LOG_WARN("direct-load does not support non-user table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
+      }
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
@@ -440,6 +445,12 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+    }
+    // check if table has mlog
+    else if (table_schema->has_mlog_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
     }
   }
   return ret;

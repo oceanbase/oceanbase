@@ -843,6 +843,9 @@ typedef enum ObItemType
   T_FUN_SYS_ST_SYMDIFFERENCE = 1729,
   T_FUN_SYS_PRIV_ST_ASMVTGEOM = 1730,
   T_FUN_SYS_PRIV_ST_MAKE_VALID = 1731,
+  T_FUN_SYS_XML_CONCAT = 1732,
+  T_FUN_SYS_XML_FOREST = 1733,
+  T_FUN_SYS_XML_EXISTSNODE = 1734,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -1246,7 +1249,6 @@ typedef enum ObItemType
   T_ROLLBACK,
   T_ANY_HOST_NAME,
   T_USER_WITH_HOST_NAME,
-  T_FLUSH_PRIVILEGES,
 
   T_INDEX_COLUMN_LIST,
   T_INDEX_USING_ALGORITHM,
@@ -2381,6 +2383,11 @@ typedef enum ObItemType
   T_COLUMN_GROUP_DROP,
   T_ALTER_COLUMN_GROUP_OPTION,
   T_BLOCKING,
+  T_PQ_SUBQUERY,
+  T_FLUSH_PRIVILEGES,
+  T_SCHEMA_ID,
+  T_CANCEL_TRANSFER_PARTITION,
+  T_CANCEL_BALANCE_JOB,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

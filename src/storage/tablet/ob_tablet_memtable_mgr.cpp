@@ -165,7 +165,7 @@ int ObTabletMemtableMgr::reset_storage_recorder()
   return ret;
 }
 
-inline int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_(
+inline int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_for_leader_(
   memtable::ObMemtable *last_frozen_memtable,
   memtable::ObMemtable *new_memtable)
 {
@@ -192,14 +192,23 @@ inline int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_(
     double_check = !double_check;
   } while (!can_resolve && double_check);
 
-  if (can_resolve) {
+
+  if (write_ref > 0) {
+    // NB: for the leader, if the write ref on the frozen memtable is greater
+    // than 0, we cannot create a new memtable. Otherwise we may finish the
+    // write on the new memtable before finishing the write on the frozen
+    // memtable and cause the writes and callbacks on memtable_ctx out of order.
+    ret = OB_EAGAIN;
+    TRANS_LOG(INFO, "last frozen's write flag is not 0 during create new memtable",
+              KPC(last_frozen_memtable), KPC(new_memtable));
+  } else if (can_resolve) {
     last_frozen_memtable->set_resolved_active_memtable_left_boundary(true);
     last_frozen_memtable->resolve_right_boundary();
     TRANS_LOG(INFO, "[resolve_right_boundary] in create_memtable on leader", KPC(last_frozen_memtable));
     if (new_memtable != last_frozen_memtable) {
       new_memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
     }
-  } else if (unsubmitted_cnt > 0 || write_ref > 0) {
+  } else if (unsubmitted_cnt > 0) {
     new_memtable->set_logging_blocked();
     TRANS_LOG(INFO, "set new memtable logging blocked", KPC(last_frozen_memtable), KPC(new_memtable));
   }
@@ -307,7 +316,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
           }
         }
         // for leader, decide the right boundary of frozen memtable
-        else if (OB_FAIL(try_resolve_boundary_on_create_memtable_(last_frozen_memtable, memtable))) {
+        else if (OB_FAIL(try_resolve_boundary_on_create_memtable_for_leader_(last_frozen_memtable, memtable))) {
           TRANS_LOG(WARN, "try resolve boundary fail", K(ret));
         }
       } else {

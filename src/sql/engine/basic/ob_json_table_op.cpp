@@ -29,53 +29,6 @@ using namespace common;
 namespace sql
 {
 
-/* json table empty or error */
-const static int32_t JSN_TABLE_ERROR    = 0;
-const static int32_t JSN_TABLE_NULL     = 1;
-const static int32_t JSN_TABLE_DEFAULT  = 2;
-const static int32_t JSN_TABLE_IMPLICIT = 3;
-
-/* json query empty or error */
-const static int32_t JSN_QUERY_ERROR        = 0;
-const static int32_t JSN_QUERY_NULL         = 1;
-const static int32_t JSN_QUERY_EMPTY        = 2;
-const static int32_t JSN_QUERY_EMPTY_ARRAY  = 3;
-const static int32_t JSN_QUERY_EMPTY_OBJECT = 4;
-const static int32_t JSN_QUERY_IMPLICIT     = 5;
-
-/* json query on mismatch { error : 0, null : 1, implicit : 2 }*/
-const static int32_t JSN_QUERY_MISMATCH_ERROR    = 0;
-const static int32_t JSN_QUERY_MISMATCH_NULL     = 1;
-const static int32_t JSN_QUERY_MISMATCH_IMPLICIT = 2;
-
-/* json query wrapper type */
-const static int32_t JSN_QUERY_WITHOUT_WRAPPER                    = 0;
-const static int32_t JSN_QUERY_WITHOUT_ARRAY_WRAPPER              = 1;
-const static int32_t JSN_QUERY_WITH_WRAPPER                       = 2;
-const static int32_t JSN_QUERY_WITH_ARRAY_WRAPPER                 = 3;
-const static int32_t JSN_QUERY_WITH_UNCONDITIONAL_WRAPPER         = 4;
-const static int32_t JSN_QUERY_WITH_CONDITIONAL_WRAPPER           = 5;
-const static int32_t JSN_QUERY_WITH_UNCONDITIONAL_ARRAY_WRAPPER   = 6;
-const static int32_t JSN_QUERY_WITH_CONDITIONAL_ARRAY_WRAPPER     = 7;
-const static int32_t JSN_QUERY_WRAPPER_IMPLICIT                   = 8;
-
-/* json query on scalars { allow : 0, disallow : 1, implicit : 2 }*/
-const static int32_t JSN_QUERY_SCALARS_ALLOW       = 0;
-const static int32_t JSN_QUERY_SCALARS_DISALLOW    = 1;
-const static int32_t JSN_QUERY_SCALARS_IMPLICIT    = 2;
-
-/* json value empty or error */
-const static int32_t JSN_VALUE_ERROR    = 0;
-const static int32_t JSN_VALUE_NULL     = 1;
-const static int32_t JSN_VALUE_DEFAULT  = 2;
-const static int32_t JSN_VALUE_IMPLICIT = 3;
-
-/*  json value  on mismatch { error : 0, null : 1, ignore : 2 }*/
-const static int32_t JSN_VALUE_MISMATCH_ERROR    = 0;
-const static int32_t JSN_VALUE_MISMATCH_NULL     = 1;
-const static int32_t JSN_VALUE_MISMATCH_IGNORE   = 2;
-const static int32_t JSN_VALUE_MISMATCH_IMPLICIT = 3;
-
 /* json value  mismatch type { MISSING : 0, EXTRA : 1, TYPE : 2, EMPTY : 3} */
 const static int32_t JSN_VALUE_TYPE_MISSING_DATA    = 0;
 const static int32_t JSN_VALUE_TYPE_EXTRA_DATA      = 1;
@@ -3348,7 +3301,7 @@ int ObJsonTableOp::inner_get_next_row()
           ret = OB_ERR_JSON_SYNTAX_ERROR;
           SET_COVER_ERROR(&jt_ctx_, ret);
           jt_ctx_.is_need_end_ = 1;
-          if (lib::is_oracle_mode() && jt_root_->col_info_.on_error_ != JSN_TABLE_ERROR) {
+          if (lib::is_oracle_mode() && jt_root_->col_info_.on_error_ != JSN_VALUE_ERROR) {
             ret = OB_SUCCESS;
           }
         } else {

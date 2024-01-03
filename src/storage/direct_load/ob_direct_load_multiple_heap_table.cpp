@@ -168,6 +168,12 @@ int ObDirectLoadMultipleHeapTable::init(const ObDirectLoadMultipleHeapTableCreat
   return ret;
 }
 
+void ObDirectLoadMultipleHeapTable::release_data()
+{
+  index_file_handle_.reset();
+  data_fragments_.reset();
+}
+
 int ObDirectLoadMultipleHeapTable::copy(const ObDirectLoadMultipleHeapTable &other)
 {
   int ret = OB_SUCCESS;

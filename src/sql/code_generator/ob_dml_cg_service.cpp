@@ -1303,6 +1303,32 @@ int ObDmlCgService::heap_table_has_not_null_uk(ObSchemaGetterGuard *schema_guard
   return ret;
 }
 
+int ObDmlCgService::append_lob_type_column_id(const ObTableSchema *table_schema,
+                                              ObIArray<uint64_t> &minimal_column_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+  for (; OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    const ObColumnSchemaV2 *column = *iter;
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column schema", K(column));
+    } else if (is_lob_storage(column->get_meta_type().get_type())) {
+      // The hidden column of xml type is of lob type, so when adding the lob column here,
+      // the hidden column of xml type will be added naturally.
+      if (OB_FAIL(add_var_to_array_no_dup(minimal_column_ids, column->get_column_id()))) {
+        LOG_WARN("add time type column_id failed", K(ret), K(column->get_column_id()));
+      }
+    } else if (column->get_meta_type().is_user_defined_sql_type()) {
+      // append xml column
+      if (OB_FAIL(add_var_to_array_no_dup(minimal_column_ids, column->get_column_id()))) {
+        LOG_WARN("add time type column_id failed", K(ret), K(column->get_column_id()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDmlCgService::append_time_type_column_id(const ObTableSchema *table_schema,
                                                ObIArray<uint64_t> &minimal_column_ids)
 {
@@ -1546,6 +1572,10 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
     }
   } else if (OB_FAIL(is_table_has_unique_key(schema_guard, table_schema, has_uk))) {
     LOG_WARN("fail to check table has UK", K(ret));
+  } else if (has_uk &&
+      OB_FAIL(append_all_uk_column_id(schema_guard, table_schema, minimal_column_ids))) {
+    // append UK
+    LOG_WARN("fail to append all uk column_id", K(ret));
   } else if (OB_FAIL(append_udt_hidden_col_id(op, table_schema, index_dml_info, minimal_column_ids))) {
     // append UDT hidden column
     LOG_WARN("fail to append upd assignment column_id", K(ret), K(index_dml_info));
@@ -1554,10 +1584,6 @@ int ObDmlCgService::append_upd_old_row_cid(ObLogicalOperator &op,
                                                      minimal_column_ids))) {
     // append update column
     LOG_WARN("fail to append upd assignment column_id", K(ret), K(index_dml_info));
-  } else if (has_uk &&
-      OB_FAIL(append_all_uk_column_id(schema_guard, table_schema, minimal_column_ids))) {
-    // append UK
-    LOG_WARN("fail to append all uk column_id", K(ret));
   } else if (OB_FAIL(append_time_type_column_id(table_schema, minimal_column_ids))) {
     // append time_type column
     LOG_WARN("fail to append time type column_id", K(ret));
@@ -1678,6 +1704,8 @@ int ObDmlCgService::generate_minimal_delete_old_row_cid(ObTableID index_tid,
   } else if (OB_FAIL(append_all_pk_column_id(schema_guard, table_schema, minimal_column_ids))) {
     // append PK
     LOG_WARN("fail to append all pk to column_id", K(ret), K(index_tid));
+  } else if (OB_FAIL(append_lob_type_column_id(table_schema, minimal_column_ids))) {
+    LOG_WARN("fail to append all lob_storage column_id", K(ret), K(index_tid));
   } else if (!is_primary_index) {
     // index_table record PK and the dependent columns of shadow_pk
     //

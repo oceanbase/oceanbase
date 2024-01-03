@@ -77,6 +77,7 @@ public:
   // and we should fill (min, max) for c3
   ObFixedArray<int64_t, common::ObIAllocator> prefix_col_idxs_;
   ObFixedArray<ObObjMeta, common::ObIAllocator> prefix_col_obj_metas_;
+  TO_STRING_KV(K_(table_id), K_(range_column_cnt), K_(prefix_col_idxs), K_(prefix_col_obj_metas));
 };
 
 } //end name space sql

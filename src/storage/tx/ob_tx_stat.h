@@ -25,21 +25,21 @@ struct ObTxCallbackListStat
 {
   int id_;
   share::SCN sync_scn_;
-  share::SCN checksum_scn_;
   int length_;
   int logged_;
   int removed_;
+  int branch_removed_;
   void reset() {}
   DECLARE_TO_STRING
   {
     int64_t pos = 0;
-    BUF_PRINTF("(%d,%d,%d,%d,%ld,%ld)",
+    BUF_PRINTF("[%d,%d,%d,%d,%d,%ld]",
                id_,
                length_,
                logged_,
                removed_,
-               (sync_scn_.is_valid() ? sync_scn_.get_val_for_inner_table_field() : -1),
-               (checksum_scn_.is_valid() ? checksum_scn_.get_val_for_inner_table_field() : -1));
+               branch_removed_,
+               (sync_scn_.is_valid() ? sync_scn_.get_val_for_inner_table_field() : 0));
     return pos;
   }
 };
@@ -127,8 +127,15 @@ public:
     {
       int64_t pos = 0;
       if (stats_.count() > 0) {
-        BUF_PRINTF("[id, length, logged, removed, sync_scn, checksum_scn]");
-        BUF_PRINTO(stats_);
+        J_ARRAY_START();
+        BUF_PRINTF("\"id, length, logged, removed, branch_removed, sync_scn\"");
+        for (int i =0; i < stats_.count(); i++) {
+          if (stats_.at(i).id_ >= 0) {
+            J_COMMA();
+            BUF_PRINTO(stats_.at(i));
+          }
+        }
+        J_ARRAY_END();
       }
       return pos;
     }

@@ -110,13 +110,14 @@ int ObAllVirtualTenantSnapshotLSReplicaHistory::process_curr_tenant(ObNewRow *&r
       SERVER_LOG(WARN, "row is null or column count mismatch", KR(ret), KP(r), K(cur_row_.count_));
     } else {
       ObString ls_meta_package_str;
-      HEAP_VAR(ObLSMetaPackage, ls_meta_package) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < cur_row_.count_; ++i) {
-          uint64_t col_id = output_column_ids_.at(i);
-          if (LS_META_PACKAGE == col_id) {  // decode ls_meta_package column
-            int64_t length = 0;
-            EXTRACT_VARCHAR_FIELD_MYSQL(*result_, "ls_meta_package", ls_meta_package_str);
-            if (ls_meta_package_str.empty()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < cur_row_.count_; ++i) {
+        uint64_t col_id = output_column_ids_.at(i);
+        if (LS_META_PACKAGE == col_id) {  // decode ls_meta_package column
+          int64_t length = 0;
+          HEAP_VAR(ObLSMetaPackage, ls_meta_package) {
+            EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result_, "ls_meta_package", ls_meta_package_str);
+            if (OB_FAIL(ret)) {
+            } else if (ls_meta_package_str.empty()) {
               cur_row_.cells_[i].reset();
             } else if (OB_ISNULL(ls_meta_buf_)) {
               ret = OB_ERR_UNEXPECTED;
@@ -128,17 +129,17 @@ int ObAllVirtualTenantSnapshotLSReplicaHistory::process_curr_tenant(ObNewRow *&r
               SERVER_LOG(WARN, "fail to get ls_meta_package string", KR(ret), K(length));
             } else {
               cur_row_.cells_[i].set_lob_value(ObObjType::ObLongTextType, ls_meta_buf_,
-                                               static_cast<int32_t>(length));
+                                              static_cast<int32_t>(length));
               cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(
                                                     ObCharset::get_default_charset()));
             }
-          } else if (col_id - OB_APP_MIN_COLUMN_ID >= 0 && col_id - OB_APP_MIN_COLUMN_ID < r->count_) {
-            // direct copy other columns
-            cur_row_.cells_[i] = r->get_cell(col_id - OB_APP_MIN_COLUMN_ID);
-          } else {
-            ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "unexpected column id", KR(ret), K(col_id), K(output_column_ids_));
           }
+        } else if (col_id - OB_APP_MIN_COLUMN_ID >= 0 && col_id - OB_APP_MIN_COLUMN_ID < r->count_) {
+          // direct copy other columns
+          cur_row_.cells_[i] = r->get_cell(col_id - OB_APP_MIN_COLUMN_ID);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          SERVER_LOG(WARN, "unexpected column id", KR(ret), K(col_id), K(output_column_ids_));
         }
       }
     }

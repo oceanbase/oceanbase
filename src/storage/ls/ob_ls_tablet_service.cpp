@@ -173,6 +173,8 @@ int ObLSTabletService::offline()
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(offline_build_tablet_without_memtable_())) {
     LOG_WARN("failed to offline build tablet without memtable", K(ret));
+  } else if (OB_FAIL(offline_gc_tablet_for_create_or_transfer_in_abort_())) {
+    LOG_WARN("failed to offline_gc_tablet_for_create_or_transfer_in_abort", K(ret));
   } else if (OB_FAIL(offline_destroy_memtable_and_mds_table_())) {
     LOG_WARN("failed to offline destroy memtable and mds table", K(ret));
   } else {
@@ -1439,6 +1441,21 @@ int ObLSTabletService::update_tablet_release_memtable_for_offline(
   return ret;
 }
 
+int ObLSTabletService::ObUpdateDDLCommitSCN::modify_tablet_meta(ObTabletMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  if (!ddl_commit_scn_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ddl_commit_scn_));
+  } else if (meta.ddl_commit_scn_.is_valid_and_not_min() && ddl_commit_scn_ != meta.ddl_commit_scn_) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("ddl commit scn already set", K(ret), K(meta), K(ddl_commit_scn_));
+  } else {
+    meta.ddl_commit_scn_ = ddl_commit_scn_;
+  }
+  return ret;
+}
+
 int ObLSTabletService::update_tablet_ddl_commit_scn(
     const common::ObTabletID &tablet_id,
     const SCN ddl_commit_scn)
@@ -1452,7 +1469,7 @@ int ObLSTabletService::update_tablet_ddl_commit_scn(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !ddl_commit_scn.is_valid())) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || !ddl_commit_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(ddl_commit_scn));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::get_tablet(key, old_handle))) {
@@ -2697,6 +2714,8 @@ int ObLSTabletService::direct_insert_rows(
     ObTableLoadStore store(table_ctx);
     if (OB_FAIL(store.init())) {
       LOG_WARN("fail to init store", KR(ret));
+    } else if (OB_FAIL(store.px_check_for_write(tablet_id))) {
+      LOG_WARN("fail to check for write", KR(ret), K(tablet_id));
     }
 
     while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
@@ -3901,9 +3920,12 @@ int ObLSTabletService::insert_rows_to_tablet(
                                        run_ctx.dml_param_.tz_info_)) {
         LOG_WARN("extract rowkey failed");
       } else {
+        int tmp_ret = OB_SUCCESS;
         ObString index_name = "PRIMARY";
         if (data_table.is_index_table()) {
           data_table.get_index_name(index_name);
+        } else if (lib::is_oracle_mode() && OB_TMP_FAIL(data_table.get_primary_key_name(index_name))) {
+          LOG_WARN("Failed to get pk name", K(ret), K(tmp_ret));
         }
         LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE,
                        rowkey_buffer, index_name.length(), index_name.ptr());
@@ -6552,6 +6574,69 @@ int ObLSTabletService::check_tablet_no_active_memtable(const ObIArray<ObTabletID
   return ret;
 }
 
+int ObLSTabletService::offline_gc_tablet_for_create_or_transfer_in_abort_()
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("start offline_gc_tablet_for_create_or_transfer_in_abort", K(ls_->get_ls_id()));
+  ObTabletIDArray deleted_tablets;
+  ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  bool tablet_status_is_written = false;
+  ObTabletCreateDeleteMdsUserData data;
+  bool is_finish = false;
+  // get deleted_tablets
+  if (OB_FAIL(build_tablet_iter(tablet_iter))) {
+    LOG_WARN("failed to build ls tablet iter", KR(ret), KPC(this));
+  } else {
+    ObTabletHandle tablet_handle;
+    ObTablet *tablet = NULL;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get tablet", KR(ret), KPC(this), K(tablet_handle));
+        }
+      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid tablet handle", KR(ret), KPC(this), K(tablet_handle));
+      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet is NULL", KR(ret));
+      } else if (tablet->is_ls_inner_tablet()) {
+        // skip ls inner tablet
+      } else if (tablet->is_empty_shell()) {
+        // skip empty shell
+      } else if (OB_FAIL(tablet->check_tablet_status_written(tablet_status_is_written))) {
+        LOG_WARN("failed to check mds written", KR(ret), KPC(tablet));
+      } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(data, is_finish))) {
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+          if (tablet_status_is_written) {
+            if (OB_FAIL(deleted_tablets.push_back(tablet->get_tablet_id()))) {
+              LOG_WARN("failed to push_back", KR(ret));
+            } else {
+              LOG_INFO("tablet need be gc", KPC(tablet));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // gc deleted_tablets
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablets.count(); ++i) {
+      const ObTabletID tablet_id = deleted_tablets.at(i);
+      if (OB_FAIL(inner_remove_tablet(ls_->get_ls_id(), tablet_id))) {
+        LOG_WARN("failed to remove tablet", K(ret), K(tablet_id));
+      } else {
+        LOG_INFO("gc tablet finish", K(ret), K(tablet_id));
+      }
+    }
+  }
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

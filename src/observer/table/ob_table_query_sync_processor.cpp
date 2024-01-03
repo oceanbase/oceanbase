@@ -395,6 +395,7 @@ int ObTableQuerySyncP::init_tb_ctx(ObTableCtx &ctx)
   ObExprFrameInfo &expr_frame_info = query_ctx.expr_frame_info_;
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   ctx.set_scan(true);
+  ctx.set_entity_type(arg_.entity_type_);
 
   if (ctx.is_init()) {
     LOG_INFO("tb ctx has been inited", K(ctx));
@@ -541,7 +542,7 @@ int ObTableQuerySyncP::query_scan_without_init()
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null result iterator", K(ret));
-  } else if (OB_FAIL(result_.assign_property_names(tb_ctx.get_query_col_names()))) {
+  } else if (OB_FAIL(result_.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
     LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
   } else {
     ObTableQueryResult *query_result = nullptr;

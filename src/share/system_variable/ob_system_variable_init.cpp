@@ -2367,7 +2367,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[166].default_value_ = "1" ;
+      ObSysVars[166].default_value_ = "0" ;
       ObSysVars[166].info_ = "enable batching of the RHS IO in NLJ" ;
       ObSysVars[166].name_ = "_nlj_batching_enabled" ;
       ObSysVars[166].data_type_ = ObIntType ;

@@ -446,7 +446,7 @@ insert_batch_on_partitions(const common::ObIArray<ObExpr *> &exprs,
       }
       is_inited_vec_ = true;
     }
-    ObBitVector::flip_foreach(skip, batch_size,
+    ret = ObBitVector::flip_foreach(skip, batch_size,
       [&](int64_t idx) __attribute__((always_inline)) {
         int ret = OB_SUCCESS;
         uint16_t batch_idx = idx;

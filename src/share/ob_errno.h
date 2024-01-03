@@ -1813,6 +1813,7 @@ constexpr int OB_ERR_MVIEW_NEVER_REFRESH = -9761;
 constexpr int OB_ERR_CLIENT_LOCAL_FILES_DISABLED = -9762;
 constexpr int OB_ERR_OUT_PARAM_NOT_BIND_VAR = -9763;
 constexpr int OB_ERR_TIME_EARLIER_THAN_SYSDATE = -9764;
+constexpr int OB_ERR_NOT_FUNC_NAME = -9765;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -3326,7 +3327,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_DESC_FOR_POS__USER_ERROR_MSG "no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__USER_ERROR_MSG "object specified is incompatible with the flag specified"
 #define OB_ERR_DBLINK_REMOTE_ECODE__USER_ERROR_MSG "\ndblink remote error code: %d,\nremote error msg: %.*s"
-#define OB_ERR_DBLINK_NO_LIB__USER_ERROR_MSG "oci lib not founded"
+#define OB_ERR_DBLINK_NO_LIB__USER_ERROR_MSG "can not find the expected version of OCI LIB: %.*s"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__USER_ERROR_MSG "partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__USER_ERROR_MSG "not all variables bound"
 #define OB_ERR_BIND_VARIABLE_NOT_EXIST__USER_ERROR_MSG "bind variable does not exist"
@@ -4019,6 +4020,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__USER_ERROR_MSG "Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_OUT_PARAM_NOT_BIND_VAR__USER_ERROR_MSG "output parameter not a bind variable"
 #define OB_ERR_TIME_EARLIER_THAN_SYSDATE__USER_ERROR_MSG "the parameter %s must evaluate to a time in the future"
+#define OB_ERR_NOT_FUNC_NAME__USER_ERROR_MSG "object '%.*s' must be of type function or array to be used this way"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -5539,7 +5541,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_DESC_FOR_POS__ORA_USER_ERROR_MSG "ORA-24334: no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__ORA_USER_ERROR_MSG "ORA-04047: object specified is incompatible with the flag specified"
 #define OB_ERR_DBLINK_REMOTE_ECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5975, \ndblink remote error code: %d,\nremote error msg: %.*s"
-#define OB_ERR_DBLINK_NO_LIB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, oci lib not founded"
+#define OB_ERR_DBLINK_NO_LIB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, can not find the expected version of OCI LIB: %.*s"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__ORA_USER_ERROR_MSG "ORA-14109: partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__ORA_USER_ERROR_MSG "ORA-01008: not all variables bound"
 #define OB_ERR_BIND_VARIABLE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-01006: bind variable does not exist"
@@ -6232,6 +6234,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9762, Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_OUT_PARAM_NOT_BIND_VAR__ORA_USER_ERROR_MSG "ORA-06577: output parameter not a bind variable"
 #define OB_ERR_TIME_EARLIER_THAN_SYSDATE__ORA_USER_ERROR_MSG "ORA-23420: the parameter %s must evaluate to a time in the future"
+#define OB_ERR_NOT_FUNC_NAME__ORA_USER_ERROR_MSG "PLS-00224: object '%.*s' must be of type function or array to be used this way"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6276,7 +6279,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2209];
+extern int g_all_ob_errnos[2210];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

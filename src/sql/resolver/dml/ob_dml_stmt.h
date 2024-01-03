@@ -695,7 +695,8 @@ public:
   int iterate_joined_table_expr(JoinedTable *joined_table,
                                 ObStmtExprVisitor &visitor) const;
 
-  int update_stmt_table_id(const ObDMLStmt &other);
+  int update_stmt_table_id(ObIAllocator *allocator, const ObDMLStmt &other);
+  int adjust_duplicated_table_names(ObIAllocator &allocator, bool &adjusted);
   int set_table_item_qb_name();
   int adjust_qb_name(ObIAllocator *allocator,
                      const ObString &src_qb_name,
@@ -1179,7 +1180,9 @@ protected:
   int update_table_item_id(const ObDMLStmt &other,
                            const TableItem &old_item,
                            const bool has_bit_index,
-                           TableItem &new_item);
+                           TableItem &new_item,
+                           ObIAllocator *allocator);
+  int adjust_duplicated_table_name(ObIAllocator &allocator, TableItem &table_item, bool &adjusted);
 
 protected:
   /**

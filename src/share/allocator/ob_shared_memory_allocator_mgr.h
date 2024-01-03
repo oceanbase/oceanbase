@@ -23,8 +23,7 @@ namespace share {
 
 class ObSharedMemAllocMgr {
 public:
-  ObSharedMemAllocMgr()
-      : share_resource_throttle_tool_(),
+  ObSharedMemAllocMgr(): share_resource_throttle_tool_(),
         memstore_allocator_(),
         tx_data_allocator_(),
         mds_allocator_() {}
@@ -47,8 +46,9 @@ public:
                    share_resource_throttle_tool_.init(&memstore_allocator_, &tx_data_allocator_, &mds_allocator_))) {
       SHARE_LOG(ERROR, "init share resource throttle tool failed", KR(ret));
     } else {
+      tenant_id_ = MTL_ID();
       share_resource_throttle_tool_.enable_adaptive_limit<FakeAllocatorForTxShare>();
-      SHARE_LOG(INFO, "finish init mtl share mem allocator mgr", K(MTL_ID()), KP(this));
+      SHARE_LOG(INFO, "finish init mtl share mem allocator mgr", K(tenant_id_), KP(this));
     }
     return ret;
   }
@@ -71,6 +71,7 @@ private:
   void update_mds_throttle_config_(const int64_t total_memory, omt::ObTenantConfigGuard &config);
 
 private:
+  int64_t tenant_id_;
   TxShareThrottleTool share_resource_throttle_tool_;
   ObMemstoreAllocator memstore_allocator_;
   ObTenantTxDataAllocator tx_data_allocator_;

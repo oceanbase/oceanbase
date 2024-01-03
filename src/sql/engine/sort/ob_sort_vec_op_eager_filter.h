@@ -64,15 +64,15 @@ public:
       bucket_num_ = bucket_num_ < MIN_BUCKET_NUM ? 0 : bucket_num_;
       if (bucket_num_ != 0) {
         bucket_size_ = (topn_cnt + bucket_num_ - 1) / bucket_num_;
-        is_inited_ = true;
+        if (OB_FAIL(init_output_brs(max_batch_size))) {
+          SQL_ENG_LOG(WARN, "init ouput batch rows failed", K(ret));
+        }
       } else {
         is_by_pass_ = true;
         SQL_ENG_LOG(INFO, "no need to use filter ", K(dumped_rows_cnt),
                     K(topn_cnt));
       }
-      if (OB_FAIL(init_output_brs(max_batch_size))) {
-        SQL_ENG_LOG(WARN, "init ouput batch rows failed", K(ret));
-      }
+      is_inited_ = true;
     }
     return ret;
   }

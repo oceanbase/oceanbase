@@ -1474,8 +1474,6 @@ int ObBasicSessionInfo::get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const
       LOG_ERROR("influence plan system var is NULL", K(i), K(ret));
     } else if (OB_FAIL(sys_vars.push_back(sys_vars_[index]->get_value()))) {
       LOG_WARN("influence plan system variables push failed", K(ret));
-    } else {
-      LOG_WARN("luofan test get_influence_plan_sys_var", KPC(sys_vars_[index]));
     }
   }
   return ret;
@@ -3625,7 +3623,7 @@ int ObBasicSessionInfo::replace_user_variables(const ObSessionValMap &user_var_m
   return ret;
 }
 
-int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessionVariable &val)
+int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessionVariable &val, bool need_track)
 {
   int ret = OB_SUCCESS;
   if (var.empty()) {
@@ -3634,7 +3632,7 @@ int ObBasicSessionInfo::replace_user_variable(const ObString &var, const ObSessi
   } else if (OB_FAIL(user_var_val_map_.set_refactored(var, val))) {
     LOG_ERROR("fail to add variable", K(var), K(ret));
   } else {
-    if (is_track_session_info()) {
+    if (need_track && is_track_session_info()) {
       if (OB_FAIL(track_user_var(var))) {
         LOG_WARN("fail to track user var", K(var), K(ret));
       }

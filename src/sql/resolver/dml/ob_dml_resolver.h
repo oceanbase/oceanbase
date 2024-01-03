@@ -878,6 +878,7 @@ private:
   int resolve_pq_map_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_distribute_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_set_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int resolve_pq_subquery_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_filter_hint(const ParseNode &join_node, ObOptHint *&opt_hint);
   int resolve_aggregation_hint(const ParseNode &hint_node, ObOptHint *&hint);
   int resolve_normal_transform_hint(const ParseNode &hint_node, ObTransHint *&hint);
@@ -916,6 +917,8 @@ private:
 
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
+  int resolve_table_constraint_items(const TableItem *table_item,
+                                           const ObTableSchema *table_schema);
   int find_table_index_infos(const ObString &index_name,
                              const TableItem *table_item,
                              bool &find_it,
@@ -932,11 +935,16 @@ private:
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
   int resolve_table_values_for_select(const ParseNode &table_node,
                                       ObIArray<ObRawExpr*> &table_values,
+                                      ObIArray<ObExprResType> &res_types,
                                       int64_t &column_cnt);
   int resolve_table_values_for_insert(const ParseNode &table_node,
                                       ObIArray<ObRawExpr*> &table_values,
+                                      ObIArray<ObExprResType> &res_types,
                                       int64_t &column_cnt);
-  int gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item);
+
+  int gen_values_table_column_items(const int64_t column_cnt,
+                                    const ObIArray<ObExprResType> &res_types,
+                                    TableItem &table_item);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,

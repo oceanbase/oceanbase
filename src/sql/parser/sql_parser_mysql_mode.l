@@ -38,14 +38,12 @@ extern void obsql_mysql_parser_fatal_error(int32_t errcoyyde, yyscan_t yyscanner
 /* the adq is used to process dq in ANSI_QUOTES sql_mode*/
 %x adq
 
-U  [\x80-\xbf]
-U_2  [\xc2-\xdf]
-U_3  [\xe0-\xef]
-U_4  [\xf0-\xf4]
+NOTASCII [\x80-\xFF]
 GB_1 [\x81-\xfe]
 GB_2 [\x40-\xfe]
 GB_3 [\x30-\x39]
-UTF8_GB_CHAR ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
+NOTASCII_GB_CHAR ({NOTASCII}|{GB_1}{GB_2}|{GB_1}{GB_3}{GB_1}{GB_3})
+
 space            [ \t\n\r\f]
 non_newline      [^\n\r]
 sql_comment      ("--"[ \t]+{non_newline}*)|(#{non_newline}*|"--"[\n\r])
@@ -62,7 +60,7 @@ common_hint_begin (\/\*\+({space}*hint{space}+)?)
 c_cmt_begin      \/\*
 c_cmt_end        \*+\/
 comment          ({sql_comment})
-identifier        (([A-Za-z0-9$_]|{UTF8_GB_CHAR})+)
+identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
 user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
 version_num      ([0-9]+\.+[0-9]*)
@@ -135,6 +133,7 @@ NULL {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_NULL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   if (IS_FAST_PARAMETERIZE) {
@@ -152,6 +151,7 @@ NULL {
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(node, p->malloc_pool_, T_INT, 0);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   int err_no = 0;
   COPY_NUM_STRING(p, node);
   // we treated '-  12' as a const node, that is to say node->str_value_ = '-  12'
@@ -205,6 +205,7 @@ NULL {
   malloc_new_node(node, p->malloc_pool_, T_DOUBLE, 0);
   check_value(yylval);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_NUM_STRING(p, node);
   node->raw_text_ = node->str_value_;
   node->text_len_ = node->str_len_;
@@ -224,6 +225,7 @@ NULL {
   malloc_new_node(node, p->malloc_pool_, T_NUMBER/* should be T_NUMBER,*/, 0);
   check_value(yylval);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_NUM_STRING(p, node);
   node->raw_text_ = node->str_value_;
   node->text_len_ = node->str_len_;
@@ -240,6 +242,7 @@ TRUE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->value_ = 1;
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
@@ -265,6 +268,7 @@ FALSE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->value_ = 0;
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
@@ -298,6 +302,7 @@ FALSE {
   }
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_NCHAR, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
 
   yylval->node->str_len_ = 0;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
@@ -312,6 +317,7 @@ FALSE {
   p->start_col_ = yylloc->first_column;
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->str_len_ = 0;
   p->last_escape_check_pos_ = 0;
   yylval->node->str_value_ = NULL;
@@ -412,6 +418,7 @@ FALSE {
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node->children_[0]);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
     check_malloc((*yylval->node->children_)->str_value_);
@@ -459,6 +466,7 @@ FALSE {
       check_malloc(*tmp_literal);
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node);
     yylval->node->str_len_ = 0;
     p->last_escape_check_pos_ = 0;
     if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
@@ -553,6 +561,7 @@ FALSE {
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node->children_[0]);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
     check_malloc((*yylval->node->children_)->str_value_);
@@ -730,6 +739,7 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
     node->str_len_ = 0;
   }
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   yylval->node->is_copy_raw_text_ = 1;
@@ -773,6 +783,7 @@ B'([01])*'|0B([01])+ {
     node->str_len_ = 0;
   }
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   yylval->node->is_copy_raw_text_ = 1;
@@ -1038,6 +1049,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PQ_DISTRIBUTE_WINDOW { return PQ_DISTRIBUTE_WINDOW; }
 <hint>PQ_MAP { return PQ_MAP; }
 <hint>PQ_SET { return PQ_SET; }
+<hint>PQ_SUBQUERY { return PQ_SUBQUERY; }
 <hint>RANDOM_LOCAL { return RANDOM_LOCAL; }
 <hint>RANDOM { return RANDOM; }
 <hint>BROADCAST { return BROADCAST; }

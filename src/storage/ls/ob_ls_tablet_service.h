@@ -483,11 +483,7 @@ private:
   public:
     explicit ObUpdateDDLCommitSCN(const share::SCN ddl_commit_scn) : ddl_commit_scn_(ddl_commit_scn) {}
     virtual ~ObUpdateDDLCommitSCN() = default;
-    virtual int modify_tablet_meta(ObTabletMeta &meta) override
-    {
-      meta.ddl_commit_scn_ = ddl_commit_scn_;
-      return OB_SUCCESS;
-    }
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
   private:
     const share::SCN ddl_commit_scn_;
     DISALLOW_COPY_AND_ASSIGN(ObUpdateDDLCommitSCN);
@@ -561,6 +557,7 @@ private:
       ObTabletHandle &handle);
   int delete_all_tablets();
   int offline_build_tablet_without_memtable_();
+  int offline_gc_tablet_for_create_or_transfer_in_abort_();
   int offline_destroy_memtable_and_mds_table_();
 private:
   static int check_real_leader_for_4377_(const ObLSID ls_id);

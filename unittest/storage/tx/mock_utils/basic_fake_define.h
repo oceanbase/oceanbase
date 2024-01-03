@@ -70,7 +70,6 @@ public:
     ObTxData *tx_data = new (ptr) ObTxData();
     tx_data->ref_cnt_ = 100;
     tx_data->tx_data_allocator_ = FAKE_ALLOCATOR;
-    tx_data->flag_ = 269381;
     tx_data_guard.init(tx_data);
     return OB_ISNULL(tx_data) ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
   }
@@ -82,7 +81,6 @@ public:
     ObTxData *from = (ObTxData*)from_guard.tx_data();
     to->ref_cnt_ = 100;
     to->tx_data_allocator_ = FAKE_ALLOCATOR;
-    to->flag_ = 269381;
     to_guard.init(to);
     OX (*to = *from);
     OZ (deep_copy_undo_status_list_(from->undo_status_list_, to->undo_status_list_));
@@ -269,6 +267,30 @@ public:
     }
     TRANS_LOG(INFO, "get gts end", K(ret), K(gts_), K(gts), K(get_gts_waiting_mode_));
     return ret;
+  }
+
+  int get_gts_sync(const uint64_t tenant_id,
+                   const MonotonicTs stc,
+                   const int64_t timeout_us,
+                   share::SCN &scn,
+                   MonotonicTs &receive_gts_ts)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
+
+    do {
+      int64_t n = ObClockGenerator::getClock();
+      if (n >= expire_ts) {
+        ret = OB_TIMEOUT;
+      } else if (OB_FAIL(get_gts(tenant_id, stc, NULL, scn, receive_gts_ts))) {
+        if (OB_EAGAIN == ret) {
+          ob_usleep(500);
+        }
+      }
+    } while (OB_EAGAIN == ret);
+
+    return ret;
+    return get_gts(tenant_id, stc, NULL, scn, receive_gts_ts);
   }
 
   int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn) {

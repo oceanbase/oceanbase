@@ -487,6 +487,7 @@ protected:
     struct COMPAT_FOR_EXEC {
       uint64_t v_;
       uint64_t get_serialize_v_() const;
+      TO_STRING_KV(K_(v));
       NEED_SERIALIZE_AND_DESERIALIZE;
     } compat_for_exec_;
     struct
@@ -784,7 +785,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t estimate_state_size();
   bool is_static_changed() { return state_change_flags_.STATIC_CHANGED_; }
   bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
-  bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
+  bool is_parts_changed() { return state_ > State::IDLE && state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }

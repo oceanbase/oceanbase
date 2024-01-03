@@ -56,7 +56,6 @@ function get_mode() {
   MODE=${MODE^^}
 }
 
-
 function exit_while_error() {
   if test -z ${EXIT_WHILE_ERROR}
   then
@@ -64,6 +63,15 @@ function exit_while_error() {
   fi
 
   return `is_true ${EXIT_WHILE_ERROR}`
+}
+
+function fastboot() {
+  if test -z ${FASTBOOT}
+  then
+    return 0
+  fi
+
+  return `is_true ${FASTBOOT}`
 }
 
 function remove_disk_check_logic_in_obd() {
@@ -126,9 +134,9 @@ else # nothing here, bootstrap
   TMPFILE="boot.${STAMP}.yaml"
 
   get_mode
-  if [ "x${MODE}" == "xSTANDALONE" ]; then
-    echo "oceanbase-ce docker in standalone mode"
-    cp -f boot-mini-tmp.yaml $TMPFILE
+  if [ "x${MODE}" == "xNORMAL" ]; then
+    echo "oceanbase-ce docker in normal mode"
+    cp -f boot-tmp.yaml $TMPFILE
   elif [ "x${MODE}" == "xMINI" ]; then
     echo "oceanbase-ce docker in mini mode"
     cp -f boot-mini-tmp.yaml $TMPFILE
@@ -136,14 +144,14 @@ else # nothing here, bootstrap
     echo "oceanbase-ce docker in slim mode"
     cp -f boot-mini-tmp.yaml $TMPFILE
   else
-    cp -f boot-tmp.yaml $TMPFILE
+    cp -f boot-mini-tmp.yaml $TMPFILE
   fi
 
   if [ "x${MODE}" != "xSLIM" ]; then
     cat obagent.yaml >> $TMPFILE
   fi
 
-  if [ "x${MODE}" != "xMINI" ] && [ "x${MODE}" != "xSTANDALONE" ]; then
+  if [ "x${MODE}" == "xSLIM" ]; then
     cat ob-configserver.yaml >> $TMPFILE
   fi
 
@@ -171,7 +179,7 @@ else # nothing here, bootstrap
   print_start_phase "Ob-deploy deploy"
   remove_disk_check_logic_in_obd
 
-  if [ "x${MODE}" == "xSTANDALONE" ]; then
+  if fastboot; then
     obd devmode enable && obd cluster deploy "${OB_CLUSTER_NAME}" -c $TMPFILE;
     if [ $? -ne 0 ]; then
       deploy_failed
@@ -195,6 +203,11 @@ else # nothing here, bootstrap
     print_start_phase "Ob-deploy start"
     obd cluster start ${OB_CLUSTER_NAME}
     print_end_phase
+
+    if [ "x${MODE}" == "xSLIM" ]; then
+      run_custom_scripts /root/boot/init.d
+    fi
+
   else
     print_start_phase "Ob-deploy autodeploy"
     obd devmode enable && obd cluster autodeploy "${OB_CLUSTER_NAME}" -c $TMPFILE;
@@ -223,6 +236,7 @@ else # nothing here, bootstrap
     fi
     print_end_phase
   fi
+
   if [ $? -ne 0 ]; then
     deploy_failed
   fi

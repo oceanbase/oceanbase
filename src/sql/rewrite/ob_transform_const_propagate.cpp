@@ -1175,7 +1175,7 @@ int ObTransformConstPropagate::replace_internal(ObRawExpr *&cur_expr,
     if (OB_FAIL(ret)) {
     } else if (!can_replace) {
       // do nothing
-    } else if (OB_FAIL(check_need_cast_when_replace(cur_expr, parent_exprs, need_cast))) {
+    } else if (OB_FAIL(check_need_cast_when_replace(cur_expr, const_expr, parent_exprs, need_cast))) {
       LOG_WARN("failed to check need cast", K(ret));
     } else if (need_cast && OB_FAIL(prepare_new_expr(expr_const_infos.at(i)))) {
       LOG_WARN("failed to prepare new expr", K(ret));
@@ -1298,7 +1298,7 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
       ObRawExpr *cast_expr = ref_expr;
       bool need_cast = false;
       trans_happened = true;
-      if (OB_FAIL(check_need_cast_when_replace(expr, parent_exprs, need_cast))) {
+      if (OB_FAIL(check_need_cast_when_replace(expr, ref_expr, parent_exprs, need_cast))) {
         LOG_WARN("failed to check need cast", K(ret));
       } else if (!need_cast && parent_exprs.count() != 0) {
         expr = ref_expr;
@@ -1341,6 +1341,7 @@ int ObTransformConstPropagate::do_remove_const_exec_param(ObRawExpr *&expr,
 }
 
 int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
+                                                            ObRawExpr *const_expr,
                                                             ObIArray<ObRawExpr *> &parent_exprs,
                                                             bool &need_cast)
 {
@@ -1357,10 +1358,31 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     need_cast = true;
   } else {
     ObRawExpr *parent_expr = parent_exprs.at(parent_exprs.count() - 1);
-    need_cast = !(IS_COMPARISON_OP(parent_expr->get_expr_type()) ||
-                parent_expr->is_query_ref_expr() ||
-                parent_expr->is_win_func_expr() ||
-                T_OP_ROW == parent_expr->get_expr_type());
+    if (OB_ISNULL(parent_expr) || OB_ISNULL(const_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      bool is_parent_cmp = IS_COMPARISON_OP(parent_expr->get_expr_type());
+      // To adapt to the behavior of casting NULL values for hash compare
+      // cast need to be added above NULL when its' parent expr is CMP_OP.
+      bool need_cast_null = false;
+      if (is_parent_cmp && const_expr->get_expr_type() == T_NULL) {
+        for (int64_t i = 0; !need_cast_null && OB_SUCC(ret) &&
+               i < parent_expr->get_param_count(); ++i) {
+          const ObRawExpr *param_expr = parent_expr->get_param_expr(i);
+          if (OB_ISNULL(param_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("param expr is null");
+          } else if (ObDatumFuncs::is_null_aware_hash_type(param_expr->get_result_type().get_type())) {
+            need_cast_null = true;
+          }
+        }
+      }
+      need_cast = need_cast_null || !(is_parent_cmp ||
+                                      parent_expr->is_query_ref_expr() ||
+                                      parent_expr->is_win_func_expr() ||
+                                      T_OP_ROW == parent_expr->get_expr_type());
+    }
   }
   return ret;
 }

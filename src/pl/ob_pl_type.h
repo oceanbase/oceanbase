@@ -41,6 +41,7 @@ namespace oceanbase
 namespace sql
 {
 class ObRawExpr;
+class ObObjAccessRawExpr;
 class ObSqlExpression;
 class ObRawExprFactory;
 class ObExecContext;
@@ -483,7 +484,7 @@ public:
   static int get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& helper, ObPLADTService &adt_service, jit::ObLLVMType &type);
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(ObPLCodeGenerator &generator,
@@ -753,6 +754,7 @@ public:
                             uint64_t &package_id, uint64_t &var_idx);
   static int get_package_id(const sql::ObRawExpr *expr,
                             uint64_t& package_id, uint64_t *p_var_idx = NULL);
+  static bool has_same_collection_access(const sql::ObRawExpr *expr, const sql::ObObjAccessRawExpr *access_expr);
   static bool has_collection_access(const sql::ObRawExpr *expr);
   static int datum_need_copy(const sql::ObRawExpr *into, const sql::ObRawExpr *value, AccessType &alloc_scop);
   static int64_t get_local_variable_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);

@@ -1657,7 +1657,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                                     out_params,
                                     &retry_ctrl,
                                     is_forall))) {
-                LOG_WARN("failed to open", K(type), K(ret));
+                LOG_WARN("failed to open", K(ret), K(sql), K(ps_sql));
               } else if (OB_FAIL(inner_fetch(ctx,
                                             retry_ctrl,
                                             spi_result,
@@ -3713,6 +3713,21 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                     spi_cursor->fields_));
                 //}
                 OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
+                if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
+                  int cli_ret = OB_SUCCESS;
+                  retry_ctrl.test_and_save_retry_state(GCTX,
+                                                       spi_result.get_sql_ctx(),
+                                                       *spi_result.get_result_set(),
+                                                       ret,
+                                                       cli_ret,
+                                                       true,
+                                                       true,
+                                                       true);
+                  LOG_WARN("failed to do fill_cursor, check if need retry", K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K(sql), K(ps_sql));
+                  ret = cli_ret;
+                  spi_result.get_sql_ctx().clear();
+                  ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+                }
                 OX (spi_cursor->row_store_.finish_add_row())
                 OX (cursor->open(spi_cursor));
                 if (OB_FAIL(ret)) {
@@ -3988,7 +4003,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
               }
             }
             OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
-            if (OB_FAIL(ret)) {
+            if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                   spi_result.get_sql_ctx(),
@@ -5246,7 +5261,7 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
               if (*key1 <= *key2) {
                 for (int64_t i = 0; OB_SUCC(ret) && i < atable->get_count(); ++i) {
                   bool flag = key!=NULL ? (key[i] >= *key1 && key[i] <= *key2)
-                                        : (i >= key1->get_int32() && i <= key2->get_int32());
+                                        : (i+1 >= key1->get_int32() && i+1 <= key2->get_int32());
                   if (flag) {
                     OZ (atable->delete_collection_elem(i));
                     if (atable->get_first() - 1 == i) {
@@ -6347,7 +6362,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
   if (NULL == sql) {
     OZ (construct_exec_params(ctx, param_allocator, param_exprs, param_count,
                               into_exprs, into_count, exec_params, out_params, is_forall),
-      K(sql), K(type), K(param_count), K(out_params), K(exec_params));
+      K(sql), K(ps_sql), K(type), K(param_count), K(out_params), K(exec_params));
     if (OB_SUCC(ret)
         && OB_NOT_NULL(ctx)
         && OB_NOT_NULL(ctx->exec_ctx_)
@@ -8550,6 +8565,7 @@ int ObSPIService::spi_update_package_change_info(
   OZ (session_info->get_package_state(package_id, package_state));
   CK (OB_NOT_NULL(package_state));
   OZ (package_state->update_changed_vars(var_idx));
+  OX (session_info->set_pl_can_retry(false));
   return ret;
 }
 

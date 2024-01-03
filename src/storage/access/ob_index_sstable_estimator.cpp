@@ -75,27 +75,21 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
   ObEstimatedResult result;
 
   lib::ObMemAttr mem_attr(MTL_ID(), "OB_STORAGE_EST");
-  common::ObSEArray<int32_t, 1> agg_projector;
-  common::ObSEArray<share::schema::ObColumnSchemaV2, 1> agg_column_schema;
   if (OB_UNLIKELY(!context_.is_valid())) {
     ret = common::OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "estimate context is not valid", K(ret), K(context_));
   } else if (OB_FAIL(allocator_.init(nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     STORAGE_LOG(WARN, "Fail to init allocator", K(ret));
   } else if (OB_FAIL(index_block_row_scanner_.init(
-              agg_projector,
-              agg_column_schema,
               context_.tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),
               allocator_,
               context_.query_flag_,
               context_.sstable_.get_macro_offset()))) {
-    STORAGE_LOG(WARN, "Failed to init index block row scanner", K(ret), K(agg_projector), K(agg_column_schema));
+    STORAGE_LOG(WARN, "Failed to init index block row scanner", K(ret));
   } else if (OB_FAIL(context_.sstable_.get_index_tree_root(root_index_block_))) {
     STORAGE_LOG(WARN, "Failed to get index tree root", K(ret));
   } else if (context_.sstable_.is_ddl_merge_sstable()) {
     index_block_row_scanner_.set_iter_param(&context_.sstable_,
-                                            context_.tablet_handle_.get_obj()->get_ls_id(),
-                                            context_.tablet_handle_.get_obj()->get_tablet_id(),
                                             context_.tablet_handle_.get_obj());
   }
   if (OB_FAIL(ret)) {

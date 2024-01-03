@@ -2098,7 +2098,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
     pc_ctx.cache_params_ = &params;
     pc_ctx.raw_sql_ = sql;
-    MEMCPY(pc_ctx.sql_id_, ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_));
+    if (ctx.get_sql_ctx()->sql_id_[0] != '\0') {
+      MEMCPY(pc_ctx.sql_id_, ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_));
+    } else {
+      CK (!pc_ctx.raw_sql_.empty());
+      OX ((void)ObSQLUtils::md5(pc_ctx.raw_sql_,
+                            pc_ctx.sql_id_,
+                            (int32_t)sizeof(pc_ctx.sql_id_)));
+    }
 
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;
@@ -2572,11 +2579,6 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
       OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
       CK (OB_NOT_NULL(user_type));
       OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
-      if (OB_SUCC(ret) && user_type->is_collection_type()) {
-        ObPLCollection *coll = reinterpret_cast<ObPLCollection *>(params->at(var_idx).get_ext());
-        CK (OB_NOT_NULL(coll));
-        OX (coll->set_count(OB_INVALID_COUNT));
-      }
     }
   } else if (!copy_value.is_ext()) {
     bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
@@ -2836,6 +2838,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
   const ObPLDataType *real_pl_type = &pl_type;
+  bool set_null = pl_type.is_record_type() ? true : (top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) ? false : true;
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
@@ -2876,12 +2879,12 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     OX (obj.set_is_ref_cursor_type(true));
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
-    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
   } else if (OB_NOT_NULL(session->get_pl_context())
       && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
     pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false));
+    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
   } else {
     ObPLResolveCtx ns(allocator,
                       *session,
@@ -2889,7 +2892,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
                       *package_guard,
                       *sql_proxy,
                       false);
-    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false));
+    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
   }
   OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
@@ -4223,7 +4226,7 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
                               const ObPLDataType &pl_type,
                               common::ObObjParam &obj,
                               bool set_allocator,
-                              bool set_record_null) const
+                              bool set_null) const
 {
   int ret = OB_SUCCESS;
   int64_t init_size = 0;
@@ -4269,7 +4272,7 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     }
     // f(self object_type, p1 out object_type), p1 will be init here, we have to set it null
     // but self can't be set to null.
-    if (OB_SUCC(ret) && user_type->is_object_type() && set_record_null) {
+    if (OB_SUCC(ret) && user_type->is_object_type() && set_null) {
       OX (record->set_is_null(true));
     }
   }
@@ -4309,10 +4312,12 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     CK (OB_NOT_NULL(coll));
     OX (set_allocator ? coll->set_allocator(&allocator) : coll->set_allocator(NULL));
     if (OB_FAIL(ret)) {
-    } else if (user_type->is_associative_array_type()) {
-      coll->set_inited();
-    } else {
-      OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : coll->set_inited());
+    } else if (!set_null) {
+      if (user_type->is_associative_array_type()) {
+        OX (coll->set_inited());
+      } else {
+        OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : coll->set_inited());
+      }
     }
     OX (coll->set_type(pl_type.get_type()));
     OZ (get_element_data_type(pl_type, elem_desc, &allocator));

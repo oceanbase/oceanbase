@@ -155,6 +155,7 @@ protected:
   int view_pullup_part_exprs();
   int expand_record_to_columns(const ParseNode &record_node,
                                               ObIArray<ObRawExpr *> &value_list);
+  bool is_fk_parent_table(const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos, const uint64_t table_id);
   int resolve_check_constraints(const TableItem* table_item,
                                 common::ObIArray<ObRawExpr*> &check_exprs);
   int resolve_view_check_exprs(uint64_t table_id,

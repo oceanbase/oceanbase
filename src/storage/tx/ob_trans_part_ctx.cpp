@@ -581,9 +581,9 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       if (exec_info_.is_dup_tx_) {
         if (!is_sub2pc() && ObTxState::REDO_COMPLETE == exec_info_.state_) {
           if (OB_SUCCESS != (tmp_ret = dup_table_tx_redo_sync_())) {
-            TRANS_LOG(WARN, "dup table tx redo sync error", K(tmp_ret));
-          }
-        } else if (ObTxState::PRE_COMMIT == exec_info_.state_) {
+          TRANS_LOG(WARN, "dup table tx redo sync error", K(tmp_ret));
+      }
+      } else if (ObTxState::PRE_COMMIT == exec_info_.state_) {
           if (OB_SUCCESS != (tmp_ret = dup_table_tx_pre_commit_())) {
             TRANS_LOG(WARN, "dup table tx pre commit error", K(tmp_ret));
           }
@@ -864,12 +864,26 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
       if (OB_FAIL(one_phase_commit_())) {
         TRANS_LOG(WARN, "start sp coimit fail", K(ret), KPC(this));
       }
+
+      if ((OB_SUCC(ret) || OB_EAGAIN == ret) && exec_info_.is_dup_tx_) {
+        set_2pc_upstream_(ls_id_);
+        if (OB_FAIL(two_phase_commit())) {
+          TRANS_LOG(WARN, "start dist commit for dup table fail", K(ret), KPC(this));
+          if (OB_EAGAIN == ret) {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+
     } else {
       exec_info_.trans_type_ = TransType::DIST_TRANS;
       // set 2pc upstream to self
       set_2pc_upstream_(ls_id_);
       if (OB_FAIL(two_phase_commit())) {
-        TRANS_LOG(WARN, "start dist coimit fail", K(ret), KPC(this));
+        TRANS_LOG(WARN, "start dist commit fail", K(ret), KPC(this));
+        if (OB_EAGAIN == ret) {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }
@@ -5023,6 +5037,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
                                        const bool pre_barrier)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("replay_commit_info", 10 * 1000);
   // const int64_t start = ObTimeUtility::fast_current_time();
   bool need_replay = true;
@@ -5103,6 +5118,11 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       if (OB_FAIL(dup_table_before_preapre_(timestamp))) {
         TRANS_LOG(WARN, "set commit_info scn as before_prepare_version failed", K(ret), KPC(this));
       }
+
+      // if (OB_TMP_FAIL(post_redo_sync_ts_response_(timestamp))) {
+      //   TRANS_LOG(WARN, "post dup table redo sync response failed", K(ret), K(tmp_ret), K(timestamp),
+      //             KPC(this));
+      // }
     }
 
     if (OB_SUCC(ret)) {
@@ -7043,7 +7063,7 @@ int ObPartTransCtx::search_unsubmitted_dup_table_redo_()
   // return mt_ctx_.get_redo_generator().search_unsubmitted_dup_tablet_redo();
 }
 
-int ObPartTransCtx::dup_table_tx_redo_sync_()
+int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -7066,36 +7086,44 @@ int ObPartTransCtx::dup_table_tx_redo_sync_()
     TRANS_LOG(WARN, "can not execute redo sync on a follower", KPC(this));
   } else if (OB_FAIL(errism_dup_table_redo_sync_())) {
     TRANS_LOG(WARN, "errsim for dup table redo sync", K(ret), KPC(this));
-  } else if (is_dup_table_redo_sync_completed_()) {
-    ret = OB_SUCCESS;
-    redo_sync_finish = true;
-    bool no_need_submit_log = false;
-    if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
-      TRANS_LOG(WARN, "do prepare failed after redo sync", K(tmp_ret), KPC(this));
-    } else {
-    }
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->check_redo_sync_completed(
-                 trans_id_, exec_info_.max_applied_log_ts_, redo_sync_finish,
-                 tmp_max_read_version))) {
-    TRANS_LOG(WARN, "check redo sync completed failed", K(ret), K(redo_sync_finish),
-              K(tmp_max_read_version), KPC(this));
-  } else if (redo_sync_finish) {
-    if (!tmp_max_read_version.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "invalid dup table follower's max_read_version", K(ret),
+  } else {
+    if (is_dup_table_redo_sync_completed_()) {
+      ret = OB_SUCCESS;
+      redo_sync_finish = true;
+      bool no_need_submit_log = false;
+      if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+        TRANS_LOG(WARN, "do prepare failed after redo sync", K(tmp_ret), KPC(this));
+      }
+    } else if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->check_redo_sync_completed(
+                   trans_id_, exec_info_.max_applied_log_ts_, redo_sync_finish,
+                   tmp_max_read_version))) {
+      TRANS_LOG(WARN, "check redo sync completed failed", K(ret), K(redo_sync_finish),
                 K(tmp_max_read_version), KPC(this));
+    } else if (redo_sync_finish) {
+      if (!tmp_max_read_version.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "invalid dup table follower's max_read_version", K(ret),
+                  K(tmp_max_read_version), KPC(this));
+      } else {
+        dup_table_follower_max_read_version_ = tmp_max_read_version;
+        /*
+         * drive into prepare state in the next do_prepare operation
+         * */
+        TRANS_LOG(INFO, "finish redo sync for dup table trx", K(ret), K(redo_sync_finish),
+                  K(dup_table_follower_max_read_version_), KPC(this));
+
+        if (OB_TMP_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+          TRANS_LOG(WARN, "do prepare failed after redo sync", K(tmp_ret), KPC(this));
+        }
+      }
     } else {
-      dup_table_follower_max_read_version_ = tmp_max_read_version;
-      /*
-       * drive into prepare state in the next do_prepare operation
-       * */
-      TRANS_LOG(INFO, "finish redo sync for dup table trx", K(ret), K(redo_sync_finish),
+      if (need_retry_by_task) {
+        (void)MTL(ObTransService *)->retry_redo_sync_by_task(get_trans_id(), get_ls_id());
+      }
+      ret = OB_EAGAIN;
+      TRANS_LOG(INFO, "redo sync will retry", K(ret), K(redo_sync_finish), K(tmp_max_read_version),
                 K(dup_table_follower_max_read_version_), KPC(this));
     }
-  } else {
-    ret = OB_EAGAIN;
-    TRANS_LOG(INFO, "redo sync need retry", K(ret), K(redo_sync_finish), K(tmp_max_read_version),
-              K(dup_table_follower_max_read_version_), KPC(this));
   }
 
   return ret;
@@ -7327,6 +7355,44 @@ int ObPartTransCtx::retry_dup_trx_before_prepare(const share::SCN &before_prepar
   return ret;
 }
 
+int ObPartTransCtx::dup_table_tx_redo_sync(const bool need_retry_by_task)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_SUCCESS == lock_.try_lock()) {
+    CtxLockGuard guard(lock_, false);
+
+    if (!is_leader_()) {
+      ret = OB_NOT_MASTER;
+      TRANS_LOG(WARN, "redo sync need not execute on a follower", K(ret), KPC(this));
+    } else if (is_exiting_) {
+      ret = OB_TRANS_IS_EXITING;
+      TRANS_LOG(WARN, "redo sync need not execute on a exiting tx_ctx", K(ret), KPC(this));
+    } else if (get_downstream_state() >= ObTxState::PREPARE) {
+      ret = OB_STATE_NOT_MATCH;
+      TRANS_LOG(WARN, "redo sync need not execute on a prepared tx_ctx", K(ret), KPC(this));
+    } else {
+      if (OB_FAIL(dup_table_tx_redo_sync_(need_retry_by_task))) {
+        TRANS_LOG(WARN, "execute dup table redo sync failed", K(ret), KPC(this));
+      }
+
+      if (OB_SUCC(ret)) {
+        if (!is_dup_table_redo_sync_completed_()) {
+          ret = OB_EAGAIN;
+          // TRANS_LOG(INFO, "redo sync need retry", K(ret), KPC(this));
+        } else {
+          ret = OB_TRANS_HAS_DECIDED;
+        }
+      }
+    }
+  } else {
+    TRANS_LOG(INFO, "The redo sync task can not acquire ctx lock. Waiting the next retry.", K(ret),
+              K(get_trans_id()), K(get_ls_id()));
+    ret = OB_EAGAIN;
+  }
+
+  return ret;
+}
 // int ObPartTransCtx::merge_tablet_modify_record(const common::ObTabletID &tablet_id)
 // {
 //   int ret = OB_SUCCESS;
@@ -7636,9 +7702,11 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc, ObTxSEQ &data_scn, con
   }
   last_request_ts_ = ObClockGenerator::getClock();
   TRANS_LOG(TRACE, "start_access", K(ret), K(data_scn.support_branch()), K(data_scn), KPC(this));
+  common::ObTraceIdAdaptor trace_id;
+  trace_id.set(ObCurTraceId::get());
   REC_TRANS_TRACE_EXT(tlog_, start_access,
                       OB_ID(ret), ret,
-                      OB_ID(trace_id), *ObCurTraceId::get(),
+                      OB_ID(trace_id), trace_id,
                       OB_ID(opid), tx_desc.op_sn_,
                       OB_ID(data_seq), data_scn.cast_to_int(),
                       OB_ID(pending), pending_write,
@@ -7766,14 +7834,17 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
   /*
    * Follower:
    *  1. add UndoAction into tx_ctx's tx_data
-   *  2. insert UndoAction into tx_data_table
+   *  2. insert tx-data into tx_data_table
    * Leader:
    *  1. submit 'RollbackToLog'
    *  2. add UndoAction into tx_ctx's tx_data
-   *  3. insert UndoAction into tx_data_table after log sync success
+   *  3. insert tx-data into tx_data_table after log sync success
    */
+  bool need_update_tx_data = false;
   ObTxDataGuard tmp_tx_data_guard;
+  ObTxDataGuard update_tx_data_guard;
   tmp_tx_data_guard.reset();
+  update_tx_data_guard.reset();
   if (is_follower_()) { /* Follower */
     ObUndoAction undo_action(from_scn, to_scn);
     // _NOTICE_ must load Undo(s) from TxDataTable before overwriten
@@ -7785,9 +7856,62 @@ int ObPartTransCtx::rollback_to_savepoint_(const ObTxSEQ from_scn,
       TRANS_LOG(WARN, "recrod undo info fail", K(ret), K(from_scn), K(to_scn), KPC(this));
     } else if (OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(tmp_tx_data_guard))) {
       TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
-    } else if (FALSE_IT(tmp_tx_data_guard.tx_data()->end_scn_ = share::SCN::max(replay_scn, exec_info_.max_applying_log_ts_))) {
-    } else if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data_guard.tx_data()))) {
-      TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+    }
+
+    //
+    // when multiple branch-level savepoints were replayed out of order, to ensure
+    // tx-data with larger end_scn include all undo-actions of others before
+    //
+    // we do deleting in frozen memtable and updating (which with largest end_scn) in active memtable
+    // because distinguish frozen/active memtable is not easy, just always do those two actions.
+    //
+    // following is an illusion of this strategy:
+    //
+    // assume rollback to logs with scn of: 80 90 110
+    //
+    // and frozen scn is 100
+    //
+    // case 1: replay order: 110, 90,  80
+    // case 2: replay order: 110, 80,  90
+    // case 3: replay order: 90,  110, 80
+    // case 4: replay order: 90,  80,  110
+    //
+    // the operations of each case:
+    // case 1: insert 110 -> [insert 90, update 110] -> [insert 80, delete 90, udpate 110]
+    // case 2: insert 110 -> [insert 80  update 110] -> [insert 90, delete 80, update 110]
+    // case 3: insert 90  -> insert 110 -> [insert 80, delete 90, update 110]
+    // case 4: insert 90  -> [insert 80, update 90]  ->  insert 100
+    //
+
+    if (OB_SUCC(ret)) {
+      need_update_tx_data = ctx_tx_data_.get_max_replayed_rollback_scn() > replay_scn;
+      if (need_update_tx_data && OB_FAIL(ctx_tx_data_.deep_copy_tx_data_out(update_tx_data_guard))) {
+        TRANS_LOG(WARN, "deep copy tx data failed", KR(ret), K(*this));
+      }
+    }
+    // prepare end_scn for tx-data items
+    if (OB_SUCC(ret)) {
+      tmp_tx_data_guard.tx_data()->end_scn_ = replay_scn;
+      if (need_update_tx_data) {
+        // if the tx-data will be inserted into frozen tx-data-memtable, and it may be not the one with largest end_scn
+        // we must delete others in order to ensure ourself is the valid one with largest end_scn
+        tmp_tx_data_guard.tx_data()->exclusive_flag_ = ObTxData::ExclusiveType::EXCLUSIVE;
+        // for update tx-data, use the same end_scn_
+        update_tx_data_guard.tx_data()->end_scn_ = ctx_tx_data_.get_max_replayed_rollback_scn();
+        update_tx_data_guard.tx_data()->exclusive_flag_ = ObTxData::ExclusiveType::EXCLUSIVE;
+      }
+    }
+    // prepare done, do the final step to insert tx-data-table, this should not fail
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(tmp_tx_data_guard.tx_data()))) {
+        TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+      } else if (need_update_tx_data && OB_FAIL(ctx_tx_data_.insert_tmp_tx_data(update_tx_data_guard.tx_data()))) {
+        TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
+      }
+    }
+    // if this is the largest scn replayed, remember it
+    if (OB_SUCC(ret) && !need_update_tx_data) {
+        ctx_tx_data_.set_max_replayed_rollback_scn(replay_scn);
     }
   } else if (OB_UNLIKELY(exec_info_.max_submitted_seq_no_ > to_scn)) { /* Leader */
     ObUndoAction undo_action(from_scn, to_scn);

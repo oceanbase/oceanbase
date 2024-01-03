@@ -269,6 +269,7 @@ public:
     int64_t offset,
     char *buf,
     int64_t buf_size,
+    const bool is_range_read,
     int64_t &read_size);
 
   // Get whole object
@@ -372,13 +373,15 @@ public:
     const CosStringBuffer &upload_id_str,
     const int part_num, /*the sequence number of this part, [1, 10000]*/
     const char *buf,
-    const int64_t buf_size);
+    const int64_t buf_size,
+    uint64_t &total_crc);
 
   static int complete_multipart_upload(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
-    const CosStringBuffer &upload_id_str);
+    const CosStringBuffer &upload_id_str,
+    const uint64_t total_crc);
 
   static int abort_multipart_upload(
     Handle *h,

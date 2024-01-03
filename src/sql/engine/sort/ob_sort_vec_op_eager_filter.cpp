@@ -42,6 +42,8 @@ int ObSortVecOpEagerFilter<Compare, Store_Row, has_addon>::filter(
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ObSortVecOpEagerFilter is not initialized", K(ret));
+  } else if (is_by_pass()) {
+    // do nothing
   } else {
     output_brs_.copy(&input_brs);
     if (bucket_heap_->count() < bucket_num_) {
@@ -72,10 +74,10 @@ int ObSortVecOpEagerFilter<Compare, Store_Row, has_addon>::update_filter(
     const Store_Row *bucket_head_row, bool &updated) {
   int ret = OB_SUCCESS;
   if (!is_inited()) {
-    // filter is not initialized, so the filter will not be updated
-    // this is not an error
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("is not initialized", K(ret));
+    LOG_WARN("ObSortVecOpEagerFilter is not initialized", K(ret));
+  } else if (is_by_pass()) {
+    updated = false;
   } else {
     Store_Row *reuse_row = nullptr;
     if (bucket_heap_->count() < bucket_num_) {

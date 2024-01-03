@@ -143,7 +143,8 @@ int ObDASExtraData::get_next_rows(int64_t &count, int64_t capacity)
       }
     } else {
       got_row = true;
-      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count, KR(ret));
+      const ObBitVector *skip = NULL;
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, *eval_ctx_, *output_exprs_, count, skip, KR(ret));
     }
   }
   return ret;

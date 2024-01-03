@@ -2405,10 +2405,14 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
   PREPARE_TX(n1, tx);
   ObTxReadSnapshot snapshot;
   n1->get_ts_mgr_().inject_get_gts_error(OB_EAGAIN);
-  ASYNC_DO(acq_snapshot, n1->get_read_snapshot(tx, ObTxIsolationLevel::RC, n1->ts_after_ms(20 * 1000), snapshot));
-  ASSERT_EQ(OB_SUCCESS, n1->interrupt(tx, OB_TRANS_KILLED));
-  ASYNC_WAIT(acq_snapshot, 2000 * 1000, wait_ret);
-  ASSERT_EQ(OB_ERR_INTERRUPTED, wait_ret);
+  int ret = OB_SUCCESS;
+  do {
+    ASYNC_DO(acq_snapshot, n1->get_read_snapshot(tx, ObTxIsolationLevel::RC, n1->ts_after_ms(20 * 1000), snapshot));
+    ASSERT_EQ(OB_SUCCESS, n1->interrupt(tx, OB_TRANS_KILLED));
+    ASYNC_WAIT(acq_snapshot, 2000 * 1000, wait_ret);
+    ret = wait_ret;
+  } while (OB_GTS_NOT_READY == ret);
+  ASSERT_EQ(OB_ERR_INTERRUPTED, ret);
   ROLLBACK_TX(n1, tx);
 }
 

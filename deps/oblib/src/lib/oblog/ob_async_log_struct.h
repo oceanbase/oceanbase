@@ -118,8 +118,6 @@ public:
   int64_t file_size_;
   struct stat stat_;
   struct stat wf_stat_;
-  std::deque<std::string> file_list_;//to store the names of log-files
-  std::deque<std::string> wf_file_list_;//to store the names of warning log-files
 };
 
 } // common

@@ -877,6 +877,12 @@ int ObServer::start()
       FLOG_INFO("success to start multi tenant");
     }
 
+    if (FAILEDx(wr_service_.start())) {
+      LOG_ERROR("failed to start wr service", K(ret));
+    } else {
+      LOG_INFO("success to start wr service");
+    }
+
     if (FAILEDx(ObServerCheckpointSlogHandler::get_instance().start())) {
       LOG_ERROR("fail to start server checkpoint slog handler", KR(ret));
     } else {
@@ -887,12 +893,6 @@ int ObServer::start()
       LOG_ERROR("fail to start log pool", KR(ret));
     } else {
       FLOG_INFO("success to start log pool");
-    }
-
-    if (FAILEDx(wr_service_.start())) {
-      LOG_ERROR("failed to start wr service", K(ret));
-    } else {
-      LOG_INFO("success to start wr service");
     }
 
     if (FAILEDx(try_update_hidden_sys())) {

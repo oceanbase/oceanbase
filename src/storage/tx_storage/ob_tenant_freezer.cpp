@@ -172,7 +172,13 @@ bool ObTenantFreezer::exist_ls_freezing()
       int ls_cnt = 0;
       int exist_ls_freezing = false;
       for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-        if (ls->get_freezer()->is_freeze()) {
+        int tmp_ret = OB_SUCCESS;
+        ObRole role;
+        if (OB_TMP_FAIL(ls->get_ls_role(role))) {
+          LOG_WARN("get ls role failed", KR(tmp_ret), K(ls->get_ls_id()));
+        } else if (common::is_strong_leader(role)) {
+          // skip check leader logstream
+        } else if (ls->get_freezer()->is_freeze()) {
           exist_ls_freezing = true;
         }
       }

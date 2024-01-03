@@ -656,6 +656,11 @@ int ObTableLoadMerger::handle_merge_thread_finish(int ret_code)
     if (OB_UNLIKELY(is_stop_ || has_error_)) {
     } else {
       LOG_INFO("LOAD MERGE COMPLETED");
+      // release tmpfile
+      // TODO(suzhi.yt) release all tables and merge tasks
+      if (!store_ctx_->is_fast_heap_table_) {
+        table_compact_ctx_.result_.release_all_table_data();
+      }
       if (store_ctx_->ctx_->schema_.is_column_store_) {
         if (OB_FAIL(build_rescan_ctx())) {
           LOG_WARN("fail to build rescan ctx", KR(ret));

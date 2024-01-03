@@ -477,6 +477,7 @@ public:
   int sync_meta_for_arb_election_leader();
   void set_sync_to_degraded_learners();
   bool is_sync_to_degraded_learners() const;
+  int forward_initial_config_meta_to_arb();
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();
@@ -680,6 +681,7 @@ private:
   mutable int64_t last_wait_barrier_time_us_;
   mutable LSN last_wait_committed_end_lsn_;
   int64_t last_sync_meta_for_arb_election_leader_time_us_;
+  int64_t forwarding_config_proposal_id_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;

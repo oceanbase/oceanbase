@@ -38,7 +38,7 @@ ObTenantDfc::ObTenantDfc(uint64_t tenant_id)
 ObTenantDfc::~ObTenantDfc()
 {}
 
-int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
+int ObTenantDfc::mtl_new(ObTenantDfc *&tenant_dfc)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
@@ -47,7 +47,16 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc tenant dfc", K(ret));
   } else if (FALSE_IT(new (tenant_dfc) ObTenantDfc(tenant_id))) {
-  } else {
+  }
+  return ret;
+}
+
+
+int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  if (OB_SUCC(ret)) {
     tenant_dfc->channel_total_cnt_ = 0;
     tenant_dfc->blocked_dfc_cnt_ = 0;
     tenant_dfc->max_parallel_cnt_ = 0;
@@ -59,14 +68,6 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
     }
     // tenant_dfc->calc_max_buffer(10);
     LOG_INFO("init tenant dfc", K(ret), K(tenant_dfc->tenant_id_));
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != tenant_dfc) {
-      tenant_dfc->tenant_mem_mgr_.destroy();
-      common::ob_delete(tenant_dfc);
-      tenant_dfc = nullptr;
-    }
-    LOG_WARN("failed to mtl init", K(ret));
   }
   return ret;
 }

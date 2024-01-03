@@ -381,13 +381,11 @@ int ObLogRestoreNetDriver::add_ls_if_needed_with_lock_(const share::ObLSID &id, 
 int ObLogRestoreNetDriver::init_fetcher_if_needed_(const int64_t cluster_id, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  void *buffer = NULL;
   if (NULL != fetcher_) {
     // fetcher already exist
-  } else if (OB_ISNULL(buffer = mtl_malloc(sizeof(logfetcher::ObLogFetcher), "LogFetcher"))) {
+  } else if (OB_ISNULL(fetcher_ = MTL_NEW(logfetcher::ObLogFetcher, "LogFetcher"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
-    fetcher_ = new (buffer) logfetcher::ObLogFetcher();
     const logfetcher::LogFetcherUser log_fetcher_user = logfetcher::LogFetcherUser::STANDBY;
     const bool is_loading_data_dict_baseline_data = false;
     const logfetcher::ClientFetchingMode fetching_mode = logfetcher::ClientFetchingMode::FETCHING_MODE_INTEGRATED;
@@ -516,7 +514,7 @@ void ObLogRestoreNetDriver::destroy_fetcher_()
     } else {
       fetcher_->stop();
       fetcher_->destroy();
-      mtl_free(fetcher_);
+      MTL_DELETE(ObLogFetcher, "LogFetcher", fetcher_);
       fetcher_ = NULL;
     }
   }
@@ -532,7 +530,7 @@ void ObLogRestoreNetDriver::destroy_fetcher_forcedly_()
     CLOG_LOG(INFO, "destroy_fetcher forcedly");
     fetcher_->stop();
     fetcher_->destroy();
-    mtl_free(fetcher_);
+    MTL_DELETE(ObLogFetcher, "LogFetcher", fetcher_);
     fetcher_ = NULL;
   }
 

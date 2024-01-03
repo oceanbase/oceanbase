@@ -36,6 +36,7 @@ public:
   ObTenantDfc(uint64_t tenant_id);
   virtual ~ObTenantDfc();
 public:
+  static int mtl_new(ObTenantDfc *&tenant_dfc);
   static int mtl_init(ObTenantDfc *&tenant_dfc);
   static void mtl_destroy(ObTenantDfc *&tenant_dfc);
 

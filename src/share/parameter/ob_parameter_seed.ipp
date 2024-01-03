@@ -311,9 +311,9 @@ DEF_DBL(large_query_worker_percentage, OB_CLUSTER_PARAMETER, "30", "[0,100]",
         "the percentage of the workers reserved to serve large query request. "
         "Range: [0, 100] in percentage",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
-DEF_TIME(large_query_threshold, OB_CLUSTER_PARAMETER, "5s", "[1ms,)",
+DEF_TIME(large_query_threshold, OB_CLUSTER_PARAMETER, "5s", "[0ms,)",
          "threshold for execution time beyond "
-         "which a request may be paused and rescheduled as a \\'large request\\'. Range: [1ms, +∞)",
+         "which a request may be paused and rescheduled as a \\'large request\\', 0ms means disable \\'large request\\'. Range: [0ms, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_ob_max_thread_num, OB_CLUSTER_PARAMETER, "0", "[0,10000)",
          "ob max thread number "
@@ -1820,3 +1820,8 @@ DEF_BOOL(enable_rpc_authentication_bypass, OB_CLUSTER_PARAMETER, "True",
         "specifies whether allow arbitration service, standby cluster, OMS service to connect "
         "cluster and provide service when rpc authentication is turned on.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// take up space on the master for checkpoint diagnose in 42x
+// DEF_INT(_checkpoint_diagnose_preservation_count, OB_TENANT_PARAMETER, "100", "[0,1000]",
+//         "the count of checkpoint diagnose info preservation",
+//         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

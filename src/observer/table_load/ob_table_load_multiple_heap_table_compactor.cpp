@@ -496,9 +496,6 @@ int ObTableLoadMultipleHeapTableCompactor::finish()
   } else if (OB_FAIL(compact_ctx_->handle_table_compact_success())) {
     LOG_WARN("fail to handle_table_compact_success", KR(ret));
   }
-  if (OB_SUCC(ret)) {
-    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
-  }
   return ret;
 }
 
@@ -528,6 +525,9 @@ int ObTableLoadMultipleHeapTableCompactor::build_result_for_heap_table()
         copied_multi_heap_sstable = nullptr;
       }
     }
+  }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
   }
   return ret;
 }

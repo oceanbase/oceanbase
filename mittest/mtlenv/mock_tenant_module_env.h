@@ -171,6 +171,18 @@ public:
     UNUSED(tenant_id);
     return source_.get_gts(stc, task, gts, receive_gts_ts);
   }
+
+  virtual int get_gts_sync(const uint64_t tenant_id,
+                           const MonotonicTs stc,
+                           int64_t timeout_us,
+                           share::SCN &gts,
+                           MonotonicTs &receive_gts_ts)
+  {
+    UNUSED(tenant_id);
+    UNUSED(timeout_us);
+    return source_.get_gts(stc, NULL, gts, receive_gts_ts);
+  }
+
   virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &gts)
   {
     UNUSED(tenant_id);
@@ -666,7 +678,7 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "init_before_start_mtl failed", K(ret));
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
-      MTL_BIND(ObTenantIOManager::mtl_init, ObTenantIOManager::mtl_destroy);
+      MTL_BIND2(nullptr, ObTenantIOManager::mtl_init, nullptr, nullptr, nullptr, ObTenantIOManager::mtl_destroy);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
@@ -705,7 +717,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObTableLockService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(server_obj_pool_mtl_new<transaction::ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<transaction::ObPartTransCtx>);
       MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
-      MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
+      MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
       MTL_BIND2(mtl_new_default, ObTenantCGReadInfoMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObDecodeResourcePool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantDirectLoadMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);

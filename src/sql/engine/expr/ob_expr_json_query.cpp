@@ -178,7 +178,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   // parse pretty ascii scalars
   uint8_t pretty_type = OB_JSON_PRE_ASC_EMPTY;
   uint8_t ascii_type = OB_JSON_PRE_ASC_EMPTY;
-  uint8_t scalars_type = OB_JSON_SCALARS_IMPLICIT;
+  uint8_t scalars_type = JSN_QUERY_SCALARS_IMPLICIT;
   if (OB_SUCC(ret) && !is_null_result) {
     ret = get_clause_pre_asc_sca_opt(expr, ctx, is_cover_by_error, pretty_type, ascii_type, scalars_type);
   }
@@ -239,12 +239,12 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   }
 
   // parse error option
-  uint8_t error_type = OB_JSON_ON_RESPONSE_IMPLICIT;
+  uint8_t error_type = JSN_QUERY_IMPLICIT;
   ObDatum *error_val = NULL;
   if (OB_SUCC(ret) && !is_null_result) {
-    ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
+    ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, JSN_QUERY_RESPONSE_COUNT);
   } else if (is_cover_by_error) { // always get error option on error
-    int temp_ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, OB_JSON_ON_RESPONSE_COUNT);
+    int temp_ret = get_clause_opt(expr, ctx, 8, is_cover_by_error, error_type, JSN_QUERY_RESPONSE_COUNT);
     if (temp_ret != OB_SUCCESS) {
       ret = temp_ret;
       LOG_WARN("failed to get error option.", K(temp_ret));
@@ -252,9 +252,9 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   }
 
   // parse wrapper
-  uint8_t wrapper_type = OB_WRAPPER_IMPLICIT;
+  uint8_t wrapper_type = JSN_QUERY_WRAPPER_IMPLICIT;
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 7, is_cover_by_error, wrapper_type, OB_WRAPPER_COUNT);
+    ret = get_clause_opt(expr, ctx, 7, is_cover_by_error, wrapper_type, JSN_QUERY_WRAPPER_COUNT);
   }
 
   if (OB_SUCC(ret) && j_path->get_last_node_type() > JPN_BEGIN_FUNC_FLAG
@@ -264,18 +264,18 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       || j_path->get_last_node_type() == JPN_LENGTH
       || j_path->get_last_node_type() == JPN_TYPE
       || j_path->get_last_node_type() == JPN_SIZE )
-      && (wrapper_type == OB_WITHOUT_WRAPPER || wrapper_type == OB_WITHOUT_ARRAY_WRAPPER
-      || wrapper_type == OB_WRAPPER_IMPLICIT)) {
+      && (wrapper_type == JSN_QUERY_WITHOUT_WRAPPER || wrapper_type == JSN_QUERY_WITHOUT_ARRAY_WRAPPER
+      || wrapper_type == JSN_QUERY_WRAPPER_IMPLICIT)) {
     is_cover_by_error = false;
     ret = OB_ERR_WITHOUT_ARR_WRAPPER;  // result cannot be returned without array wrapper
     LOG_WARN("result cannot be returned without array wrapper.", K(ret), K(j_path->get_last_node_type()), K(wrapper_type));
   }
 
   // mismatch      // if mismatch_type == 3  from dot notation
-  uint8_t mismatch_type = OB_JSON_ON_MISMATCH_IMPLICIT;
+  uint8_t mismatch_type = JSN_QUERY_MISMATCH_IMPLICIT;
   uint8_t mismatch_val = 7;
   if (OB_SUCC(ret) && !is_null_result) {
-    if (OB_FAIL(get_clause_opt(expr, ctx, 10, is_cover_by_error, mismatch_type, OB_JSON_ON_MISMATCH_COUNT))) {
+    if (OB_FAIL(get_clause_opt(expr, ctx, 10, is_cover_by_error, mismatch_type, JSN_QUERY_MISMATCH_COUNT))) {
       LOG_WARN("failed to get mismatch option.", K(ret), K(mismatch_type));
     }
   }
@@ -304,7 +304,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       }
       LOG_WARN("json seek failed", K(json_datum->get_string()), K(ret));
     } else if (hits.size() == 1) {
-      if (mismatch_type == OB_JSON_ON_MISMATCH_DOT) {
+      if (mismatch_type == JSN_QUERY_MISMATCH_DOT) {
         if (hits[0]->json_type() == ObJsonNodeType::J_NULL && hits[0]->is_real_json_null(hits[0]) && dst_type != ObJsonType) {
           is_null_result = true;
         }
@@ -346,9 +346,9 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       }
     } else if (hits.size() == 0) {
         // parse empty option
-      uint8_t empty_type = OB_JSON_ON_RESPONSE_IMPLICIT;
+      uint8_t empty_type = JSN_QUERY_IMPLICIT;
       if (OB_SUCC(ret) && !is_null_result) {
-        ret = get_clause_opt(expr, ctx, 9, is_cover_by_error, empty_type, OB_JSON_ON_RESPONSE_COUNT);
+        ret = get_clause_opt(expr, ctx, 9, is_cover_by_error, empty_type, JSN_QUERY_RESPONSE_COUNT);
       }
       if (OB_SUCC(ret) && OB_FAIL(get_empty_option(hits, is_cover_by_error, empty_type, is_null_result, is_null_json_obj, is_null_json_array))) {
         LOG_WARN("get empty type", K(ret));
@@ -372,12 +372,12 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     LOG_WARN("json_query failed", K(ret));
   } else if (is_null_result) {
     res.set_null();
-  } else if (mismatch_type == OB_JSON_ON_MISMATCH_DOT && hits.size() == 1 && dst_type != ObJsonType) {
+  } else if (mismatch_type == JSN_QUERY_MISMATCH_DOT && hits.size() == 1 && dst_type != ObJsonType) {
     ObVector<uint8_t> mismatch_val_tmp;
     ObVector<uint8_t> mismatch_type_tmp;    //OB_JSON_TYPE_IMPLICIT
     ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
     ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
-    ret = ObExprJsonValue::cast_to_res(&temp_allocator, expr, ctx, hits[0], OB_JSON_ON_RESPONSE_NULL, error_val,
+    ret = ObExprJsonValue::cast_to_res(&temp_allocator, expr, ctx, hits[0], JSN_QUERY_NULL, error_val,
                   accuracy, dst_type, in_coll_type, dst_coll_type, res, mismatch_val_tmp, mismatch_type_tmp, is_type_cast, ascii_type, is_truncate);
   } else {
     if (is_null_json_obj) {
@@ -495,7 +495,7 @@ int ObExprJsonQuery::set_result(ObObjType dst_type,
           }
           ret = OB_OPERATE_OVERFLOW;
           LOG_USER_ERROR(OB_OPERATE_OVERFLOW, res_ptr, "json_query");
-          if (!try_set_error_val(allocator, ctx, expr, res, ret, error_type, OB_JSON_ON_MISMATCH_IMPLICIT, dst_type)) {
+          if (!try_set_error_val(allocator, ctx, expr, res, ret, error_type, JSN_QUERY_MISMATCH_IMPLICIT, dst_type)) {
             LOG_WARN("set error val fail", K(ret));
           }
         }
@@ -573,7 +573,7 @@ int ObExprJsonQuery::get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &c
   }
   // parse scalars
   if (OB_SUCC(ret)) {
-    ret = get_clause_opt(expr, ctx, 4, is_cover_by_error, scalars_type, OB_JSON_SCALARS_COUNT);
+    ret = get_clause_opt(expr, ctx, 4, is_cover_by_error, scalars_type, JSN_QUERY_SCALARS_COUNT);
   }
   return ret;
 }
@@ -661,29 +661,29 @@ int ObExprJsonQuery::get_empty_option(ObJsonBaseVector &hits, bool &is_cover_by_
 {
   INIT_SUCC(ret);
   switch (empty_type) {
-    case OB_JSON_ON_RESPONSE_IMPLICIT: {
+    case JSN_QUERY_IMPLICIT: {
       ret = OB_ERR_JSON_VALUE_NO_VALUE;
       LOG_USER_ERROR(OB_ERR_JSON_VALUE_NO_VALUE);
       LOG_WARN("json value seek result empty.", K(hits.size()));
       break;
     }
-    case OB_JSON_ON_RESPONSE_ERROR: {
+    case JSN_QUERY_ERROR: {
       is_cover_by_error = false;
       ret = OB_ERR_JSON_VALUE_NO_VALUE;
       LOG_USER_ERROR(OB_ERR_JSON_VALUE_NO_VALUE);
       LOG_WARN("json value seek result empty.", K(hits.size()));
       break;
     }
-    case OB_JSON_ON_RESPONSE_EMPTY_OBJECT: {
+    case JSN_QUERY_EMPTY_OBJECT: {
       is_null_json_obj = true;
       break;
     }
-    case OB_JSON_ON_RESPONSE_NULL: {
+    case JSN_QUERY_NULL: {
       is_null_result = true;
       break;
     }
-    case OB_JSON_ON_RESPONSE_EMPTY:
-    case OB_JSON_ON_RESPONSE_EMPTY_ARRAY: {
+    case JSN_QUERY_EMPTY:
+    case JSN_QUERY_EMPTY_ARRAY: {
       is_null_json_array = true;   // set_json_array
       break;
     }
@@ -697,27 +697,27 @@ int ObExprJsonQuery::get_single_obj_wrapper(uint8_t wrapper_type, int &use_wrapp
 {
   INIT_SUCC(ret);
   switch (wrapper_type) {
-    case OB_WITHOUT_WRAPPER:
-    case OB_WITHOUT_ARRAY_WRAPPER:
-    case OB_WRAPPER_IMPLICIT: {
+    case JSN_QUERY_WITHOUT_WRAPPER:
+    case JSN_QUERY_WITHOUT_ARRAY_WRAPPER:
+    case JSN_QUERY_WRAPPER_IMPLICIT: {
       if ((in_type != ObJsonNodeType::J_OBJECT &&  in_type != ObJsonNodeType::J_ARRAY
-          && scalars_type == OB_JSON_SCALARS_DISALLOW)) {
+          && scalars_type == JSN_QUERY_SCALARS_DISALLOW)) {
         ret = OB_ERR_WITHOUT_ARR_WRAPPER;  // result cannot be returned without array wrapper
         LOG_USER_ERROR(OB_ERR_WITHOUT_ARR_WRAPPER);
         LOG_WARN("result cannot be returned without array wrapper.", K(ret));
       }
       break;
     }
-    case OB_WITH_WRAPPER:
-    case OB_WITH_ARRAY_WRAPPER:
-    case OB_WITH_UNCONDITIONAL_WRAPPER:
-    case OB_WITH_UNCONDITIONAL_ARRAY_WRAPPER: {
+    case JSN_QUERY_WITH_WRAPPER:
+    case JSN_QUERY_WITH_ARRAY_WRAPPER:
+    case JSN_QUERY_WITH_UNCONDITIONAL_WRAPPER:
+    case JSN_QUERY_WITH_UNCONDITIONAL_ARRAY_WRAPPER: {
       use_wrapper = 1;
       break;
     }
-    case OB_WITH_CONDITIONAL_WRAPPER:
-    case OB_WITH_CONDITIONAL_ARRAY_WRAPPER: {
-      if (in_type != ObJsonNodeType::J_OBJECT &&  in_type != ObJsonNodeType::J_ARRAY && scalars_type == OB_JSON_SCALARS_DISALLOW ) {
+    case JSN_QUERY_WITH_CONDITIONAL_WRAPPER:
+    case JSN_QUERY_WITH_CONDITIONAL_ARRAY_WRAPPER: {
+      if (in_type != ObJsonNodeType::J_OBJECT &&  in_type != ObJsonNodeType::J_ARRAY && scalars_type == JSN_QUERY_SCALARS_DISALLOW ) {
         use_wrapper = 1;
       }
       break;
@@ -732,23 +732,23 @@ int ObExprJsonQuery::get_multi_scalars_wrapper_type(uint8_t wrapper_type, int &u
 {
   INIT_SUCC(ret);
   switch (wrapper_type) {
-    case OB_WITHOUT_WRAPPER:
-    case OB_WITHOUT_ARRAY_WRAPPER:
-    case OB_WRAPPER_IMPLICIT: {
+    case JSN_QUERY_WITHOUT_WRAPPER:
+    case JSN_QUERY_WITHOUT_ARRAY_WRAPPER:
+    case JSN_QUERY_WRAPPER_IMPLICIT: {
       ret = OB_ERR_WITHOUT_ARR_WRAPPER;  // result cannot be returned without array wrapper
       LOG_USER_ERROR(OB_ERR_WITHOUT_ARR_WRAPPER);
       LOG_WARN("result cannot be returned without array wrapper.", K(ret), K(hits.size()));
       break;
     }
-    case OB_WITH_WRAPPER:
-    case OB_WITH_ARRAY_WRAPPER:
-    case OB_WITH_UNCONDITIONAL_WRAPPER:
-    case OB_WITH_UNCONDITIONAL_ARRAY_WRAPPER: {
+    case JSN_QUERY_WITH_WRAPPER:
+    case JSN_QUERY_WITH_ARRAY_WRAPPER:
+    case JSN_QUERY_WITH_UNCONDITIONAL_WRAPPER:
+    case JSN_QUERY_WITH_UNCONDITIONAL_ARRAY_WRAPPER: {
       use_wrapper = 1;
       break;
     }
-    case OB_WITH_CONDITIONAL_WRAPPER:
-    case OB_WITH_CONDITIONAL_ARRAY_WRAPPER: {
+    case JSN_QUERY_WITH_CONDITIONAL_WRAPPER:
+    case JSN_QUERY_WITH_CONDITIONAL_ARRAY_WRAPPER: {
       use_wrapper = 1;
       break;
     }
@@ -771,7 +771,7 @@ bool ObExprJsonQuery::try_set_error_val(common::ObIAllocator *allocator,
   bool mismatch_error = true;
 
   if (OB_FAIL(ret)) {
-    if (error_type == OB_JSON_ON_RESPONSE_EMPTY_ARRAY || error_type == OB_JSON_ON_RESPONSE_EMPTY) {
+    if (error_type == JSN_QUERY_EMPTY_ARRAY || error_type == JSN_QUERY_EMPTY) {
       ret = OB_SUCCESS;
       ObJsonArray j_arr_res(allocator);
       ObIJsonBase *jb_res = NULL;
@@ -779,7 +779,7 @@ bool ObExprJsonQuery::try_set_error_val(common::ObIAllocator *allocator,
       if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0, 0))) {
         LOG_WARN("result set fail", K(ret));
       }
-    } else if (error_type == OB_JSON_ON_RESPONSE_EMPTY_OBJECT) {
+    } else if (error_type == JSN_QUERY_EMPTY_OBJECT) {
       ret = OB_SUCCESS;
       ObJsonObject j_node_null(allocator);
       ObIJsonBase *jb_res = NULL;
@@ -787,7 +787,7 @@ bool ObExprJsonQuery::try_set_error_val(common::ObIAllocator *allocator,
       if (OB_FAIL(set_result(dst_type, OB_MAX_TEXT_LENGTH, jb_res, allocator, ctx, expr, res, error_type, 0, 0))) {
         LOG_WARN("result set fail", K(ret));
       }
-    } else if (error_type == OB_JSON_ON_RESPONSE_NULL || error_type == OB_JSON_ON_RESPONSE_IMPLICIT) {
+    } else if (error_type == JSN_QUERY_NULL || error_type == JSN_QUERY_IMPLICIT) {
       res.set_null();
       ret = OB_SUCCESS;
     }

@@ -507,7 +507,7 @@ Outputs & filters:
       access([a.g]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  2 - output([b.g]), filter([_st_dwithin(:0, b.g, cast(0.1, DOUBLE(-1, -1)))])
+  2 - output([b.g]), filter([_st_dwithin(:0, b.g, cast(0.1, DOUBLE(2, 1)))])
       access([b.__pk_increment], [b.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
       range_key([b.__cellid_16], [b.__mbr_16], [b.__pk_increment]), range(MIN ; MAX)

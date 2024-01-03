@@ -704,7 +704,7 @@ int ObTabletTableStore::calculate_read_tables(
     if (OB_FAIL(iterator.add_table(meta_major_tables_.at(0)))) {
       LOG_WARN("failed to add meta major table to iterator", K(ret), K(meta_major_tables_));
     }
-  } else if (!is_major_sstable_empty(tablet)) {
+  } else if (!is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
     if (!major_tables_.empty()) {
       for (int64_t i = major_tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
         if (major_tables_[i]->get_snapshot_version() <= snapshot_version) {
@@ -773,7 +773,7 @@ int ObTabletTableStore::calculate_read_tables(
     }
   } else { // not find base table
     if (!allow_no_ready_read) {
-      if (is_major_sstable_empty(tablet)) {
+      if (is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
         ret = OB_REPLICA_NOT_READABLE;
         LOG_WARN("no base table, not allow no ready read, tablet is not readable",
                  K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
@@ -950,7 +950,8 @@ int ObTabletTableStore::get_read_tables(
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_version));
-  } else if (OB_UNLIKELY(is_major_sstable_empty(tablet) && minor_tables_.empty() && allow_no_ready_read)) {
+  } else if (OB_UNLIKELY(is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)
+        && minor_tables_.empty() && allow_no_ready_read)) {
     if (memtables_.empty()) {
       LOG_INFO("no table in table store, cannot read", K(ret), K(*this));
     } else if (OB_FAIL(iterator.add_tables(memtables_))) {
@@ -1487,10 +1488,10 @@ int ObTabletTableStore::build_meta_major_table(
   return ret;
 }
 
-bool ObTabletTableStore::is_major_sstable_empty(const ObTablet &tablet) const
+bool ObTabletTableStore::is_major_sstable_empty(const share::SCN &ddl_commit_scn) const
 {
   return major_tables_.empty()
-    && !tablet.get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min(); // ddl logic major sstable require commit scn valid
+    && !ddl_commit_scn.is_valid_and_not_min(); // ddl logic major sstable require commit scn valid
 }
 
 int ObTabletTableStore::get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const
@@ -1645,35 +1646,52 @@ int ObTabletTableStore::build_memtable_array(const ObTablet &tablet)
 int ObTabletTableStore::check_ready_for_read(const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
+  ObReadyForReadParam param;
+  if (OB_FAIL(tablet.get_ready_for_read_param(param))) {
+    LOG_WARN("fail to get ready for read param", K(ret), K(tablet));
+  } else if (OB_FAIL(check_ready_for_read(param))) {
+    if (OB_SIZE_OVERFLOW == ret) {
+      diagnose_table_count_unsafe(tablet);
+    } else {
+      LOG_WARN("fail to check ready for read", K(ret), K(tablet));
+    }
+  }
+  return ret;
+}
+
+void ObTabletTableStore::diagnose_table_count_unsafe(const ObTablet &tablet)
+{
+  compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
+  MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+}
+
+int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
+{
+  int ret = OB_SUCCESS;
   is_ready_for_read_ = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KPC(this));
-  } else if (is_major_sstable_empty(tablet)) {
+  } else if (is_major_sstable_empty(param.ddl_commit_scn_)) {
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
     LOG_WARN("failed to check continuous of tables", K(ret));
   } else if (minor_tables_.count() + 1 > MAX_SSTABLE_CNT_IN_STORAGE) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("Too Many sstables in table store", K(ret), KPC(this), K(tablet));
-    compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(
-      compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
-    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+    LOG_WARN("Too Many sstables in table store", K(ret), KPC(this));
   } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), K(tablet));
-    compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
-    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+    LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this));
   } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
   } else {
-    const SCN &clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
+    const SCN &clog_checkpoint_scn = param.clog_checkpoint_scn_;
     const SCN &last_minor_end_scn = minor_tables_.get_boundary_table(true/*last*/)->get_end_scn();
     if (OB_UNLIKELY(clog_checkpoint_scn != last_minor_end_scn)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last minor table's end_scn must be equal to clog_checkpoint_scn",
-          K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this), K(tablet));
+          K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this));
     } else {
       is_ready_for_read_ = true;
     }

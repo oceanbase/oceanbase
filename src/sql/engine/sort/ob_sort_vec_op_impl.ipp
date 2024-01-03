@@ -356,7 +356,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_batch(const ObBatchRows 
   if (OB_SUCC(ret)) {
     const ObBatchRows *input_brs_ptr = nullptr;
     if (is_topn_sort() && OB_NOT_NULL(topn_filter_) && OB_LIKELY(!topn_filter_->is_by_pass())) {
-      if (OB_FAIL(topn_filter_->filter(all_exprs_, *eval_ctx_, start_pos,
+      if (OB_FAIL(batch_eval_vector(all_exprs_, input_brs))) {
+        SQL_ENG_LOG(WARN, "failed to eval vector", K(ret));
+      } else if (OB_FAIL(topn_filter_->filter(all_exprs_, *eval_ctx_, start_pos,
                                               input_brs))) {
         SQL_ENG_LOG(WARN, "failed to do topn filter", K(ret));
       } else {
@@ -1048,14 +1050,18 @@ template <typename Compare, typename Store_Row, bool has_addon>
 int ObSortVecOpImpl<Compare, Store_Row, has_addon>::eager_topn_filter_update(
     const common::ObIArray<Store_Row *> *sorted_dumped_rows) {
   int ret = OB_SUCCESS;
-  int64_t dumped_rows_count = sorted_dumped_rows->count();
-  int64_t bucket_size = topn_filter_->bucket_size();
-  bool updated = true;
-  for (int64_t i = bucket_size - 1;
-       OB_SUCC(ret) && updated && i < dumped_rows_count; i += bucket_size) {
-    if (OB_FAIL(
-            topn_filter_->update_filter(sorted_dumped_rows->at(i), updated))) {
-      SQL_ENG_LOG(WARN, "failed to eager topn filter update", K(ret));
+  if (topn_filter_->is_by_pass()) {
+    // do nothing
+  } else {
+    int64_t dumped_rows_count = sorted_dumped_rows->count();
+    int64_t bucket_size = topn_filter_->bucket_size();
+    bool updated = true;
+    for (int64_t i = bucket_size - 1;
+        OB_SUCC(ret) && updated && i < dumped_rows_count; i += bucket_size) {
+      if (OB_FAIL(
+              topn_filter_->update_filter(sorted_dumped_rows->at(i), updated))) {
+        SQL_ENG_LOG(WARN, "failed to eager topn filter update", K(ret));
+      }
     }
   }
   return ret;

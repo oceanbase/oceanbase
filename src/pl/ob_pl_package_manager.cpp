@@ -849,6 +849,7 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
   }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));
+    OX (resolve_ctx.session_info_.set_pl_can_retry(false));
   }
   return ret;
 }

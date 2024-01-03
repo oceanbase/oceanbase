@@ -31,6 +31,7 @@ ObTableIterParam::ObTableIterParam()
       tablet_id_(),
       read_info_(nullptr),
       rowkey_read_info_(nullptr),
+      get_table_param_(nullptr),
       cg_read_info_handle_(),
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
@@ -65,6 +66,7 @@ void ObTableIterParam::reset()
   tablet_id_.reset();
   read_info_ = nullptr;
   rowkey_read_info_ = nullptr;
+  get_table_param_ = nullptr;
   cg_read_info_handle_.reset();
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;

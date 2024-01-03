@@ -205,6 +205,7 @@ public:
     inline int add_row(ObCompactRow *new_row, int64_t row_size);
     int create_and_add_row(const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta,
         const int64_t row_size, ObEvalCtx &ctx, ObCompactRow *&new_row, uint64_t hash_val);
+    TO_STRING_KV(K(get_row_cnt()), K_(row_sizes), K_(serial_rows))
   private:
     common::ObIAllocator &allocator_;
     ObSArray<ObCompactRow *> serial_rows_;

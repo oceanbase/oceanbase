@@ -1732,6 +1732,10 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
                                   [&]() -> bool { return tx.flags_.INTERRUPTED_; });
   tx.lock_.lock();
   bool interrupted = tx.flags_.INTERRUPTED_;
+  if (interrupted) {
+    ret = OB_ERR_INTERRUPTED;
+    TRANS_LOG(WARN, "acquiring global snapshot has been interrupted", KR(ret), K(tx));
+  }
   tx.clear_interrupt();
   tx.flags_.BLOCK_ = false;
   if (op_sn != tx.op_sn_) {
@@ -1759,33 +1763,27 @@ int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
   int ret = OB_SUCCESS;
   const MonotonicTs now0 = get_req_receive_mts_();
   const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
-  int retry_times = 0;
-  const int MAX_RETRY_TIMES = 2000; // 2000 * 500us = 1s
-  do {
-    int64_t n = ObClockGenerator::getClock();
-    MonotonicTs rts(0);
-    if (n >= expire_ts) {
-      ret = OB_TIMEOUT;
-    } else if (retry_times++ > MAX_RETRY_TIMES) {
+  const int64_t current_time = ObClockGenerator::getClock();
+  // occupy current worker thread for at most 1s
+  const int64_t MAX_WAIT_TIME_US = 1 * 1000 * 1000;
+  MonotonicTs rts(0);
+
+  if (interrupt_checker()) {
+    ret = OB_ERR_INTERRUPTED;
+  } else if (current_time >= expire_ts) {
+    ret = OB_TIMEOUT;
+    TRANS_LOG(WARN, "get gts timeout", K(ret), K(expire_ts), K(current_time));
+  } else if (OB_FAIL(ts_mgr_->get_gts_sync(tenant_id_, now, MAX_WAIT_TIME_US, snapshot, rts))) {
+    TRANS_LOG(WARN, "get gts fail", K(ret), K(expire_ts), K(now));
+    if (OB_TIMEOUT == ret) {
       ret = OB_GTS_NOT_READY;
-      TRANS_LOG(WARN, "gts not ready", K(ret), K(retry_times));
-    } else if (OB_FAIL(ts_mgr_->get_gts(tenant_id_, now, NULL, snapshot, rts))) {
-      if (OB_EAGAIN == ret) {
-        if (interrupt_checker()) {
-          ret = OB_ERR_INTERRUPTED;
-        } else {
-          ob_usleep(500);
-        }
-      } else {
-        TRANS_LOG(WARN, "get gts fail", K(now));
-      }
-    } else if (OB_UNLIKELY(!snapshot.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot), K(now));
-    } else {
-      uncertain_bound = rts.mts_ + gts_ahead;
     }
-  } while (OB_EAGAIN == ret);
+  } else if (OB_UNLIKELY(!snapshot.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot), K(now));
+  } else {
+    uncertain_bound = rts.mts_ + gts_ahead;
+  }
 
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "acquire global snapshot fail", K(ret),

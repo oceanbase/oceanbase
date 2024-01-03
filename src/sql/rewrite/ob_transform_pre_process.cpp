@@ -60,15 +60,21 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
   int ret = OB_SUCCESS;
   trans_happened = false;
   bool is_happened = false;
-  if (OB_ISNULL(stmt)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("stmt is NULL", K(ret));
+    LOG_WARN("unexpected NULL", K(ret), K(stmt), K(ctx_));
   } else if (OB_FAIL(ObTransformUtils::right_join_to_left(stmt))) {
     LOG_WARN("failed to transform right join as left", K(ret));
   } else if (parent_stmts.empty() && lib::is_oracle_mode() &&
               OB_FAIL(formalize_limit_expr(*stmt))) {
     LOG_WARN("formalize stmt fialed", K(ret));
+  } else if (OB_FAIL(stmt->adjust_duplicated_table_names(*ctx_->allocator_, is_happened))) {
+    LOG_WARN("failed to adjust duplicated table names", K(ret));
   } else {
+    trans_happened |= is_happened;
+    OPT_TRACE("adjust duplicated table name", is_happened);
+    LOG_TRACE("succeed to adjust duplicated table name", K(is_happened), K(ret));
+
     if (OB_SUCC(ret)) {
       if (OB_FAIL(flatten_conditions(stmt, is_happened))) {
         LOG_WARN("failed to flatten_condition", K(ret));
@@ -1494,7 +1500,7 @@ int ObTransformPreProcess::create_child_stmts_for_groupby_sets(ObSelectStmt *ori
                                                                      ctx_->src_hash_val_,
                                                                      i + 1))) {
         LOG_WARN("failed to recursive adjust statement id", K(ret));
-      } else if (OB_FAIL(groupby_stmt->update_stmt_table_id(*origin_stmt))) {
+      } else if (OB_FAIL(groupby_stmt->update_stmt_table_id(ctx_->allocator_, *origin_stmt))) {
         LOG_WARN("failed to update stmt table id.", K(ret));
       } else if (OB_FAIL(groupby_stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalized stmt.", K(ret));
@@ -2346,7 +2352,7 @@ int ObTransformPreProcess::create_and_mock_join_view(ObSelectStmt &stmt)
                                                                       ctx_->src_hash_val_,
                                                                       sub_num))) {
       LOG_WARN("failed to adjust statement id", K(ret));
-    } else if (OB_FAIL(right_view_stmt->update_stmt_table_id(*left_view_stmt))) {
+    } else if (OB_FAIL(right_view_stmt->update_stmt_table_id(ctx_->allocator_, *left_view_stmt))) {
       LOG_WARN("failed to update stmt table id", K(ret));
     } else {
       right_view_stmt->get_start_with_exprs().reset();
@@ -5153,7 +5159,7 @@ int ObTransformPreProcess::transform_insert_only_merge_into(ObDMLStmt* stmt, ObD
                                                                  ctx_->src_hash_val_,
                                                                  1))) {
         LOG_WARN("failed to recursive adjust statement id", K(ret));
-      } else if (OB_FAIL(ref_stmt->update_stmt_table_id(*target_table->ref_query_))) {
+      } else if (OB_FAIL(ref_stmt->update_stmt_table_id(ctx_->allocator_, *target_table->ref_query_))) {
         LOG_WARN("failed to update table id", K(ret));
       } else if (OB_FALSE_IT(inner_target_table->ref_query_ = ref_stmt)) {
       } else if (OB_FAIL(ref_stmt->adjust_subquery_list())) {
@@ -8802,7 +8808,7 @@ int ObTransformPreProcess::expand_full_outer_join(ObSelectStmt *&ref_query)
                                                                ctx_->src_hash_val_,
                                                                sub_num))) {
     LOG_WARN("failed to recursive adjust statement id", K(ret));
-  } else if (OB_FAIL(right_stmt->update_stmt_table_id(*left_stmt))) {
+  } else if (OB_FAIL(right_stmt->update_stmt_table_id(ctx_->allocator_, *left_stmt))) {
     LOG_WARN("failed to updatew table id in stmt.", K(ret));
   } else if (right_stmt->get_joined_tables().count() != 1) {
     ret = OB_ERR_UNEXPECTED;

@@ -2054,6 +2054,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
 
       AccessNameType name_type = UNKNOWN;
+      access_ident.has_brackets_ = (1 == left_node.int16_values_[0]);
       if (!q_name.is_unknown()) {
         if (0 == access_ident.access_name_.case_compare("NEXT")
             || 0 == access_ident.access_name_.case_compare("PRIOR")
@@ -2232,6 +2233,9 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_XMLPARSE == left_node.type_
              || T_FUN_ORA_XMLAGG == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
+  } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
+    ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
+    LOG_WARN("input invalid arguments", K(ret));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("left node of obj access ref node not T_IDENT/T_QUESTIONMARK/T_FUN_SYS", K(ret), K(left_node.type_));
@@ -5700,7 +5704,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     num = node->num_child_;
-    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr);
+    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_QUERY, func_expr);
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_query")));
   }
@@ -5718,7 +5722,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   }
   // pre check default returning type with item method
   if (OB_SUCC(ret)) {
-    if (returning_type->type_ == T_NULL) {
+    if (returning_type->type_ == T_NULL || returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
       ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
       if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_QUERY))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));

@@ -147,7 +147,8 @@ int ObVectorsResultHolder::ObColResultHolder::copy_uniform_base(
     const int64_t batch_size) {
   int ret = OB_SUCCESS;
   int64_t copy_size = is_const ? 1 : max_row_cnt_;
-  bool is_fixed_length_data = expr->is_fixed_length_data_;
+  bool need_copy_rev_buf = expr->is_fixed_length_data_
+                           || ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type());
   if (OB_FAIL(copy_vector_base(vec))) {
     LOG_WARN("failed to copy vector base", K(ret));
   } else {
@@ -159,7 +160,7 @@ int ObVectorsResultHolder::ObColResultHolder::copy_uniform_base(
                  K(max_row_cnt_));
       }
     }
-    if (OB_SUCC(ret) && is_fixed_length_data && nullptr == frame_data_) {
+    if (OB_SUCC(ret) && need_copy_rev_buf && nullptr == frame_data_) {
       len_ = expr->res_buf_len_;
       if (OB_ISNULL(
               frame_data_ = static_cast<char *>(alloc.alloc(len_ * copy_size)))) {
@@ -169,7 +170,7 @@ int ObVectorsResultHolder::ObColResultHolder::copy_uniform_base(
     }
   }
   if (OB_SUCC(ret)) {
-    if (is_fixed_length_data) {
+    if (need_copy_rev_buf) {
       MEMCPY(frame_data_, expr->get_rev_buf(eval_ctx), len_ * copy_size);
     }
     datums_ = const_cast<ObDatum *> (vec.get_datums());
@@ -233,11 +234,13 @@ void ObVectorsResultHolder::ObColResultHolder::restore_uniform_base(
     ObEvalCtx &eval_ctx,
     const int64_t batch_size) const {
   int ret = OB_SUCCESS;
+  bool need_copy_rev_buf = expr->is_fixed_length_data_
+                           || ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type());
   int64_t copy_size = is_const ? 1 : max_row_cnt_;
   restore_vector_base(vec);
   vec.set_datums(datums_);
   MEMCPY(expr->locate_batch_datums(eval_ctx), frame_datums_, sizeof(ObDatum) * copy_size);
-  if (OB_NOT_NULL(expr_) && expr_->is_fixed_length_data_) {
+  if (need_copy_rev_buf) {
     MEMCPY(expr->get_rev_buf(eval_ctx), frame_data_, len_ * copy_size);
   }
 }

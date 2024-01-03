@@ -98,6 +98,7 @@ int ObDASGroupScanOp::open_op()
   iter_.init_group_range(cur_group_idx_, group_size_);
   if (OB_FAIL(iter_.init_row_store(scan_ctdef_->result_output_,
                                    *scan_rtdef_->eval_ctx_,
+                                   scan_ctdef_->pd_expr_spec_.access_exprs_,
                                    scan_rtdef_->stmt_allocator_,
                                    max_size,
                                    scan_ctdef_->group_id_expr_,
@@ -241,6 +242,7 @@ int ObDASGroupScanOp::decode_task_result(ObIDASTaskResult *task_result)
       iter_.init_group_range(cur_group_idx_, group_size_);
       if (OB_FAIL(iter_.init_row_store(scan_ctdef_->result_output_,
                                        *scan_rtdef_->eval_ctx_,
+                                       scan_ctdef_->pd_expr_spec_.access_exprs_,
                                        scan_rtdef_->stmt_allocator_,
                                        max_size,
                                        scan_ctdef_->group_id_expr_,
@@ -296,6 +298,7 @@ int ObGroupLookupOp::init_group_scan_iter(int64_t cur_group_idx,
   group_iter_.init_group_range(cur_group_idx, group_size);
   OZ(group_iter_.init_row_store(lookup_ctdef_->result_output_,
                                 *lookup_rtdef_->eval_ctx_,
+                                lookup_ctdef_->pd_expr_spec_.access_exprs_,
                                 lookup_rtdef_->stmt_allocator_,
                                 max_row_store_size,
                                 group_id_expr,

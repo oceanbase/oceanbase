@@ -1070,13 +1070,6 @@ int ObQueryRange::compute_range_size(const ObIArray<ObKeyPart*> &key_parts,
   return ret;
 }
 
-int ObQueryRange::is_at_most_one_row(bool &is_one_row) const
-{
-  int ret = OB_SUCCESS;
-  is_one_row = table_graph_.is_precise_get_;
-  return ret;
-}
-
 int ObQueryRange::is_get(bool &is_range_get) const
 {
   return is_get(column_count_, is_range_get);

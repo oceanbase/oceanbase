@@ -1628,7 +1628,7 @@ DEFINE_ERROR_EXT(OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW, -5972, ER_VIEW_NONUPD
 DEFINE_ORACLE_ERROR(OB_ERR_NO_DESC_FOR_POS, -5973, -1, "HY000", "no descriptor for this position", 24334, "no descriptor for this position");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_OBJ_FLAG, -5974, -1, "HY000", "object specified is incompatible with the flag specified", 4047, "object specified is incompatible with the flag specified");
 DEFINE_ERROR_DEP(OB_ERR_DBLINK_REMOTE_ECODE, -5975, -1, "HY000", "\ndblink remote error code: %d,\nremote error msg: %.*s", "\ndblink remote error code: %d,\nremote error msg: %.*s");
-DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "oci lib not founded");
+DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "can not find the expected version of OCI LIB: %.*s", "can not find the expected version of OCI LIB: %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_EXTENDED_ON_VIEW, -5977, -1, "HY000", "partition-extended object names may only be used with tables and editioning views", 14109, "partition-extended object names may only be used with tables and editioning views");
 DEFINE_ORACLE_ERROR(OB_ERR_NOT_ALL_VARIABLE_BIND, -5978, -1, "HY000", "not all variables bound", 1008, "not all variables bound");
 DEFINE_ORACLE_ERROR(OB_ERR_BIND_VARIABLE_NOT_EXIST, -5979, -1, "HY000", "bind variable does not exist", 1006, "bind variable does not exist");
@@ -1784,6 +1784,9 @@ DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout")
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 DEFINE_ERROR(OB_CLOG_DISK_HANG, -6325, -1, "HY000", "ob clog disk hang");
+// 6326: OB_TABLE_LOCK_SPLIT_TWICE
+// 6327: OB_TABLE_LOCK_IS_SPLITTING
+// 6328: OB_TABLE_LOCK_SPLIT_FAIL
 
 // for freeze
 // DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
@@ -2389,6 +2392,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_NEVER_REFRESH, -9761, -1, "HY000", "cannot 
 DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
 DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output parameter not a bind variable", 6577, "output parameter not a bind variable");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_TIME_EARLIER_THAN_SYSDATE, -9764, -1, "HY000", "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future", 23420, "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future");
+DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way", 224, "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way");
 
 ////////////////////////////////////////////////////////////////
 //error code for OBKV [-10500, -10700)

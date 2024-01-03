@@ -1681,13 +1681,9 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
       for (int i = 0; i < right_param_num; i++) {
         in_ctx->cmp_functions_[i] = (void *)func_ptr;
       }
-      if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
-        fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
-        left_datum.len_ = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
-      }
       if (0 == in_ctx->get_static_engine_hashset_size()) {
         // Scenarios where in_list contains only null.
-        if (right_has_null) {
+        if (in_ctx->ctx_hash_null_) {
           for (int64_t left_idx = bound.start(); left_idx < bound.end(); ++left_idx) {
             if (skip.at(left_idx) || eval_flags.at(left_idx)) { continue; }
             res_vec->set_null(left_idx);
@@ -1699,6 +1695,9 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row(const ObExpr &expr,
           LOG_WARN("static_engine_hashset_size unexpected", K(ret), K(right_has_null),
                   K(in_ctx->get_static_engine_hashset_size()));
         }
+      } else if (std::is_same<LeftVec, ObFixedLengthBase>::value) {
+        fixed_base_l_payload = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_data();
+        left_datum.len_ = (reinterpret_cast<ObFixedLengthBase *>(input_left_vec))->get_length();
       }
     }
   }

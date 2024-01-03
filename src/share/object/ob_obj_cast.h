@@ -400,11 +400,7 @@ public:
                      const ObObj &in_obj, ObObj &out_obj);
   static int to_type(const ObObjType expect_type, ObCollationType expect_cs_type,
                      ObCastCtx &cast_ctx, const ObObj &in_obj, ObObj &out_obj);
-  static int get_zero_value(const ObObjType expect_type,
-                            ObCollationType expect_cs_type,
-                            int64_t data_len,
-                            ObIAllocator &alloc,
-                            ObObj &zero_obj);
+  static int get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj);
   static int enumset_to_inner(const ObObjMeta &expect_meta,
                               const ObObj &in_obj, ObObj &out_obj,
                               common::ObIAllocator &allocator,
