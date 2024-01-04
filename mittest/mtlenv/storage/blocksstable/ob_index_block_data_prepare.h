@@ -746,7 +746,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
         macro_handle.set_block_id(data_macro_meta.get_macro_id());
         ObDataMacroBlockMeta *copied_meta = nullptr;
         ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
-        ASSERT_EQ(OB_SUCCESS, ddl_kv_.insert_block_meta_tree(macro_handle, copied_meta));
+        ASSERT_EQ(OB_SUCCESS, ddl_kv_.insert_block_meta_tree(macro_handle, copied_meta, 0));
       }
     }
     ASSERT_EQ(OB_ITER_END, ret);
@@ -1207,7 +1207,7 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
         if (macro_idx > partial_kv_start_idx_) {
           ObDataMacroBlockMeta *copied_meta = nullptr;
           ASSERT_EQ(OB_SUCCESS, data_macro_meta.deep_copy(copied_meta, allocator_));
-          ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->get_ddl_memtables().at(kv_idx)->insert_block_meta_tree(macro_handle, copied_meta));
+          ASSERT_EQ(OB_SUCCESS, ddl_kvs_.get_obj()->get_ddl_memtables().at(kv_idx)->insert_block_meta_tree(macro_handle, copied_meta, 0));
           ++kv_idx;
         }
       }

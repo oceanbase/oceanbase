@@ -64,19 +64,23 @@ public:
   virtual void reuse() override;
   virtual void set_iter_end() override { is_iter_finish_ = true; }
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLIndexBlockRowIterator",
-                       K_(is_iter_start), K_(is_iter_finish), KP(cur_tree_value_), KP(block_meta_tree_), K(is_normal_cg_));
+                       K_(is_iter_start), K_(is_iter_finish), KP(cur_tree_value_), KP(block_meta_tree_), K(is_co_sstable_));
 public:
   int set_iter_param(const ObStorageDatumUtils *datum_utils,
                      bool is_reverse_scan,
                      const storage::ObBlockMetaTree *block_meta_tree,
-                     const bool is_normal_cg,
+                     const bool is_co_sstable,
                      const int64_t iter_step = INT64_MAX);
   bool is_valid() { return OB_NOT_NULL(block_meta_tree_); }
   int get_next_meta(const ObDataMacroBlockMeta *&meta);
 private:
+  int inner_get_current(const ObIndexBlockRowHeader *&idx_row_header,
+                        const ObDatumRowkey *&endkey,
+                        int64_t &row_offset/*for co sstable*/);
+private:
   bool is_iter_start_;
   bool is_iter_finish_;
-  bool is_normal_cg_;
+  bool is_co_sstable_;
   DDLBtreeIterator btree_iter_;
   const storage::ObBlockMetaTree *block_meta_tree_;
   storage::ObBlockMetaTreeValue *cur_tree_value_;

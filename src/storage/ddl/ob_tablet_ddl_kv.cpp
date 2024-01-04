@@ -264,7 +264,8 @@ void ObBlockMetaTree::destroy_tree_value()
 
 int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
                                         const blocksstable::ObDatumRowkey *rowkey,
-                                        const blocksstable::ObDataMacroBlockMeta *meta)
+                                        const blocksstable::ObDataMacroBlockMeta *meta,
+                                        const int64_t co_sstable_row_offset)
 {
   int ret = OB_SUCCESS;
   ObDataMacroBlockMeta *insert_meta = const_cast<ObDataMacroBlockMeta *>(meta);
@@ -284,6 +285,7 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
   } else {
     tree_value = new (buf) ObBlockMetaTreeValue(insert_meta, rowkey);
 
+    tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
     tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1;
     tree_value->header_.row_store_type_ = static_cast<uint8_t>(data_desc_.get_desc().get_row_store_type());
     tree_value->header_.compressor_type_ = static_cast<uint8_t>(data_desc_.get_desc().get_compressor_type());
@@ -879,11 +881,11 @@ int ObDDLMemtable::init_ddl_index_iterator(const blocksstable::ObStorageDatumUti
                                            blocksstable::ObDDLIndexBlockRowIterator *ddl_kv_index_iter)
 {
   int ret = OB_SUCCESS;
-  const bool is_normal_cg = is_normal_cg_sstable();
+  const bool is_co_sst = is_co_sstable();
   if (OB_ISNULL(datum_utils) || OB_UNLIKELY(!datum_utils->is_valid()) || OB_ISNULL(ddl_kv_index_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), KP(ddl_kv_index_iter), KPC(datum_utils));
-  } else if (OB_FAIL(ddl_kv_index_iter->set_iter_param(datum_utils, is_reverse_scan, &block_meta_tree_, is_normal_cg))) {
+  } else if (OB_FAIL(ddl_kv_index_iter->set_iter_param(datum_utils, is_reverse_scan, &block_meta_tree_, is_co_sst))) {
     LOG_WARN("fail to set ddl iter param", K(ret));
   }
   return ret;
@@ -1142,7 +1144,7 @@ int ObDDLKV::set_macro_block(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta))) {
+      } else if (OB_FAIL(ddl_memtable->insert_block_meta_tree(macro_block.block_handle_, data_macro_meta, macro_block.end_row_id_))) {
         LOG_WARN("insert block meta tree faield", K(ret));
       } else {
         min_scn_ = SCN::min(min_scn_, macro_block.scn_);
@@ -1155,10 +1157,10 @@ int ObDDLKV::set_macro_block(
   return ret;
 }
 
-int ObDDLMemtable::insert_block_meta_tree(const ObDDLMacroHandle &macro_handle, blocksstable::ObDataMacroBlockMeta *data_macro_meta)
+int ObDDLMemtable::insert_block_meta_tree(const ObDDLMacroHandle &macro_handle, blocksstable::ObDataMacroBlockMeta *data_macro_meta, const int64_t co_sstable_row_offset)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(block_meta_tree_.insert_macro_block(macro_handle, &data_macro_meta->end_key_, data_macro_meta))) {
+  if (OB_FAIL(block_meta_tree_.insert_macro_block(macro_handle, &data_macro_meta->end_key_, data_macro_meta, co_sstable_row_offset))) {
     LOG_WARN("insert macro block failed", K(ret), K(macro_handle), KPC(data_macro_meta));
   } else {
     const ObDataBlockMetaVal &meta_val = data_macro_meta->get_meta_val();
