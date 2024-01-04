@@ -185,7 +185,7 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_cluster)
   EXPECT_EQ(true, iserver->is_arb_server());
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   palflite::PalfEnvLiteMgr *palf_env_mgr = &arb_server->palf_env_mgr_;
-  std::vector<int64_t> cluster_ids = {2, 3, 4, 5, 6};
+  std::vector<int64_t> cluster_ids = {2, 3, 4, 5, 6, 7};
   arbserver::GCMsgEpoch epoch = arbserver::GCMsgEpoch(1, 1);
 
   // test add tenant without cluster, generate placeholder
@@ -218,6 +218,20 @@ TEST_F(TestObSimpleMutilArbServer, create_mutil_cluster)
   // empty cluster_name
   EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[4], "", epoch));
   EXPECT_EQ(OB_ARBITRATION_SERVICE_ALREADY_EXIST, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[4], "test", epoch));
+
+  // long cluster_name
+  char *long_cluster_name = new char[OB_MAX_CLUSTER_NAME_LENGTH + 1];
+  MEMSET(long_cluster_name, '\0', OB_MAX_CLUSTER_NAME_LENGTH + 1);
+  MEMSET(long_cluster_name, 'a', OB_MAX_CLUSTER_NAME_LENGTH);
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[5], long_cluster_name, epoch));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->add_cluster(iserver->get_addr(), cluster_ids[5], long_cluster_name, epoch));
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  EXPECT_TRUE(palf_env_mgr->is_cluster_placeholder_exists(cluster_ids[0]));
+  palflite::ClusterMetaInfo long_cluster_meta_info;
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->get_cluster_meta_info_(cluster_ids[5], long_cluster_meta_info));
+  EXPECT_EQ(0, strcmp(long_cluster_name, long_cluster_meta_info.cluster_name_));
+  EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[5], long_cluster_name, epoch));
 
   // test remove_cluster
   EXPECT_EQ(OB_SUCCESS, palf_env_mgr->remove_cluster(iserver->get_addr(), cluster_ids[0], "arbserver_test", epoch));
