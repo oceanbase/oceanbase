@@ -209,7 +209,7 @@ int ObCloneScheduler::process_sys_clone_job(const share::ObCloneJob &job)
       case ObTenantCloneStatus::Status::CLONE_SYS_CREATE_TENANT_FAIL:
       case ObTenantCloneStatus::Status::CLONE_SYS_WAIT_TENANT_RESTORE_FINISH_FAIL:
       case ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL:
-      case ObTenantCloneStatus::Status::CLONE_SYS_CANCELED:
+      case ObTenantCloneStatus::Status::CLONE_SYS_CANCELING:
         ret = clone_recycle_failed_job(job);
         break;
       default:
@@ -1200,6 +1200,8 @@ int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
     LOG_WARN("fail to release resource of clone tenant", KR(ret), K(job));
   } else if (OB_FAIL(ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(*sql_proxy_, job))) {
     LOG_WARN("fail to release resource of source tenant", KR(ret), K(job));
+  } else if (job_status.is_sys_canceling_status()) {
+    const_cast<ObCloneJob&>(job).set_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELED);
   }
 
   if (OB_SUCC(ret)) {
