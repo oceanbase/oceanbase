@@ -1138,7 +1138,7 @@ int ObCOSSTableRowScanner::push_group_by_processor(ObICGIterator *cg_iterator)
   if (OB_ISNULL(cg_iterator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret));
-  } else if (cg_iterator->get_type() != ObICGIterator::OB_CG_GROUP_BY_SCANNER) {
+  } else if (OB_UNLIKELY(!ObICGIterator::is_valid_group_by_cg_scanner(cg_iterator->get_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected cg scanner", K(ret), K(cg_iterator->get_type()));
   } else {
