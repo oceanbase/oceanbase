@@ -11295,6 +11295,26 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   }
   return ret;
 }
+
+int ObRootService::reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
+                                     obrpc::ObReloadMasterKeyResult &result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t max_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(master_key_mgr_.reload_tenant_max_key_version(arg.tenant_id_, max_version))) {
+    LOG_WARN("failed to reload master key version", K(ret), K(arg));
+  } else {
+    result.tenant_id_ = arg.tenant_id_;
+    result.master_key_id_ = max_version;
+  }
+  return ret;
+}
 #endif
 
 } // end namespace rootserver
