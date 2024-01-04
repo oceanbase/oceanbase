@@ -149,12 +149,17 @@ int ObDbmsStatsExecutor::do_gather_stats(ObExecContext &ctx,
     /*do nothing*/
   } else {
     ObBasicStatsEstimator basic_est(ctx, *param.allocator_);
-    ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
     if (OB_FAIL(basic_est.estimate(param, extra, opt_stats))) {
       LOG_WARN("failed to estimate basic statistics", K(ret));
-    } else if (extra.need_histogram_ && OB_FAIL(hybrid_est.estimate(param, extra, opt_stats))) {
-      LOG_WARN("failed to estimate hybrid histogram", K(ret));
-    } else {/*do nothing*/}
+    } else if (extra.need_histogram_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
+        ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
+        extra.nth_part_ = i;
+        if (OB_FAIL(hybrid_est.estimate(param, extra, opt_stats.at(i)))) {
+          LOG_WARN("failed to estimate hybrid histogram", K(ret));
+        } else {/*do nothing*/}
+      }
+    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObIncrementalStatEstimator::try_derive_global_stat(ctx, param,

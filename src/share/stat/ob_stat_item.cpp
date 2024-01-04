@@ -696,6 +696,11 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
       col_stat_->get_histogram().set_sample_size(hybrid_hist.get_total_count());
       col_stat_->get_histogram().set_pop_frequency(hybrid_hist.get_pop_freq());
       col_stat_->get_histogram().set_pop_count(hybrid_hist.get_pop_count());
+      col_stat_->get_histogram().calc_density(ObHistType::HYBIRD,
+                                              hybrid_hist.get_total_count(),
+                                              hybrid_hist.get_pop_freq(),
+                                              col_stat_->get_num_distinct(),
+                                              hybrid_hist.get_pop_count());
       LOG_TRACE("succeed to build hybrid hist", K(hybrid_hist), K(col_stat_->get_histogram()));
     }
   }

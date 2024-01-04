@@ -322,7 +322,7 @@ int ObStatsEstimator::fill_group_by_info(ObIAllocator &allocator,
 
 int ObStatsEstimator::do_estimate(uint64_t tenant_id,
                                   const ObString &raw_sql,
-                                  CopyStatType copy_type,
+                                  bool need_copy_basic_stat,
                                   ObOptStat &src_opt_stat,
                                   ObIArray<ObOptStat> &dst_opt_stats)
 {
@@ -386,11 +386,8 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
           if (OB_SUCC(ret)) {
             if (OB_FAIL(decode(allocator_))) {
               LOG_WARN("failed to decode results", K(ret));
-            } else if (copy_type == COPY_ALL_STAT &&
+            } else if (need_copy_basic_stat &&
                        OB_FAIL(copy_opt_stat(src_opt_stat, dst_opt_stats))) {
-              LOG_WARN("failed to copy stat to target opt stat", K(ret));
-            } else if (copy_type == COPY_HYBRID_HIST_STAT &&
-                       OB_FAIL(copy_hybrid_hist_stat(src_opt_stat, dst_opt_stats))) {
               LOG_WARN("failed to copy stat to target opt stat", K(ret));
             } else {
               results_.reset();
@@ -527,74 +524,6 @@ int ObStatsEstimator::copy_col_stats(const int64_t cur_row_cnt,
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObStatsEstimator::copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
-                                            ObIArray<ObOptStat> &dst_opt_stats)
-{
-  int ret = OB_SUCCESS;
-  bool find_it = false;
-  if (OB_ISNULL(src_opt_stat.table_stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(src_opt_stat.table_stat_));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < dst_opt_stats.count(); ++i) {
-    if (OB_ISNULL(dst_opt_stats.at(i).table_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(dst_opt_stats.at(i).table_stat_));
-    } else if (dst_opt_stats.at(i).table_stat_->get_partition_id() ==
-               src_opt_stat.table_stat_->get_partition_id()) {
-      find_it = true;
-      if (OB_UNLIKELY(dst_opt_stats.at(i).column_stats_.count() !=
-                      src_opt_stat.column_stats_.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(dst_opt_stats.at(i).column_stats_.count()),
-                                         K(src_opt_stat.column_stats_.count()));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < src_opt_stat.column_stats_.count(); ++j) {
-          ObOptColumnStat *src_col_stat = NULL;
-          ObOptColumnStat *dst_col_stat = NULL;
-          bool is_skewed = false;
-          if (OB_ISNULL(src_col_stat = src_opt_stat.column_stats_.at(j)) ||
-              OB_ISNULL(dst_col_stat = dst_opt_stats.at(i).column_stats_.at(j))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(src_col_stat), K(dst_col_stat), K(j));
-          } else if (!dst_col_stat->get_histogram().is_hybrid() ||
-                     dst_col_stat->get_histogram().is_valid() ||
-                     !src_col_stat->get_histogram().is_valid()) {
-            LOG_TRACE("no need copy histogram", K(src_col_stat->get_histogram()),
-                                                K(dst_col_stat->get_histogram()), K(i), K(j));
-            if (!src_col_stat->get_histogram().is_valid() &&
-                !dst_col_stat->get_histogram().is_valid()) {
-              dst_col_stat->get_histogram().reset();
-              dst_col_stat->get_histogram().set_sample_size(dst_col_stat->get_num_not_null());
-            }
-          } else {
-            ObHistogram &src_hist = src_col_stat->get_histogram();
-            dst_col_stat->get_histogram().set_type(src_hist.get_type());
-            dst_col_stat->get_histogram().set_sample_size(src_hist.get_sample_size());
-            dst_col_stat->get_histogram().set_bucket_cnt(src_hist.get_bucket_cnt());
-            dst_col_stat->get_histogram().calc_density(ObHistType::HYBIRD,
-                                                       src_hist.get_sample_size(),
-                                                       src_hist.get_pop_frequency(),
-                                                       dst_col_stat->get_num_distinct(),
-                                                       src_hist.get_pop_count());
-            if (OB_FAIL(dst_col_stat->get_histogram().get_buckets().assign(src_hist.get_buckets()))) {
-              LOG_WARN("failed to assign buckets", K(ret));
-            } else {
-              LOG_TRACE("Succeed to copy histogram", K(*dst_col_stat), K(i), K(j));
-            }
-          }
-        }
-      }
-    } else {/*do nothing*/}
-  }
-  if (OB_SUCC(ret) && !find_it) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error, can't find specify partition id", K(ret), K(find_it),
-                                                                      K(*src_opt_stat.table_stat_));
   }
   return ret;
 }

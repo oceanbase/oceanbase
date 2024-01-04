@@ -320,18 +320,20 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
   }
   if (OB_SUCC(ret) && !gather_hybrid_hist_opt_stats.empty()) {
     //gather partition hybird hist togather.
-    ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
     ObExtraParam extra;
     extra.type_ = PARTITION_LEVEL;
-    extra.nth_part_ = 0;
     extra.start_time_ = ObTimeUtility::current_time();
     ObTableStatParam part_param;
     if (OB_FAIL(gen_part_param(param, gather_hybrid_hist_opt_stats, part_param))) {
       LOG_WARN("failed to gen part param", K(ret));
-    } else if (OB_FAIL(hybrid_est.estimate(part_param, extra,
-                                           gather_hybrid_hist_opt_stats))) {
-      LOG_WARN("failed to estimate hybrid histogram", K(ret));
     } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < gather_hybrid_hist_opt_stats.count(); ++i) {
+        ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
+        extra.nth_part_ = i;
+        if (OB_FAIL(hybrid_est.estimate(part_param, extra, gather_hybrid_hist_opt_stats.at(i)))) {
+          LOG_WARN("failed to estimate hybrid histogram", K(ret));
+        } else {/*do nothing*/}
+      }
       LOG_TRACE("succeed to gather partition hybrid hist", K(gather_hybrid_hist_opt_stats.count()));
     }
   }
@@ -643,10 +645,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         extra.type_ = TABLE_LEVEL;
         extra.nth_part_ = 0;
         extra.start_time_ = ObTimeUtility::current_time();
-        ObSEArray<ObOptStat, 1> opt_stats;
-        if (OB_FAIL(opt_stats.push_back(global_opt_stat))) {
-          LOG_WARN("failed to push back opt stat", K(ret));
-        } else if (OB_FAIL(hybrid_est.estimate(param, extra, opt_stats))) {
+        if (OB_FAIL(hybrid_est.estimate(param, extra, global_opt_stat))) {
           LOG_WARN("failed to estimate hybrid histogram", K(ret));
         } else {
           LOG_TRACE("succeed to gather hybrid hist");

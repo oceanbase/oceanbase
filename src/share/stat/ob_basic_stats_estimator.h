@@ -136,6 +136,8 @@ public:
   template <class T>
   int add_stat_item(const T &item);
 
+  int fill_hints(common::ObIAllocator &alloc, const ObString &table_name);
+
 private:
 
   static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
@@ -151,8 +153,6 @@ private:
                                   bool &need_re_estimate,
                                   ObTableStatParam &new_param,
                                   ObExtraParam &new_extra);
-
-  int fill_hints(common::ObIAllocator &alloc, const ObString &table_name);
 };
 
 }

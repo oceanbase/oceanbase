@@ -26,12 +26,6 @@ using namespace sql;
 namespace common
 {
 
-enum CopyStatType
-{
-  COPY_ALL_STAT,
-  COPY_HYBRID_HIST_STAT
-};
-
 class ObStatsEstimator
 {
 public:
@@ -49,7 +43,7 @@ protected:
 
   int do_estimate(uint64_t tenant_id,
                   const ObString &raw_sql,
-                  CopyStatType copy_type,
+                  bool need_copy_basic_stat,
                   ObOptStat &src_opt_stat,
                   ObIArray<ObOptStat> &dst_opt_stats);
 
@@ -92,13 +86,12 @@ protected:
                          ObString &calc_part_id_str);
 
   void reset_select_items() { stat_items_.reset(); select_fields_.reset(); }
+  void reset_sample_hint() { sample_hint_.reset(); }
+  void reset_other_hint() { other_hints_.reset(); }
 
 private:
   int copy_opt_stat(ObOptStat &src_opt_stat,
                     ObIArray<ObOptStat> &dst_opt_stats);
-
-  int copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
-                            ObIArray<ObOptStat> &dst_opt_stats);
 
   int copy_col_stats(const int64_t cur_row_cnt,
                      const int64_t total_row_cnt,
