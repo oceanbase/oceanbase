@@ -6889,7 +6889,12 @@ if (OB_SUCC(ret) ) { \
   const ObObj *dest_val = NULL; \
   if (!start.is_min_value() && !start.is_max_value() && !start.is_unknown() \
     && (!ObSQLUtils::is_same_type_for_compare(start.get_meta(), column_type.get_obj_meta()) || start.is_decimal_int())) { \
-    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+    ObCastMode cm = CM_WARN_ON_FAIL;\
+    if (ObDecimalIntType == expect_type.get_type()\
+        && start.get_int_bytes() > wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision())) {\
+      cm |= CM_CONST_TO_DECIMAL_INT_EQ;\
+    }\
+    ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
     if (ObDecimalIntType == expect_type.get_type()) {\
       cast_ctx.res_accuracy_ = &acc;\
     }\
@@ -6929,7 +6934,12 @@ if (OB_SUCC(ret) ) { \
   if (OB_SUCC(ret)) { \
     if (!end.is_min_value() && !end.is_max_value() && !end.is_unknown() \
       && (!ObSQLUtils::is_same_type_for_compare(end.get_meta(), column_type.get_obj_meta()) || end.is_decimal_int())) { \
-      ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+      ObCastMode cm = CM_WARN_ON_FAIL;\
+      if (ObDecimalIntType == expect_type.get_type()\
+          && end.get_int_bytes() > wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision())) {\
+        cm |= CM_CONST_TO_DECIMAL_INT_EQ;\
+      }\
+      ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
       if (ObDecimalIntType == expect_type.get_type()) {\
         cast_ctx.res_accuracy_ = &acc;\
       }\
