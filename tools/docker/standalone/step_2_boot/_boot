@@ -246,7 +246,11 @@ fi
 if [ $? -eq 0 ]; then
   echo "boot success!"
   # close the enable_rich_error_msg
-  obclient -h127.1 -uroot@sys -A -P${OB_MYSQL_PORT} -e "alter system set enable_rich_error_msg = false;"
+  if [ "${OB_ROOT_PASSWORD}" != "" ]; then
+    obclient -h127.1 -uroot@sys -A -P${OB_MYSQL_PORT} -p${OB_ROOT_PASSWORD} -e "alter system set enable_rich_error_msg = false;"
+  else
+    obclient -h127.1 -uroot@sys -A -P${OB_MYSQL_PORT} -e "alter system set enable_rich_error_msg = false;"
+  fi
 else
   echo "boot failed!"
   if exit_while_error
