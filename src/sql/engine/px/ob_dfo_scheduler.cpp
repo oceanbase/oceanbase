@@ -1217,15 +1217,11 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           LOG_WARN("[DM] fail to push back dtl channels", K(push_ret), K(sqc.get_sqc_addr()),
               K(dfo.get_px_detectable_ids().sqc_detectable_id_));
         }
-      } else if (!cb->is_processed()) {
+      } else {
         // if init_sqc_msg is not processed and the msg may be sent successfully, set server not alive.
         // then when qc waiting_all_dfo_exit, it will push sqc.access_table_locations into trans_result,
         // and the query can be retried.
-        bool msg_not_send_out = (cb->get_error() == EASY_TIMEOUT_NOT_SENT_OUT
-                                || cb->get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
-        if (!msg_not_send_out) {
-          sqc.set_server_not_alive(true);
-        }
+        sqc.set_server_not_alive(true);
       }
     }
   };
