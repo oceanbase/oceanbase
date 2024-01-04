@@ -244,6 +244,7 @@ INSERT /*+ ENABLE_PARALLEL_DML PARALLEL(3) */ INTO table0_innodb_key_pk_parts_2 
 INSERT /*+ ENABLE_PARALLEL_DML PARALLEL(3) */ INTO table0_innodb_key_pk_parts_2 ( col_enum , col_enum_not_null , col_decimal ) VALUES ( '2006-04-09 05:33:14.045216' , '2008' , '2004-09-17 09:11:54.004359' );
 INSERT /*+ ENABLE_PARALLEL_DML PARALLEL(3) */ INTO table0_innodb_key_pk_parts_2 ( col_blob_key , col_int_unsigned_not_null , col_int_not_null_key ) VALUES ( '20:35:45' , 47682 , 1319 );
 
+--error 1048
 UPDATE /*+ ENABLE_PARALLEL_DML PARALLEL(3) */ table0_innodb_key_pk_parts_2 SET col_blob_not_null_key = NULL WHERE col_bit_not_null <> '08:59:21';
 select * from table0_innodb_key_pk_parts_2;
 drop table table0_innodb_key_pk_parts_2;
