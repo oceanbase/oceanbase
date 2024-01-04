@@ -1080,6 +1080,8 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
         for (int64_t i = 0; i < MY_SPEC.aggr_infos_.count(); ++i) {
           if (MY_SPEC.aggr_infos_.at(i).param_exprs_.count() == 1) {
             aggr_vectors_[i] = MY_SPEC.aggr_infos_.at(i).param_exprs_.at(0)->get_vector(eval_ctx_);
+          } else if (MY_SPEC.aggr_infos_.at(i).is_implicit_first_aggr()) {
+            aggr_vectors_[i] = MY_SPEC.aggr_infos_.at(i).expr_->get_vector(eval_ctx_);
           } else {
             aggr_vectors_[i] = nullptr;
           }
