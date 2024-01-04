@@ -828,8 +828,7 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
           ret = OB_SUCCESS;
           break;
         } else {
-          // ignore error, iter part row completely.
-          ret = OB_SUCCESS;
+          LOG_WARN("iter row failed", K(ret), K(task_id), K(execution_id), K(ls_id), K(tablet_id));
         }
       }
     }
