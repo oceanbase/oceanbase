@@ -416,7 +416,7 @@ int ObDefaultCGScanner::apply_filter(
     } else {
       result = filter_result_;
     }
-  } else if (OB_FAIL(do_filter(filter, result))) {
+  } else if (OB_FAIL(do_filter(filter, *filter_info.skip_bit_, result))) {
     STORAGE_LOG(WARN, "failed to do filter", K(ret), KPC(filter));
   }
 
@@ -483,7 +483,7 @@ int ObDefaultCGScanner::get_next_row(const blocksstable::ObDatumRow *&datum_row)
   return ret;
 }
 
-int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, bool &result)
+int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, const sql::ObBitVector &skip_bit, bool &result)
 {
   int ret = OB_SUCCESS;
   bool filtered = false;
@@ -491,7 +491,11 @@ int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, bool &r
   if (filter->is_filter_node()) {
     if (filter->is_filter_black_node()) {
       sql::ObPhysicalFilterExecutor *black_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
-      if (OB_FAIL(black_filter->filter(default_row_.storage_datums_, filter->get_col_count(), filtered))) {
+      sql::ObPushdownOperator &pushdown_op = black_filter->get_op();
+      if (pushdown_op.enable_rich_format_ &&
+          OB_FAIL(storage::init_exprs_uniform_header(black_filter->get_cg_col_exprs(), pushdown_op.get_eval_ctx(), 1))) {
+        LOG_WARN("Failed to init exprs vector header", K(ret));
+      } else if (OB_FAIL(black_filter->filter(default_row_.storage_datums_, filter->get_col_count(), skip_bit, filtered))) {
         LOG_WARN("Failed to filter row with black filter", K(ret), K(default_row_), KPC(black_filter));
       }
     } else {
@@ -514,7 +518,7 @@ int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, bool &r
         if (OB_ISNULL(children[i])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected null child filter", K(ret));
-        } else if (OB_FAIL(do_filter(children[i], result))) {
+        } else if (OB_FAIL(do_filter(children[i], skip_bit, result))) {
           STORAGE_LOG(WARN, "failed to do filter", K(ret), KPC(children[i]));
         } else if ((result && filter->is_logic_or_node()) || (!result && filter->is_logic_and_node())) {
           break;
