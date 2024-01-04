@@ -214,7 +214,6 @@ void ObMemstoreAllocator::init_throttle_config(int64_t &resource_limit,
                                                int64_t &max_duration)
 {
   // define some default value
-  const int64_t MEMSTORE_LIMIT_PERCENTAGE = 50;
   const int64_t MEMSTORE_THROTTLE_TRIGGER_PERCENTAGE = 60;
   const int64_t MEMSTORE_THROTTLE_MAX_DURATION = 2LL * 60LL * 60LL * 1000LL * 1000LL;  // 2 hours
 
@@ -223,15 +222,14 @@ void ObMemstoreAllocator::init_throttle_config(int64_t &resource_limit,
   // Use tenant config to init throttle config
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
-    resource_limit = total_memory * tenant_config->memstore_limit_percentage / 100LL;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
     max_duration = tenant_config->writing_throttling_maximum_duration;
   } else {
     COMMON_LOG_RET(WARN, OB_INVALID_CONFIG, "init throttle config with default value");
-    resource_limit = total_memory * MEMSTORE_LIMIT_PERCENTAGE / 100;
     trigger_percentage = MEMSTORE_THROTTLE_TRIGGER_PERCENTAGE;
     max_duration = MEMSTORE_THROTTLE_MAX_DURATION;
   }
+  resource_limit = total_memory * MTL(storage::ObTenantFreezer *)->get_memstore_limit_percentage() / 100;
 }
 
 void ObMemstoreAllocator::adaptive_update_limit(const int64_t tenant_id,

@@ -118,6 +118,8 @@ public:
                                const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
+  // get the memstore limit percentage
+  static int64_t get_memstore_limit_percentage();
   // this is used to check if the tenant's memstore is out at user side.
   int check_memstore_full(bool &is_out_of_mem);
   // this is used for internal check rather than user side.

@@ -14,6 +14,7 @@
 
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/alloc/alloc_func.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase {
 
@@ -41,7 +42,7 @@ void FakeAllocatorForTxShare::init_throttle_config(int64_t &resource_limit,
     int64_t share_mem_limit = tenant_config->_tx_share_memory_limit_percentage;
     // if _tx_share_memory_limit_percentage equals 1, use (memstore_limit_percentage + 10) as default value
     if (0 == share_mem_limit) {
-      share_mem_limit = tenant_config->memstore_limit_percentage + 10;
+      share_mem_limit = MTL(ObTenantFreezer*)->get_memstore_limit_percentage() + 10;
     }
     resource_limit = total_memory * share_mem_limit / 100LL;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;

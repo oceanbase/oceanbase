@@ -114,11 +114,10 @@ public:
   virtual ~ObTenantInfo() { reset(); }
   void reset();
   int update_frozen_scn(int64_t frozen_scn);
-  int64_t mem_memstore_left() const;
 
   void update_mem_limit(const int64_t lower_limit, const int64_t upper_limit);
   void get_mem_limit(int64_t &lower_limit, int64_t &upper_limit) const;
-  void update_memstore_limit(const int64_t memstore_limit_percentage);
+  void update_memstore_limit(const int64_t tenant_memstore_limit_percentage);
   int64_t get_memstore_limit() const;
   bool is_memstore_limit_changed(const int64_t curr_memstore_limit_percentage) const;
   void get_freeze_ctx(ObTenantFreezeCtx &ctx) const;

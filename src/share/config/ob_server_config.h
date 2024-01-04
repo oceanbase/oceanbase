@@ -56,6 +56,7 @@ const char* const FREEZE_TRIGGER_PERCENTAGE = "freeze_trigger_percentage";
 const char* const WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE = "writing_throttling_trigger_percentage";
 const char* const _TX_SHARE_MEMORY_LIMIT_PERCENTAGE = "_tx_share_memory_limit_percentage";
 const char* const MEMSTORE_LIMIT_PERCENTAGE = "memstore_limit_percentage";
+const char* const TENANT_MEMSTORE_LIMIT_PERCENTAGE = "_memstore_limit_percentage";
 const char* const _TX_DATA_MEMORY_LIMIT_PERCENTAGE = "_tx_data_memory_limit_percentage";
 const char* const _MDS_MEMORY_LIMIT_PERCENTAGE = "_mds_memory_limit_percentage";
 const char* const COMPATIBLE = "compatible";
