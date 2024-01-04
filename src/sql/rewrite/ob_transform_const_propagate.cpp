@@ -2037,10 +2037,9 @@ int ObTransformConstPropagate::replace_check_constraint_exprs(ObDMLStmt *stmt,
                                                             part_column_expr,
                                                             old_column_exprs,
                                                             new_const_exprs,
-                                                            complex_cst_info_idx))) {
+                                                            complex_cst_info_idx,
+                                                            trans_happened))) {
           LOG_WARN("failed to do replace check constraint expr", K(ret));
-        } else {
-          trans_happened = true;
         }
       }
     }
@@ -2144,6 +2143,9 @@ int ObTransformConstPropagate::do_check_constraint_param_expr_vaildity(
         LOG_WARN("failed to check all const propagate column", K(ret));
       } else if (!is_valid) {
         //do nothing
+      } else if (complex_cst_info_idx >= 0
+              && expr_const_infos.at(complex_cst_info_idx).multi_const_exprs_.count() > 10) {
+        is_valid = false; //do not deduce big in
       //check rule 3
       } else if (OB_FAIL(recursive_check_non_column_param_expr_validity(non_column_param_expr,
                                                                         parent_exprs,
@@ -2155,6 +2157,33 @@ int ObTransformConstPropagate::do_check_constraint_param_expr_vaildity(
                 K(old_column_exprs), K(new_const_exprs), K(complex_cst_info_idx), K(is_valid));
       }
     }
+  }
+  return ret;
+}
+
+int ObTransformConstPropagate::check_constraint_value_validity(ObRawExpr *value_expr, bool &reject)
+{
+  int ret = OB_SUCCESS;
+  reject = false;
+  ObObj result;
+  bool got_result = false;
+  if (OB_ISNULL(value_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_FAIL(value_expr->extract_info())) {
+    LOG_WARN("extract info failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx_->exec_ctx_,
+                                                        value_expr,
+                                                        result,
+                                                        got_result,
+                                                        *ctx_->allocator_))) {
+    LOG_WARN("calc const or calculable expr failed", K(ret));
+  } else if (!got_result) {
+    reject = true;
+    //uncalculable
+  } else if (result.is_null()) {
+    reject = true;
+    //violate null reject, can not add new condition
   }
   return ret;
 }
@@ -2238,7 +2267,8 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
                                                                 ObRawExpr *part_column_expr,
                                                                 ObIArray<ObRawExpr*> &old_column_exprs,
                                                                 ObIArray<ObRawExpr*> &new_const_exprs,
-                                                                int64_t &complex_cst_info_idx)
+                                                                int64_t &complex_cst_info_idx,
+                                                                bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(check_constraint_expr) || OB_ISNULL(part_column_expr) ||
@@ -2248,8 +2278,11 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
     LOG_WARN("get unexpected error", K(ret), K(check_constraint_expr), K(stmt), K(part_column_expr),
                                      K(ctx_), K(old_column_exprs), K(new_const_exprs));
   } else {
+    bool reject = false;
     ObRawExpr *new_check_cst_expr = NULL;
+    ObRawExpr *value_expr = NULL;
     ObRawExprCopier copier(*ctx_->expr_factory_);
+    ObSEArray<ObRawExpr *, 4> not_null_values;
     if (complex_cst_info_idx >= 0) {//need generate in condition for complex const(or/in expr)
       if (OB_UNLIKELY(complex_cst_info_idx > expr_const_infos.count() ||
                       !expr_const_infos.at(complex_cst_info_idx).is_complex_const_info_)) {
@@ -2260,8 +2293,11 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
                                                      part_column_expr,
                                                      old_column_exprs,
                                                      new_const_exprs,
-                                                     new_check_cst_expr))) {
+                                                     new_check_cst_expr,
+                                                     not_null_values,
+                                                     reject))) {
         LOG_WARN("failed to build new in condition expr", K(ret));
+      } else if (reject) {
       } else {
         expr_const_infos.at(complex_cst_info_idx).is_used_ = true;
       }
@@ -2271,14 +2307,47 @@ int ObTransformConstPropagate::do_replace_check_constraint_expr(ObDMLStmt *stmt,
       LOG_WARN("failed to add skipped expr", K(ret));
     } else if (OB_FAIL(copier.copy(check_constraint_expr, new_check_cst_expr))) {
       LOG_WARN("failed to copy expr", K(ret));
+    } else if (OB_ISNULL(new_check_cst_expr) || OB_UNLIKELY(new_check_cst_expr->get_param_count() < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), KPC(new_check_cst_expr));
+    } else if (OB_ISNULL(value_expr = (part_column_expr == new_check_cst_expr->get_param_expr(0) ?
+                                                          new_check_cst_expr->get_param_expr(1) :
+                                                          new_check_cst_expr->get_param_expr(0)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("value expr is null", K(ret));
+    } else if (OB_FAIL(not_null_values.push_back(value_expr))) {
+      LOG_WARN("push back failed", K(ret));
+    } else if (OB_FAIL(check_constraint_value_validity(value_expr, reject))) {
+      LOG_WARN("ensure check cst failed", K(ret));
     } else {/*do nothing*/}
 
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(batch_mark_expr_const_infos_used(old_column_exprs, expr_const_infos))) {
+    if (OB_SUCC(ret) && !reject) {
+      ObRawExpr *or_expr = NULL;
+      ObRawExpr *part_col_is_null = NULL;
+      ObSEArray<ObRawExpr *, 2> or_expr_children;
+      if (OB_FAIL(ObRawExprUtils::build_is_not_null_expr(*ctx_->expr_factory_, part_column_expr, false, part_col_is_null))) {
+        LOG_WARN("build is null failed", K(ret));
+      } else if (OB_FAIL(or_expr_children.push_back(part_col_is_null))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(or_expr_children.push_back(new_check_cst_expr))) {
+        LOG_WARN("push back failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(*ctx_->expr_factory_, or_expr_children, or_expr))) {
+        LOG_WARN("build or exprs failed", K(ret));
+      } else {
+        new_check_cst_expr = or_expr;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(batch_mark_expr_const_infos_used(old_column_exprs, expr_const_infos))) {
         LOG_WARN("failed to batch mark_expr_const_infos_used", K(ret));
       } else if (OB_FAIL(stmt->get_condition_exprs().push_back(new_check_cst_expr))) {
         LOG_WARN("failed to push back", K(ret));
       } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < not_null_values.count(); i++) {
+          if (OB_FAIL(ObTransformUtils::add_param_not_null_constraint(*ctx_, not_null_values.at(i)))) {
+            LOG_WARN("add not null cst failed", K(ret));
+          }
+        }
+        trans_happened = true;
         LOG_TRACE("Succeed to do replace check constraint expr", KPC(new_check_cst_expr));
       }
     }
@@ -2291,7 +2360,9 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
                                                            ObRawExpr *part_column_expr,
                                                            ObIArray<ObRawExpr*> &old_column_exprs,
                                                            ObIArray<ObRawExpr*> &new_const_exprs,
-                                                           ObRawExpr *&new_condititon_expr)
+                                                           ObRawExpr *&new_condititon_expr,
+                                                           ObIArray<ObRawExpr*> &not_null_values,
+                                                           bool &reject)
 {
   int ret = OB_SUCCESS;
   new_condititon_expr = NULL;
@@ -2327,7 +2398,7 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
     } else if (OB_FAIL(in_expr->add_param_expr(row_expr))) {
       LOG_WARN("failed to add param expr", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < expr_const_info.multi_const_exprs_.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && !reject && i < expr_const_info.multi_const_exprs_.count(); ++i) {
         ObRawExpr *new_param_expr = NULL;
         ObRawExprCopier copier(*ctx_->expr_factory_);
         if (OB_FAIL(old_column_exprs.push_back(expr_const_info.column_expr_))) {
@@ -2340,12 +2411,16 @@ int ObTransformConstPropagate::build_new_in_condition_expr(ObRawExpr *check_cons
           LOG_WARN("failed to copy expr", K(ret));
         } else if (OB_FAIL(row_expr->add_param_expr(new_param_expr))) {
           LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(not_null_values.push_back(new_param_expr))) {
+          LOG_WARN("failed to add param expr", K(ret));
+        } else if (OB_FAIL(check_constraint_value_validity(new_param_expr, reject))) {
+          LOG_WARN("ensure check cst failed", K(ret));
         } else {
           old_column_exprs.pop_back();
           new_const_exprs.pop_back();
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !reject) {
         if (OB_FAIL(in_expr->formalize(ctx_->session_info_))) {
           LOG_WARN("failed to formalize", K(ret));
         } else {
