@@ -727,7 +727,8 @@ int ObRebuildService::check_can_rebuild_(
     if (ObLSRebuildType::CLOG == rebuild_ctx.type_
         && is_primary_tenant
         && member_list.contains(self_addr)) {
-      LOG_ERROR("paxos member lost clog, need rebuild", "ls_id", ls->get_ls_id(), K(role));
+      LOG_ERROR("paxos member lost clog, need rebuild", "tenant_id", ls->get_tenant_id(),
+          "ls_id", ls->get_ls_id(), K(role));
     }
   }
   return ret;

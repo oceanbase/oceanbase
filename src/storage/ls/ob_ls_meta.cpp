@@ -310,7 +310,10 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
                && OB_FAIL(set_finish_ha_state())) {
       LOG_WARN("set finish ha state failed", K(ret), K(ls_id_));
     } else {
+      ObMigrationStatus original_status = migration_status_;
       migration_status_ = migration_status;
+      FLOG_INFO("succeed to set ls migration status", K(ls_id_), "original status",
+          original_status, "current status", migration_status);
     }
   }
   return ret;
@@ -403,7 +406,10 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
                && OB_FAIL(set_finish_ha_state())) {
       LOG_WARN("set finish ha state failed", KR(ret), K(ls_id_));
     } else {
+      ObLSRestoreStatus original_status = restore_status_;
       restore_status_ = restore_status;
+      FLOG_INFO("succeed to set ls restore status", K(ls_id_), "original status",
+          original_status, "current status", restore_status);
     }
   }
   return ret;
@@ -547,6 +553,7 @@ int ObLSMeta::set_ls_rebuild()
       } else {
         migration_status_ = change_status;
         rebuild_seq_ = tmp.rebuild_seq_;
+        FLOG_INFO("succeed to set ls rebuild", "ls_id", ls_id_, KPC(this));
       }
     }
   }
@@ -777,6 +784,7 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       rebuild_info_ = rebuild_info;
+      FLOG_INFO("succeed to set rebuild info", K(ls_id_), K(rebuild_info));
     }
   }
   return ret;
