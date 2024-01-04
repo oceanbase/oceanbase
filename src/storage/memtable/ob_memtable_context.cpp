@@ -1180,6 +1180,7 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
     int64_t pos = 0;
     ObTxDataSourceType type = ObTxDataSourceType::TABLE_LOCK;
     ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+
     if (serialize_size > tablelock::ObTableLockOp::MAX_SERIALIZE_SIZE) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "lock op serialize size if over flow", K(ret), K(serialize_size));

@@ -100,6 +100,10 @@ void *ObTenantTxDataAllocator::alloc(const bool enable_throttle, const int64_t a
       if (MTL(ObTenantFreezer *)->exist_ls_freezing()) {
         (void)throttle_tool_->skip_throttle<ObTenantTxDataAllocator>(storage::TX_DATA_SLICE_SIZE);
       } else {
+        uint64_t timeout = 10000;  // 10s
+        int64_t left_interval = abs_expire_time - ObClockGenerator::getClock();
+        common::ObWaitEventGuard wait_guard(
+            common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
         (void)throttle_tool_->do_throttle<ObTenantTxDataAllocator>(abs_expire_time);
       }
     }

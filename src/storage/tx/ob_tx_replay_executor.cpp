@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/throttle/ob_throttle_unit.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_tx_service.h"
 #include "storage/memtable/ob_memtable.h"
@@ -443,6 +444,11 @@ int ObTxReplayExecutor::replay_multi_source_data_()
 {
   int ret = OB_SUCCESS;
   ObTxMultiDataSourceLog log;
+
+  ObMdsThrottleGuard mds_throttle_guard(true /* for_replay */,
+                                        ObClockGenerator::getClock() +
+                                            share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME);
+
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", KR(ret), K(lsn_), K(log_ts_ns_));
   } else if (OB_FAIL(ctx_->replay_multi_data_source(log, lsn_, log_ts_ns_, tx_part_log_no_))) {

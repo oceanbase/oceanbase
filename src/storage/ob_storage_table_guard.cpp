@@ -66,7 +66,6 @@ void ObStorageTableGuard::throttle_if_needed_()
     TxShareThrottleTool &throttle_tool = MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool();
     ObThrottleInfoGuard share_ti_guard;
     ObThrottleInfoGuard module_ti_guard;
-    int64_t thread_idx = common::get_itid();
     if (throttle_tool.is_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard)) {
 
       // only do throttle on active memtable
@@ -120,11 +119,15 @@ void ObStorageTableGuard::do_throttle_(TxShareThrottleTool &throttle_tool,
 {
   int ret = OB_SUCCESS;
   int64_t sleep_time = 0;
-  int64_t left_interval = INT64_MAX;
+  int64_t left_interval = share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME;
 
   if (!for_replay_) {
     left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getClock());
   }
+
+  uint64_t timeout = 10000;  // 10s
+  common::ObWaitEventGuard wait_guard(
+      common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT, timeout, 0, 0, left_interval);
 
   while (throttle_tool.still_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard) && (left_interval > 0)) {
     int64_t expected_wait_time = 0;
