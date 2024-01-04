@@ -150,6 +150,10 @@ private:
       share::ObFreezeInfo &freeze_info);
   int try_update_reserved_snapshot();
   int try_update_info();
+  int inner_update_info(
+      const share::SCN &new_snapshot_gc_scn,
+      const common::ObIArray<share::ObFreezeInfo> &new_freeze_infos,
+      const common::ObIArray<share::ObSnapshotInfo> &new_snapshots);
 
   class ReloadTask : public common::ObTimerTask
   {

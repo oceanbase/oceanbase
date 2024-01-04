@@ -472,7 +472,7 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
       min_snapshot = freeze_info.prev.frozen_scn_.get_val_for_tx();
     }
 
-    if (INT64_MAX == freeze_info.next.frozen_scn_.is_max() && is_multi_version_merge) {
+    if (freeze_info.next.frozen_scn_.is_max() && is_multi_version_merge) {
       max_snapshot = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
     } else {
       max_snapshot = freeze_info.next.frozen_scn_.get_val_for_tx();
