@@ -132,8 +132,8 @@ int ElectionAcceptor::start()
     
     LockGuard lock_guard(p_election_->lock_);
     // 周期性打印选举的状态
-    if (ObClockGenerator::getCurrentTime() > last_dump_acceptor_info_ts_ + 3_s) {
-      last_dump_acceptor_info_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_acceptor_info_ts_ + 3_s) {
+      last_dump_acceptor_info_ts_ = ObClockGenerator::getClock();
       ELECT_LOG(INFO, "dump acceptor info", K(*this));
     }
     // 当acceptor的Lease有效状态发生变化时需要打印日志以及汇报事件
@@ -163,7 +163,7 @@ int ElectionAcceptor::start()
       if (last_record_lease_valid_state && !lease_valid_state) {// 这个定时任务可能是被延迟致lease到期时触发的，为了在lease到期的第一时间投票
         can_vote = true;
         LOG_ELECT_LEADER(INFO, "vote when lease expired");
-      } else if (ObClockGenerator::getCurrentTime() - last_time_window_open_ts_ >= CALCULATE_TIME_WINDOW_SPAN_TS()) {
+      } else if (ObClockGenerator::getClock() - last_time_window_open_ts_ >= CALCULATE_TIME_WINDOW_SPAN_TS()) {
         can_vote = true;
       } else {
         LOG_ELECT_LEADER(INFO, "can't vote now", K(last_record_lease_valid_state),
@@ -269,7 +269,7 @@ void ElectionAcceptor::on_prepare_request(const ElectionPrepareRequestMsg &prepa
           LOG_PHASE(ERROR, phase, "open time window failed");
         } else {
           is_time_window_opened_ = true;// 定时任务注册成功，打开时间窗口
-          last_time_window_open_ts_ = ObClockGenerator::getCurrentTime();
+          last_time_window_open_ts_ = ObClockGenerator::getClock();
           LOG_PHASE(INFO, phase, "open time window success", K(timewindow_span));
         }
       }
