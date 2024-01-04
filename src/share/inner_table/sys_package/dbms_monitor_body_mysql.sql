@@ -1,17 +1,17 @@
 #package_name:dbms_monitor
 #author: guoyun.lgy
 CREATE OR REPLACE PACKAGE BODY DBMS_MONITOR
-  PROCEDURE OB_SESSION_TRACE_ENABLE(SESSION_ID   DECIMAL,
-                                    LEVEL        DECIMAL,
-                                    SAMPLE_PCT   DECIMAL,
+  PROCEDURE OB_SESSION_TRACE_ENABLE(SESSION_ID   DECIMAL(20, 0),
+                                    LEVEL        DECIMAL(20, 0),
+                                    SAMPLE_PCT   DECIMAL(20, 10),
                                     RECORD_POLICY VARCHAR(65535));
   PRAGMA INTERFACE(c, OB_SESSION_TRACE_ENABLE);
-  PROCEDURE OB_SESSION_TRACE_DISABLE(session_id   DECIMAL);
+  PROCEDURE OB_SESSION_TRACE_DISABLE(session_id   DECIMAL(20, 0));
   PRAGMA INTERFACE(c, OB_SESSION_TRACE_DISABLE);
 
   PROCEDURE OB_CLIENT_ID_TRACE_ENABLE(CLIENT_ID    VARCHAR(65535),
-                                      LEVEL        DECIMAL,
-                                      SAMPLE_PCT   DECIMAL,
+                                      LEVEL        DECIMAL(20, 0),
+                                      SAMPLE_PCT   DECIMAL(20, 10),
                                       RECORD_POLICY VARCHAR(65535));
   PRAGMA INTERFACE(c, OB_CLIENT_ID_TRACE_ENABLE);
   PROCEDURE OB_CLIENT_ID_TRACE_DISABLE(CLIENT_ID VARCHAR(65535));
@@ -19,16 +19,16 @@ CREATE OR REPLACE PACKAGE BODY DBMS_MONITOR
 
   PROCEDURE OB_MOD_ACT_TRACE_ENABLE(MODULE_NAME     VARCHAR(65535),
                                     ACTION_NAME     VARCHAR(65535),
-                                    LEVEL        DECIMAL,
-                                    SAMPLE_PCT   DECIMAL,
+                                    LEVEL        DECIMAL(20, 0),
+                                    SAMPLE_PCT   DECIMAL(20, 10),
                                     RECORD_POLICY VARCHAR(65535));
   PRAGMA INTERFACE(c, OB_MOD_ACT_TRACE_ENABLE);
   PROCEDURE OB_MOD_ACT_TRACE_DISABLE(MODULE_NAME     VARCHAR(65535),
                                      ACTION_NAME     VARCHAR(65535));
   PRAGMA INTERFACE(c, OB_MOD_ACT_TRACE_DISABLE);
 
-  PROCEDURE OB_TENANT_TRACE_ENABLE(LEVEL        DECIMAL,
-                            SAMPLE_PCT   DECIMAL,
+  PROCEDURE OB_TENANT_TRACE_ENABLE(LEVEL        DECIMAL(20, 0),
+                            SAMPLE_PCT   DECIMAL(20, 10),
                             RECORD_POLICY VARCHAR(65535));
   PRAGMA INTERFACE(c, OB_TENANT_TRACE_ENABLE);
   PROCEDURE OB_TENANT_TRACE_DISABLE(TENANT_NAME  VARCHAR(65535) DEFAULT NULL);
