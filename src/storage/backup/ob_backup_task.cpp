@@ -5620,7 +5620,7 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   char *buf = NULL;
   int64_t read_len = 0;
   if (OB_FAIL(util.open_with_access_type(
-          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_RANDOMWRITER))) {
+          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_MULTIPART_WRITER))) {
     LOG_WARN("failed to open with access type", K(ret));
   } else if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
     LOG_WARN("failed to get file length", K(ret), K(src_path));
