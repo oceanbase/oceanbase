@@ -24,6 +24,8 @@ class ObErrLogService;
 class ObDMLService
 {
 public:
+  static bool check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row);
+
   static int check_row_null(const ObExprPtrIArray &row,
                             ObEvalCtx &eval_ctx,
                             int64_t row_num,
