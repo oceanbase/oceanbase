@@ -1009,6 +1009,8 @@ int ObPartTransCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
     TRANS_LOG(WARN, "iter tx obj lock op failed", K(ret));
   } else {
     // do nothing
+    // should not set iterator is ready here,
+    // because it may iterate other tx_ctx then
   }
 
   return ret;
