@@ -3153,40 +3153,25 @@ int ObLogicalOperator::alloc_op_post(AllocOpContext& ctx)
   if (query_ctx->get_global_hint().alloc_op_hints_.empty()){
     /*no ops will be allocated, skip*/
   } else {
-    ret = ctx.disabled_op_set_.exist_refactored(op_id_);
-    if (OB_HASH_EXIST == ret) {
-      /*skip*/
-      ret = OB_SUCCESS;
-    } else if (OB_HASH_NOT_EXIST == ret){
-      ret = OB_SUCCESS;
-      const ObIArray<ObAllocOpHint> &alloc_op_hints = query_ctx->get_global_hint().alloc_op_hints_;
-      // There won't be too many 'blocking or tracing' hints, so it is acceptable for us to traverse the entire array three times:
-      // Allocate `all` level nodes first
-      // Allocate `dfo` level nodes srcond
-      // Allocate enumerate level nodes finally
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_ALL == alloc_op_hints.at(i).alloc_level_ &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at all level", K(ret));
-        }
+    const ObIArray<ObAllocOpHint> &alloc_op_hints = query_ctx->get_global_hint().alloc_op_hints_;
+    // There won't be too many 'blocking or tracing' hints, so it is acceptable for us to traverse the entire array three times:
+    // Allocate `all` level nodes first
+    // Allocate `dfo` level nodes srcond
+    // Allocate enumerate level nodes finally
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_ALL == alloc_op_hints.at(i).alloc_level_ &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at all level", K(ret));
+      } else if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
+          (log_op_def::LOG_EXCHANGE == type_ &&
+          static_cast<ObLogExchange*>(this)->is_consumer()) &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at dfo level", K(ret));
+      } else if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
+          alloc_op_hints.at(i).id_ == op_id_ &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at enumerate level", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
-            (log_op_def::LOG_EXCHANGE == type_ &&
-            static_cast<ObLogExchange*>(this)->is_consumer()) &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at dfo level", K(ret));
-        }
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
-            alloc_op_hints.at(i).id_ == op_id_ &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at enumerate level", K(ret));
-        }
-      }
-    } else {
-      LOG_WARN("exist_refactored fail", K(ret));
     }
   }
   return ret;
@@ -5822,16 +5807,25 @@ int ObLogicalOperator::alloc_nodes_above(AllocOpContext& ctx, const uint64_t &fl
   int ret = OB_SUCCESS;
   if (flags & ObAllocOpHint::OB_MATERIAL
       && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MATERIAL)) {
-    if (OB_FAIL(allocate_material_node_above())) {
-      LOG_WARN("failed to allocate material above", K(ret));
-    } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MATERIAL))) {
-      LOG_WARN("failed to visit alloc op", K(ret));
+    ret = ctx.disabled_op_set_.exist_refactored(op_id_);
+    if (OB_HASH_EXIST == ret) {
+      /*op cant not add material, skip*/
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(allocate_material_node_above())) {
+        LOG_WARN("failed to allocate material above", K(ret));
+      } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MATERIAL))) {
+        LOG_WARN("failed to visit alloc op", K(ret));
+      }
+    } else {
+      LOG_WARN("exist_refactored fail", K(ret));
     }
   }
   if (OB_SUCC(ret)
-      && ((flags & ObAllocOpHint::OB_MONITOR_STAT)
-      || (flags & ObAllocOpHint::OB_MONITOR_TRACING))
-      && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING)) {
+        && ((flags & ObAllocOpHint::OB_MONITOR_STAT)
+              || (flags & ObAllocOpHint::OB_MONITOR_TRACING))
+             && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING)) {
     if (OB_FAIL(allocate_monitoring_dump_node_above(flags, op_id_))) {
       LOG_WARN("failed to allocate monitoring dump above", K(ret));
     } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING))) {
