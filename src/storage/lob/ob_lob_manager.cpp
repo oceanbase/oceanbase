@@ -1659,6 +1659,7 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
         data.assign_buffer(buf + cur_handle_size, append_lob_len);
         SMART_VAR(ObLobAccessParam, read_param) {
           read_param.tx_desc_ = param.tx_desc_;
+          read_param.tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
@@ -1721,6 +1722,7 @@ int ObLobManager::append(ObLobAccessParam& param, ObLobLocatorV2& lob, ObLobMeta
         } else {
           read_param = new(read_param)ObLobAccessParam();
           read_param->tx_desc_ = param.tx_desc_;
+          read_param->tenant_id_ = param.src_tenant_id_;
           if (OB_FAIL(build_lob_param(*read_param, *param.allocator_, param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
