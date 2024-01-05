@@ -91,6 +91,11 @@ struct PLCacheObjStat
     sql_id_[0] = '\0';
   }
 
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
+  }
+
   void reset()
   {
     sql_id_[0] = '\0';
