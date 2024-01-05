@@ -1998,6 +1998,7 @@ int ObLLVMHelper::check_insert_point(bool &is_valid)
 int ObDWARFHelper::init()
 {
   int ret = OB_SUCCESS;
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD));
   std::string s;
   llvm::raw_string_ostream Out(s);
   if (nullptr == (Context = OB_NEWx(core::ObDWARFContext, (&Allocator), DebugBuf, DebugLen))) {
@@ -2019,7 +2020,12 @@ int ObDWARFHelper::init()
     DumpOpts.ShowForm = true;
     DumpOpts.SummarizeTypes = true;
     DumpOpts.Verbose = true; 
-    Context->Context->dump(Out, DumpOpts);
+    {
+      // dump uses static memory, record as SYS tenant
+      lib::ObMallocHookAttrGuard malloc_guard(
+          ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
+      Context->Context->dump(Out, DumpOpts);
+    }
     Out.flush();
     LOG_INFO("success to init ObDWARFHelper!", K(ret), K(Out.str().c_str()));
   }
@@ -2031,8 +2037,7 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
   int ret = OB_SUCCESS;
   std::string s;
   llvm::raw_string_ostream Out(s);
-  core::StringMemoryBuffer MemoryBuf(DebugBuf, DebugLen);
-  MemoryBufferRef MemoryRef(MemoryBuf);
+  MemoryBufferRef MemoryRef(ObStringRef(DebugBuf, DebugLen), "");
   auto BinOrErr = llvm::object::createBinary(MemoryRef);
   if (!BinOrErr) {
     ret = OB_ERR_UNEXPECTED;
@@ -2050,7 +2055,12 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
       DumpOpts.SummarizeTypes = true;
       DumpOpts.Verbose = true;
       Context->verify(Out);
-      Context->dump(Out, DumpOpts);
+      {
+        // dump uses static memory, record as SYS tenant
+        lib::ObMallocHookAttrGuard malloc_guard(
+            ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
+        Context->dump(Out, DumpOpts);
+      }
       Out.flush();
     }
   }
@@ -2207,5 +2217,13 @@ int ObDWARFHelper::find_function_from_pc(uint64_t pc, ObDIEAddress &func)
   return ret;
 }
 
+ObDWARFHelper::~ObDWARFHelper() {
+  if (nullptr != Context) {
+    Context->~ObDWARFContext();
+    Allocator.free(Context);
+    Context = nullptr;
+  }
 }
-}
+
+} // namespace jit
+} // namespace oceanbase
