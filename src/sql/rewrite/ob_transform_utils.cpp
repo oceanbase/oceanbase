@@ -9444,7 +9444,7 @@ int StmtUniqueKeyProvider::recover_useless_unique_for_temp_table()
           || OB_UNLIKELY(sel_item_count <= 0 || col_item_count < 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected params", K(ret), K(sel_stmt), K(sel_item_count), K(col_item_count));
-      } else if (OB_UNLIKELY(sel_item_count >= sel_stmt->get_select_item_size()
+      } else if (OB_UNLIKELY(sel_item_count > sel_stmt->get_select_item_size()
                              || col_item_count > sel_stmt->get_column_size())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected params", K(ret), K(sel_item_count), K(sel_stmt->get_select_item_size()),
