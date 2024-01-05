@@ -1358,11 +1358,11 @@ public:
    */
   int alloc_op_pre(AllocOpContext& ctx);
   int alloc_op_post(AllocOpContext& ctx);
-  int find_rownum_expr_recursively(const ObRawExpr *&rownum_expr, const ObRawExpr *expr);
-  int find_rownum_expr(const ObRawExpr *&rownum_expr, const ObIArray<ObRawExpr *> &exprs);
-  int find_rownum_expr(const ObRawExpr *&rownum_expr);
-  int disable_rownum_expr(hash::ObHashSet<uint64_t> &disabled_op_set, ObIArray<uint64_t> &cur_path);
-  int disable_rownum_expr(hash::ObHashSet<uint64_t> &disabled_op_set, const uint64_t &count_op_id);
+  int find_rownum_expr_recursively(const uint64_t &op_id, ObLogicalOperator *&rownum_op,
+                                   const ObRawExpr *expr);
+  int find_rownum_expr(const uint64_t &op_id, ObLogicalOperator *&rownum_op,
+                       const ObIArray<ObRawExpr *> &exprs);
+  int find_rownum_expr(const uint64_t &op_id, ObLogicalOperator *&rownum_op);
   int gen_temp_op_id(AllocOpContext& ctx);
   int recursively_disable_alloc_op_above(AllocOpContext& ctx);
   int alloc_nodes_above(AllocOpContext& ctx, const uint64_t &flags);
