@@ -99,14 +99,16 @@ int Thread::start()
     if (pret == 0) {
       stop_ = false;
       pret = pthread_create(&pth_, &attr, __th_start, this);
-      while (ATOMIC_LOAD(&create_ret_) == OB_NOT_RUNNING) {
-        sched_yield();
-      }
       if (pret != 0) {
         LOG_ERROR("pthread create failed", K(pret), K(errno));
         pth_ = 0;
-      } else if (OB_FAIL(create_ret_)) {
-        LOG_ERROR("thread create failed", K(create_ret_));
+      } else {
+        while (ATOMIC_LOAD(&create_ret_) == OB_NOT_RUNNING) {
+          sched_yield();
+        }
+        if (OB_FAIL(create_ret_)) {
+          LOG_ERROR("thread create failed", K(create_ret_));
+        }
       }
     }
     if (0 != pret) {
@@ -345,6 +347,9 @@ void* Thread::__th_start(void *arg)
         DESTROY_CONTEXT(*mem_context);
       }
     }
+  }
+  if (OB_FAIL(ret)) {
+    ATOMIC_STORE(&th->create_ret_, ret);
   }
   ATOMIC_FAA(&total_thread_count_, -1);
   return nullptr;
