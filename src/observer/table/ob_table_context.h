@@ -88,7 +88,8 @@ struct ObTableColumnItem : public sql::ColumnItem
         is_virtual_generated_column_(false),
         is_auto_increment_(false),
         is_nullable_(true),
-        rowkey_position_(-1)
+        rowkey_position_(-1),
+        column_type_(ObMaxType)
   {}
   TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
                KPC_(raw_expr),
@@ -100,7 +101,8 @@ struct ObTableColumnItem : public sql::ColumnItem
                K_(dependant_exprs),
                K_(is_auto_increment),
                K_(is_nullable),
-               K_(rowkey_position));
+               K_(rowkey_position),
+               K_(column_type));
   sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
   bool is_generated_column_;
   bool is_stored_generated_column_;
@@ -113,6 +115,7 @@ struct ObTableColumnItem : public sql::ColumnItem
   bool is_auto_increment_;
   bool is_nullable_;
   int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
+  common::ObObjType column_type_;
 };
 
 struct ObTableColumnInfo
@@ -342,6 +345,10 @@ public:
   OB_INLINE bool is_inc() const
   {
     return ObTableOperationType::Type::INCREMENT == operation_type_;
+  }
+  OB_INLINE bool is_append() const
+  {
+    return ObTableOperationType::Type::APPEND == operation_type_;
   }
   OB_INLINE bool is_dml() const
   {

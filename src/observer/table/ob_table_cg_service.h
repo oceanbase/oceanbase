@@ -91,6 +91,7 @@ private:
                                          ObTableColumnItem &item,
                                          const ObString &expr_str,
                                          sql::ObRawExpr *&expr,
+                                         const bool is_inc_or_append = false,
                                          sql::ObRawExpr *delta_expr = nullptr);
 
   static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
