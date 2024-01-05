@@ -425,7 +425,7 @@ int ObTXTransferUtils::build_empty_minor_sstable_param_(
     param.table_key_.tablet_id_ = tablet_id;
     param.table_key_.scn_range_.start_scn_ = start_scn;
     param.table_key_.scn_range_.end_scn_ = end_scn;
-    param.max_merged_trans_version_ = INT64_MAX; //Set max merged trans version avoild sstable recycle;
+    param.max_merged_trans_version_ = 0;
 
     param.schema_version_ = table_schema.get_schema_version();
     param.create_snapshot_version_ = 0;
