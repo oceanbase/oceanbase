@@ -1297,5 +1297,6 @@ void ObMemtableCtx::check_all_redo_flushed()
 {
   trans_mgr_.check_all_redo_flushed();
 }
+
 }
 }

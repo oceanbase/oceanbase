@@ -1781,7 +1781,7 @@ int ObPartTransCtx::submit_redo_log_for_freeze()
   TRANS_LOG(TRACE, "", K_(trans_id), K_(ls_id));
   ObTimeGuard tg("submit_redo_for_freeze_log", 100000);
   bool submitted = false;
-  bool need_submit = !is_logging_blocked();
+  bool need_submit = fast_check_need_submit_redo_for_freeze_();
   if (need_submit) {
     CtxLockGuard guard(lock_);
     tg.click();
@@ -1791,10 +1791,6 @@ int ObPartTransCtx::submit_redo_log_for_freeze()
       REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
                            OB_ID(used), tg.get_diff(), OB_ID(ref), get_ref());
     }
-    // TODO: mark frozen memtable for fast check need submit redo
-    // if (OB_BLOCK_FROZEN != ret) {
-    //   clear_block_frozen_memtable();
-    // }
     if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
       ret = OB_SUCCESS;
     }
@@ -1843,10 +1839,6 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
       }
     }
   }
-  // TODO: mark frozen memtable for fast check need submit redo
-  // if (OB_BLOCK_FROZEN != ret) {
-  //   clear_block_frozen_memtable();
-  // }
   if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
     ret = OB_SUCCESS;
   }
@@ -1943,27 +1935,11 @@ int ObPartTransCtx::submit_redo_log_for_freeze_(bool &submitted)
   return ret;
 }
 
-int ObPartTransCtx::set_block_frozen_memtable(memtable::ObMemtable *memtable)
+bool ObPartTransCtx::fast_check_need_submit_redo_for_freeze_() const
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(memtable)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "memtable cannot be null", K(ret), KPC(this));
-  } else {
-    ATOMIC_STORE(&block_frozen_memtable_, memtable);
-  }
-  return ret;
-}
-
-void ObPartTransCtx::clear_block_frozen_memtable()
-{
-  ATOMIC_STORE(&block_frozen_memtable_, nullptr);
-}
-
-bool ObPartTransCtx::is_logging_blocked()
-{
-  memtable::ObMemtable *memtable = ATOMIC_LOAD(&block_frozen_memtable_);
-  return OB_NOT_NULL(memtable) && memtable->get_logging_blocked();
+  bool has_pending_log = false;
+  const bool blocked = mt_ctx_.is_logging_blocked(has_pending_log);
+  return has_pending_log && !blocked;
 }
 
 void ObPartTransCtx::get_audit_info(int64_t &lock_for_read_elapse) const

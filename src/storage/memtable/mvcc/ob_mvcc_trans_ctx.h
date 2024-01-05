@@ -247,6 +247,7 @@ private:
   void wakeup_waiting_txns_();
   int extend_callback_lists_(const int16_t cnt);
 public:
+  bool is_logging_blocked(bool &has_pending_log) const;
   int fill_log(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func);
   int log_submitted(const ObCallbackScopeArray &callbacks, share::SCN scn, int &submitted);
   int log_sync_succ(const ObCallbackScopeArray &callbacks, const share::SCN scn, int64_t &sync_cnt);
@@ -273,7 +274,6 @@ public:
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,
                     int &cb_list_idx);
-  int get_next_flush_log_guard(ObCallbackListLogGuard &lock_guard, int &list_idx);
   void set_parallel_logging(const share::SCN serial_final_scn);
   void set_skip_checksum_calc();
   bool skip_checksum_calc() const { return ATOMIC_LOAD(&skip_checksum_); }

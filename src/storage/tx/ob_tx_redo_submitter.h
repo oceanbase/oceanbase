@@ -130,6 +130,8 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
     if (OB_NEED_RETRY == ret) {
       // give up, lock conflict
       ret = OB_SUCCESS;
+    } else if (OB_BLOCK_FROZEN == ret) {
+      // memtable is logging blocked
     } else if (OB_EAGAIN == ret) {
       // others need flush firstly
       // TODO: try flush others out and retry

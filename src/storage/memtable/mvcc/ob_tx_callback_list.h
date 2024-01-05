@@ -120,6 +120,9 @@ public:
 
   // traversal to find and break
   bool find(ObITxCallbackFinder &func);
+
+  // is logging blocked: test current list can fill log
+  bool is_logging_blocked() const;
 private:
   union LockState {
     LockState() : v_(0) {}
@@ -191,6 +194,9 @@ public:
   {
     return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > limit;
   }
+  bool has_pending_log() const {
+    return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > 0;
+  }
   DECLARE_TO_STRING;
 private:
   const int16_t id_;
@@ -236,7 +242,7 @@ private:
   // used to serialize append callback to list tail
   common::ObByteLock append_latch_;
   // used to serialize fill and flush log of this list
-  common::ObByteLock log_latch_;
+  mutable common::ObByteLock log_latch_;
   // used to serialize operates on synced callbacks
   common::ObByteLock iter_synced_latch_;
   DISALLOW_COPY_AND_ASSIGN(ObTxCallbackList);
