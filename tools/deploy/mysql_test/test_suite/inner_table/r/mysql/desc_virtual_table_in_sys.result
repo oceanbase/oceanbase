@@ -839,7 +839,7 @@ ps_client_stmt_id	bigint(20)	NO		NULL
 ps_inner_stmt_id	bigint(20)	NO		NULL	
 transaction_id	bigint(20)	NO		NULL	
 snapshot_version	bigint(20) unsigned	NO		NULL	
-snapshot_source	varchar(16)	NO		NULL	
+snapshot_source	varchar(128)	NO		NULL	
 request_type	bigint(20)	NO		NULL	
 is_batched_multi_stmt	tinyint(4)	NO		NULL	
 ob_trace_info	varchar(4096)	NO		NULL	

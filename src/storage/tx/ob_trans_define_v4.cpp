@@ -1234,10 +1234,52 @@ void ObTxReadSnapshot::wait_consistency()
     }
   }
 }
-ObString ObTxReadSnapshot::get_source_name() const
+
+const char* ObTxReadSnapshot::get_source_name() const
 {
   static const char* const SRC_NAME[] = { "INVALID", "GTS", "LOCAL", "WEAK_READ", "USER_SPECIFIED", "NONE" };
-  return ObString(SRC_NAME[(int)source_]);
+  return SRC_NAME[(int)source_];
+}
+
+/*
+ * generate sql_audit's snapshot_source fileds
+ * contains: src, ls_id, ls_role, parts
+ * when shorter than 128 char like:
+ * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(id:1001,epoch:1111),(id:1002,epoch:12222)]"
+ * when longer than 128 char, with "..." in the end
+ * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(lsid:1001,epoch:1111),(lsid:1002,epoch:122..."
+*/
+int ObTxReadSnapshot::generate_snapshot_source(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(ERROR, "invaild arguments", K(ret), KPC(this), K(buf_len));
+  } else {
+    const char *snapshot_src = get_source_name();
+    const char *ls_role = role_to_string(snapshot_ls_role_);
+    uint64_t ls_id = snapshot_lsid_.id();
+    int n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:",
+                     snapshot_src, ls_id, ls_role);
+    if (n < 0){
+      ret = OB_UNEXPECT_INTERNAL_ERROR;
+      TRANS_LOG(WARN, "fail to fill snapshot source", K(ret), KPC(this), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      pos += parts_.to_string(buf + pos, buf_len - pos);
+      if (pos >= buf_len - 1) {
+        // buf full, parts fill not complete
+        // replace end 3 chars with ...
+        buf[pos - 2] = '.';
+        buf[pos - 3] = '.';
+        buf[pos - 4] = '.';
+      }
+      buf[pos - 1] = '\0';
+      TRANS_LOG(DEBUG, "succeed to generate snapshot source", KPC(this), K(pos), K(buf_len), K(ObString(buf)));
+    }
+  }
+  return ret;
 }
 
 ObTxExecResult::ObTxExecResult()
