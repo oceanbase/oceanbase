@@ -76,12 +76,12 @@ int ObTableBatchExecuteP::check_arg()
 int ObTableBatchExecuteP::check_arg2() const
 {
   int ret = OB_SUCCESS;
-  if (arg_.returning_rowkey_
-      || arg_.returning_affected_entity_) {
+  if (arg_.returning_rowkey()
+      || arg_.returning_affected_entity()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some options not supported yet", K(ret),
-             "returning_rowkey", arg_.returning_rowkey_,
-             "returning_affected_entity", arg_.returning_affected_entity_);
+             "returning_rowkey", arg_.returning_rowkey(),
+             "returning_affected_entity", arg_.returning_affected_entity());
   }
   return ret;
 }
@@ -110,7 +110,7 @@ uint64_t ObTableBatchExecuteP::get_request_checksum()
   const uint64_t op_checksum = arg_.batch_operation_.get_checksum();
   checksum = ob_crc64(checksum, &op_checksum, sizeof(op_checksum));
   checksum = ob_crc64(checksum, &arg_.consistency_level_, sizeof(arg_.consistency_level_));
-  checksum = ob_crc64(checksum, &arg_.returning_rowkey_, sizeof(arg_.returning_rowkey_));
+  checksum = ob_crc64(checksum, &arg_.option_flag_, sizeof(arg_.option_flag_));
   checksum = ob_crc64(checksum, &arg_.returning_affected_entity_, sizeof(arg_.returning_affected_entity_));
   checksum = ob_crc64(checksum, &arg_.returning_affected_rows_, sizeof(arg_.returning_affected_rows_));
   checksum = ob_crc64(checksum, &arg_.binlog_row_image_type_, sizeof(arg_.binlog_row_image_type_));
@@ -848,7 +848,7 @@ int ObTableBatchExecuteP::init_single_op_tb_ctx(table::ObTableCtx &ctx,
         break;
       }
       case ObTableOperationType::INSERT_OR_UPDATE: {
-        if (OB_FAIL(ctx.init_insert_up())) {
+        if (OB_FAIL(ctx.init_insert_up(arg_.use_put()))) {
           LOG_WARN("fail to init insert up ctx", K(ret), K(ctx));
         }
         break;
@@ -860,15 +860,15 @@ int ObTableBatchExecuteP::init_single_op_tb_ctx(table::ObTableCtx &ctx,
         break;
       }
       case ObTableOperationType::APPEND: {
-        if (OB_FAIL(ctx.init_append(arg_.returning_affected_entity_,
-                                    arg_.returning_rowkey_))) {
+        if (OB_FAIL(ctx.init_append(arg_.returning_affected_entity(),
+                                    arg_.returning_rowkey()))) {
           LOG_WARN("fail to init append ctx", K(ret), K(ctx));
         }
         break;
       }
       case ObTableOperationType::INCREMENT: {
-        if (OB_FAIL(ctx.init_increment(arg_.returning_affected_entity_,
-                                       arg_.returning_rowkey_))) {
+        if (OB_FAIL(ctx.init_increment(arg_.returning_affected_entity(),
+                                       arg_.returning_rowkey()))) {
           LOG_WARN("fail to init increment ctx", K(ret), K(ctx));
         }
         break;

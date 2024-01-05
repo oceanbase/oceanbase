@@ -96,7 +96,7 @@ int ObTableRpcImpl::execute(const ObTableOperation &table_operation, const ObTab
         request.consistency_level_ = request_options.consistency_level();
         request.returning_affected_rows_ = request_options.returning_affected_rows();
         request.returning_affected_entity_ = request_options.returning_affected_entity();
-        request.returning_rowkey_ = request_options.returning_rowkey();
+        request.option_flag_ = request_options.get_option_flag();
 
         ret = rpc_proxy_->
               timeout(request_options.server_timeout())
@@ -286,7 +286,7 @@ int ObTableRpcImpl::batch_execute(const ObTableBatchOperation &batch_operation, 
       request.consistency_level_ = request_options.consistency_level();
       request.returning_affected_rows_ = request_options.returning_affected_rows();
       request.returning_affected_entity_ = request_options.returning_affected_entity();
-      request.returning_rowkey_ = request_options.returning_rowkey();
+      request.option_flag_ = request_options.get_option_flag();
       request.batch_operation_as_atomic_ = request_options.batch_operation_as_atomic();
       if (REACH_TIME_INTERVAL(10*1000*1000)) {
         // TODO: we can not print the tenat memory usage now.

@@ -273,42 +273,6 @@ int ObTableCtx::get_expr_from_assignments(const ObString &col_name, ObRawExpr *&
 }
 
 /*
-  check insert up operation can use put implement or not
-  1. can not have any index.
-  2. all column must be filled.
-*/
-int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
-{
-  int ret = OB_SUCCESS;
-  use_put = true;
-
-  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
-    use_put = false;
-  } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid operation type", K(ret), K_(operation_type));
-  } else if (is_htable()) { // htable has no index and alway full filled.
-    use_put = true;
-  } else if (!related_index_ids_.empty()) { // has index, can not use put
-    use_put = false;
-  } else if (OB_ISNULL(table_schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table schema is null", K(ret));
-  } else {
-    if (OB_ISNULL(entity_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("entity is null", K(ret));
-    } else if (table_schema_->get_column_count() - table_schema_->get_rowkey_column_num() <= entity_->get_properties_count()) { // all columns are filled
-      use_put = true;
-    } else { // some columns are missing
-      use_put = false;
-    }
-  }
-
-  return ret;
-}
-
-/*
   1. ObConflictChecker need ObPhysicalPlanCtx.
   2. now() expr need ObPhysicalPlanCtx.cur_time_.
   3. das need ObPhysicalPlanCtx to check task should retry or not.
@@ -1196,10 +1160,11 @@ int ObTableCtx::init_replace()
     1. init update
     2. reset for is_for_update_ flag, cause init_update() had set is_for_update_=true
 */
-int ObTableCtx::init_insert_up()
+int ObTableCtx::init_insert_up(bool is_client_set_put)
 {
   int ret = OB_SUCCESS;
   is_for_insertup_ = true;
+  is_client_set_put_ = is_client_set_put;
 
   if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init update", K(ret));
@@ -1271,7 +1236,7 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up())) {
+  if (OB_FAIL(init_insert_up(false))) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1334,7 +1299,7 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up())) {
+  if (OB_FAIL(init_insert_up(false))) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1724,6 +1689,51 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
       LOG_WARN("fail to get tablet id", K(ret), K(part_idx), K(subpart_idx));
     } else {
       related_tablet_id = tmp_tablet_id;
+    }
+  }
+
+  return ret;
+}
+
+/*
+  check insert up operation can use put implement or not
+  1. can not have any index.
+  2. all column must be filled.
+*/
+int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
+{
+  int ret = OB_SUCCESS;
+  use_put = true;
+
+  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
+    use_put = false;
+  } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid operation type", K(ret), K_(operation_type));
+  } else if (is_htable()) { // htable has no index and alway full filled.
+    use_put = true;
+  } else if (is_client_set_put_ && !related_index_ids_.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("client set use_put flag, but has local index is not support", K(ret), K_(related_index_ids));
+  } else if (!related_index_ids_.empty()) { // has index, can not use put
+    use_put = false;
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    bool is_all_columns_filled = false;
+    if (OB_ISNULL(entity_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("entity is null", K(ret));
+    } else if (FALSE_IT(is_all_columns_filled = table_schema_->get_column_count()
+        - table_schema_->get_rowkey_column_num() <= entity_->get_properties_count())) { // all columns are filled
+    } else if (is_client_set_put_ && !is_all_columns_filled) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("client set use_put flag, but not fill all columns is not support", K(ret), KPC_(table_schema), KPC_(entity));
+    } else if (is_client_set_put_ || is_all_columns_filled) {
+      use_put = true;
+    } else { // some columns are missing
+      use_put = false;
     }
   }
 
