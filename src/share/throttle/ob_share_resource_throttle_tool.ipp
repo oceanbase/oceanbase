@@ -200,7 +200,8 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
                 ALLOCATOR::throttle_unit_name(),                                         \
                 K(sleep_time),                                                           \
                 K(left_interval),                                                        \
-                K(expected_wait_t));                                                     \
+                K(expected_wait_t),                                                      \
+                K(abs_expire_time));                                                     \
       if (!has_printed_lbt) {                                                            \
         has_printed_lbt = true;                                                          \
         oceanbase::share::ObTaskController::get().allow_next_syslog();                   \

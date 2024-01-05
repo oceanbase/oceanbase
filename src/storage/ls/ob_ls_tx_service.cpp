@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_ls_tx_service.h"
+#include "share/throttle/ob_throttle_unit.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
@@ -191,6 +192,12 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
+    int64_t abs_expire_ts = ObClockGenerator::getClock() + tx.get_timeout_us();
+    if (abs_expire_ts < 0) {
+      abs_expire_ts = ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME;
+    }
+
+    ObTxDataThrottleGuard tx_data_throttle_guard(false /* for_replay */, abs_expire_ts);
     ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, spec_seq_no, false);
   }
   return ret;
