@@ -264,6 +264,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
                                                       ObTableColumnItem &item,
                                                       const ObString &expr_str,
                                                       ObRawExpr *&expr,
+                                                      const bool is_inc_or_append/* = false*/,
                                                       sql::ObRawExpr *delta_expr/* = nullptr*/)
 {
   int ret = OB_SUCCESS;
@@ -272,7 +273,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
-  } else if (ctx.is_inc_or_append() && OB_ISNULL(delta_expr)) {
+  } else if (is_inc_or_append && OB_ISNULL(delta_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("delta expr should not be null when do append or increment", K(ret));
   } else {
@@ -318,7 +319,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
         const ObQualifiedName &tmp_column = columns.at(i);
         const ObString &col_name = tmp_column.col_name_;
         ObRawExpr *tmp_expr = nullptr;
-        if (1 == i && ctx.is_inc_or_append()) {
+        if (1 == i && is_inc_or_append) {
           tmp_expr = delta_expr;
         } else if (OB_FAIL(ctx.get_expr_from_assignments(col_name, tmp_expr))) {
           LOG_WARN("fail to get expr from assignments", K(ret), K(col_name));
@@ -346,7 +347,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
                                                               gen_expr,
                                                               &sess_info))) {
           LOG_WARN("fail to build column conv expr", K(ret));
-        } else if (ctx.is_inc_or_append()) {
+        } else if (is_inc_or_append) {
           expr = gen_expr; // expr should be a calculate expr in increment or append operation
         } else {
           gen_expr->set_for_generated_column();
@@ -739,7 +740,8 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
       }
     }
   } else if (assign.is_inc_or_append_) {
-    if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr, assign.delta_expr_))) {
+    bool is_inc_or_append = true;
+    if (OB_FAIL(build_generated_column_expr(ctx, *item, item->generated_expr_str_, tmp_expr, is_inc_or_append, assign.delta_expr_))) {
       LOG_WARN("fail to build generated column expr", K(ret), K(*item));
     }
   } else {

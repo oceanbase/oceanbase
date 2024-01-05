@@ -543,8 +543,8 @@ int ObTableQuerySyncP::query_scan_without_init()
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("unexpected null result iterator", K(ret));
-  } else if (OB_FAIL(result_.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
-    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
+  } else if (OB_FAIL(result_.deep_copy_property_names(query_session_->get_query().get_select_columns()))) {
+    LOG_WARN("fail to deep copy property names to one result", K(ret), K(query_session_->get_query()));
   } else {
     ObTableQueryResult *query_result = nullptr;
     result_iter->set_one_result(&result_);  // set result_ as container
