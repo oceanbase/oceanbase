@@ -66,6 +66,7 @@ public:
   // interfaces forward to mds_table_handler_
   void mark_mds_table_deleted();
   void set_tablet_status_written();
+  void reset_tablet_status_written();
   bool is_tablet_status_written() const;
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();

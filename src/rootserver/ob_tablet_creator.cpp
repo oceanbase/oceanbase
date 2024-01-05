@@ -27,6 +27,7 @@ namespace rootserver
 {
 
 
+ERRSIM_POINT_DEF(EN_LOCK_CREATE_TABLET_FAILED);
 bool ObTabletCreatorArg::is_valid() const
 {
   bool is_valid = ls_key_.is_valid()
@@ -359,6 +360,14 @@ int ObTabletCreator::execute()
     } // end for
   }
   reset();
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = EN_LOCK_CREATE_TABLET_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_LOCK_CREATE_TABLET_FAILED", K(ret));
+      }
+    }
+#endif
   return ret;
 }
 
