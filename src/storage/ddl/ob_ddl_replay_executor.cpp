@@ -145,6 +145,24 @@ int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       LOG_WARN("fail to check need replay ddl log", K(ret), K_(tablet_id), K_(scn));
     }
   } else if (!need_replay) {
+    // check if lob meta tablet need replay
+    ObTabletBindingMdsUserData ddl_data;
+    if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+    } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+      ObTabletHandle lob_meta_tablet_handle;
+      const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
+      if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_, lob_meta_tablet_handle))) {
+        LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      } else if (check_need_replay_ddl_log_(lob_meta_tablet_handle, scn_, scn_, need_replay)) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("fail to check need replay ddl log of lob tablet", K(ret), K_(tablet_id), K_(scn), K(lob_meta_tablet_id));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!need_replay) {
     // do nothing
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
@@ -368,6 +386,24 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle) //TODO(
     if (OB_EAGAIN != ret) {
       LOG_WARN("fail to check need replay ddl log", K(ret), K(table_key), K_(scn), K_(log));
     }
+  } else if (!need_replay) {
+    // check if lob meta tablet need replay
+    ObTabletBindingMdsUserData ddl_data;
+    if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
+    } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+      ObTabletHandle lob_meta_tablet_handle;
+      const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
+      if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_, lob_meta_tablet_handle))) {
+        LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
+      } else if (check_need_replay_ddl_log_(lob_meta_tablet_handle, scn_, scn_, need_replay)) {
+        if (OB_EAGAIN != ret) {
+          LOG_WARN("fail to check need replay ddl log of lob tablet", K(ret), K_(tablet_id), K_(scn), K(lob_meta_tablet_id));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (!need_replay) {
     // do nothing
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
