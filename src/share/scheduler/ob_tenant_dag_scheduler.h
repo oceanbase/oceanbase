@@ -1423,7 +1423,7 @@ inline bool is_reserve_mode()
     if (NULL != worker) {                                                \
       if (worker->hold_by_compaction_dag()) {                            \
         worker->set_mem_ctx(&mem_ctx);                                   \
-      } else {                                                           \
+      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
           "only compaction dag can set memctx", KPC(worker));            \
       }                                                                  \
@@ -1437,7 +1437,7 @@ inline bool is_reserve_mode()
     if (NULL != worker) {                                                \
       if (worker->hold_by_compaction_dag()) {                            \
         mem_ctx = worker->get_mem_ctx();                                 \
-      } else {                                                           \
+      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
           "memctx only provided for compaction dag", KPC(worker));       \
       }                                                                  \
