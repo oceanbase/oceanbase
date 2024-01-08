@@ -37,6 +37,7 @@ namespace oceanbase
 namespace common
 {
 
+static const int OSS_BAD_REQUEST = 400;
 static const int OSS_OBJECT_NOT_EXIST = 404;
 static const int OSS_PERMISSION_DENIED = 403;
 static const int OSS_OBJECT_PWRITE_OFFSET_NOT_MATH = 409;
@@ -60,6 +61,8 @@ int init_oss_env();
 // You need to clean oss resource when not use oss any more.
 // Thread safe guaranteed by user.
 void fin_oss_env();
+
+bool is_oss_supported_checksum(ObStorageChecksumType checksum_type);
 
 class ObStorageOssStaticVar
 {
@@ -133,6 +136,7 @@ public:
   char oss_endpoint_[MAX_OSS_ENDPOINT_LENGTH];
   bool is_inited_;
   ObOssAccount oss_account_;
+  ObStorageChecksumType checksum_type_;
   
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssBase);
 };
@@ -154,6 +158,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
+  ObStorageChecksumType checksum_type_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssWriter);
 };
 
@@ -186,7 +191,7 @@ private:
   int partnum_;
   bool is_opened_;
   int64_t file_length_;
-  uint64_t total_crc_;
+  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssMultiPartWriter);
 };
@@ -281,6 +286,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObString bucket_;
   common::ObString object_;
+  ObStorageChecksumType checksum_type_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageOssAppendWriter);
 };

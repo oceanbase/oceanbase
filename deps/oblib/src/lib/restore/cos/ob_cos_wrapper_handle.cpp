@@ -102,14 +102,15 @@ void ObCosWrapperHandle::reset()
   delete_mode_ = ObIStorageUtil::DELETE;
 }
 
-int ObCosWrapperHandle::create_cos_handle()
+int ObCosWrapperHandle::create_cos_handle(const bool check_md5)
 {
   int ret = OB_SUCCESS;
   qcloud_cos::OB_COS_customMem cos_mem = {ob_cos_malloc, ob_cos_free, &allocator_};
   if (OB_NOT_NULL(handle_)) {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "handle is not null", K(ret));
-  } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_, &handle_))) {
+  } else if (OB_FAIL(qcloud_cos::ObCosWrapper::create_cos_handle(cos_mem, cos_account_,
+                                                                 check_md5, &handle_))) {
     OB_LOG(WARN, "failed to create cos handle", K(ret));
   } else if (OB_ISNULL(handle_)) {
     ret = OB_COS_ERROR;
