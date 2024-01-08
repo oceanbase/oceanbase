@@ -24,7 +24,7 @@ namespace transaction
 {
 
 const int64_t ObDupTableLSLeaseMgr::LEASE_UNIT = ObDupTableLoopWorker::LOOP_INTERVAL;
-const int64_t ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
+int64_t ObDupTableLSLeaseMgr::DEFAULT_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
 const int64_t ObDupTableLSLeaseMgr::MIN_LEASE_INTERVAL = ObDupTableLSLeaseMgr::LEASE_UNIT * 60;
 
 int ObDupTableLSLeaseMgr::init(ObDupTableLSHandler *dup_ls_handle)
@@ -575,6 +575,9 @@ bool ObDupTableLSLeaseMgr::is_follower_lease_valid()
 
   SpinRLockGuard guard(lease_lock_);
   is_follower_lease = follower_lease_info_.lease_expired_ts_ > ObTimeUtility::current_time();
+  if (!is_follower_lease) {
+    DUP_TABLE_LOG(INFO, DUP_TABLET_LIFE_PREFIX "lease is expired", K(follower_lease_info_));
+  }
 
   return is_follower_lease;
 }
@@ -828,11 +831,15 @@ int ObDupTableLSLeaseMgr::GetLeaseValidAddrFunctor::operator()(
   +----------------------------------------------------+
   */
 
-  if (hash_pair.second.lease_expired_ts_ > cur_time_
-      // include a granted logging lease
-      || hash_pair.second.cache_lease_req_.is_ready()) {
+  if (MTL(ObTransService *)->get_server() == hash_pair.first) {
+    DUP_TABLE_LOG(INFO, "we need not push back self into lease valid array", K(ret),
+                  K(hash_pair.first), K(hash_pair.second));
+  } else if (hash_pair.second.lease_expired_ts_ > cur_time_
+             // include a granted logging lease
+             || hash_pair.second.cache_lease_req_.is_ready()) {
     if (OB_FAIL(addr_arr_.push_back(hash_pair.first))) {
-      DUP_TABLE_LOG(WARN, "push back lease valid array failed", K(ret));
+      DUP_TABLE_LOG(WARN, "push back lease valid array failed", K(ret), K(hash_pair.first),
+                    K(hash_pair.second));
     }
   }
 

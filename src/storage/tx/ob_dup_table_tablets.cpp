@@ -1102,6 +1102,23 @@ int ObLSDupTabletsMgr::prepare_serialize_src_set_with_related_set_(
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(EN_DUP_TABLE_LOG_PREPARE_SERIALIZE)
+#endif
+
+OB_NOINLINE int ObLSDupTabletsMgr::process_prepare_ser_err_test_()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_DUP_TABLE_LOG_PREPARE_SERIALIZE;
+#endif
+
+  DUP_TABLE_LOG(INFO, "errsim prepare serialize err test", K(ret),K(ls_id_));
+
+  return ret;
+}
+
 int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
                                          DupTabletSetIDArray &unique_id_array,
                                          const int64_t max_log_buf_len)
@@ -1112,6 +1129,12 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   SpinWLockGuard guard(dup_tablets_lock_);
 
   unique_id_array.reuse();
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(process_prepare_ser_err_test_())) {
+      DUP_TABLE_LOG(WARN, "errsim for dup tablet log prepare serialize", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret)) {
     bool can_be_confirmed = true;

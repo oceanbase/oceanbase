@@ -224,10 +224,30 @@ int ObTxReplayExecutor::do_replay_(const char *buf,
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(EN_TX_REPLAY)
+#endif
+
+OB_NOINLINE int ObTxReplayExecutor::errsim_tx_replay_()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_TX_REPLAY;
+#endif
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(INFO, "errsim tx replay in observer", K(ret));
+  }
+  return ret;
+}
+
 int ObTxReplayExecutor::prepare_replay_(const char *buf, const int64_t &size, const int skip_pos)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(log_block_.init(buf, size, skip_pos, log_block_header_))) {
+  if (OB_FAIL(errsim_tx_replay_())) {
+    TRANS_LOG(WARN, "errsim for tx replay", K(ret), K(log_ts_ns_), K(lsn_));
+  } else if (OB_FAIL(log_block_.init(buf, size, skip_pos, log_block_header_))) {
     TRANS_LOG(ERROR, "TxLogBlock init error", K(log_block_), K(log_block_header_));
   }
   return ret;

@@ -94,6 +94,8 @@ private:
   int before_replay_redo_();
   void finish_replay_(const int retcode);
 
+  int errsim_tx_replay_();
+
   int replay_redo_();
   int replay_rollback_to_();
   int replay_active_info_();

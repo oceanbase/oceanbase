@@ -207,7 +207,7 @@ int ObMultiReplicaTestBase::wait_all_test_completed()
   int ret = OB_SUCCESS;
   std::string zone_str = "ZONE" + std::to_string(cur_zone_id_);
   if (OB_FAIL(finish_event(TEST_CASE_FINSH_EVENT_PREFIX + zone_str, zone_str))) {
-
+    SERVER_LOG(WARN, "write test finish event failed", K(ret), K(zone_str.c_str()));
   } else {
     for (int i = 1; i <= MAX_ZONE_COUNT && OB_SUCC(ret); i++) {
       zone_str = "ZONE" + std::to_string(i);
@@ -276,6 +276,13 @@ void ObMultiReplicaTestBase::TearDownTestCase()
   SERVER_LOG(INFO, "[ObMultiReplicaTestBase] TearDownTestCase");
 
   int ret = OB_SUCCESS;
+  const bool enable_failed_sleep = false;
+
+  int fail_cnt = ::testing::UnitTest::GetInstance()->failed_test_case_count();
+  if (fail_cnt > 0 && enable_failed_sleep) {
+    fprintf(stdout, "[SLEEP] FAIL %d TEST CASE, WAIT TO KILL", fail_cnt);
+    usleep(30 * 60 * 1000 * 1000);
+  }
 
   // fprintf(stdout, ">>>>>>> AFTER RUN TEST: pid = %d\n", getpid());
   if (OB_FAIL(oceanbase::unittest::ObMultiReplicaTestBase::wait_all_test_completed())) {
@@ -285,7 +292,6 @@ void ObMultiReplicaTestBase::TearDownTestCase()
     // ret = close();
     // ASSERT_EQ(ret, OB_SUCCESS);
   }
-  int fail_cnt = ::testing::UnitTest::GetInstance()->failed_test_case_count();
   if (chdir(exec_dir_.c_str()) == 0) {
     bool to_delete = true;
     if (to_delete) {
@@ -674,6 +680,8 @@ int ObMultiReplicaTestBase::finish_event(const std::string &event_name,
     fclose(fp);
   }
 
+        fprintf(stdout, "[WAIT EVENT] write target event : EVENT_KEY = %s; EVENT_VAL = %s\n",
+                event_name.c_str(), event_content.c_str());
   SERVER_LOG(INFO, "[ObMultiReplicaTestBase] [WAIT EVENT] write target event",
              K(event_name.c_str()), K(event_content.c_str()));
   return ret;

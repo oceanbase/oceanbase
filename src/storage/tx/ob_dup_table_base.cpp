@@ -741,6 +741,7 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   bool contain_all_readable = false;
   int64_t logging_readable_cnt = 0;
   const int64_t all_readable_set_cnt = tablet_mgr_ptr_->get_readable_tablet_set_count();
+  const share::SCN cur_sync_succ_scn = logging_scn_;
   ObDupTableLSCheckpoint::ObLSDupTableMeta tmp_dup_ls_meta;
 
   if (OB_SUCC(ret)) {
@@ -799,13 +800,14 @@ int ObDupTableLogOperator::sync_log_succ_(const bool for_replay)
   }
 
   if (lease_log_sync_cost_time + tablet_log_sync_cost_time + ckpt_update_cost_time > 500 * 1000) {
-    DUP_TABLE_LOG(INFO, "sync log succ cost too much time", K(ret), K(logging_scn_),
+    DUP_TABLE_LOG(INFO, "sync log succ cost too much time", K(ret), K(cur_sync_succ_scn),
                   K(logging_lease_addrs_.count()), K(logging_tablet_set_ids_.count()), K(stat_log_),
                   K(start_sync_time), K(lease_log_sync_cost_time), K(tablet_log_sync_cost_time),
                   K(ckpt_update_cost_time));
   }
 
   if (OB_NOT_NULL(interface_stat_ptr_)) {
+    interface_stat_ptr_->dup_table_max_applying_scn_.inc_update(cur_sync_succ_scn);
     interface_stat_ptr_->dup_table_lease_log_sync_total_time_ += lease_log_sync_cost_time;
     interface_stat_ptr_->dup_table_tablet_log_sync_total_time_ += tablet_log_sync_cost_time;
   }

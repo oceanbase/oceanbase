@@ -296,7 +296,7 @@ bool ObLSTxLogAdapter::has_dup_tablet()
   if (OB_ISNULL(dup_table_ls_handler_)) {
     has_dup = false;
   } else {
-    has_dup = dup_table_ls_handler_->has_dup_tablet();
+    has_dup = dup_table_ls_handler_->check_tablet_set_exist();
   }
   return has_dup;
 }
