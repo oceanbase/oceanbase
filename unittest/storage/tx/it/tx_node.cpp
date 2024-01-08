@@ -44,6 +44,26 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
 
 namespace storage {
 
+void ObMemtableMgrHandle::reset()
+{
+  if (nullptr != memtable_mgr_) {
+    if (nullptr == pool_) {
+      STORAGE_LOG(DEBUG, "this memory manager is a special handle", KP(memtable_mgr_), "ref_cnt",
+                  memtable_mgr_->get_ref(), K(lbt()));
+      // at present, inner tablet's memtable_mgr_ is not managed by pool,
+      // just decrease ref and leave the release to the owner of memtable_mgr.
+      memtable_mgr_->dec_ref();
+      memtable_mgr_ = nullptr;
+    } else {
+      if (0 == memtable_mgr_->dec_ref()) {
+        TRANS_LOG(INFO, "dec ref to 0", KP(memtable_mgr_));
+      }
+      memtable_mgr_ = nullptr;
+      pool_ = nullptr;
+    }
+  }
+}
+
 int ObTxTable::online()
 {
   ATOMIC_INC(&epoch_);

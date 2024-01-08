@@ -277,6 +277,9 @@ public:
   int dump_tablet_info();
   int release_memtable_and_mds_table_for_ls_offline(const ObTabletMapKey &key);
 
+  // TODO(bizhu): remove tablet memtable mgr pool
+  ObTenantMetaObjPool<ObTabletMemtableMgr> *get_tablet_memtable_mgr_pool() { return &tablet_memtable_mgr_pool_; }
+
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 private:
   int fill_buffer_infos(
