@@ -233,7 +233,14 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     }
   }
   if (OB_SUCC(ret)) {
-    ObObjType result_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+    ObObjType result_type = ObMaxType;
+    if(OBJ_TYPE_TO_CLASS[type.get_type()] == ObExtendTC) {
+      result_type = ObExtendType;
+    }
+    else {
+      // 这里针对calc的转换是不是可以直接用在result上？？
+      result_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[type.get_type()]];
+    }
     if (OB_UNLIKELY(ObMaxType == result_type)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_ENG_LOG(WARN, "invalid type of parameter ", K(type), K(ret));
@@ -348,6 +355,10 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       } else {
         type.set_length(len);
       }
+    }
+    if(ob_is_extend(type.get_type())) {
+      type.set_extend_type(types_stack[RESULT_TYPE_INDEX].get_extend_type());
+      type.set_accuracy(types_stack[RESULT_TYPE_INDEX].get_accuracy().get_accuracy());
     }
   }
   if (OB_SUCC(ret)) {
