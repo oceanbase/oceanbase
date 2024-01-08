@@ -454,6 +454,8 @@ public:
                                ObProcType &routine_type,
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
+  static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
+  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type);
 
   static
   int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
@@ -1067,8 +1069,6 @@ private:
   inline void set_item_type(ObItemType item_type) { item_type_ = item_type; }
 
   int resolve_question_mark_node(const ObStmtNodeTree *into_node, ObRawExpr *&into_expr);
-  bool is_question_mark_value(ObRawExpr *into_expr);
-  int set_question_mark_type(ObRawExpr *into_expr, const ObPLDataType *type);
 
   int check_cursor_formal_params(const ObIArray<int64_t>& formal_params,
                                  ObPLCursor &cursor,
