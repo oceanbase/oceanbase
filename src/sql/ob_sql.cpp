@@ -3462,6 +3462,21 @@ int ObSql::prepare_outline_for_phy_plan(ObLogPlan *logical_plan,
       phy_plan->stat_.outline_data_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(NULL == (tmp_ptr = phy_plan->get_allocator().alloc(OB_MAX_SQL_LENGTH)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("fail to alloc memory", K(ret));
+  } else if (FALSE_IT(buf = static_cast<char *>(tmp_ptr))) {
+  } else {
+    PlanText plan_text;
+    plan_text.buf_ = buf;
+    plan_text.buf_len_ = OB_MAX_SQL_LENGTH;
+    if (OB_FAIL(ObSqlPlan::get_plan_used_hint_info_one_line(plan_text, logical_plan))) {
+      LOG_WARN("failed to get plan used hint info", K(ret));
+    } else {
+      phy_plan->stat_.hints_info_.assign_ptr(buf, static_cast<ObString::obstr_size_t>(plan_text.pos_));
+    }
+  }
   return ret;
 }
 

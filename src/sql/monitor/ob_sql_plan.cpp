@@ -72,7 +72,8 @@ namespace sql
 {
 
 ObSqlPlan::ObSqlPlan(common::ObIAllocator &allocator)
-  :allocator_(allocator)
+  :allocator_(allocator),
+  session_(NULL)
 {
 }
 
@@ -150,13 +151,10 @@ int ObSqlPlan::store_sql_plan_for_explain(ObExecContext *ctx,
     }
   }
   if (OB_SUCC(ret)) {
-    if (allocate_mem_failed) {
+    if (allocate_mem_failed || plan_strs.empty()) {
       if (OB_FAIL(plan_strs.push_back("Plan truncated due to insufficient memory!"))) {
         LOG_WARN("failed to push back string", K(ret));
       }
-    } else if (plan_strs.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to generate plan", K(ret));
     }
   }
   destroy_buffer(plan_text);
@@ -220,6 +218,39 @@ int ObSqlPlan::get_plan_outline_info_one_line(PlanText &plan_text,
     } else {
       BUF_PRINT_CONST_STR(" END_OUTLINE_DATA*/", plan_text);
       plan_text.is_outline_data_ = false;
+    }
+    if (OB_SIZE_OVERFLOW == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObSqlPlan::get_plan_used_hint_info_one_line(PlanText &plan_text,
+                                                ObLogPlan* plan)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(plan) ||
+      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(plan), K(query_ctx));
+  } else {
+    const ObQueryHint &query_hint = query_ctx->get_query_hint();
+    plan_text.is_used_hint_ = true;
+    plan_text.is_oneline_ = true;
+    plan_text.pos_ = 0;
+    BUF_PRINT_CONST_STR("/*+ ", plan_text);
+    if (OB_FAIL(get_plan_tree_used_hint(plan_text, plan->get_plan_root()))) {
+      LOG_WARN("failed to get plan tree used hint", K(ret));
+    } else if (OB_FAIL(query_hint.print_qb_name_hints(plan_text))) {
+      LOG_WARN("failed to print qb name hints", K(ret));
+    } else if (OB_FAIL(query_hint.print_transform_hints(plan_text))) {
+      LOG_WARN("failed to print all transform hints", K(ret));
+    } else if (OB_FAIL(query_hint.get_global_hint().print_global_hint(plan_text))) {
+      LOG_WARN("failed to print global hint", K(ret));
+    } else {
+      BUF_PRINT_CONST_STR("  */", plan_text);
     }
     if (OB_SIZE_OVERFLOW == ret) {
       ret = OB_SUCCESS;
@@ -1045,10 +1076,12 @@ int ObSqlPlan::print_constraint_info(char *buf,
 int ObSqlPlan::format_sql_plan(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
                               ExplainType type,
                               const ObExplainDisplayOpt& option,
-                              PlanText &plan_text)
+                              PlanText &plan_text,
+                              const bool alloc_buffer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init_buffer(plan_text))) {
+  if (alloc_buffer &&
+      OB_FAIL(init_buffer(plan_text))) {
     LOG_WARN("failed to init buffer", K(ret));
   } else if (sql_plan_infos.empty()) {
     //do nothing
@@ -1167,7 +1200,11 @@ int ObSqlPlan::get_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos
     }
     //EST ROWS
     if (OB_SUCC(ret)) {
-      snprintf(buffer, sizeof(buffer), "%ld", plan_item->cardinality_);
+      if (plan_item->cardinality_ >= 0) {
+        snprintf(buffer, sizeof(buffer), "%ld", plan_item->cardinality_);
+      } else {
+        snprintf(buffer, sizeof(buffer), "%s", "more than 1.0e19");
+      }
       length = (int32_t) strlen(buffer);
       if (length > format_helper.column_len_.at(EstRows)) {
         format_helper.column_len_.at(EstRows) = length;
@@ -1175,7 +1212,11 @@ int ObSqlPlan::get_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_infos
     }
     //EST COST
     if (OB_SUCC(ret)) {
-      snprintf(buffer, sizeof(buffer), "%ld", plan_item->cost_);
+      if (plan_item->cost_ >= 0) {
+        snprintf(buffer, sizeof(buffer), "%ld", plan_item->cost_);
+      } else {
+        snprintf(buffer, sizeof(buffer), "%s", "more than 1.0e19");
+      }
       length = (int32_t) strlen(buffer);
       if (length > format_helper.column_len_.at(EstCost)) {
         format_helper.column_len_.at(EstCost) = length;
@@ -1229,7 +1270,11 @@ int ObSqlPlan::get_real_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_
     }
     //EST ROWS
     if (OB_SUCC(ret)) {
-      snprintf(buffer, sizeof(buffer), "%ld", plan_item->cardinality_);
+      if (plan_item->cardinality_ >= 0) {
+        snprintf(buffer, sizeof(buffer), "%ld", plan_item->cardinality_);
+      } else {
+        snprintf(buffer, sizeof(buffer), "%s", "more than 1.0e19");
+      }
       length = (int32_t) strlen(buffer);
       if (length > format_helper.column_len_.at(EstRows)) {
         format_helper.column_len_.at(EstRows) = length;
@@ -1237,7 +1282,11 @@ int ObSqlPlan::get_real_plan_table_formatter(ObIArray<ObSqlPlanItem*> &sql_plan_
     }
     //EST COST
     if (OB_SUCC(ret)) {
-      snprintf(buffer, sizeof(buffer), "%ld", plan_item->cost_);
+      if (plan_item->cost_ >= 0) {
+        snprintf(buffer, sizeof(buffer), "%ld", plan_item->cost_);
+      } else {
+        snprintf(buffer, sizeof(buffer), "%s", "more than 1.0e19");
+      }
       length = (int32_t) strlen(buffer);
       if (length > format_helper.column_len_.at(EstCost)) {
         format_helper.column_len_.at(EstCost) = length;
@@ -1430,13 +1479,13 @@ int ObSqlPlan::get_operator_prefix(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect idx", K(ret));
         } else if (prefix_helper.with_line_.at(j)) {
-          const char *txt = "│ ";
+          const char *txt = get_tree_line(0);
           if (plan_item->parent_id_ == parent_item->id_) {
             if (plan_item->is_last_child_) {
-              txt = "└─";
+              txt = get_tree_line(1);
               prefix_helper.with_line_.at(j) = false;
             } else {
-              txt = "├─";
+              txt = get_tree_line(2);
             }
           }
           if (prefix_helper.color_idxs_.at(j) >= 0) {
@@ -1663,16 +1712,28 @@ int ObSqlPlan::format_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
       //ROWS
       if (OB_SUCC(ret)) {
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
-        ret = BUF_PRINTF("%-*ld",
+        if (plan_item->cardinality_ >= 0) {
+          ret = BUF_PRINTF("%-*ld",
                          format_helper.column_len_.at(EstRows),
                          plan_item->cardinality_);
+        } else {
+          ret = BUF_PRINTF("%-*s",
+                         format_helper.column_len_.at(EstRows),
+                         "more than 1.0e19");
+        }
       }
       //COST
       if (OB_SUCC(ret)) {
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
-        ret = BUF_PRINTF("%-*ld",
+        if (plan_item->cost_ >= 0) {
+          ret = BUF_PRINTF("%-*ld",
                          format_helper.column_len_.at(EstCost),
                          plan_item->cost_);
+        } else {
+          ret = BUF_PRINTF("%-*s",
+                         format_helper.column_len_.at(EstCost),
+                         "more than 1.0e19");
+        }
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
       }
       if (OB_SUCC(ret))  {
@@ -1780,16 +1841,28 @@ int ObSqlPlan::format_real_plan_table(ObIArray<ObSqlPlanItem*> &sql_plan_infos,
       //EST ROWS
       if (OB_SUCC(ret)) {
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
-        ret = BUF_PRINTF("%-*ld",
+        if (plan_item->cardinality_ >= 0) {
+          ret = BUF_PRINTF("%-*ld",
                          format_helper.column_len_.at(EstRows),
                          plan_item->cardinality_);
+        } else {
+          ret = BUF_PRINTF("%-*s",
+                         format_helper.column_len_.at(EstRows),
+                         "more than 1.0e19");
+        }
       }
       //EST COST
       if (OB_SUCC(ret)) {
         ret = BUF_PRINTF(COLUMN_SEPARATOR);
-        ret = BUF_PRINTF("%-*ld",
+        if (plan_item->cost_ >= 0) {
+          ret = BUF_PRINTF("%-*ld",
                          format_helper.column_len_.at(EstCost),
                          plan_item->cost_);
+        } else {
+          ret = BUF_PRINTF("%-*s",
+                         format_helper.column_len_.at(EstCost),
+                         "more than 1.0e19");
+        }
       }
       //REAL ROWS
       if (OB_SUCC(ret)) {
@@ -2331,6 +2404,7 @@ int ObSqlPlan::init_buffer(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
   plan_text.buf_len_ = 1024 * 1024;
+  plan_text.pos_ = 0;
   plan_text.buf_ = static_cast<char*>(allocator_.alloc(plan_text.buf_len_));
   if (OB_ISNULL(plan_text.buf_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2456,6 +2530,33 @@ int ObSqlPlan::restore_session(ObSQLSessionInfo *session,
     }
   }
   return ret;
+}
+
+const char* ObSqlPlan::get_tree_line(int type)
+{
+  static const char *tree_line[] = {
+    "│ ",
+    "└─",
+    "├─",
+    "| ",
+    "+-",
+    "|-"
+  };
+  int ret = OB_SUCCESS;
+  ObCharsetType client_character = ObCharsetType::CHARSET_INVALID;
+  ObCharsetType connection_character = ObCharsetType::CHARSET_INVALID;
+  if (NULL == session_ ||
+      OB_FAIL(session_->get_character_set_client(client_character)) ||
+      OB_FAIL(session_->get_character_set_connection(connection_character))) {
+    return tree_line[type%3];
+  } else if ((ObCharsetType::CHARSET_BINARY == client_character ||
+            ObCharsetType::CHARSET_UTF8MB4 == client_character) &&
+            (ObCharsetType::CHARSET_BINARY == connection_character ||
+            ObCharsetType::CHARSET_UTF8MB4 == connection_character)) {
+    return tree_line[type%3];
+  } else {
+    return tree_line[3+type%3];
+  }
 }
 
 } // end of namespace sql

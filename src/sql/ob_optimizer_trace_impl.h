@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace common {
 class ObObj;
+class ObDSResultItem;
 }
 using namespace common;
 namespace sql
@@ -163,7 +164,6 @@ inline ObOptimizerTraceImpl** get_local_tracer()
 #define OPT_TRACE_STATIS(stmt, table_metas)       \
   do {                                            \
     CHECK_TRACE_ENABLED {                         \
-      tracer->append_title("BASIC TABLE STATIS"); \
       tracer->trace_static(stmt, table_metas);    \
     }                                             \
   } while (0);                                    \
@@ -264,6 +264,7 @@ public:
   int append(const TableItem *table);
   int append(const ObShardingInfo *info);
   int append(const CandidatePlan &plan);
+  int append(const ObDSResultItem &ds_result);
 /***********************************************/
 ////print template type
 /***********************************************/
@@ -290,6 +291,11 @@ public:
   //for ObIArray<int64_t>
   template <typename T>
   typename std::enable_if<std::is_base_of<ObIArray<int64_t>, T>::value, int>::type
+  append(const T& value);
+
+  //for ObIArray<ObDSResultItem>
+  template <typename T>
+  typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
   append(const T& value);
 
   //template for function append
@@ -420,6 +426,20 @@ ObOptimizerTraceImpl::append(const T& value)
     ret = append(value.at(i));
   }
   append("]");
+  return ret;
+}
+
+//for ObIArray<ObDSResultItem>
+template <typename T>
+typename std::enable_if<std::is_base_of<ObIArray<ObDSResultItem>, T>::value, int>::type
+ObOptimizerTraceImpl::append(const T& value)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < value.count(); ++i) {
+    if (OB_FAIL(append(value.at(i)))) {
+    } else if (OB_FAIL(new_line())) {
+    }
+  }
   return ret;
 }
 
