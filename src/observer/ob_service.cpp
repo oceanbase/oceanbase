@@ -3029,6 +3029,7 @@ int ObService::get_ls_replayed_scn(
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
+    share::SCN offline_scn;
     if (OB_ISNULL(ls_svr)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
@@ -3044,10 +3045,14 @@ int ObService::get_ls_replayed_scn(
         LOG_WARN("failed to get all replica readable scn", KR(ret));
       }
     }
-    if (FAILEDx(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn, GCTX.self_addr()))) {
-      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
+    if (FAILEDx(ls->get_offline_scn(offline_scn))) {
+      LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(),
+            cur_readable_scn, offline_scn, get_self_addr()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn), K(offline_scn));
     }
-    LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
+    LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result),
+        K(offline_scn));
   }
 
   return ret;
