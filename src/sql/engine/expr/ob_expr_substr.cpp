@@ -110,7 +110,7 @@ int ObExprSubstr::calc_result_length(ObExprResType *types_array,
             mbmaxlen = 1;
           }
           if (start_pos > 0 && substr_len > 0) {
-            if (start_pos + substr_len <= result_len + 1) {
+            if (start_pos <= INT64_MAX - substr_len && start_pos + substr_len <= result_len + 1) {
               if (is_oracle_mode) {
                 res_len = substr_len * mbmaxlen;
               } else {
