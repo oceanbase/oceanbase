@@ -2379,7 +2379,7 @@
   "_nlj_batching_enabled": {
     "id": 10080,
     "name": "_nlj_batching_enabled",
-    "default_value": "1",
+    "default_value": "0",
     "base_value": "1",
     "data_type": "bool",
     "info": "enable batching of the RHS IO in NLJ",
