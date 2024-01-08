@@ -2410,7 +2410,7 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
           LOG_WARN("fail to free block", K(ret), K(block_info));
         }
 #ifndef OB_BUILD_RPM
-        if (OB_FAIL(tmp_ret)) {
+        if (OB_TMP_FAIL(tmp_ret)) {
           // do nothing
         } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
