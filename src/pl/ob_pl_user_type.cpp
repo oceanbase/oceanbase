@@ -5420,8 +5420,19 @@ int ObPLJsonBaseType::deep_copy(ObPLOpaque *dst)
   OZ (ObPLOpaque::deep_copy(dst));
   CK (OB_NOT_NULL(copy = new(dst)ObPLJsonBaseType()));
   OX (copy->set_err_behavior(static_cast<int32_t>(behavior_)));
-  if (OB_NOT_NULL(data_)) {
-    OX (copy->set_data(data_));
+  if (OB_SUCC(ret) && OB_NOT_NULL(data_)) {
+    if (need_shallow_copy()) {
+      copy->set_data(data_);
+      copy->set_shallow_copy(1);
+    } else {
+      ObJsonNode *json_dst = data_->clone(&copy->get_allocator());
+      if (OB_ISNULL(json_dst)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for clone json node failed", K(ret));
+      } else {
+        copy->set_data(json_dst);
+      }
+    }
   }
 
   return ret;
