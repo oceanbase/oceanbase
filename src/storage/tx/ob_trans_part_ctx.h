@@ -135,7 +135,7 @@ public:
   /*
    * graceful kill: wait trx finish logging
    */
-  int kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array);
+  int kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list);
   memtable::ObMemtableCtx *get_memtable_ctx() { return &mt_ctx_; }
   int commit(const share::ObLSArray &parts,
              const MonotonicTs &commit_time,
@@ -249,7 +249,6 @@ private:
                 "2pc_role",
                 get_2pc_role(),
                 K_(collected),
-                K_(ref),
                 K_(rec_log_ts),
                 K_(prev_rec_log_ts),
                 K_(lastest_snapshot),
@@ -389,9 +388,9 @@ public:
 
   // leader switch related
   bool need_callback_scheduler_();
-  int switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb_array);
+  int switch_to_follower_forcedly(ObTxCommitCallback *&cb_list);
   int switch_to_leader(const share::SCN &start_working_ts);
-  int switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &cb_array);
+  int switch_to_follower_gracefully(ObTxCommitCallback *&cb_list);
   int resume_leader(const share::SCN &start_working_ts);
   int supplement_undo_actions_if_exist_();
 

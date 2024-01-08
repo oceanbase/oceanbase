@@ -27,10 +27,35 @@ void ObTxCommitCallback::reset()
   enable_ = false;
   inited_ = false;
   callback_count_ = 0;
+  if (linked_) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "should not be linked", KP(tx_ctx_), K(tx_id_), K(ret_));
+    if (tx_ctx_ && tx_ctx_->get_ref() > 0) {
+      tx_ctx_->release_ctx_ref();
+    }
+    linked_ = false;
+  }
+  tx_ctx_ = NULL;
   txs_ = NULL;
   tx_id_.reset();
   ret_ = OB_ERR_UNEXPECTED;
   commit_version_.reset();
+  link_next_ = NULL;
+}
+
+int ObTxCommitCallback::link(ObTransCtx *tx_ctx, ObTxCommitCallback *link_next)
+{
+  int ret = OB_SUCCESS;
+  TRANS_LOG(DEBUG, "", KPC(tx_ctx), KP(link_next));
+  if (linked_) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "already linked", KPC(this), KPC(tx_ctx), KP(link_next));
+  } else {
+    tx_ctx->acquire_ctx_ref();
+    tx_ctx_ = tx_ctx;
+    link_next_ = link_next;
+    linked_ = true;
+  }
+  return ret;
 }
 
 int ObTxCommitCallback::callback()
@@ -45,6 +70,16 @@ int ObTxCommitCallback::callback()
   } else {
     ++callback_count_;
     txs_->handle_tx_commit_result(tx_id_, ret_, commit_version_);
+  }
+  if (linked_) {
+    TRANS_LOG(DEBUG, "linked commit cb", KPC(tx_ctx_), K(ret_));
+    if (OB_ISNULL(tx_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "tx ctx should not be null for linked commit cb", K(ret), KPC(this));
+    } else {
+      linked_ = false;
+      tx_ctx_->release_ctx_ref();
+    }
   }
   return ret;
 }

@@ -236,6 +236,19 @@ void ObTransCtx::test_lock(ObTxLogCb *log_cb)
   }
 }
 
+int ObTransCtx::prepare_commit_cb_for_role_change_(const int cb_ret, ObTxCommitCallback *&cb_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(commit_cb_.init(trans_service_, trans_id_, cb_ret, share::SCN()))) {
+    TRANS_LOG(WARN, "init commit cb fail", K(ret), KPC(this));
+  } else if (OB_FAIL(commit_cb_.link(this, cb_list))) {
+    TRANS_LOG(WARN, "link commit cb fail", K(ret), KPC(this));
+  } else {
+    cb_list = &commit_cb_;
+  }
+  return ret;
+}
+
 void ObTransCtx::generate_request_id_()
 {
   const int64_t request_id = ObClockGenerator::getClock();
@@ -357,6 +370,11 @@ int ObTransCtx::set_app_trace_id_(const ObString &app_trace_id)
     // do nothing
   }
   return ret;
+}
+
+void ObTransCtx::release_ctx_ref()
+{
+  ls_tx_ctx_mgr_->revert_tx_ctx_without_lock(this);
 }
 
 } // transaction

@@ -659,7 +659,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
   return ret;
 }
 
-int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array)
+int ObPartTransCtx::kill(const KillTransArg &arg, ObTxCommitCallback *&cb_list)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -708,12 +708,9 @@ int ObPartTransCtx::kill(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &
       // notify scheduler only if commit callback has not been armed
         if (commit_cb_.is_enabled() && !commit_cb_.is_inited()) {
           if (exec_info_.scheduler_ == addr_) {
-            ObTxCommitCallback cb;
-            cb.init(trans_service_, trans_id_, cb_param, SCN());
-            if (OB_FAIL(cb_array.push_back(cb))) {
-              TRANS_LOG(WARN, "push commit callback fail", K(ret), KPC(this));
-            } else {
-              commit_cb_.disable();
+            if (OB_TMP_FAIL(prepare_commit_cb_for_role_change_(cb_param, cb_list))) {
+              TRANS_LOG(WARN, "prepare commit cb fail", K(tmp_ret), K(cb_param), KPC(this));
+              ret = (ret == OB_SUCCESS) ? tmp_ret : ret;
             }
           } else {
             post_tx_commit_resp_(cb_param);
@@ -5626,7 +5623,7 @@ inline bool ObPartTransCtx::need_callback_scheduler_() {
 // 3. resume_leader is called
 // 4. resume_leader fails
 // 5. revoke, and still in follower state
-int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb_array)
+int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_head)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("switch_to_follower_forcely", 10 * 1000);
@@ -5655,10 +5652,8 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
       if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
         TRANS_LOG(WARN, "do local tx abort failed", K(ret));
       } else if (need_cb_scheduler) {
-        ObTxCommitCallback cb;
-        cb.init(trans_service_, trans_id_, OB_TRANS_KILLED, SCN());
-        if (OB_FAIL(cb_array.push_back(cb))) {
-          TRANS_LOG(WARN, "push back callback failed", K(ret), "context", *this);
+        if (OB_FAIL(prepare_commit_cb_for_role_change_(OB_TRANS_KILLED, cb_list_head))) {
+          TRANS_LOG(WARN, "prepare commit cb fail", K(ret), KPC(this));
         }
       }
       if (OB_FAIL(ret) && need_cb_scheduler) {
@@ -5704,18 +5699,21 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
       // special handle commit triggered by local call: coordinator colocate with scheduler
       // let scheduler retry commit with RPC if required
       if (need_callback_scheduler_()) {
-        ObTxCommitCallback cb;
+        int commit_ret = OB_SUCCESS;
         // no CommitInfoLog has been submitted, txn must abort
         if (exec_info_.state_ == ObTxState::INIT && !sub_state_.is_info_log_submitted()) {
-          cb.init(trans_service_, trans_id_, OB_TRANS_KILLED, SCN());
+          commit_ret = OB_TRANS_KILLED;
         } else {
           // otherwise, txn either continue commit or abort, need retry to get final result
-          cb.init(trans_service_, trans_id_, OB_NOT_MASTER, SCN());
+          commit_ret = OB_NOT_MASTER;
         }
-        TRANS_LOG(INFO, "switch to follower forcely, notify txn commit result to scheduler",
-                  "commit_result", cb.ret_, KPC(this));
-        if (OB_FAIL(cb_array.push_back(cb))) {
-          TRANS_LOG(WARN, "push back callback failed", K(ret), "context", *this);
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(prepare_commit_cb_for_role_change_(commit_ret, cb_list_head))) {
+          TRANS_LOG(WARN, "prepare commit cb fail", K(tmp_ret), KPC(this));
+          ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+        } else {
+          TRANS_LOG(INFO, "switch to follower forcely, notify txn commit result to scheduler",
+                    "commit_result", commit_ret, KPC(this));
         }
       }
     }
@@ -5736,7 +5734,7 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
   return ret;
 }
 
-int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &cb_array)
+int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_head)
 {
   int ret = OB_SUCCESS;
   bool need_submit_log = false;
@@ -5780,11 +5778,10 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
         log_type = ObTxLogType::TX_COMMIT_INFO_LOG;
       }
       if (need_callback_scheduler_()) {
-        ObTxCommitCallback cb;
-        cb.init(trans_service_, trans_id_, OB_SWITCHING_TO_FOLLOWER_GRACEFULLY, SCN());
-        TRANS_LOG(INFO, "swtich to follower gracefully, notify scheduler retry", KPC(this));
-        if (OB_FAIL(cb_array.push_back(cb))) {
-          TRANS_LOG(WARN, "push back callback failed", K(ret), "context", *this);
+        if (OB_FAIL(prepare_commit_cb_for_role_change_(OB_SWITCHING_TO_FOLLOWER_GRACEFULLY, cb_list_head))) {
+          TRANS_LOG(WARN, "prepare commit cb fail", K(ret), KPC(this));
+        } else {
+          TRANS_LOG(INFO, "swtich to follower gracefully, notify scheduler retry", KPC(this));
         }
       }
     }
@@ -5842,10 +5839,10 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObIArray<ObTxCommitCallback> &
                               OB_ID(used), timeguard.get_diff(),
                               OB_ID(ref), get_ref());
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), K(ret), KPC(this), K(cb_array));
+    TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), KPC(this));
   } else {
 #ifndef NDEBUG
-    TRANS_LOG(INFO, "switch to follower gracefully succeed", KPC(this), K(cb_array));
+    TRANS_LOG(INFO, "switch to follower gracefully succeed", KPC(this));
 #endif
   }
 
