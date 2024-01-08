@@ -24,6 +24,7 @@
 #include "share/ob_thread_mgr.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -580,6 +581,27 @@ int ObLogReplayService::is_replay_done(const share::ObLSID &id,
   return ret;
 }
 
+int ObLogReplayService::is_submit_task_clear(const share::ObLSID &id, bool &is_clear)
+{
+  int ret = OB_SUCCESS;
+  ObReplayStatus *replay_status = NULL;
+  ObReplayStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (OB_FAIL(get_replay_status_(id, guard))) {
+    CLOG_LOG(WARN, "guard get replay status failed", K(id));
+  } else if (NULL == (replay_status = guard.get_replay_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "replay status is not exist", K(id));
+  } else if (OB_FAIL(replay_status->is_submit_task_clear(is_clear))){
+    CLOG_LOG(WARN, "check replay done failed", K(id));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
 //通用接口, 受控回放时最终返回值为受控回放点前的最后一条日志的log_ts
 int ObLogReplayService::get_max_replayed_scn(const share::ObLSID &id, SCN &scn)
 {
@@ -869,6 +891,10 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
     CLOG_LOG(ERROR, "invalid argument", KPC(replay_task), KPC(replay_status), KR(ret));
   } else if (OB_ISNULL(ls_adapter_)) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(replay_status->check_can_replay())) {
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      CLOG_LOG(INFO, "can not replay log", KPC(replay_status), KPC(replay_task));
+    }
   } else if (OB_FAIL(replay_status->check_replay_barrier(replay_task, replay_log_buff,
                                                          need_replay, replay_queue_idx))) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
@@ -1153,6 +1179,13 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
       if (!replay_status->is_enabled_without_lock() || !replay_status->need_submit_log()) {
         need_submit_log = false;
       } else {
+#ifdef ERRSIM
+        int tmp_ret = OB_E(EventTable::EN_REPLAY_SERVICE_SUBMIT_TASK_SLEEP) OB_SUCCESS;
+        if (OB_SUCCESS != tmp_ret) {
+          usleep(300 * 1000);
+          CLOG_LOG(INFO, "sleep 300ms before read log", KPC(submit_task), KPC(replay_status), KR(tmp_ret));
+        }
+#endif
         const SCN &replayable_point = inner_get_replayable_point_();
         need_submit_log = submit_task->has_remained_submit_log(replayable_point,
                                                                iterate_end_by_replayable_point);
