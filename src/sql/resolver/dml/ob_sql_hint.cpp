@@ -228,9 +228,11 @@ int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, 
   int ret = OB_SUCCESS;
   const ObSQLSessionInfo *session_info = NULL;
   bool has_enable_param = false;
-  if (OB_ISNULL(session_info = params.session_info_)) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(session_info = params.session_info_)
+      || OB_ISNULL(query_ctx = params.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(session_info));
+    LOG_WARN("unexpected null", K(ret), K(session_info), K(query_ctx));
   } else if (T_NONE_SCOPE != params.hidden_column_scope_ &&
              OB_FAIL(global_hint_.opt_params_.has_enable_opt_param(ObOptParamHint::OptParamType::HIDDEN_COLUMN_VISIBLE, has_enable_param))) {
     LOG_WARN("failed to check has enable opt param", K(ret));
@@ -246,6 +248,11 @@ int ObQueryHint::check_and_set_params_from_hint(const ObResolverParams &params, 
   } else {
     if (global_hint_.query_timeout_ > 0) {
       THIS_WORKER.set_timeout_ts(session_info->get_query_start_time() + global_hint_.query_timeout_);
+    }
+    if (global_hint_.has_valid_opt_features_version()) {
+      query_ctx->optimizer_features_enable_version_ = global_hint_.opt_features_version_;
+    } else if (OB_FAIL(session_info->get_optimizer_features_enable_version(query_ctx->optimizer_features_enable_version_))) {
+      LOG_WARN("failed to check ddl schema version", K(ret));
     }
   }
   return ret;

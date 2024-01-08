@@ -3728,7 +3728,7 @@ Outline Data:
       FULL(@"SEL$0208448F" "B"@"SEL$1")
       FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3811,7 +3811,7 @@ Outline Data:
       INDEX(@"SEL$0208448F" "B"@"SEL$1" "c2")
       INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
       PRED_DEDUCE(@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3906,7 +3906,7 @@ Outline Data:
       FULL(@"SEL$0208448F" "B"@"SEL$1")
       FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:

@@ -508,15 +508,18 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   // OPTIMIZER_FEATURES_ENABLE
   if (OB_SUCC(ret) && (has_valid_opt_features_version())) {
     int64_t cur_pos = 0;
-    const uint64_t version = has_valid_opt_features_version()
-                             ? opt_features_version_ : CURRENT_OUTLINE_ENABLE_VERSION;
+    // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LASTED_COMPAT_VERSION,
+    // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LASTED_COMPAT_VERSION
+    const bool print_empty_str = (OB_SUCCESS != (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)
+                                 && LASTED_COMPAT_VERSION == opt_features_version_);
     if (OB_FAIL(BUF_PRINTF("%s%s(\'", outline_indent, "OPTIMIZER_FEATURES_ENABLE"))) {
       LOG_WARN("failed to print hint", K(ret));
-    } else if (OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
+    } else if (!print_empty_str &&
+               OB_UNLIKELY(0 == (cur_pos = ObClusterVersion::print_version_str(buf + pos,
                                                                                buf_len - pos,
-                                                                               version)))) {
+                                                                               opt_features_version_)))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to print version str", K(ret), K(version));
+      LOG_WARN("failed to print version str", K(ret), K(opt_features_version_));
     } else if (OB_FALSE_IT(pos += cur_pos)) {
     } else if (OB_FAIL(BUF_PRINTF("\')"))) {
     }

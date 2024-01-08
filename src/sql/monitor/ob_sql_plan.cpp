@@ -277,15 +277,17 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
 {
   int ret = OB_SUCCESS;
   ObDelUpdLogPlan *del_upd_plan = NULL;
-  outline_global_hint.opt_features_version_ = ObGlobalHint::CURRENT_OUTLINE_ENABLE_VERSION;
   outline_global_hint.pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
-  if (OB_SUCC(ret) && NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))
-      && del_upd_plan->use_pdml()) {
-    outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
-  }
-
-  if (OB_SUCC(ret)) {
-    outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  const ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
+  } else {
+    outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
+    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan)) && del_upd_plan->use_pdml()) {
+      outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+    }
     if (plan.get_optimizer_context().is_use_auto_dop()) {
       outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
