@@ -4610,8 +4610,7 @@ int ObSPIService::spi_alloc_complex_var(pl::ObPLExecCtx *ctx,
         need_alloc = false;
         int tmp = OB_SUCCESS;
         if (OB_SUCCESS != (tmp = ObUserDefinedType::destruct_obj(ctx->params_->at(var_idx),
-                                                                  ctx->exec_ctx_->get_my_session(),
-                                                                  false))) {
+                                                                  ctx->exec_ctx_->get_my_session()))) {
           LOG_WARN("fail to destruct obj", K(tmp));
         }
       }

@@ -144,7 +144,9 @@ public:
 
   static int deep_copy_obj(
     ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
-  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL, bool set_null = true);
+  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL);
+  static int alloc_sub_composite(ObObj &dest_element, ObIAllocator &allocator);
+  static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);

@@ -2553,7 +2553,7 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
       && params->at(var_idx).is_pl_extend()
       && params->at(var_idx).get_ext() != 0
       && params->at(var_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session(), false));
+    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
   }
 
   if (OB_FAIL(ret)) {
