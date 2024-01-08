@@ -31,7 +31,7 @@ ObTableIterParam::ObTableIterParam()
       tablet_id_(),
       read_info_(nullptr),
       rowkey_read_info_(nullptr),
-      get_table_param_(nullptr),
+      tablet_handle_(nullptr),
       cg_read_info_handle_(),
       out_cols_project_(NULL),
       agg_cols_project_(NULL),
@@ -66,7 +66,7 @@ void ObTableIterParam::reset()
   tablet_id_.reset();
   read_info_ = nullptr;
   rowkey_read_info_ = nullptr;
-  get_table_param_ = nullptr;
+  tablet_handle_ = nullptr;
   cg_read_info_handle_.reset();
   out_cols_project_ = NULL;
   agg_cols_project_ = NULL;
@@ -217,6 +217,7 @@ int ObTableAccessParam::init(
     iter_param_.tablet_id_ = scan_param.tablet_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
     iter_param_.rowkey_read_info_ = &tablet_handle.get_obj()->get_rowkey_read_info();
+    iter_param_.set_tablet_handle(&tablet_handle);
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.group_by_cols_project_ = &table_param.get_group_by_projector();
@@ -332,6 +333,7 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.is_multi_version_minor_merge_ = is_multi_version_minor_merge;
     iter_param_.read_info_ = &read_info;
     iter_param_.rowkey_read_info_ = &read_info;
+    // merge_query will not goto ddl_merge_query, no need to pass tablet
     is_inited_ = true;
   }
   return ret;
@@ -353,6 +355,7 @@ int ObTableAccessParam::init_dml_access_param(
     iter_param_.tablet_id_ = table.get_tablet_id();
     iter_param_.read_info_ = &schema_param.get_read_info();
     iter_param_.rowkey_read_info_ = &rowkey_read_info;
+    iter_param_.set_tablet_handle(table.tablet_iter_.get_tablet_handle_ptr());
     iter_param_.is_same_schema_column_ =
         iter_param_.read_info_->get_schema_column_count() == iter_param_.rowkey_read_info_->get_schema_column_count();
     iter_param_.out_cols_project_ = out_cols_project;

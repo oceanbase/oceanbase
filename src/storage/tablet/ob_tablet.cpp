@@ -5808,7 +5808,7 @@ int ObTablet::prepare_param(
   param.table_id_ = relative_table.get_table_id();
   param.tablet_id_ = tablet_meta_.tablet_id_;
   param.read_info_ = rowkey_read_info_;
-
+  param.set_tablet_handle(relative_table.get_tablet_handle());
   return ret;
 }
 

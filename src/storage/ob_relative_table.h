@@ -58,6 +58,7 @@ public:
       const bool allow_not_ready = false);
   uint64_t get_table_id() const;
   const ObTabletID& get_tablet_id() const;
+  const ObTabletHandle *get_tablet_handle() const;
   int64_t get_schema_version() const;
   int get_col_desc(const uint64_t column_id, share::schema::ObColDesc &col_desc) const;
   int get_col_desc_by_idx(const int64_t idx, share::schema::ObColDesc &col_desc) const;

@@ -137,7 +137,6 @@ protected:
   int64_t mirco_blocks_per_macro_block_;
   bool is_cg_data_;
   bool is_ddl_merge_data_;
-  ObGetTableParam get_table_param_;
 
 };
 
@@ -299,8 +298,7 @@ void TestIndexBlockDataPrepare::SetUp()
 
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema_, allocator_));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle_));
-  get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle_);
-  iter_param_.set_table_param(&get_table_param_);
+  iter_param_.set_tablet_handle(&tablet_handle_);
   sstable_.key_.table_type_ = ObITable::TableType::COLUMN_ORIENTED_SSTABLE;
 
   if (is_cg_data_ && is_ddl_merge_data_) {

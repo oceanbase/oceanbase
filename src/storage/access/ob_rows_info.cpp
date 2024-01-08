@@ -74,6 +74,7 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
       table_iter_param_.tablet_id_ = table.get_tablet_id();
       table_iter_param_.out_cols_project_ = NULL;
       table_iter_param_.read_info_ = &rowkey_read_info;
+      table_iter_param_.set_tablet_handle(table.get_tablet_handle());
       is_inited_ = true;
     }
   }
