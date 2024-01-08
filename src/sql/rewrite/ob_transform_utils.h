@@ -1042,21 +1042,10 @@ public:
                                 ObIArray<ObRawExpr *> &targets,
                                 ObIArray<ObRawExprPointer> &parents);
 
-  static int generate_unique_key(ObTransformerCtx *ctx,
-                                 ObDMLStmt *stmt,
-                                 TableItem *item,
-                                 ObIArray<ObRawExpr *> &unique_keys);
-
-  /**
-   * @brief generate_unique_key
-   * 可以对stmt生成唯一键，需要调用
-   * check_can_set_stmt_unique
-   * 确认stmt有唯一键
-   */
-  static int generate_unique_key(ObTransformerCtx *ctx,
-                                ObDMLStmt *stmt,
-                                ObSqlBitSet<> &ignore_tables,
-                                ObIArray<ObRawExpr *> &unique_keys);
+  static int generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
+                                                 ObDMLStmt *stmt,
+                                                 TableItem *item,
+                                                 ObIArray<ObRawExpr *> &unique_keys);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
@@ -1356,17 +1345,6 @@ public:
                                        ObRawExpr *limit_count,
                                        ObRawExpr *limit_offset,
                                        ObRawExpr *&pushdown_limit_count);
-
-  static int recursive_set_stmt_unique(ObSelectStmt *select_stmt,
-                                       ObTransformerCtx *ctx,
-                                       bool ignore_check_unique = false,
-                                       common::ObIArray<ObRawExpr *> *unique_keys = NULL);
-  static int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
-                                              ObRawExprFactory *expr_factory,
-                                              ObIArray<ObRawExpr*> &unique_keys,
-                                              ObIArray<ObRawExpr*> &added_unique_keys);
-  static int check_can_set_stmt_unique(ObDMLStmt *stmt,
-                                       bool &can_set_unique);
 
   static int get_rel_ids_from_tables(const ObDMLStmt *stmt,
                                      const ObIArray<TableItem*> &table_items,
@@ -1935,9 +1913,6 @@ private:
                             ObIArray<ObRawExpr*> &from_exprs, 
                             ObIArray<ObRawExpr*> &view_exprs);
 
-  static int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
-                                            ObIArray<ObRawExpr*> &org_select_exprs);
-
   static int extract_shared_exprs(ObDMLStmt *parent,
                                   ObSelectStmt *view_stmt,
                                   ObIArray<ObRawExpr *> &common_exprs,
@@ -1961,6 +1936,51 @@ private:
                                          bool &is_safe);
 };
 
+class StmtUniqueKeyProvider
+{
+public:
+  StmtUniqueKeyProvider(bool for_costed_trans = true) :
+    for_costed_trans_(for_costed_trans),
+    in_temp_table_(false)
+  {}
+  virtual ~StmtUniqueKeyProvider() {}
+
+  static int check_can_set_stmt_unique(ObDMLStmt *stmt,
+                                       bool &can_set_unique);
+  int recursive_set_stmt_unique(ObSelectStmt *select_stmt,
+                                ObTransformerCtx *ctx,
+                                bool ignore_check_unique = false,
+                                common::ObIArray<ObRawExpr *> *unique_keys = NULL);
+  /**
+   * @brief generate_unique_key
+   * generate unique key for stmt, need call check_can_set_stmt_unique before to ensure unique key can be generated
+   */
+  int generate_unique_key(ObTransformerCtx *ctx,
+                          ObDMLStmt *stmt,
+                          ObSqlBitSet<> &ignore_tables,
+                          ObIArray<ObRawExpr *> &unique_keys);
+  int recover_useless_unique_for_temp_table();
+private:
+  int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
+                                       ObRawExprFactory *expr_factory,
+                                       ObIArray<ObRawExpr*> &unique_keys,
+                                       ObIArray<ObRawExpr*> &added_unique_keys);
+  int try_push_back_modified_info(ObSelectStmt *select_stmt,
+                                  int64_t sel_item_count,
+                                  int64_t col_item_count);
+  int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
+                                     ObIArray<ObRawExpr*> &org_select_exprs);
+
+private:
+    DISALLOW_COPY_AND_ASSIGN(StmtUniqueKeyProvider);
+    const bool for_costed_trans_;
+    bool in_temp_table_;
+    // select items in temp tables may be appended by recursive_set_stmt_unique, store some information to recover them.
+    // ordering in array below must be maintained by this class
+    common::ObSEArray<ObSelectStmt*, 4> sel_stmts_;
+    common::ObSEArray<int64_t, 4> sel_item_counts_;
+    common::ObSEArray<int64_t, 4> col_item_counts_;
+};
 
 template <typename T>
 int ObTransformUtils::replace_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,

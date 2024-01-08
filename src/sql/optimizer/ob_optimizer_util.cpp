@@ -4611,6 +4611,8 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   ObRawExprSet *min_parent_exprs = NULL;
   bool is_contain = false;
   bool is_in_child = false;
+  ObSqlBitSet<> root_exprs_set;
+  int64_t expr_idx = -1;
   root_exprs.reset();
   // 将 fd item 分为unique的和非unique的
   for (int64_t i = 0; OB_SUCC(ret) && i < fd_item_set.count(); ++i) {
@@ -4643,11 +4645,10 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
   }
   // 找到一个unique fd item, 直接从candi exprs里找出匹配parent set的expr
   if (OB_SUCC(ret) && NULL != min_parent_exprs) {
-    int64_t expr_idx = -1;
     for (int64_t i = 0; OB_SUCC(ret) && i < min_parent_exprs->count(); ++i) {
       if (find_equal_expr(candi_exprs, min_parent_exprs->at(i), equal_sets, expr_idx)) {
-        if (OB_FAIL(root_exprs.push_back(candi_exprs.at(expr_idx)))) {
-          LOG_WARN("failed to push back root expr", K(ret));
+        if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       } else { /* not find means min_parent_exprs->at(i) is const, do nothing */ }
     }
@@ -4667,7 +4668,6 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
       } else if (is_contain) {
         ObSEArray<ObRawExpr *, 8> left_domain;
         ObSEArray<ObRawExpr *, 8> right_domain;
-        int64_t expr_idx = -1;
         // 生成新的root exprs集合
         for (int64_t j = 0; OB_SUCC(ret) && j < root_exprs.count(); ++j) {
           if (OB_FAIL(left_domain.push_back(root_exprs.at(j)))) {
@@ -4716,18 +4716,35 @@ int ObOptimizerUtil::simplify_exprs(const ObFdItemSet &fd_item_set,
         }
       }
     }
+    for (int64_t i = 0; OB_SUCC(ret) && i < root_exprs.count(); ++i) {
+      if(OB_UNLIKELY(!find_item(candi_exprs, root_exprs.at(i), &expr_idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find item", K(ret));
+      } else if (OB_FAIL(root_exprs_set.add_member(expr_idx))) {
+        LOG_WARN("failed to add member", K(ret));
+      }
+    }
     // 所有non unique fd item都遍历过了, 但是还有其它无法被决定的expr, 直接加入到root exprs中
     if (OB_SUCC(ret) && eliminate_set.num_members() < candi_exprs.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
         if (eliminate_set.has_member(i)) {
           // do nothing
-        } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
-          LOG_WARN("failed to push back candi expr", K(ret));
+        } else if (OB_FAIL(root_exprs_set.add_member(i))) {
+          LOG_WARN("failed to add member", K(ret));
         }
       }
     }
   }
   if (OB_SUCC(ret)) {
+    root_exprs.reuse();
+    // use bitset to keep exprs ordering
+    for (int64_t i = 0; OB_SUCC(ret) && i < candi_exprs.count(); ++i) {
+      if (!root_exprs_set.has_member(i)) {
+        // do nothing
+      } else if (OB_FAIL(root_exprs.push_back(candi_exprs.at(i)))) {
+        LOG_WARN("failed to push back candi expr", K(ret));
+      }
+    }
     LOG_TRACE("succeed to simply exprs", K(fd_item_set), K(equal_sets), K(const_exprs),
         K(candi_exprs), K(root_exprs));
   }

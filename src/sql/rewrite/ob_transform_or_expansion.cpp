@@ -160,11 +160,15 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
       ctx.expand_exprs_.reuse();
       ObDMLStmt *trans_stmt = upper_stmt;
       ObSelectStmt *transformed_union_stmt = NULL;
+      StmtUniqueKeyProvider unique_key_provider;
+      try_trans_helper2.unique_key_provider_ = &unique_key_provider;
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
       } else if (OB_FAIL(transform_or_expansion(spj_stmt, OB_INVALID_ID, trans_infos.at(i).pos_,
-                                                !expect_ordering.empty(), ctx, transformed_union_stmt))) {
+                                                !expect_ordering.empty(), ctx,
+                                                transformed_union_stmt,
+                                                unique_key_provider))) {
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
@@ -252,6 +256,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
           ctx.expand_exprs_.reuse();
           ObSelectStmt *transformed_union_stmt = NULL;
           trans_stmt = upper_stmt;
+          StmtUniqueKeyProvider unique_key_provider;
+          try_trans_helper2.unique_key_provider_ = &unique_key_provider;
           if (reached_max_times_for_or_expansion()) {
             /*do nothing*/
             OPT_TRACE("retry count reached max times:", try_times_);
@@ -261,7 +267,8 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
           } else if (INVALID_OR_EXPAND_TYPE == ctx.or_expand_type_) {
             /*do nothing*/
           } else if (OB_FAIL(transform_or_expansion(spj_stmt, semi_info->semi_id_, i,
-                                                    false, ctx, transformed_union_stmt))) {
+                                                    false, ctx, transformed_union_stmt,
+                                                    unique_key_provider))) {
             LOG_WARN("failed to do transformation", K(ret));
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
             LOG_WARN("failed to merge stmt", K(ret));
@@ -419,12 +426,14 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
       ctx.expand_exprs_.reuse();
       ObDMLStmt *trans_stmt = ref_query;
       ObSelectStmt *union_stmt = NULL;
+      StmtUniqueKeyProvider unique_key_provider;
+      try_trans_helper2.unique_key_provider_ = &unique_key_provider;
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
       } else if (OB_FAIL(transform_or_expansion(ref_query, OB_INVALID_ID,
                                                 trans_infos.at(i).pos_, false,
-                                                ctx, union_stmt))) {
+                                                ctx, union_stmt, unique_key_provider))) {
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, ref_query, union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
@@ -488,6 +497,8 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   ObTryTransHelper try_trans_helper1;
   ObTryTransHelper try_trans_helper2;
+  StmtUniqueKeyProvider unique_key_provider1;
+  try_trans_helper1.unique_key_provider_ = &unique_key_provider1;
   if (OB_ISNULL(stmt) || OB_ISNULL(joined_table) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -521,6 +532,7 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
                                             dummy_exprs, cur_joined_table, trans_infos))) {
     LOG_WARN("failed to get conds trans infos", K(ret));
   } else if (OB_FAIL(add_select_item_to_ref_query(ref_query, not_null_side_table->table_id_,
+                                                  unique_key_provider1,
                                                   left_unique_pos, right_flag_pos))) {
     LOG_WARN("failed to set stmt unique", K(ret));
   } else if (OB_FAIL(try_trans_helper2.fill_helper(stmt->get_query_ctx()))) {
@@ -533,12 +545,14 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       ctx.expand_exprs_.reuse();
       ObSelectStmt *trans_ref_query = NULL;
       ObDMLStmt *trans_stmt = origin_trans_stmt;
+      StmtUniqueKeyProvider unique_key_provider2;
+      try_trans_helper2.unique_key_provider_ = &unique_key_provider2;
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
       } else if (OB_FAIL(transform_or_expansion(ref_query, joined_table->table_id_,
                                                 trans_infos.at(i).pos_, false, ctx,
-                                                trans_ref_query))) {
+                                                trans_ref_query, unique_key_provider2))) {
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(do_transform_for_left_join(trans_ref_query, left_unique_pos,
                                                     right_flag_pos))) {
@@ -634,7 +648,7 @@ int ObTransformOrExpansion::check_child_table_valid(JoinedTable *cur_table,
     not_null_side_table = child_stmt->is_set_distinct() ? not_null_side_table : NULL;
   } else if (child_stmt->is_hierarchical_query() || child_stmt->has_rollup()) {
     not_null_side_table = NULL;
-  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(child_stmt, can_set_unique))) {
+  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(child_stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unique", K(ret));
   } else if (!can_set_unique) {
     not_null_side_table = NULL;
@@ -678,6 +692,7 @@ int ObTransformOrExpansion::get_table_not_on_null_side(TableItem *cur_table,
 // add left table unique key, right table falg expr to stmt select
 int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                          const uint64_t flag_table_id,
+                                                         StmtUniqueKeyProvider &unique_key_provider,
                                                          ObSqlBitSet<> &left_unique_pos,
                                                          ObSqlBitSet<> &right_flag_pos)
 {
@@ -703,8 +718,8 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_tables))) {
     LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
-  } else if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, stmt, right_tables,
-                                                           left_unique_exprs))) {
+  } else if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_, stmt, right_tables,
+                                                             left_unique_exprs))) {
     LOG_WARN("faield to get table rel ids", K(ret), K(*right_table));
   } else if (OB_ISNULL(flag_table = stmt->get_table_item_by_id(flag_table_id))) {
     LOG_WARN("faield to get table item", K(ret), K(flag_table), K(flag_table_id));
@@ -728,12 +743,9 @@ int ObTransformOrExpansion::add_select_item_to_ref_query(ObSelectStmt *stmt,
                                                                  select_list, right_flag_exprs))) {
       LOG_WARN("failed to create columns for view", K(ret));
     }
-  } else if (!flag_table->is_basic_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect table item type", K(*flag_table), K(ret));
-  } else if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, stmt, flag_table,
-                                                           right_flag_exprs))) {
-    LOG_WARN("failed to generate unique key", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx_, stmt, flag_table,
+                                                                           right_flag_exprs))) {
+    LOG_WARN("failed to generate unique key for basic table", K(ret));
   } else if (OB_UNLIKELY(right_flag_exprs.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect exprs", K(ret), K(right_flag_exprs));
@@ -1068,7 +1080,7 @@ int ObTransformOrExpansion::has_valid_condition(ObDMLStmt &stmt,
     OPT_TRACE("check conditions:", conds);
     if (NULL == expect_ordering) {
       /* do nothing */
-    } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(&stmt, can_set_distinct))) {
+    } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_distinct))) {
       LOG_WARN("failed to check can set stmt unique", K(ret));
     } else if (!can_set_distinct) {
       /* do nothing */
@@ -2061,7 +2073,8 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
                                                    const int64_t expr_pos,
                                                    bool is_topk,
                                                    ObCostBasedRewriteCtx &ctx,
-                                                   ObSelectStmt *&trans_stmt)
+                                                   ObSelectStmt *&trans_stmt,
+                                                   StmtUniqueKeyProvider &unique_key_provider)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *copy_stmt = NULL;
@@ -2106,7 +2119,7 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
   } else if (!ctx.is_set_distinct_ && OB_FAIL(preprocess_or_condition(*view_stmt, trans_id, view_expr_pos))) {
     LOG_WARN("failed to preprocess or condition", K(ret));
   } else if (ctx.is_set_distinct_ && !ctx.is_unique_ &&
-             OB_FAIL(ObTransformUtils::recursive_set_stmt_unique(view_stmt, ctx_, true))) {
+             OB_FAIL(unique_key_provider.recursive_set_stmt_unique(view_stmt, ctx_, true))) {
     LOG_WARN("failed to set stmt unique", K(ret));
   } else if (!is_topk &&
              OB_FAIL(classify_or_expr(*view_stmt, conds_exprs->at(view_expr_pos)))) {
@@ -2134,7 +2147,7 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
         LOG_WARN("failed to recursive adjust statement id", K(ret));
       } else if (OB_FAIL(get_expand_conds(*child_stmt, trans_id, conds_exprs))) {
         LOG_WARN("failed to get expand conds", K(ret));
-      } else if (OB_FAIL(child_stmt->update_stmt_table_id(*view_stmt))) {
+      } else if (OB_FAIL(child_stmt->update_stmt_table_id(ctx_->allocator_, *view_stmt))) {
         //update stmt table id after find conds_exprs
         LOG_WARN("failed to update table id", K(ret));
       } else if (OB_FAIL(adjust_or_expansion_stmt(conds_exprs, view_expr_pos, i,
@@ -2355,7 +2368,7 @@ int ObTransformOrExpansion::has_valid_semi_anti_cond(ObDMLStmt &stmt,
   } else if (has_lob) {
     // do nothing
     OPT_TRACE("select expr has lob expr");
-  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(&stmt, can_set_unique))) {
+  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unique", K(ret));
   } else if (!can_set_unique) {
     // do nothing
@@ -2491,7 +2504,7 @@ int ObTransformOrExpansion::gather_transform_infos(ObSelectStmt *stmt,
     LOG_WARN("failed to check stmt has lob", K(ret));
   } else if (has_lob) {
     can_set_distinct = false;
-  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(stmt, can_set_distinct))) {
+  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(stmt, can_set_distinct))) {
     LOG_WARN("failed to check can set stmt unique", K(ret));
   }
 

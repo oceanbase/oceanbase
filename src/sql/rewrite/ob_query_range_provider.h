@@ -49,7 +49,6 @@ public:
                                    ObQueryRangeArray &ss_ranges,
                                    const common::ObDataTypeCastParams &dtc_params) const = 0;
   virtual bool is_precise_whole_range() const = 0;
-  virtual bool is_at_most_one_row() const = 0;
   virtual int is_get(bool &is_get) const = 0;
   virtual bool is_precise_get() const = 0;
   virtual int64_t get_column_count() const = 0;

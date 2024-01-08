@@ -1244,11 +1244,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       }
     }
   }
-  
-  // add table_name for anonymous view(view in from)
-  if (OB_SUCC(ret) && OB_FAIL(add_name_for_anonymous_view())) {
-    LOG_WARN("fail to add name for anonymous view", K(ret));
-  }
   return ret;
 }
 
@@ -6811,34 +6806,6 @@ int ObSelectResolver::recursive_check_grouping_columns(ObSelectStmt *stmt, ObRaw
       } else {/*do nothing*/}
     }
   }
-  return ret;
-}
-
-
-int ObSelectResolver::add_name_for_anonymous_view()
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *stmt = get_select_stmt();
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null pointer", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); i++) {
-      TableItem *tmp_table = stmt->get_table_item(i);
-      if (OB_ISNULL(tmp_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null pointer", K(ret));
-      } else if (tmp_table->is_generated_table()
-                && tmp_table->alias_name_.empty()
-                && tmp_table->table_name_.empty()) {
-        // found anonymous view, generate new name.
-        if (OB_FAIL(stmt->generate_anonymous_view_name(*params_.allocator_, tmp_table->table_name_))) {
-          LOG_WARN("fail to generate view name", K(ret));
-        }
-      }
-    }
-  }
-
   return ret;
 }
 

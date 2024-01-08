@@ -925,7 +925,11 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
   } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_names(qb_name_counts_, query_ctx->stmt_count_))) {
     LOG_WARN("failed to revover qb names", K(ret));
+  } else if (NULL != unique_key_provider_
+             && OB_FAIL(unique_key_provider_->recover_useless_unique_for_temp_table())) {
+    LOG_WARN("failed to recover useless unique for temp table", K(ret));
   } else {
+    unique_key_provider_ = NULL;
     query_ctx->available_tb_id_ = available_tb_id_;
     query_ctx->subquery_count_ = subquery_count_;
     query_ctx->temp_table_count_ = temp_table_count_;

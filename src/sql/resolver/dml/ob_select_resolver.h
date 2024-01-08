@@ -345,9 +345,6 @@ private:
   int check_cube_items_valid(const common::ObIArray<ObCubeItem> &cube_items);
   int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr);
 
-  int add_name_for_anonymous_view();
-  int add_name_for_anonymous_view_recursive(TableItem *table_item);
-
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);

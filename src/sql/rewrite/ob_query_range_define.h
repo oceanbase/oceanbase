@@ -254,7 +254,6 @@ public:
                                    ObQueryRangeArray &ss_ranges,
                                    const common::ObDataTypeCastParams &dtc_params) const;
   virtual bool is_precise_whole_range() const { return (nullptr == node_head_) || (node_head_->always_true_); }
-  virtual bool is_at_most_one_row() const { return is_precise_get_; }
   virtual int is_get(bool &is_get) const
   {
     is_get = is_get_;

@@ -36,6 +36,7 @@ class ObStmtFactory;
 class ObPhysicalPlan;
 class ObCodeGeneratorImpl;
 class ObLogPlan;
+class StmtUniqueKeyProvider;
 
 struct ObTransformerCtx
 {
@@ -193,7 +194,11 @@ struct ObParentDMLStmt
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {
-  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0)
+  ObTryTransHelper() :
+    available_tb_id_(0),
+    subquery_count_(0),
+    temp_table_count_(0),
+    unique_key_provider_(NULL)
   {}
 
   int fill_helper(const ObQueryCtx *query_ctx);
@@ -204,6 +209,7 @@ struct ObTryTransHelper
   int64_t subquery_count_;
   int64_t temp_table_count_;
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> qb_name_counts_;
+  StmtUniqueKeyProvider *unique_key_provider_;
 };
 
 // record context param values or array/list size

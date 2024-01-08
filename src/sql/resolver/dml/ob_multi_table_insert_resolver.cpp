@@ -291,8 +291,6 @@ int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode &su
     } else if (select_stmt->has_sequence()) {//多表插入不允许子查询中使用sequence
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
       LOG_WARN("sequence number not allowed here", K(ret));
-    } else if (OB_FAIL(insert_all_stmt->generate_anonymous_view_name(*allocator_, view_name))) {
-      LOG_WARN("failed to generate view name", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     } else if (OB_FAIL(resolve_all_generated_table_columns(*sub_select_table, column_items))) {

@@ -157,6 +157,9 @@ private:
   int pushdown_predicates(ObDMLStmt *stmt,
                           ObIArray<ObRawExpr *> &predicates);
 
+  int pushdown_into_tables_skip_current_level_stmt(ObDMLStmt &stmt);
+  int pushdown_into_joined_table_skip_current_level_stmt(TableItem *table_item);
+
   /**
    * @brief pushdown_into_set_stmt
    * 下推谓词到set stmt的左右子查询中

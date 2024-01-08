@@ -7584,10 +7584,6 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
     LOG_WARN("failed to calc table location", K(ret));
   } else if (OB_FAIL(estimate_size_for_base_table(helper, access_paths))) {
     LOG_WARN("failed to estimate_size", K(ret));
-  } else if (!helper.is_inner_path_ && !is_virtual_table(ref_table_id)
-             && EXTERNAL_TABLE != table_meta_info_.table_type_
-             && OB_FAIL(compute_one_row_info_for_table_scan(access_paths))) {
-    LOG_WARN("failed to compute one row info", K(ret));
   } else if (OB_FAIL(pruning_unstable_access_path(helper.table_opt_info_, access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
   } else if (OB_FAIL(get_plan()->select_location(tbl_part_infos))) {
@@ -7625,6 +7621,12 @@ int ObJoinOrder::compute_base_table_property(uint64_t table_id,
                                                         ref_table_id,
                                                         get_restrict_infos()))) {
     LOG_WARN("failed to extract fd item set", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(get_output_const_exprs(),
+                                                      get_fd_item_set(),
+                                                      get_output_equal_sets(),
+                                                      get_output_const_exprs(),
+                                                      is_at_most_one_row_))) {
+    LOG_WARN("failed to compute at most one row", K(ret));
   } else if (OB_FAIL(compute_table_location(table_id,
                                             ref_table_id,
                                             false,
@@ -13022,29 +13024,6 @@ int ObJoinOrder::compute_fd_item_set_for_subquery(const uint64_t table_id,
   } else {
     LOG_TRACE("subplan scan fd item set", K(fd_item_set_));
   }
-  return ret;
-}
-
-int ObJoinOrder::compute_one_row_info_for_table_scan(ObIArray<AccessPath *> &access_paths)
-{
-  int ret = OB_SUCCESS;
-  AccessPath *access_path = NULL;
-  is_at_most_one_row_ = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !is_at_most_one_row_ && i < access_paths.count(); i++) {
-    bool is_one_row = false;
-    if (OB_ISNULL(access_path = access_paths.at(i)) ||
-        OB_ISNULL(access_path->get_query_range_provider())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (access_path->is_inner_path_) {
-      /*do nothing*/
-    } else if (access_path->get_query_range_provider()->is_at_most_one_row() &&
-               (1 == access_path->est_cost_info_.ranges_.count())) {
-      is_at_most_one_row_ = true;
-    } else { /*do nothing*/ }
-  }
-  LOG_TRACE("succeed to compute one row info for table scan", K(is_at_most_one_row_),
-      K(table_id_));
   return ret;
 }
 

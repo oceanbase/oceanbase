@@ -1281,7 +1281,7 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
   bool can_set_unique = false;
   if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
     is_valid = false;
-  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(&stmt, can_set_unique))) {
+  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
   } else if (!can_set_unique) {
     is_valid = false;
@@ -1730,7 +1730,8 @@ int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt &stmt,
     LOG_WARN("transform context is invalid", K(ret), K(ctx_), K(query_hint));
   } else if (is_first_trans) {
     // 第一次改写时需要生成所有from table的unique 可以
-    if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, &stmt, empty_ignore_tables, pkeys))) {
+    StmtUniqueKeyProvider unique_key_provider(false);
+    if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_, &stmt, empty_ignore_tables, pkeys))) {
       LOG_WARN("failed to generate unique key", K(ret));
     }
   } else if ((query_hint->has_outline_data() && stmt.get_table_items().count() < 1) ||

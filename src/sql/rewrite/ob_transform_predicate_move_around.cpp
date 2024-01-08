@@ -1244,12 +1244,8 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
                                        pushdown_preds))) {
       LOG_WARN("recursive pushdown preds into set stmt failed", K(ret));
     } else {/*do nothing*/}
-  } else if (stmt->is_hierarchical_query() || enable_no_pred_deduce) {
+  } else if (stmt->is_hierarchical_query()) {
     // do not transform for current level stmt, but need call function to transform child query
-    if (enable_no_pred_deduce) {
-      LOG_TRACE("NO PRED DEDUCE");
-      OPT_TRACE("hint disable transform");
-    }
     ObArray<ObRawExpr *> dummy_preds;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
       TableItem *table = stmt->get_table_item(i);
@@ -1262,6 +1258,13 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
       } else if (OB_FAIL(SMART_CALL(pushdown_predicates(table->ref_query_, dummy_preds)))) {
         LOG_WARN("failed to push down predicates", K(ret));
       } else {/*do nothing*/}
+    }
+  } else if (enable_no_pred_deduce) {
+    // do not transform for current level stmt, but need call function to transform child query
+    LOG_TRACE("NO PRED DEDUCE");
+    OPT_TRACE("hint disable transform");
+    if (OB_FAIL(pushdown_into_tables_skip_current_level_stmt(*stmt))) {
+      LOG_WARN("failed to pushdown predicates into tables skip current level stmt", K(ret));
     }
   } else {
     const uint64_t pushdown_pred_count = pushdown_preds.count();
@@ -1362,6 +1365,67 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
     }
   }
   OPT_TRACE_END_SECTION;
+  return ret;
+}
+
+// when hint disabled transform for current level stmt, need try transform child stmt in table item in specific ordering.
+int ObTransformPredicateMoveAround::pushdown_into_tables_skip_current_level_stmt(ObDMLStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> dummy_preds;
+  TableItem *table_item = NULL;
+  ObIArray<FromItem> &from_items = stmt.get_from_items();
+  ObIArray<SemiInfo*> &semi_infos = stmt.get_semi_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && i < from_items.count(); ++i) {
+    if (OB_ISNULL(table_item = stmt.get_table_item(from_items.at(i)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret), K(table_item));
+    } else if (table_item->is_generated_table()) {
+      if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
+        LOG_WARN("failed to push down predicates", K(ret));
+      }
+    } else if (!table_item->is_joined_table()) {
+      /* do nothing */
+    } else if (OB_FAIL(pushdown_into_joined_table_skip_current_level_stmt(table_item))) {
+      LOG_WARN("failed to push down predicates", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
+    if (OB_ISNULL(semi_infos.at(i)) ||
+        OB_ISNULL(table_item = stmt.get_table_item_by_id(semi_infos.at(i)->right_table_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret), K(i), K(table_item), K(semi_infos));
+    } else if (!table_item->is_generated_table()) {
+      /* do nothing */
+    } else if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
+      LOG_WARN("failed to push down predicates", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::pushdown_into_joined_table_skip_current_level_stmt(TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(table_item));
+  } else if (table_item->is_generated_table()) {
+    ObArray<ObRawExpr *> dummy_preds;
+    if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
+      LOG_WARN("failed to push down predicates", K(ret));
+    }
+  } else if (!table_item->is_joined_table()) {
+    /* do nothing */
+  } else {
+    JoinedTable *joined_table = static_cast<JoinedTable*>(table_item);
+    if (OB_FAIL(SMART_CALL(pushdown_into_joined_table_skip_current_level_stmt(joined_table->left_table_)))) {
+      LOG_WARN("failed to push down predicates", K(ret));
+    } else if (OB_FAIL(SMART_CALL(pushdown_into_joined_table_skip_current_level_stmt(joined_table->right_table_)))) {
+      LOG_WARN("failed to push down predicates", K(ret));
+    }
+  }
   return ret;
 }
 

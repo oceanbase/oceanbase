@@ -182,7 +182,7 @@ USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION
 PARTITION_SORT NO_PARTITION_SORT
 USE_LATE_MATERIALIZATION NO_USE_LATE_MATERIALIZATION
 PX_JOIN_FILTER NO_PX_JOIN_FILTER PX_PART_JOIN_FILTER NO_PX_PART_JOIN_FILTER
-PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET RANDOM_LOCAL BROADCAST BC2HOST LIST
+PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY RANDOM_LOCAL BROADCAST BC2HOST LIST
 GBY_PUSHDOWN NO_GBY_PUSHDOWN
 USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
@@ -502,7 +502,7 @@ END_P SET_VAR DELIMITER
 %type <node> optimize_stmt
 %type <node> dump_memory_stmt
 %type <node> create_savepoint_stmt rollback_savepoint_stmt release_savepoint_stmt
-%type <node> opt_qb_name parallel_hint pq_set_hint_desc
+%type <node> opt_qb_name opt_qb_name_list_with_quotes parallel_hint pq_set_hint_desc pq_subquery_hint_desc
 %type <node> create_tablespace_stmt drop_tablespace_stmt tablespace rotate_master_key_stmt
 %type <node> alter_tablespace_stmt
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
@@ -9764,6 +9764,11 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB ')'
 {
   $$ = $3;
 }
+| PQ_SUBQUERY '('qb_name_option opt_comma pq_subquery_hint_desc ')'
+{
+  (void)($4);               /* unused */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SUBQUERY, 3, $3, $5->children_[0], $5->children_[1]);
+}
 | GBY_PUSHDOWN opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_GBY_PUSHDOWN, 1, $2);
@@ -9880,6 +9885,26 @@ pq_set_hint_desc:
 | '@' qb_name_string
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_SET, 3, $2, NULL, NULL);
+}
+;
+
+pq_subquery_hint_desc:
+opt_qb_name_list_with_quotes distribute_method_list
+{
+  ParseNode *method_list = NULL;
+  merge_nodes(method_list, result, T_DISTRIBUTE_METHOD_LIST, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INVALID, 2, $1, method_list);
+}
+;
+
+opt_qb_name_list_with_quotes:
+'(' qb_name_list ')'
+{
+  merge_nodes($$, result, T_QB_NAME_LIST, $2);
+}
+| /*empty*/
+{
+  $$ = NULL;
 }
 ;
 

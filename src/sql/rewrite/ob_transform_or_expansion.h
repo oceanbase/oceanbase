@@ -160,6 +160,7 @@ private:
 
   int add_select_item_to_ref_query(ObSelectStmt *stmt,
                                    const uint64_t flag_table_id,
+                                   StmtUniqueKeyProvider &unique_key_provider,
                                    ObSqlBitSet<> &left_unique_pos,
                                    ObSqlBitSet<> &right_flag_pos);
 
@@ -298,7 +299,8 @@ private:
                              const int64_t expr_pos,
                              bool is_topk,
                              ObCostBasedRewriteCtx &ctx,
-                             ObSelectStmt *&trans_stmt);
+                             ObSelectStmt *&trans_stmt,
+                             StmtUniqueKeyProvider &unique_key_provider);
   int adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds_exprs,
                                const int64_t expr_pos,
                                const int64_t param_pos,

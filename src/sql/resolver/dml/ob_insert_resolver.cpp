@@ -594,6 +594,10 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
         } else {
           table_alias_node = alias_node;
         }
+        if (NULL != table_alias_node) {
+          view_name.assign_ptr(const_cast<char*>(table_alias_node->str_value_),
+                          static_cast<int32_t>(table_alias_node->str_len_));
+        }
     }
     if (OB_UNLIKELY(T_SELECT != value_node.type_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -612,17 +616,14 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
                                                                         label_se_columns,
                                                                         *select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
-    } else if (NULL != table_alias_node) {
-      view_name.assign_ptr(const_cast<char*>(table_alias_node->str_value_),
-                          static_cast<int32_t>(table_alias_node->str_len_));
-    } else if (OB_FAIL(insert_stmt->generate_anonymous_view_name(*allocator_, view_name))) {
-      LOG_WARN("failed to generate view name", K(ret));
+    } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
+      LOG_WARN("failed to resolve generate table item", K(ret));
     }
 
     if (OB_SUCC(ret) && is_mock) {
     ObString ori_table_name = table_item->table_name_;
     ObSEArray<ObString, 4> ori_column_names;
-    ObString row_alias_table_name = view_name;
+    ObString row_alias_table_name = sub_select_table->get_table_name();
     ObSEArray<ObString, 4> row_alias_column_names;
     ParseNode **row_alias_values_nodes = NULL;
     //1. check_table_and_column_name
@@ -649,8 +650,6 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
     }
     if (OB_FAIL(ret)) {
       //do nothing
-    } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
-      LOG_WARN("failed to resolve generate table item", K(ret));
     } else if (OB_FAIL(resolve_all_generated_table_columns(*sub_select_table,
                                                                    column_items))) {
       LOG_WARN("failed to resolve all generated table columns", K(ret));

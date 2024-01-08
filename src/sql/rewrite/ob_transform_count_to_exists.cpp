@@ -96,7 +96,7 @@ int ObTransformCountToExists::construct_transform_hint(ObDMLStmt &stmt, void *tr
         LOG_WARN("get unexpected null", K(ret), K(query_expr));
       } else if (OB_FAIL(query_expr->get_ref_stmt()->get_qb_name(qb_name))) {
         LOG_WARN("failed to get qb name", K(ret));
-      } else if (OB_FAIL(hint->get_qb_name_list().push_back(qb_name))) {
+      } else if (OB_FAIL(hint->get_qb_names().push_back(qb_name))) {
         LOG_WARN("failed to push back qb name", K(ret));
       }
     }

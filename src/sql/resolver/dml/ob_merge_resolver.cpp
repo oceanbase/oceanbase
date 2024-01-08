@@ -461,6 +461,10 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
   select_resolver.set_is_sub_stmt(true);
   select_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   select_resolver.set_current_view_level(current_view_level_);
+  ObString alias_name;
+  if (alias_node != NULL) {
+    alias_name.assign_ptr((char *)(alias_node->str_value_), static_cast<int32_t>(alias_node->str_len_));
+  }
   if (OB_ISNULL(merge_stmt)
       || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -475,11 +479,9 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
   } else if (OB_UNLIKELY(NULL == (item = merge_stmt->create_table_item(*allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create table item failed", K(ret));
+  } else if (alias_name.empty() && OB_FAIL(merge_stmt->generate_anonymous_view_name(*allocator_, alias_name))) {
+    LOG_WARN("failed to generate view name", K(ret));
   } else {
-    ObString alias_name;
-    if (alias_node != NULL) {
-      alias_name.assign_ptr((char *)(alias_node->str_value_), static_cast<int32_t>(alias_node->str_len_));
-    }
     item->ref_query_ = child_stmt;
     item->table_id_ = generate_table_id();
     item->table_name_ = alias_name;

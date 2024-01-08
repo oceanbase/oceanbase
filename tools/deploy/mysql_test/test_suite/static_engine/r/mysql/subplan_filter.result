@@ -1759,6 +1759,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -1862,6 +1863,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -1965,6 +1967,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2075,6 +2078,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2199,6 +2203,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2323,6 +2328,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2447,6 +2453,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2578,6 +2585,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2756,6 +2764,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2990,6 +2999,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -3224,6 +3234,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")

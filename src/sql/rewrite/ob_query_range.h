@@ -449,7 +449,6 @@ public:
     }
     return bret;
   }
-  virtual bool is_at_most_one_row() const { return table_graph_.is_precise_get_; };
   virtual int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
   virtual bool is_precise_get() const { return table_graph_.is_precise_get_; }
