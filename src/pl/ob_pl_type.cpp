@@ -1914,13 +1914,6 @@ bool ObObjAccessIdx::has_same_collection_access(const ObRawExpr *expr, const ObO
         break;
       }
     }
-  } else {
-    for (int64_t i = 0; i < expr->get_param_count(); ++i) {
-      if (has_same_collection_access(expr->get_param_expr(i), access_expr)) {
-        ret = true;
-        break;
-      }
-    }
   }
   return ret;
 }

@@ -415,7 +415,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
         LOG_WARN("a assign stmt must has expr", K(s), K(into_expr), K(ret));
       } else {
         int64_t result_idx = OB_INVALID_INDEX;
-        ObLLVMValue into_address;
         if (into_expr->is_const_raw_expr()) {
           const ObConstRawExpr* const_expr = static_cast<const ObConstRawExpr*>(into_expr);
           if (const_expr->get_value().is_unknown()) {
@@ -432,13 +431,6 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected const expr", K(const_expr->get_value()), K(ret));
           }
-        } else if (into_expr->is_obj_access_expr()) {
-          if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION
-              && ObObjAccessIdx::has_same_collection_access(s.get_value_expr(i), static_cast<const ObObjAccessRawExpr *>(into_expr))) {
-            ObLLVMValue p_result_obj;
-            OZ (generator_.generate_expr(s.get_value_index(i), s, OB_INVALID_INDEX, p_result_obj));
-          }
-          OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
         }
 
         if (OB_SUCC(ret)) {
@@ -615,7 +607,13 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                                                    s.get_block()->in_notfound(),
                                                    s.get_block()->in_warning()));
             } else if (into_expr->is_obj_access_expr()) { //ADT
+              ObLLVMValue into_address;
               ObPLDataType final_type;
+              OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
+              if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION
+                  && ObObjAccessIdx::has_same_collection_access(s.get_value_expr(i), static_cast<const ObObjAccessRawExpr *>(into_expr))) {
+                OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx, p_result_obj));
+              }
               OZ (static_cast<const ObObjAccessRawExpr*>(into_expr)->get_final_type(final_type));
               if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION) {
                 OZ (generator_.generate_check_not_null(s, final_type.get_not_null(), p_result_obj));
