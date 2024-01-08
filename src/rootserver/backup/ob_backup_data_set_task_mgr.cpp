@@ -410,7 +410,10 @@ int ObBackupSetTaskMgr::calc_task_turn_(const ObBackupDataTaskType &type, int64_
     case ObBackupStatus::BACKUP_USER_META: {
       if (type.is_backup_meta()) {
         turn_id = set_task_attr_.meta_turn_id_;
-      } else if (type.is_backup_minor()) {
+      }
+    }
+    case ObBackupStatus::BACKUP_META_FINISH: {
+      if (type.is_backup_minor()) {
         turn_id = set_task_attr_.minor_turn_id_;
       }
       break;
@@ -558,7 +561,7 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupLSTaskAttr> ls_task;
-  ObArray<ObLSID> ls_ids;
+  ObArray<ObLSID> new_ls_ids;
   share::SCN consistent_scn;
 
   DEBUG_SYNC(BEFORE_BACKUP_META_FINISH);
@@ -568,11 +571,12 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
   } else if (ls_task.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]no logstream task", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_MERGE_BACKUP_META_INFO))) {
   } else if (OB_FAIL(calc_consistent_scn_(ls_task, consistent_scn))) {
     LOG_WARN("failed to calc consistent scn", K(ret), K(ls_task));
   } else if (OB_FAIL(merge_ls_meta_infos_(ls_task))) {
     LOG_WARN("fail to merge ls meta infos", K(ret), K(ls_task));
-  } else if (OB_FAIL(merge_tablet_to_ls_info_(consistent_scn, ls_task, ls_ids))) {
+  } else if (OB_FAIL(merge_tablet_to_ls_info_(consistent_scn, ls_task, new_ls_ids))) {
     LOG_WARN("[DATA_BACKUP]failed to merge tablet to ls info", K(ret), K(ls_task));
   } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_BACKUP_DATA))) {
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
@@ -584,8 +588,8 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
       LOG_WARN("[DATA_BACKUP]fail to update task type to backup data", K(ret));
     } else if (OB_FAIL(advance_status_(trans_, next_status))) {
       LOG_WARN("[DATA_BACKUP]failed to advance status to BACKUP_DATA_MINOR", K(ret), K(next_status));
-    } else if (OB_FAIL(generate_ls_tasks_(ls_ids, type))) {
-      LOG_WARN("failed to generate ls tasks", K(ret), K(ls_ids), K(type));
+    } else if (OB_FAIL(generate_ls_tasks_(new_ls_ids, type))) {
+      LOG_WARN("failed to generate ls tasks", K(ret), K(new_ls_ids), K(type));
     } else {
       ROOTSERVICE_EVENT_ADD("backup_data", "after_backup_consistent_scn");
     }
