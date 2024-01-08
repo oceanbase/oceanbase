@@ -1604,8 +1604,13 @@ int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &l
       new_ls_task.result_ = OB_SUCCESS;
       new_ls_task.dst_.reset();
       new_ls_task.task_trace_id_.reset();
-      new_ls_task.retry_id_ = 0;
-      new_ls_task.turn_id_ = 1;
+      // backup meta finish need reuse the turn id and retry id to merge tablet infos
+      // so that the turn id and retry id of backup meta finish
+      // is the same as the turn id and retry id of backup meta
+      if (ObBackupDataTaskType::Type::BACKUP_META_FINISH != type.type_) {
+        new_ls_task.retry_id_ = 0;
+        new_ls_task.turn_id_ = 1;
+      }
       if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("failed to check leader", K(ret));
       } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(trans_, new_ls_task))) {
