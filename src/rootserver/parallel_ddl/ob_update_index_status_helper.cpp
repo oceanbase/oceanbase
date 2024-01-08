@@ -230,14 +230,21 @@ int ObUpdateIndexStatusHelper::update_status_()
       *new_data_table_schema_, arg_.index_table_id_, new_status_, new_schema_version, trans_, ddl_stmt_str))) {
       LOG_WARN("fail to update index status", KR(ret), K_(arg_.index_table_id), K_(arg_.data_table_id), K_(new_status));
     } else if (arg_.task_id_ != 0) {
-      if (orig_index_table_schema_->get_index_status() != new_status_ && new_status_ == INDEX_STATUS_AVAILABLE) {
+      ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
+      int64_t consensus_schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(tsi_generator->get_end_version(consensus_schema_version))) {
+        LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
+      } else if (OB_FAIL(ObDDLTaskRecordOperator::update_consensus_schema_version(
+                         trans_, tenant_id_, arg_.task_id_, consensus_schema_version))) {
+        LOG_WARN("fail to update consensus_schema_version", KR(ret), K_(tenant_id), K_(arg_.task_id), K(consensus_schema_version));
+      } else if (orig_index_table_schema_->get_index_status() != new_status_ && new_status_ == INDEX_STATUS_AVAILABLE) {
         if (OB_ISNULL(new_data_table_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data_table_schema is null", KR(ret));
         } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*new_data_table_schema_,
                                                                 *orig_index_table_schema_,
-                                                                  ObTableLockOwnerID(arg_.task_id_),
-                                                                  trans_))) {
+                                                                ObTableLockOwnerID(arg_.task_id_),
+                                                                trans_))) {
           LOG_WARN("failed to unlock ddl lock", KR(ret));
         }
       }

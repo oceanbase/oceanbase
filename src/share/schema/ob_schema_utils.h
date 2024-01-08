@@ -308,7 +308,6 @@ public:
     TRUNCATE_TABLE = 0,
     SET_COMMENT = 1,
     CREATE_INDEX = 2,
-    UPDATE_INDEX_STATUS = 3,
     MAX_TYPE // can not > 32
   };
 

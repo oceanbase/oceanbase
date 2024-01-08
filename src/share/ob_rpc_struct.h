@@ -230,7 +230,8 @@ public:
       based_schema_object_infos_(),
       parallelism_(0),
       task_id_(0),
-      consumer_group_id_(0)
+      consumer_group_id_(0),
+      is_parallel_(false)
    { }
   virtual ~ObDDLArg() = default;
   bool is_need_check_based_schema_objects() const
@@ -257,9 +258,10 @@ public:
     parallelism_ = 0;
     task_id_ = 0;
     consumer_group_id_ = 0;
+    is_parallel_ = false;
   }
   TO_STRING_KV(K_(ddl_stmt_str), K_(exec_tenant_id), K_(ddl_id_str), K_(sync_from_primary), K_(based_schema_object_infos),
-               K_(parallelism), K_(task_id), K_(consumer_group_id));
+               K_(parallelism), K_(task_id), K_(consumer_group_id), K_(is_parallel));
 
   common::ObString ddl_stmt_str_;
   uint64_t exec_tenant_id_;
@@ -269,6 +271,8 @@ public:
   int64_t parallelism_;
   int64_t task_id_;
   int64_t consumer_group_id_;
+  //some parallel ddl is effect before 4220, this member is valid after 4220
+  bool is_parallel_;
 };
 
 struct ObAlterResourceUnitArg : public ObDDLArg

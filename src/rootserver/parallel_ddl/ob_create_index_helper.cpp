@@ -317,8 +317,10 @@ int ObCreateIndexHelper::check_table_legitimacy_()
   } else if (OB_UNLIKELY(orig_data_table_schema_->is_in_splitting())) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN( "con not create index during splitting", KR(ret), K_(arg));
-  } else if (OB_FAIL(ddl_service_->check_restore_point_allow(tenant_id_, *orig_data_table_schema_))) {
-    LOG_WARN("fail to check restore point allow", KR(ret), K_(tenant_id), K_(orig_data_table_schema));
+  // There used to be check_restore_point_allow() here, but it is currently useless.
+  // Meanwhile, the frequent addition and deletion of __all_acquired_snapshot during the index creation
+  // will cause it's buffer table to bloat,
+  // resulting in performance decline during long periods of concentrated index building.
   } else if (!orig_data_table_schema_->check_can_do_ddl()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), KPC(orig_data_table_schema_));

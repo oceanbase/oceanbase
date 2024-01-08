@@ -57,10 +57,6 @@ TEST_F(TestObParallelDDLControl, test_parse)
   ASSERT_EQ(true, parser.parse("create_index:off", arr, 32));
   ASSERT_EQ(arr[0], 0b00010000);
 
-  MEMSET(arr, 0, 32);
-  ASSERT_EQ(true, parser.parse("update_index_status:off", arr,32));
-  ASSERT_EQ(arr[0], 0b01000000);
-
   MEMSET(arr, 0,32);
   ASSERT_EQ(true, parser.parse("set_comment:on, set_comment:off, create_index:off", arr, 32));
   ASSERT_EQ(arr[0], 0b00010100);
@@ -93,8 +89,6 @@ TEST_F(TestObParallelDDLControl, testObParallelDDLControlMode)
   ASSERT_EQ(true, is_parallel);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
   ASSERT_EQ(true, is_parallel);
-  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::UPDATE_INDEX_STATUS, is_parallel));
-  ASSERT_EQ(true, is_parallel);
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::MAX_TYPE, is_parallel));
 
@@ -106,8 +100,6 @@ TEST_F(TestObParallelDDLControl, testObParallelDDLControlMode)
   ASSERT_EQ(true, is_parallel);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
   ASSERT_EQ(true, is_parallel);
-  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::UPDATE_INDEX_STATUS, is_parallel));
-  ASSERT_EQ(true, is_parallel);
 
   ASSERT_EQ(true, _parallel_ddl_control.set_value("set_comment:off"));
   _parallel_ddl_control.init_mode(ddl_mode);
@@ -117,18 +109,14 @@ TEST_F(TestObParallelDDLControl, testObParallelDDLControlMode)
   ASSERT_EQ(false, is_parallel);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
   ASSERT_EQ(true, is_parallel);
-  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::UPDATE_INDEX_STATUS, is_parallel));
-  ASSERT_EQ(true, is_parallel);
 
-  ASSERT_EQ(true, _parallel_ddl_control.set_value("create_index:off, update_index_status:off"));
+  ASSERT_EQ(true, _parallel_ddl_control.set_value("create_index:off, set_comment:off"));
   _parallel_ddl_control.init_mode(ddl_mode);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::TRUNCATE_TABLE, is_parallel));
   ASSERT_EQ(true, is_parallel);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::SET_COMMENT, is_parallel));
-  ASSERT_EQ(true, is_parallel);
-  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
   ASSERT_EQ(false, is_parallel);
-  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::UPDATE_INDEX_STATUS, is_parallel));
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
   ASSERT_EQ(false, is_parallel);
 }
 

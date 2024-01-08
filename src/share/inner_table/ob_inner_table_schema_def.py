@@ -2799,7 +2799,8 @@ def_table_schema(
       ('user_message', 'longtext', 'true'),
       ('dba_message', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
       ('parent_task_id', 'int', 'false', 0),
-      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
+      ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+      ('consensus_schema_version', 'int', 'false', '-1')
     ],
 )
 
@@ -2950,6 +2951,7 @@ def_table_schema(
     ('ddl_stmt_str', 'longtext', 'true'),
     ('ret_code', 'int', 'false', '0'),
     ('message', 'longtext', 'true'),
+    ('consensus_schema_version', 'int', 'false', '-1')
   ],
 )
 

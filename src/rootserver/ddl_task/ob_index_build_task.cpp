@@ -22,7 +22,6 @@
 #include "rootserver/ob_root_service.h"
 #include "share/scn.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
-#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -508,6 +507,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
     is_unique_index_ = task_record.is_unique_index_;
     is_global_index_ = task_record.is_global_index_;
+    consensus_schema_version_ = task_record.consensus_schema_version_;
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status_) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
     }
@@ -1488,7 +1488,6 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
       // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
       arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
     }
-    bool is_parallel_ddl = true;
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
@@ -1497,12 +1496,9 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
     } else if (OB_FALSE_IT(ddl_rpc_timeout += tmp_timeout)) {
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_INDEX_STATUS_FAILED))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-    } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
-                       ObParallelDDLControlMode::UPDATE_INDEX_STATUS,
-                       tenant_id_, is_parallel_ddl))) {
-      LOG_WARN("fail to get whether is parallel update_index_status", KR(ret), K_(tenant_id));
     } else {
-      if (data_format_version_ < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
+      const bool is_parallel_ = create_index_arg_.is_parallel_;
+      if (data_format_version_ < DATA_VERSION_4_2_2_0 || !is_parallel_) {
         if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
           LOG_WARN("update index status failed", K(ret), K(arg));
         }
@@ -1510,6 +1506,8 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
         obrpc::ObParallelDDLRes res;
         if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).parallel_update_index_status(arg, res))) {
           LOG_WARN("fail to parallel update index status", KR(ret), K(arg));
+        } else {
+          consensus_schema_version_ = res.schema_version_;
         }
       }
       if (OB_SUCC(ret)) {
@@ -1536,7 +1534,7 @@ int ObIndexBuildTask::clean_on_failed()
     bool state_finished = true;
     ObSchemaGetterGuard schema_guard;
     bool drop_index_on_failed = true; // TODO@wenqu: index building triggered by truncate partition may need keep the failed index schema
-    if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    if (OB_FAIL(root_service_->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, is_index_exist))) {
       LOG_WARN("check table exist failed", K(ret), K_(tenant_id), K(index_table_id_));

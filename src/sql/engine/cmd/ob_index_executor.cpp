@@ -109,6 +109,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
     } else {
       ObTimeoutCtx ctx;
       start_time = ObTimeUtility::current_time();
+      create_index_arg.is_parallel_ = true;
       if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
         LOG_WARN("fail to set timeout ctx", KR(ret));
       } else if (OB_FAIL(common_rpc_proxy->parallel_create_index(create_index_arg, res))) {

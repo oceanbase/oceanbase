@@ -577,6 +577,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
         int64_t start_time = ObTimeUtility::current_time();
         ObTimeoutCtx ctx;
+        create_table_arg.is_parallel_ = true;
         if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
           LOG_WARN("fail to set timeout ctx", K(ret));
         } else if (OB_FAIL(common_rpc_proxy->parallel_create_table(create_table_arg, res))) {
@@ -2041,6 +2042,7 @@ int ObCommentExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
     obrpc::ObParallelDDLRes set_comment_res;
     const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
     alter_table_arg.ddl_stmt_str_ = first_stmt;
+    alter_table_arg.is_parallel_ = true;
     my_session = ctx.get_my_session();
     int64_t start_time = ObTimeUtility::current_time();
     ObTimeoutCtx tctx;
@@ -2268,6 +2270,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       } else {
         // new parallel truncate
         ObTimeoutCtx ctx;
+        tmp_arg.is_parallel_ = true;
         if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
           LOG_WARN("fail to set timeout ctx", K(ret));
         } else {
