@@ -231,7 +231,7 @@ private:
 
   int prepare_log_operator_();
   int get_min_lease_ts_info_(DupTableTsInfo &min_ts_info);
-  int leader_takeover_(const bool is_resume);
+  int leader_takeover_(const bool is_resume, const bool is_initing = false);
   int leader_revoke_(const bool is_forcedly);
 
   int try_to_confirm_tablets_(const share::SCN &confirm_ts);
@@ -242,6 +242,7 @@ private:
   share::ObLSID ls_id_;
 
   bool is_inited_;
+  SpinRWLock init_rw_lock_;
 
   // set these flag for a normal ls without dup_table
   ObDupTableLSRoleStateHelper ls_state_helper_;
