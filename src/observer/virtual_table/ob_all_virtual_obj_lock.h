@@ -40,13 +40,13 @@ private:
   virtual bool is_need_process(uint64_t tenant_id) override;
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual void release_last_tenant() override;
-  int get_next_ls(ObLS *&ls);
+  int get_next_ls();
   int get_next_tx_ctx(transaction::ObPartTransCtx *&tx_ctx);
   int get_next_lock_id(ObLockID &lock_id);
   int get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op);
-  int get_next_lock_op_iter(ObLockOpIterator &lock_op_iter);
-  int get_next_lock_op_iter_from_tx_ctx(ObLockOpIterator &lock_op_iter);
-  int get_next_lock_op_iter_from_lock_memtable(ObLockOpIterator &lock_op_iter);
+  int get_next_lock_op_iter();
+  int get_next_lock_op_iter_from_tx_ctx();
+  int get_next_lock_op_iter_from_lock_memtable();
   int prepare_start_to_read();
 
 private:
