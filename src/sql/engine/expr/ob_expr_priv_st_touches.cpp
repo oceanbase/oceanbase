@@ -150,7 +150,7 @@ int ObExprPrivSTTouches::eval_priv_st_touches(const ObExpr &expr, ObEvalCtx &ctx
       LOG_WARN("srid not the same", K(ret), K(srid1), K(srid2));
       LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_PRIV_ST_TOUCHES, srid1, srid2);
     } else if (is_geo1_empty || is_geo2_empty) {
-      res.set_bool(is_geo1_empty && is_geo2_empty);
+      res.set_bool(false);
     } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
       LOG_WARN("zoom in geos failed", K(ret));
     } else {

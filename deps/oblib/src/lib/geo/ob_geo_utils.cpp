@@ -1490,6 +1490,29 @@ bool ObGeoBoxUtil::is_box_valid(const ObGeogBox &box)
   return !is_float_equal(box.xmin, box.xmax) && !is_float_equal(box.ymin, box.ymax);
 }
 
+int ObGeoBoxUtil::get_geom_poly_box(const ObWkbGeomPolygon &poly, bool not_calc_inner_ring, ObGeogBox &res)
+{
+  int ret = OB_SUCCESS;
+  if (poly.size() <= 0) {
+    ret = OB_ERR_GIS_INVALID_DATA;
+    LOG_WARN("empty polygon has not box", K(ret), K(poly.size()));
+  } else if (OB_FAIL(get_geom_line_box(poly.exterior_ring(), res))) {
+    LOG_WARN("fail to get poly box", K(ret));
+  } else if (!not_calc_inner_ring) {
+    const ObWkbGeomPolygonInnerRings &inners = poly.inner_rings();
+    ObWkbGeomPolygonInnerRings::const_iterator iter = inners.begin();
+    for (; OB_SUCC(ret) && iter != inners.end(); ++iter) {
+      ObGeogBox tmp_box;
+      if (OB_FAIL(get_geom_line_box(*iter, tmp_box))) {
+        LOG_WARN("fail to get poly box", K(ret));
+      } else {
+        box_union(tmp_box, res);
+      }
+    }
+  }
+  return ret;
+}
+
 // 1. geometry类型可以存储所有其他空间类型;
 // 2. POINT, LINESTRING, 和 POLYGON只能存储各自对应的类型(由表达式校验);
 // 3. GEOMETRYCOLLECTION可以存储任何类型的对象的集合，

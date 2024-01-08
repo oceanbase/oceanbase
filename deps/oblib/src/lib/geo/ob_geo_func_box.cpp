@@ -274,31 +274,14 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomPolygon, ObGeogBox *)
 {
   INIT_SUCC(ret);
   ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
+  const ObWkbGeomPolygon *poly = reinterpret_cast<const ObWkbGeomPolygon *>(g->val());
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geo box", K(ret));
+  } else if (OB_FAIL(ObGeoBoxUtil::get_geom_poly_box(*poly, context.get_is_called_in_pg_expr(), *res))) {
+    LOG_WARN("fail to calc polygon box", K(ret));
   } else {
-    const ObWkbGeomPolygon *poly = reinterpret_cast<const ObWkbGeomPolygon *>(g->val());
-    if (poly->size() <= 0) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_WARN("empty polygon has not box", K(ret), K(poly->size()));
-    } else if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(poly->exterior_ring(), *res))) {
-      LOG_WARN("fail to get poly box", K(ret));
-    } else if (!context.get_is_called_in_pg_expr()) {
-      const ObWkbGeomPolygonInnerRings &inners = poly->inner_rings();
-      ObWkbGeomPolygonInnerRings::const_iterator iter = inners.begin();
-      for (; OB_SUCC(ret) && iter != inners.end(); ++iter) {
-        ObGeogBox tmp_box;
-        if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*iter, tmp_box))) {
-          LOG_WARN("fail to get poly box", K(ret));
-        } else {
-          ObGeoBoxUtil::box_union(tmp_box, *res);
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      result = res;
-    }
+    result = res;
   }
   return ret;
 }
@@ -327,7 +310,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiLineString, ObGeogBox *)
 {
   int ret = OB_SUCCESS;
   ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
-  bool is_first_line = true;
+  bool is_first_poly = true;
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geo box", K(ret));
@@ -338,8 +321,8 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiLineString, ObGeogBox *)
       ObGeogBox tmp;
       if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(*iter, tmp))) {
         LOG_WARN("fail to get poly box", K(ret));
-      } else if (is_first_line) {
-        is_first_line = false;
+      } else if (is_first_poly) {
+        is_first_poly = false;
         *res = tmp;
       } else {
         ObGeoBoxUtil::box_union(tmp, *res);
@@ -357,7 +340,7 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiPolygon, ObGeogBox *)
 {
   int ret = OB_SUCCESS;
   ObGeogBox *res = OB_NEWx(ObGeogBox, context.get_allocator());
-  bool is_first_line = true;
+  bool is_first_poly = true;
   if (OB_ISNULL(res)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geo box", K(ret));
@@ -366,13 +349,10 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncBoxImpl, ObWkbGeomMultiPolygon, ObGeogBox *)
     ObWkbGeomMultiPolygon::iterator iter = multipoly->begin();
     for (; OB_SUCC(ret) && iter != multipoly->end(); iter++) {
       ObGeogBox tmp;
-      if (iter->size() <= 0) {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("empty polygon has not box", K(ret), K(iter->size()));
-      } else if (OB_FAIL(ObGeoBoxUtil::get_geom_line_box(iter->exterior_ring(), tmp))) {
-        LOG_WARN("fail to get poly box", K(ret));
-      } else if (is_first_line) {
-        is_first_line = false;
+      if (OB_FAIL(ObGeoBoxUtil::get_geom_poly_box(*iter, context.get_is_called_in_pg_expr(), tmp))) {
+        LOG_WARN("fail to calc polygon box", K(ret));
+      } else if (is_first_poly) {
+        is_first_poly = false;
         *res = tmp;
       } else {
         ObGeoBoxUtil::box_union(tmp, *res);

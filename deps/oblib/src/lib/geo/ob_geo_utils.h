@@ -243,6 +243,7 @@ public:
   template<typename GeometryType>
   static int get_geog_line_box(const GeometryType &line, ObGeogBox &box);
   static int get_geog_poly_box(const ObWkbGeogPolygon &poly, ObGeogBox &box);
+  static int get_geom_poly_box(const ObWkbGeomPolygon &poly, bool not_calc_inner_ring, ObGeogBox &res);
   static int caculate_line_box(ObPoint3d &start, ObPoint3d &end, ObGeogBox &box);
   static void get_box_center(const ObGeogBox &box, ObPoint2d &center);
   static bool is_same_point3d(const ObPoint3d &p3d1, const ObPoint3d &p3d2);
