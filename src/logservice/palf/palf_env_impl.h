@@ -356,7 +356,7 @@ private:
                                  LogIOWorkerConfig &config);
 
   int check_can_update_log_disk_options_(const PalfDiskOptions &disk_options);
-
+  int remove_directory_while_exist_(const char *log_dir);
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
