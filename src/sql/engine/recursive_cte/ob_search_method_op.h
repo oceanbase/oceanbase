@@ -334,6 +334,7 @@ public:
   int sort_result_output_nodes(int64_t rows_cnt);
   int add_row(const ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int init_mem_context();
+  void free_input_rows_mem();
   void free_last_iter_mem();
 
 private:
