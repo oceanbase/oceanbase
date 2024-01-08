@@ -64,7 +64,7 @@ public:
   virtual int64_t get_member_count() const;
   virtual const ObPLDataType *get_member(int64_t i) const;
   virtual int generate_assign_with_null(
-    ObPLCodeGenerator &generator, const ObPLBlockNS &ns,
+    ObPLCodeGenerator &generator, const ObPLINS &ns,
     jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(
     ObPLCodeGenerator &generator,const ObPLINS &ns,
@@ -259,9 +259,10 @@ public:
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                      jit::ObLLVMValue &allocator,
-                                      jit::ObLLVMValue &dest) const
-  { UNUSED(generator); UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
+                                        ObPLINS &ns,
+                                        jit::ObLLVMValue &allocator,
+                                        jit::ObLLVMValue &dest) const
+  { UNUSED(generator); UNUSED(ns), UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
@@ -409,7 +410,7 @@ public:
   virtual const ObPLDataType *get_member(int64_t i) const { return get_record_member_type(i); }
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
 
@@ -567,13 +568,13 @@ public:
                                  jit::ObLLVMValue &value,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLBlockNS &ns,
+                                        const ObPLINS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
-                                                const ObPLINS &ns,
-                                                jit::ObLLVMValue &value,
-                                                const pl::ObPLStmt *s = NULL) const;
+                           const ObPLINS &ns,
+                           jit::ObLLVMValue &value,
+                           const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
                      int64_t &ptr) const;

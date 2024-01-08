@@ -611,7 +611,7 @@ int ObPLDataType::get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& 
 }
 
 int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
-                                            const ObPLBlockNS &ns,
+                                            const ObPLINS &ns,
                                             jit::ObLLVMValue &allocator,
                                             jit::ObLLVMValue &dest) const
 {
@@ -621,7 +621,7 @@ int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
     LOG_WARN("unexpected type to assign NULL", K(*this), K(ret));
   } else {
     const ObUserDefinedType *user_type = NULL;
-    if (OB_FAIL(ns.get_pl_data_type_by_id(get_user_type_id(), user_type))) {
+    if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type))) {
       LOG_WARN("failed to get user type", K(*this), K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
