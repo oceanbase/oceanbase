@@ -705,7 +705,6 @@ int LogIOFlashbackTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
     PALF_LOG(WARN, "push_flush_cb_to_thread_pool_ failed", K(ret));
   } else {
-    PALF_LOG(INFO, "LogIOFlashbackTask do_task success", K(ret), K(palf_id_));
   }
   return ret;
 }
