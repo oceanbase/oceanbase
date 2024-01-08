@@ -520,8 +520,9 @@ int ObWktParser::parse_linestring(bool is_ring)
             ret = OB_ERR_PARSER_SYNTAX;
           } else {
             uint8_t dim = dim_type_ == ObGeoDimType::IS_3D ? 3 : 2;
+            // 3D ring is legal as long as the X/Y axes are equal
             bool not_same_point = MEMCMP(wkb_buf_.ptr() + pos + sizeof(uint32_t),
-              wkb_buf_.ptr() + wkb_buf_.length() - dim * sizeof(double), dim * sizeof(double));
+              wkb_buf_.ptr() + wkb_buf_.length() - dim * sizeof(double), 2 * sizeof(double));
 
             if (not_same_point && !lib::is_oracle_mode()) {
               ret = OB_ERR_PARSER_SYNTAX;

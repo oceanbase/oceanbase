@@ -551,7 +551,6 @@ TEST_F(TestWktParser, test_parse_3dwkt)
   compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON Z((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
   compare_wkt_parse_result(ObGeoType::POLYGONZ, ObString("POLYGON((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1),(2 2 5 ,2 5 4,5 5 3,5 2 3,2 2 5))"), wkb_res);
   // not a close ring
-  comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 ,10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0, 10 0, 10 10 2,0 10 2,0 0 2))"));
   comapre_wkt_parse_wrong_result(ObString("POLYGONZ((0 0 1,10 0 2 ,10 10 2,0 10 2,0 0 1), (0 0,10 0,10 10,0 10,0 0))"));
@@ -617,7 +616,6 @@ TEST_F(TestWktParser, test_parse_3dwkt)
   compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGONZ(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
   compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
   compare_wkt_parse_result(ObGeoType::MULTIPOLYGONZ, ObString("MULTIPOLYGON Z (((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3), (0 0 2,5 0 2,5 5 3,0 5 3,0 0 2)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"), wkb_res);
-  comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 1)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0 3,10 0 3,10 10 3,0 10 3,0 0 3)),((2 2,2 5,5 5,5 2,2 2)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON(((0 0,10 0,10 10,0 10,0 0)),((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)))"));
   comapre_wkt_parse_wrong_result(ObString("MULTIPOLYGON Z(((2 2 3,2 5 3,5 5 3,5 2 3,2 2 3)),((0 0 1, 1 0 1, 0 0 1)))"));
@@ -658,7 +656,6 @@ TEST_F(TestWktParser, test_parse_3dwkt)
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (LINESTRING (1 1 , 1 2))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (LINESTRING Z (1 1 1))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON((0 0,10 0,10 10,0 10,0 0)))"));
-  comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON Z((0 0 1,10 0 1,10 10 1,0 10 1,0 0 2)))"));
   comapre_wkt_parse_wrong_result(ObString("GEOMETRYCOLLECTION Z (POLYGON Z((0 0 1,0 10 1,0 0 2)))"));
 }
 } // namespace common

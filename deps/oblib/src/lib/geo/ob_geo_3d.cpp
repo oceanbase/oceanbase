@@ -99,7 +99,7 @@ int ObGeometry3D::read_header(ObGeoWkbByteOrder &bo, ObGeoType &geo_type)
   const char *ptr = val();
   uint64_t header_len = EWKB_COMMON_WKB_HEADER_LEN;
   if (OB_ISNULL(ptr) || (cur_pos_ + header_len > length())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("pointer or position is wrong", K(ret), K(ptr));
   } else {
     bo = byteorder(cur_pos_);
@@ -115,7 +115,7 @@ int ObGeometry3D::read_nums_value(ObGeoWkbByteOrder bo, uint32_t &nums)
   int ret = OB_SUCCESS;
   const char *ptr = val();
   if (OB_ISNULL(ptr) || (cur_pos_ + WKB_GEO_ELEMENT_NUM_SIZE > length())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("unexpect ptr or pos to read nums value");
   } else {
     nums = ObGeoWkbByteOrderUtil::read<uint32_t>(ptr + cur_pos_, bo);
@@ -268,7 +268,7 @@ int ObGeometry3D::visit_pointz_inner(ObGeoWkbByteOrder bo, ObGeo3DVisitor &visit
   const char *ptr = val();
   uint64_t pointz_len = WKB_POINT_DATA_SIZE + WKB_GEO_DOUBLE_STORED_SIZE;
   if (OB_ISNULL(ptr) || (cur_pos_ + pointz_len > length())) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("copy pointer or position is wrong", K(ret), K(ptr));
   } else {
     double x = ObGeoWkbByteOrderUtil::read<double>(ptr + cur_pos_, bo);
@@ -669,7 +669,7 @@ int ObGeo3DChecker::visit_linestringz_start(ObGeometry3D *geo, uint32_t nums, Ob
     const char *ptr = geo->val();
     uint64_t cur_pos = geo->get_pos();
     if (OB_ISNULL(ptr) || (cur_pos + WKB_GEO_ELEMENT_NUM_SIZE > geo->length())) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("unexpect ptr or pos to read nums value");
     } else {
       ObGeoWkbByteOrder bo = geo->byteorder();
@@ -1473,7 +1473,7 @@ int ObGeo3DElevationVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner
     uint64_t pointz_len = WKB_POINT_DATA_SIZE + WKB_GEO_DOUBLE_STORED_SIZE;
     char *ptr = const_cast<char *>(geo->val());
     if (OB_ISNULL(ptr) || (cur_pos + pointz_len > geo->length())) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("3D geometry position is wrong", K(ret));
     } else {
       ObGeoWkbByteOrder bo = geo->byteorder();
@@ -1500,7 +1500,7 @@ int ObGeo3DNormalizeVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner
     uint64_t pointz_len = WKB_POINT_DATA_SIZE + WKB_GEO_DOUBLE_STORED_SIZE;
     char *ptr = const_cast<char *>(geo->val());
     if (OB_ISNULL(ptr) || (cur_pos + pointz_len > geo->length())) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("3D geometry position is wrong", K(ret));
     } else {
       ObGeoWkbByteOrder bo = geo->byteorder();
@@ -1565,7 +1565,7 @@ int ObGeo3DEmptyVisitor::visit_pointz_start(ObGeometry3D *geo, bool is_inner)
     uint64_t pointz_len = WKB_POINT_DATA_SIZE + WKB_GEO_DOUBLE_STORED_SIZE;
     char *ptr = const_cast<char *>(geo->val());
     if (OB_ISNULL(ptr) || (cur_pos + pointz_len > geo->length())) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("3D geometry position is wrong", K(ret));
     } else {
       ObGeoWkbByteOrder bo = geo->byteorder();
