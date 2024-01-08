@@ -1023,6 +1023,8 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   // need continue to check replica's readability
   if (OB_SUCC(ret)) {
     if ((MTL_TENANT_ROLE_CACHE_IS_PRIMARY()
+            && snapshot.source_ == ObTxReadSnapshot::SRC::LS
+            && snapshot.snapshot_lsid_ == ls_id
             && snapshot.snapshot_acquire_addr_ == GCTX.self_addr()
             && snapshot.snapshot_ls_role_ == common::ObRole::LEADER)
         || check_readable_ok) {

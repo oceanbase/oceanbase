@@ -626,6 +626,8 @@ int ObTransService::get_read_snapshot(ObTxDesc &tx,
   if (OB_SUCC(ret)) {
     snapshot.source_ = ObTxReadSnapshot::SRC::GLOBAL;
     snapshot.parts_.reset();
+    snapshot.snapshot_ls_role_ = common::ObRole::INVALID_ROLE;
+    snapshot.snapshot_acquire_addr_ = GCTX.self_addr();
     // If tx id is valid , record tx_id and scn
     if (tx.tx_id_.is_valid()) {
       snapshot.core_.tx_id_ = tx.tx_id_;
