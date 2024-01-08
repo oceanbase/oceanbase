@@ -1026,6 +1026,13 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                                                 stored_row);
 }
 
+/*
+ * Note: During the update process,
+ * ObDMLService::check_row_whether_changed() and ObDMLService::update_row() must be executed together
+ * within a single iteration,
+ * because the update_row process relies on check_row_whether_changed to determine
+ * whether the new and old values of the row being updated have changed.
+ **/
 int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,
                              const ObDASTabletLoc *old_tablet_loc,
