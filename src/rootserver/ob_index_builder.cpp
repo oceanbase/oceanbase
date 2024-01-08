@@ -361,6 +361,9 @@ int ObIndexBuilder::submit_build_index_task(
     const int64_t group_id)
 {
   int ret = OB_SUCCESS;
+  bool use_partitioned_local_index_build_path = false;
+  int64_t table_row_cnt = 0;
+  double table_avg_row_len = 0;
   uint64_t tenant_data_format_version = 0;
   if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
     ret = OB_INVALID_ARGUMENT;
@@ -371,21 +374,30 @@ int ObIndexBuilder::submit_build_index_task(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rootservice is null", K(ret));
   } else {
-    ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
-                              (tenant_data_format_version >= DATA_VERSION_4_2_2_0) && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
-                              data_schema,
-                              index_schema,
-                              0/*object_id*/,
-                              index_schema->get_schema_version(),
-                              parallelism,
-                              group_id,
-                              &allocator,
-                              &create_index_arg);
-    if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
-      LOG_WARN("submit create index ddl task failed", K(ret));
-    } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-        *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
-      LOG_WARN("failed to lock online ddl lock", K(ret));
+    if (tenant_data_format_version >= DATA_VERSION_4_2_2_0 && index_schema->is_storage_local_index_table() && index_schema->is_partitioned_table()) {
+      if (OB_FAIL(ObDDLUtil::get_table_row_cnt_and_avg_row_len(data_schema->get_tenant_id(), data_schema->get_table_id(), table_row_cnt, table_avg_row_len))) {
+        LOG_WARN("fail to get table big tablet cnt", K(ret), K(data_schema->get_tenant_id()), K(data_schema->get_table_id()), K(table_row_cnt), K(table_avg_row_len));
+      } else if (table_row_cnt > MAX_DATA_ROW_COUNT_PER_BATCH || (table_row_cnt * table_avg_row_len > MAX_DATA_SIZE_PER_BATCH)) {
+        use_partitioned_local_index_build_path = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
+                                use_partitioned_local_index_build_path ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX,
+                                data_schema,
+                                index_schema,
+                                0/*object_id*/,
+                                index_schema->get_schema_version(),
+                                parallelism,
+                                group_id,
+                                &allocator,
+                                &create_index_arg);
+      if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
+        LOG_WARN("submit create index ddl task failed", K(ret));
+      } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
+          *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+        LOG_WARN("failed to lock online ddl lock", K(ret));
+      }
     }
   }
   return ret;

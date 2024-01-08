@@ -444,6 +444,11 @@ public:
     const common::ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
     int64_t &data_row_cnt);
+  static int get_table_row_cnt_and_avg_row_len(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    int64_t &table_row_cnt,
+    double &table_avg_row_len);
   static int get_ls_host_left_disk_space(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,

@@ -19,6 +19,8 @@ namespace oceanbase
 {
 namespace rootserver
 {
+#define MAX_DATA_ROW_COUNT_PER_BATCH 50000000
+#define MAX_DATA_SIZE_PER_BATCH 5368709120
 class ObDDLTabletScheduler final
 {
 public:

@@ -470,11 +470,11 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
       int64_t tablet_data_size = 0;
       int64_t tablet_data_row_cnt = 0;
       uint64_t task_max_data_size = 0;
-      const int64_t task_max_data_row_cnt = 50000000;
+      const int64_t task_max_data_row_cnt = MAX_DATA_ROW_COUNT_PER_BATCH;
       if (left_space_size > 0) {
         task_max_data_size = left_space_size / 30; // according to the estimated maximum temporary space amplification factor 30, ensure that the current remaining disk space can complete index construction
       } else {
-        task_max_data_size = 5368709120; // 5GB
+        task_max_data_size = MAX_DATA_SIZE_PER_BATCH; // 5GB
       }
       for (int64_t i = 0; i < in_tablets.count() && OB_SUCC(ret); i++) {
         tablet_data_size = 0;

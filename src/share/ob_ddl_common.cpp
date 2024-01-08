@@ -1318,6 +1318,68 @@ int ObDDLUtil::get_tablet_data_row_cnt(
   return ret;
 }
 
+int ObDDLUtil::get_table_row_cnt_and_avg_row_len(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    int64_t &table_row_cnt,
+    double &table_avg_row_len)
+{
+  int ret = OB_SUCCESS;
+  const int64_t table_row_cnt_pos = 0;
+  const int64_t table_avg_row_len_pos = 1;
+  ObObj result_table_row_cnt;
+  ObObj result_table_avg_row_len;
+  table_row_cnt = 0;
+  table_avg_row_len = 0;
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString query_string;
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(query_string.assign_fmt("SELECT row_cnt, avg_row_len FROM %s WHERE tenant_id = %lu AND table_id = %lu",
+                  share::OB_ALL_TABLE_STAT_TNAME,
+                  share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                  share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id)))) {
+        LOG_WARN("assign sql string failed", K(ret), K(share::OB_ALL_TABLE_STAT_TNAME), K(tenant_id), K(table_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
+        LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), K(tenant_id), K(table_id), K(query_string));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          table_row_cnt = 0;
+          table_avg_row_len = 0;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get next result failed", K(ret), K(tenant_id), K(table_id), K(query_string));
+        }
+      } else if (OB_FAIL(result->get_obj(table_row_cnt_pos, result_table_row_cnt))) {
+        LOG_WARN("failed to get object", K(ret), K(tenant_id), K(table_id), K(query_string), K(table_row_cnt_pos), K(result_table_row_cnt));
+      } else if (OB_FAIL(result->get_obj(table_avg_row_len_pos, result_table_avg_row_len))) {
+        LOG_WARN("failed to get object", K(ret), K(tenant_id), K(table_id), K(query_string), K(table_avg_row_len_pos), K(result_table_avg_row_len));
+      } else if (result_table_row_cnt.is_null()) {
+        table_row_cnt = 0;
+        LOG_WARN("table row count is null", K(ret), K(tenant_id), K(table_id), K(query_string));
+        ret = OB_SUCCESS;
+      } else if (result_table_avg_row_len.is_null()) {
+        table_avg_row_len = 0;
+        LOG_WARN("table avg row len is null", K(ret), K(tenant_id), K(table_id), K(query_string));
+        ret = OB_SUCCESS;
+      } else if (OB_UNLIKELY(!result_table_row_cnt.is_integer_type() || !result_table_avg_row_len.is_numeric_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected obj type", K(ret), K(tenant_id), K(table_id), K(query_string), K(result_table_row_cnt.get_type()), K(result_table_avg_row_len.get_type()));
+      } else {
+        table_row_cnt = result_table_row_cnt.get_int();
+        table_avg_row_len = result_table_avg_row_len.get_double();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::get_ls_host_left_disk_space(
     const uint64_t &tenant_id,
     const share::ObLSID &ls_id,
