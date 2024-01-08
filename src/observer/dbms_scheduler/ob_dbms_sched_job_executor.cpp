@@ -145,9 +145,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
     CK (OB_LIKELY(inited_));
     CK (OB_NOT_NULL(sql_proxy_));
     CK (sql_proxy_->is_inited());
+    CK (job_info.valid());
+    CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
     if (OB_SUCC(ret)) {
-      CK (job_info.valid());
-      CK ((job_info.get_what().length() != 0) || (job_info.get_program_name().length() != 0));
       if (job_info.get_what().length() != 0) { // action
         if (job_info.is_oracle_tenant_) {
           OZ (what.append_fmt("BEGIN %.*s; END;",
@@ -279,7 +279,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-    OZ (table_operator_.update_for_start(tenant_id, job_info));
 
     OZ (run_dbms_sched_job(tenant_id, job_info));
 
