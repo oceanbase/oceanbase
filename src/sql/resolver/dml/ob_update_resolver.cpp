@@ -451,7 +451,7 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
         LOG_WARN("add reference table to namespace checker failed", K(ret));
       } else if (OB_FAIL(update_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()))) {
         LOG_WARN("failed to add from item", K(ret));
-      } else if (check_need_fired_trigger(table_item)) {
+      } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
         LOG_WARN("failed to check need fired trigger", K(ret));
       } else {
       /*
