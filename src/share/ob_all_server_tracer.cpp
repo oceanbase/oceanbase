@@ -566,6 +566,9 @@ int ObServerTraceMap::refresh()
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info))) {
     LOG_WARN("fail to get servers_info", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_UNLIKELY(servers_info.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("read nothing in table", KR(ret), K(servers_info));
   } else {
     SpinWLockGuard guard(lock_);
     // reuse memory
@@ -579,6 +582,7 @@ int ObServerTraceMap::refresh()
     }
     if (OB_SUCC(ret) && !has_build_) {
       has_build_ = true;
+      FLOG_INFO("server tracer has built", KR(ret), K(has_build_), K(server_info_arr_));
     }
   }
   return ret;
