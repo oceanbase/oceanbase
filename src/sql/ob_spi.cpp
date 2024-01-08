@@ -6019,10 +6019,15 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
             CK (type->is_collection_type());
             CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(type)));
             OZ (collection_type->get_element_type().newx(*coll.get_allocator(), ns, ptr));
-            if (OB_SUCC(ret) && collection_type->get_element_type().is_collection_type()) {
+            if (OB_FAIL(ret)) {
+            } else if (collection_type->get_element_type().is_collection_type()) {
               ObPLCollection *collection = NULL;
               CK (OB_NOT_NULL(collection = reinterpret_cast<ObPLCollection*>(ptr)));
               OX (collection->set_count(0));
+            } else if (collection_type->get_element_type().is_record_type()) {
+              ObPLRecord *record = NULL;
+              CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(ptr)));
+              OX (record->set_null());
             }
             OZ (collection_type->get_element_type().get_size(PL_TYPE_INIT_SIZE, init_size));
             OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
