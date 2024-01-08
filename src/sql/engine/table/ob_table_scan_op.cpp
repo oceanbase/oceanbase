@@ -1366,9 +1366,9 @@ int ObTableScanOp::do_init_before_get_row()
 {
   int ret = OB_SUCCESS;
   if (need_init_before_get_row_) {
-    LOG_DEBUG("do init before get row", K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
+    LOG_DEBUG("do init before get row", K(MY_SPEC.id_), K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
     if (OB_UNLIKELY(iter_end_)) {
-      //do nothing
+      LOG_DEBUG("do init before get row meet iter end", K(MY_SPEC.id_));
     } else {
       if (MY_SPEC.gi_above_) {
         ObGranuleTaskInfo info;

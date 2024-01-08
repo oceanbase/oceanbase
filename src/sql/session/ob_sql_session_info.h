@@ -1272,6 +1272,7 @@ public:
   int is_enable_range_extraction_for_not_in(bool &enabled) const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_sqlstat_enabled() const;
+  bool is_spf_mlj_group_rescan_enabled() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
