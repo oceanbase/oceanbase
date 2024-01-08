@@ -479,6 +479,11 @@ private:
                      const ObTableLockMode lock_mode,
                      const ObTableLockOwnerID lock_owner,
                      ObRetryCtx &retry_ctx);
+  template<class RpcProxy, class LockRequest>
+  int rpc_call_(RpcProxy &proxy_batch,
+                const ObAddr &addr,
+                const int64_t timeout_us,
+                const LockRequest &request);
   int get_retry_lock_ids_(const ObLockIDArray &lock_ids,
                           const int64_t start_pos,
                           ObLockIDArray &retry_lock_ids);

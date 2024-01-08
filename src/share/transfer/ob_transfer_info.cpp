@@ -828,14 +828,13 @@ int ObTransferLockUtil::unlock_tablet_on_src_ls_for_table_lock(
   return ret;
 }
 
-template<typename LockArg>
 int ObTransferLockUtil::process_table_lock_on_tablets_(
   ObMySQLTransaction &trans,
   const uint64_t tenant_id,
   const ObLSID &ls_id,
   const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
   const ObDisplayTabletList &table_lock_tablet_list,
-  LockArg &lock_arg)
+  ObLockAloneTabletRequest &lock_arg)
 {
   int ret = OB_SUCCESS;
   lock_arg.tablet_ids_.reset();
@@ -872,7 +871,7 @@ int ObTransferLockUtil::process_table_lock_on_tablets_(
       LOG_WARN("lock tablet failed", KR(ret), K(tenant_id), K(lock_arg));
     }
   } else if (OUT_TRANS_UNLOCK == lock_arg.op_type_) {
-    if (OB_FAIL(ObInnerConnectionLockUtil::unlock_tablet(tenant_id, lock_arg, conn))) {
+    if (OB_FAIL(ObInnerConnectionLockUtil::unlock_tablet(tenant_id, static_cast<ObUnLockAloneTabletRequest &>(lock_arg), conn))) {
       LOG_WARN("unock tablet failed", KR(ret), K(tenant_id), K(lock_arg));
     }
   } else {
