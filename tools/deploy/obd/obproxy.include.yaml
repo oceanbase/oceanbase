@@ -5,4 +5,3 @@ config:
   enable_metadb_used: 'false'
   enable_qa_mode: 'TRUE'
   location_expire_period: '1'
-__mirror_repository_section_name: taobao-test
