@@ -669,7 +669,8 @@ public:
                            const ObIArray<ObRawExpr*> &src_keys,
                            const ObIArray<ObRawExpr*> &target_keys,
                            const ObIArray<ObRawExpr*> &target_part_keys,
-                           ObIArray<ObRawExpr *> &src_part_keys);
+                           ObIArray<ObRawExpr *> &src_part_keys,
+                           const bool ignore_no_match = false);
 
   /** @brief Allcoate operator for subquery path */
   int allocate_subquery_path(SubQueryPath *subpath,
