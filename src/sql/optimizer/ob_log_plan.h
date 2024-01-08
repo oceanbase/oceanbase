@@ -987,8 +987,6 @@ public:
 
   int candi_allocate_subplan_filter_for_where();
 
-  int candi_allocate_subplan_filter_for_exprs(ObIArray<ObRawExpr*> &exprs);
-
   int candi_allocate_subplan_filter(const ObIArray<ObRawExpr *> &subquery_exprs,
                                     const ObIArray<ObRawExpr *> *filters = NULL,
                                     const bool is_update_set = false,

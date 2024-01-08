@@ -92,7 +92,7 @@ int ObSelectLogPlan::candi_allocate_group_by()
              OB_FAIL(append(candi_subquery_exprs, stmt->get_rollup_exprs())) ||
              OB_FAIL(append(candi_subquery_exprs, stmt->get_aggr_items()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
     LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
   } else if (stmt->is_scala_group_by()) {
     if (OB_FAIL(ObOptimizerUtil::classify_subquery_exprs(stmt->get_having_exprs(),
@@ -1372,7 +1372,7 @@ int ObSelectLogPlan::candi_allocate_distinct()
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(get_distinct_exprs(best_plan, reduce_exprs, distinct_exprs))) {
     LOG_WARN("failed to get select columns", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(distinct_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(distinct_exprs))) {
         LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
   } else if (distinct_exprs.empty()) {
     // if all the distinct exprs are const, we add limit operator instead of distinct operator
@@ -4620,13 +4620,8 @@ int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item()
     LOG_WARN("null stmt", K(select_stmt), K(ret));
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::get_subquery_exprs(select_exprs,
-                                                         subquery_exprs))) {
-    LOG_WARN("failed to get subquery exprs", K(ret));
-  } else if (subquery_exprs.empty()) {
-    /*do nothing*/
-  } else if (OB_FAIL(candi_allocate_subplan_filter(subquery_exprs))) {
-    LOG_WARN("failed to allocate subplan filter for select item", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter(select_exprs))) {
+    LOG_WARN("failed to candi allocate subplan filter for exprs", K(ret));
   } else {
     LOG_TRACE("succeed to allocate subplan filter for select item", K(select_stmt->get_stmt_id()));
   }
@@ -4739,7 +4734,7 @@ int ObSelectLogPlan::candi_allocate_window_function()
     LOG_WARN("unexpected params", K(ret), K(stmt), K(stmt->has_window_function()));
   } else if (OB_FAIL(append(candi_subquery_exprs, stmt->get_window_func_exprs()))) {
     LOG_WARN("failed to append exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter_for_exprs(candi_subquery_exprs))) {
+  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
     LOG_WARN("failed to do allocate subplan filter", K(ret));
   } else if (OB_FAIL(candi_allocate_window_function_with_hint(stmt->get_window_func_exprs(),
                                                               win_func_plans))) {
