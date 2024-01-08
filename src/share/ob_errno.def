@@ -2370,6 +2370,23 @@ DEFINE_ERROR_EXT(OB_ERR_DEBUG_ID_NOT_EXIST, -9754, -1, "HY000", "debug_session_i
 DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
 
 ////////////////////////////////////////////////////////////////
+//error code for OBKV [-10500 ---- -10700)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_TTL_NOT_ENABLE, -10501, -1, "HY000", "TTL feature is not enabled");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_NOT_EXIST, -10502, -1, "HY000", "TTL column not exists", "TTL column '%.*s' not exists");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, -10503, -1, "HY000", "Column type is not supported in TTL definition", "Column type of '%.*s' is not supported for TTL definition");
+DEFINE_ERROR_EXT(OB_TTL_CMD_NOT_ALLOWED, -10504, -1, "HY000", "TTL command is not allowed", "TTL command is not allowed, current TTL status is '%s'");
+DEFINE_ERROR(OB_TTL_NO_TASK_RUNNING, -10505, -1, "HY000", "No TTL task is running, please try trigger a new TTL task");
+DEFINE_ERROR(OB_TTL_TENANT_IS_RESTORE, -10506, -1, "HY000", "Cannot execute TTL task during tenant is restore");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_TTL, -10507, -1, "HY000", "Time to live of hbase table must be greater than 0");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS, -10508, -1, "HY000", "MaxVersions of hbase table must be greater than 0");
+DEFINE_ERROR_EXT(OB_KV_CREDENTIAL_NOT_MATCH, -10509, -1, "HY000", "OBKV credential not match", "Access denied, credential '%.*s' not match '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey column count not match", "Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'");
+DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
+
+////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN, -11000, ER_VALUES_CLAUSE_NEED_HAVE_COLUMN, "HY000", "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.");

@@ -235,6 +235,9 @@ private:
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
   static int replace_exprs_with_dependant(ObTableCtx &ctx,
                                           common::ObIArray<sql::ObRawExpr *> &dst_exprs);
+  static int add_all_column_infos(ObTableCtx &ctx,
+                                  common::ObIAllocator &allocator,
+                                  sql::ColContentFixedArray &column_infos);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };

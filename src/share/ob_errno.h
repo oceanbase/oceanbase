@@ -1799,6 +1799,19 @@ constexpr int OB_ERR_FORALL_ON_REMOTE_TABLE = -9752;
 constexpr int OB_ERR_SEQUENCE_NOT_DEFINE = -9753;
 constexpr int OB_ERR_DEBUG_ID_NOT_EXIST = -9754;
 constexpr int OB_ERR_CLIENT_LOCAL_FILES_DISABLED = -9762;
+constexpr int OB_TTL_NOT_ENABLE = -10501;
+constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
+constexpr int OB_TTL_COLUMN_TYPE_NOT_SUPPORTED = -10503;
+constexpr int OB_TTL_CMD_NOT_ALLOWED = -10504;
+constexpr int OB_TTL_NO_TASK_RUNNING = -10505;
+constexpr int OB_TTL_TENANT_IS_RESTORE = -10506;
+constexpr int OB_TTL_INVALID_HBASE_TTL = -10507;
+constexpr int OB_TTL_INVALID_HBASE_MAXVERSIONS = -10508;
+constexpr int OB_KV_CREDENTIAL_NOT_MATCH = -10509;
+constexpr int OB_KV_ROWKEY_COUNT_NOT_MATCH = -10510;
+constexpr int OB_KV_COLUMN_TYPE_NOT_MATCH = -10511;
+constexpr int OB_KV_COLLATION_MISMATCH = -10512;
+constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
@@ -3971,6 +3984,19 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__USER_ERROR_MSG "sequence is not yet defined in this session"
 #define OB_ERR_DEBUG_ID_NOT_EXIST__USER_ERROR_MSG "debug_session_id = %u does not exist"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__USER_ERROR_MSG "Loading local data is disabled; this must be enabled on both the client and server sides"
+#define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
+#define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
+#define OB_TTL_COLUMN_TYPE_NOT_SUPPORTED__USER_ERROR_MSG "Column type of '%.*s' is not supported for TTL definition"
+#define OB_TTL_CMD_NOT_ALLOWED__USER_ERROR_MSG "TTL command is not allowed, current TTL status is '%s'"
+#define OB_TTL_NO_TASK_RUNNING__USER_ERROR_MSG "No TTL task is running, please try trigger a new TTL task"
+#define OB_TTL_TENANT_IS_RESTORE__USER_ERROR_MSG "Cannot execute TTL task during tenant is restore"
+#define OB_TTL_INVALID_HBASE_TTL__USER_ERROR_MSG "Time to live of hbase table must be greater than 0"
+#define OB_TTL_INVALID_HBASE_MAXVERSIONS__USER_ERROR_MSG "MaxVersions of hbase table must be greater than 0"
+#define OB_KV_CREDENTIAL_NOT_MATCH__USER_ERROR_MSG "Access denied, credential '%.*s' not match '%.*s'"
+#define OB_KV_ROWKEY_COUNT_NOT_MATCH__USER_ERROR_MSG "Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'"
+#define OB_KV_COLUMN_TYPE_NOT_MATCH__USER_ERROR_MSG "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
+#define OB_KV_COLLATION_MISMATCH__USER_ERROR_MSG "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
+#define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
@@ -6143,6 +6169,19 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SEQUENCE_NOT_DEFINE__ORA_USER_ERROR_MSG "ORA-08002: sequence is not yet defined in this session"
 #define OB_ERR_DEBUG_ID_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9754, debug_session_id = %u does not exist"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9762, Loading local data is disabled; this must be enabled on both the client and server sides"
+#define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
+#define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
+#define OB_TTL_COLUMN_TYPE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10503, Column type of '%.*s' is not supported for TTL definition"
+#define OB_TTL_CMD_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10504, TTL command is not allowed, current TTL status is '%s'"
+#define OB_TTL_NO_TASK_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10505, No TTL task is running, please try trigger a new TTL task"
+#define OB_TTL_TENANT_IS_RESTORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10506, Cannot execute TTL task during tenant is restore"
+#define OB_TTL_INVALID_HBASE_TTL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10507, Time to live of hbase table must be greater than 0"
+#define OB_TTL_INVALID_HBASE_MAXVERSIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10508, MaxVersions of hbase table must be greater than 0"
+#define OB_KV_CREDENTIAL_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10509, Access denied, credential '%.*s' not match '%.*s'"
+#define OB_KV_ROWKEY_COUNT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10510, Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'"
+#define OB_KV_COLUMN_TYPE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10511, Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
+#define OB_KV_COLLATION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10512, Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
+#define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
@@ -6162,7 +6201,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2168];
+extern int g_all_ob_errnos[2181];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

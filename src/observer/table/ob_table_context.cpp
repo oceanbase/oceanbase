@@ -19,6 +19,8 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "ob_table_aggregation.h"
 
+using namespace oceanbase::common;
+
 namespace oceanbase
 {
 namespace table
@@ -75,7 +77,7 @@ int ObTableCtx::init_sess_info(ObTableApiCredential &credential)
 }
 
 int ObTableCtx::init_common(ObTableApiCredential &credential,
-                            const common::ObTabletID &arg_tablet_id,
+                            const ObTabletID &arg_tablet_id,
                             const uint64_t table_id,
                             const int64_t &timeout_ts)
 {
@@ -140,6 +142,7 @@ int ObTableCtx::construct_column_items()
         item.is_stored_generated_column_ = col_schema->is_stored_generated_column();
         item.is_virtual_generated_column_ = col_schema->is_virtual_generated_column();
         item.is_auto_increment_ = col_schema->is_autoincrement();
+        item.is_nullable_ = col_schema->is_nullable();
         item.generated_expr_str_ = item.default_value_.get_string();
         item.auto_filled_timestamp_ = col_schema->is_on_update_current_timestamp();
         item.rowkey_position_ = col_schema->get_rowkey_position();
@@ -301,8 +304,8 @@ int ObTableCtx::init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema
   - adjust entity
 */
 int ObTableCtx::init_common(ObTableApiCredential &credential,
-                            const common::ObTabletID &arg_tablet_id,
-                            const common::ObString &arg_table_name,
+                            const ObTabletID &arg_tablet_id,
+                            const ObString &arg_table_name,
                             const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -317,6 +320,11 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                                                     false, /* is_index */
                                                     table_schema_))) {
     LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
+  } else if (OB_ISNULL(table_schema_)) {
+    ret = OB_TABLE_NOT_EXIST;
+    ObString db("");
+    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, db.ptr(), arg_table_name.ptr());
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(database_id), K(arg_table_name));
   } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, arg_table_name, timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id),
       K(arg_table_name), K(timeout_ts));
@@ -326,8 +334,8 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
 }
 
 int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
-                                  const common::ObTabletID &arg_tablet_id,
-                                  const common::ObString &table_name,
+                                  const ObTabletID &arg_tablet_id,
+                                  const ObString &table_name,
                                   const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
@@ -353,6 +361,7 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
     if (is_scan_) { // 扫描场景使用table_schema上的tablet id,客户端已经做了路由分发
       if (table_schema_->is_partitioned_table()) { // 不支持分区表
         ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid tablet id in partition table when do scan");
         LOG_WARN("partitioned table not supported", K(ret), K(table_name));
       } else {
         tablet_id = table_schema_->get_tablet_id();
@@ -380,6 +389,8 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
     LOG_WARN("fail to construct column items", K(ret));
   } else if (!is_scan_ && OB_FAIL(adjust_entity())) {
     LOG_WARN("fail to adjust entity", K(ret));
+  } else if (OB_FAIL(sess_guard_.get_sess_info().get_binlog_row_image(binlog_row_image_type_))) {
+    LOG_WARN("fail to get binlog row image", K(ret));
   } else {
     table_name_ = table_name;
     ref_table_id_ = table_schema_->get_table_id();
@@ -394,11 +405,11 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
   return ret;
 }
 
-// get columns type from index_schema or primary table schema
-int ObTableCtx::generate_columns_type(ObIArray<ObExprResType> &columns_type)
+// get columns info from index_schema or primary table schema
+int ObTableCtx::generate_column_infos(ObIArray<ObTableColumnInfo> &columns_infos)
 {
   int ret = OB_SUCCESS;
-  ObExprResType tmp_column_type;
+  ObTableColumnInfo tmp_column_info;
   const ObColumnSchemaV2 *column_schema = nullptr;
 
   if (is_index_scan_) {
@@ -407,10 +418,10 @@ int ObTableCtx::generate_columns_type(ObIArray<ObExprResType> &columns_type)
       if (OB_ISNULL(column_schema = index_schema_->get_column_schema(index_col_ids_.at(i)))) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get column schema", K(ret), K(index_col_ids_.at(i)));
-      } else if (OB_FAIL(cons_column_type(*column_schema, tmp_column_type))) {
-        LOG_WARN("fail to cons column type", K(ret));
-      } else if (OB_FAIL(columns_type.push_back(tmp_column_type))) {
-        LOG_WARN("fail to push back column type", K(ret), K(tmp_column_type));
+      } else if (OB_FAIL(cons_column_info(*column_schema, tmp_column_info))) {
+        LOG_WARN("fail to cons column info", K(ret));
+      } else if (OB_FAIL(columns_infos.push_back(tmp_column_info))) {
+        LOG_WARN("fail to push back column info", K(ret), K(tmp_column_info));
       }
     }
   } else { // primary key
@@ -423,10 +434,10 @@ int ObTableCtx::generate_columns_type(ObIArray<ObExprResType> &columns_type)
       } else if (OB_ISNULL(column_schema = table_schema_->get_column_schema(column_id))) {
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get column schema", K(ret), K(column_id));
-      } else if (OB_FAIL(cons_column_type(*column_schema, tmp_column_type))) {
-        LOG_WARN("fail to cons column type", K(ret));
-      } else if (OB_FAIL(columns_type.push_back(tmp_column_type))) {
-        LOG_WARN("fail to push back column type", K(ret), K(tmp_column_type));
+      } else if (OB_FAIL(cons_column_info(*column_schema, tmp_column_info))) {
+        LOG_WARN("fail to cons column info", K(ret));
+      } else if (OB_FAIL(columns_infos.push_back(tmp_column_info))) {
+        LOG_WARN("fail to push back column info", K(ret), K(tmp_column_info));
       }
     }
   }
@@ -434,25 +445,29 @@ int ObTableCtx::generate_columns_type(ObIArray<ObExprResType> &columns_type)
   return ret;
 }
 
-int ObTableCtx::cons_column_type(const ObColumnSchemaV2 &column_schema,
-                                 ObExprResType &column_type)
+int ObTableCtx::cons_column_info(const ObColumnSchemaV2 &column_schema,
+                                 ObTableColumnInfo &column_info)
 {
   int ret = OB_SUCCESS;
-  column_type.set_type(column_schema.get_data_type());
-  column_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(column_schema));
+  column_info.type_.set_type(column_schema.get_data_type());
+  column_info.type_.set_result_flag(ObRawExprUtils::calc_column_result_flag(column_schema));
+  column_info.column_name_ = column_schema.get_column_name_str();
+  column_info.is_auto_inc_ = column_schema.is_autoincrement();
+  column_info.is_nullable_ = column_schema.is_nullable();
 
   if (ob_is_string_type(column_schema.get_data_type()) || ob_is_json(column_schema.get_data_type())) {
-    column_type.set_collation_type(column_schema.get_collation_type());
-    column_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    column_info.type_.set_collation_type(column_schema.get_collation_type());
+    column_info.type_.set_collation_level(CS_LEVEL_IMPLICIT);
   } else {
-    column_type.set_collation_type(CS_TYPE_BINARY);
-    column_type.set_collation_level(CS_LEVEL_NUMERIC);
+    column_info.type_.set_collation_type(CS_TYPE_BINARY);
+    column_info.type_.set_collation_level(CS_LEVEL_NUMERIC);
   }
   const ObAccuracy &accuracy = column_schema.get_accuracy();
-  column_type.set_accuracy(accuracy);
-  const bool is_zerofill = column_type.has_result_flag(ZEROFILL_FLAG);
+  column_info.type_.set_accuracy(accuracy);
+  const bool is_zerofill = column_info.type_.has_result_flag(ZEROFILL_FLAG);
   if (is_zerofill) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "modifing column with ZEROFILL flag");
     LOG_WARN("modifing column with ZEROFILL flag is not supported", K(ret), K(column_schema));
   }
 
@@ -496,25 +511,28 @@ int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
   - check collation for string type and convert obj type to the column type (char, varchar or text)
   - check accuracy
 */
-int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
-                                   ObObj &obj,
-                                   bool is_autoincrement/*=false*/)
+int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  const bool is_not_nullable = column_type.is_not_null_for_read();
+  const ObExprResType &column_type = column_info.type_;
   const ObCollationType cs_type = column_type.get_collation_type();
 
   // 1. check nullable
-  if (is_not_nullable && obj.is_null()) {
-    if (!is_autoincrement) {
+  if (!column_info.is_nullable_ && obj.is_null()) {
+    if (!column_info.is_auto_inc_) {
       ret = OB_BAD_NULL_ERROR;
+      LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
     }
   } else if (obj.is_null() || is_inc()) {
     // continue
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
     // 2. data type mismatch
-    ret = OB_OBJ_TYPE_ERROR;
+    ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
+    const char *schema_type_str = ob_obj_type_str(column_type.get_type());
+    const char *obj_type_str = ob_obj_type_str(obj.get_type());
+    LOG_USER_ERROR(OB_KV_COLUMN_TYPE_NOT_MATCH, column_info.column_name_.length(), column_info.column_name_.ptr(),
+        static_cast<int>(strlen(schema_type_str)), schema_type_str, static_cast<int>(strlen(obj_type_str)), obj_type_str);
     LOG_WARN("object type mismatch with column type", K(ret), K(column_type), K(obj));
   } else {
     // 3. check collation
@@ -530,7 +548,11 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
         // same charset, convert it
         obj.set_collation_type(cs_type);
       } else {
-        ret = OB_ERR_COLLATION_MISMATCH;
+        ret = OB_KV_COLLATION_MISMATCH;
+        const char *schema_coll_str = ObCharset::collation_name(cs_type);
+        const char *obj_coll_str = ObCharset::collation_name(obj.get_collation_type());
+        LOG_USER_ERROR(OB_KV_COLLATION_MISMATCH, column_info.column_name_.length(), column_info.column_name_.ptr(),
+            static_cast<int>(strlen(schema_coll_str)), schema_coll_str, static_cast<int>(strlen(obj_coll_str)), obj_coll_str);
         LOG_WARN("collation type mismatch with column", K(ret), K(column_type), K(obj));
       }
       if (OB_SUCC(ret)) {
@@ -546,6 +568,16 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
     // 4. check accuracy
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ob_obj_accuracy_check_only(column_type.get_accuracy(), cs_type, obj))) {
+        if (ret == OB_DATA_OUT_OF_RANGE) {
+          int64_t row_num = 0;
+          LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_info.column_name_.length(), column_info.column_name_.ptr(), row_num);
+        } else if (ret == OB_OPERATE_OVERFLOW) {
+          const char *type_str = ob_obj_type_str(column_type.get_type());
+          LOG_USER_ERROR(OB_OPERATE_OVERFLOW, type_str, column_info.column_name_.ptr());
+        } else if (ret == OB_ERR_DATA_TOO_LONG) {
+          int64_t row_num = 0;
+          LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG, column_info.column_name_.length(), column_info.column_name_.ptr(), row_num);
+        }
         LOG_WARN("accuracy check failed", K(ret), K(obj), K(column_type));
       }
     }
@@ -564,12 +596,12 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
 int ObTableCtx::adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj)
 {
   int ret = OB_SUCCESS;
-  ObExprResType column_type;
+  ObTableColumnInfo column_info;
 
-  if (OB_FAIL(cons_column_type(col_schema, column_type))) {
-    LOG_WARN("fail to construct column type", K(ret), K(col_schema));
-  } else if (OB_FAIL(adjust_column_type(column_type, obj, col_schema.is_autoincrement()))) {
-    LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj));
+  if (OB_FAIL(cons_column_info(col_schema, column_info))) {
+    LOG_WARN("fail to construct column info", K(ret), K(col_schema));
+  } else if (OB_FAIL(adjust_column_type(column_info, obj))) {
+    LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj), K(column_info));
   }
 
   return ret;
@@ -608,6 +640,7 @@ int ObTableCtx::adjust_rowkey()
         has_auto_inc = true;
         if (col_schema->is_part_key_column()) {
           ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto increment column set to be partition column");
           LOG_WARN("auto increment column could not be partition column", K(ret), K(*col_schema));
         } else if (!is_full_filled) { // curr column is auto_increment and user not fill，no need to check
           need_check = false;
@@ -629,7 +662,8 @@ int ObTableCtx::adjust_rowkey()
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (!has_auto_inc && entity_rowkey_cnt != schema_rowkey_cnt) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_KV_ROWKEY_COUNT_NOT_MATCH;
+      LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
       LOG_WARN("entity rowkey count mismatch table schema rowkey count",
            K(ret), K(entity_rowkey_cnt), K(schema_rowkey_cnt));
     }
@@ -660,12 +694,15 @@ int ObTableCtx::adjust_properties()
       const ObString &col_name = prop_names.at(i);
       ObObj &prop_obj = const_cast<ObObj &>(prop_objs.at(i));
       if (OB_ISNULL(col_schema = table_schema_->get_column_schema(col_name))) {
-        ret = OB_ERR_COLUMN_NOT_FOUND;
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        const ObString &table = table_schema_->get_table_name_str();
+        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, col_name.length(), col_name.ptr(), table.length(), table.ptr());
         LOG_WARN("fail to get column schema", K(ret), K(col_name));
       } else if (is_get) {
         // do nothing
       } else if (col_schema->is_rowkey_column()) {
         ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutate rowkey column");
         LOG_WARN("property should not be rowkey column", K(ret), K(prop_names), K(i));
       } else if (OB_FAIL(adjust_column(*col_schema, prop_obj))) {
         LOG_WARN("fail to adjust column", K(ret), K(prop_obj));
@@ -722,11 +759,11 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
 {
   int ret = OB_SUCCESS;
   int64_t padding_num = -1;
-  ObArray<sql::ObExprResType> columns_type;
+  ObSEArray<ObTableColumnInfo, 32> columns_infos;
   int64_t N = scan_ranges.count();
 
-  if (OB_FAIL(generate_columns_type(columns_type))) {
-    LOG_WARN("fail to generate columns type", K(ret));
+  if (OB_FAIL(generate_column_infos(columns_infos))) {
+    LOG_WARN("fail to generate columns infos", K(ret));
   } else if (is_index_scan_) {
     // 索引扫描场景下用户可能没有填写rowkey的key_range，需要加上
     padding_num = index_schema_->get_rowkey_column_num() - index_col_ids_.count();
@@ -745,17 +782,18 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
       if (p_key->is_min_row() || p_key->is_max_row()) {
         // do nothing
       } else {
-        if (p_key->get_obj_cnt() != columns_type.count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("wrong rowkey size", K(ret), K(i), K(j), K(*p_key), K(columns_type));
+        if (p_key->get_obj_cnt() != columns_infos.count()) {
+          ret = OB_KV_SCAN_RANGE_MISSING;
+          LOG_USER_ERROR(OB_KV_SCAN_RANGE_MISSING, p_key->get_obj_cnt(), columns_infos.count());
+          LOG_WARN("wrong rowkey size", K(ret), K(i), K(j), K(*p_key), K(columns_infos));
         } else {
           const int64_t M = p_key->get_obj_cnt();
           for (int64_t k = 0; OB_SUCCESS == ret && k < M; ++k) {
             ObObj &obj = const_cast<ObObj&>(p_key->get_obj_ptr()[k]);
             if (obj.is_min_value() || obj.is_max_value()) {
               // do nothing
-            } else if (OB_FAIL(adjust_column_type(columns_type.at(k), obj))) {
-              LOG_WARN("fail to adjust column type", K(ret), K(columns_type.at(k)), K(obj));
+            } else if (OB_FAIL(adjust_column_type(columns_infos.at(k), obj))) {
+              LOG_WARN("fail to adjust column type", K(ret), K(columns_infos.at(k)), K(obj));
             }
           }
         }
@@ -865,7 +903,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     } else {
       // init index_col_ids_
       if (OB_SUCC(ret)) {
-        const common::ObIndexInfo &index_info = index_schema_->get_index_info();
+        const ObIndexInfo &index_info = index_schema_->get_index_info();
         if (OB_FAIL(index_info.get_column_ids(index_col_ids_))) {
           LOG_WARN("fail to get index column ids", K(ret), K(index_info));
         }
@@ -988,7 +1026,7 @@ int ObTableCtx::add_stored_generated_column_assignment(const ObTableAssignment &
       }
     }
   }
-  return init_dml_related_tid();
+  return ret;
 }
 
 /*
@@ -1015,6 +1053,7 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
     if (OB_SUCCESS == entity.get_property(item.column_name_, prop_obj)) {
       if (item.rowkey_position_ > 0) {
         ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
+        LOG_USER_ERROR(OB_ERR_UPDATE_ROWKEY_COLUMN);
         LOG_WARN("can not update rowkey column", K(ret));
       } else {
         ObTableAssignment assign(&item);
@@ -1248,10 +1287,15 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
       } else if (assign.column_item_->auto_filled_timestamp_) {
         // do nothing
       } else if (delta.is_null()) {
-        ret = OB_OBJ_TYPE_ERROR;
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "append null");
         LOG_WARN("append NULL is illegal", K(ret), K(delta));
       } else if (OB_UNLIKELY(!ob_is_string_type(delta.get_type()))) {
-        ret = OB_OBJ_TYPE_ERROR;
+        ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
+        const char *schema_type_str = "stringTc";
+        const char *obj_type_str = ob_obj_type_str(delta.get_type());
+        LOG_USER_ERROR(OB_KV_COLUMN_TYPE_NOT_MATCH, assign.column_item_->column_name_.length(), assign.column_item_->column_name_.ptr(),
+            static_cast<int>(strlen(schema_type_str)), schema_type_str, static_cast<int>(strlen(obj_type_str)), obj_type_str);
         LOG_WARN("can only append string type", K(ret), K(delta));
       } else {
         const ObString &column_name = assign.column_item_->column_name_;
@@ -1310,11 +1354,16 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
         LOG_WARN("column item is null", K(ret), K(assign));
       } else if (assign.column_item_->is_auto_increment_) {
         ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "increment auto increment column");
         LOG_WARN("not support increment auto increment column", K(ret), K(assign));
       } else if (assign.column_item_->auto_filled_timestamp_) {
         // do nothing
       } else if (!ob_is_int_tc(delta.get_type())) {
-        ret = OB_OBJ_TYPE_ERROR;
+        ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
+        const char *schema_type_str = "intTc";
+        const char *obj_type_str = ob_obj_type_str(delta.get_type());
+        LOG_USER_ERROR(OB_KV_COLUMN_TYPE_NOT_MATCH, assign.column_item_->column_name_.length(), assign.column_item_->column_name_.ptr(),
+            static_cast<int>(strlen(schema_type_str)), schema_type_str, static_cast<int>(strlen(obj_type_str)), obj_type_str);
         LOG_WARN("delta should only be signed integer type", K(ret), K(delta));
       } else {
         const ObString &column_name = assign.column_item_->column_name_;
@@ -1575,7 +1624,7 @@ int ObTableCtx::init_agg_cell_proj(int64_t size)
 }
 
 int ObTableCtx::add_aggregate_proj(int64_t cell_idx,
-                                   const common::ObString &column_name,
+                                   const ObString &column_name,
                                    const ObIArray<ObTableAggregation> &aggregations)
 {
   int ret = OB_SUCCESS;
@@ -1703,20 +1752,22 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
   int ret = OB_SUCCESS;
-  use_put = true;
+  use_put = false;
+  bool can_use_put = true;
 
   if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
-    use_put = false;
+    can_use_put = false;
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
   } else if (is_htable()) { // htable has no index and alway full filled.
-    use_put = true;
+    can_use_put = true;
   } else if (is_client_set_put_ && !related_index_ids_.empty()) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with index use put");
     LOG_WARN("client set use_put flag, but has local index is not support", K(ret), K_(related_index_ids));
   } else if (!related_index_ids_.empty()) { // has index, can not use put
-    use_put = false;
+    can_use_put = false;
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema is null", K(ret));
@@ -1729,12 +1780,17 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
         - table_schema_->get_rowkey_column_num() <= entity_->get_properties_count())) { // all columns are filled
     } else if (is_client_set_put_ && !is_all_columns_filled) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "all columns not filled but use put");
       LOG_WARN("client set use_put flag, but not fill all columns is not support", K(ret), KPC_(table_schema), KPC_(entity));
     } else if (is_client_set_put_ || is_all_columns_filled) {
-      use_put = true;
+      can_use_put = true;
     } else { // some columns are missing
-      use_put = false;
+      can_use_put = false;
     }
+  }
+
+  if (OB_SUCC(ret) && can_use_put && !is_total_quantity_log()) {
+    use_put = true;
   }
 
   return ret;

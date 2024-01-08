@@ -102,7 +102,7 @@ TEST_F(TestTableSessPool, test_node_init)
 TEST_F(TestTableSessPool, test_node_val_init)
 {
   ObTableApiSessNode node(*mock_cred_);
-  ObTableApiSessNodeVal val(&node);
+  ObTableApiSessNodeVal val(&node, MTL_ID());
   ASSERT_FALSE(val.is_inited_);
   ASSERT_EQ(&node, val.owner_node_);
 }
@@ -132,7 +132,7 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ASSERT_NE(0, node->last_active_ts_);
 
   // add mock val to node
-  ObTableApiSessNodeVal val(node);
+  ObTableApiSessNodeVal val(node, MTL_ID());
   val.is_inited_ = true;
   ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(&val));
 
@@ -217,7 +217,7 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   // add mock val to node
   ObTableApiSessNode *node;
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
-  ObTableApiSessNodeVal val(node);
+  ObTableApiSessNodeVal val(node, MTL_ID());
   val.is_inited_ = true;
   ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(&val));
 

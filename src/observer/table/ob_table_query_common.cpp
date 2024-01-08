@@ -50,6 +50,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
       LOG_WARN("htable scan should not set Offset and Limit", K(ret), K(query));
     } else if (ObQueryFlag::Forward != query.get_scan_order() && ObQueryFlag::Reverse != query.get_scan_order()) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "scan order");
       LOG_WARN("TableQuery with htable_filter only support forward and reverse scan yet", K(ret));
     }
   }

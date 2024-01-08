@@ -29,6 +29,8 @@
 #include "share/table/ob_table_ttl_common.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_role.h"
+#include "common/row/ob_row.h"
+#include "lib/oblog/ob_warning_buffer.h"
 namespace oceanbase
 {
 namespace common
@@ -380,6 +382,16 @@ public:
     msg_[0] = '\0';
   }
   ~ObTableResult() = default;
+  void set_err(int err)
+  {
+    errno_ = err;
+    if (err != common::OB_SUCCESS) {
+      common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+      if (OB_NOT_NULL(wb)) {
+        (void)snprintf(msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
+      }
+    }
+  }
   void set_errno(int err) { errno_ = err; }
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);
@@ -879,6 +891,16 @@ public:
 private:
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);
   int alloc_buf_if_need(const int64_t size);
+  OB_INLINE int64_t get_lob_storage_count(const common::ObNewRow &row) const
+  {
+    int64_t count = 0;
+    for (int64_t i = 0; i < row.get_count(); ++i) {
+      if (is_lob_storage(row.get_cell(i).get_type())) {
+        count++;
+      }
+    }
+    return count;
+  }
 private:
   common::ObSEArray<ObString, 16> properties_names_;  // serialize
   int64_t row_count_;                                 // serialize
