@@ -43,7 +43,7 @@ namespace share
 bool is_valid_tenant_scn(
   const share::SCN &sync_scn,
   const share::SCN &replayable_scn,
-  const share::SCN &standby_scn,
+  const share::SCN &readable_scn,
   const share::SCN &recovery_until_scn);
 
 SCN gen_new_sync_scn(const share::SCN &cur_sync_scn, const share::SCN &desired_sync_scn, const share::SCN &cur_recovery_until_scn);
@@ -62,7 +62,7 @@ public:
   * @param[in] switchover_epoch
   * @param[in] sync_scn
   * @param[in] replayable_scn
-  * @param[in] standby_scn
+  * @param[in] readable_scn
   * @param[in] recovery_until_scn
   * @param[in] log_mode
   */
@@ -72,7 +72,7 @@ public:
           const int64_t switchover_epoch = 0,
           const SCN &sync_scn = SCN::base_scn(),
           const SCN &replayable_scn = SCN::base_scn(),
-          const SCN &standby_scn = SCN::base_scn(),
+          const SCN &readable_scn = SCN::base_scn(),
           const SCN &recovery_until_scn = SCN::base_scn(),
           const ObArchiveMode &log_mode = NOARCHIVE_MODE,
           const share::ObLSID &max_ls_id = share::SYS_LS);
@@ -116,7 +116,7 @@ IS_TENANT_STATUS(prepare_flashback_for_switch_to_primary)
     "switchover_status", switchover_status_.to_str(),
     K_(switchover_epoch), "sync_scn", sync_scn_.get_val_for_inner_table_field(),
     "replayable_scn", replayable_scn_.get_val_for_inner_table_field(),
-    "standby_scn", standby_scn_.get_val_for_inner_table_field(),
+    "readable_scn", readable_scn_.get_val_for_inner_table_field(),
     "recovery_until_scn", recovery_until_scn_.get_val_for_inner_table_field(),
     "log_mode", log_mode_.to_str(), "max_ls_id", max_ls_id_.id());
   DECLARE_TO_YSON_KV;
@@ -140,7 +140,7 @@ public:\
   Property_declare_var(int64_t, switchover_epoch)
   Property_declare_var(share::SCN, sync_scn)
   Property_declare_var(share::SCN, replayable_scn)
-  Property_declare_var(share::SCN, standby_scn)
+  Property_declare_var(share::SCN, readable_scn)
   Property_declare_var(share::SCN, recovery_until_scn)
   Property_declare_var(ObArchiveMode, log_mode)
   Property_declare_var(share::ObLSID, max_ls_id)

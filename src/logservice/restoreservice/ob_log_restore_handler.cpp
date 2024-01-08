@@ -850,27 +850,10 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
 {
   int ret = OB_SUCCESS;
   bool offline_log_exist = false;
-  share::ObTenantRole tenant_role;
-  share::schema::ObTenantStatus tenant_status;
   palf::AccessMode access_mode;
-  const char *db_name = service_attr.user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? "OCEANBASE" : "SYS";
-  ObSqlString user;
-  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
   SMART_VAR(share::ObLogRestoreProxyUtil, proxy_util) {
-    if (!service_attr.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(service_attr.get_password(passwd, sizeof(passwd)))) {
-      CLOG_LOG(WARN, "get_password failed", K(id_), K(service_attr));
-    } else if (OB_FAIL(service_attr.get_user_str_(user))) {
-      CLOG_LOG(WARN, "get user str failed", K(service_attr));
-    } else if (OB_FAIL(proxy_util.init(MTL_ID(), service_attr.addr_,
-            user.ptr(), passwd, db_name))) {
-      CLOG_LOG(WARN, "proxy_util init failed", K(id_));
-    } else if (OB_FAIL(proxy_util.get_tenant_info(tenant_role, tenant_status))) {
-      CLOG_LOG(WARN, "get tenant info failed", K(id_), K(service_attr));
-    } else if (! tenant_role.is_standby() || share::schema::ObTenantStatus::TENANT_STATUS_NORMAL != tenant_status) {
-      ret = OB_SOURCE_TENANT_STATE_NOT_MATCH;
-      CLOG_LOG(WARN, "tenant role or status not match", K(id_), K(tenant_role), K(tenant_status), K(service_attr));
+    if (OB_FAIL(proxy_util.init_with_service_attr(MTL_ID(), &service_attr))) {
+      CLOG_LOG(WARN, "proxy_util init failed", K(id_), K(service_attr));
     } else if (OB_FAIL(proxy_util.get_max_log_info(share::ObLSID(id_), access_mode, archive_scn))) {
       // OB_ENTRY_NOT_EXIST, ls not exist in gv$ob_log_stat, a) ls has no leader; b) access virtual table failed; c) ls gc
       if (OB_ENTRY_NOT_EXIST == ret) {

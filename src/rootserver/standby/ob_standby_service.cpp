@@ -246,6 +246,7 @@ int ObStandbyService::failover_to_primary(
   } else if (OB_FAIL(role_transition_service.init(
       tenant_id,
       switch_optype,
+      is_verify,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -255,8 +256,8 @@ int ObStandbyService::failover_to_primary(
   } else if (tenant_info.is_primary() && tenant_info.is_normal_status()) {
     LOG_INFO("already is primary tenant, no need switch", K(tenant_info));
   } else {
-    if (OB_FAIL(role_transition_service.failover_to_primary(is_verify))) {
-      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id), K(is_verify));
+    if (OB_FAIL(role_transition_service.failover_to_primary())) {
+      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id));
     }
     switch_scn = tenant_info.get_sync_scn();
   }
@@ -521,6 +522,7 @@ int ObStandbyService::switch_to_primary(
   } else if (OB_FAIL(role_transition_service.init(
       tenant_id,
       switch_optype,
+      is_verify,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -529,8 +531,8 @@ int ObStandbyService::switch_to_primary(
         KP(sql_proxy_), KP(GCTX.srv_rpc_proxy_), K(cost_detail), K(all_ls));
   } else {
     (void)role_transition_service.set_switchover_epoch(tenant_info.get_switchover_epoch());
-    if (OB_FAIL(role_transition_service.failover_to_primary(is_verify))) {
-      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id), K(is_verify));
+    if (OB_FAIL(role_transition_service.failover_to_primary())) {
+      LOG_WARN("fail to failover to primary", KR(ret), K(tenant_id));
     }
     switch_scn = role_transition_service.get_so_scn();
   }
@@ -598,6 +600,7 @@ int ObStandbyService::switch_to_standby(
         } else if (OB_FAIL(role_transition_service.init(
             tenant_id,
             switch_optype,
+            is_verify,
             sql_proxy_,
             GCTX.srv_rpc_proxy_,
             &cost_detail,

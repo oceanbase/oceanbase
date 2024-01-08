@@ -406,7 +406,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
     ret = OB_NEED_WAIT;
     LOG_TRACE("sts can not work for current tenant status", KR(ret), K(tenant_info));
   } else {
-    standby_scn = tenant_info.get_standby_scn();
+    standby_scn = tenant_info.get_readable_scn();
   }
 
   const int64_t PRINT_INTERVAL = 3 * 1000 * 1000L;

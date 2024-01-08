@@ -663,6 +663,7 @@ int ObRestoreScheduler::post_check(const ObPhysicalRestoreJob &job_info)
     } else if (OB_FAIL(role_transition_service.init(
         tenant_id_,
         ObSwitchTenantArg::OpType::INVALID,
+        false, /* is_verify */
         sql_proxy_,
         GCTX.srv_rpc_proxy_,
         &cost_detail,
@@ -1384,7 +1385,7 @@ int ObRestoreScheduler::check_tenant_replay_to_consistent_scn(const uint64_t ten
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected recovery until scn", K(ret), K(tenant_info), K(scn));
   } else {
-    is_replay_finish = (tenant_info.get_recovery_until_scn() <= tenant_info.get_standby_scn());
+    is_replay_finish = (tenant_info.get_recovery_until_scn() <= tenant_info.get_readable_scn());
     LOG_INFO("[RESTORE]tenant replay to consistent_scn", K(is_replay_finish));
   }
   return ret;

@@ -131,16 +131,19 @@ public:
     switch_optype_(obrpc::ObSwitchTenantArg::OpType::INVALID),
     so_scn_(),
     cost_detail_(NULL),
-    all_ls_info_(NULL) {}
+    all_ls_info_(NULL),
+    has_restore_source_(false),
+    is_verify_(false) {}
   virtual ~ObTenantRoleTransitionService() {}
   int init(
       uint64_t tenant_id,
       const obrpc::ObSwitchTenantArg::OpType &switch_optype,
+      const bool is_verify,
       common::ObMySQLProxy *sql_proxy,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       ObTenantRoleTransCostDetail *cost_detail,
       ObTenantRoleTransAllLSInfo *all_ls_info);
-  int failover_to_primary(const bool is_verify);
+  int failover_to_primary();
   int check_inner_stat();
   int do_switch_access_mode_to_append(const share::ObAllTenantInfo &tenant_info,
                              const share::ObTenantRole &target_tenant_role);
@@ -174,6 +177,7 @@ public:
       const int64_t old_switchover_epoch,
       ObAllTenantInfo &new_tenant_info);
 
+  int wait_sys_ls_sync_to_latest_until_timeout_(const uint64_t tenant_id, ObAllTenantInfo &tenant_info);
   /**
    * @description:
    *    wait tenant sync to switchover checkpoint until timeout
@@ -181,7 +185,8 @@ public:
    * @param[in] primary_checkpoints primary switchover checkpoint
    * @return return code
    */
-  int wait_tenant_sync_to_latest_until_timeout_(const uint64_t tenant_id, ObAllTenantInfo &tenant_info);
+  int wait_tenant_sync_to_latest_until_timeout_(const uint64_t tenant_id, const ObAllTenantInfo &tenant_info);
+  int check_restore_source_for_switchover_to_primary_(const uint64_t tenant_id);
 
   /**
    * @description:
@@ -260,6 +265,16 @@ private:
       const ObIArray<obrpc::ObCheckpoint> &checkpoints,
       share::SCN &sys_ls_sync_scn,
       bool &is_sync_to_latest);
+  /**
+   * @description:
+   *    wait tenant/sys ls sync to switchover checkpoint until timeout
+   * @param[in] tenant_id
+   * @param[in] only_check_sys_ls true: only wait sys ls sync; false: wait tenant sync
+   * @return return code
+   */
+  int check_sync_to_latest_do_while_(
+    const ObAllTenantInfo &tenant_info,
+    const bool only_check_sys_ls);
 
   /**
    * @description:
@@ -269,9 +284,12 @@ private:
    * @param[out] is_all_ls_synced whether sync to latest
    * @return return code
    */
-  int check_sync_to_latest_(const uint64_t tenant_id,
-                            ObAllTenantInfo &tenant_info,
-                            bool &is_all_ls_synced);
+  int check_sync_to_latest_(
+      const uint64_t tenant_id,
+      const bool only_check_sys_ls,
+      const ObAllTenantInfo &tenant_info,
+      bool &is_sys_ls_synced,
+      bool &is_all_ls_synced);
 
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
@@ -307,6 +325,8 @@ private:
   share::SCN so_scn_;
   ObTenantRoleTransCostDetail *cost_detail_;
   ObTenantRoleTransAllLSInfo *all_ls_info_;
+  bool has_restore_source_;
+  bool is_verify_;
 };
 }
 }
