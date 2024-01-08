@@ -120,6 +120,7 @@ int ObExprJsonUnquote::eval_json_unquote(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObJsonBuffer j_buf(&temp_allocator);
   bool is_null = false;
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_FAIL(arg->eval(ctx, json_datum))) {
     ret = OB_ERR_INVALID_DATATYPE;
     LOG_WARN("error, eval json args datum failed", K(ret));

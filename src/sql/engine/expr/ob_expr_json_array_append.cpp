@@ -99,6 +99,7 @@ int ObExprJsonArrayAppend::eval_json_array_append(const ObExpr &expr, ObEvalCtx 
   bool is_null = false;
   ObJsonSeekResult hit;
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));

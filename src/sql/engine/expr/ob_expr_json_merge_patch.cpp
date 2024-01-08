@@ -115,6 +115,7 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
   ObIJsonBase *j_patch_node = NULL;
   bool has_null = false;
   ObJsonNull j_null;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -192,6 +193,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
 
   // eval option original int64 type value
   int64_t opt_array[OPT_MAX_ID] = {0};
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   for (size_t i = 2; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
     ObDatum *opt_datum = NULL;
     ObExpr *opt_expr = expr.args_[i];

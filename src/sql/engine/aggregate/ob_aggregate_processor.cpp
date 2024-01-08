@@ -7063,6 +7063,8 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
   common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStringBuffer value(&res_alloc_arr);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "JSONModule"));
+
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -7198,6 +7200,8 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
   common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStringBuffer value(&res_alloc_arr);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "JSONModule"));
+
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -7243,7 +7247,7 @@ int ObAggregateProcessor::get_ora_json_arrayagg_result(const ObAggrInfo &aggr_in
           LOG_WARN("failed to append key and value", K(ret));
         } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
           ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-          LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+          LOG_WARN("result of oracle json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
                                                             K(OB_MAX_PACKET_LENGTH));
         } else {
           tmp_alloc.reset();
@@ -7320,6 +7324,8 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
   common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStringBuffer value(&res_alloc_arr);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "JSONModule"));
+
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unpexcted null", K(ret), K(extra));
@@ -7443,7 +7449,7 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
               LOG_WARN("failed to append key and value", K(ret), K(key_data));
             } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-              LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+              LOG_WARN("result of json object agg is too long", K(ret), K(bin_agg.get_approximate_length()),
                                                                 K(OB_MAX_PACKET_LENGTH));
             } else {
               tmp_alloc.reset();
@@ -7497,12 +7503,9 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
 
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "XMLModule"));
 
-  if (OB_ISNULL(eval_ctx_.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get session failed.", K(ret));
-  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_alloc, xml_mem_ctx))) {
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&tmp_alloc, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_ISNULL(content = OB_NEWx(ObXmlDocument, xml_mem_ctx->allocator_, ObMulModeNodeType::M_CONTENT, xml_mem_ctx))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -7694,7 +7697,7 @@ int ObAggregateProcessor::get_ora_xmlagg_result(const ObAggrInfo &aggr_info,
             LOG_WARN("append binary failed", K(ret));
           } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
             ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-            LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+            LOG_WARN("result of xmlagg is too long", K(ret), K(bin_agg.get_approximate_length()),
                                                             K(OB_MAX_PACKET_LENGTH));
           } else if (!is_unparsed) {
             is_unparsed = bin->get_unparse();
@@ -7751,6 +7754,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
   common::ObArenaAllocator res_alloc_back(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   common::ObArenaAllocator res_alloc_arr(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObStringBuffer value(&res_alloc_arr);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(eval_ctx_.exec_ctx_.get_my_session()), "JSONModule"));
 
   if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7830,7 +7834,7 @@ int ObAggregateProcessor::get_ora_json_objectagg_result(const ObAggrInfo &aggr_i
               LOG_WARN("failed to append key and value", K(ret), K(key_string));
             } else if (bin_agg.get_approximate_length() > OB_MAX_PACKET_LENGTH * 2) {
               ret = OB_ERR_TOO_LONG_STRING_IN_CONCAT;
-              LOG_WARN("result of json_arrayagg is too long", K(ret), K(bin_agg.get_approximate_length()),
+              LOG_WARN("result of oracle json object agg is too long", K(ret), K(bin_agg.get_approximate_length()),
                                                                 K(OB_MAX_PACKET_LENGTH));
             } else {
               tmp_alloc.reset();

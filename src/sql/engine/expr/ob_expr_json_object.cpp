@@ -197,6 +197,7 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObJsonObject j_obj(&temp_allocator);
   ObIJsonBase *j_base = &j_obj;
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -259,6 +260,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
 
   // parse null type
   uint8_t null_type = OB_JSON_ON_NULL_IMPLICIT;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_SUCC(ret)
       && OB_FAIL(eval_option_clause_value(expr.args_[expr.arg_cnt_ - 4], ctx, null_type, OB_JSON_ON_NULL_NUM))) {
     LOG_WARN("fail to eval option", K(ret), K(expr.arg_cnt_));

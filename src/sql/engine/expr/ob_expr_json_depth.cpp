@@ -60,6 +60,7 @@ int ObExprJsonDepth::eval_json_depth(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType || json_datum->is_null()) {

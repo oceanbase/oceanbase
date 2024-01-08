@@ -188,6 +188,7 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   // get context first
   ObJsonParamCacheCtx ctx_cache(&temp_allocator);
   ObJsonParamCacheCtx* param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }

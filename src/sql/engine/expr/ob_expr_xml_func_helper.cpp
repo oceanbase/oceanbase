@@ -34,18 +34,6 @@ namespace oceanbase
 namespace sql
 {
 
-uint64_t ObXMLExprHelper::get_tenant_id(ObSQLSessionInfo *session)
-{
-  uint64_t tenant_id = 0;
-  if (OB_ISNULL(session)) {
-  } else if (session->get_ddl_info().is_ddl_check_default_value()) {
-    tenant_id = OB_SERVER_TENANT_ID;
-  } else {
-    tenant_id = session->get_effective_tenant_id();
-  }
-  return tenant_id;
-}
-
 int ObXMLExprHelper::add_binary_to_element(ObMulModeMemCtx* mem_ctx, ObString binary_value, ObXmlElement &element)
 {
   INIT_SUCC(ret);

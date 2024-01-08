@@ -106,6 +106,7 @@ int ObExprJsonQuote::eval_json_quote(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObDatum* json_datum = NULL;
   bool is_null = false;
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_FAIL(arg->eval(ctx, json_datum))) {
     LOG_WARN("failed: eval json args datum.", K(ret));
   } else if (OB_FAIL(calc(ctx, temp_allocator, *json_datum, arg->datum_meta_,

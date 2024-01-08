@@ -136,12 +136,9 @@ int ObExprExtractValue::eval_extract_value(const ObExpr &expr, ObEvalCtx &ctx, O
   ObString xml_res;
   ObCollationType cs_type = CS_TYPE_INVALID;
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
-  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get session failed.", K(ret));
-  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (OB_UNLIKELY(expr.arg_cnt_ != 2 && expr.arg_cnt_ != 3)) {
     ret = OB_ERR_PARAM_SIZE;
@@ -188,11 +185,8 @@ int ObExprExtractValue::eval_mysql_extract_value(const ObExpr &expr, ObEvalCtx &
   ObStringBuffer xml_res(&allocator);
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObXMLExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
-  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get session failed.", K(ret));
-  } else if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   } else if (expr.arg_cnt_ != 2) {
     ret = OB_ERR_PARAM_SIZE;

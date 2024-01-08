@@ -430,6 +430,7 @@ int ObExprJsonExists::eval_json_exists(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   // No error is reported when the json data is empty, no error is reported anyway, and the result is false
   // When error on error, json parses an error and reports an error, otherwise no error is reported (false on error by default)
   // ORA-40441: JSON syntax error
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
                                              json_data, is_null_json))) {
     if (ret == OB_ERR_JSON_SYNTAX_ERROR) {

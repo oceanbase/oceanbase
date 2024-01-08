@@ -647,6 +647,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp
+  engine/expr/ob_expr_multi_mode_func_helper.cpp
   engine/expr/ob_expr_xmlparse.cpp
   engine/expr/ob_expr_xml_element.cpp
   engine/expr/ob_expr_xml_attributes.cpp

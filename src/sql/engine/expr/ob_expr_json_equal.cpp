@@ -97,6 +97,7 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObObjType val_type_l = json_arg_l->datum_meta_.type_;
   ObExpr *json_arg_r = expr.args_[1];
   ObObjType val_type_r = json_arg_l->datum_meta_.type_;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (val_type_l == ObRawType || val_type_r == ObRawType) {
     ret = OB_ERR_JSON_SYNTAX_ERROR;
     is_cover_by_error = true;

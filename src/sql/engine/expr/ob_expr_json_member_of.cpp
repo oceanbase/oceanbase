@@ -92,6 +92,7 @@ int ObExprJsonMemberOf::eval_json_member_of(const ObExpr &expr, ObEvalCtx &ctx, 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   bool is_null_result = (expr.args_[0]->datum_meta_.type_ == ObNullType);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (!is_null_result) {
     ObDatum *json_datum = NULL;
     ObExpr *json_arg = expr.args_[0];

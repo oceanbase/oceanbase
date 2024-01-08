@@ -120,6 +120,7 @@ int ObExprJsonStorageSize::eval_json_storage_size(const ObExpr &expr, ObEvalCtx 
   } else {
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObIAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
     if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
       LOG_WARN("fail to calc json storage free result", K(ret), K(arg->datum_meta_));
     }

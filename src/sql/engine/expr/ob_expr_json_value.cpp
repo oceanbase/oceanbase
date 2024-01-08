@@ -236,6 +236,7 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   * get content point，
   */
   param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_ISNULL(param_ctx)) {
     param_ctx = &ctx_cache;
   }
@@ -333,6 +334,7 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   }
 
   // add version protection, as lower version has handle input in a defference way
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("json value raw expr number has change in 4.2.2 version", K(ret));

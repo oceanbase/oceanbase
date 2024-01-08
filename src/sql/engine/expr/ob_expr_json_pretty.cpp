@@ -64,6 +64,7 @@ int ObExprJsonPretty::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta
   ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
   common::ObString j_str = data.get_string(); // json text or json binary
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (OB_ISNULL(allocator)) { // check allocator
     ret = OB_NOT_INIT;
     LOG_WARN("allcator is null", K(ret));

@@ -15,6 +15,7 @@
 #include "ob_expr_json_array_insert.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -86,6 +87,7 @@ int ObExprJsonArrayInsert::eval_json_array_insert(const ObExpr &expr, ObEvalCtx 
   bool is_null = false;
   ObJsonSeekResult hit;
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "JSONModule"));
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
