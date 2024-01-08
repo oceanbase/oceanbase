@@ -449,6 +449,8 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     // Most of the time, if it is not an identifier character, it maybe a space,
     // comma, opening parenthesis, or closing parenthesis. This judgment logic is
     // added here to avoid the next judgment whether it is utf8 char or gbk char
+  } else if (!is_oracle_mode_) {
+    idf_pos = notascii_gb_char(pos);
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
@@ -919,6 +921,17 @@ int ObFastParserBase::get_one_insert_row_str(ObRawSql &raw_sql,
   LOG_TRACE("after get one insert row str", K(raw_sql.cur_pos_), K(str), K(row_state),
       K(on_duplicate_params), K(is_valid), K(start), K(end));
   return ret;
+}
+
+inline int64_t ObFastParserBase::notascii_gb_char(const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (notascii(raw_sql_.char_at(pos))) {
+    idf_pos = pos + 1;
+  } else {
+    idf_pos = is_gbk_char(pos);
+  }
+  return idf_pos;
 }
 
 inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
@@ -1672,6 +1685,8 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     // Most of the time, if it is not an identifier character, it maybe a space,
     // comma, opening parenthesis, or closing parenthesis. This judgment logic is
     // added here to avoid the next judgment whether it is utf8 char or gbk char
+  } else if (!is_oracle_mode_) {
+    idf_pos = notascii_gb_char(pos);
   } else if (CHARSET_UTF8MB4 == charset_type_ || CHARSET_UTF16 == charset_type_) {
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
