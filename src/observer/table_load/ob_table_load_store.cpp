@@ -927,6 +927,29 @@ int ObTableLoadStore::px_finish_trans(const ObTableLoadTransId &trans_id)
   return ret;
 }
 
+int ObTableLoadStore::px_check_for_write(const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
+  } else {
+    bool is_exist = false;
+    for (int64_t i = 0; i < store_ctx_->ls_partition_ids_.count(); ++i) {
+      const ObTableLoadLSIdAndPartitionId &ls_part_id = store_ctx_->ls_partition_ids_.at(i);
+      if (ls_part_id.part_tablet_id_.tablet_id_ == tablet_id) {
+        is_exist = true;
+        break;
+      }
+    }
+    if (OB_UNLIKELY(!is_exist)) {
+      ret = OB_NOT_MASTER;
+      LOG_WARN("not partition master", KR(ret), K(tablet_id), K(store_ctx_->ls_partition_ids_));
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadStore::px_write(const ObTableLoadTransId &trans_id,
     const ObTabletID &tablet_id, const ObIArray<ObNewRow> &row_array)
 {
