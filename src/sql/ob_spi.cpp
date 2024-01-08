@@ -4027,6 +4027,21 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                       spi_cursor->fields_));
                   //}
                   OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
+                  if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
+                    int cli_ret = OB_SUCCESS;
+                    retry_ctrl.test_and_save_retry_state(GCTX,
+                                                         spi_result.get_sql_ctx(),
+                                                         *spi_result.get_result_set(),
+                                                         ret,
+                                                         cli_ret,
+                                                         true,
+                                                         true,
+                                                         true);
+                    LOG_WARN("failed to do fill_cursor, check if need retry", K(ret), K(cli_ret), K(retry_ctrl.need_retry()), K(sql), K(ps_sql));
+                    ret = cli_ret;
+                    spi_result.get_sql_ctx().clear();
+                    ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+                  }
                   OX (spi_cursor->row_store_.finish_add_row())
                   OX (cursor->open(spi_cursor));
                   if (OB_FAIL(ret)) {
@@ -4347,7 +4362,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
               }
             }
             OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
-            if (OB_FAIL(ret)) {
+            if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                   spi_result.get_sql_ctx(),
@@ -9051,6 +9066,7 @@ int ObSPIService::spi_update_package_change_info(
   OZ (session_info->get_package_state(package_id, package_state));
   CK (OB_NOT_NULL(package_state));
   OZ (package_state->update_changed_vars(var_idx));
+  OX (session_info->set_pl_can_retry(false));
   return ret;
 }
 
