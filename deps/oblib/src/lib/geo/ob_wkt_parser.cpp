@@ -290,6 +290,9 @@ int ObWktParser::parse_geo_type(ObGeoType &geo_type)
 
   if (OB_FAIL(check_next_token_with_val(ObWktTokenType::W_WORD, tkn_val_1))) {
     LOG_WARN("fail to parse geometry type from wkt", K(ret));
+  } else if (0 == tkn_val_1.string_val_.case_compare("geomcollection")) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("wkt has extra character after parse", K(ret), K(cur_pos_));
   } else {
     geo_type = ObGeoTypeUtil::get_geo_type_by_name(tkn_val_1.string_val_);
   }

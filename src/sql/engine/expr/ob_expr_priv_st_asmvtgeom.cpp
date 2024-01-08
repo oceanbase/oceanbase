@@ -81,7 +81,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
   // boolean clip_geom
   if (OB_SUCC(ret) && param_num >= 5) {
     ObObjType extent_type = types_stack[4].get_type();
-    if (!ob_is_integer_type(extent_type) && !ob_is_string_type(extent_type)
+    if (extent_type != ObTinyIntType && !ob_is_string_type(extent_type)
         && !ob_is_null(extent_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
       LOG_WARN("invalid input type extent", K(ret), K(extent_type));
