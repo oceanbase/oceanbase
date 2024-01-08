@@ -55,6 +55,7 @@ private:
   char locks_addr_[256];
   char trace_id_buf_[40];
   char cgroup_path_buf_[PATH_BUFSIZE];
+  int read_real_cgroup_path();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualThread);
