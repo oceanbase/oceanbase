@@ -358,7 +358,11 @@ int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) con
              "dim_type", get_dim_type(), "other.dim_type", other.get_dim_type());
   } else {
     const ObQueryRangeDim &tmp = static_cast<const ObQueryRangeDim &>(other);
-    if (column_cnt_ == 0 && tmp.column_cnt_ == 0) {
+    if (contain_always_false_ && tmp.contain_always_false_) {
+      status = EQUAL;
+    } else if (contain_always_false_ || tmp.contain_always_false_) {
+      status = UNCOMPARABLE;
+    } else if (column_cnt_ == 0 && tmp.column_cnt_ == 0) {
       status = EQUAL; //both can't not extract query range, equal
     } else {
       RangeSubsetComp comp;
@@ -402,13 +406,16 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
   int ret = OB_SUCCESS;
   status = ObSkylineDim::EQUAL;
   int64_t compare_result = 0;
+  LOG_TRACE("begin skyline compare index", KPC(this), K(other));
+  OPT_TRACE("compare index", get_index_id(), "to index", other.get_index_id());
+  OPT_TRACE_BEGIN_SECTION;
   for (int i = 0; OB_SUCC(ret) && status != ObSkylineDim::UNCOMPARABLE && i < dim_count_; ++i) {
     const ObSkylineDim *left_dim = skyline_dims_[i];
     const ObSkylineDim *right_dim = other.skyline_dims_[i];
     ObSkylineDim::CompareStat tmp_status = ObSkylineDim::UNCOMPARABLE;
     if (OB_ISNULL(left_dim) || OB_ISNULL(right_dim)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("skeyline dimension should not be null", K(ret), K(i), K(left_dim), K(right_dim));
+      LOG_WARN("skyline dimension should not be null", K(ret), K(i), K(left_dim), K(right_dim));
     } else if (OB_FAIL(left_dim->compare(*right_dim, tmp_status))) {
       LOG_WARN("compare skyline dimension failed", K(ret), K(i),
                K(*left_dim), K(*right_dim));
@@ -430,6 +437,10 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
           status = ObSkylineDim::UNCOMPARABLE;
         }
       }
+      LOG_TRACE("skyline compare dim", K(i), K(tmp_status), K(compare_result), KPC(left_dim), KPC(right_dim));
+      OPT_TRACE("compare dim", static_cast<int64_t>(i), "result:", static_cast<int64_t>(tmp_status));
+      OPT_TRACE("left dim:", *left_dim);
+      OPT_TRACE("right dim:", *right_dim);
     }
   }
   if (OB_SUCC(ret)) {
@@ -441,6 +452,9 @@ int ObIndexSkylineDim::compare(const ObIndexSkylineDim &other, ObSkylineDim::Com
       }
     }
   }
+  LOG_TRACE("finish skyline compare index", K(status));
+  OPT_TRACE("compare result (UNCOMPARABLE:-2, RIGHT_DOMINATED:-1, EQUAL:0, LEFT_DOMINATED:1):", static_cast<int64_t>(status));
+  OPT_TRACE_END_SECTION;
   return ret;
 }
 
@@ -541,7 +555,8 @@ int ObIndexSkylineDim::add_interesting_order_dim(const bool is_index_back,
 }
 
 int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_range_ids,
-                                           ObIAllocator &allocator)
+                                           ObIAllocator &allocator,
+                                           bool contain_always_false)
 {
   int ret = OB_SUCCESS;
   ObQueryRangeDim *dim = NULL;
@@ -552,6 +567,7 @@ int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_rang
     LOG_WARN("failed to create dimension", K(ret));
   } else {
     if (OB_SUCC(ret)) {
+      dim->set_contain_always_false(contain_always_false);
       if (OB_FAIL(dim->add_rowkey_ids(prefix_range_ids))) {
         LOG_WARN("failed to add rowkey ids", K(ret));
       } else if (OB_FAIL(add_skyline_dim(*dim))) {
@@ -570,6 +586,9 @@ int ObSkylineDimRecorder::add_index_dim(const ObIndexSkylineDim &dim, bool &has_
   has_add = false;
   ObArray<int64_t> remove_idxs;
   bool need_add = true;
+  LOG_TRACE("Skyline Pruning try to add index", K(dim));
+  OPT_TRACE("try to add index", dim.get_index_id());
+  OPT_TRACE_BEGIN_SECTION;
   if (!dim.can_prunning()) {
     //can't prunning, just add
     if (OB_FAIL(index_dims_.push_back(&dim))) {
@@ -577,6 +596,8 @@ int ObSkylineDimRecorder::add_index_dim(const ObIndexSkylineDim &dim, bool &has_
     } else {
       has_add = true;
     }
+    LOG_TRACE("Index can not be pruning");
+    OPT_TRACE("Index can not be pruning");
   } else {
     if (OB_FAIL(has_dominate_dim(dim, remove_idxs, need_add))) {
       ret = OB_ERR_UNEXPECTED;
@@ -597,8 +618,11 @@ int ObSkylineDimRecorder::add_index_dim(const ObIndexSkylineDim &dim, bool &has_
           has_add = true;
         }
       }
+      LOG_TRACE("succeed to add index", K(dim));
+      OPT_TRACE("succeed to add index ", dim.get_index_id());
     }
   }
+  OPT_TRACE_END_SECTION;
   return ret;
 }
 
@@ -636,6 +660,7 @@ int ObSkylineDimRecorder::has_dominate_dim(const ObIndexSkylineDim &dim,
     const ObIndexSkylineDim *index_dim = index_dims_.at(i);
     if (!index_dim->can_prunning()) {
       LOG_TRACE("ignore index that can't not be prunning", K(*index_dim));
+      OPT_TRACE("index", index_dim->get_index_id(), "can't be prunning");
     } else if (OB_FAIL(index_dim->compare(dim, status))) {
       LOG_WARN("compare skyline dimension failed", K(ret), K(dim), K(i)); 
     } else if (ObSkylineDim::LEFT_DOMINATED == status) {
@@ -645,6 +670,8 @@ int ObSkylineDimRecorder::has_dominate_dim(const ObIndexSkylineDim &dim,
                  K(ret), K(i), K(remove_idxs), K(*index_dim), K(dim));
       } else {
         need_add = false;
+        LOG_TRACE("index is prunning by exists index", KPC(index_dim));
+        OPT_TRACE("index", dim.get_index_id(), "is prunning by index", index_dim->get_index_id());
         break;//not continue
       }
     } else if (ObSkylineDim::RIGHT_DOMINATED == status) {
@@ -652,6 +679,8 @@ int ObSkylineDimRecorder::has_dominate_dim(const ObIndexSkylineDim &dim,
       if (OB_FAIL(remove_idxs.push_back(i))) {
         LOG_WARN("failed to add dominate idx", K(ret));
       }
+      LOG_TRACE("index rigit dominated exists index", KPC(index_dim));
+      OPT_TRACE("index", dim.get_index_id(), "prune index", index_dim->get_index_id());
     }
   }
   return ret;

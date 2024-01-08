@@ -2025,7 +2025,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     ObSEArray<uint64_t, 8> interest_column_ids;
     ObSEArray<bool, 8> const_column_info;
     ObSEArray<uint64_t, 8> prefix_range_ids;  //for query range compare
-    bool contain_always_false = false; //for always false condition, the index is not comparable
+    bool contain_always_false = false;
     if (OB_FAIL(extract_interesting_column_ids(ordering_info->get_index_keys(),
                                                index_info_entry->get_interesting_order_prefix_count(),
                                                interest_column_ids,
@@ -2059,25 +2059,24 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
          * (2) interesting_order
          * (3) query range
          * */
-        if (contain_always_false) {
-          //包含恒false的条件(or is global index)，计划不做剪枝
-          index_dim.set_can_prunning(false);
-        }
+        bool can_extract_range = prefix_range_ids.count() > 0 || contain_always_false;
         if (OB_FAIL(index_dim.add_index_back_dim(is_index_back,
                                                  interest_column_ids.count() > 0,
-                                                 prefix_range_ids.count() > 0,
+                                                 can_extract_range,
                                                  index_schema->get_column_count(),
                                                  filter_column_ids,
                                                  *allocator_))) {
           LOG_WARN("add index back dim failed", K(is_index_back), K(ret));
         } else if (OB_FAIL(index_dim.add_interesting_order_dim(is_index_back,
-                                                               prefix_range_ids.count() > 0,
+                                                               can_extract_range,
                                                                filter_column_ids,
                                                                interest_column_ids,
                                                                const_column_info,
                                                                *allocator_))) {
           LOG_WARN("add interesting order dim failed", K(interest_column_ids), K(ret));
-        } else if (OB_FAIL(index_dim.add_query_range_dim(prefix_range_ids, *allocator_))) {
+        } else if (OB_FAIL(index_dim.add_query_range_dim(prefix_range_ids,
+                                                         *allocator_,
+                                                         contain_always_false))) {
           LOG_WARN("add query range dimension failed", K(ret));
         }
       }
@@ -2116,6 +2115,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
     } else { /*do nothing*/ }
   } else {
     //维度统计信息
+    OPT_TRACE_TITLE("BEGIN SKYLINE INDEX PRUNNING");
     ObSkylineDimRecorder recorder;
     bool has_add = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {

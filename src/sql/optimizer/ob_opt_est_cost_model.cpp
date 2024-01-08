@@ -1468,8 +1468,8 @@ int ObOptEstCostModel::cost_table_scan_one_batch(const ObCostTableScanInfo &est_
         if (est_cost_info.sample_info_.is_row_sample()) {
           index_back_row_count *= 0.01 * est_cost_info.sample_info_.percent_;
         }
-        LOG_TRACE("OPT:[COST SCAN SIMPLE ROW COUNT]", K(index_back_row_count));
         index_back_row_count = index_back_row_count * est_cost_info.postfix_filter_sel_;
+        LOG_TRACE("OPT:[COST SCAN SIMPLE ROW COUNT]", K(index_back_row_count));
         if (OB_FAIL(cost_table_get_one_batch_inner(index_back_row_count,
                                                    est_cost_info,
                                                    false,

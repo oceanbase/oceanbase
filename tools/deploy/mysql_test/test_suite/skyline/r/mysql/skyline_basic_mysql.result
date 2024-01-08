@@ -1523,17 +1523,17 @@ Outputs & filters:
       range_cond([:0 > t2.pk2])
 explain select a, b, c from t1 where b = 100 and c < 100 and c > 100 order by c desc limit 0, 100;
 Query Plan
-===============================================================
-|ID|OPERATOR        |NAME               |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------
-|0 |TABLE RANGE SCAN|t1(idx_b_c,Reverse)|0       |4           |
-===============================================================
+=================================================================
+|ID|OPERATOR        |NAME                 |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(idx_b_c_a,Reverse)|0       |4           |
+=================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.a], [t1.b], [t1.c]), filter(nil), rowset=16
-      access([t1.pk1], [t1.b], [t1.c], [t1.a]), partitions(p0)
-      limit(100), offset(0), is_index_back=true, is_global_index=false, 
-      range_key([t1.b], [t1.c], [t1.pk1]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      access([t1.b], [t1.c], [t1.a]), partitions(p0)
+      limit(100), offset(0), is_index_back=false, is_global_index=false, 
+      range_key([t1.b], [t1.c], [t1.a], [t1.pk1]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false, 
       range_cond([t1.b = 100], [t1.c < 100], [t1.c > 100])
 explain select a, b, c from t1 where b = 100 or (b = 200 and c = 300) order by c desc limit 0, 100;
 Query Plan
@@ -3710,5 +3710,1212 @@ Outputs & filters:
       access([t9.c1], [t9.c3], [t9.c5], [t9.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t9.c2], [t9.c3], [t9.c5], [t9.c1]), range(MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX)always true
+create table t10(pk int primary key, c1 int, c2 int, c3 int, c4 int);
+create index t10i1 on t10(c1, c2, c3);
+create index t10i2 on t10(c2, c3);
+create index t10i3 on t10(c3);
+create table t11(pk int primary key, c1 int, c2 int);
+create index t11i1 on t11(c1);
+create table t12(c1 int, c2 int, c3 int, c4 int, primary key(c1, c2));
+create index t12i1 on t12(c2);
+create index t12i2 on t12(c3);
+explain extended_noaddr select 1 from t10 where c1 < 0 and c1 > 0 and c2 = 1;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c2 = 1]), rowset=16
+      access([t10.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t10.c1], [t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false, 
+      range_cond([t10.c1 < 0], [t10.c1 > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i3]
+      unstable_index_name:[t10]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c3 = 1]), rowset=16
+      access([t10.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c2 < 0], [t10.c2 > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      unstable_index_name:[t10]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i3]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TABLE FULL SCAN|t10(t10i1)|0       |4           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c2 < 0], [t10.c2 > 0], [t10.c4 = 2]), rowset=16
+      access([t10.pk], [t10.c2], [t10.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,false], 
+      range_key([t10.c1], [t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i3]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TABLE FULL SCAN|t10(t10i1)|0       |4           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+      access([t10.pk], [t10.c3], [t10.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,false], 
+      range_key([t10.c1], [t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1 order by c2;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c3 = 1]), rowset=16
+      access([t10.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c2 < 0], [t10.c2 > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i1]
+      unstable_index_name:[t10]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1 order by c3;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t10(t10i2)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false, 
+      range_cond([t10.c3 < 0], [t10.c3 > 0], [t10.c2 = 1])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i1, t10i3]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2 order by c1;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TABLE FULL SCAN|t10(t10i1)|0       |4           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c2 < 0], [t10.c2 > 0], [t10.c4 = 2]), rowset=16
+      access([t10.pk], [t10.c2], [t10.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,false], 
+      range_key([t10.c1], [t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX,MAX ; MIN,MIN,MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i2, t10i3]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c2;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TABLE FULL SCAN|t10(t10i2)|0       |4           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+      access([t10.pk], [t10.c3], [t10.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,false], 
+      range_key([t10.c2], [t10.c3], [t10.pk]), range(MAX,MAX,MAX ; MIN,MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t10"@"SEL$1" "t10i2")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i1, t10i3]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c3;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SORT             |    |0       |4           |
+|1 |└─TABLE FULL SCAN|t10 |0       |4           |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      sort_keys([t10.c3, ASC])
+  1 - output([t10.c3]), filter([t10.c3 < 0], [t10.c3 > 0], [t10.c4 = 2]), rowset=16
+      access([t10.c3], [t10.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t10.pk]), range(MIN ; MAX)always true
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t10"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t10:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t10i1, t10i2, t10i3, t10]
+      pruned_index_name:[t10i1, t10i2]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0;
+Query Plan
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t11 |0       |4           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.pk]), range(MAX ; MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where c1 < 0 and c1 > 0;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.c1 < 0], [t11.c1 > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "t11i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1;
+Query Plan
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t11 |0       |4           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t11.c2 = 1]), rowset=16
+      access([t11.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t11.pk]), range(MAX ; MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      pruned_index_name:[t11i1]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by pk;
+Query Plan
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t11 |0       |4           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t11.c2 = 1]), rowset=16
+      access([t11.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t11.pk]), range(MAX ; MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      pruned_index_name:[t11i1]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c1;
+Query Plan
+=====================================================
+|ID|OPERATOR       |NAME      |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TABLE FULL SCAN|t11(t11i1)|0       |4           |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t11.pk < 0], [t11.pk > 0], [t11.c2 = 1]), rowset=16
+      access([t11.pk], [t11.c2]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true,true,false], 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "t11i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c2;
+Query Plan
+================================================
+|ID|OPERATOR        |NAME|EST.ROWS|EST.TIME(us)|
+------------------------------------------------
+|0 |TABLE RANGE SCAN|t11 |0       |4           |
+================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t11.c2 = 1]), rowset=16
+      access([t11.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t11.pk]), range(MAX ; MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1 > SEL$E230E5BA
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1")
+      REPLACE_CONST(@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      pruned_index_name:[t11i1]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+  Expr Constraints:
+      cast(1, INT(11, 0)) = 1 result is TRUE
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "t11i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by pk;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t11"@"SEL$1" "t11i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      pruned_index_name:[t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c1;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t11(t11i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t11.c1], [t11.pk]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0], [t11.c1 = 1])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1 > SEL$E230E5BA
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$E230E5BA" "hualong"."t11"@"SEL$1" "t11i1")
+      REPLACE_CONST(@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+  Expr Constraints:
+      cast(1, INT(11, 0)) = 1 result is TRUE
+explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c2;
+Query Plan
+==================================================
+|ID|OPERATOR          |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------
+|0 |SORT              |    |0       |4           |
+|1 |└─TABLE RANGE SCAN|t11 |0       |4           |
+==================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      sort_keys([t11.c2, ASC])
+  1 - output([t11.c2]), filter([t11.c1 = 1]), rowset=16
+      access([t11.c1], [t11.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t11.pk]), range(MAX ; MIN)always false, 
+      range_cond([t11.pk < 0], [t11.pk > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t11"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t11:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t11i1, t11]
+      pruned_index_name:[t11i1]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0;
+Query Plan
+======================================================
+|ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |TABLE RANGE SCAN|t12(t12i1)|0       |4           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter(nil), rowset=16
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t12.c2], [t12.c1]), range(MAX,MAX ; MIN,MIN)always false, 
+      range_cond([t12.c2 < 0], [t12.c2 > 0])
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      INDEX(@"SEL$1" "hualong"."t12"@"SEL$1" "t12i1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t12:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:1
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t12i1, t12i2, t12]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t12 |0       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0]), rowset=16
+      access([t12.c1], [t12.c2], [t12.c3], [t12.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t12.c1], [t12.c2]), range(MAX,MAX ; MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t12:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t12i1, t12i2, t12]
+      pruned_index_name:[t12i1, t12i2]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t12 |0       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([1]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
+      access([t12.c2], [t12.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t12.c1], [t12.c2]), range(MAX,MAX ; MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t12:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t12i1, t12i2, t12]
+      pruned_index_name:[t12i1]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
+explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0 and c3 = 1;
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t12 |0       |4           |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t12.c1], [t12.c2], [t12.c3], [t12.c4]), filter([t12.c2 < 0], [t12.c2 > 0], [t12.c3 = 1]), rowset=16
+      access([t12.c1], [t12.c2], [t12.c3], [t12.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t12.c1], [t12.c2]), range(MAX,MAX ; MIN,MIN)always false
+Used Hint:
+-------------------------------------
+  /*+
+      
+  */
+Qb name trace:
+-------------------------------------
+  stmt_id:0, stmt_type:T_EXPLAIN 
+  stmt_id:1, SEL$1
+Outline Data: 
+-------------------------------------
+  /*+
+      BEGIN_OUTLINE_DATA
+      FULL(@"SEL$1" "hualong"."t12"@"SEL$1")
+      OPTIMIZER_FEATURES_ENABLE('')
+      END_OUTLINE_DATA
+  */
+Optimization Info:
+-------------------------------------
+  t12:
+      table_rows:1
+      physical_range_rows:1
+      logical_range_rows:1
+      index_back_rows:0
+      output_rows:0
+      table_dop:1
+      dop_method:Table DOP
+      avaiable_index_name:[t12i1, t12i2, t12]
+      pruned_index_name:[t12i1, t12i2]
+      stats version:0
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
+  Plan Type:
+      LOCAL
+  Note:
+      Degree of Parallelisim is 1 because of table property
 set @@recyclebin = 'off';
 drop database hualong;
