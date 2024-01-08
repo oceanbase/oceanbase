@@ -22,6 +22,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/scn.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -1487,17 +1488,21 @@ int ObIndexBuildTask::update_index_status_in_schema(const ObTableSchema &index_s
       // For alter table add index syntax, create_index_arg_ will not record the user sql, and generate the ddl_stmt_str when generating index schema.
       arg.ddl_stmt_str_ = create_index_arg_.ddl_stmt_str_;
     }
-
+    bool is_parallel_ddl = true;
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
-    if (FAILEDx(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
+    if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema.get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
     } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, index_schema.get_data_table_id(), tmp_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
     } else if (OB_FALSE_IT(ddl_rpc_timeout += tmp_timeout)) {
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_INDEX_STATUS_FAILED))) {
       LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
+    } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                       ObParallelDDLControlMode::UPDATE_INDEX_STATUS,
+                       tenant_id_, is_parallel_ddl))) {
+      LOG_WARN("fail to get whether is parallel update_index_status", KR(ret), K_(tenant_id));
     } else {
-      if (data_format_version_ < DATA_VERSION_4_2_2_0) {
+      if (data_format_version_ < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
         if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
           LOG_WARN("update index status failed", K(ret), K(arg));
         }

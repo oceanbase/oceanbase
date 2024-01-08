@@ -516,6 +516,10 @@ DEF_TIME(recyclebin_object_expire_time, OB_CLUSTER_PARAMETER, "0s", "[0s,)",
          "default 0 that means auto purge recyclebin off. Range: [0s, +∞)",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_MODE_WITH_PARSER(_parallel_ddl_control, OB_TENANT_PARAMETER, "",
+        common::ObParallelDDLControlParser,
+        "switch for parallel capability of parallel DDL",
+        ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // ========================= LogService Config Begin =====================
 
 DEF_CAP(log_disk_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",

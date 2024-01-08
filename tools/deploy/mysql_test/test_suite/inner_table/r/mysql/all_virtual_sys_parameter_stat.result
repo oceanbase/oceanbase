@@ -363,6 +363,7 @@ _optimizer_better_inlist_costing
 _optimizer_group_by_placement
 _optimizer_skip_scan_enabled
 _optimizer_sortmerge_join_enabled
+_parallel_ddl_control
 _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_server_sleep_time

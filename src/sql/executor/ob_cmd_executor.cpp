@@ -18,6 +18,7 @@
 #include "lib/ob_name_def.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
+#include "share/schema/ob_schema_utils.h"
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_modify_tenant_stmt.h"
@@ -827,9 +828,13 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         ObAlterTableStmt &stmt = *(static_cast<ObAlterTableStmt*>(&cmd));
         const uint64_t tenant_id = stmt.get_tenant_id();
         uint64_t data_version = OB_INVALID_VERSION;
+        bool is_parallel_ddl = true;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
           LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-        } else if (data_version < DATA_VERSION_4_2_2_0) {
+        } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                           ObParallelDDLControlMode::SET_COMMENT, tenant_id, is_parallel_ddl))) {
+          LOG_WARN("fail to get whether is parallel set comment", KR(ret), K(tenant_id));
+        } else if (data_version < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
           DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObAlterTableExecutor);
         } else {
           DEFINE_EXECUTE_CMD(ObAlterTableStmt, ObCommentExecutor);

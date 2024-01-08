@@ -732,6 +732,110 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   return ret;
 }
 
+const char* DDLType[]
+{
+  "TRUNCATE_TABLE",
+  "SET_COMMENT",
+  "CREATE_INDEX",
+  "UPDATE_INDEX_STATUS"
+};
+
+int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)
+{
+  int ret = OB_SUCCESS;
+  ddl_type = MAX_TYPE;
+  STATIC_ASSERT((ARRAYSIZEOF(DDLType)) == MAX_TYPE, "size count not match");
+  bool find = false;
+  for (uint64_t i = 0; !find && i < ARRAYSIZEOF(DDLType); i++) {
+    if (ddl_string.case_compare(DDLType[i]) == 0) {
+      find = true;
+      ddl_type = static_cast<ObParallelDDLType>(i);
+    }
+  }
+  if (OB_UNLIKELY(!find)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "unknown ddl_type", KR(ret), K(ddl_string));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::set_value(const ObConfigModeItem &mode_item)
+{
+  int ret = OB_SUCCESS;
+  const uint8_t* values = mode_item.get_value();
+  if (OB_ISNULL(values)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "mode item's value_ is null ptr", KR(ret));
+  } else {
+    STATIC_ASSERT(((sizeof(value_)/sizeof(uint8_t) <= ObConfigModeItem::MAX_MODE_BYTES)),
+                  "value_ size overflow");
+    STATIC_ASSERT( (MAX_TYPE * 2) <= (sizeof(value_) * 8), "type size overflow");
+    value_ = 0;
+    for (uint64_t i = 0; i < 8; ++i) {
+      value_ = (value_ | static_cast<uint64_t>(values[i]) << (8 * i));
+    }
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::set_parallel_ddl_mode(const ObParallelDDLType type, const uint8_t mode)
+{
+  int ret = OB_SUCCESS;
+  if ((TRUNCATE_TABLE <= type) && (type < MAX_TYPE)) {
+    uint64_t shift = static_cast<uint64_t>(type);
+    if (!check_mode_valid_(mode)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "mode invalid", KR(ret), K(mode));
+    } else {
+      uint64_t mask = MASK << (shift * MASK_SIZE);
+      value_ = (value_ & ~mask) | (static_cast<uint64_t>(mode) << (shift * MASK_SIZE));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "type invalid", KR(ret), K(type));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel)
+{
+  int ret = OB_SUCCESS;
+  is_parallel = true;
+  if ((TRUNCATE_TABLE <= type) && (type < MAX_TYPE)) {
+    uint64_t shift = static_cast<uint64_t>(type);
+    uint8_t value = static_cast<uint8_t>((value_ >> (shift * MASK_SIZE)) & MASK);
+    if (value == ObParallelDDLControlParser::MODE_OFF) {
+      is_parallel = false;
+    } else if (value == ObParallelDDLControlParser::MODE_ON) {
+      is_parallel = true;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "invalid value unexpected", KR(ret), K(value));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "type invalid", KR(ret), K(type));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::is_parallel_ddl_enable(const ObParallelDDLType ddl_type, const uint64_t tenant_id, bool &is_parallel)
+{
+  int ret = OB_SUCCESS;
+  is_parallel = true;
+  ObParallelDDLControlMode cfg;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "invalid tenant config", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_config->_parallel_ddl_control.init_mode(cfg))) {
+    LOG_WARN("init mode failed", KR(ret));
+  } else if (OB_FAIL(cfg.is_parallel_ddl(ddl_type, is_parallel))) {
+    LOG_WARN("fail to check is parallel ddl", KR(ret), K(ddl_type));
+  }
+  return ret;
+}
+
 } // end schema
 } // end share
 } // end oceanbase

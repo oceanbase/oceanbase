@@ -28,6 +28,7 @@
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "share/schema/ob_schema_utils.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -92,7 +93,12 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
-    if (data_version < DATA_VERSION_4_2_2_0) {
+    bool is_parallel_ddl = true;
+    if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+                ObParallelDDLControlMode::CREATE_INDEX,
+                tenant_id, is_parallel_ddl))) {
+      LOG_WARN("fail to get whether create index is parallel", KR(ret), K(tenant_id));
+    } else if (data_version < DATA_VERSION_4_2_2_0 || !is_parallel_ddl) {
       start_time = ObTimeUtility::current_time();
       if (OB_FAIL(common_rpc_proxy->create_index(create_index_arg, res))) {    //send the signal of creating index to rs
         LOG_WARN("rpc proxy create index failed", K(create_index_arg),

@@ -254,8 +254,6 @@ public:
   ObTruncateTableExecutor();
   virtual ~ObTruncateTableExecutor();
   int execute(ObExecContext &ctx, ObTruncateTableStmt &stmt);
-private:
-  int check_use_parallel_truncate(const obrpc::ObTruncateTableArg &arg, bool &use_parallel_truncate);
 
 };
 
