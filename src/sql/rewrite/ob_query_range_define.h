@@ -134,6 +134,7 @@ public:
   common::ObIAllocator &allocator_;
   common::ObFixedArray<ExprFinalInfo, common::ObIAllocator> expr_final_infos_;
   common::ObFixedArray<InParam*, common::ObIAllocator> in_params_;
+  TO_STRING_KV(K_(expr_final_infos), K_(in_params));
 };
 
 class ObRangeColumnMeta
