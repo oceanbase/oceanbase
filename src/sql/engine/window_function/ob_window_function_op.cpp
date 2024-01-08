@@ -71,7 +71,8 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     role_type_,
                     wf_aggr_status_expr_,
                     input_rows_mem_bound_ratio_,
-                    estimated_part_cnt_);
+                    estimated_part_cnt_,
+                    enable_hash_base_distinct_);
 
 OB_SERIALIZE_MEMBER(ObWindowFunctionOpInput, local_task_count_, total_task_count_, wf_participator_shared_info_);
 
@@ -1153,7 +1154,6 @@ int ObWindowFunctionOp::FuncAllocer::alloc(WinFuncCell *&return_func,
 int ObWindowFunctionOp::init()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   ObWindowFunctionOpInput *op_input = static_cast<ObWindowFunctionOpInput*>(input_);
   if (OB_UNLIKELY(!wf_list_.is_empty())) {
     ret = OB_INIT_TWICE;
@@ -1293,7 +1293,7 @@ int ObWindowFunctionOp::init()
                 LOG_WARN("failed to initialize init_group_rows", K(ret));
                 aggr_func->~AggrCell();
                 aggr_func = NULL;
-              } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+              } else if (MY_SPEC.enable_hash_base_distinct_
                 && aggr_func->aggr_processor_.has_distinct()
                 && OB_FAIL(init_distinct_set(aggr_func->aggr_processor_))) {
                 LOG_WARN("failed to init distinct set", K(ret));
@@ -1480,7 +1480,6 @@ int ObWindowFunctionOp::init_mem_context()
 int ObWindowFunctionOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   if (OB_FAIL(ObOperator::inner_open())) {
     LOG_WARN("inner_open child operator failed", K(ret));
   } else if (OB_ISNULL(ctx_.get_my_session())) {
@@ -1490,7 +1489,7 @@ int ObWindowFunctionOp::inner_open()
     LOG_WARN("init shadow copy row failed", K(ret));
   } else if (OB_FAIL(init())) {
     LOG_WARN("init failed", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && distinct_aggr_count_ > 0
     && OB_FAIL(hp_infras_mgr_.reserve_hp_infras(distinct_aggr_count_))) {
     LOG_WARN("failed to init hp infras group", K(ret), K(distinct_aggr_count_));
@@ -1504,7 +1503,6 @@ int ObWindowFunctionOp::inner_open()
 int ObWindowFunctionOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   hp_infras_mgr_.destroy();
   if (OB_FAIL(ObOperator::inner_rescan())) {
     LOG_WARN("rescan child operator failed", K(ret));
@@ -1513,7 +1511,7 @@ int ObWindowFunctionOp::inner_rescan()
     LOG_WARN("NULL ptr", K(ret));
   } else if (OB_FAIL(reset_for_scan(ctx_.get_my_session()->get_effective_tenant_id()))) {
     LOG_WARN("reset_for_scan failed", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && distinct_aggr_count_ > 0) {
     if (OB_FAIL(init_hp_infras_group_mgr())) {
       LOG_WARN("failed to init hp infras group manager", K(ret));
@@ -4079,12 +4077,12 @@ int ObWindowFunctionOp::init_distinct_set(ObAggregateProcessor &aggr_processor)
 int ObWindowFunctionOp::init_hp_infras_group_mgr()
 {
   int ret = OB_SUCCESS;
-  int64_t est_rows = MY_SPEC.rows_;
+  int64_t est_rows = MY_SPEC.rows_ / MY_SPEC.estimated_part_cnt_;
   uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
   if (!hp_infras_mgr_.is_inited()) {
-    if (OB_FAIL(hp_infras_mgr_.init(tenant_id,
-      GCONF.is_sql_operator_dump_enabled(), est_rows, MY_SPEC.width_, true/*unique*/, 1/*ways*/,
-      &eval_ctx_, &sql_mem_processor_, &io_event_observer_))) {
+    if (OB_FAIL(hp_infras_mgr_.init(tenant_id, GCONF.is_sql_operator_dump_enabled(), est_rows,
+                                    MY_SPEC.width_, true /*unique*/, 1 /*ways*/, &eval_ctx_,
+                                    &sql_mem_processor_, &io_event_observer_))) {
       LOG_WARN("failed to init hash infras group", K(ret));
     }
   }

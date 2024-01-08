@@ -754,6 +754,7 @@ class EventTable
 
       // WR && ASH
       EN_CLOSE_ASH = 2201,
+      EN_DISABLE_HASH_BASE_DISTINCT = 2302,
 
       EVENT_TABLE_MAX = SIZE_OF_EVENT_TABLE
     };

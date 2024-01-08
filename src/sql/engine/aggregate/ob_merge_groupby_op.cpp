@@ -37,7 +37,9 @@ OB_SERIALIZE_MEMBER((ObMergeGroupBySpec, ObGroupBySpec),
                     sort_exprs_,
                     sort_collations_,
                     sort_cmp_funcs_,
-                    enable_encode_sort_
+                    enable_encode_sort_,
+                    est_rows_per_group_,
+                    enable_hash_base_distinct_
 );
 
 DEF_TO_STRING(ObMergeGroupBySpec)
@@ -48,7 +50,8 @@ DEF_TO_STRING(ObMergeGroupBySpec)
   J_COLON();
   pos += ObGroupBySpec::to_string(buf + pos, buf_len - pos);
   J_COMMA();
-  J_KV(K_(group_exprs), K_(rollup_exprs), K_(is_duplicate_rollup_expr), K_(has_rollup));
+  J_KV(K_(group_exprs), K_(rollup_exprs), K_(is_duplicate_rollup_expr), K_(has_rollup),
+       K_(est_rows_per_group), K_(enable_hash_base_distinct));
   J_OBJ_END();
   return pos;
 }
@@ -186,7 +189,6 @@ int ObMergeGroupByOp::init_rollup_distributor()
 int ObMergeGroupByOp::init_group_rows()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   const int64_t col_count = (MY_SPEC.has_rollup_
       ? (MY_SPEC.group_exprs_.count() + MY_SPEC.rollup_exprs_.count() + 1)
       : 0);
@@ -200,7 +202,7 @@ int ObMergeGroupByOp::init_group_rows()
       OB_FAIL(append(all_groupby_exprs_, MY_SPEC.rollup_exprs_))) {
     LOG_WARN("failed to append group exprs", K(ret));
   } else if (!is_vectorized()) {
-    if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0) {
+    if (MY_SPEC.enable_hash_base_distinct_) {
       const int64_t hp_infras_cnt = col_count <= 0 ? 1 : col_count;
       const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
       if (aggr_processor_.has_distinct() && distinct_cnt > 0
@@ -213,7 +215,7 @@ int ObMergeGroupByOp::init_group_rows()
       LOG_WARN("failed to initialize init_group_rows", K(ret));
     }
   } else {
-    if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0) {
+    if (MY_SPEC.enable_hash_base_distinct_) {
       const int64_t hp_infras_cnt = col_count - 1 <= 0 ? 1 : col_count;
       const int64_t distinct_cnt = aggr_processor_.get_distinct_count();
       if (aggr_processor_.has_distinct() && distinct_cnt > 0
@@ -242,12 +244,11 @@ int ObMergeGroupByOp::init_group_rows()
 int ObMergeGroupByOp::init()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
@@ -340,11 +341,10 @@ void ObMergeGroupByOp::destroy()
 int ObMergeGroupByOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   reset();
   if (OB_FAIL(ObGroupByOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {
@@ -356,11 +356,10 @@ int ObMergeGroupByOp::inner_switch_iterator()
 int ObMergeGroupByOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   reset();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(init_group_rows())) {

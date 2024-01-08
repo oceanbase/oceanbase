@@ -42,7 +42,8 @@ public:
       sort_collations_(alloc),
       sort_cmp_funcs_(alloc),
       enable_encode_sort_(false),
-      est_rows_per_group_(0)
+      est_rows_per_group_(0),
+      enable_hash_base_distinct_(false)
     {
     }
 
@@ -82,6 +83,7 @@ public:
   ObSortFuncs sort_cmp_funcs_;
   bool enable_encode_sort_;
   int64_t est_rows_per_group_;
+  bool enable_hash_base_distinct_;
 };
 
 // 输入数据已经按照groupby列排序

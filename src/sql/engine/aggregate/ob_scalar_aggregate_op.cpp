@@ -22,19 +22,18 @@ namespace oceanbase
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER((ObScalarAggregateSpec, ObGroupBySpec));
+OB_SERIALIZE_MEMBER((ObScalarAggregateSpec, ObGroupBySpec), enable_hash_base_distinct_);
 
 int ObScalarAggregateOp::inner_open()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   if (OB_FAIL(ObGroupByOp::inner_open())) {
     LOG_WARN("failed to inner_open", K(ret));
   } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
     LOG_WARN("failed to alloc dir id", K(ret));
   } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
   } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {
@@ -68,11 +67,10 @@ void ObScalarAggregateOp::destroy()
 int ObScalarAggregateOp::inner_switch_iterator()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   hp_infras_mgr_.destroy();
   if (OB_FAIL(ObGroupByOp::inner_switch_iterator())) {
     LOG_WARN("failed to switch_iterator", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {
@@ -86,11 +84,10 @@ int ObScalarAggregateOp::inner_switch_iterator()
 int ObScalarAggregateOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
-  uint64_t min_cluster_version = MY_SPEC.get_phy_plan()->get_min_cluster_version();
   hp_infras_mgr_.destroy();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
-  } else if (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+  } else if (MY_SPEC.enable_hash_base_distinct_
     && OB_FAIL(init_hp_infras_group_mgr())) {
     LOG_WARN("failed to init hp infras group manager", K(ret));
   } else if (OB_FAIL(aggr_processor_.init_one_group())) {

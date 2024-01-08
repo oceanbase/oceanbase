@@ -27,7 +27,7 @@ using HashPartInfras = ObHashPartInfrastructure<HashCol, HashRowStore>;
 using HashPartInfrasList = common::ObDList<HashPartInfras>;
 public:
   ObHashPartInfrastructureGroup(common::ObIAllocator &allocator)
-    : allocator_(allocator), initial_hp_size_(0), hp_infras_buffer_(nullptr),
+    : allocator_(allocator), est_bucket_num_(0), initial_hp_size_(0), hp_infras_buffer_(nullptr),
       hp_infras_buffer_idx_(MAX_HP_INFRAS_CNT)
   {
   }
@@ -104,7 +104,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObHashPartInfrastructureGroup);
 
 private:
+  const static int64_t RATIO = 20;
   common::ObIAllocator &allocator_;
+  int64_t est_bucket_num_;
   int64_t initial_hp_size_;
   HashPartInfras *hp_infras_buffer_;
   int64_t hp_infras_buffer_idx_;

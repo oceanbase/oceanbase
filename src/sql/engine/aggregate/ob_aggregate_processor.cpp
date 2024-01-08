@@ -414,7 +414,6 @@ int ObAggregateProcessor::ObSigResultHolder::restore()
 void ObAggregateProcessor::HashBasedDistinctExtraResult::reuse()
 {
   if (nullptr != hp_infras_) {
-    hp_infras_->reuse();
     hp_infras_mgr_->free_one_hp_infras(hp_infras_);
     hp_infras_ = nullptr;
   }
@@ -434,6 +433,8 @@ int ObAggregateProcessor::HashBasedDistinctExtraResult::rewind()
     } else {
       got_row_ = false;
     }
+  } else if (nullptr != unique_sort_op_ && need_rewind_) {
+    unique_sort_op_->rewind();
   }
   LOG_TRACE("extra result rewind");
   return ret;
@@ -1617,14 +1618,8 @@ int ObAggregateProcessor::collect_group_row(GroupRow *group_row,
             // distinct set is sorted and iterated in rollup_process(), rewind here.
             // if partial rollup, then group_id > 0 may not sort
             //    the first partial_rolup_idx_ group need sort
-            if (enable_hash_distinct_) {
-              if (OB_FAIL(ad_result->rewind())) {
-                LOG_WARN("rewind iterator failed", K(ret));
-              }
-            } else {
-              if (OB_FAIL(ad_result->unique_sort_op_->rewind())) {
-                LOG_WARN("rewind iterator failed", K(ret));
-              }
+            if (OB_FAIL(ad_result->rewind())) {
+              LOG_WARN("rewind iterator failed", K(ret));
             }
           } else if (!enable_hash_distinct_) {
             if (OB_FAIL(ad_result->unique_sort_op_->sort())) {
@@ -1998,14 +1993,8 @@ int ObAggregateProcessor::process_distinct_batch(
     if (group_id > 0) {
       // Group id greater than zero in sort based group by must be rollup,
       // distinct set is sorted and iterated in rollup_process(), rewind here.
-      if (enable_hash_distinct_) {
-        if (OB_FAIL(extra_info->rewind())) {
-          LOG_WARN("rewind iterator failed", K(ret));
-        }
-      } else {
-        if (OB_FAIL(extra_info->unique_sort_op_->rewind())) {
-          LOG_WARN("rewind iterator failed", K(ret));
-        }
+      if (OB_FAIL(extra_info->rewind())) {
+        LOG_WARN("rewind iterator failed", K(ret));
       }
       LOG_DEBUG("debug process distinct batch", K(group_id),
         K(start_partial_rollup_idx_), K(end_partial_rollup_idx_));
@@ -2493,15 +2482,15 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
             if (OB_ISNULL(hp_infras_mgr_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("hash part infras group should not be null", K(ret));
-            } else if (OB_FAIL(static_cast<HashBasedDistinctExtraResult*>(aggr_cell.get_extra())->init_distinct_set(
-                      aggr_info,
-                      need_rewind,
-                      *hp_infras_mgr_,
-                      eval_ctx_))) {
+            } else if (OB_FAIL(static_cast<HashBasedDistinctExtraResult*>(
+                      aggr_cell.get_extra())->init_distinct_set(aggr_info,
+                                                                need_rewind,
+                                                                *hp_infras_mgr_,
+                                                                eval_ctx_))) {
               LOG_WARN("init_distinct_set failed", K(ret));
             }
           } else {
-            if (OB_FAIL(aggr_cell.get_extra()->init_distinct_set(
+            if (OB_FAIL(static_cast<ExtraResult*>(aggr_cell.get_extra())->init_distinct_set(
                 eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id(),
                 aggr_info,
                 eval_ctx_,

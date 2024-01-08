@@ -3735,6 +3735,11 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObScalarAggregateSpec &spe
 {
   UNUSED(in_root_job);
   int ret = OB_SUCCESS;
+  spec.enable_hash_base_distinct_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0;
+  int tmp_ret = OB_E(EventTable::EN_DISABLE_HASH_BASE_DISTINCT) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    spec.enable_hash_base_distinct_ = false;
+  }
   if (OB_UNLIKELY(op.get_num_of_child() != 1 || OB_ISNULL(op.get_child(0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
@@ -3764,9 +3769,15 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
   } else {
+    spec.enable_hash_base_distinct_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0;
+    int tmp_ret = OB_E(EventTable::EN_DISABLE_HASH_BASE_DISTINCT) OB_SUCCESS;
+    if (OB_SUCCESS != tmp_ret) {
+      spec.enable_hash_base_distinct_ = false;
+    }
     if ((!op.get_group_by_exprs().empty() || !op.get_rollup_exprs().empty())
       && SCALAR_AGGREGATE != op.get_algo()) {
-      spec.est_rows_per_group_ = ceil(op.get_origin_child_card() / op.get_card());
+      double distinct_card = MAX(1.0, op.get_distinct_card());
+      spec.est_rows_per_group_ = ceil(op.get_origin_child_card() / distinct_card);
     }
     spec.set_rollup(op.has_rollup());
     spec.by_pass_enabled_ = false;
@@ -6167,6 +6178,11 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
   int ret = OB_SUCCESS;
   ObSEArray<ObExpr*, 16> rd_expr;
   ObSEArray<ObExpr*, 16> all_expr;
+  spec.enable_hash_base_distinct_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0;
+  int tmp_ret = OB_E(EventTable::EN_DISABLE_HASH_BASE_DISTINCT) OB_SUCCESS;
+  if (OB_SUCCESS != tmp_ret) {
+    spec.enable_hash_base_distinct_ = false;
+  }
   if (OB_UNLIKELY(op.get_num_of_child() != 1 || OB_ISNULL(op.get_child(0)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("wrong number of children", K(ret), K(op.get_num_of_child()));
