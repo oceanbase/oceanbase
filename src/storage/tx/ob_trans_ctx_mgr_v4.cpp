@@ -250,7 +250,7 @@ int ObLSTxCtxMgr::process_callback_(ObTxCommitCallback *&cb_list) const
   int ret = OB_SUCCESS;
   ObTxCommitCallback *next = NULL;
   for (ObTxCommitCallback *iter = cb_list; iter != NULL; iter = next) {
-    ObTxCommitCallback *next = iter->get_link_next();
+    next = iter->get_link_next();
     iter->callback();
   }
   return ret;
