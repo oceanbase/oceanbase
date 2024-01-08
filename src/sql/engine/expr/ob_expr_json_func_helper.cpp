@@ -1443,6 +1443,16 @@ int ObJsonExprHelper::transform_scalar_2jsonBase(const T &datum,
       }
       break;
     }
+    case ObGeometryType: {
+      ret = OB_ERR_INVALID_JSON_TEXT;
+      LOG_WARN("Internal JSON error", K(ret), K(type));
+      break;
+    }
+    case ObUserDefinedSQLType: {
+      ret = OB_ERR_INVALID_CAST_TO_JSON;
+      LOG_WARN("UDT transform to json is not supported currently", K(ret), K(type));
+      break;
+    }
     default:
     {
       ret = OB_INVALID_ARGUMENT;
