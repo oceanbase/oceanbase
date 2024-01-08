@@ -7104,15 +7104,20 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
           ObIJsonBase *json_val = NULL;
           ObDatum converted_datum;
           converted_datum.set_datum(storted_row->cells()[0]);
+          bool has_lob_header = tmp_obj->has_lob_header();
           // convert string charset if needed
           if (ob_is_string_type(val_type) 
               && (ObCharset::charset_type_by_coll(cs_type) != CHARSET_UTF8MB4)) {
             ObString origin_str = converted_datum.get_string();
             ObString converted_str;
-            if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str, 
+            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&tmp_alloc,
+              val_type, cs_type, tmp_obj->has_lob_header(), origin_str))) {
+              LOG_WARN("fail to get real data.", K(ret), K(origin_str));
+            } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type, converted_str,
                                                              CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
               LOG_WARN("convert string collation failed", K(ret), K(cs_type), K(origin_str.length()));
             } else {
+              has_lob_header = false;
               converted_datum.set_string(converted_str);
               cs_type = CS_TYPE_UTF8MB4_BIN;
             }
@@ -7136,7 +7141,7 @@ int ObAggregateProcessor::get_json_arrayagg_result(const ObAggrInfo &aggr_info,
             if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(converted_datum, val_type,
                                                                           &tmp_alloc, cs_type,
                                                                           json_val, ObConv2JsonParam(true,
-                                                                          tmp_obj->has_lob_header(),
+                                                                          has_lob_header,
                                                                           true)))) {
               LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
             }
@@ -7400,12 +7405,19 @@ int ObAggregateProcessor::get_json_objectagg_result(const ObAggrInfo &aggr_info,
             && (ObCharset::charset_type_by_coll(cs_type1) != CHARSET_UTF8MB4)) {
               ObString origin_str = converted_datum.get_string();
               ObString converted_str;
-              if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str, 
+              if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&tmp_alloc,
+                                                                          val_type1,
+                                                                          cs_type1,
+                                                                          tmp_obj->has_lob_header(),
+                                                                          origin_str))) {
+                LOG_WARN("fail to get real data.", K(ret), K(origin_str));
+              } else if (OB_FAIL(ObExprUtil::convert_string_collation(origin_str, cs_type1, converted_str,
                                                               CS_TYPE_UTF8MB4_BIN, tmp_alloc))) {
                 LOG_WARN("convert string collation failed", K(ret), K(cs_type1), K(origin_str.length()));
               } else {
                 converted_datum.set_string(converted_str);
                 cs_type1 = CS_TYPE_UTF8MB4_BIN;
+                has_lob_header1 = false;
               }
             }
 
