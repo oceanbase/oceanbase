@@ -686,7 +686,9 @@ int ObSubPlanFilterOp::inner_open()
 
   //BATCH SUBPLAN FILTER {
   if (OB_SUCC(ret) && MY_SPEC.enable_das_group_rescan_) {
-    max_group_size_ = OB_MAX_BULK_JOIN_ROWS;
+    int64_t simulate_group_size = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_GROUP_SIZE);
+    max_group_size_ = simulate_group_size > 0 ? simulate_group_size: OB_MAX_BULK_JOIN_ROWS;
+    LOG_TRACE("max group size of SPF is", K(max_group_size_));
     if(OB_FAIL(alloc_das_batch_params(max_group_size_+MY_SPEC.max_batch_size_))) {
       LOG_WARN("Fail to alloc das batch params.", K(ret));
     }

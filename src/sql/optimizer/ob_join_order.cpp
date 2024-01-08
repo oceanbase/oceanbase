@@ -1541,8 +1541,10 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
       create_basic_path = false;
     } else if ((helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) &&
                !is_virtual_table(ref_id)) {
+      bool force_use_nlj = false;
+      force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
       create_das_path = true;
-      create_basic_path = true;
+      create_basic_path = force_use_nlj ? false : true;
     } else if (index_info_entry->is_index_global() && ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
       // for global index use auto dop, create das path and basic path, after get auto dop result, prune unnecessary path
       create_das_path = true;
@@ -11193,6 +11195,14 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
       path_info.local_methods_ &= ~MERGE_JOIN;
       OPT_TRACE("right semi/anti join can not use nested loop/merge join");
     }
+    if (OB_SUCC(ret)) {
+      bool force_use_nlj = false;
+      force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
+      if (force_use_nlj) {
+        path_info.local_methods_ &= ~MERGE_JOIN;
+        path_info.local_methods_ |= NESTED_LOOP_JOIN;
+      }
+    }
     //check batch update join type
     if (OB_SUCC(ret) && get_plan()->get_optimizer_context().is_batched_multi_stmt()) {
       // left_tree is the generated table of batch params and right tree is other path -> NLJ
@@ -12014,6 +12024,26 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
     } else {
       LOG_TRACE("succeed to create a nested loop join path", K(join_type),
           K(join_dist_algo), K(need_mat), K(on_conditions), K(where_conditions));
+    }
+    // Trace point to force use NLJ as possible
+    if (OB_SUCC(ret)) {
+      bool force_use_nlj = false;
+      force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
+      if (force_use_nlj && !join_path->contain_normal_nl_) {
+        LOG_TRACE("trigger trace point to generate nest-loop join");
+        if (OB_FAIL(interesting_paths_.push_back(join_path))) {
+          LOG_WARN("failed to push back nlj path");
+        } else {
+          for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+            JoinPath *join_path = reinterpret_cast<JoinPath *>(interesting_paths_.at(i));
+            if (join_path->join_algo_ != NESTED_LOOP_JOIN) {
+              if (OB_FAIL(interesting_paths_.remove(i))) {
+                LOG_WARN("failed to remove dominated plans", K(i), K(ret));
+              }
+            }
+          }
+        }
+      }
     }
   }
   return ret;
