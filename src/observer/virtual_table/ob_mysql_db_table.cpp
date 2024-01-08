@@ -121,9 +121,9 @@ int ObMySQLDBTable::inner_get_next_row(common::ObNewRow *&row)
                   NO_EXIST_PRIV_CASE(LOCK_TABLES);
                   EXIST_PRIV_CASE(CREATE_VIEW);
                   EXIST_PRIV_CASE(SHOW_VIEW);
-                  NO_EXIST_PRIV_CASE(CREATE_ROUTINE);
-                  NO_EXIST_PRIV_CASE(ALTER_ROUTINE);
-                  NO_EXIST_PRIV_CASE(EXECUTE);
+                  EXIST_PRIV_CASE(CREATE_ROUTINE);
+                  EXIST_PRIV_CASE(ALTER_ROUTINE);
+                  EXIST_PRIV_CASE(EXECUTE);
                   NO_EXIST_PRIV_CASE(EVENT);
                   NO_EXIST_PRIV_CASE(TRIGGER);
 
