@@ -917,6 +917,14 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
       LOG_WARN("PLS-00382: expression is of wrong type",
                K(ret), K(src_type_id), K(dst_pl_type), K(dst_type), K(src_type));
     }
+  } else if (lib::is_oracle_mode() &&
+            ob_is_oracle_datetime_tc(src_type) &&
+            ob_is_oracle_datetime_tc(dst_type)) {
+    if (dst_type == src_type) {
+      OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
+    } else {
+      OX (match_info = (ObRoutineMatchInfo::MatchInfo(true, src_type, dst_type)));
+    }
   // Case2: 处理TypeClass相同的情形
   } else if (OBJ_TO_TYPE_CLASS(src_type) == OBJ_TO_TYPE_CLASS(dst_type)) {
     if (ob_obj_type_class(src_type) != ObExtendTC // 普通类型TypeClass相同
