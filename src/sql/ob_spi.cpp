@@ -4210,7 +4210,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
           lib::ContextTLOptGuard guard(false);
           if (OB_FAIL(inner_open(ctx, sql_str, ps_sql, stmt_type, exec_params,
                               *spi_result, spi_result->get_out_params()))) {
-            if (spi_result->get_result_set() != NULL && !cursor.is_ps_cursor()) {
+            if (spi_result->get_result_set() != NULL) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                 spi_result->get_sql_ctx(),
@@ -4218,9 +4218,11 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                                 ret, cli_ret, true, true, true);
                 LOG_WARN("fail to open, check if need retry", K(ret), K(cli_ret),
                   K(retry_ctrl.need_retry()), K(sql_str), K(ps_sql), K(exec_params));
-              ret = cli_ret;
-              spi_result->get_sql_ctx().clear();
-              ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+              if (!cursor.is_ps_cursor()) {
+                ret = cli_ret;
+                spi_result->get_sql_ctx().clear();
+                ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+              }
             }
           }
         }
@@ -4345,7 +4347,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
               }
             }
             OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor));
-            if (OB_FAIL(ret) && !cursor.is_ps_cursor()) {
+            if (OB_FAIL(ret)) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
                                                   spi_result.get_sql_ctx(),
@@ -4358,9 +4360,11 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
               LOG_WARN("failed to fill_cursor, check if need retry",
                       K(ret), K(cli_ret), K(retry_ctrl.need_retry()),
                       K(sql_stmt), K(ps_sql), K(exec_params));
-              ret = cli_ret;
-              spi_result.get_sql_ctx().clear();
-              ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+              if (!cursor.is_ps_cursor()) {
+                ret = cli_ret;
+                spi_result.get_sql_ctx().clear();
+                ctx->exec_ctx_->get_my_session()->set_session_in_retry(retry_ctrl.need_retry());
+              }
             }
           }
           OX (spi_cursor->row_store_.finish_add_row());
