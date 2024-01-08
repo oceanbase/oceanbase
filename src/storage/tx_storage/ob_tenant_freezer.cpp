@@ -182,7 +182,8 @@ bool ObTenantFreezer::exist_ls_freezing()
       for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
         int tmp_ret = OB_SUCCESS;
         ObRole role;
-        if (OB_TMP_FAIL(ls->get_ls_role(role))) {
+        int64_t proposal_id = 0;
+        if (OB_TMP_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
           LOG_WARN("get ls role failed", KR(tmp_ret), K(ls->get_ls_id()));
         } else if (common::is_strong_leader(role)) {
           // skip check leader logstream
