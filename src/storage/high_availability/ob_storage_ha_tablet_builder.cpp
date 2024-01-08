@@ -939,7 +939,7 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
     if (OB_SUCC(ret)) {
       //need copy src all minor sstables for tablet meta merge, do not need calculate sstable version range.
       //here set end scn just for compatible
-      if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_1_1) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
         scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
         scn_range.end_scn_ = sstables.empty() ? tablet->get_tablet_meta().clog_checkpoint_scn_ : sstables.at(0)->get_start_scn();
       } else {
