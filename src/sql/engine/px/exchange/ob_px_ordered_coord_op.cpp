@@ -282,6 +282,15 @@ int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg
   return ret;
 }
 
+int ObPxOrderedCoordOp::inner_rescan()
+{
+  finish_ch_cnt_ = 0;
+  all_rows_finish_ = false;
+  destroy_readers();
+  int ret = ObPxCoordOp::inner_rescan();
+  return ret;
+}
+
 int ObPxOrderedCoordOp::receive_channel_root_dfo(ObExecContext &ctx,
                                             ObDfo &parent,
                                             ObPxTaskChSets &parent_ch_sets)
