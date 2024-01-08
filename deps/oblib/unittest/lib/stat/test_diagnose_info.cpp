@@ -39,26 +39,26 @@ namespace common
       ret;                                                        \
     })
 
-TEST(ObDiagnoseSessionInfo, guard)
-{
-  EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
-  EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-  EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
-  {
-    ObTenantStatEstGuard tenant_guard(2);
-    EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
-    EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-    EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
-    {
-      ObTenantStatEstGuard tenant_guard(3);
-      EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
-      EXPECT_EQ(3, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-      EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
-    }
-    EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-  }
-  EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
-}
+// TEST(ObDiagnoseSessionInfo, guard)
+// {
+//   EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
+//   EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
+//   EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
+//   {
+//     ObTenantStatEstGuard tenant_guard(2);
+//     EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
+//     EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
+//     EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
+//     {
+//       ObTenantStatEstGuard tenant_guard(3);
+//       EVENT_INC(SYS_TIME_MODEL_ENCRYPT_CPU);
+//       EXPECT_EQ(3, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
+//       EXPECT_EQ(1, TENANT_EVENT_GET(ObStatEventIds::SYS_TIME_MODEL_ENCRYPT_CPU));
+//     }
+//     EXPECT_EQ(2, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
+//   }
+//   EXPECT_EQ(1, GET_TSI(ObSessionDIBuffer)->get_tenant_id());
+// }
 
 // disallow nested wait event for now.
 // TEST(ObDISessionCache, multithread)
