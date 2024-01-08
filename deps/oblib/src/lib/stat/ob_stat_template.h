@@ -36,6 +36,9 @@ public:
 private:
   static const uint32_t WRITE_MASK = 1<<30;
   volatile uint32_t lock_;
+#ifndef NDEBUG
+  int64_t wlock_tid_;  // record tid for thread that holds the lock.
+#endif
 };
 /**
  * ----------------------------------------------------template define---------------------------------------------------------

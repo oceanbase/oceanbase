@@ -85,6 +85,9 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
         bucket.lock_.unlock();
         break;
+      } else {
+        bucket.lock_.unlock();
+        continue;
       }
     }
     if (OB_SUCCESS != ret) {
