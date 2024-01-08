@@ -122,9 +122,10 @@ public:
   /// @return OB_ITER_END when no more data available
   int get_next_row(const common::ObNewRow *&row);
   /// close the result set after get all the rows
-  int close() { int unused = 0; return close(unused); }
+  int close() { return do_close(NULL); }
   // close result set and rewrite the client ret
-  int close(int &client_ret);
+  int close(int &client_ret) { return do_close(&client_ret); }
+
   /// get number of rows affected by INSERT/UPDATE/DELETE
   int64_t get_affected_rows() const;
   int64_t get_return_rows() const { return return_rows_; }
@@ -346,7 +347,7 @@ private:
   int init_cmd_exec_context(ObExecContext &exec_ctx);
   int on_cmd_execute();
   int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool &async);
-
+  int do_close(int *client_ret = NULL);
   void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
   void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
   int store_last_insert_id(ObExecContext &ctx);
