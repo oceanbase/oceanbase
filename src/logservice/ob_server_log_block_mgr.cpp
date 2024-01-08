@@ -1571,5 +1571,35 @@ DEFINE_GET_SERIALIZE_SIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   size += serialization::encoded_length_i64(sizeof(checksum_));
   return size;
 }
+
+int ObServerLogBlockMgr::force_update_tenant_log_disk(const uint64_t tenant_id,
+                                                      const int64_t new_log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    int64_t unused_size = 0;
+    int64_t old_log_disk_size = 0;
+    int64_t allowed_new_log_disk_size = 0;
+    ObLogService *log_service = MTL(ObLogService*);
+    if (NULL == log_service) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "unexpected error, ObLogService is nullptr", KR(ret), KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(unused_size, old_log_disk_size))) {
+      CLOG_LOG(ERROR, "get_palf_stable_disk_usage failed", KR(ret), KP(log_service));
+    } else if (OB_FAIL(update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
+      CLOG_LOG(WARN, "update_tenant failed", KR(ret), KP(log_service));
+    } else if (allowed_new_log_disk_size != new_log_disk_size) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "can not force update tenant log disk, force_update_tenant_log_disk failed", KR(ret), KP(log_service), K(new_log_disk_size),
+               K(allowed_new_log_disk_size), K(old_log_disk_size));
+    } else {
+    }
+    CLOG_LOG(INFO, "force_update_tenant_log_disk finished", KR(ret), KP(log_service), K(new_log_disk_size),
+             K(allowed_new_log_disk_size), K(old_log_disk_size));
+  } else {
+    CLOG_LOG(WARN, "force_update_tenant_log_disk failed, no such tenant", KR(ret),  K(tenant_id), K(new_log_disk_size));
+  }
+  return ret;
+}
 } // namespace logservice
 } // namespace oceanbase

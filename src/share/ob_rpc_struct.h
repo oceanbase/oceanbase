@@ -10234,6 +10234,68 @@ private:
   int ret_;
 };
 
+struct ObForceSetTenantLogDiskArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObForceSetTenantLogDiskArg() { reset(); }
+  ~ObForceSetTenantLogDiskArg() { reset(); }
+  int set(const uint64_t tenant_id,
+          const int64_t log_disk_size);
+  int assign(const ObForceSetTenantLogDiskArg &arg);
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(log_disk_size));
+public:
+  uint64_t tenant_id_;
+  int64_t log_disk_size_;
+};
+
+struct ObDumpServerUsageRequest final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDumpServerUsageRequest() : tenant_id_(OB_SYS_TENANT_ID) {}
+  ~ObDumpServerUsageRequest() { tenant_id_ = OB_INVALID_TENANT_ID; }
+  uint64_t tenant_id_;
+};
+
+struct ObDumpServerUsageResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  struct ObServerInfo {
+    OB_UNIS_VERSION(1);
+  public:
+    ObServerInfo() : log_disk_capacity_(0), log_disk_assigned_(0)
+    {}
+    ~ObServerInfo() {}
+    int64_t log_disk_capacity_;
+    int64_t log_disk_assigned_;
+    TO_STRING_KV(K_(log_disk_capacity), K_(log_disk_assigned));
+  };
+  struct ObUnitInfo {
+    OB_UNIS_VERSION(1);
+  public:
+    ObUnitInfo() : tenant_id_(OB_INVALID_TENANT_ID), log_disk_size_(0), log_disk_in_use_(0)
+    {}
+    ~ObUnitInfo() {}
+  public:
+    uint64_t tenant_id_;
+    int64_t log_disk_size_;
+    int64_t log_disk_in_use_;
+    TO_STRING_KV(K_(tenant_id), K_(log_disk_size), K_(log_disk_in_use));
+  };
+public:
+  ObDumpServerUsageResult() : server_info_(), unit_info_() {}
+  ~ObDumpServerUsageResult() {}
+  int assign(const ObDumpServerUsageResult &rhs);
+  TO_STRING_KV(K_(server_info), K_(unit_info));
+  // server info
+  ObServerInfo server_info_;
+  // unit info
+  ObSArray<ObUnitInfo> unit_info_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

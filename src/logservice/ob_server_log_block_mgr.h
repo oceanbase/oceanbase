@@ -201,6 +201,8 @@ public:
   // NB: accurately, when tenant not exist in 'omt_', we can remove it from ObServerLogBlockMgr
   int remove_tenant(const int64_t log_disk_size);
 
+  int force_update_tenant_log_disk(const uint64_t tenant_id,
+                                   const int64_t new_log_disk_size);
   TO_STRING_KV("dir:",
                log_pool_path_, K_(dir_fd), K_(meta_fd), K_(log_pool_meta),
                K_(min_block_id), K_(max_block_id), K(min_log_disk_size_for_all_tenants_),
@@ -337,6 +339,7 @@ private:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObServerLogBlockMgr);
 };
+
 } // namespace logservice
 } // namespace oceanbase
 #endif

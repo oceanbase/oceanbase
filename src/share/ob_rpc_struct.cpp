@@ -9838,5 +9838,58 @@ int ObTabletLocationSendResult::get_ret() const
 
 OB_SERIALIZE_MEMBER(ObTabletLocationSendResult, ret_);
 
+OB_SERIALIZE_MEMBER(ObForceSetTenantLogDiskArg, tenant_id_, log_disk_size_);
+
+int ObForceSetTenantLogDiskArg::set(const uint64_t tenant_id,
+                                    const int64_t log_disk_size)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id) || log_disk_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumetn", K(tenant_id), K(log_disk_size));
+  } else {
+    tenant_id_ = tenant_id;
+    log_disk_size_ = log_disk_size;
+  }
+  return ret;
+}
+int ObForceSetTenantLogDiskArg::assign(const ObForceSetTenantLogDiskArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnt", K(arg));
+  } else {
+    tenant_id_ = arg.tenant_id_;
+    log_disk_size_ = arg.log_disk_size_;
+  }
+  return ret;
+}
+
+bool ObForceSetTenantLogDiskArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_) && 0 < log_disk_size_;
+}
+
+void ObForceSetTenantLogDiskArg::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  log_disk_size_ = -1;
+}
+
+OB_SERIALIZE_MEMBER(ObDumpServerUsageRequest, tenant_id_);
+OB_SERIALIZE_MEMBER(ObDumpServerUsageResult::ObServerInfo, log_disk_capacity_, log_disk_assigned_);
+OB_SERIALIZE_MEMBER(ObDumpServerUsageResult::ObUnitInfo, tenant_id_, log_disk_size_, log_disk_in_use_);
+OB_SERIALIZE_MEMBER(ObDumpServerUsageResult, server_info_, unit_info_);
+int ObDumpServerUsageResult::assign(const ObDumpServerUsageResult &rhs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(unit_info_.assign(rhs.unit_info_))) {
+    LOG_WARN("assign failed", KR(ret));
+  } else {
+    server_info_ = rhs.server_info_;
+  }
+  return ret;
+}
 }//end namespace obrpc
 }//end namepsace oceanbase
