@@ -383,7 +383,13 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     BIND_BASIC_BY_POS(7, &part1_type, static_cast<int64_t>(sizeof(int)), oci_sql_int);
     if (FAILEDx(dblink_proxy->dblink_execute_proc(dblink_conn))) {
       const DblinkDriverProto link_type = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto());
-      LOG_WARN("read link failed", K(ret), K(ObString(call_proc)));
+      if (OB_ERR_ILL_OBJ_FLAG == ret) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_WARN("invalid identifier", K(ret), K(full_name_copy));
+        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, full_name_copy.length(), full_name_copy.ptr());
+      } else {
+        LOG_WARN("read link failed", K(ret), K(ObString(call_proc)));
+      }
     } else {
       switch (part1_type) {
         case OracleObjectType::ORA_PROCEUDRE:

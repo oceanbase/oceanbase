@@ -1522,9 +1522,31 @@ int ObRawExprResolverImpl::process_remote_sequence_node(const ParseNode *node, O
     ObColumnRefRawExpr *b_expr = NULL;
     uint64_t tenant_id = ctx_.session_info_->get_effective_tenant_id();
     const ObDbLinkSchema *dblink_schema = NULL;
-    if (OB_FAIL(ctx_.schema_checker_->get_dblink_schema(tenant_id,
-                                                        column_ref.dblink_name_,
-                                                        dblink_schema))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < 3; i++) {
+      if (OB_NOT_NULL(node->children_[i])) {
+        if (T_IDENT != node->children_[i]->type_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("child type error", K(ret), K(i), K(node->children_[i]->type_));
+        } else {
+          ObString ident_name(static_cast<int32_t>(node->children_[i]->str_len_), node->children_[i]->str_value_);
+          if (OB_FAIL(column_ref.access_idents_.push_back(ObObjAccessIdent(ident_name, OB_INVALID_INDEX)))) {
+            LOG_WARN("push back failed", K(ret), K(column_ref));
+          }
+        }
+      }
+    }
+    int64_t acc_cnt = column_ref.access_idents_.count();
+    if (OB_FAIL(ret)) {
+    } else if (acc_cnt > 0
+               && (0 != column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("NEXTVAL")
+               && (0 != column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("CURRVAL"))
+               && lib::is_oracle_mode())) {
+      if (OB_FAIL(resolve_dblink_udf_expr(NULL, column_ref, expr))) {
+        LOG_WARN("resolve dblink udf expr failed", K(ret), K(column_ref));
+      }
+    } else if (OB_FAIL(ctx_.schema_checker_->get_dblink_schema(tenant_id,
+                                                               column_ref.dblink_name_,
+                                                               dblink_schema))) {
       LOG_WARN("failed to get dblink schema", K(ret));
     } else if (OB_ISNULL(dblink_schema)) {
       ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
@@ -1575,70 +1597,85 @@ int ObRawExprResolverImpl::process_dblink_udf_node(const ParseNode *node, ObRawE
       }
     }
   }
+  if (OB_SUCC(ret) && column_ref.access_idents_.count() >= 2) {
+    int64_t acc_cnt = column_ref.access_idents_.count();
+    if (0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("NEXTVAL")
+        || 0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("CURRVAL")) {
+      ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
+      LOG_WARN("ORA-02287: sequence number not allowed here", K(ret), K(column_ref));
+    }
+  }
   OV (column_ref.access_idents_.count() >= 1);
   OX (column_ref.dblink_name_.assign_ptr(const_cast<char *>(node->children_[3]->str_value_),
                                          static_cast<int32_t>(node->children_[3]->str_len_)));
-  if (OB_SUCC(ret)) {
-    ObObjAccessIdent &access_ident = column_ref.access_idents_.at(column_ref.access_idents_.count() - 1);
-    ObUDFInfo &udf_info = access_ident.udf_info_;
-    ObUDFRawExpr *func_expr = NULL;
-    access_ident.type_ = PL_UDF;
-    OX (udf_info.udf_name_.assign_ptr(access_ident.access_name_.ptr(), access_ident.access_name_.length()));
-    OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
-    CK (OB_NOT_NULL(func_expr));
-    // resolve param list
-    if (OB_SUCC(ret) && NULL != node->children_[4]) {
-      bool has_assign_expr = false;
-      for (int64_t i = 0; OB_SUCC(ret) && i < node->children_[4]->num_child_; i++) {
-        ObRawExpr *param_expr = NULL;
-        const ParseNode *param_node = node->children_[4]->children_[i];
-        CK (OB_NOT_NULL(param_node));
-        if (OB_SUCC(ret) && T_SP_CPARAM == param_node->type_) {
-          if (T_IDENT != param_node->children_[0]->type_) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid param name node", K(ret), K(param_node->children_[0]->type_));
-          } else {
-            has_assign_expr = true;
-            ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
-                                param_node->children_[0]->str_value_);
-            OV (!param_name.empty(), OB_INVALID_ARGUMENT);
-            OZ (udf_info.param_names_.push_back(param_name));
-            OZ (SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)));
-            OZ (udf_info.param_exprs_.push_back(param_expr));
-          }
-        } else if (has_assign_expr) {
-          ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
-          LOG_WARN("a positional parameter association may not follow a named", K(ret));
+  OZ (resolve_dblink_udf_expr(node->children_[4], column_ref, expr));
+  return ret;
+}
+
+int ObRawExprResolverImpl::resolve_dblink_udf_expr(const ParseNode *node,
+                                                   ObQualifiedName &column_ref,
+                                                   ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObObjAccessIdent &access_ident = column_ref.access_idents_.at(column_ref.access_idents_.count() - 1);
+  ObUDFInfo &udf_info = access_ident.udf_info_;
+  ObUDFRawExpr *func_expr = NULL;
+  access_ident.type_ = PL_UDF;
+  OX (udf_info.udf_name_.assign_ptr(access_ident.access_name_.ptr(), access_ident.access_name_.length()));
+  OZ (ctx_.expr_factory_.create_raw_expr(T_FUN_UDF, func_expr));
+  CK (OB_NOT_NULL(func_expr));
+  // resolve param list
+  if (OB_SUCC(ret) && NULL != node) {
+    bool has_assign_expr = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+      ObRawExpr *param_expr = NULL;
+      const ParseNode *param_node = node->children_[i];
+      CK (OB_NOT_NULL(param_node));
+      if (OB_SUCC(ret) && T_SP_CPARAM == param_node->type_) {
+        if (T_IDENT != param_node->children_[0]->type_) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid param name node", K(ret), K(param_node->children_[0]->type_));
         } else {
-          OZ (SMART_CALL(recursive_resolve(node->children_[4]->children_[i], param_expr)));
-          OX (udf_info.udf_param_num_++);
-          OZ (access_ident.params_.push_back(std::make_pair(param_expr, 0)), KPC(param_expr), K(i));
-          OZ (func_expr->add_param_expr(access_ident.params_.at(i).first));
+          has_assign_expr = true;
+          ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
+                              param_node->children_[0]->str_value_);
+          OV (!param_name.empty(), OB_INVALID_ARGUMENT);
+          OZ (udf_info.param_names_.push_back(param_name));
+          OZ (SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)));
+          OZ (udf_info.param_exprs_.push_back(param_expr));
         }
+      } else if (has_assign_expr) {
+        ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
+        LOG_WARN("a positional parameter association may not follow a named", K(ret));
+      } else {
+        OZ (SMART_CALL(recursive_resolve(node->children_[i], param_expr)));
+        OX (udf_info.udf_param_num_++);
+        OZ (access_ident.params_.push_back(std::make_pair(param_expr, 0)), KPC(param_expr), K(i));
+        OZ (func_expr->add_param_expr(access_ident.params_.at(i).first));
       }
     }
-    if (OB_SUCC(ret) && NULL != ctx_.query_ctx_) {
-      ctx_.query_ctx_->has_udf_ = true;
-      for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.query_ctx_->all_user_variable_.count(); i++) {
-        OV (OB_NOT_NULL(ctx_.query_ctx_->all_user_variable_.at(i)), OB_ERR_UNEXPECTED, i);
-        OX (ctx_.query_ctx_->all_user_variable_.at(i)->set_query_has_udf(true));
-      }
+  }
+  if (OB_SUCC(ret) && NULL != ctx_.query_ctx_) {
+    ctx_.query_ctx_->has_udf_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.query_ctx_->all_user_variable_.count(); i++) {
+      OV (OB_NOT_NULL(ctx_.query_ctx_->all_user_variable_.at(i)), OB_ERR_UNEXPECTED, i);
+      OX (ctx_.query_ctx_->all_user_variable_.at(i)->set_query_has_udf(true));
     }
-    if (OB_SUCC(ret) && NULL != func_expr) {
-      func_expr->set_func_name(udf_info.udf_name_);
-      udf_info.ref_expr_ = func_expr;
-      OZ (func_expr->extract_info(), KPC(func_expr));
-    }
-    if (OB_SUCC(ret)) {
-      column_ref.format_qualified_name(ctx_.case_mode_);
-      column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
-      ObColumnRefRawExpr *b_expr = NULL;
-      OZ (ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr));
-      OV (OB_NOT_NULL(b_expr));
-      OX (column_ref.ref_expr_ = b_expr);
-      OZ (ctx_.columns_->push_back(column_ref));
-      OX (expr = b_expr);
-    }
+  }
+  if (OB_SUCC(ret) && NULL != func_expr) {
+    func_expr->set_func_name(udf_info.udf_name_);
+    udf_info.ref_expr_ = func_expr;
+    OZ (func_expr->extract_info(), KPC(func_expr));
+  }
+  if (OB_SUCC(ret)) {
+    column_ref.format_qualified_name(ctx_.case_mode_);
+    column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+    ObColumnRefRawExpr *b_expr = NULL;
+    OZ (ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr));
+    OV (OB_NOT_NULL(b_expr));
+    OX (column_ref.ref_expr_ = b_expr);
+    OZ (ctx_.columns_->push_back(column_ref));
+    OX (expr = b_expr);
   }
   return ret;
 }

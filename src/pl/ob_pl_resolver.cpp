@@ -9376,11 +9376,6 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
   ObArray<ObUDFInfo> udf_info;
   ObArray<ObOpRawExpr*> op_exprs;
   CK (OB_NOT_NULL(node));
-  if (T_REMOTE_SEQUENCE == node->type_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("dblink sequence not support in PL", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink sequence in PL");
-  }
   OZ (build_raw_expr(*node,
                      expr,
                      columns,
@@ -9408,6 +9403,17 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
     OZ (resolve_columns(expr, columns, unit_ast));
   }
   OV (udf_info.count() <= 0, OB_ERR_UNEXPECTED, K(udf_info));
+  if (OB_SUCC(ret)
+      && NULL != expr
+      && (T_FUN_SYS_PL_SEQ_NEXT_VALUE == expr->get_expr_type()
+          || T_FUN_SYS_SEQ_NEXTVAL == expr->get_expr_type())) {
+    ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr *>(expr);
+    if (OB_INVALID_ID != seq_expr->get_dblink_id()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("dblink sequence not support in PL", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "dblink sequence in PL");
+    }
+  }
   if (OB_SUCC(ret) && op_exprs.count() > 0) {
     if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(expr_factory_,
                                         &resolve_ctx_.session_info_, op_exprs))) {
@@ -15202,15 +15208,17 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
       LOG_WARN("init schemachecker failed.");
     } else {
       // check if sequence is created. will also check synonym
+      uint64_t dblink_id = OB_INVALID_ID;
       if (OB_FAIL(ob_sequence_ns_checker_.check_sequence_namespace(q_name,
                                                                   syn_checker,
                                                                   &resolve_ctx_.session_info_,
                                                                   &sc,
-                                                                  seq_id))) {
+                                                                  seq_id,
+                                                                  &dblink_id))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "check basic column namespace failed", K(ret), K(q_name));
       } else if(OB_FAIL(build_seq_value_expr(real_ref_expr, q_name, seq_id))) {
         LOG_WARN("failed to resolve seq.", K(ret));
-      } else {
+      } else if (OB_INVALID_ID == dblink_id) {
         int64_t schema_version = OB_INVALID_VERSION;
         ObSchemaObjVersion obj_version;
         const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
@@ -15223,6 +15231,11 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
         OX (obj_version.object_type_ = DEPENDENCY_SEQUENCE);
         OX (obj_version.version_ = schema_version);
         OZ (unit_ast.add_dependency_object(obj_version));
+      } else {
+        ObSequenceRawExpr *seq_expr = static_cast<ObSequenceRawExpr*>(real_ref_expr);
+        seq_expr->set_dblink_name(q_name.dblink_name_);
+        seq_expr->set_dblink_id(dblink_id);
+        unit_ast.set_can_cached(false);
       }
       if (OB_SUCC(ret)) {
         unit_ast.set_has_sequence();
