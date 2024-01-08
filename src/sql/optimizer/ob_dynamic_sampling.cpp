@@ -1375,6 +1375,15 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
                real_expr->get_expr_type() == T_OP_BOOL) {
       no_use = true;
     } else {/*do nothing*/}
+  } else if (filter->is_column_ref_expr()) {
+    //Dynamic Sampling of columns with LOB-related types is prohibited, as projecting such type columns is particularly slow.
+    //bug:
+    if (!ObColumnStatParam::is_valid_opt_col_type(filter->get_data_type())) {
+      no_use = true;
+    } else if (ob_obj_type_class(filter->get_data_type()) == ColumnTypeClass::ObTextTC &&
+               filter->get_data_type() != ObTinyTextType) {
+      no_use = true;
+    }
   } else {/*do nothing*/}
   if (OB_SUCC(ret) && !no_use) {
     ++ total_expr_cnt;
