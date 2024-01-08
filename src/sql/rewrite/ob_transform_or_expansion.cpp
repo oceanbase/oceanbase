@@ -1274,7 +1274,7 @@ int ObTransformOrExpansion::get_trans_view(ObDMLStmt *stmt,
     LOG_WARN("get unexpected error", K(ret), K(upper_stmt));
   } else if (OB_FAIL(ObTransformUtils::create_simple_view(ctx_, upper_stmt, child_stmt, false))) {
     LOG_WARN("failed to create simple view", K(ret));
-  } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(expr_factory, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt expr reference", K(ret));
   }
   return ret;

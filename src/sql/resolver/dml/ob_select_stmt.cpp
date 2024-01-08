@@ -800,13 +800,18 @@ int ObSelectStmt::clear_sharable_expr_reference()
   return ret;
 }
 
-int ObSelectStmt::remove_useless_sharable_expr()
+int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
+                                               ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr())) {
+  if (OB_ISNULL(expr_factory)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObDMLStmt::remove_useless_sharable_expr(expr_factory, session_info))) {
     LOG_WARN("failed to remove useless sharable expr", K(ret));
   } else {
     ObRawExpr *expr = NULL;
+    const bool is_scala = is_scala_group_by();
     for (int64_t i = agg_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       if (OB_ISNULL(expr = agg_items_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -830,6 +835,17 @@ int ObSelectStmt::remove_useless_sharable_expr()
       } else {
         LOG_TRACE("succeed to remove win func exprs", K(*expr));
       }
+    }
+    if (OB_SUCC(ret) && is_scala && agg_items_.empty()) {
+      ObAggFunRawExpr *aggr_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_dummy_count_expr(*expr_factory, session_info, aggr_expr))) {
+        LOG_WARN("failed to build a dummy expr", K(ret));
+      } else if (OB_FAIL(agg_items_.push_back(aggr_expr))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(set_sharable_expr_reference(*aggr_expr,
+                                                     ExplicitedRefType::REF_BY_NORMAL))) {
+        LOG_WARN("failed to set sharable exprs reference", K(ret));
+      } else {/* do nothing */}
     }
   }
   return ret;
@@ -1304,31 +1320,6 @@ ObRawExpr* ObSelectStmt::get_pure_set_expr(ObRawExpr *expr)
     expr = expr->get_param_expr(0);
   }
   return expr;
-}
-
-// add ref count to the last aggr item to maintain the scala group by
-int ObSelectStmt::maintain_scala_group_by_ref()
-{
-  int ret = OB_SUCCESS;
-  bool has_ref = false;
-  if (is_scala_group_by()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < agg_items_.count(); ++i) {
-      ObAggFunRawExpr *agg_expr = agg_items_.at(i);
-      if (OB_ISNULL(agg_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("agg expr is NULL", K(ret));
-      } else if (agg_expr->is_explicited_reference()) {
-        has_ref = true;
-        break;
-      }
-    }
-    if (OB_FAIL(ret) || has_ref) {
-      // do nothing
-    } else if (OB_FAIL(set_sharable_expr_reference(*agg_items_.at(0), ExplicitedRefType::REF_BY_NORMAL))) {
-      LOG_WARN("fail to set expr reference", K(ret));
-    }
-  }
-  return ret;
 }
 
 int ObSelectStmt::get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const

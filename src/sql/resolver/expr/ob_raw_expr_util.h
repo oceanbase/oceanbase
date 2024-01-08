@@ -1184,6 +1184,9 @@ public:
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
   static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+  static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
+                                    const ObSQLSessionInfo *session_info,
+                                    ObAggFunRawExpr *&expr);
 
   static int extract_local_vars_for_gencol(ObRawExpr *expr,
                                            const ObSQLMode sql_mode,

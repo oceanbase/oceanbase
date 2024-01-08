@@ -6863,7 +6863,7 @@ int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
       //do nothing
     } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {
+    } else if (OB_FAIL(get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs))) {
       LOG_WARN("failed to get all group by exprs", K(ret));
     } else if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
                                                        get_select_stmt(),
