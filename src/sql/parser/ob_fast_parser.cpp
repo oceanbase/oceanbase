@@ -1349,79 +1349,6 @@ inline char* ObFastParserBase::parse_strndup(const char *str, size_t nbyte, char
   return buf;
 }
 
-inline char* ObFastParserOracle::parse_strndup_with_trim_space_for_new_line(const char *str,
-                                                                            size_t nbyte,
-                                                                            char *buf,
-                                                                            int *connection_collation,
-                                                                            int64_t *new_len)
-{
-  MEMMOVE(buf, str, nbyte);
-  int64_t idx = 0;
-  for (int64_t i = 0; i < nbyte; ++i) {
-    if (idx > 0 && buf[i] == '\n') {
-      int64_t j = idx - 1;
-      bool is_found = false;
-      do {
-        is_found = false;
-        if (buf[j] == ' ' || buf[j] == '\t') {
-          -- j;
-          -- idx;
-          is_found = true;
-        } else {
-          switch (*connection_collation) {
-            case 28/*CS_TYPE_GBK_CHINESE_CI*/:
-            case 87/*CS_TYPE_GBK_BIN*/:
-            case 216/*CS_TYPE_GB18030_2022_BIN*/:
-            case 217/*CS_TYPE_GB18030_2022_PINYIN_CI*/:
-            case 218/*CS_TYPE_GB18030_2022_PINYIN_CS*/:
-            case 219/*CS_TYPE_GB18030_2022_RADICAL_CI*/:
-            case 220/*CS_TYPE_GB18030_2022_RADICAL_CS*/:
-            case 221/*CS_TYPE_GB18030_2022_STROKE_CI*/:
-            case 222/*CS_TYPE_GB18030_2022_STROKE_CS*/:
-            case 248/*CS_TYPE_GB18030_CHINESE_CI*/:
-            case 249/*CS_TYPE_GB18030_BIN*/: {
-              if (j - 1 >= 0) {
-                if (buf[j - 1] == (char)0xa1 &&
-                    buf[j] == (char)0xa1) {//gbk multi byte space
-                  j = j - 2;
-                  idx = idx - 2;
-                  is_found = true;
-                }
-              }
-              break;
-            }
-            case 45/*CS_TYPE_UTF8MB4_GENERAL_CI*/:
-            case 46/*CS_TYPE_UTF8MB4_BIN*/:
-            case 63/*CS_TYPE_BINARY*/:
-            case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/: {
-            //case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-            //case 47/*CS_TYPE_LATIN1_BIN*/:
-              if (j - 2 >= 0) {
-                if (buf[j - 2] == (char)0xe3 &&
-                    buf[j - 1] == (char)0x80 &&
-                    buf[j] == (char)0x80) {//utf8 multi byte space
-                  j = j - 3;
-                  idx = idx - 3;
-                  is_found = true;
-                }
-              }
-              break;
-            }
-            default:
-              break;
-          }
-        }
-      } while (j >= 0 && is_found);
-      buf[idx++] = buf[i];
-    } else {
-      buf[idx++] = buf[i];
-    }
-  }
-  *new_len -= (nbyte - idx);
-  buf[*new_len] = '\0';
-  return buf;
-}
-
 char *ObFastParserBase::parse_strdup_with_replace_multi_byte_char(
 	                      const char *str, const size_t dup_len, char *out_str, int64_t &out_len)
 {
@@ -2984,10 +2911,8 @@ int ObFastParserOracle::process_string(const bool in_q_quote)
           node->text_len_ = text_len;
           node->str_len_ = str_len;
           node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
-          int cs_type = ObCharset::is_gb_charset(charset_type_) ? CS_TYPE_GBK_BIN :
-                         (CHARSET_UTF8MB4 == charset_type_ ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_INVALID);
           if (node->str_len_ > 0) {
-            node->str_value_ = parse_strndup_with_trim_space_for_new_line(tmp_buf_, tmp_buf_len_, buf, &cs_type, &node->str_len_);
+            node->str_value_ = parse_strndup(tmp_buf_, tmp_buf_len_, buf);
           }
           // buf points to the beginning of the next available memory
           buf += str_len + 1;
