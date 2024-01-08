@@ -602,6 +602,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   session.update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
 
   if (enable_perf_event) {
+    record_stat(session, result_set.get_stmt_type(), last_ret, is_from_pl);
     exec_record.max_wait_event_ = max_wait_desc;
     exec_record.wait_time_end_ = total_wait_desc.time_waited_;
     exec_record.wait_count_end_ = total_wait_desc.total_waits_;
@@ -934,16 +935,6 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
           time_record.set_execute_end_timestamp(execute_end_timestamp_);
           if (enable_perf_event) {
             exec_record.record_end();
-            record_stat(get_session(), res.result_set().get_stmt_type(), ret_code);
-          }
-          if (enable_sqlstat) {
-            sqlstat_record.record_sqlstat_end_value();
-            sqlstat_record.set_rows_processed(res.result_set().get_affected_rows() + res.result_set().get_return_rows());
-            sqlstat_record.set_partition_cnt(res.result_set().get_exec_context().get_das_ctx().get_related_tablet_cnt());
-            sqlstat_record.set_is_route_miss(get_session().partition_hit().get_bool()? 0 : 1);
-            sqlstat_record.move_to_sqlstat_cache(get_session(),
-                                                 res.sql_ctx().cur_sql_,
-                                                 res.result_set().get_physical_plan());
           }
         }
 
@@ -955,6 +946,16 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
                                 res.has_tenant_resource(), dummy_ps_sql);
           if (OB_SUCCESS != record_ret) {
             LOG_WARN("failed to process record",  K(executor), K(record_ret), K(ret));
+          }
+
+          if (enable_sqlstat) {
+            sqlstat_record.record_sqlstat_end_value();
+            sqlstat_record.set_rows_processed(res.result_set().get_affected_rows() + res.result_set().get_return_rows());
+            sqlstat_record.set_partition_cnt(res.result_set().get_exec_context().get_das_ctx().get_related_tablet_cnt());
+            sqlstat_record.set_is_route_miss(get_session().partition_hit().get_bool()? 0 : 1);
+            sqlstat_record.move_to_sqlstat_cache(get_session(),
+                                                res.sql_ctx().cur_sql_,
+                                                res.result_set().get_physical_plan());
           }
         }
 
