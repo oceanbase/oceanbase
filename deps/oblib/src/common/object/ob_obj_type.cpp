@@ -576,24 +576,6 @@ bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src
         || (src_meta.is_unsigned_integer() && dst_meta.is_unsigned_integer())) // both are singed or unsigned integer
         && src_meta.get_type() <= dst_meta.get_type())) { // (unsigned) integer can be changed into larger by online ddl
     is_online_ddl = true;
-  } else if (src_meta.is_unsigned_integer() && dst_meta.is_signed_integer()) {
-    if (src_meta.is_utinyint()) {
-      if (dst_meta.get_type() >= ObSmallIntType && dst_meta.get_type() <= ObIntType) { // unsigned tinyint -> smallint mediumint int bigint
-        is_online_ddl = true;
-      }
-    } else if (src_meta.is_usmallint()) {
-      if (dst_meta.get_type() >= ObMediumIntType && dst_meta.get_type() <= ObIntType) { // unsigned smallint -> mediumint int bigint
-        is_online_ddl = true;
-      }
-    } else if (src_meta.is_umediumint()) {
-      if (dst_meta.get_type() >= ObInt32Type && dst_meta.get_type() <= ObIntType) { // unsigned mediumint -> int bigint
-        is_online_ddl = true;
-      }
-    } else if (src_meta.is_uint32()) {
-      if (dst_meta.is_int()) {     // unsigned int -> bigint
-        is_online_ddl = true;
-      }
-    }
   }
   return is_online_ddl;
 }
