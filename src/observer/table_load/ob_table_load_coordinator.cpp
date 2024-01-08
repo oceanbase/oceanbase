@@ -263,6 +263,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
   } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
     LOG_WARN("fail to get memory_limit", K(ret));
   } else {
+    int64_t retry_count = 0;
     common::ObAddr leader;
     common::ObAddr coordinator_addr = ObServer::get_instance().get_self();
     bool include_cur_addr = false;
@@ -375,29 +376,32 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         }
         if (OB_SUCC(ret)) {
           if (ObTableLoadUtils::is_local_addr(leader)) {
-            if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
-              LOG_INFO("fail to apply resource", KR(ret));
-            }
+            ret = ObTableLoadResourceService::apply_resource(apply_arg, apply_res);
           } else {
             TABLE_LOAD_RESOURCE_RPC_CALL(apply_resource, leader, apply_arg, apply_res);
           }
           if (OB_SUCC(ret) && OB_SUCC(apply_res.error_code_)) {
-              ctx_->param_.need_sort_ = last_sort;
-              ctx_->param_.session_count_ = coordinator_session_count;
-              ctx_->param_.write_session_count_ = (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2)
-                                                                    : min_session_count);
-              ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ? (last_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT
-                                                                                  : ObTableLoadExeMode::FAST_HEAP_TABLE)
-                                                                     : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
-                                                                                  : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
+            ctx_->param_.need_sort_ = last_sort;
+            ctx_->param_.session_count_ = coordinator_session_count;
+            ctx_->param_.write_session_count_ = (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2)
+                                                                  : min_session_count);
+            ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ? (last_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT
+                                                                                : ObTableLoadExeMode::FAST_HEAP_TABLE)
+                                                                   : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
+                                                                                : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
 
-              if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
-                LOG_WARN("fail to add_assigned_task", KR(ret));
-              } else {
-                ctx_->set_assigned_resource();
-                LOG_INFO("Coordinator::gen_apply_arg", K(param_.exe_mode_), K(partitions), K(leader), K(apply_arg));
-                break;
-              }
+            if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
+              LOG_WARN("fail to add_assigned_task", KR(ret));
+            } else {
+              ctx_->set_assigned_resource();
+              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(partitions), K(leader), K(apply_arg));
+              break;
+            }
+          } else {
+            retry_count++;
+            if (retry_count % 100 == 0) {
+              LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count));
+            }
           }
           usleep(RESOURCE_OP_WAIT_INTERVAL_US);
         }

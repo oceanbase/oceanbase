@@ -235,7 +235,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_INFO("register restore major freeze service complete", KR(ret));
       }
 
-      if (OB_SUCC(ret) && (ls_id == TABLE_LOAD_RESOURCE_SERVICE_LS)) {
+      if (OB_SUCC(ret) && (ls_id == TABLE_LOAD_RESOURCE_SERVICE_LS) && (is_user_tenant(tenant_id) || is_sys_tenant(tenant_id))) {
         REGISTER_TO_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
         LOG_INFO("register resource service complete", KR(ret));
       }
@@ -799,7 +799,7 @@ void ObLS::destroy()
     rootserver::ObPrimaryMajorFreezeService *primary_major_freeze_service = MTL(rootserver::ObPrimaryMajorFreezeService *);
     UNREGISTER_FROM_LOGSERVICE(logservice::MAJOR_FREEZE_LOG_BASE_TYPE, primary_major_freeze_service);
   }
-  if (ls_meta_.ls_id_ == TABLE_LOAD_RESOURCE_SERVICE_LS) {
+  if (ls_meta_.ls_id_ == TABLE_LOAD_RESOURCE_SERVICE_LS && (is_user_tenant(MTL_ID()) || is_sys_tenant(MTL_ID()))) {
     observer::ObTableLoadResourceService *resource_service = MTL(observer::ObTableLoadResourceService *);
     UNREGISTER_FROM_LOGSERVICE(logservice::TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, resource_service);
   }

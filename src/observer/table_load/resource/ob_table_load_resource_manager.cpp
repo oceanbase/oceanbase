@@ -209,8 +209,7 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
           if (OB_FAIL(resource_pool_.get_refactored(apply_unit.addr_, ctx))) {
             LOG_WARN("fail to get refactored", K(apply_unit.addr_));
           } else if (apply_unit.thread_count_ > ctx.thread_remain_ || apply_unit.memory_size_ > ctx.memory_remain_) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("resource not enough", K(ctx), K(apply_unit));
+            ret = OB_RESOURCE_OUT;
           }
 	      }
         if (OB_SUCC(ret)) {
@@ -237,7 +236,7 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
         LOG_WARN("fail to get refactored", K(arg.task_key_));
       }
     } else {
-      LOG_WARN("resource has been assigned", K(arg.task_key_));
+      LOG_INFO("resource has been assigned", K(arg.task_key_));
     }
   }
   res.error_code_ = ret;
