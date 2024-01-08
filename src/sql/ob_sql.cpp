@@ -763,7 +763,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           field.type_.set_number(number);
         }
         if (expr->get_result_type().is_user_defined_sql_type() ||
-            expr->get_result_type().is_collection_sql_type()) {
+            expr->get_result_type().is_collection_sql_type() ||
+            ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
           uint16_t subschema_id = expr->get_result_type().get_subschema_id();
           uint16_t tmp_subschema_id = ObInvalidSqlType;
           uint64_t udt_id = expr->get_result_type().get_udt_id();
@@ -771,10 +772,15 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           if (subschema_id == ObXMLSqlType) {
             udt_id = T_OBJ_XML;
           }
+          if (expr->get_result_type().is_geometry()) {
+            udt_id = T_OBJ_SDO_GEOMETRY;
+            field.type_.meta_.set_ext();
+            field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
+          }
           if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
             LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
-          } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
-            LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+          } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(tmp_subschema_id, udt_meta))) {
+            LOG_WARN("failed to get udt meta", K(ret), K(tmp_subschema_id));
           } else if(ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
             // common udt constructors or functions set udt id , but xml exprs not
             if (udt_meta.udt_id_ == T_OBJ_XML) {
@@ -783,12 +789,12 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("udt id mismarch", K(ret), K(udt_id), K(udt_meta.udt_id_));
             }
-            field.type_.set_subschema_id(subschema_id);
+            field.type_.set_subschema_id(tmp_subschema_id);
             field.charsetnr_ = CS_TYPE_BINARY;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
           } else {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("udt type not supported", K(ret), K(subschema_id));
+            LOG_WARN("udt type not supported", K(ret), K(tmp_subschema_id));
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {

@@ -25,6 +25,9 @@
 #include "sql/ob_result_set.h"
 #include "sql/ob_spi.h"
 #include "lib/xml/ob_binary_aggregate.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/sys_package/ob_sdo_geometry.h"
+#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -1148,7 +1151,7 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
                                              ObSchemaGetterGuard *schema_guard) // need fields and schema guard
 {
   int ret = OB_SUCCESS;
-  if (!value.is_user_defined_sql_type() && !value.is_collection_sql_type()) {
+  if (!value.is_user_defined_sql_type() && !value.is_collection_sql_type() && !value.is_geometry()) {
     ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "not supported udt type", K(ret),
            K(value.get_type()), K(value.get_udt_subschema_id()));
@@ -1227,6 +1230,21 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
           }
         }
       }
+    }
+  } else if (value.is_geometry()) {
+    if (is_ps_protocol) {
+#ifdef OB_BUILD_ORACLE_PL
+      ObObj result;
+      if (OB_ISNULL(exec_context)) {
+        ret = OB_BAD_NULL_ERROR;
+      } else if (OB_FAIL(pl::ObSdoGeometry::wkb_to_pl_extend(exec_context->get_allocator(), exec_context, value.get_string(), result))) {
+        LOG_WARN("failed to get geometry wkb from pl extend", K(ret));
+      } else {
+        value = result;
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+#endif
     }
   } else {
     if (OB_ISNULL(exec_context)) {

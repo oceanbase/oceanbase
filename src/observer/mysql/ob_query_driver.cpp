@@ -258,7 +258,7 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
         } else if ((value.is_lob() || value.is_lob_locator() || value.is_json() || value.is_geometry())
                   && OB_FAIL(process_lob_locator_results(value, result))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type()) &&
+        } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry()) &&
                    OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, result))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
         }
@@ -632,7 +632,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
   //    refer to sz/aibo1m
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
-  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json();
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json() && !value.is_geometry();
   if (!is_lob_type) {
     // not lob types, do nothing
   } else if (value.is_null() || value.is_nop_value()) {

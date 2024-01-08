@@ -651,11 +651,10 @@ int ObExprOutputPack::try_encode_row(const ObExpr &expr, ObEvalCtx &ctx,
         } else if ((obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry())
                    && OB_FAIL(process_lob_locator_results(obj, alloc, *session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-        } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type())
+        } else if ((obj.is_user_defined_sql_type() || obj.is_collection_sql_type() || obj.is_geometry())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(obj, &alloc, session,
                                                                        &ctx.exec_ctx_,
-                                                                       session->is_ps_protocol()))
-        ) {
+                                                                       session->is_ps_protocol()))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(obj.get_udt_subschema_id()));
         }
       }
