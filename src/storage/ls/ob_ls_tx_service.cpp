@@ -82,6 +82,22 @@ int ObLSTxService::get_tx_ctx(const transaction::ObTransID &tx_id,
   return ret;
 }
 
+int ObLSTxService::get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                                           const bool for_replay,
+                                           transaction::ObPartTransCtx *&tx_ctx,
+                                           const int64_t lock_timeout) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ret = mgr_->get_tx_ctx_with_timeout(tx_id, for_replay, tx_ctx, lock_timeout);
+  }
+
+  return ret;
+}
+
 int ObLSTxService::get_tx_scheduler(const transaction::ObTransID &tx_id,
                                     ObAddr &scheduler) const
 {

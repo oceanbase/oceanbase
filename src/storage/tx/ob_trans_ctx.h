@@ -107,6 +107,7 @@ public:
       callback_scheduler_on_clear_(false),
       pending_callback_param_(common::OB_SUCCESS), p_mt_ctx_(NULL),
       is_exiting_(false), for_replay_(false),
+      need_retry_redo_sync_by_task_(false),
       has_pending_callback_(false),
       can_elr_(false),
       opid_(0) {}
@@ -121,6 +122,7 @@ public:
   bool is_readonly() const { return false; }
   void set_for_replay(const bool for_replay) { for_replay_ = for_replay; }
   bool is_for_replay() const { return for_replay_; }
+  void set_need_retry_redo_sync_by_task_() { need_retry_redo_sync_by_task_ = true; }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   int set_ls_tx_ctx_mgr(ObLSTxCtxMgr *ls_tx_ctx_mgr)
   {
@@ -269,6 +271,7 @@ protected:
   memtable::ObMemtableCtx *p_mt_ctx_;
   bool is_exiting_;
   bool for_replay_;
+  bool need_retry_redo_sync_by_task_;
   bool has_pending_callback_;
   // whether the trans can release locks early
   bool can_elr_;

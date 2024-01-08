@@ -699,6 +699,7 @@ public:
   // @return OB_NOT_MASTER, if the LogStream is follower replica
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_with_timeout, int);
 
   // Decrease the specified tx_ctx's reference count
   // @param [in] tx_ctx: the TxCtx will be revert
