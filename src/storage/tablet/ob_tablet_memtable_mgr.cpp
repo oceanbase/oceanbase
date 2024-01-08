@@ -282,8 +282,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
             last_frozen_memtable->resolve_right_boundary();
             TRANS_LOG(INFO, "[resolve_right_boundary] last_frozen_memtable in create_memtable", K(for_replay), K(ls_id), KPC(last_frozen_memtable));
             if (memtable != last_frozen_memtable) {
-              const SCN &new_start_scn = MAX(last_frozen_memtable->get_end_scn(), last_frozen_memtable->get_migration_clog_checkpoint_scn());
-              memtable->resolve_left_boundary(new_start_scn);
+              memtable->resolve_left_boundary(last_frozen_memtable->get_end_scn());
             }
           }
         }

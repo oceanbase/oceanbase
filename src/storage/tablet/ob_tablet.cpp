@@ -4773,46 +4773,6 @@ int ObTablet::get_finish_medium_scn(int64_t &finish_medium_scn) const
   return ret;
 }
 
-int ObTablet::set_memtable_clog_checkpoint_scn(
-    const ObMigrationTabletParam *tablet_meta)
-{
-  int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
-  ObTableHandleV2 handle;
-  memtable::ObMemtable *memtable = nullptr;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_ISNULL(tablet_meta)) {
-    // no need to set memtable clog checkpoint ts
-  } else if (tablet_meta->clog_checkpoint_scn_ <= tablet_meta_.clog_checkpoint_scn_) {
-    // do nothing
-  } else if (OB_FAIL(get_memtable_mgr(memtable_mgr))) {
-    LOG_WARN("failed to get memtable mgr", K(ret));
-  } else if (is_ls_inner_tablet()) {
-    if (OB_UNLIKELY(memtable_mgr->has_memtable())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls inner tablet should not have memtable", K(ret), KPC(tablet_meta));
-    }
-  } else if (OB_FAIL(memtable_mgr->get_boundary_memtable(handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get boundary memtable for tablet", K(ret), KPC(this), KPC(tablet_meta));
-    }
-  } else if (OB_FAIL(handle.get_data_memtable(memtable))) {
-    LOG_WARN("failed to get memtable", K(ret), K(handle));
-  } else if (OB_ISNULL(memtable)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null memtable", K(ret), KPC(memtable));
-  } else if (OB_FAIL(memtable->set_migration_clog_checkpoint_scn(tablet_meta->clog_checkpoint_scn_))) {
-    LOG_WARN("failed to set migration clog checkpoint ts", K(ret), K(handle), KPC(this));
-  }
-
-  return ret;
-}
-
 int ObTablet::get_medium_info_list(
     common::ObArenaAllocator &allocator,
     compaction::ObMediumCompactionInfoList &medium_info_list) const
