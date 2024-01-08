@@ -2349,15 +2349,6 @@ typedef enum ObContextType {
     INITIALIZED_GLOBALLY = 3,
   }ObContextType;
 
-typedef enum ObOutlineType
-{
-  OUTLINE_TYPE_INVALID = -1, //Attention: add a new type after CACHE_TYPE_INVALID
-  OUTLINE_TYPE_NORMAL,
-  OUTLINE_TYPE_FORMAT,
-  OUTLINE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
-} ObOutlineType;
-
-
 #define IS_BOOL_OP(op) \
   (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN && (op) != T_OP_POW) \
     || ((op) == T_OP_EXISTS) \

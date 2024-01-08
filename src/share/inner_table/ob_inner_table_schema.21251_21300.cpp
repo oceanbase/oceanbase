@@ -1660,7 +1660,7 @@ int ObInnerTableSchema::dba_ob_outlines_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.GMT_CREATE AS CREATE_TIME,       B.GMT_MODIFIED AS MODIFY_TIME,       A.TENANT_ID,       A.DATABASE_ID,       A.OUTLINE_ID,       A.DATABASE_NAME,       A.OUTLINE_NAME,       A.VISIBLE_SIGNATURE,       A.SQL_TEXT,       A.OUTLINE_TARGET,       A.OUTLINE_SQL,       A.SQL_ID,       A.OUTLINE_CONTENT     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B     WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0 )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       B.GMT_CREATE AS CREATE_TIME,       B.GMT_MODIFIED AS MODIFY_TIME,       A.TENANT_ID,       A.DATABASE_ID,       A.OUTLINE_ID,       A.DATABASE_NAME,       A.OUTLINE_NAME,       A.VISIBLE_SIGNATURE,       A.SQL_TEXT,       A.OUTLINE_TARGET,       A.OUTLINE_SQL,       A.SQL_ID,       A.OUTLINE_CONTENT     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B     WHERE A.OUTLINE_ID = B.OUTLINE_ID )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

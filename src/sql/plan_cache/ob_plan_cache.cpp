@@ -591,9 +591,6 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         MEMCPY(pc_ctx.sql_ctx_.sql_id_,
                plan->stat_.sql_id_.ptr(),
                plan->stat_.sql_id_.length());
-        MEMCPY(pc_ctx.sql_ctx_.format_sql_id_,
-               plan->stat_.format_sql_id_.ptr(),
-               plan->stat_.format_sql_id_.length());
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
@@ -2260,10 +2257,6 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
     MEMCPY(pc_ctx.sql_ctx_.sql_id_,
            sql_plan->stat_.sql_id_.ptr(),
            sql_plan->stat_.sql_id_.length());
-    MEMCPY(pc_ctx.sql_ctx_.format_sql_id_,
-           sql_plan->stat_.format_sql_id_.ptr(),
-           sql_plan->stat_.format_sql_id_.length());
-
   }
   //check read only privilege
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {

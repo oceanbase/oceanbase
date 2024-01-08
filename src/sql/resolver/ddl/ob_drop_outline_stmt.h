@@ -30,7 +30,6 @@ public:
   void set_database_name(const common::ObString &database_name) { drop_outline_arg_.db_name_ = database_name; }
   void set_outline_name(const common::ObString &outline_name) { drop_outline_arg_.outline_name_ = outline_name; }
   void set_tenant_id(uint64_t tenant_id) { drop_outline_arg_.tenant_id_ = tenant_id; }
-  void set_is_format(bool is_format) { drop_outline_arg_.is_format_ = is_format; }
   obrpc::ObDropOutlineArg &get_drop_outline_arg() { return drop_outline_arg_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_outline_arg_; }
   TO_STRING_KV(K_(drop_outline_arg));

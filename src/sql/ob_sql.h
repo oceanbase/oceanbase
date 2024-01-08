@@ -389,13 +389,11 @@ private:
   int get_outline_data(ObSqlCtx &context,
                        ObPlanCacheCtx &pc_ctx,
                        const ObString &signature_sql,
-                       const ObString &signature_format_sql,
                        ObOutlineState &outline_state,
                        ParseResult &outline_parse_result);
 
   int get_outline_data(ObPlanCacheCtx &pc_ctx,
                        const ObString &signature_sql,
-                       const ObString &signature_format_sql,
                        ObOutlineState &outline_state,
                        ObString &outline_content);
 
@@ -457,7 +455,6 @@ private:
                            bool add_plan_to_pc,
                            ParseResult &parse_result,
                            ObString &signature_sql,
-                           ObString &signature_format_sql,
                            int err_code);
   int pc_add_plan(ObPlanCacheCtx &pc_ctx,
                   ObResultSet &result,

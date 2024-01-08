@@ -295,12 +295,10 @@ public:
       const uint64_t database_id,
       const common::ObString &outline_name,
       uint64_t &outline_id,
-      bool is_format,
       bool &exist) ;
   int check_outline_exist_with_sql(const uint64_t tenant_id,
       const uint64_t database_id,
       const common::ObString &paramlized_sql,
-      bool is_format,
       bool &exist) ;
   int check_synonym_exist(const uint64_t tenant_id,
       const uint64_t database_id,
@@ -318,7 +316,6 @@ public:
   int check_outline_exist_with_sql_id(const uint64_t tenant_id,
       const uint64_t database_id,
       const common::ObString &sql_id,
-      bool is_format,
       bool &exist) ;
 
   int check_procedure_exist(uint64_t tenant_id, uint64_t database_id,

@@ -594,33 +594,27 @@ public:
   int check_outline_exist_with_name(const uint64_t tenant_id,
                                     const uint64_t database_id,
                                     const common::ObString &outline_name,
-                                    const bool is_format,
                                     uint64_t &outline_id,
                                     bool &exist);
   int check_outline_exist_with_sql(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &paramlized_sql,
-                                   const bool is_format,
                                    bool &exist);
   int check_outline_exist_with_sql_id(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &sql_id,
-                                   const bool is_format,
                                    bool &exist) ;
   int get_outline_info_with_name(const uint64_t tenant_id,
                                  const uint64_t database_id,
                                  const common::ObString &name,
-                                 const bool is_format,
                                  const ObOutlineInfo *&outline_info);
   int get_outline_info_with_name(const uint64_t tenant_id,
                                  const common::ObString &db_name,
                                  const common::ObString &outline_name,
-                                 const bool is_format,
                                  const ObOutlineInfo *&outline_info);
   int get_outline_info_with_signature(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &signature,
-                                      const bool is_format,
                                       const ObOutlineInfo *&outline_info);
   //package
   int check_package_exist(uint64_t tenant_id, uint64_t database_id,
@@ -739,7 +733,6 @@ public:
   int get_outline_info_with_sql_id(const uint64_t tenant_id,
                                       const uint64_t database_id,
                                       const common::ObString &sql_id,
-                                      const bool is_format,
                                       const ObOutlineInfo *&outline_info) ;
   //about user define function
   int check_udf_exist_with_name(const uint64_t tenant_id,

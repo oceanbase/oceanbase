@@ -997,9 +997,6 @@ all_outline_def = dict(
       ('outline_target', 'longtext', 'false'),
       ('sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('owner_id', 'int', 'true'),
-      ('format_sql_text', 'longtext', 'true'),
-      ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-      ('format_outline', 'int', 'false', '0'),
     ],
 )
 
@@ -7858,7 +7855,6 @@ def_table_schema(
     ('flt_trace_id', 'varchar:OB_MAX_SPAN_LENGTH'),
     ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ('plsql_exec_time', 'int'),
-    ('format_sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8182,9 +8178,6 @@ def_table_schema(
       ('outline_sql', 'longtext', 'false'),
       ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
       ('outline_content', 'longtext', 'false'),
-      ('format_sql_text', 'longtext', 'false', ''),
-      ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-      ('format_outline', 'int', 'false', '0')
   ],
 )
 
@@ -15306,8 +15299,7 @@ def_table_schema(
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
-                         plsql_exec_time as PLSQL_EXEC_TIME,
-                         format_sql_id as FORMAT_SQL_ID
+                         plsql_exec_time as PLSQL_EXEC_TIME
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -24619,7 +24611,7 @@ def_table_schema(
       A.SQL_ID,
       A.OUTLINE_CONTENT
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
+    WHERE A.OUTLINE_ID = B.OUTLINE_ID
 """.replace("\n", " "),
 
     normal_columns = [
@@ -30941,37 +30933,7 @@ def_table_schema(
     oceanbase.__all_virtual_wr_event_name SETTING
   """.replace("\n", " ")
 )
-
-def_table_schema(
-    owner = 'guoyun.lgy',
-    table_name     = 'DBA_OB_FORMAT_OUTLINES',
-    table_id       = '21485',
-    table_type = 'SYSTEM_VIEW',
-    gm_columns = [],
-    in_tenant_space = True,
-    rowkey_columns = [],
-    view_definition = """
-    SELECT
-      B.GMT_CREATE AS CREATE_TIME,
-      B.GMT_MODIFIED AS MODIFY_TIME,
-      A.TENANT_ID,
-      A.DATABASE_ID,
-      A.OUTLINE_ID,
-      A.DATABASE_NAME,
-      A.OUTLINE_NAME,
-      A.VISIBLE_SIGNATURE,
-      A.FORMAT_SQL_TEXT,
-      A.OUTLINE_TARGET,
-      A.OUTLINE_SQL,
-      A.FORMAT_SQL_ID,
-      A.OUTLINE_CONTENT
-    FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0
-""".replace("\n", " "),
-    normal_columns = [
-   ],
-
-)
+# 21485: DBA_OB_FORMAT_OUTLINES
 
 def_table_schema(
   owner = 'mingye.swj',
@@ -45396,7 +45358,6 @@ def_table_schema(
         WHEN 'USER_TAB_PRIVS' THEN ''
         WHEN 'STMT_AUDIT_OPTION_MAP' THEN ''
         WHEN 'DBA_OB_OUTLINES' THEN ''
-        WHEN 'DBA_OB_FORMAT_OUTLINES' THEN ''
         WHEN 'GV$OB_SQL_AUDIT' THEN ''
         WHEN 'V$OB_SQL_AUDIT' THEN ''
         WHEN 'DBA_AUDIT_SESSION' THEN ''
@@ -50399,37 +50360,8 @@ def_table_schema(
 )
 
 # 25271: DBA_SCHEDULER_RUNNING_JOBS
-def_table_schema(
-    owner = 'guoyun.lgy',
-    table_name     = 'DBA_OB_FORMAT_OUTLINES',
-    name_postfix    = '_ORA',
-    database_id     = 'OB_ORA_SYS_DATABASE_ID',
-    table_id       = '25272',
-    table_type = 'SYSTEM_VIEW',
-    gm_columns = [],
-    in_tenant_space = True,
-    rowkey_columns = [],
-    view_definition = """
-    SELECT
-      CAST(B.GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
-      CAST(B.GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
-      A.TENANT_ID,
-      A.DATABASE_ID,
-      A.OUTLINE_ID,
-      A.DATABASE_NAME,
-      A.OUTLINE_NAME,
-      A.VISIBLE_SIGNATURE,
-      A.FORMAT_SQL_TEXT,
-      A.OUTLINE_TARGET,
-      A.OUTLINE_SQL,
-      A.FORMAT_SQL_ID,
-      A.OUTLINE_CONTENT
-    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
-    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0;
-""".replace("\n", " "),
-   normal_columns = [
-   ],
-)
+
+#25272: DBA_OB_FORMAT_OUTLINES
 
 def_table_schema(
   owner           = 'jiajingzhe.jjz',
@@ -50783,8 +50715,7 @@ def_table_schema(
                          tx_internal_route_version as TX_STATE_VERSION,
                          flt_trace_id as FLT_TRACE_ID,
                          pl_trace_id as PL_TRACE_ID,
-                         plsql_exec_time as PLSQL_EXEC_TIME,
-                         format_sql_id as FORMAT_SQL_ID
+                         plsql_exec_time as PLSQL_EXEC_TIME
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -55500,7 +55431,7 @@ def_table_schema(
                           A.SQL_ID,
                           A.OUTLINE_CONTENT
                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
-                   WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
+                   WHERE A.OUTLINE_ID = B.OUTLINE_ID
 """.replace("\n", " ")
 )
 
@@ -57185,7 +57116,6 @@ def_table_schema(
 """.replace("\n", " "),
 )
 # 余留位置
-
 
 ################################################################################
 # Lob Table (50000, 70000)

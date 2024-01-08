@@ -398,7 +398,6 @@ struct ObAuditRecordData {
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   ObCurTraceId::TraceId pl_trace_id_;
   int64_t plsql_exec_time_;
-  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
 };
 
 } //namespace sql

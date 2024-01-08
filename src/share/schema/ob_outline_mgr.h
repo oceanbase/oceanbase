@@ -40,9 +40,7 @@ public:
                K_(schema_version),
                K_(database_id),
                K_(name),
-               K_(signature),
-               K_(format_sql_id),
-               K_(format_outline));
+               K_(signature));
   virtual void reset();
   inline bool is_valid() const;
   inline int64_t get_convert_size() const;
@@ -54,8 +52,6 @@ public:
   inline int64_t get_schema_version() const { return schema_version_; }
   inline void set_database_id(const uint64_t database_id) { database_id_ = database_id; }
   inline uint64_t get_database_id() const { return database_id_; }
-  int set_format_sql_id(const char *sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
-  int set_format_sql_id(const common::ObString &sql_id) { return deep_copy_str(sql_id, format_sql_id_); }
   inline int set_name(const common::ObString &name)
   { return deep_copy_str(name, name_); }
   inline const char *get_name() const { return extract_str(name_); }
@@ -68,12 +64,8 @@ public:
   inline const char *get_sql_id() const { return extract_str(sql_id_); }
   inline const common::ObString &get_signature_str() const { return signature_; }
   inline const common::ObString &get_sql_id_str() const { return sql_id_; }
-  inline const char *get_format_sql_id() const { return extract_str(format_sql_id_); }
-  inline const common::ObString &get_format_sql_id_str() const { return format_sql_id_; }
   inline ObTenantOutlineId get_tenant_outline_id() const
   { return ObTenantOutlineId(tenant_id_, outline_id_); }
-  void set_format_outline(bool is_format) { format_outline_ = is_format;}
-  inline bool is_format() const { return format_outline_; }
 
 private:
   uint64_t tenant_id_;
@@ -83,8 +75,6 @@ private:
   common::ObString name_;
   common::ObString signature_;
   common::ObString sql_id_;
-  common::ObString format_sql_id_;
-  bool format_outline_;
 };
 
 template<class T, class V>
@@ -116,7 +106,6 @@ struct ObGetOutlineKeyV3<ObOutlineNameHashWrapper, ObSimpleOutlineSchema *>
       name_wrap.set_tenant_id(outline_schema->get_tenant_id());
       name_wrap.set_database_id(outline_schema->get_database_id());
       name_wrap.set_name(outline_schema->get_name_str());
-      name_wrap.set_is_format(outline_schema->is_format());
     }
     return name_wrap;
   }
@@ -132,7 +121,6 @@ struct ObGetOutlineKeyV3<ObOutlineSignatureHashWrapper, ObSimpleOutlineSchema *>
       sql_wrap.set_tenant_id(outline_schema->get_tenant_id());
       sql_wrap.set_database_id(outline_schema->get_database_id());
       sql_wrap.set_signature(outline_schema->get_signature_str());
-      sql_wrap.set_is_format(outline_schema->is_format());
     }
     return sql_wrap;
   }
@@ -145,12 +133,9 @@ struct ObGetOutlineKeyV3<ObOutlineSqlIdHashWrapper, ObSimpleOutlineSchema *>
   {
     ObOutlineSqlIdHashWrapper sql_wrap;
     if (!OB_ISNULL(outline_schema)) {
-      ObString sql_id = outline_schema->is_format() ? outline_schema->get_format_sql_id_str()
-                                                    : outline_schema->get_sql_id_str();
       sql_wrap.set_tenant_id(outline_schema->get_tenant_id());
       sql_wrap.set_database_id(outline_schema->get_database_id());
-      sql_wrap.set_sql_id(sql_id);
-      sql_wrap.set_is_format(outline_schema->is_format());
+      sql_wrap.set_sql_id(outline_schema->get_sql_id_str());
     }
     return sql_wrap;
   }
@@ -191,17 +176,14 @@ public:
   int get_outline_schema_with_name(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &name,
-                                   const bool is_format,
                                    const ObSimpleOutlineSchema *&outline_schema) const;
   int get_outline_schema_with_signature(const uint64_t tenant_id,
                                         const uint64_t database_id,
                                         const common::ObString &signature,
-                                        const bool is_format,
                                         const ObSimpleOutlineSchema *&outline_schema) const;
   int get_outline_schema_with_sql_id(const uint64_t tenant_id,
                                      const uint64_t database_id,
                                      const common::ObString &sql_id,
-                                     const bool is_format,
                                      const ObSimpleOutlineSchema *&outline_schema) const;
   int get_outline_schemas_in_tenant(const uint64_t tenant_id,
       common::ObIArray<const ObSimpleOutlineSchema *> &outline_schemas) const;

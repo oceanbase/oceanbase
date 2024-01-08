@@ -788,8 +788,7 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     is_enable_px_fast_reclaim_,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
-                    subschema_ctx_,
-                    stat_.format_sql_id_);
+                    subschema_ctx_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

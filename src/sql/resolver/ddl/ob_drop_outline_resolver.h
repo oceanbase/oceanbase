@@ -25,7 +25,7 @@ public:
   virtual ~ObDropOutlineResolver() {}
   virtual int resolve(const ParseNode &parse_tree);
 private:
-  static const int64_t OUTLINE_CHILD_COUNT = 2;
+  static const int64_t OUTLINE_CHILD_COUNT = 1;
   DISALLOW_COPY_AND_ASSIGN(ObDropOutlineResolver);
 };
 }//namespace sql

@@ -30369,12 +30369,9 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
   } else if (OB_UNLIKELY(OB_INVALID_ID == outline_info.get_tenant_id()
                          || OB_INVALID_ID == outline_info.get_database_id()
                          || outline_info.get_name_str().empty()
-                         || (!outline_info.is_format() && outline_info.get_signature_str().empty() &&
-                            !ObOutlineInfo::is_sql_id_valid(outline_info.get_sql_id_str()))
-                         || (outline_info.is_format() && outline_info.get_format_sql_text_str().empty() &&
-                            !ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())))) {
+                         || (outline_info.get_signature_str().empty() && !ObOutlineInfo::is_sql_id_valid(outline_info.get_sql_id_str())))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(outline_info.is_format()), K(outline_info.get_format_sql_text_str().empty()), K(ObOutlineInfo::is_sql_id_valid(outline_info.get_format_sql_id_str())), K(outline_info), K(ret));
+    LOG_WARN("invalid argument", K(outline_info), K(ret));
   } else {
     is_update = false;
     bool is_outline_exist_with_name = false;
@@ -30385,7 +30382,6 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                 outline_info.get_database_id(),
                 outline_info.get_name_str(),
                 outline_id,
-                outline_info.is_format(),
                 is_outline_exist_with_name))) {
       LOG_WARN("failed to check if outline_name exists", K(outline_info), K(ret));
     } else {
@@ -30394,7 +30390,6 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                  outline_info.get_tenant_id(),
                  outline_info.get_database_id(),
                  outline_info.get_signature_str(),
-                 outline_info.is_format(),
                  is_outline_exist_with_signature_or_sql_id))) {
           LOG_WARN("failed to check if signature exist", K(outline_info), K(ret));
         }
@@ -30402,8 +30397,7 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
         if (OB_FAIL(schema_service_->check_outline_exist_with_sql_id(
                  outline_info.get_tenant_id(),
                  outline_info.get_database_id(),
-                 (outline_info.is_format() ? outline_info.get_format_sql_id_str() : outline_info.get_sql_id_str()),
-                 outline_info.is_format(),
+                 outline_info.get_sql_id_str(),
                  is_outline_exist_with_signature_or_sql_id))) {
           LOG_WARN("failed to check if sql id exist", K(outline_info), K(ret));
         }
@@ -30420,7 +30414,6 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                   outline_info.get_tenant_id(),
                   outline_info.get_database_id(),
                   outline_info.get_name_str(),
-                  outline_info.is_format(),
                   orig_outline))) {
         LOG_WARN("failed to get origin outline info", K(outline_info), K(ret));
       } else if (OB_ISNULL(orig_outline)) {
@@ -30439,7 +30432,7 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
       LOG_USER_ERROR(OB_ERR_OUTLINE_EXIST, outline_info.get_name_str().length(), outline_info.get_name_str().ptr());
     } else if (is_outline_exist_with_signature_or_sql_id) {
       ObString outline_name;
-      outline_name = outline_info.is_format() ? outline_info.get_format_sql_text_str() : outline_info.get_sql_text_str();
+      outline_name = outline_info.get_sql_text_str();
       ret = OB_ERR_OUTLINE_EXIST;
       LOG_USER_ERROR(OB_ERR_OUTLINE_EXIST, outline_name.length(), outline_name.ptr());
     } else {/*do nothing*/}
@@ -30515,7 +30508,6 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
       const ObString &database_name = arg.db_name_;
       const ObString &outline_name = alter_outline_info.get_name_str();
       const ObOutlineInfo *orig_outline_info = NULL;
-      bool is_format = alter_outline_info.is_format();
       if (database_name.empty() || outline_name.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("database name or outline name is empty", K(alter_outline_info),
@@ -30523,7 +30515,6 @@ int ObDDLService::alter_outline_in_trans(const obrpc::ObAlterOutlineArg &arg)
       } else if (OB_FAIL(schema_guard.get_outline_info_with_name(tenant_id,
                                                                  database_name,
                                                                  outline_name,
-                                                                 is_format,
                                                                  orig_outline_info))) {
         LOG_WARN("failed to get_outline_info_with_name", K(tenant_id),
                  K(database_name), K(outline_name), K(ret));
@@ -30689,7 +30680,7 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
       //do nothing
     } else if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, database_id,
                                                                       outline_name, outline_id,
-                                                                      arg.is_format_, outline_exist))) {
+                                                                      outline_exist))) {
       LOG_WARN("check_outline_exist failed", K(tenant_id), K(database_name), K(outline_name), K(ret));
     } else if (!outline_exist) {
       ret = OB_OUTLINE_NOT_EXIST;
