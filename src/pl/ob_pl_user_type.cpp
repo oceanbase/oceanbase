@@ -2746,6 +2746,7 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             OX (table_data_pos_tmp += sizeof(ObObj));
           }
         }
+        int64_t n = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
           if (ObSMUtils::update_from_bitmap(null_value, bitmap, i)) { // null value
             ObObj* value = reinterpret_cast<ObObj*>(table_data + table_data_pos);
@@ -2767,8 +2768,20 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
               LOG_WARN("deserialize element failed", K(ret), K(i), K(element_init_size), K(count));
             }
           }
+          OX(++n);
           LOG_DEBUG("deserialize element done", K(ret), KPC(this), K(i), K(element_init_size), K(count),
             K(src), K(table_data), K(table_data_len), K(table_data_pos));
+        }
+        if (OB_FAIL(ret)) {
+          for (int64_t j = 0; j <= n; ++j) {
+            ObObj* value = reinterpret_cast<ObObj*>(table_data + j);
+            int tmp = ObUserDefinedType::destruct_obj(*value);
+            if (OB_SUCCESS != tmp) {
+              LOG_WARN("fail torelease memory", K(ret), K(tmp));
+            }
+            value->set_type(ObMaxType);
+          }
+          collection_allocator->reset();
         }
       }
       if (OB_SUCC(ret)) {
