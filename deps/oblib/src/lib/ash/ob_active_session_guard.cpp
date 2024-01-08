@@ -127,9 +127,7 @@ void ObActiveSessionStat::finish_async_commiting() {
     event_no_ = 0;
     const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
     wait_event_begin_ts_ = 0;
-    if (OB_UNLIKELY(cur_wait_time <= 0)) {
-      LOG_ERROR("failed to set wait_event_begin_ts_ for async wait event", KPC(this), K(cur_wait_time), KPC(this));
-    } else {
+    if (OB_LIKELY(cur_wait_time > 0)) {
       total_non_idle_wait_time_ += cur_wait_time;
     }
   }
@@ -235,14 +233,15 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
         stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
         stat.delta_db_time_ = delta_time - delta_idle_wait_time;
 
-        ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
+          ObTenantStatEstGuard guard(stat.tenant_id_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
         } else {
+          ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
           EVENT_ADD(SYS_TIME_MODEL_DB_TIME, stat.delta_db_time_);
           EVENT_ADD(SYS_TIME_MODEL_DB_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
@@ -299,8 +298,8 @@ void ObActiveSessionStat::calc_db_time_for_background_session(ObActiveSessionSta
         stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
         stat.delta_db_time_ = delta_time - delta_idle_wait_time;
 
-        ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
         if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
+          ObTenantStatEstGuard guard(stat.tenant_id_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
