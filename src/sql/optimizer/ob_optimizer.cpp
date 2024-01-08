@@ -554,10 +554,14 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
+  ObQueryCtx* query_ctx = ctx_.get_query_ctx();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
-  if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null query ctx");
+  } else if (OB_FAIL(check_whether_contain_nested_sql(stmt))) {
     LOG_WARN("check whether contain nested sql failed", K(ret));
   } else if (OB_FAIL(stmt.check_has_subquery_in_function_table(has_subquery_in_function_table))) {
     LOG_WARN("failed to check stmt has function table", K(ret));
@@ -600,10 +604,13 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
     }
     int tmp_ret = OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS;
-    LOG_TRACE("yibo generate random plan", K(tmp_ret), K(session.is_inner()));
     if (!session.is_inner() && (OB_E(EventTable::EN_GENERATE_RANDOM_PLAN) OB_SUCCESS) != OB_SUCCESS) {
       ctx_.set_generate_random_plan(true);
-      LOG_TRACE("yibo generate random plan");
+    }
+    if (session.is_enable_new_query_range() &&
+        query_ctx->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_2 &&
+        GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+      ctx_.set_enable_new_query_range(true);
     }
     //do nothing
   }

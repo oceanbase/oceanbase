@@ -2130,7 +2130,6 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
   ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx.get_session_info());
   const ColumnItem* column_item = NULL;
   bool dummy_all_single_value_ranges = true;
-  bool new_query_range = false;
   if (OB_ISNULL(log_plan) || OB_ISNULL(exec_ctx) || OB_ISNULL(session_info) ||
       OB_ISNULL(column_item = log_plan->get_column_item_by_id(table_id, column_id)) ||
       OB_ISNULL(ctx.get_stmt()) || OB_ISNULL(ctx.get_stmt()->get_query_ctx())) {
@@ -2138,8 +2137,7 @@ int ObOptSelectivity::get_column_query_range(const OptSelectivityCtx &ctx,
     LOG_WARN("get unexpected null", K(ret), K(log_plan), K(exec_ctx), K(session_info), K(column_item));
   } else if (OB_FAIL(column_items.push_back(*column_item))) {
     LOG_WARN("failed to push back column item", K(ret));
-  } else if (OB_FALSE_IT(new_query_range = session_info->is_enable_new_query_range())) {
-  } else if (new_query_range) {
+  } else if (ctx.get_opt_ctx().enable_new_query_range()) {
     ObPreRangeGraph pre_range_graph(alloc);
     if (OB_FAIL(pre_range_graph.preliminary_extract_query_range(column_items, quals, exec_ctx,
                                                                 NULL, params, false, true))) {

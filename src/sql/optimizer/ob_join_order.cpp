@@ -3173,7 +3173,6 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
   ObSQLSessionInfo *session_info = NULL;
-  bool use_new_range = false;
   bool enable_better_inlist = false;
   ObSEArray<ObRawExpr*, 4> range_predicates;
   if (OB_ISNULL(get_plan()) ||
@@ -3184,7 +3183,6 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
-  } else if (OB_FALSE_IT(use_new_range = session_info->is_enable_new_query_range())) {
   } else if (OB_FAIL(check_enable_better_inlist(table_id, enable_better_inlist))) {
     LOG_WARN("failed to check better inlist enabled", K(ret));
   } else if (enable_better_inlist &&
@@ -3195,7 +3193,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   } else if (!enable_better_inlist &&
              OB_FAIL(range_predicates.assign(predicates))) {
     LOG_WARN("failed to assign exprs", K(ret));
-  } else if (use_new_range && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+  } else if (opt_ctx->enable_new_query_range()) {
     void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
     ObPreRangeGraph *pre_range_graph = NULL;
     if (OB_ISNULL(ptr)) {

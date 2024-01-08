@@ -6872,13 +6872,11 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
   const ObTableSchema *table_schema = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   ObSEArray<uint64_t, 8> rowkey_ids;
-  bool use_new_query_range = false;
   if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(join) ||
       OB_ISNULL(index_scan) || OB_ISNULL(table_scan) ||
       OB_ISNULL(optimizer_context_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(join), K(index_scan), K(table_scan), K(ret));
-  } else if (OB_FALSE_IT(use_new_query_range = optimizer_context_.get_session_info()->is_enable_new_query_range())) {
   } else if (OB_UNLIKELY(log_op_def::LOG_JOIN != join->get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected join type", K(join->get_type()), K(ret));
@@ -6948,7 +6946,7 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
         LOG_WARN("failed to set range columns", K(ret));
-      } else if (use_new_query_range && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0) {
+      } else if (optimizer_context_.enable_new_query_range()) {
         ObPreRangeGraph *pre_range_graph = static_cast<ObPreRangeGraph*>(get_allocator().alloc(sizeof(ObPreRangeGraph)));
         if (OB_ISNULL(pre_range_graph)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;

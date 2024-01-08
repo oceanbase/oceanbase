@@ -1333,14 +1333,16 @@ int ObTableLocation::init(
       LOG_WARN("fail to record_in_dml_partition_info", K(ret));
     } else if (!is_in_hit_) {
       bool is_in_range_optimization_enabled = false;
-      bool use_new_query_range = session_info->is_enable_new_query_range();
+      bool use_new_query_range = (session_info->is_enable_new_query_range()
+                              && stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_2
+                              && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0);
       if (OB_FAIL(ObOptimizerUtil::is_in_range_optimization_enabled(stmt.get_query_ctx()->get_global_hint(),
                                                                     session_info,
                                                                     is_in_range_optimization_enabled))) {
         LOG_WARN("failed to check in range optimization enabled", K(ret));
       } else if (OB_FAIL(record_not_insert_dml_partition_info(stmt, exec_ctx, table_schema, filter_exprs, dtc_params,
                                                               is_in_range_optimization_enabled,
-                                                              use_new_query_range && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0))) {
+                                                              use_new_query_range))) {
           LOG_WARN("Fail to record select or update partition info", K(stmt_type_), K(ret));
       } else if (OB_FAIL(get_not_insert_dml_part_sort_expr(stmt, sort_exprs))) {
         LOG_WARN("Failed to get not insert dml sort key with parts", K(ret));
