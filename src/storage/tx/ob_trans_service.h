@@ -47,6 +47,8 @@
 #include "ob_tx_free_route_msg.h"
 #include "ob_tablet_to_ls_cache.h"
 
+#define MAX_REDO_SYNC_TASK_COUNT 10
+
 namespace oceanbase
 {
 
@@ -247,6 +249,8 @@ private:
 public:
   int check_dup_table_ls_readable();
   int check_dup_table_tablet_readable();
+
+  int retry_redo_sync_by_task(ObTransID tx_id, share::ObLSID ls_id);
 public:
   int end_1pc_trans(ObTxDesc &trans_desc,
                     ObITxCallback *endTransCb,
@@ -314,6 +318,7 @@ private:
   ObDupTabletScanTask dup_tablet_scan_task_;
   ObDupTableLoopWorker dup_table_loop_worker_;
   ObDupTableRpc dup_table_rpc_impl_;
+  ObTxRedoSyncRetryTask redo_sync_task_array_[MAX_REDO_SYNC_TASK_COUNT];
 
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObTxELRUtil elr_util_;

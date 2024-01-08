@@ -1202,6 +1202,150 @@ int ObDupTableRpc::init(rpc::frame::ObReqTransport *req_transport,
 
   return ret;
 }
+
+int ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::operator()(
+    common::hash::HashSetTypes<RedoSyncKey>::pair_type &redo_sync_hash_pair)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (ls_handle_.is_valid()) {
+    if (redo_sync_hash_pair.first.ls_id_ != ls_handle_.get_ls()->get_ls_id()) {
+      ls_handle_.reset();
+    }
+  }
+
+  // tmp_ret = OB_SUCCESS;
+  ObPartTransCtx *tx_ctx = nullptr;
+
+  if (!ls_handle_.is_valid() && OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+    if (OB_TMP_FAIL(
+            MTL(ObLSService *)
+                ->get_ls(redo_sync_hash_pair.first.ls_id_, ls_handle_, ObLSGetMod::TRANS_MOD))) {
+      TRANS_LOG(WARN, "get ls failed", K(ret), K(redo_sync_hash_pair.first));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
+    if (OB_TMP_FAIL(ls_handle_.get_ls()->get_tx_ctx(redo_sync_hash_pair.first.tx_id_,
+                                                    false /*for_replay*/, tx_ctx))) {
+      TRANS_LOG(WARN, "get tx ctx failed", K(ret), K(tmp_ret), K(redo_sync_hash_pair.first),
+                K(ls_handle_), KP(tx_ctx));
+    } else if (OB_TMP_FAIL(tx_ctx->dup_table_tx_redo_sync(false/*need_retry_by_task*/))) {
+      TRANS_LOG(WARN, "dup table redo sync failed", K(ret), K(tmp_ret),
+                K(redo_sync_hash_pair.first), K(ls_handle_), KP(tx_ctx));
+      if (tmp_ret == OB_EAGAIN) {
+        tmp_ret = OB_SUCCESS;
+      }
+    }
+
+    if (OB_NOT_NULL(tx_ctx)) {
+      (void)ls_handle_.get_ls()->revert_tx_ctx(tx_ctx);
+    }
+  }
+
+  TRANS_LOG(INFO, "iter tx redo sync by task", K(redo_sync_hash_pair.first), K(tmp_ret), K(ret),
+            KP(this));
+
+  if (OB_SUCCESS != tmp_ret) {
+    int tmp_ret2 = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret2 = del_list_.push_back(redo_sync_hash_pair.first))) {
+      TRANS_LOG(WARN, "push back into del_list failed", K(ret), K(tmp_ret), K(tmp_ret2),
+                K(redo_sync_hash_pair.first));
+    }
+  }
+
+  return ret;
+}
+
+void ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::remove_unused_redo_sync_key()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  RedoSyncKey tmp_key;
+  if (del_list_.size() > 0) {
+    while (OB_SUCC(del_list_.pop_front(tmp_key))) {
+      if (OB_TMP_FAIL(redo_sync_retry_set_.erase_refactored(tmp_key))) {
+        TRANS_LOG(WARN, "erase from hash map failed", K(ret), K(tmp_ret),K(tmp_key));
+      } else {
+        // DUP_TABLE_LOG(INFO, "erase from hash map succ", K(ret), K(tmp_key));
+      }
+    }
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // when pop all list, rewrite ret code
+      TRANS_LOG(DEBUG, "end del in while loop", K(ret));
+      ret = OB_SUCCESS;
+    }
+  }
+}
+
+int ObTxRedoSyncRetryTask::iter_tx_retry_redo_sync()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  share::ObLSID last_ls_id;
+  last_ls_id.reset();
+  ObLSHandle ls_handle;
+  TransModulePageAllocator allocator;
+
+  ObTxRedoSyncIterFunc redo_sync_func(redo_sync_retry_set_, allocator);
+
+  if (OB_FAIL(redo_sync_retry_set_.foreach_refactored(redo_sync_func))) {
+    TRANS_LOG(WARN, "retry to start tx redo sync failed", K(ret), K(redo_sync_retry_set_.size()));
+  }
+
+  redo_sync_func.remove_unused_redo_sync_key();
+
+  if (OB_SUCC(ret) && !redo_sync_retry_set_.empty() && ATOMIC_BCAS(&in_thread_pool_, false, true)) {
+    set_retry_interval_us(5 * 1000, 5 * 1000);
+    if (OB_TMP_FAIL(MTL(ObTransService *)->push(this))) {
+      ATOMIC_BCAS(&in_thread_pool_, true, false);
+      TRANS_LOG(WARN, "push redo sync task failed", K(ret), K(in_thread_pool_));
+    }
+  }
+
+  return ret;
+}
+int ObTxRedoSyncRetryTask::push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  if (!redo_sync_retry_set_.created()) {
+    if (OB_FAIL(redo_sync_retry_set_.create(100))) {
+      TRANS_LOG(WARN, "alloc a redo sync set failed", K(ret), K(tx_id), K(ls_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    RedoSyncKey redo_sync_key;
+    redo_sync_key.tx_id_ = tx_id;
+    redo_sync_key.ls_id_ = ls_id;
+    if (OB_FAIL(redo_sync_retry_set_.set_refactored(redo_sync_key, 0))) {
+      if (ret == OB_HASH_EXIST) {
+        ret = OB_SUCCESS;
+      } else {
+        TRANS_LOG(WARN, "insert redo_sync_set into hash_set failed", K(ret), K(tx_id), K(ls_id));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !redo_sync_retry_set_.empty() && ATOMIC_BCAS(&in_thread_pool_, false, true)) {
+    set_retry_interval_us(5 * 1000, 5 * 1000);
+    if (OB_TMP_FAIL(MTL(ObTransService *)->push(this))) {
+      ATOMIC_BCAS(&in_thread_pool_, true, false);
+      TRANS_LOG(WARN, "push redo sync task failed", K(ret), K(tx_id), K(ls_id), K(in_thread_pool_));
+    }
+  }
+
+  TRANS_LOG(INFO, "push redo sync task succ", K(ret), KP(this), K(tx_id), K(ls_id),
+            K(in_thread_pool_));
+
+  return ret;
+}
+
+
+
 } // namespace transaction
 
 namespace obrpc
