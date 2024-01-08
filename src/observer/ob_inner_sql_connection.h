@@ -442,6 +442,7 @@ private:
   int64_t prev_tenant_id_;
   int64_t prev_session_id_;
   ObActiveSessionStat *prev_stat_;
+  bool need_record_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

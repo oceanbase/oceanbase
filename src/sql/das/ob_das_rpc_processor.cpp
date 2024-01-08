@@ -210,7 +210,6 @@ void ObDASBaseAccessP<pcode>::cleanup()
 {
   ObActiveSessionGuard::get_stat().in_das_remote_exec_ = false;
   ObActiveSessionGuard::get_stat().reuse();
-  ObActiveSessionGuard::setup_default_ash(); // set ptr to thread_local stat
   ObActiveSessionGuard::get_stat().session_id_ = bkgd_ash_stat_sess_id_;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;

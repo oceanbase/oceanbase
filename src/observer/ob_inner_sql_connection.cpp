@@ -2305,7 +2305,8 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
       di_buffer_(nullptr),
       prev_tenant_id_(OB_SYS_TENANT_ID),
       prev_session_id_(0),
-      prev_stat_(nullptr)
+      prev_stat_(nullptr),
+      need_record_(true)
 {
   if (is_inner_session_ && OB_NOT_NULL(inner_session) &&
       ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session->get_sessid() &&

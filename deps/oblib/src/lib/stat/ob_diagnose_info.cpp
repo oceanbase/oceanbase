@@ -235,6 +235,8 @@ int ObWaitEventHistory::push(const int64_t event_no, const uint64_t timeout_ms, 
   int ret = OB_SUCCESS;
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
+  } else if (nest_cnt_ >= 1) {
+    ret = OB_ARRAY_OUT_OF_RANGE;
   } else if (nest_cnt_ >= SESSION_WAIT_HISTORY_CNT) {
     ++nest_cnt_;
   } else {
@@ -801,7 +803,9 @@ ObWaitEventGuard::ObWaitEventGuard(
     event_no_ = event_no;
     di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
     if (NULL != di_) {
-      di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3, is_atomic);
+      if (OB_SUCCESS != (di_->notify_wait_begin(event_no, timeout_ms, p1, p2, p3, is_atomic))) {
+        need_record_ = false;
+      }
     } else {
       wait_begin_time_ = ObTimeUtility::current_time();
       timeout_ms_ = timeout_ms;

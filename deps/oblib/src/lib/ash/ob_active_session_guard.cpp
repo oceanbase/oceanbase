@@ -114,39 +114,23 @@ void ObActiveSessionStat::set_async_committing()
 {
   in_committing_ = true;
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(di_)) {
-    di_ = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
-  }
-  if (di_ &&
-      OB_SUCC(di_->notify_wait_begin(ObWaitEventIds::ASYNC_COMMITTING_WAIT, 0, 0, 0, 0, true))) {
-  } else {
-    LOG_WARN("begin async event failed", KPC(this));
-    wait_event_begin_ts_ = ObTimeUtility::current_time();
-    event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
-  }
+  wait_event_begin_ts_ = ObTimeUtility::current_time();
+  event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
 }
 
 void ObActiveSessionStat::finish_async_commiting() {
   in_committing_ = false;
   int ret = OB_SUCCESS;
-  ObTenantStatEstGuard tenant_stat_guard(tenant_id_);
-  if (di_ && OB_SUCC(di_->notify_wait_end(ObDiagnoseTenantInfo::get_local_diagnose_info(),
-                 true /*is_phy*/, false /*is_idle*/))) {
-    // di_ cache working and db time successfully stored.
+  if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
+    // if happened. caller of set_async_committing should check and revert the wait event.
   } else {
-    // di cache been evicted.
-    // LOG_WARN("async committing event but di cache invalidated.", KPC(this));
-    if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
-      // if happened. caller of set_async_committing should check and revert the wait event.
+    event_no_ = 0;
+    const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
+    wait_event_begin_ts_ = 0;
+    if (OB_UNLIKELY(cur_wait_time <= 0)) {
+      LOG_ERROR("failed to set wait_event_begin_ts_ for async wait event", KPC(this), K(cur_wait_time), KPC(this));
     } else {
-      event_no_ = 0;
-      const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
-      wait_event_begin_ts_ = 0;
-      if (OB_UNLIKELY(cur_wait_time <= 0)) {
-        LOG_ERROR("failed to set wait_event_begin_ts_ for async wait event", KPC(this), K(cur_wait_time), KPC(this));
-      } else {
-        total_non_idle_wait_time_ += cur_wait_time;
-      }
+      total_non_idle_wait_time_ += cur_wait_time;
     }
   }
 }

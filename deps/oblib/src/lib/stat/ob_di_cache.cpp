@@ -107,7 +107,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
         bucket.lock_.wrlock();
         if (OB_SUCCESS != (ret = bucket.get_the_node(session_id, session_collect))) {
           ret = OB_SUCCESS;
-          bucket.list_.add_first(&collects_[pos]);
+          bucket.list_.add_last(&collects_[pos]);
           collects_[pos].session_id_ = session_id;
           bucket.lock_.unlock();
           session_collect = &collects_[pos];

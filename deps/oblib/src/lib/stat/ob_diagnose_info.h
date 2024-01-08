@@ -195,7 +195,9 @@ public:
       need_record_ = true;
       di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
       if (NULL != di_) {
-        di_->notify_wait_begin(EVENT_ID, timeout_ms, p1, p2, p3, IS_PHYSICAL);
+        if (OB_SUCCESS != di_->notify_wait_begin(EVENT_ID, timeout_ms, p1, p2, p3, IS_PHYSICAL)) {
+          need_record_ = false;
+        }
       } else {
         wait_begin_time_ = ObTimeUtility::current_time();
         timeout_ms_ = timeout_ms;
@@ -382,26 +384,30 @@ private:
     ret;                                                        \
   })
 
-#define WAIT_BEGIN(stat_no, ...)                                                          \
-  do {                                                                                    \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {                                     \
-      oceanbase::common::ObDiagnoseSessionInfo *di =                                      \
-          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();            \
-      if (di) {                                                                           \
-        di->notify_wait_begin(stat_no, ##__VA_ARGS__);                                    \
-      }                                                                                   \
-    }                                                                                     \
+#define WAIT_BEGIN(stat_no, ...)                                               \
+  do {                                                                         \
+    if (oceanbase::lib::is_diagnose_info_enabled()) {                          \
+      oceanbase::common::ObDiagnoseSessionInfo *di =                           \
+          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
+      if (di) {                                                                \
+        if (OB_SUCCESS != (di->notify_wait_begin(stat_no, ##__VA_ARGS__))) {   \
+          need_record_ = false;                                                \
+        }                                                                      \
+      }                                                                        \
+    } else {                                                                   \
+      need_record_ = false;                                                    \
+    }                                                                          \
   } while (0)
 
 #define WAIT_END(stat_no)                                                      \
   do {                                                                         \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {                          \
+    if (oceanbase::lib::is_diagnose_info_enabled() && need_record_) {          \
       oceanbase::common::ObDiagnoseSessionInfo *di =                           \
           oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
       oceanbase::common::ObDiagnoseTenantInfo *tenant_di =                     \
           oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();  \
       if (NULL != di && NULL != tenant_di) {                                   \
-        di->notify_wait_end(tenant_di, OB_WAIT_EVENTS[stat_no].is_phy_,       \
+        di->notify_wait_end(tenant_di, OB_WAIT_EVENTS[stat_no].is_phy_,        \
             OB_WAIT_EVENTS[stat_no].wait_class_ == ObWaitClassIds::IDLE);      \
       }                                                                        \
     }                                                                          \
