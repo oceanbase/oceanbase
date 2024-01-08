@@ -73,6 +73,8 @@ public:
   int part_key_has_subquery(bool &has) const ;
   int part_key_has_auto_inc(bool &has) const;
   int part_key_is_updated(bool &is_updated) const;
+  int check_pdml_disabled(const bool is_online_ddl, bool &disable_pdml, bool &is_pk_auto_inc) const;
+  int find_first_auto_inc_expr(const ObRawExpr *expr, const ObRawExpr *&auto_inc) const;
   virtual int get_value_exprs(ObIArray<ObRawExpr *> &value_exprs) const override;
   // use this only when part_generated_col_dep_cols_.count() is not zero
   int get_values_desc_for_heap_table(common::ObIArray<ObColumnRefRawExpr*> &arr) const;
