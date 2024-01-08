@@ -241,6 +241,9 @@ int ObCallProcedureResolver::generate_pl_cache_ctx(pl::ObPLCacheCtx &pc_ctx)
     pc_ctx.key_.sessid_ = 0;
     pc_ctx.key_.key_id_ = OB_INVALID_ID;
     pc_ctx.key_.name_ = params_.cur_sql_;
+    (void)ObSQLUtils::md5(pc_ctx.raw_sql_,
+                          pc_ctx.sql_id_,
+                          (int32_t)sizeof(pc_ctx.sql_id_));
   }
   return ret;
 }

@@ -4847,6 +4847,7 @@ int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
   sql_id_ = other.sql_id_;
   is_fine_grained_ = other.is_fine_grained_;
   ns_type_ = other.ns_type_;
+  schema_id_ = other.schema_id_;
   if (OB_FAIL(tenant_ids_.assign(other.tenant_ids_))) {
     LOG_WARN("failed to assign tenant ids", K(ret));
   } else if (OB_FAIL(db_ids_.assign(other.db_ids_))) {
@@ -4855,7 +4856,7 @@ int ObAdminFlushCacheArg::assign(const ObAdminFlushCacheArg &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_);
+OB_SERIALIZE_MEMBER(ObAdminFlushCacheArg, tenant_ids_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_, schema_id_);
 
 int ObFlushCacheArg::assign(const ObFlushCacheArg &other)
 {
@@ -4866,13 +4867,14 @@ int ObFlushCacheArg::assign(const ObFlushCacheArg &other)
   sql_id_ = other.sql_id_;
   is_fine_grained_ = other.is_fine_grained_;
   ns_type_ = other.ns_type_;
+  schema_id_ = other.schema_id_;
   if (OB_FAIL(db_ids_.assign(other.db_ids_))) {
     LOG_WARN("failed to assign db ids", K(ret));
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_);
+OB_SERIALIZE_MEMBER(ObFlushCacheArg, is_all_tenant_, tenant_id_, cache_type_, db_ids_, sql_id_, is_fine_grained_, ns_type_, schema_id_);
 
 OB_SERIALIZE_MEMBER(ObGetAllSchemaArg,
                     schema_version_,

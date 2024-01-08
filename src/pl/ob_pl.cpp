@@ -2230,7 +2230,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     pc_ctx.schema_guard_ = ctx.get_sql_ctx()->schema_guard_;
     pc_ctx.cache_params_ = &params;
     pc_ctx.raw_sql_ = sql;
-    MEMCPY(pc_ctx.sql_id_, ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_));
+    if (ctx.get_sql_ctx()->sql_id_[0] != '\0') {
+      MEMCPY(pc_ctx.sql_id_, ctx.get_sql_ctx()->sql_id_, (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_));
+    } else {
+      CK (!pc_ctx.raw_sql_.empty());
+      OX ((void)ObSQLUtils::md5(pc_ctx.raw_sql_,
+                            pc_ctx.sql_id_,
+                            (int32_t)sizeof(pc_ctx.sql_id_)));
+    }
 
     pc_ctx.key_.namespace_ = ObLibCacheNameSpace::NS_ANON;
     pc_ctx.key_.db_id_ = database_id;

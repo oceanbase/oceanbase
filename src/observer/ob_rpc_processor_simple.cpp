@@ -68,6 +68,7 @@
 #include "sql/spm/ob_spm_controller.h"
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
@@ -1334,7 +1335,27 @@ int ObFlushCacheP::process()
       break;
     }
     case CACHE_TYPE_PL_OBJ: {
-      if (arg_.is_all_tenant_) {
+      if (arg_.is_fine_grained_) { // fine-grained plan cache evict
+        bool is_evict_by_schema_id = common::OB_INVALID_ID != arg_.schema_id_;
+        MTL_SWITCH(arg_.tenant_id_) {
+          ObPlanCache* plan_cache = MTL(ObPlanCache*);
+          if (arg_.db_ids_.count() == 0) {
+            if (is_evict_by_schema_id) {
+              ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySchemaIdOp, uint64_t>(OB_INVALID_ID, arg_.schema_id_);
+            } else {
+              ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySQLIDOp, ObString>(OB_INVALID_ID, arg_.sql_id_);
+            }
+          } else {
+            for (uint64_t i=0; i<arg_.db_ids_.count(); i++) {
+              if (is_evict_by_schema_id) {
+                ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySchemaIdOp, uint64_t>(arg_.db_ids_.at(i), arg_.schema_id_);
+              } else {
+                ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySQLIDOp, ObString>(arg_.db_ids_.at(i), arg_.sql_id_);
+              }
+            }
+          }
+        }
+      } else if (arg_.is_all_tenant_) {
         common::ObArray<uint64_t> tenant_ids;
         if (OB_ISNULL(GCTX.omt_)) {
           ret = OB_ERR_UNEXPECTED;

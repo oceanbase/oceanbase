@@ -800,6 +800,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"sql_buffer_result", SQL_BUFFER_RESULT},
   {"sql_cache", SQL_CACHE},
   {"sql_id", SQL_ID},
+  {"schema_id", SCHEMA_ID},
   {"sql_no_cache", SQL_NO_CACHE},
   {"sql_thread", SQL_THREAD},
   {"sql_tsi_day", SQL_TSI_DAY},

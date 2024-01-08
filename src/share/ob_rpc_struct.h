@@ -5633,7 +5633,8 @@ public:
   ObAdminFlushCacheArg() :
     cache_type_(CACHE_TYPE_INVALID),
     is_fine_grained_(false),
-    ns_type_(sql::ObLibCacheNameSpace::NS_INVALID)
+    ns_type_(sql::ObLibCacheNameSpace::NS_INVALID),
+    schema_id_(common::OB_INVALID_ID)
   {
   }
   virtual ~ObAdminFlushCacheArg() {}
@@ -5652,6 +5653,7 @@ public:
   common::ObString sql_id_;
   bool is_fine_grained_;
   sql::ObLibCacheNameSpace ns_type_;
+  uint64_t schema_id_;
 };
 
 struct ObAdminMigrateUnitArg
@@ -6265,7 +6267,8 @@ public:
     tenant_id_(common::OB_INVALID_TENANT_ID),
     cache_type_(CACHE_TYPE_INVALID),
     is_fine_grained_(false),
-    ns_type_(sql::ObLibCacheNameSpace::NS_INVALID)
+    ns_type_(sql::ObLibCacheNameSpace::NS_INVALID),
+    schema_id_(common::OB_INVALID_ID)
   {}
   virtual ~ObFlushCacheArg() {}
   bool is_valid() const
@@ -6289,6 +6292,7 @@ public:
   common::ObString sql_id_;
   bool is_fine_grained_;
   sql::ObLibCacheNameSpace ns_type_;
+  uint64_t schema_id_;
 };
 
 struct ObGetAllSchemaArg
