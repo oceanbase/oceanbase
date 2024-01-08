@@ -98,6 +98,7 @@ public:
   int transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt);
   int transform_json_column(ObObj &json);
   int mvt_pack(ObString &blob_res);
+  void set_tmp_allocator(common::ObIAllocator *temp_allocator) { temp_allocator_ = temp_allocator;}
 private:
   int get_key_id(ObString col_name, uint32_t &key_id);
 
@@ -106,6 +107,8 @@ public:
   static const uint32_t FEATURE_CAPACITY_INIT = 50;
   static const int64_t DEFAULT_BUCKET_NUM = 10243L;
   common::ObIAllocator &allocator_;
+  // for single row iterate allocator;
+  common::ObIAllocator *temp_allocator_;
   bool inited_;
   common::ObString lay_name_;
   common::ObString geom_name_;

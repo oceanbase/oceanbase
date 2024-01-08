@@ -74,14 +74,14 @@ int mvt_agg_result::generate_feature(ObObj *tmp_obj, uint32_t obj_cnt)
         str.reset();
       } else if (is_lob_storage(meta.get_type())) {
         ObTextStringIter str_iter(meta.get_type(), meta.get_collation_type(), str, tmp_obj[geom_idx_].has_lob_header());
-        if (OB_FAIL(str_iter.init(0, NULL, &allocator_))) {
+        if (OB_FAIL(str_iter.init(0, NULL, temp_allocator_))) {
           LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
         } else if (OB_FAIL(str_iter.get_full_data(str))) {
           LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
-        } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(allocator_, str, NULL, geo, true))) {
+        } else if (OB_FAIL(ObGeoTypeUtil::construct_geometry(*temp_allocator_, str, NULL, geo, true))) {
           LOG_WARN("failed to construct geometry", K(ret));
         } else if (ObGeoTypeUtil::is_3d_geo_type(geo->type())
-                  && OB_FAIL(ObGeoTypeUtil::convert_geometry_3D_to_2D(NULL, allocator_, geo, ObGeoBuildFlag::GEO_ALL_DISABLE, geo))) {
+                  && OB_FAIL(ObGeoTypeUtil::convert_geometry_3D_to_2D(NULL, *temp_allocator_, geo, ObGeoBuildFlag::GEO_ALL_DISABLE, geo))) {
           LOG_WARN("failed to convert 3d to 2d", K(ret));
         } else if (OB_FAIL(transform_geom(*geo))) {
           LOG_WARN("failed to transform geometry", K(ret));
@@ -169,7 +169,7 @@ int mvt_agg_result::transform_json_column(ObObj &json)
   int ret = OB_SUCCESS;
   ObString str;
   ObTextStringIter str_iter(json.get_meta().get_type(), json.get_meta().get_collation_type(), json.get_string(), json.has_lob_header());
-  if (OB_FAIL(str_iter.init(0, NULL, &allocator_))) {
+  if (OB_FAIL(str_iter.init(0, NULL, temp_allocator_))) {
     LOG_WARN("Lob: init lob str iter failed ", K(ret), K(str_iter));
   } else if (OB_FAIL(str_iter.get_full_data(str))) {
     LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
@@ -198,7 +198,7 @@ int mvt_agg_result::transform_json_column(ObObj &json)
         }
         if (OB_SUCC(ret)) {
           ObIJsonBase *jb_ptr = NULL;
-          ObJsonBin j_val(&allocator_);
+          ObJsonBin j_val(temp_allocator_);
           jb_ptr = &j_val;
           if (OB_FAIL(j_base->get_object_value(i, jb_ptr))) {
             LOG_WARN("fail to get object value", K(ret), K(i));
@@ -373,7 +373,7 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         ObObj obj;
         ObObj geo_hex;
         ObString str;
-        ObCastCtx cast_ctx(&allocator_, NULL, CM_NONE, ObCharset::get_system_collation());
+        ObCastCtx cast_ctx(temp_allocator_, NULL, CM_NONE, ObCharset::get_system_collation());
         if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, tmp_obj[i], obj))) {
           LOG_WARN("failed to cast number to double type", K(ret));
         } else if (ob_is_geometry(type) && OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length(), obj.get_string().ptr()),
@@ -392,12 +392,13 @@ int mvt_agg_result::transform_other_column(ObObj *tmp_obj, uint32_t obj_cnt)
         tile_value.value_ = value;
         uint32_t tag_id;
         if (OB_FAIL(values_map_.get_refactored(tile_value, tag_id))) {
-          LOG_WARN("failed to get key", K(ret));
           if (OB_HASH_NOT_EXIST == ret) {
             tag_id = values_map_.size();
             if (OB_FAIL(values_map_.set_refactored(tile_value, tag_id))) {
               LOG_WARN("failed to set key", K(ret));
             }
+          } else {
+            LOG_WARN("failed to get key", K(ret));
           }
         }
         if (OB_SUCC(ret)) {

@@ -2973,6 +2973,11 @@ MOD '(' expr ',' expr ')'
 mvt_param:
 STRING_VALUE { $$ = $1; }
 | INTNUM { $$ = $1; }
+| '-' INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
+}
 | NULLX { $$ = $1; }
 | NAME_OB { $$ = $1; }
 | unreserved_keyword

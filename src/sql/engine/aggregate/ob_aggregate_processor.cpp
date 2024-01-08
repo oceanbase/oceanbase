@@ -8183,6 +8183,7 @@ int ObAggregateProcessor::get_asmvt_result(const ObAggrInfo &aggr_info,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {
+        common::ObArenaAllocator single_row_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         // get obj
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
@@ -8194,6 +8195,7 @@ int ObAggregateProcessor::get_asmvt_result(const ObAggrInfo &aggr_info,
         } else if (!mvt_res.is_inited()
                    && OB_FAIL(init_asmvt_result(tmp_alloc, aggr_info, tmp_obj, storted_row->cnt_, mvt_res))) {
           LOG_WARN("failed to init asmvt result", K(ret));
+        } else if (FALSE_IT(mvt_res.set_tmp_allocator(&single_row_alloc))) {
         } else if (OB_FAIL(mvt_res.generate_feature(tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to generate mvt feature", K(ret));
         }
