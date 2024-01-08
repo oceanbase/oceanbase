@@ -1114,7 +1114,8 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_small_group(int64_t &cmp_res)
       ObRADatumStore::StoredRow *stored_row = NULL;
       guard.set_batch_idx(cur_idx_);
       guard.set_batch_size(brs_.size_);
-      if (OB_FAIL(datum_store_.add_row(*all_exprs_, &(merge_join_op_.eval_ctx_), &stored_row))) {
+      if (OB_FAIL(datum_store_.add_row<false>(*all_exprs_, &(merge_join_op_.eval_ctx_),
+                                              &stored_row))) {
         LOG_WARN("add row failed", K(ret));
       } else if (OB_ISNULL(stored_row)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1184,7 +1185,8 @@ int ObMergeJoinOp::ChildBatchFetcher::get_next_equal_group(JoinRowList &row_list
           if (!greater_found) {
             guard.set_batch_idx(cur_idx_);
             guard.set_batch_size(batch_size_);
-            if (OB_FAIL(datum_store_.add_row(*all_exprs_, &(merge_join_op_.eval_ctx_), &new_stored_row))) {
+            if (OB_FAIL(datum_store_.add_row<false>(*all_exprs_, &(merge_join_op_.eval_ctx_),
+                                                    &new_stored_row))) {
               LOG_WARN("add row failed", K(ret));
             } else if (OB_ISNULL(new_stored_row)) {
               ret = OB_ERR_UNEXPECTED;
@@ -1343,8 +1345,8 @@ int ObMergeJoinOp::store_group_first_row(
   int ret = OB_SUCCESS;
   ObRADatumStore::StoredRow *res_row = NULL;
   guard.set_batch_idx(child_fetcher.cur_idx_);
-  if (OB_FAIL(child_fetcher.datum_store_.add_row(*child_fetcher.all_exprs_,
-                                                    &eval_ctx_, &res_row))) {
+  if (OB_FAIL(child_fetcher.datum_store_.add_row<false>(*child_fetcher.all_exprs_,
+                                                         &eval_ctx_, &res_row))) {
     LOG_WARN("add row failed", K(ret));
   } else if (OB_ISNULL(res_row)) {
     ret = OB_ERR_UNEXPECTED;

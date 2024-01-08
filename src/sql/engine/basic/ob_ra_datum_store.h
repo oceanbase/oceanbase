@@ -71,6 +71,7 @@ public:
 
   // 这里暂时以ObExpr的数组形式写入数据到DatumStore，主要是为了上层Operator在写入数据时，可以无脑调用ObExpr的插入
   // 可以看下面参数为common::ObDatum **datums的函数进行对比
+  template<bool NEED_EVAL = true>
   static inline int row_copy_size(
     const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx, int64_t &size)
   {
@@ -78,8 +79,9 @@ public:
     common::ObDatum *datum = nullptr;
     size = DATUM_SIZE * exprs.count();
     for (int64_t i = 0; i < exprs.count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(exprs.at(i)->eval(ctx, datum))) {
+      if (NEED_EVAL && OB_FAIL(exprs.at(i)->eval(ctx, datum))) {
         SQL_ENG_LOG(WARN, "failed to eval expr datum", K(ret));
+      } else if (!NEED_EVAL && FALSE_IT(datum = &exprs.at(i)->locate_expr_datum(ctx))) {
       } else {
         size += datum->len_;
       }
@@ -144,6 +146,7 @@ public:
     {
       return sizeof(Block) + row_store_size;
     }
+    template<bool NEED_EVAL>
     static int inline row_store_size(const common::ObIArray<ObExpr*> &exprs,
                                      ObEvalCtx &ctx,
                                      int64_t &size,
@@ -151,7 +154,7 @@ public:
     {
       int ret = common::OB_SUCCESS;
       size = 0;
-      if (OB_FAIL(row_copy_size(exprs, ctx, size))) {
+      if (OB_FAIL(row_copy_size<NEED_EVAL>(exprs, ctx, size))) {
         SQL_ENG_LOG(WARN, "failed to calc store row size", K(ret));
       } else {
         size += ROW_HEAD_SIZE + ROW_INDEX_SIZE + row_extend_size;
@@ -350,6 +353,7 @@ public:
   // Keeping one memory block, reader must call reuse() too.
   void reuse();
 
+  template<bool NEED_EVAL = true>
   int add_row(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx *ctx,
               StoredRow **stored_row = nullptr);
   int add_row(const common::ObIArray<common::ObDatum> &datums,
