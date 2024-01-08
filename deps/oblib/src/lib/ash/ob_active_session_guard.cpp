@@ -80,7 +80,7 @@ void ObActiveSessionStat::fixup_last_stat(ObWaitEventDesc &desc)
       fixup_ash_buffer_.reset();
       fixup_index_ = -1;
     } else {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "fixup index with no fixup buffer.", K_(fixup_index), KPC(this));
     }
   }
 }

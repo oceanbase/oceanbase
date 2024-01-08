@@ -511,17 +511,17 @@ int ObDiagnoseSessionInfo::notify_wait_begin(const int64_t event_no, const uint6
   if (event_no < 0) {
     ret = OB_INVALID_ARGUMENT;
   } else {
-    if (is_atomic) {
-      // time model only record physical wait(including idle and non-idle wait)
-      if (OB_UNLIKELY(ObActiveSessionGuard::get_stat().event_no_ != 0 &&
-                      OB_WAIT_EVENTS[ObActiveSessionGuard::get_stat().event_no_].is_phy_ &&
-                      ObWaitEventIds::ASYNC_COMMITTING_WAIT != event_no &&
-                      ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
-        LOG_WARN("nested physical wait event! ", "prev event no",
-            ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
-            K(ObActiveSessionGuard::get_stat()), K(lbt()));
-      }
-    }
+    // if (is_atomic) {
+    //   // time model only record physical wait(including idle and non-idle wait)
+    //   if (OB_UNLIKELY(ObActiveSessionGuard::get_stat().event_no_ != 0 &&
+    //                   OB_WAIT_EVENTS[ObActiveSessionGuard::get_stat().event_no_].is_phy_ &&
+    //                   ObWaitEventIds::ASYNC_COMMITTING_WAIT != event_no &&
+    //                   ObWaitEventIds::INNER_SQL_EXEC_WAIT != event_no)) {
+    //     LOG_WARN("nested physical wait event! ", "prev event no",
+    //         ObActiveSessionGuard::get_stat().event_no_, "cur event no", event_no,
+    //         K(ObActiveSessionGuard::get_stat()), K(lbt()));
+    //   }
+    // }
     // ash only sample first wait event.
     if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {
       ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
