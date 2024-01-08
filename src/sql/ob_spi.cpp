@@ -930,6 +930,9 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         } else if (result->get_accuracy() == invalid_accuracy) {
           result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
         }
+        if (result->is_null()) {
+          result->set_null_meta(param.get_null_meta());
+        }
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
         }

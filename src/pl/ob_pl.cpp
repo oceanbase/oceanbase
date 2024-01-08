@@ -3161,7 +3161,13 @@ do {                                                                  \
           sql::ObSqlExpression *default_expr = func_.get_default_expr(i);
           OV (OB_NOT_NULL(default_expr), OB_ERR_UNEXPECTED, K(i), K(func_.get_default_idxs()));
           OZ (ObSPIService::spi_calc_expr(&ctx_, default_expr, OB_INVALID_INDEX, &result));
-          OX (get_params().at(i) = result);
+          if (OB_SUCC(ret) && result.is_null()) {
+            ObObjMeta null_meta = get_params().at(i).get_meta();
+            get_params().at(i).set_null();
+            get_params().at(i).set_null_meta(null_meta);
+          } else {
+            OX (get_params().at(i) = result);
+          }
           if (pl_type.is_composite_type() && result.is_null()) {
             OZ (init_complex_obj(
               (*get_allocator()), func_.get_variables().at(i), get_params().at(i)));
