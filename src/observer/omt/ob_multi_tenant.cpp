@@ -423,7 +423,7 @@ int ObMultiTenant::init(ObAddr myaddr,
   }
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
-    MTL_BIND(ObTenantIOManager::mtl_init, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(nullptr, ObTenantIOManager::mtl_init, nullptr, nullptr, nullptr, ObTenantIOManager::mtl_destroy);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
@@ -498,28 +498,28 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObRebuildService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObMultiVersionGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObUDRMgr::mtl_init, nullptr, ObUDRMgr::mtl_stop, nullptr, mtl_destroy_default);
-
-    MTL_BIND(ObPxPools::mtl_init, ObPxPools::mtl_destroy);
-    MTL_BIND(ObTenantDfc::mtl_init, ObTenantDfc::mtl_destroy);
-    MTL_BIND(init_compat_mode, nullptr);
+    MTL_BIND2(mtl_new_default, ObPxPools::mtl_init, nullptr, nullptr, nullptr, ObPxPools::mtl_destroy);
+    MTL_BIND2(ObTenantDfc::mtl_new, ObTenantDfc::mtl_init, nullptr, nullptr, nullptr, ObTenantDfc::mtl_destroy);
+    MTL_BIND2(nullptr, init_compat_mode, nullptr, nullptr, nullptr, nullptr);
     MTL_BIND2(ObMySQLRequestManager::mtl_new, ObMySQLRequestManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, ObMySQLRequestManager::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObTenantWeakReadService::mtl_init, mtl_start_default,
               mtl_stop_default,
               mtl_wait_default,
               mtl_destroy_default);
-    //MTL_BIND(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
-    MTL_BIND(ObTenantSqlMemoryManager::mtl_init, ObTenantSqlMemoryManager::mtl_destroy);
-    MTL_BIND(ObPlanMonitorNodeList::mtl_init, ObPlanMonitorNodeList::mtl_destroy);
+    //MTL_BIND2(ObTransAuditRecordMgr::mtl_init, ObTransAuditRecordMgr::mtl_destroy);
+    MTL_BIND2(ObTenantSqlMemoryManager::mtl_new, ObTenantSqlMemoryManager::mtl_init, nullptr, nullptr, nullptr, ObTenantSqlMemoryManager::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObPlanMonitorNodeList::mtl_init, nullptr, nullptr, nullptr, ObPlanMonitorNodeList::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObTableLoadService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObSharedMacroBlockMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
-    MTL_BIND(ObFLTSpanMgr::mtl_init, ObFLTSpanMgr::mtl_destroy);
-    MTL_BIND(common::sqlclient::ObTenantOciEnvs::mtl_init, common::sqlclient::ObTenantOciEnvs::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObFLTSpanMgr::mtl_init, nullptr, nullptr, nullptr, ObFLTSpanMgr::mtl_destroy);
+    MTL_BIND2(common::sqlclient::ObTenantOciEnvs::mtl_new, common::sqlclient::ObTenantOciEnvs::mtl_init,
+        nullptr, nullptr, nullptr, common::sqlclient::ObTenantOciEnvs::mtl_destroy);
     MTL_BIND2(mtl_new_default, ObPlanCache::mtl_init, nullptr, ObPlanCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObPsCache::mtl_init, nullptr, ObPsCache::mtl_stop, nullptr, mtl_destroy_default);
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
-    MTL_BIND(ObDetectManager::mtl_init, ObDetectManager::mtl_destroy);
-    MTL_BIND(ObTenantSQLSessionMgr::mtl_init, ObTenantSQLSessionMgr::mtl_destroy);
+    MTL_BIND2(ObDetectManager::mtl_new, ObDetectManager::mtl_init, nullptr, nullptr, nullptr, ObDetectManager::mtl_destroy);
+    MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
