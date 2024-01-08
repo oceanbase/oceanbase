@@ -1227,9 +1227,21 @@ class ObDupTableBeforePrepareRequest : public ObDupTableMsgBase
   OB_UNIS_VERSION(1);
 
 public:
+  enum class BeforePrepareScnSrc : int64_t
+  {
+    UNKNOWN = -1,
+    REDO_COMPLETE_SCN = 1,
+    GTS = 2,
+    MAX_DECIDED_SCN = 3
+  };
+
+public:
   ObDupTableBeforePrepareRequest() { reset(); }
-  ObDupTableBeforePrepareRequest(const ObTransID &tx_id, const share::SCN &before_prepare_version)
-      : tx_id_(tx_id), before_prepare_version_(before_prepare_version)
+  ObDupTableBeforePrepareRequest(const ObTransID &tx_id,
+                                 const share::SCN &before_prepare_version,
+                                 const BeforePrepareScnSrc &before_prepare_src)
+      : tx_id_(tx_id), before_prepare_version_(before_prepare_version),
+        before_prepare_scn_src_(before_prepare_src)
   {}
 
   void reset()
@@ -1237,6 +1249,7 @@ public:
     ObDupTableMsgBase::reset();
     tx_id_.reset();
     before_prepare_version_.reset();
+    before_prepare_scn_src_ = BeforePrepareScnSrc::UNKNOWN;
   }
 
   bool is_valid() const
@@ -1244,17 +1257,20 @@ public:
     return ObDupTableMsgBase::is_valid() && tx_id_.is_valid() && before_prepare_version_.is_valid();
   }
 
-  const ObTransID &get_tx_id() { return tx_id_; }
-  const share::SCN &get_before_prepare_version() { return before_prepare_version_; }
+  const ObTransID &get_tx_id() const { return tx_id_; }
+  const share::SCN &get_before_prepare_version() const { return before_prepare_version_; }
+  const BeforePrepareScnSrc &get_before_prepare_scn_src() const { return before_prepare_scn_src_; }
 
   INHERIT_TO_STRING_KV("ObDupTableMsgBase",
                        ObDupTableMsgBase,
                        K(tx_id_),
-                       K(before_prepare_version_));
+                       K(before_prepare_version_),
+                       K(before_prepare_scn_src_));
 
 private:
   ObTransID tx_id_;
   share::SCN before_prepare_version_;
+  BeforePrepareScnSrc before_prepare_scn_src_;
 };
 
 } // namespace transaction
