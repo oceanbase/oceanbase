@@ -1052,6 +1052,11 @@ OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncUnionImpl, ObCartesianMultipolygon, ObCarte
   return apply_bg_union<ObCartesianMultipolygon, ObCartesianMultipolygon, ObCartesianMultipolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncUnionImpl, ObCartesianMultipolygon, ObCartesianPolygon, ObGeometry *)
+{
+  return apply_bg_union<ObCartesianPolygon, ObCartesianMultipolygon, ObCartesianMultipolygon>(g2, g1, context, result);
+} OB_GEO_FUNC_END;
+
 // tree geograph polygon
 OB_GEO_GEOG_TREE_FUNC_BEGIN(ObGeoFuncUnionImpl, ObGeographPolygon, ObGeographPolygon, ObGeometry *)
 {

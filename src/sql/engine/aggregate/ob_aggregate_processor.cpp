@@ -8279,26 +8279,54 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
       }
     } else if (!is_param_done) {
       ObObjType type = tmp_obj[i].get_type();
+      ObString content;
       if (ob_is_null(type)) {
         // do nothing, use default value
       } else if (i == 1) {
         // layer name
-        if (!ob_is_string_tc(type)) {
+        if (!ob_is_string_tc(type) && !ob_is_large_text(type) && !ob_is_geometry_tc(type)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("invalid type for layer name", K(ret), K(type));
-        } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.lay_name_, true))) {
-          LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        } else if (ob_is_geometry_tc(type)) {
+          ObObj geo_hex;
+          ObObj obj;
+          ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+          if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, tmp_obj[i], obj))) {
+            LOG_WARN("failed to cast number to double type", K(ret));
+          } else if (OB_FAIL(ObHexUtils::hex(ObString(obj.get_string().length(), obj.get_string().ptr()), cast_ctx, geo_hex))) {
+            LOG_WARN("failed to cast to hex", K(ret), K(content));
+          } else if (OB_FAIL(ob_write_string(allocator, geo_hex.get_string(), mvt_res.lay_name_, true))) {
+            LOG_WARN("write string failed", K(ret), K(content));
+          }
+        } else if (OB_FAIL(tmp_obj[i].get_string(content))) {
+          LOG_WARN("get lay name string failed", K(ret));
+        } else if (OB_FAIL(ob_write_string(allocator, content, mvt_res.lay_name_, true))) {
+          LOG_WARN("write string failed", K(ret), K(content));
         }
       } else if (i == 2) {
         // extent
+        ObObj obj;
+        const ObObj *extent_res = &tmp_obj[i];
         if (!ob_is_int_tc(type) && !ob_is_uint_tc(type)) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("invalid type for layer name", K(ret), K(type));
-        } else if (tmp_obj[i].get_int() == 0) {
+          if (expr->is_static_const_) {
+            ObCastCtx cast_ctx(&allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+            if (OB_FAIL(ObObjCaster::to_type(ObInt32Type, cast_ctx, tmp_obj[i], obj))) {
+              LOG_WARN("failed to cast number to double type", K(ret));
+            } else {
+              extent_res = &obj;
+            }
+          } else {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("invalid type for extent", K(ret), K(type));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (extent_res->get_int() == 0
+                   || extent_res->is_overflow_integer(ObInt32Type)) {
           ret = OB_ERR_INVALID_INPUT_VALUE;
-          LOG_WARN("extent value can't be 0", K(ret));
+          LOG_WARN("invalid extent value", K(ret), K(extent_res->get_int()));
         } else {
-          mvt_res.extent_ = tmp_obj[i].get_int();
+          mvt_res.extent_ = extent_res->get_int();
         }
       } else if (i == 3) {
         // geo_name
