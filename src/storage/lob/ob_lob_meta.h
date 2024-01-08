@@ -145,6 +145,7 @@ private:
   ObIAllocator* allocator_;
   ObLobMetaInfo last_info_;
   void *iter_; // ObLobQueryIter
+  uint64_t iter_fill_size_;
 };
  
 class ObLobMetaManager {

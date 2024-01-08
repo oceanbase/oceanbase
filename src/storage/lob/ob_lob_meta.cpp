@@ -277,7 +277,8 @@ ObLobMetaWriteIter::ObLobMetaWriteIter(
     inner_buffer_(),
     allocator_(allocator),
     last_info_(),
-    iter_(nullptr)
+    iter_(nullptr),
+    iter_fill_size_(0)
 {
   data_ = data;
   offset_ = 0;
@@ -454,6 +455,8 @@ int ObLobMetaWriteIter::try_fill_data(
     row.info_.byte_len_ += by_len;
     row.info_.char_len_ += char_len;
     OB_ASSERT(row.info_.byte_len_ >= row.info_.char_len_);
+    offset_ += by_len;
+    iter_fill_size_ += by_len;
   }
   return ret;
 }
@@ -644,8 +647,8 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
           ret = try_fill_data(row, post_data_, post_data_.length(), true, use_inner_buffer, fill_full);
         } else if (!iter->is_end()) {
           ret = try_fill_data(row, use_inner_buffer, fill_full);
-        } else if (remain_buf_.length() > offset_ - post_data_.length() - padding_size_) {
-          ret = try_fill_data(row, remain_buf_, post_data_.length() + padding_size_, false, use_inner_buffer, fill_full);
+        } else if (remain_buf_.length() > offset_ - post_data_.length() - padding_size_ - iter_fill_size_) {
+          ret = try_fill_data(row, remain_buf_, post_data_.length() + padding_size_ + iter_fill_size_, false, use_inner_buffer, fill_full);
         } else {
           ret = OB_ITER_END;
         }
