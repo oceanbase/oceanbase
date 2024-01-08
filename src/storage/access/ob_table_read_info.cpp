@@ -1100,30 +1100,30 @@ int ObTenantCGReadInfoMgr::construct_normal_cg_read_infos()
       read_info_array = new(buf) ObCGReadInfo[array_cnt];
       basic_info_array = new((char *)buf + (sizeof(ObCGReadInfo) * array_cnt)) ObReadInfoStruct[array_cnt];
       alloc_buf_ = buf;
+      ObColExtend tmp_col_extend;
+      tmp_col_extend.skip_index_attr_.set_min_max();
+      int64_t idx = 0;
+      for (int64_t i = 0 ; OB_SUCC(ret) && i < ObObjType::ObMaxType ; ++i) {
+        ObObjType type = static_cast<ObObjType>(i);
+        ObColDesc tmp_desc;
+        ObCGReadInfo &tmp_read_info = read_info_array[idx];
+        normal_cg_read_infos_.at(i) = &tmp_read_info;
+        if (not_in_normal_cg_array(type)) {
+        } else if (FALSE_IT(set_col_desc(type, tmp_desc))) {
+        } else if (FALSE_IT(tmp_read_info.cg_basic_info_ = &basic_info_array[idx])) {
+        } else if (OB_FAIL(tmp_read_info.cg_basic_info_->generate_for_column_store(allocator_, tmp_desc, index_read_info_.is_oracle_mode()))) {
+          STORAGE_LOG(WARN, "Fail to generate column group read info", K(ret));
+        } else if (OB_FAIL(tmp_read_info.cols_extend_.init(1, allocator_))) {
+          STORAGE_LOG(WARN, "Fail to init columns extend", K(ret));
+        } else if (OB_FAIL(tmp_read_info.cols_extend_.push_back(tmp_col_extend))) {
+          STORAGE_LOG(WARN, "Fail to push col extend", K(ret));
+        } else {
+          tmp_read_info.need_release_ = false;
+          idx++;
+        }
+      } // end of for
+      // if failed, will call destroy outside
     }
-    ObColExtend tmp_col_extend;
-    tmp_col_extend.skip_index_attr_.set_min_max();
-    int64_t idx = 0;
-    for (int64_t i = 0 ; OB_SUCC(ret) && i < ObObjType::ObMaxType ; ++i) {
-      ObObjType type = static_cast<ObObjType>(i);
-      ObColDesc tmp_desc;
-      ObCGReadInfo &tmp_read_info = read_info_array[idx];
-      normal_cg_read_infos_.at(i) = &tmp_read_info;
-      if (not_in_normal_cg_array(type)) {
-      } else if (FALSE_IT(set_col_desc(type, tmp_desc))) {
-      } else if (FALSE_IT(tmp_read_info.cg_basic_info_ = &basic_info_array[idx])) {
-      } else if (OB_FAIL(tmp_read_info.cg_basic_info_->generate_for_column_store(allocator_, tmp_desc, index_read_info_.is_oracle_mode()))) {
-        STORAGE_LOG(WARN, "Fail to generate column group read info", K(ret));
-      } else if (OB_FAIL(tmp_read_info.cols_extend_.init(1, allocator_))) {
-        STORAGE_LOG(WARN, "Fail to init columns extend", K(ret));
-      } else if (OB_FAIL(tmp_read_info.cols_extend_.push_back(tmp_col_extend))) {
-        STORAGE_LOG(WARN, "Fail to push col extend", K(ret));
-      } else {
-        tmp_read_info.need_release_ = false;
-        idx++;
-      }
-    } // end of for
-    // if failed, will call destroy outside
   }
 
   return ret;

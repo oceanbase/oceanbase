@@ -530,11 +530,16 @@ int ObCOSSTableRowsFilter::transform_filter_tree(
       LOG_WARN("Failed to pull up common node", K(ret), K(tmp_filter_indexes));
     }
     if (OB_SUCC(ret)) {
-      if (1 < tmp_filter_indexes.count() &&
-          OB_FAIL(common_filter_executor->set_cg_param(*common_col_group_ids, common_col_exprs))) {
-        LOG_WARN("Failed to set cg param to filter", K(ret), KPC(common_filter_executor),
-                 KP(common_col_group_ids), KP(common_col_exprs));
-      } else {
+      if (1 < tmp_filter_indexes.count()) {
+        if (OB_ISNULL(common_filter_executor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null common_filter_executor", K(ret));
+        } else if (OB_FAIL(common_filter_executor->set_cg_param(*common_col_group_ids, common_col_exprs))) {
+          LOG_WARN("Failed to set cg param to filter", K(ret), KPC(common_filter_executor),
+                   KP(common_col_group_ids), KP(common_col_exprs));
+        }
+      }
+      if (OB_SUCC(ret)) {
         ++base_filter_idx;
         if (common_filter_executor == &filter || base_filter_idx >= filter.get_child_count()) {
           break;
