@@ -1052,9 +1052,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
               if (extern_params.at(i).second->same_as(*c_expr)) {
                 ObRawExpr *rawexpr = extern_params.at(i).first;
                 if (T_OBJ_ACCESS_REF == rawexpr->get_expr_type()) {
-                  ObObjAccessRawExpr* obj = static_cast<ObObjAccessRawExpr*>(rawexpr);
-                  CK (OB_NOT_NULL(obj));
-                  OX (obj->set_write(true));
+                  OZ (pl::ObPLResolver::set_write_property(
+                    rawexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
                 }
                 break;
               }
@@ -1090,9 +1089,8 @@ do {                                                                            
             ObObjAccessRawExpr* obj = static_cast<ObObjAccessRawExpr*>(iexpr);
             uint64_t pkg_id = OB_INVALID_ID;
             uint64_t var_id = OB_INVALID_ID;
-            CK (OB_NOT_NULL(obj));
-            OX (obj->set_write(true));
-            OZ (obj->formalize(params.session_info_));
+            OZ (pl::ObPLResolver::set_write_property(
+                iexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
             if (obj->get_access_idxs().count() > 0 &&
                 OB_NOT_NULL(obj->get_access_idxs().at(0).get_sysfunc_) &&
                 T_OP_GET_PACKAGE_VAR == obj->get_access_idxs().at(0).get_sysfunc_->get_expr_type()) {

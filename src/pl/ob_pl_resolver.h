@@ -455,6 +455,19 @@ public:
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
 
+  static
+  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
+                                 ObRawExprFactory &expr_factory,
+                                 const sql::ObSQLSessionInfo *session_info,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 bool for_write,
+                                 ObString &result);
+  static
+  int set_write_property(ObRawExpr *obj_expr,
+                         ObRawExprFactory &expr_factory,
+                         const ObSQLSessionInfo *session_info,
+                         ObSchemaGetterGuard *schema_guard,
+                         bool for_write);
   int get_caller_accessor_item(
     const ObPLStmtBlock *caller, AccessorItem &caller_item);
   int check_package_accessible(
@@ -919,19 +932,6 @@ private:
   int check_variable_accessible(ObRawExpr *expr, bool for_write);
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);
-  static
-  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
-                                 ObRawExprFactory &expr_factory,
-                                 const sql::ObSQLSessionInfo *session_info,
-                                 ObSchemaGetterGuard *schema_guard,
-                                 bool for_write,
-                                 ObString &result);
-  static
-  int set_write_property(ObRawExpr *obj_expr,
-                         ObRawExprFactory &expr_factory,
-                         const ObSQLSessionInfo *session_info,
-                         ObSchemaGetterGuard *schema_guard,
-                         bool for_write);
   static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
