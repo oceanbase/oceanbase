@@ -2626,6 +2626,7 @@ int PalfHandleImpl::check_and_switch_state()
       } else if (OB_FAIL(mode_mgr_.leader_do_loop_work())) {
         PALF_LOG(WARN, "LogModeMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
       }
+      (void) config_mgr_.forward_initial_config_meta_to_arb();
     } while (0);
     if (OB_UNLIKELY(config_state_changed)) {
       WLockGuard guard(lock_);
