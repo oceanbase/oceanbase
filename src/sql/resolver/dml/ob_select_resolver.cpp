@@ -36,6 +36,7 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/expr/ob_json_param_type.h"
+#include "sql/resolver/dml/ob_multi_mode_dml_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2595,7 +2596,7 @@ int ObSelectResolver::resolve_all_json_table_columns(
   if (OB_ISNULL(column_items)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid params, null column items", K(ret));
-  } else if (OB_FAIL(resolve_json_table_column_all_items(table_item, *column_items))) {
+  } else if (OB_FAIL(ObMultiModeDMLResolver::json_table_resolve_all_column_items(table_item, *column_items, get_stmt()))) {
     LOG_WARN("fail to resolve json table column items", K(ret));
   }
   return ret;

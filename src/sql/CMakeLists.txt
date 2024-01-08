@@ -1132,6 +1132,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_delete_resolver.cpp
   resolver/dml/ob_delete_stmt.cpp
   resolver/dml/ob_dml_resolver.cpp
+  resolver/dml/ob_multi_mode_dml_resolver.cpp
   resolver/dml/ob_dml_stmt.cpp
   resolver/dml/ob_group_by_checker.cpp
   resolver/dml/ob_insert_resolver.cpp

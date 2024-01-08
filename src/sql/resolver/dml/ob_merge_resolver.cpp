@@ -25,6 +25,7 @@
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/dml/ob_multi_mode_dml_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -378,7 +379,7 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));
         }
-        OZ (resolve_json_table_item(*table_node, table_item));
+        OZ (ObMultiModeDMLResolver::multimode_table_resolve_item(*table_node, table_item, this));
         break;
       }
       default: {
