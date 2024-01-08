@@ -5044,9 +5044,9 @@ int ObUnitManager::allocate_pool_units_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("new unit group id array status not match",
         KR(ret), K(increase_delta_unit_num), KP(unit_group_id_array));
-  } else if (OB_ISNULL(srv_rpc_proxy_)) {
+  } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("srv_rpc_proxy_ is null", KR(ret), KP(srv_rpc_proxy_));
+    LOG_WARN("srv_rpc_proxy_ or GCTX.sql_proxy_ is null", KR(ret), KP(srv_rpc_proxy_), KP(GCTX.sql_proxy_));
   } else if (is_valid_tenant_id(pool.tenant_id_)
       && OB_FAIL(ObCompatModeGetter::get_tenant_mode(pool.tenant_id_, compat_mode))) {
     LOG_WARN("fail to get tenant compat mode", KR(ret), K(pool.tenant_id_));
