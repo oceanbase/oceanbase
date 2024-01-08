@@ -11759,6 +11759,8 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
       LOG_WARN("failed to generate replace generated tsc expr", K(ret));
     } else if (OB_FAIL(scan_op->generate_ddl_output_column_ids())) {
       LOG_WARN("fail to generate ddl output column ids");
+    } else if (OB_FAIL(scan_op->copy_gen_col_range_exprs())) {
+      LOG_WARN("fail to copy gen col range exprs", K(ret));
     } else if (OB_FAIL(scan_op->replace_gen_col_op_exprs(gen_col_replacer_))) {
       LOG_WARN("failed to replace generated tsc expr", K(ret));
     }
@@ -11878,7 +11880,7 @@ int ObLogPlan::generate_tsc_replace_exprs_pair(ObLogTableScan *op)
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid op", K(ret));
-  } else if (op->is_index_scan() && !(op->get_index_back())) {
+  } else if (!op->need_replace_gen_column()) {
     //no need replace in index table non-return table scenario.
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_access_exprs().count(); ++i) {

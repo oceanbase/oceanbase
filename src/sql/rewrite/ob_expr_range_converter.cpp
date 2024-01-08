@@ -1480,7 +1480,7 @@ int ObExprRangeConverter::convert_not_in_expr(const ObRawExpr *expr, ObRangeNode
   } else if (l_expr->get_expr_type() == T_OP_ROW || r_expr->get_param_count() > MAX_NOT_IN_SIZE) {
     // do nothing
   } else if (l_expr->is_column_ref_expr()) {
-    ObArenaAllocator alloc;
+    ObArenaAllocator alloc("ExprRangeAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObSEArray<ObRangeNode*, 10> and_range_nodes;
     ObSEArray<ObRangeNode*, 2> or_range_nodes;
     bool is_precise = true;
