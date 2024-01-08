@@ -879,6 +879,18 @@ private:
                            double max2,
                            double offset);
 
+  static double get_any_gt_sel(double min1,
+                               double max1,
+                               double min2,
+                               double max2,
+                               double offset);
+
+  static double get_all_gt_sel(double min1,
+                               double max1,
+                               double min2,
+                               double max2,
+                               double offset);
+
   // c1 in [min1, max1], c2 in [min2, max2]
   // calc the sel of `c1 + c2 = offset`;
   static double get_equal_sel(double min1,
@@ -887,7 +899,10 @@ private:
                               double min2,
                               double max2,
                               double ndv2,
-                              double offset);
+                              double offset,
+                              bool is_semi);
+
+  double get_sel_for_point(double point1, double point2);
 
   void reverse();
   void update_lower_bound(double bound, bool include);

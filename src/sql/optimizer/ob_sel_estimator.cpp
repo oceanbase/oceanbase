@@ -282,9 +282,9 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
 }
 
 int ObIsSelEstimator::get_is_sel(const OptTableMetas &table_metas,
-                                    const OptSelectivityCtx &ctx,
-                                    const ObRawExpr &qual,
-                                    double &selectivity)
+                                 const OptSelectivityCtx &ctx,
+                                 const ObRawExpr &qual,
+                                 double &selectivity)
 {
   int ret = OB_SUCCESS;
   selectivity = DEFAULT_SEL;
@@ -1623,7 +1623,7 @@ int ObLikeSelEstimator::get_sel(const OptTableMetas &table_metas,
     if (ObOptimizerUtil::find_item(all_predicate_sel, ObExprSelPair(&qual, 0), &idx)) {
       selectivity = all_predicate_sel.at(idx).sel_;
     } else {
-      selectivity = DEFAULT_SEL;
+      selectivity = DEFAULT_INEQ_SEL;
     }
   }
   return ret;
@@ -2503,13 +2503,48 @@ double ObInequalJoinSelEstimator::get_gt_sel(double min1,
   return selectivity;
 }
 
+double ObInequalJoinSelEstimator::get_any_gt_sel(double min1,
+                                                 double max1,
+                                                 double min2,
+                                                 double max2,
+                                                 double offset)
+{
+  double selectivity = 0.0;
+  if (offset < min1 + max2) {
+    selectivity = 1.0;
+  } else if (offset < max1 + max2 && max1 - min1 > OB_DOUBLE_EPSINON) {
+    selectivity = (max1 + max2 - offset) / (max1 - min1);
+  } else {
+    selectivity = 0.0;
+  }
+  return selectivity;
+}
+
+double ObInequalJoinSelEstimator::get_all_gt_sel(double min1,
+                                                 double max1,
+                                                 double min2,
+                                                 double max2,
+                                                 double offset)
+{
+  double selectivity = 0.0;
+  if (offset < min1 + min2) {
+    selectivity = 1.0;
+  } else if (offset < max1 + min2 && max1 - min1 > OB_DOUBLE_EPSINON) {
+    selectivity = (max1 + min2 - offset) / (max1 - min1);
+  } else {
+    selectivity = 0.0;
+  }
+  return selectivity;
+}
+
 double ObInequalJoinSelEstimator::get_equal_sel(double min1,
                                                 double max1,
                                                 double ndv1,
                                                 double min2,
                                                 double max2,
                                                 double ndv2,
-                                                double offset)
+                                                double offset,
+                                                bool is_semi)
 {
   double selectivity = 0.0;
   double overlap = 0.0;
@@ -2537,7 +2572,11 @@ double ObInequalJoinSelEstimator::get_equal_sel(double min1,
   } else {
     overlap_ndv2 = 1;
   }
-  selectivity = 1 / max(overlap_ndv1, overlap_ndv2) * (overlap_ndv1 / ndv1) * (overlap_ndv2 / ndv2);
+  if (is_semi) {
+    selectivity = overlap_ndv1 / ndv1;
+  } else {
+    selectivity = 1 / max(overlap_ndv1, overlap_ndv2) * (overlap_ndv1 / ndv1) * (overlap_ndv2 / ndv2);
+  }
   return selectivity;
 }
 
@@ -2569,6 +2608,7 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     LOG_WARN("failed to get nns");
   } else if (has_lower_bound_ && has_upper_bound_ &&
              lower_bound >= upper_bound && !is_eq) {
+    // always false
     // e.g.  1 < c1 + c2 < 0
     selectivity = 0.0;
   } else if (term_.col1_->get_table_id() == term_.col2_->get_table_id() &&
@@ -2620,14 +2660,47 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
     if (term_.coefficient2_ < 0) {
       std::swap(min2, max2);
     }
+    bool is_semi = IS_SEMI_ANTI_JOIN(ctx.get_join_type());
+    if (is_semi) {
+      if (OB_ISNULL(ctx.get_left_rel_ids()) || OB_ISNULL(ctx.get_right_rel_ids())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ctx.get_left_rel_ids()), K(ctx.get_right_rel_ids()));
+      } else if (term_.col1_->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+                 term_.col2_->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
+        std::swap(min1, min2);
+        std::swap(max1, max2);
+        std::swap(ndv1, ndv2);
+        std::swap(nns1, nns2);
+      }
+    }
     if (OB_UNLIKELY(min1 > max1) ||
         OB_UNLIKELY(min2 > max2)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected min max", K(min1), K(max1), K(min2), K(max2), KPC(this));
+    } else if (fabs(max1 - min1) <= OB_DOUBLE_EPSINON && fabs(max2 - min2) <= OB_DOUBLE_EPSINON) {
+      // Both c1 and c2 have only one value
+      // e.g. c1 in [1,1] and c2 in [2,2]
+      selectivity = get_sel_for_point(min1, min2);
     } else if (is_eq) {
+      // lower bound is the same as the upper bound
       // e.g : 1 <= c1 + c2 <= 1;
-      selectivity = ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, lower_bound);
+      selectivity = ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, lower_bound, is_semi);
+    } else if (is_semi) {
+      // calculate selectivity for semi join
+      // e.g. : 0 <= c1 + c2 < 1
+      double sel1 = has_lower_bound_ ? ObInequalJoinSelEstimator::get_any_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
+      double sel2 = has_upper_bound_ ? ObInequalJoinSelEstimator::get_all_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
+      // the sel of `any c2 satisfy 'a < c1 + c2 < b'` =
+      // the sel of `any c2 satisfy 'c1 + c2 > a'` minus the sel of `all c2 satisfy 'c1 + c2 > b'`
+      selectivity = sel1 - sel2;
+      if (include_lower_bound_ && ndv1 > 1) {
+        selectivity += 1 / ndv1;
+      }
+      if (include_upper_bound_ && ndv1 > 1) {
+        selectivity += 1 / ndv1;
+      }
     } else {
+      // calculate selectivity for inner join
       // e.g. : 0 <= c1 + c2 < 1
       double sel1 = has_lower_bound_ ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, lower_bound) : 1.0;
       double sel2 = has_upper_bound_ ? ObInequalJoinSelEstimator::get_gt_sel(min1, max1, min2, max2, upper_bound) : 0.0;
@@ -2635,16 +2708,35 @@ int ObInequalJoinSelEstimator::get_sel(const OptTableMetas &table_metas,
       // the sel of 'c1 + c2 > a' minus the sel of 'c1 + c2 > b'
       selectivity = sel1 - sel2;
       if (include_lower_bound_) {
-        selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, lower_bound);
+        selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, lower_bound, is_semi);
       }
       if (include_upper_bound_) {
-        selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, upper_bound);
+        selectivity += ObInequalJoinSelEstimator::get_equal_sel(min1, max1, ndv1, min2, max2, ndv2, upper_bound, is_semi);
       }
     }
     selectivity = ObOptSelectivity::revise_between_0_1(selectivity);
-    selectivity *= nns1 * nns2;
+
+    // process not null sel
+    if (is_semi) {
+      selectivity *= nns1;
+    } else {
+      selectivity *= nns1 * nns2;
+    }
   }
   return ret;
+}
+
+double ObInequalJoinSelEstimator::get_sel_for_point(double point1, double point2)
+{
+  bool within_interval = true;
+  double sum = point1 + point2;
+  if (has_lower_bound_) {
+    within_interval &= include_lower_bound_ ? sum >= lower_bound_ : sum > lower_bound_;
+  }
+  if (has_upper_bound_) {
+    within_interval &= include_upper_bound_ ? sum <= upper_bound_ : sum < upper_bound_;
+  }
+  return within_interval ? 1.0 : 0.0;
 }
 
 int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
