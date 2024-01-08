@@ -11807,10 +11807,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
       }
     }
     if (OB_SUCCESS == ret) {
-      ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
-      if (OB_NOT_NULL(wb)) {
-        wb->reset_err();
-      }
+      ob_reset_tsi_warning_buffer();
     }
   }
   //in static typing engine, we wont do implict cast at stage of execution,
