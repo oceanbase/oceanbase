@@ -2084,7 +2084,8 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
   if (OB_SUCC(ret)) {
     const ExprFixedArray &storage_output = MY_CTDEF.get_das_output_exprs();
     if (!MY_SPEC.is_global_index_back()) {
-      PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, storage_output, brs_.size_, K(MY_CTDEF.scan_ctdef_.ref_table_id_));
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, storage_output, brs_.size_, brs_.skip_,
+                            K(MY_CTDEF.scan_ctdef_.ref_table_id_));
     }
     if (OB_FAIL(add_ddl_column_checksum_batch(brs_.size_))) {
       LOG_WARN("add ddl column checksum failed", K(ret));
