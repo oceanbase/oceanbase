@@ -141,6 +141,8 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
           // 需要检查当前用户是否有超级权限或者set user id的权限，如果权限ok，那么host为%
           if (session_info_->has_user_super_privilege()) {
             host_name.assign_ptr("%", 1);
+          } else if (user_name == cur_user_name) {
+            host_name = cur_host_name;
           } else {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("no privilege", K(ret));
@@ -148,7 +150,9 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
         } else {
           host_name.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_));
           // 显式指定host为%，需要当前用户有超级权限或者set user id的权限
-          if (0 == host_name.case_compare("%") && !session_info_->has_user_super_privilege()) {
+          if (user_name == cur_user_name && host_name == cur_host_name) {
+            // do nothing
+          } else if (0 == host_name.case_compare("%") && !session_info_->has_user_super_privilege()) {
             ret = OB_ERR_NO_PRIVILEGE;
             LOG_WARN("no privilege", K(ret));
           }
@@ -160,7 +164,6 @@ int ObCreateRoutineResolver::resolve_sp_definer(const ParseNode *parse_node,
                                                                          user_name,
                                                                          host_name,
                                                                          user_info))) {
-            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get_user_info", K(ret));
           } else if (OB_ISNULL(user_info)) {
             LOG_USER_WARN(OB_ERR_USER_NOT_EXIST);
