@@ -4106,6 +4106,10 @@ struct ObSqlArrayObj
   }
   typedef common::ObArrayWrap<common::ObObjParam> DataArray;
   static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
+  static int do_real_deserialize(common::ObIAllocator &allocator, char *buf, int64_t data_len, ObSqlArrayObj *&array_obj);
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int deserialize(common::ObIAllocator &allocator, const char* buf, const int64_t data_len, int64_t& pos);
+  int64_t get_serialize_size(void) const;
   TO_STRING_KV("data", DataArray(data_, count_), K_(count), K_(element));
   common::ObObjParam *data_;
   int64_t count_;

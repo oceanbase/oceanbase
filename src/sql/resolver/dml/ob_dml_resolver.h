@@ -740,7 +740,9 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
-  int gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item);
+  int gen_values_table_column_items(const int64_t column_cnt,
+                                    const ObIArray<ObExprResType> &res_types,
+                                    TableItem &table_item);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -860,8 +862,10 @@ private:
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
   int resolve_table_values_for_select(const ParseNode &table_node,
+                                      ObIArray<ObExprResType> &res_types,
                                       ObValuesTableDef &table_values);
   int resolve_table_values_for_insert(const ParseNode &table_node,
+                                      ObIArray<ObExprResType> &res_types,
                                       ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
