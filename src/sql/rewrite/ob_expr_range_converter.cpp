@@ -1126,7 +1126,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
     ObSEArray<TmpExprArray*, 4> all_val_exprs;
     const int64_t row_dimension = l_expr.get_param_count();
     int64_t in_param_count = 0;
-    for (int64_t i = 0; i < key_idxs.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < key_idxs.count(); ++i) {
       void *ptr = alloc.alloc(sizeof(TmpExprArray));
       if (OB_ISNULL(ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1147,7 +1147,7 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected expr", KPC(row_expr));
       }
-      for (int64_t j = key_offsets.count() - 1; OB_SUCC(ret)&& need_add && j >= 0; --j) {
+      for (int64_t j = 0; OB_SUCC(ret) && need_add && j < key_offsets.count(); ++j) {
         int64_t val_offset = key_offsets.at(j);
         ObRangeColumnMeta* column_meta = column_metas.at(j);
         bool cur_can_be_extract = true;
@@ -1183,14 +1183,13 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
             // current key cannot extract range, remove current and subsequent keys
             for (int64_t k = key_offsets.count() - 1; OB_SUCC(ret) && k >= j; --k) {
               TmpExprArray *val_exprs = all_val_exprs.at(k);
-              if (OB_FAIL(key_idxs.remove(k))) {
-                LOG_WARN("failed to remove key idx");
-              } else if (OB_FAIL(key_offsets.remove(k))) {
-                LOG_WARN("failed to remove key offset");
-              } else if (OB_FAIL(column_metas.remove(k))) {
-                LOG_WARN("failed to remove column meta");
-              } else if (OB_FAIL(all_val_exprs.remove(k))) {
-                LOG_WARN("failed to remove val exprs");
+              key_idxs.pop_back();
+              key_offsets.pop_back();
+              column_metas.pop_back();
+              all_val_exprs.pop_back();
+              if (OB_ISNULL(val_exprs)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get null val exprs");
               } else {
                 val_exprs->destroy();
                 alloc.free(val_exprs);
@@ -1201,14 +1200,13 @@ int ObExprRangeConverter::get_row_in_range_ndoe(const ObRawExpr &l_expr,
           }
         }
       }
-      if (OB_SUCC(ret) && need_add) {
+      if (OB_SUCC(ret) && need_add && cur_val_exprs.count() > 0) {
         ++in_param_count;
         for (int64_t j = 0; OB_SUCC(ret) && j < cur_val_exprs.count(); ++j) {
-          int64_t expr_idx = cur_val_exprs.count() - 1 - j;
           if (OB_ISNULL(all_val_exprs.at(j))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected expr array");
-          } else if (OB_FAIL(all_val_exprs.at(expr_idx)->push_back(cur_val_exprs.at(j)))) {
+          } else if (OB_FAIL(all_val_exprs.at(j)->push_back(cur_val_exprs.at(j)))) {
             LOG_WARN("failed to push back raw expr");
           }
         }
