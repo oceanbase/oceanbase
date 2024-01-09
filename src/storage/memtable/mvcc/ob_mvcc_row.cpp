@@ -281,8 +281,8 @@ void ObMvccRow::reset()
   index_ = NULL;
   total_trans_node_cnt_ = 0;
   last_compact_cnt_ = 0;
-  max_modify_count_ = UINT32_MAX;
-  min_modify_count_ = UINT32_MAX;
+  max_modify_scn_.set_invalid();
+  min_modify_scn_.set_invalid();
 }
 
 int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
@@ -304,8 +304,8 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           "latest_compact_ts=%ld "
                           "last_compact_cnt=%ld "
                           "total_trans_node_cnt=%ld "
-                          "max_modify_count=%u "
-                          "min_modify_count=%u}",
+                          "max_modify_scn=%s "
+                          "min_modify_scn=%s}",
                           this,
                           (latch_.is_locked() ? "locked" : "unlocked"),
                           flag_,
@@ -321,8 +321,8 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           latest_compact_ts_,
                           last_compact_cnt_,
                           total_trans_node_cnt_,
-                          max_modify_count_,
-                          min_modify_count_);
+                          to_cstring(max_modify_scn_),
+                          to_cstring(min_modify_scn_));
   return pos;
 }
 
@@ -677,7 +677,7 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
     }
 
     update_dml_flag_(node.get_dml_flag(),
-                     node.modify_count_);
+                     node.get_scn());
     update_max_trans_version(commit_version, node.tx_id_);
     update_max_elr_trans_version(commit_version, node.tx_id_);
   }
@@ -685,23 +685,17 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
   return ret;
 }
 
-void ObMvccRow::update_dml_flag_(blocksstable::ObDmlFlag flag,
-                                 uint32_t modify_count)
+void ObMvccRow::update_dml_flag_(const blocksstable::ObDmlFlag flag, const share::SCN modify_scn)
 {
   if (blocksstable::ObDmlFlag::DF_LOCK != flag) {
-    if (max_modify_count_ == modify_count || min_modify_count_ == modify_count) {
-      // TODO(handora.qc): add it back later
-      // TRANS_LOG(ERROR, "mvcc row never trans commit twice", KPC(this), K(flag), K(modify_count));
-    } else {
-      if (max_modify_count_ == UINT32_MAX || max_modify_count_ < modify_count) {
-        max_modify_count_ = modify_count;
-        last_dml_flag_ = flag;
-      }
+    if (!max_modify_scn_.is_valid() || max_modify_scn_ <= modify_scn) {
+      max_modify_scn_ = modify_scn;
+      last_dml_flag_ = flag;
+    }
 
-      if (min_modify_count_ == UINT32_MAX || min_modify_count_ > modify_count) {
-        min_modify_count_ = modify_count;
-        first_dml_flag_ = flag;
-      }
+    if (!min_modify_scn_.is_valid() || min_modify_scn_ > modify_scn) {
+      min_modify_scn_ = modify_scn;
+      first_dml_flag_ = flag;
     }
   }
 }

@@ -980,6 +980,8 @@ int ObMvccRowCallback::checkpoint_callback()
     TRANS_LOG(ERROR, "checkpoint never called on unsynced callback", KPC(this));
   } else if (OB_FAIL(value_.remove_callback(*this))) {
     TRANS_LOG(ERROR, "remove callback from trans node failed", K(ret), K(*this));
+  } else if (OB_NOT_NULL(tnode_)) {
+    (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());
   }
 
   return ret;

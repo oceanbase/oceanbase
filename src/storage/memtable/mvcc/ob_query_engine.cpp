@@ -397,6 +397,7 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter,
         } else {
           // Case5: existent row, not change estimation total row count
         }
+
         if (sample_row_count >= MAX_SAMPLE_ROW_COUNT) {
           break;
         }
@@ -658,6 +659,7 @@ int ObQueryEngine::estimate_row_count(const transaction::ObTransID &tx_id,
       TRANS_LOG(WARN, "failed to sample rows", KR(ret), K(*start_key), K(*end_key));
     }
   }
+
   logical_row_count = log_row_count1 + log_row_count2;
   // since remaining_row_count actually includes phy_row_count1, so we don't
   // want to add it twice here
