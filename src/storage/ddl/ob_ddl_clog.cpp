@@ -244,7 +244,7 @@ int ObDDLMacroBlockClogCb::on_success()
       const int64_t snapshot_version = redo_info_.table_key_.get_snapshot_version();
       const uint64_t data_format_version = redo_info_.data_format_version_;
       if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle_.get_obj(), macro_block,
-        snapshot_version, data_format_version))) {
+        snapshot_version, data_format_version, direct_load_mgr_handle_))) {
         LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle_), K(macro_block),
             K(snapshot_version), K(data_format_version));
       }

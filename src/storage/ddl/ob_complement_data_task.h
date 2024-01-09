@@ -121,7 +121,7 @@ public:
   ObComplementDataContext():
     is_inited_(false), is_major_sstable_exist_(false), complement_data_ret_(common::OB_SUCCESS),
     allocator_("CompleteDataCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), lock_(ObLatchIds::COMPLEMENT_DATA_CONTEXT_LOCK), concurrent_cnt_(0),
-    data_sstable_redo_writer_(), index_builder_(nullptr), tablet_direct_load_mgr_handle_(), row_scanned_(0), row_inserted_(0), context_id_(0)
+    data_sstable_redo_writer_(), index_builder_(nullptr), start_scn_(share::SCN::min_scn()), tablet_direct_load_mgr_handle_(), row_scanned_(0), row_inserted_(0), context_id_(0)
   {}
   ~ObComplementDataContext() { destroy(); }
   int init(const ObComplementDataParam &param, const blocksstable::ObDataStoreDesc &desc);
@@ -133,7 +133,8 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       bool &is_commited);
-  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder), K_(tablet_direct_load_mgr_handle), K_(row_scanned), K_(row_inserted));
+  TO_STRING_KV(K_(is_inited), K_(complement_data_ret), K_(concurrent_cnt), KP_(index_builder),
+    K_(start_scn), K_(tablet_direct_load_mgr_handle), K_(row_scanned), K_(row_inserted));
 public:
   bool is_inited_;
   bool is_major_sstable_exist_;
@@ -143,6 +144,7 @@ public:
   int64_t concurrent_cnt_;
   ObDDLRedoLogWriter data_sstable_redo_writer_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
+  share::SCN start_scn_;
   ObTabletDirectLoadMgrHandle tablet_direct_load_mgr_handle_;
   int64_t row_scanned_;
   int64_t row_inserted_;

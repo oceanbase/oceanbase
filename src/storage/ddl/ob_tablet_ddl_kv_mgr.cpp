@@ -336,24 +336,26 @@ int ObTabletDDLKvMgr::get_active_ddl_kv_impl(ObDDLKVHandle &kv_handle)
 }
 
 int ObTabletDDLKvMgr::get_or_create_ddl_kv(
-    const share::SCN &start_scn,
     const share::SCN &scn,
-    const int64_t snapshot_version,
-    const uint64_t data_format_version,
+    ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
     ObDDLKVHandle &kv_handle)
 {
   int ret = OB_SUCCESS;
   kv_handle.reset();
+  uint32_t direct_load_lock_tid = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
   } else if (!scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(scn));
+  } else if (OB_FAIL(direct_load_mgr_handle.get_obj()->rdlock(TRY_LOCK_TIMEOUT/*10s*/, direct_load_lock_tid))) {
+    // usually use the latest start scn to allocate kv.
+    LOG_WARN("lock failed", K(ret));
   } else {
     uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
     if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
-      LOG_WARN("failed to rdlock", K(ret), K(start_scn), KPC(this));
+      LOG_WARN("failed to rdlock", K(ret), KPC(this));
     } else {
       try_get_ddl_kv_unlock(scn, kv_handle);
     }
@@ -364,19 +366,24 @@ int ObTabletDDLKvMgr::get_or_create_ddl_kv(
   if (OB_SUCC(ret) && !kv_handle.is_valid()) {
     uint32_t lock_tid = 0; // try lock to avoid hang in clog callback
     if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
-      LOG_WARN("failed to wrlock", K(ret), K(start_scn), KPC(this));
+      LOG_WARN("failed to wrlock", K(ret), KPC(this));
     } else {
       try_get_ddl_kv_unlock(scn, kv_handle);
       if (kv_handle.is_valid()) {
         // do nothing
-      } else if (OB_FAIL(alloc_ddl_kv(start_scn,
-        snapshot_version, data_format_version, kv_handle))) {
-        LOG_WARN("create ddl kv failed", K(ret));
+      } else if (OB_FAIL(alloc_ddl_kv(direct_load_mgr_handle.get_obj()->get_start_scn(),
+        direct_load_mgr_handle.get_obj()->get_table_key().get_snapshot_version(),
+        direct_load_mgr_handle.get_obj()->get_data_format_version(),
+        kv_handle))) {
+        LOG_WARN("create ddl kv failed", K(ret), KPC(direct_load_mgr_handle.get_obj()));
       }
     }
     if (lock_tid != 0) {
       unlock(lock_tid);
     }
+  }
+  if (direct_load_lock_tid != 0) {
+    direct_load_mgr_handle.get_obj()->unlock(direct_load_lock_tid);
   }
   return ret;
 }

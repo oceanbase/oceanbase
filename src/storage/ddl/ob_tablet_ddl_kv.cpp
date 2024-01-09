@@ -1107,6 +1107,9 @@ int ObDDLKV::set_macro_block(
     } else if (macro_block.scn_ > freeze_scn_) {
       ret = OB_EAGAIN;
       LOG_INFO("this ddl kv is freezed, retry other ddl kv", K(ret), K(ls_id_), K(tablet_id_), K(macro_block), K(freeze_scn_));
+    } else if (OB_UNLIKELY(snapshot_version != snapshot_version_ || data_format_version != data_format_version_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret), K(snapshot_version), K(data_format_version), KPC(this));
     } else {
       ObDDLMemtable *ddl_memtable = nullptr;
       // 1. try find the ddl memtable
