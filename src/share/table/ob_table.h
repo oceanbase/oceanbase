@@ -906,6 +906,7 @@ private:
   int64_t row_count_;                                 // serialize
   common::ObDataBuffer buf_;                          // serialize
   common::ObArenaAllocator allocator_;
+  common::ObArenaAllocator prop_name_allocator_;
   int64_t fixed_result_size_;
   // for deserialize and read
   int64_t curr_idx_;
