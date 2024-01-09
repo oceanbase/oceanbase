@@ -960,7 +960,6 @@ private:
   TransModulePageAllocator reserve_allocator_;
   // ========================================================
   // newly added for 4.0
-  share::ObLSID ls_id_;
   // persistent state
   ObTxExecInfo exec_info_;
   ObCtxTxData ctx_tx_data_;
