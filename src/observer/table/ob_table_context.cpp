@@ -146,6 +146,7 @@ int ObTableCtx::construct_column_items()
         item.generated_expr_str_ = item.default_value_.get_string();
         item.auto_filled_timestamp_ = col_schema->is_on_update_current_timestamp();
         item.rowkey_position_ = col_schema->get_rowkey_position();
+        item.column_type_ = col_schema->get_meta_type().get_type();
         if (item.is_auto_increment_ && OB_FAIL(add_auto_inc_param(*col_schema))) {
           LOG_WARN("fail to add auto inc param", K(ret), K(item));
         } else if (item.is_generated_column_
@@ -523,8 +524,10 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
       ret = OB_BAD_NULL_ERROR;
       LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
     }
-  } else if (obj.is_null() || is_inc()) {
-    // continue
+  } else if (obj.is_null() || is_inc_or_append()) { // increment or append check in init_increment() and init_append()
+    if (is_append() && ob_is_string_type(obj.get_type())) {
+      obj.set_type(column_type.get_type()); // set obj to column type to add lob header when column type is lob, obj is varchar(varchar will not add lob header).
+    }
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
     // 2. data type mismatch
@@ -558,11 +561,6 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
       if (OB_SUCC(ret)) {
         // convert obj type to the column type (char, varchar or text)
         obj.set_type(column_type.get_type());
-        if (is_lob_storage(obj.get_type()) && cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
-          if (OB_FAIL(convert_lob(ctx_allocator_, obj))) {
-            LOG_WARN("fail to convert lob", K(ret), K(obj));
-          }
-        }
       }
     }
     // 4. check accuracy
@@ -579,6 +577,15 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
           LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG, column_info.column_name_.length(), column_info.column_name_.ptr(), row_num);
         }
         LOG_WARN("accuracy check failed", K(ret), K(obj), K(column_type));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // add lob header when is lob storage
+    if (is_lob_storage(obj.get_type()) && cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
+      if (OB_FAIL(convert_lob(ctx_allocator_, obj))) {
+        LOG_WARN("fail to convert lob", K(ret), K(obj));
       }
     }
   }
@@ -1074,6 +1081,12 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
     }
   }
 
+  if (assigns_.empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "empty assignment");
+    LOG_WARN("empty assignment is not supported", K(ret), K_(operation_type));
+  }
+
   return ret;
 }
 
@@ -1290,6 +1303,10 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "append null");
         LOG_WARN("append NULL is illegal", K(ret), K(delta));
+      } else if (OB_UNLIKELY(!ob_is_string_type(assign.column_item_->column_type_))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-string types for append operation");
+        LOG_WARN("invalid type for append", K(ret), K(assign));
       } else if (OB_UNLIKELY(!ob_is_string_type(delta.get_type()))) {
         ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
         const char *schema_type_str = "stringTc";
@@ -1358,6 +1375,10 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
         LOG_WARN("not support increment auto increment column", K(ret), K(assign));
       } else if (assign.column_item_->auto_filled_timestamp_) {
         // do nothing
+      } else if (OB_UNLIKELY(!ob_is_int_tc(assign.column_item_->column_type_))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-integer types for increment operation");
+        LOG_WARN("invalid type for increment", K(ret), K(assign));
       } else if (!ob_is_int_tc(delta.get_type())) {
         ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
         const char *schema_type_str = "intTc";

@@ -104,15 +104,28 @@ int ObTableApiModifyExecutor::submit_all_dml_task()
 int ObTableApiModifyExecutor::close()
 {
   int ret = OB_SUCCESS;
-  ObDASRef &das_ref = dml_rtctx_.das_ref_;
 
   if (!is_opened_) {
     // do nothing
-  } else if (das_ref.has_task()) {
-    if (OB_FAIL(das_ref.close_all_task())) {
-      LOG_WARN("fail to close all insert das task", K(ret));
-    } else {
-      das_ref.reset();
+  } else {
+    ObDASRef &das_ref = dml_rtctx_.das_ref_;
+    ObPhysicalPlanCtx *plan_ctx = tb_ctx_.get_exec_ctx().get_physical_plan_ctx();
+    if (OB_NOT_NULL(plan_ctx)) {
+      share::ObAutoincrementService &auto_service = share::ObAutoincrementService::get_instance();
+      ObIArray<AutoincParam> &auto_params = plan_ctx->get_autoinc_params();
+      for (int64_t i = 0; i < auto_params.count(); ++i) {
+        if (OB_NOT_NULL(auto_params.at(i).cache_handle_)) {
+          auto_service.release_handle(auto_params.at(i).cache_handle_);
+        }
+      }
+    }
+
+    if (das_ref.has_task()) {
+      if (OB_FAIL(das_ref.close_all_task())) {
+        LOG_WARN("fail to close all insert das task", K(ret));
+      } else {
+        das_ref.reset();
+      }
     }
   }
 
