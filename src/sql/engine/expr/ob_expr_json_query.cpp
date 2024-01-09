@@ -69,7 +69,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
       LOG_USER_ERROR(OB_ERR_PATH_EXPRESSION_NOT_LITERAL);
     } else if (ob_is_string_type(types_stack[JSN_QUE_PATH].get_type())) {
       if (types_stack[JSN_QUE_PATH].get_charset_type() != CHARSET_UTF8MB4) {
-        types_stack[JSN_QUE_PATH].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        types_stack[JSN_QUE_PATH].set_calc_collation_type(types_stack[JSN_QUE_PATH].get_collation_type());
       }
     } else {
       types_stack[JSN_QUE_PATH].set_calc_type(ObLongTextType);
@@ -109,12 +109,20 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
 {
   INIT_SUCC(ret);
   if (types_stack[JSN_QUE_RET].get_type() == ObNullType) {
-    const ObString j_path_text(types_stack[JSN_QUE_PATH].get_param().get_string().length(), types_stack[JSN_QUE_PATH].get_param().get_string().ptr());
+    ObString j_path_text(types_stack[JSN_QUE_PATH].get_param().get_string().length(), types_stack[JSN_QUE_PATH].get_param().get_string().ptr());
     ObJsonPath j_path(j_path_text, allocator);
+
     if (j_path_text.length() == 0) {
       dst_type.set_type(ObObjType::ObVarcharType);
       dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
       dst_type.set_full_length(VARCHAR2_DEFAULT_LEN, 1);
+    } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(
+                                                types_stack[JSN_QUE_PATH].get_collation_type(),
+                                                CS_TYPE_UTF8MB4_BIN,
+                                                allocator,
+                                                j_path_text,
+                                                j_path_text))) {
+      LOG_WARN("convert string memory failed", K(ret), K(j_path_text));
     } else if (OB_FAIL(j_path.parse_path())) {
       ret = OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR;
       LOG_USER_ERROR(OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR, j_path_text.length(), j_path_text.ptr());

@@ -1448,12 +1448,19 @@ int ObJsonUtil::get_json_path(ObExpr* expr,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("input type error", K(type));
     }
+
     if OB_SUCC(ret) {
       j_path_text = json_datum->get_string();
       if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr, ctx, temp_allocator, j_path_text, is_null_result))) {
         LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
       } else if (j_path_text.length() == 0) { // maybe input json doc is null type
         is_null_result = true;
+      } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(expr->datum_meta_.cs_type_,
+                                                       CS_TYPE_UTF8MB4_BIN,
+                                                       &ctx.exec_ctx_.get_allocator(),
+                                                       j_path_text,
+                                                       j_path_text))) {
+        LOG_WARN("convert string memory failed", K(ret), K(j_path_text));
       }
       path_cache = ((path_cache != NULL) ? path_cache : &ctx_cache);
     }
