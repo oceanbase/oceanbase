@@ -135,7 +135,8 @@ int ObLogFetcher::init(
         cfg.blacklist_history_overdue_time_min,
         cfg.blacklist_history_clear_interval_min,
         is_tenant_mode,
-        TCTX.tenant_id_))) {
+        TCTX.tenant_id_,
+        OB_SERVER_TENANT_ID))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
     } else if (OB_FAIL(progress_controller_.init(cfg.ls_count_upper_limit))) {
       LOG_ERROR("init progress controller fail", KR(ret));
