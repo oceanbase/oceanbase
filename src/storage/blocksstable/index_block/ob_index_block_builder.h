@@ -43,6 +43,8 @@ typedef common::ObSEArray<ObIndexTreeRootCtx *, DEFAULT_MICRO_BLOCK_WRITER_COUNT
     IndexTreeRootCtxList;
 typedef common::ObSEArray<ObDataMacroBlockMeta *, DEFAULT_MACRO_LEVEL_ROWS_COUNT>
     ObMacroMetasArray;
+typedef common::ObSEArray<int64_t, DEFAULT_MACRO_LEVEL_ROWS_COUNT>
+    ObAbsoluteOffsetArray;
 struct ObIndexTreeRootCtx final
 {
 public:
@@ -53,6 +55,7 @@ public:
      data_column_cnt_(0),
      data_blocks_cnt_(0),
      macro_metas_(nullptr),
+     absolute_offsets_(nullptr),
      use_old_macro_block_count_(0),
      meta_block_offset_(0),
      meta_block_size_(0),
@@ -62,14 +65,22 @@ public:
   ~ObIndexTreeRootCtx();
   int init(common::ObIAllocator &allocator);
   void reset();
+  /*
+    use_absolute_offset_ for ddl paritial sst select.
+    ddl cg sstable                   : use_absolute_offset == true, absolute_offsets == nullptr
+    ddl co sstable                   : use_absolute_offset == true, absolute_offsets != nullptr
+    not ddl sstable for column store : use_ablsolute_offset == false, absolute_offsets == nullptr
+  */
+  inline bool is_absolute_vaild(const bool is_cg) const;
+  int add_absolute_row_offset(const int64_t absolute_row_offset);
   int add_macro_block_meta(const ObDataMacroBlockMeta &macro_meta);
   int get_macro_id_array(common::ObIArray<blocksstable::MacroBlockId> &block_ids); //inc ref
   // used for small sstable
   int change_macro_id(const MacroBlockId &macro_block_id);
-
   TO_STRING_KV(KP(allocator_), K_(last_key), K_(task_idx), K_(data_column_cnt), K_(data_blocks_cnt),
       K_(use_old_macro_block_count), K_(meta_block_offset), K_(meta_block_size),
-      K_(last_macro_size), KP(macro_metas_), K_(is_inited));
+      K_(last_macro_size), KP_(macro_metas),
+      KP_(absolute_offsets), K_(use_absolute_offset), K_(is_inited));
   common::ObIAllocator *allocator_;
   //TODO :replace by task id
   ObDatumRowkey last_key_;
@@ -77,6 +88,7 @@ public:
   int64_t data_column_cnt_;
   int64_t data_blocks_cnt_;
   ObMacroMetasArray *macro_metas_;
+  ObAbsoluteOffsetArray *absolute_offsets_;
   int64_t use_old_macro_block_count_;
   int64_t meta_block_offset_;
   int64_t meta_block_size_;
@@ -263,7 +275,7 @@ public:
            ObDataStoreDesc &index_store_desc,
            ObIAllocator &allocator,
            ObMacroBlockWriter *macro_writer,
-           const int64_t level = 0);
+           const int64_t level);
   int append_row(const ObIndexBlockRowDesc &row_desc);
   int append_row(const ObDataMacroBlockMeta &macro_meta, ObIndexBlockRowDesc &row_desc);
   int close(ObIAllocator &allocator, ObIndexTreeInfo &tree_info);
@@ -298,6 +310,7 @@ protected:
 
   bool is_inited_;
   bool is_closed_;
+  bool use_absolute_offset_;
   ObDataStoreDesc *index_store_desc_;
   // full_store_col_desc in data_store_desc is only used to generate skip index
   const ObDataStoreDesc *data_store_desc_;
@@ -399,6 +412,7 @@ private:
   ObMacroBlockWriter *macro_writer_;
   ObDatumRowkey last_leaf_rowkey_;
   compaction::ObLocalArena leaf_rowkey_allocator_;
+  int64_t meta_row_offset_;
   DISALLOW_COPY_AND_ASSIGN(ObMetaIndexBlockBuilder);
 };
 
@@ -407,13 +421,13 @@ class ObIndexBlockRebuilder final
 public:
   ObIndexBlockRebuilder();
   ~ObIndexBlockRebuilder();
-  // TOOD(yunsong.lhp) rm use_absolute_offset from rebuilder
   int init(ObSSTableIndexBuilder &sstable_builder, bool need_sort = true, const int64_t *task_idx = nullptr, const bool use_absolute_offset = false);
   int append_macro_row(
       const char *buf,
       const int64_t size,
       const MacroBlockId &macro_id);
   int append_macro_row(const ObDataMacroBlockMeta &macro_meta);
+  int append_macro_row(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset);
   int close();
   void reset();
   static int get_macro_meta(
