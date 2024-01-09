@@ -335,7 +335,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       ObPLRecord *record = reinterpret_cast<ObPLRecord*>(src.get_ext());
       CK  (OB_NOT_NULL(record));
       for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
-        OZ (destruct_obj(record->get_element()[i], session));
+        OZ (SMART_CALL(destruct_obj(record->get_element()[i], session)));
       }
       OX (record->set_null());
     }
@@ -348,7 +348,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
       CK  (OB_NOT_NULL(collection));
       if (OB_SUCC(ret) && OB_NOT_NULL(collection->get_allocator())) {
         for (int64_t i = 0; OB_SUCC(ret) && i < collection->get_count(); ++i) {
-          OZ (destruct_obj(collection->get_data()[i], session));
+          OZ (SMART_CALL(destruct_obj(collection->get_data()[i], session)));
         }
       }
       if (OB_SUCC(ret)) {
