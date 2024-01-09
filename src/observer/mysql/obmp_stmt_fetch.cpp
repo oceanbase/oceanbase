@@ -646,11 +646,8 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
   ObSessionStatEstGuard stat_est_guard(get_conn()->tenant_->id(), session.get_sessid());
-  const bool enable_trace_log = lib::is_trace_log_enabled();
-  if (enable_trace_log) {
-    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-  }
+  //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+  ObThreadLogLevelUtils::init(session.get_log_id_level_map());
   // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
   // observer will force refresh schema if local_schema_version < last_schema_version;
   if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
@@ -665,9 +662,7 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
       ret = do_process(session, need_response_error);
     }
   }
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
   const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
   if (debug_sync_timeout > 0) {
     // ignore thread local debug sync actions to session actions failed

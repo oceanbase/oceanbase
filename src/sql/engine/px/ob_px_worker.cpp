@@ -160,7 +160,6 @@ void PxWorkerFunctor::operator ()(bool need_exec)
   ObPxSqcHandler *sqc_handler = task_arg_.get_sqc_handler();
   SQCHandlerGuard sqc_handler_guard(sqc_handler);
   lib::MemoryContext mem_context = nullptr;
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   //ensure PX worker skip updating timeout_ts_ by ntp offset
   THIS_WORKER.set_ntp_offset(0);
   if (!need_exec) {
@@ -185,7 +184,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
     if (OB_LOGGER.is_info_as_wdiag()) {
       ObThreadLogLevelUtils::clear();
     } else {
-      if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level() && enable_trace_log) {
+      if (OB_LOG_LEVEL_NONE != env_arg_.get_log_level()) {
         ObThreadLogLevelUtils::init(env_arg_.get_log_level());
       }
     }
@@ -233,9 +232,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
         }
       }
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
   } else if (OB_ISNULL(sqc_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Unexpected null sqc handler", K(sqc_handler));

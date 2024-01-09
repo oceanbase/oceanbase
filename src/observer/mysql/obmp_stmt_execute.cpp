@@ -1695,17 +1695,14 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
 
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   //============================ 注意这些变量的生命周期 ================================
   ObSMConnection *conn = get_conn();
   ObSessionStatEstGuard stat_est_guard(conn->tenant_->id(), session.get_sessid());
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
     // observer will force refresh schema if local_schema_version < last_schema_version;
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
@@ -1783,9 +1780,7 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
       }
       reset_complex_param_memory(params_, session);
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
     const int64_t debug_sync_timeout = GCONF.debug_sync_timeout;
     if (debug_sync_timeout > 0) {
       // ignore thread local debug sync actions to session actions failed

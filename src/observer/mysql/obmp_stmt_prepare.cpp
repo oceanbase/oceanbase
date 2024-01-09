@@ -294,10 +294,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var faield.", K(ret), K(multi_stmt_item));
   } else {
-    const bool enable_trace_log = lib::is_trace_log_enabled();
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),
                                          session.get_effective_tenant_id()))) {
       LOG_WARN("failed to check_and_refresh_schema", K(ret));
@@ -338,9 +335,7 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
                   "retry_times", retry_ctrl_.get_retry_times(), K(multi_stmt_item));
       }
     }
-    if (enable_trace_log) {
-      ObThreadLogLevelUtils::clear();
-    }
+    ObThreadLogLevelUtils::clear();
   }
 
   //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret

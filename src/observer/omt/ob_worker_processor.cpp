@@ -99,7 +99,6 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
   }
   OB_ATOMIC_EVENT_RESET_RECORDER();
   PERF_RESET_RECORDER();
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   const int64_t q_time = THIS_THWORKER.get_query_start_time() - req.get_receive_timestamp();
   NG_TRACE_EXT(process_begin,
                OB_ID(in_queue_time), q_time,
@@ -121,7 +120,7 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
     if (OB_LOGGER.is_info_as_wdiag()) {
       ObThreadLogLevelUtils::clear();
     } else {
-      if (enable_trace_log && OB_LOG_LEVEL_NONE != packet.get_log_level()) {
+      if (OB_LOG_LEVEL_NONE != packet.get_log_level()) {
         ObThreadLogLevelUtils::init(packet.get_log_level());
       }
     }
@@ -161,9 +160,7 @@ int ObWorkerProcessor::process(rpc::ObRequest &req)
 
   // cleanup
   ObCurTraceId::reset();
-  if (enable_trace_log) {
-    ObThreadLogLevelUtils::clear();
-  }
+  ObThreadLogLevelUtils::clear();
   PERF_GATHER_DATA();
   //LOG_INFO("yzf debug", "atomic_op", ATOMIC_EVENT_RECORDER);
   OB_ATOMIC_EVENT_GATHER_DATA();

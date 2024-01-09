@@ -477,7 +477,6 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   FLTSpanGuard(mpquery_single_stmt);
   ctx_.spm_ctx_.reset();
   bool need_response_error = true;
-  const bool enable_trace_log = lib::is_trace_log_enabled();
   session.get_raw_audit_record().request_memory_used_ = 0;
   observer::ObProcessMallocCallback pmcb(0,
         session.get_raw_audit_record().request_memory_used_);
@@ -493,10 +492,8 @@ int ObMPQuery::process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   if (OB_FAIL(init_process_var(ctx_, multi_stmt_item, session))) {
     LOG_WARN("init process var failed.", K(ret), K(multi_stmt_item));
   } else {
-    if (enable_trace_log) {
-      //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
-      ObThreadLogLevelUtils::init(session.get_log_id_level_map());
-    }
+    //set session log_level.Must use ObThreadLogLevelUtils::clear() in pair
+    ObThreadLogLevelUtils::init(session.get_log_id_level_map());
     // obproxy may use 'SET @@last_schema_version = xxxx' to set newest schema,
     // observer will force refresh schema if local_schema_version < last_schema_version;
     if (OB_FAIL(check_and_refresh_schema(session.get_login_tenant_id(),

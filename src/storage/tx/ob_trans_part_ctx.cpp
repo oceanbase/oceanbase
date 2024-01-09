@@ -151,13 +151,14 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
 
     mt_ctx_.set_trans_ctx(this);
     mt_ctx_.set_for_replay(is_follower_());
-
     if (!GCONF.enable_record_trace_log) {
       tlog_ = NULL;
     } else {
       tlog_ = &trace_log_;
     }
-
+#ifdef ENABLE_DEBUG_LOG
+    tlog_ = &trace_log_;
+#endif
     is_inited_ = true;
   } else {
     // reset immediately
