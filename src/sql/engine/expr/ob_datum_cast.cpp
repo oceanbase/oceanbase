@@ -3079,12 +3079,16 @@ static int common_string_json(const ObExpr &expr,
         is_null_res = true;
       } else if (!is_oracle
                   && (is_enumset_to_str
+                      || (CM_IS_SQL_AS_JSON_SCALAR(expr.extra_) && ob_is_string_type(in_type))
                       || (CM_IS_IMPLICIT_CAST(expr.extra_)
                           && !CM_IS_COLUMN_CONVERT(expr.extra_)
                           && !CM_IS_JSON_VALUE(expr.extra_)
                           && is_convert_jstr_type))) {
         // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
         j_base = &j_string;
+        if ((CM_IS_SQL_AS_JSON_SCALAR(expr.extra_) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
+          j_base = &j_null;
+        }
       } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
       } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {

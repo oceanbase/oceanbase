@@ -3454,6 +3454,13 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
       }
+
+      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
+      if (ObStringTC == ori_tc && ObJsonTC == expect_tc
+          && IS_BASIC_CMP_OP(parent.get_expr_type())) {
+        uint64_t extra = new_expr->get_extra();
+        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
+      }
       OZ(parent.replace_param_expr(child_idx, new_expr));
       if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
         ret = OB_SUCCESS;
