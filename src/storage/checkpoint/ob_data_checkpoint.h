@@ -169,6 +169,7 @@ private:
   void pop_new_create_to_ls_frozen_();
   void ls_frozen_to_active_(int64_t &last_time);
   void ls_frozen_to_prepare_(int64_t &last_time);
+  void add_diagnose_info_for_ls_frozen_();
   void print_list_(ObCheckpointDList &list);
   void set_ls_freeze_finished_(bool is_finished);
   int get_need_flush_tablets_(const share::SCN recycle_scn,

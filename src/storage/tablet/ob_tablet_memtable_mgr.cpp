@@ -680,7 +680,7 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       memtable->set_is_flushed();
       memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
       memtable->set_frozen();
-      memtable->report_checkpoint_diagnose_info(UpdateReleaseTime());
+      memtable->report_memtable_diagnose_info(UpdateReleaseTime());
       release_head_memtable();
       memtable::ObMemtable *active_memtable = get_active_memtable_();
       if (OB_NOT_NULL(active_memtable) && !active_memtable->allow_freeze()) {

@@ -240,12 +240,13 @@ int ObTxCtxMemtable::flush(SCN recycle_scn, const int64_t trace_id, bool need_fr
     param.tablet_id_ = LS_TX_CTX_TABLET;
     param.merge_type_ = MINI_MERGE;
     param.merge_version_ = ObVersionRange::MIN_VERSION;
+    set_trace_id(trace_id);
     if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_tx_table_merge_dag(param))) {
       if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
           TRANS_LOG(WARN, "failed to schedule tablet merge dag", K(ret));
       }
     } else {
-      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, trace_id, get_tablet_id(), get_rec_scn(), get_start_scn(), get_end_scn());
+      REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, get_rec_scn(), get_start_scn(), get_end_scn());
       TRANS_LOG(INFO, "tx ctx memtable flush successfully", KPC(this), K(ls_id_));
     }
   }

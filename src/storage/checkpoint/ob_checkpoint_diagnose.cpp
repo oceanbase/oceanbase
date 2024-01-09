@@ -35,6 +35,7 @@ void ObTraceInfo::init(const int64_t trace_id,
 
 void ObTraceInfo::reset_without_lock_()
 {
+  TRANS_LOG(INFO, "trace info reset", KPC(this));
   trace_id_ = INVALID_TRACE_ID;
   freeze_clock_ = 0;
   ls_id_.reset();
@@ -91,9 +92,9 @@ int ObCheckpointDiagnoseMgr::init()
   } else {
     for (int i = 0; OB_SUCC(ret) && i < MAX_TRACE_INFO_ARR_SIZE; i++) {
       const int64_t bucket_count = hash::cal_next_prime(100);
-      if (OB_FAIL(trace_info_arr_[i].memtable_diagnose_info_map_.create(bucket_count, "CkptDgnMem"))) {
+      if (OB_FAIL(trace_info_arr_[i].memtable_diagnose_info_map_.create(bucket_count, "CkptDgnMem", "CkptDgnMemNode", MTL_ID()))) {
         LOG_WARN("failed to create map", KR(ret));
-      } else if (OB_FAIL(trace_info_arr_[i].checkpoint_unit_diagnose_info_map_.create(bucket_count, "CkptDgnMemCU"))) {
+      } else if (OB_FAIL(trace_info_arr_[i].checkpoint_unit_diagnose_info_map_.create(bucket_count, "CkptDgnMemCU", "CkptDgnCUNode", MTL_ID()))) {
         LOG_WARN("failed to create map", KR(ret));
       }
     }
@@ -116,14 +117,14 @@ int ObCheckpointDiagnoseMgr::acquire_trace_id(const share::ObLSID &ls_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls_id is invalid", KR(ret));
   } else {
-    const int64_t start_time = ObTimeUtility::current_time();
     SpinWLockGuard lock(pos_lock_);
-    trace_id = ++last_pos_;
-    while (last_pos_ - first_pos_ >= max_trace_info_size_) {
-      trace_info_arr_[first_pos_++ % MAX_TRACE_INFO_ARR_SIZE].reset();
+    if (max_trace_info_size_ > 0) {
+      const int64_t start_time = ObTimeUtility::current_time();
+      trace_id = ++last_pos_;
+      trace_info_arr_[trace_id % MAX_TRACE_INFO_ARR_SIZE].init(trace_id, ls_id, start_time);
+      reset_old_trace_infos_without_pos_lock_();
+      LOG_INFO("acquire_trace_id", K(trace_id), K(ls_id));
     }
-    trace_info_arr_[last_pos_ % MAX_TRACE_INFO_ARR_SIZE].init(trace_id, ls_id, start_time);
-    LOG_INFO("acquire_trace_id", K(trace_id), K(ls_id));
   }
   return ret;
 }
@@ -145,8 +146,10 @@ int ObCheckpointDiagnoseMgr::update_freeze_clock(const share::ObLSID &ls_id,
     if (checkpoint::INVALID_TRACE_ID == tmp_trace_id) {
       MTL(checkpoint::ObCheckpointDiagnoseMgr*)->acquire_trace_id(ls_id, tmp_trace_id);
     }
-    trace_info_arr_[tmp_trace_id % MAX_TRACE_INFO_ARR_SIZE].update_freeze_clock(tmp_trace_id, logstream_clock);
-    LOG_INFO("update_freeze_clock", K(trace_info_arr_[tmp_trace_id % MAX_TRACE_INFO_ARR_SIZE]));
+    if (checkpoint::INVALID_TRACE_ID != tmp_trace_id) {
+      trace_info_arr_[tmp_trace_id % MAX_TRACE_INFO_ARR_SIZE].update_freeze_clock(tmp_trace_id, logstream_clock);
+      LOG_INFO("update_freeze_clock", K(trace_info_arr_[tmp_trace_id % MAX_TRACE_INFO_ARR_SIZE]));
+    }
   }
   return ret;
 }
@@ -173,7 +176,7 @@ int ObCheckpointDiagnoseMgr::update_schedule_dag_info(const ObCheckpointDiagnose
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param is invalid", KR(ret), K(param));
   } else {
-    if (OB_FAIL(trace_info_arr_[param.trace_id_ % MAX_TRACE_INFO_ARR_SIZE].add_diagnose_info
+    if (OB_FAIL(trace_info_arr_[param.trace_id_ % MAX_TRACE_INFO_ARR_SIZE].update_diagnose_info
           <ObCheckpointUnitDiagnoseInfo>(param, UpdateScheduleDagInfo(param, rec_scn, start_scn, end_scn)))) {
       LOG_WARN("failed to add_checkpoint_unit_diagnose_info", KR(ret), K(param));
     }
@@ -250,7 +253,7 @@ int ObCheckpointDiagnoseMgr::update_freeze_info(const ObCheckpointDiagnoseParam 
     if (OB_ISNULL(trace_info_ptr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("trace_info is NULL", KR(ret), K(param));
-    } else if (OB_FAIL(trace_info_ptr->add_diagnose_info<ObMemtableDiagnoseInfo>(param,
+    } else if (OB_FAIL(trace_info_ptr->update_diagnose_info<ObMemtableDiagnoseInfo>(param,
             UpdateFreezeInfo(param, rec_scn, start_scn, end_scn, occupy_size)))) {
       LOG_WARN("failed to add_memtable_diagnose_info", KR(ret), K(param));
 
@@ -389,6 +392,21 @@ ObTraceInfo* ObCheckpointDiagnoseMgr::get_trace_info_for_memtable(const ObCheckp
     }
   } else {
     ret = &(trace_info_arr_[param.trace_id_ % MAX_TRACE_INFO_ARR_SIZE]);
+  }
+  return ret;
+}
+
+int ObCheckpointDiagnoseMgr::update_max_trace_info_size(int64_t max_trace_info_size)
+{
+  int ret = OB_SUCCESS;
+  if (max_trace_info_size < 0 || max_trace_info_size > MAX_TRACE_INFO_ARR_SIZE) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "max_trace_info_size invalid", K(ret), K(max_trace_info_size));
+  } else {
+    SpinWLockGuard lock(pos_lock_);
+    max_trace_info_size_ = max_trace_info_size;
+    reset_old_trace_infos_without_pos_lock_();
+    TRANS_LOG(INFO, "max_trace_info_size update.", KPC(this));
   }
   return ret;
 }

@@ -112,7 +112,7 @@ public:
   trace_id_(checkpoint::INVALID_TRACE_ID) { construct_sequence_ = ObMdsGlobalSequencer::generate_senquence(); }
   virtual ~MdsTableBase()
   {
-    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, tablet_id_);
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, this);
   }
   int init(const ObTabletID tablet_id,
            const share::ObLSID ls_id,
@@ -181,7 +181,10 @@ public:
   bool is_removed_from_t3m() const;
   int64_t get_removed_from_t3m_ts() const;
   int64_t get_trace_id() const { return trace_id_; }
-  void set_trace_id(int64_t trace_id) { trace_id_ = trace_id; }
+  void set_trace_id(int64_t trace_id)
+  {
+    ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObCheckpointUnitDiagnoseInfo, trace_id);
+  }
   VIRTUAL_TO_STRING_KV(KP(this));
 protected:
   void inc_valid_node_cnt();
@@ -239,7 +242,7 @@ protected:
       observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
     }
 
-    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, trace_id_, tablet_id_, rec_scn_, rec_scn_, flushing_scn_);
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_schedule_dag_info, this, rec_scn_, rec_scn_, flushing_scn_);
 
   }
   template <int N>
@@ -265,7 +268,7 @@ protected:
       observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
     }
 
-    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, trace_id_, tablet_id_);
+    REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, this);
   }
   void report_recycle_event_(share::SCN recycle_scn,
                              const char *file = __builtin_FILE(),

@@ -181,6 +181,8 @@ public:                                                                         
     }                                                                                     \
   }                                                                                       \
 };
+DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateStartGCTimeForMemtable, update_start_gc_time_for_memtable)
+DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(AddCheckpointDiagnoseInfoForMemtable, add_diagnose_info<checkpoint::ObMemtableDiagnoseInfo>)
 
 struct UpdateFreezeInfo
 {
@@ -532,18 +534,17 @@ public:
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
   virtual int finish_freeze();
 
-  DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateStartGCTimeForMemtable, update_start_gc_time_for_memtable)
   virtual int64_t dec_ref()
   {
     int64_t ref_cnt = ObITable::dec_ref();
     if (0 == ref_cnt) {
-      report_checkpoint_diagnose_info(UpdateStartGCTimeForMemtable());
+      report_memtable_diagnose_info(UpdateStartGCTimeForMemtable());
     }
     return ref_cnt;
   }
 
   template<class OP>
-  void report_checkpoint_diagnose_info(const OP &op)
+  void report_memtable_diagnose_info(const OP &op)
   {
     int ret = OB_SUCCESS;
     // logstream freeze
@@ -562,6 +563,7 @@ public:
       op(param);
     }
   }
+
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
                        K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),

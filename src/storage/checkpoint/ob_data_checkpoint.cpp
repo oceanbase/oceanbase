@@ -344,10 +344,13 @@ void ObDataCheckpoint::road_to_flush(SCN rec_scn)
       last = active_list_.get_first_greater(rec_scn);
     }
     pop_active_list_to_ls_frozen_(last);
-    last_time = common::ObTimeUtility::fast_current_time();
     STORAGE_LOG(INFO, "[Freezer] active_list to ls_frozen_list success",
                                                     K(ls_->get_ls_id()));
+    // add diagnose info
+    add_diagnose_info_for_ls_frozen_();
+
     // ls_frozen_list -> prepare_list
+    last_time = common::ObTimeUtility::fast_current_time();
     ls_frozen_to_prepare_(last_time);
     STORAGE_LOG(INFO, "[Freezer] road_to_flush end", K(ls_->get_ls_id()));
   }
@@ -897,6 +900,18 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
     }
   }
   return ret;
+}
+
+void ObDataCheckpoint::add_diagnose_info_for_ls_frozen_()
+{
+  ObCheckpointIterator iterator;
+  ls_frozen_list_.get_iterator(iterator);
+  while (iterator.has_next()) {
+    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable*>(iterator.get_next());
+    if (!memtable->is_active_checkpoint()) {
+      memtable->report_memtable_diagnose_info(memtable::ObMemtable::AddCheckpointDiagnoseInfoForMemtable());
+    }
+  }
 }
 
 }  // namespace checkpoint

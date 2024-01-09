@@ -230,15 +230,20 @@ public:
     checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*);
     if (0 == ref_cnt) {
       if (get_tablet_id().is_ls_inner_tablet()) {
-        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, trace_id_, get_tablet_id())
-      } else {
-        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_memtable, trace_id_, get_tablet_id())
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_start_gc_time_for_checkpoint_unit, this)
       }
     }
     return ref_cnt;
   }
 
-  void set_trace_id(const int64_t trace_id) { ATOMIC_STORE(&trace_id_, trace_id); }
+  void set_trace_id(const int64_t trace_id)
+  {
+    if (get_tablet_id().is_ls_inner_tablet()) {
+      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObCheckpointUnitDiagnoseInfo, trace_id);
+    } else {
+      ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(checkpoint::ObMemtableDiagnoseInfo, trace_id);
+    }
+  }
   void reset_trace_id() { ATOMIC_STORE(&trace_id_, checkpoint::INVALID_TRACE_ID); }
   int64_t get_trace_id() const { return ATOMIC_LOAD(&trace_id_); }
 protected:

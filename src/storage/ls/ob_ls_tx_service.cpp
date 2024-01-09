@@ -543,7 +543,6 @@ int ObLSTxService::flush(SCN &recycle_scn)
         MTL(ObCheckpointDiagnoseMgr*)->acquire_trace_id(ls_id_, trace_id);
       }
       TRANS_LOG(INFO, "common_checkpoints flush", K(trace_id), K(ls_id_), K(has_gen_diagnose_trace), K(common_checkpoints_[i]));
-      //MTL(ObCheckpointDiagnoseMgr*)->update_start_time(trace_id, i);
       if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn, trace_id))) {
         TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(common_checkpoints_[i]));
       }

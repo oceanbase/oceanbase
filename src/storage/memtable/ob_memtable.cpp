@@ -2002,7 +2002,7 @@ int ObMemtable::flush(share::ObLSID ls_id)
       }
     } else {
       mt_stat_.create_flush_dag_time_ = cur_time;
-      report_checkpoint_diagnose_info(UpdateScheduleDagTime());
+      report_memtable_diagnose_info(UpdateScheduleDagTime());
       TRANS_LOG(INFO, "schedule tablet merge dag successfully", K(ret), K(param), KPC(this));
     }
 
@@ -2911,7 +2911,7 @@ int ObMemtable::finish_freeze()
   if (OB_FAIL(ObFreezeCheckpoint::finish_freeze())) {
     TRANS_LOG(WARN, "fail to finish_freeze", KR(ret));
   } else {
-    report_checkpoint_diagnose_info(UpdateFreezeInfo(*this));
+    report_memtable_diagnose_info(UpdateFreezeInfo(*this));
   }
   return ret;
 }

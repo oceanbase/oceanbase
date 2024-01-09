@@ -1172,24 +1172,18 @@ int ObTabletMergeFinishTask::report_checkpoint_diagnose_info(ObTabletMergeCtx &c
     } else if (OB_UNLIKELY(!table->is_memtable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is not memtable", K(ret), K(ctx.tables_handle_), KPC(table));
-    } else if (OB_UNLIKELY(!table->is_frozen_memtable())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not frozen memtable", K(ret), K(ctx.tables_handle_), KPC(table));
     } else {
       const ObSSTableMergeInfo &sstable_merge_info = ctx.get_merge_info().get_sstable_merge_info();
       if (table->is_data_memtable()) {
         ObMemtable *memtable = nullptr;
         memtable = static_cast<ObMemtable*>(table);
-        memtable->report_checkpoint_diagnose_info(ObMemtable::UpdateMergeInfoForMemtable(
+        memtable->report_memtable_diagnose_info(ObMemtable::UpdateMergeInfoForMemtable(
               sstable_merge_info.merge_start_time_, sstable_merge_info.merge_finish_time_,
               sstable_merge_info.occupy_size_, sstable_merge_info.concurrent_cnt_));
       } else {
         ObIMemtable *memtable = nullptr;
         memtable = static_cast<ObIMemtable*>(table);
-        if (checkpoint::INVALID_TRACE_ID != memtable->get_trace_id()) {
-          checkpoint::ObCheckpointDiagnoseParam param(memtable->get_trace_id(), memtable->get_tablet_id(), memtable);
-          MTL(checkpoint::ObCheckpointDiagnoseMgr*)->update_merge_info_for_checkpoint_unit(param);
-        }
+        REPORT_CHECKPOINT_DIAGNOSE_INFO(update_merge_info_for_checkpoint_unit, memtable)
       }
     }
   }

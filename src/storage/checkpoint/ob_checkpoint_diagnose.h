@@ -20,16 +20,23 @@
 #include "share/ob_errno.h"
 #include "share/ob_define.h"
 
-#define REPORT_CHECKPOINT_DIAGNOSE_INFO(func, trace_id, tablet_id, arg...)              \
+#define ADD_CHECKPOINT_DIAGNOSE_INFO_AND_SET_TRACE_ID(T, trace_id) \
   checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*); \
-  if (OB_NOT_NULL(cdm)) {                                                               \
-    if (checkpoint::INVALID_TRACE_ID != trace_id) {                                     \
-      if (trace_id_ != trace_id) {                                                      \
-        trace_id_ = trace_id;                                                           \
-      }                                                                                 \
-      checkpoint::ObCheckpointDiagnoseParam param(trace_id, tablet_id, (void*)this);    \
-      cdm->func(param, ##arg);                                                          \
-    }                                                                                   \
+  if (OB_NOT_NULL(cdm)) { \
+    if (checkpoint::INVALID_TRACE_ID != trace_id) { \
+      trace_id_ = trace_id; \
+      checkpoint::ObCheckpointDiagnoseParam param(trace_id, get_tablet_id(), (void*)this); \
+      cdm->add_diagnose_info<T>(param); \
+    } \
+  }
+
+#define REPORT_CHECKPOINT_DIAGNOSE_INFO(func, unit_ptr, arg...) \
+  checkpoint::ObCheckpointDiagnoseMgr *cdm = MTL(checkpoint::ObCheckpointDiagnoseMgr*); \
+  if (OB_NOT_NULL(cdm)) { \
+    if (checkpoint::INVALID_TRACE_ID != unit_ptr->get_trace_id()) { \
+      checkpoint::ObCheckpointDiagnoseParam param(unit_ptr->get_trace_id(), unit_ptr->get_tablet_id(), unit_ptr); \
+      cdm->func(param, ##arg); \
+    } \
   }
 
 namespace oceanbase
@@ -214,9 +221,8 @@ public:
   bool check_trace_id_(const int64_t trace_id);
   bool check_trace_id_(const ObCheckpointDiagnoseParam &param);
 
-  template <typename T, typename OP>
-  int add_diagnose_info(const ObCheckpointDiagnoseParam &param,
-      const OP &op);
+  template <typename T>
+  int add_diagnose_info(const ObCheckpointDiagnoseParam &param);
   template <typename T, typename OP>
   int update_diagnose_info(const ObCheckpointDiagnoseParam &param,
       const OP &op);
@@ -354,9 +360,8 @@ private:
   ObTraceInfo *&ret_;
 };
 
-template <typename T, typename OP>
-int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param,
-    const OP &op)
+template <typename T>
+int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard lock(lock_);
@@ -368,7 +373,6 @@ int ObTraceInfo::add_diagnose_info(const ObCheckpointDiagnoseParam &param,
     } else {
       T *diagnose_info = new (ptr)T();
       SpinWLockGuard lock(diagnose_info->lock_);
-      op(*diagnose_info);
       if (OB_FAIL(get_diagnose_info_map_<T>().set_refactored(param.key_, diagnose_info,
               0 /* not overwrite */ ))) {
         TRANS_LOG(WARN, "failed to add diagnose info", KR(ret), K(param.key_), KPC(diagnose_info), KPC(this));
@@ -405,7 +409,7 @@ int ObTraceInfo::read_diagnose_info(const int64_t trace_id,
     const OP &op)
 {
   int ret = OB_SUCCESS;
-  TRANS_LOG(INFO, "read_diagenose_info in ObTraceInfo", KPC(this));
+  TRANS_LOG(INFO, "read_diagenose_info in ObTraceInfo", KPC(this), K(trace_id));
   SpinRLockGuard lock(lock_);
   if (check_trace_id_(trace_id)) {
     FOREACH(iter, get_diagnose_info_map_<T>()) {
@@ -429,7 +433,6 @@ template <typename OP>
 int ObTraceInfo::read_trace_info(const int64_t trace_id, const OP &op)
 {
   int ret = OB_SUCCESS;
-  TRANS_LOG(INFO, "read_trace_info in ObTraceInfo", KPC(this));
   SpinRLockGuard lock(lock_);
   if (INVALID_TRACE_ID == trace_id
       || check_trace_id_(trace_id)) {
@@ -443,9 +446,9 @@ int ObTraceInfo::read_trace_info(const int64_t trace_id, const OP &op)
 class ObCheckpointDiagnoseMgr
 {
 private:
-  const static int64_t MAX_TRACE_INFO_ARR_SIZE = 100;
+  const static int64_t MAX_TRACE_INFO_ARR_SIZE = 800;
 public:
-  ObCheckpointDiagnoseMgr(int64_t max_trace_info_size = MAX_TRACE_INFO_ARR_SIZE)
+  ObCheckpointDiagnoseMgr(int64_t max_trace_info_size = 100)
     : first_pos_(0),
       last_pos_(-1),
       max_trace_info_size_(max_trace_info_size),
@@ -455,6 +458,7 @@ public:
   static int mtl_init(ObCheckpointDiagnoseMgr* &m) { return m->init(); }
   int init();
   void destroy() { is_inited_ = false; };
+  int update_max_trace_info_size(int64_t max_trace_info_size);
 
   // trace_info func
   int acquire_trace_id(const share::ObLSID &ls_id,
@@ -463,6 +467,8 @@ public:
       const int64_t trace_id,
       const int logstream_clock);
 
+  template <typename OP>
+  int add_diagnose_info(const ObCheckpointDiagnoseParam &param);
   // checkpoint_unit func
   int update_schedule_dag_info(const ObCheckpointDiagnoseParam &param,
       const share::SCN &rec_scn,
@@ -495,6 +501,15 @@ public:
 
   int64_t get_trace_info_count() { return last_pos_ - first_pos_ + 1; }
   ObTraceInfo* get_trace_info_for_memtable(const ObCheckpointDiagnoseParam &param);
+  TO_STRING_KV(K_(first_pos), K_(last_pos), K_(max_trace_info_size));
+
+private:
+  void reset_old_trace_infos_without_pos_lock_()
+  {
+    while (last_pos_ - first_pos_ >= max_trace_info_size_) {
+      trace_info_arr_[first_pos_++ % MAX_TRACE_INFO_ARR_SIZE].reset();
+    }
+  }
 
 private:
   int64_t first_pos_;
@@ -505,6 +520,28 @@ private:
   int64_t max_trace_info_size_;
   bool is_inited_;
 };
+
+template<typename T>
+int ObCheckpointDiagnoseMgr::add_diagnose_info(const ObCheckpointDiagnoseParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "ObCheckpointDiagnoseMgr not inited.", K(ret));
+  } else if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "param is invalid", KR(ret), K(param));
+  } else {
+    ObTraceInfo *trace_info_ptr = get_trace_info_for_memtable(param);
+    if (OB_ISNULL(trace_info_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "trace_info is NULL", KR(ret), K(param));
+    } else if (OB_FAIL(trace_info_ptr->add_diagnose_info<T>(param))) {
+      TRANS_LOG(WARN, "failed to add diagnose_info", KR(ret), K(param));
+    }
+  }
+  return ret;
+}
 
 template<typename T, typename OP>
 int ObCheckpointDiagnoseMgr::read_diagnose_info(const int64_t trace_id,
