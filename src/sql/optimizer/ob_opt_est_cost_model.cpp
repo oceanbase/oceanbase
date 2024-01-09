@@ -133,6 +133,7 @@ double ObIndexMetaInfo::get_micro_block_numbers() const
  */
 int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                     double &cost,
+                                    double &filter_selectivity,
                                     ObIArray<ObExprSelPair> &all_predicate_sel)
 {
   int ret = OB_SUCCESS;
@@ -145,7 +146,7 @@ int ObOptEstCostModel::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
     double right_rows = est_cost_info.right_rows_;
     double cart_tuples = left_rows * right_rows; // tuples of Cartesian product
     double out_tuples = 0.0;
-    double filter_selectivity = 0.0;
+    filter_selectivity = 0.0;
     double material_cost = 0.0;
     //selectivity for equal conds
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(*est_cost_info.table_metas_,
@@ -2291,5 +2292,58 @@ int ObOptEstCostModel::cost_range_scan(const ObTableMetaInfo& table_meta_info,
                       + range_count * cost_params_.RANGE_COST + qual_cost;
   cpu_cost += row_count * cost_params_.TABLE_SCAN_CPU_TUPLE_COST;
   cost = io_cost + cpu_cost;
+  return ret;
+}
+
+int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
+                                              double card,
+                                              double &cost)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    double rows = expr->is_const_expr() && card > 0 ? card : 1;
+    bool need_calc_child_cost = true;
+    if (IS_SPATIAL_OP(expr->get_expr_type())
+       || IS_GEO_OP(expr->get_expr_type())
+       || expr->is_json_expr()
+       || expr->is_xml_expr()) {
+      cost += cost_params_.CMP_SPATIAL_COST / rows;
+    } else if (expr->is_udf_expr()) {
+      cost += cost_params_.CMP_UDF_COST / rows;
+    } else if (ob_is_lob_locator(expr->get_result_type().get_type())) {
+      cost += cost_params_.CMP_LOB_COST / rows;
+    } else if (T_OP_DIV == expr->get_expr_type()) {
+      cost += cost_params_.CMP_ERR_HANDLE_EXPR_COST / rows;
+    } else if (T_FUN_SYS_CAST == expr->get_expr_type()) {
+      if (OB_ISNULL(expr->get_param_expr(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        ObObjType src = expr->get_param_expr(0)->get_result_type().get_type();
+        ObObjType dst = expr->get_result_type().get_type();
+        if (ob_is_string_type(src) &&
+            (ob_is_numeric_type(dst) || ob_is_temporal_type(dst))) {
+          cost += cost_params_.CMP_ERR_HANDLE_EXPR_COST / rows;
+        } else {
+          cost += cost_params_.CMP_INT_COST / rows;
+        }
+      }
+    } else if (T_OP_IN == expr->get_expr_type()) {
+      cost += expr->get_param_count() * cost_params_.CMP_INT_COST / rows;
+      need_calc_child_cost = false;
+    } else {
+      cost += cost_params_.CMP_INT_COST / rows;
+    }
+    if (need_calc_child_cost) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_FAIL(SMART_CALL(calc_pred_cost_per_row(expr->get_param_expr(i), card, cost)))) {
+          LOG_WARN("calc cost per tuple failed", K(ret), KPC(expr));
+        }
+      }
+    }
+  }
   return ret;
 }

@@ -69,6 +69,10 @@ const static double VECTOR_DELETE_INDEX_PER_ROW_COST = 6.549611874999999;
 const static double VECTOR_DELETE_CHECK_PER_ROW_COST = 59.4583275;
 const static double VECTOR_SPATIAL_PER_ROW_COST = 3.2434868757557513;  // todo: fix later
 const static double VECTOR_RANGE_COST = 2.1;
+//mock complex expr cost
+const static double VECTOR_CMP_UDF_COST = 100.0;
+const static double VECTOR_CMP_LOB_COST = 9.707028746051587301587301588; //NORMAL_CMP_CHAR_COST * 100
+const static double VECTOR_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539; //NORMAL_CMP_INT_COST * 100
 
 const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // null
@@ -180,7 +184,10 @@ const static ObOptEstCostModel::ObCostParams cost_params_vector(
    VECTOR_DELETE_INDEX_PER_ROW_COST,
    VECTOR_DELETE_CHECK_PER_ROW_COST,
    VECTOR_SPATIAL_PER_ROW_COST,
-   VECTOR_RANGE_COST
+   VECTOR_RANGE_COST,
+   VECTOR_CMP_UDF_COST,
+   VECTOR_CMP_LOB_COST,
+   VECTOR_CMP_ERR_HANDLE_EXPR_COST
 );
 
 }

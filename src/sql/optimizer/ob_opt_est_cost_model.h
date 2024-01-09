@@ -647,7 +647,10 @@ public:
     const double DEFAULT_DELETE_INDEX_PER_ROW_COST,
     const double DEFAULT_DELETE_CHECK_PER_ROW_COST,
     const double DEFAULT_SPATIAL_PER_ROW_COST,
-    const double DEFAULT_RANGE_COST
+    const double DEFAULT_RANGE_COST,
+    const double DEFAULT_CMP_UDF_COST,
+    const double DEFAULT_CMP_LOB_COST,
+    const double DEFAULT_CMP_ERR_HANDLE_EXPR_COST
     )
     : CPU_TUPLE_COST(DEFAULT_CPU_TUPLE_COST),
       TABLE_SCAN_CPU_TUPLE_COST(DEFAULT_TABLE_SCAN_CPU_TUPLE_COST),
@@ -698,7 +701,10 @@ public:
       DELETE_INDEX_PER_ROW_COST(DEFAULT_DELETE_INDEX_PER_ROW_COST),
       DELETE_CHECK_PER_ROW_COST(DEFAULT_DELETE_CHECK_PER_ROW_COST),
       SPATIAL_PER_ROW_COST(DEFAULT_SPATIAL_PER_ROW_COST),
-      RANGE_COST(DEFAULT_RANGE_COST)
+      RANGE_COST(DEFAULT_RANGE_COST),
+      CMP_UDF_COST(DEFAULT_CMP_UDF_COST),
+      CMP_LOB_COST(DEFAULT_CMP_LOB_COST),
+      CMP_ERR_HANDLE_EXPR_COST(DEFAULT_CMP_ERR_HANDLE_EXPR_COST)
     {}
     /** 读取一行的CPU开销，基本上只包括get_next_row()操作 */
     double CPU_TUPLE_COST;
@@ -798,6 +804,12 @@ public:
     double SPATIAL_PER_ROW_COST;
     //存储层切换一次range的代价
     double RANGE_COST;
+    //计算一个UDF的代价
+    double CMP_UDF_COST;
+    //计算一个返回值为LOB的表达式的代价
+    double CMP_LOB_COST;
+    //计算一个需处理异常的表达式的代价
+    double CMP_ERR_HANDLE_EXPR_COST;
   };
 
 	ObOptEstCostModel(
@@ -813,6 +825,7 @@ public:
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
 										double &cost,
+                    double &filter_selectivity,
 										common::ObIArray<ObExprSelPair> &all_predicate_sel);
 
   int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
@@ -953,6 +966,9 @@ public:
                       int64_t range_count,
                       double range_sel,
                       double &cost);
+  int calc_pred_cost_per_row(const ObRawExpr *expr,
+                            double card,
+                            double &cost);
 
 protected:
   int cost_sort(const ObSortCostInfo &cost_info,

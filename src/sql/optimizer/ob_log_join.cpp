@@ -1512,3 +1512,20 @@ int ObLogJoin::allocate_startup_expr_post(int64_t child_idx)
   }
   return ret;
 }
+
+int ObLogJoin::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = 0;
+  ObLogicalOperator *child_op = NULL;
+  const JoinPath *path = static_cast<ObLogJoin *>(this)->get_join_path();
+  if (OB_ISNULL(path)) {
+    //for late materialization
+    card = get_card();
+  } else if (path->other_cond_sel_ > 0) {
+    card = get_card() / path->other_cond_sel_;
+  } else {
+    card = 1.0;
+  }
+  return ret;
+}

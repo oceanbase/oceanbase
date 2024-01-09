@@ -501,6 +501,7 @@ public:
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
+  virtual int get_card_without_filter(double &card) override;
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();

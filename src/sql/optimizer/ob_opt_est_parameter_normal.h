@@ -69,6 +69,10 @@ const static double NORMAL_DELETE_INDEX_PER_ROW_COST = 6.549611874999999;
 const static double NORMAL_DELETE_CHECK_PER_ROW_COST = 59.4583275;
 const static double NORMAL_SPATIAL_PER_ROW_COST = 3.2434868757557513;
 const static double NORMAL_RANGE_COST = 2.1;
+//mock complex expr cost
+const static double NORMAL_CMP_UDF_COST = 100.0;
+const static double NORMAL_CMP_LOB_COST = 9.707028746051587301587301588; //NORMAL_CMP_CHAR_COST * 100
+const static double NORMAL_CMP_ERR_HANDLE_EXPR_COST = 1.00087103407539; //NORMAL_CMP_INT_COST * 100
 
 const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_INT_COST,            // null
@@ -181,7 +185,10 @@ const static ObOptEstCostModel::ObCostParams cost_params_normal(
     NORMAL_DELETE_INDEX_PER_ROW_COST,
     NORMAL_DELETE_CHECK_PER_ROW_COST,
     NORMAL_SPATIAL_PER_ROW_COST,
-    NORMAL_RANGE_COST
+    NORMAL_RANGE_COST,
+    NORMAL_CMP_UDF_COST,
+    NORMAL_CMP_LOB_COST,
+    NORMAL_CMP_ERR_HANDLE_EXPR_COST
 );
 
 }

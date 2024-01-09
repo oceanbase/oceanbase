@@ -52,6 +52,7 @@ class ObLogValuesTableAccess : public ObLogicalOperator
     inline void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
     inline void set_values_path(ValuesTablePath *values_path) { values_path_ = values_path; }
     inline const ValuesTablePath *get_values_path() { return values_path_; }
+    virtual int get_card_without_filter(double &card) override;
   private:
 
   private:

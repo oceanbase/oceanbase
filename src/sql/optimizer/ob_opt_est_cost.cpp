@@ -40,12 +40,14 @@ ObOptEstVectorCostModel vector_model_(comparison_params_vector, hash_params_vect
 
 int ObOptEstCost::cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                                 double &cost,
+                                double &filter_selectivity,
                                 ObIArray<ObExprSelPair> &all_predicate_sel,
                                 MODEL_TYPE model_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_model(model_type).cost_nestloop(est_cost_info,
                                                   cost,
+                                                  filter_selectivity,
                                                   all_predicate_sel))) {
     LOG_WARN("failed to est cost for nestloop join", K(model_type), K(ret));
   }
@@ -721,4 +723,12 @@ ObOptEstCostModel &ObOptEstCost::get_model(MODEL_TYPE model_type)
 double ObOptEstCost::cost_values_table(double rows, ObIArray<ObRawExpr*> &filters, MODEL_TYPE model_type)
 {
   return get_model(model_type).cost_get_rows(rows) + get_model(model_type).cost_quals(rows, filters);
+}
+
+double ObOptEstCost::calc_pred_cost_per_row(const ObRawExpr *expr,
+                                            double card,
+                                            MODEL_TYPE model_type,
+                                            double &cost)
+{
+  return get_model(model_type).calc_pred_cost_per_row(expr, card, cost);
 }

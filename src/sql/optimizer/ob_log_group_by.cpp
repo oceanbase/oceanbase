@@ -892,3 +892,10 @@ int ObLogGroupBy::compute_sharding_info()
   }
   return ret;
 }
+
+int ObLogGroupBy::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_distinct_card();
+  return ret;
+}

@@ -240,5 +240,12 @@ int ObLogValuesTableAccess::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fix
   return OB_SUCCESS;
 }
 
+int ObLogValuesTableAccess::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_card();
+  return ret;
+}
+
 } // namespace sql
 }// namespace oceanbase

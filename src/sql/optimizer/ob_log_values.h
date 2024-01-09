@@ -69,6 +69,12 @@ class ObLogValues : public ObLogicalOperator
       }
       return ret;
     }
+    virtual int get_card_without_filter(double &card) override
+    {
+      int ret = OB_SUCCESS;
+      card = 1.0;
+      return ret;
+    }
   private:
     ObLogPlan *explain_plan_;
     common::ObRowStore row_store_;

@@ -59,6 +59,7 @@
 #include "sql/optimizer/ob_log_merge.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
+#include "sql/optimizer/ob_opt_est_parameter_normal.h"
 
 
 using namespace oceanbase::sql;
@@ -442,6 +443,18 @@ double FilterCompare::get_selectivity(ObRawExpr *expr)
     }
   }
   return selectivity;
+}
+
+int ObLogicalOperator::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child_op = NULL;
+  if (OB_NOT_NULL(child_op = get_child(ObLogicalOperator::first_child))) {
+    card = child_op->get_card();
+  } else {
+    card = 1.0;
+  }
+  return ret;
 }
 
 // Add a child to the end of the array
@@ -2465,9 +2478,61 @@ int ObLogicalOperator::reorder_filter_exprs()
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Get unexpeced null", K(ret), K(get_plan()));
-  } else {
-    FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
-    std::sort(filter_exprs_.begin(), filter_exprs_.end(), filter_compare);
+  } else if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                           filter_exprs_))) {
+    LOG_WARN("reorder filter exprs failed", K(ret));
+  } else if (log_op_def::LOG_JOIN == get_type()) {
+    ObLogJoin *join_op = static_cast<ObLogJoin *>(this);
+    if (OB_FAIL(reorder_filters_exprs(get_plan()->get_predicate_selectivities(),
+                                      join_op->get_join_filters()))) {
+      LOG_WARN("reorder join filters failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::reorder_filters_exprs(common::ObIArray<ObExprSelPair> &predicate_selectivities,
+                                             ObIArray<ObRawExpr *> &filter_exprs)
+{
+  int ret = OB_SUCCESS;
+  double card = 0;
+  FilterCompare filter_compare(predicate_selectivities);
+  ObOptimizerContext *opt_ctx = NULL;
+  common::ObSEArray<ObExprRankPair, 4> filter_ranks;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(opt_ctx));
+  } else if (OB_FAIL(get_card_without_filter(card))) {
+    LOG_WARN("get num of rows to be filtered failed", K(ret));
+  } else if (card < 1.0) {
+    card = 1.0;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    double cost_per_tuple = 0.0;
+    double sel = filter_compare.get_selectivity(filter_exprs.at(i));
+    double rank = 0;
+    if (sel < 0) {
+      // security filter should be calc firstly
+      rank = -NAN;
+    } else if (OB_FAIL(ObOptEstCost::calc_pred_cost_per_row(filter_exprs.at(i),
+                                                            card,
+                                                            opt_ctx->get_cost_model_type(),
+                                                            cost_per_tuple))) {
+      LOG_WARN("calc pred cost failed", K(ret));
+    } else {
+      rank = (sel - 1) / cost_per_tuple;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(filter_ranks.push_back(ObExprRankPair(rank, filter_exprs.at(i))))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    std::sort(filter_ranks.begin(), filter_ranks.end(), ObExprRankPairCompare());
+    for(int64_t i = 0; i < filter_ranks.count(); ++i) {
+      filter_exprs.at(i) = filter_ranks.at(i).second;
+    }
   }
   return ret;
 }

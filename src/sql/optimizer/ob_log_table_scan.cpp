@@ -2173,3 +2173,9 @@ int ObLogTableScan::copy_gen_col_range_exprs()
   }
   return ret;
 }
+int ObLogTableScan::get_card_without_filter(double &card)
+{
+  int ret = OB_SUCCESS;
+  card = get_query_range_row_count();
+  return ret;
+}
