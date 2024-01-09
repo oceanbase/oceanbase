@@ -56,6 +56,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   failures_ = other.failures_;
   flag_ = other.flag_;
   scheduler_flags_ = other.scheduler_flags_;
+  start_date_ = other.start_date_;
   end_date_ = other.end_date_;
   enabled_ = other.enabled_;
   auto_drop_ = other.auto_drop_;
