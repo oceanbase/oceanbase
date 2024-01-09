@@ -3,4 +3,4 @@
 echo "execute post uninstall script"
 prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
 
-rm -rf $prefix/.sqlite $prefix/log_obshell
+rm -rf $prefix/.meta $prefix/log_obshell
