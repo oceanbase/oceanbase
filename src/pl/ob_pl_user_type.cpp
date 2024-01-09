@@ -2612,6 +2612,16 @@ int ObCollectionType::deserialize(
 
     if (OB_SUCC(ret)) {
       char *table_data = reinterpret_cast<char*>(table->get_data());
+      // if element type is schema varray type, udt will mark it as nested table, which cause element type is not correct.
+      ObPLType elem_type = PL_INVALID_TYPE;
+      if (count > 0) {
+        ObObj* elem_obj = reinterpret_cast<ObObj*>(table_data);
+        if (elem_obj->is_ext()) {
+          ObPLComposite* elem_composite = reinterpret_cast<ObPLComposite*>(elem_obj->get_ext());
+          CK (OB_NOT_NULL(elem_composite));
+          OX (elem_type = elem_composite->get_type());
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
         ObObj* obj = reinterpret_cast<ObObj*>(table_data);
         CK (OB_NOT_NULL(table->get_allocator()));
@@ -2621,7 +2631,7 @@ int ObCollectionType::deserialize(
           ObPLComposite* composite = reinterpret_cast<ObPLComposite*>(obj->get_ext());
           CK (OB_NOT_NULL(composite));
           if (OB_SUCC(ret) && composite->get_type() == PL_INVALID_TYPE) {
-            composite->set_type(element_type_.get_type());
+            composite->set_type(elem_type);
             composite->set_is_null(!element_type_.get_not_null());
             composite->set_id(element_type_.get_user_type_id());
             obj->set_type(ObMaxType);
