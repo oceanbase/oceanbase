@@ -1932,7 +1932,8 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(MTL_ID()))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(
+                     OB_INVALID_TENANT_ID != MTL_ID() ? MTL_ID() : OB_SERVER_TENANT_ID))) {
         } else if (OB_FAIL(handle.get_more(*transmit_result))) {
           LOG_WARN("fail wait response", K(ret));
         } else {
