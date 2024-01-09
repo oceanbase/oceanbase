@@ -196,7 +196,6 @@ int ObTransService::do_commit_tx_(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   ObTxPart *coord = NULL;
   tx.set_commit_cb(&cb);
-  tx.commit_expire_ts_ = expire_ts;
   if (OB_FAIL(decide_tx_commit_info_(tx, coord))) {
     TRANS_LOG(WARN, "decide tx coordinator fail, tx will abort", K(ret), K(tx));
   } else if (OB_FAIL(tx.commit_task_.init(&tx, this))) {
