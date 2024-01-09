@@ -361,8 +361,6 @@ public:
   int add_row(const StoredRow &src_stored_row,
               StoredRow **stored_row = nullptr);
   int finish_add_row();
-
-  bool is_all_dumped() const { return blk_mem_list_.is_empty(); }
   int dump(const bool all_dump, const int64_t target_dump_size = INT64_MAX);
   int dump_block_if_need(const int64_t extra_size);
   bool need_dump(const int64_t extra_size);
@@ -378,8 +376,6 @@ public:
 
   bool is_inited() const { return inited_; }
   bool is_file_open() const { return fd_ >= 0; }
-  inline int64_t get_blkbuf_remain_size() const
-  { return blkbuf_.buf_.is_inited() ? blkbuf_.buf_.remain() : 0; }
   // save_row_cnt_ is 0 means that there is no block switching and only one block in store.
   inline bool is_empty_save_row_cnt() const { return 0 == save_row_cnt_; }
 

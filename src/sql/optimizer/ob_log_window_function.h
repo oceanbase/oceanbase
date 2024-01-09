@@ -102,7 +102,6 @@ namespace sql
     bool get_use_hash_sort() const { return use_hash_sort_; }
     double get_input_rows_mem_bound_ratio() const { return input_rows_mem_bound_ratio_; }
     double get_estimated_part_cnt() const { return estimated_part_cnt_; }
-    int est_input_rows_mem_bound_ratio();
     int est_window_function_part_cnt();
     virtual int compute_property() override;
 

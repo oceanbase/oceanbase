@@ -185,31 +185,6 @@ int ObLogWindowFunction::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
-// estimate input_rows_mem_bound_ratio for auto mem management in window function
-int ObLogWindowFunction::est_input_rows_mem_bound_ratio()
-{
-  int ret = OB_SUCCESS;
-  double input_width = 0.0;
-  double wf_res_width = 0.0;
-  ObLogicalOperator *first_child = NULL;
-  if (OB_ISNULL(get_plan()) ||
-      OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("first child is null", K(ret), K(first_child));
-  } else {
-    input_width = first_child->get_width();
-    for (int64_t i = 0; i < get_window_exprs().count(); ++i) {
-      wf_res_width += ObOptEstCost::get_estimate_width_from_type(
-                      get_window_exprs().at(i)->get_result_type());
-    }
-    const double input_mem_bound_ratio = input_width / (input_width + wf_res_width);
-    input_rows_mem_bound_ratio_ = input_mem_bound_ratio;
-    LOG_TRACE("est_input_rows_mem_bound_ratio", K(input_width), K(wf_res_width),
-                                                K(input_mem_bound_ratio));
-  }
-  return ret;
-}
-
 int ObLogWindowFunction::est_window_function_part_cnt()
 {
   int ret = OB_SUCCESS;
@@ -268,10 +243,8 @@ int ObLogWindowFunction::est_width()
                                                             output_exprs,
                                                             width))) {
     LOG_WARN("failed to estimate width for output winfunc exprs", K(ret));
-  } else if (FALSE_IT(set_width(width))) {
-  } else if (OB_FAIL(est_input_rows_mem_bound_ratio())) {
-    LOG_WARN("fail to est_input_rows_mem_bound_ratio", K(ret));
   } else {
+    set_width(width);
     LOG_TRACE("est_width for winfunc", K(output_exprs), K(width));
   }
   return ret;
