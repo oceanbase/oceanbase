@@ -6083,7 +6083,7 @@ int ObTablet::check_snapshot_readable_with_cache(
         bool is_committed = false;
         if (OB_FAIL(ObITabletMdsInterface::get_latest_ddl_data(tmp_ddl_data, is_committed))) {
           if (OB_EMPTY_RESULT == ret) {
-            is_committed = false;
+            is_committed = true;
             tmp_ddl_data.set_default_value(); // use default value
             ret = OB_SUCCESS;
           } else {
