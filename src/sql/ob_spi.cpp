@@ -975,6 +975,9 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         bool has_lob_header = result->ObObj::has_lob_header();
         result->ObObj::set_scale(param.get_meta().get_scale());
         result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
+        if (result->is_null()) {
+          result->set_null_meta(param.get_null_meta());
+        }
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
         }
