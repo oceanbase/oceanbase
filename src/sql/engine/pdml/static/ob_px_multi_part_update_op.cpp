@@ -100,7 +100,16 @@ int ObPxMultiPartUpdateOp::update_row_to_das(const ObDASTabletLoc *tablet_loc)
 {
   int ret = OB_SUCCESS;
   ObChunkDatumStore::StoredRow* stored_row = nullptr;
-  if (OB_FAIL(ObDMLService::update_row(MY_SPEC.upd_ctdef_, upd_rtdef_, tablet_loc, tablet_loc, dml_rtctx_, stored_row, stored_row, stored_row))) {
+  if (OB_FAIL(ObDMLService::check_row_whether_changed(MY_SPEC.upd_ctdef_, upd_rtdef_, eval_ctx_))) {
+    LOG_WARN("check row whether changed failed", K(ret));
+  } else if (OB_FAIL(ObDMLService::update_row(MY_SPEC.upd_ctdef_,
+                                              upd_rtdef_,
+                                              tablet_loc,
+                                              tablet_loc,
+                                              dml_rtctx_,
+                                              stored_row,
+                                              stored_row,
+                                              stored_row))) {
     LOG_WARN("insert row with das failed", K(ret));
   }
   return ret;
