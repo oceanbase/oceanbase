@@ -791,8 +791,8 @@ int ObRangeGraphGenerator::remove_useless_range_node(ObRangeNode *range_node, in
   for (ObRangeNode *cur_node = range_node; cur_node != nullptr; cur_node = cur_node->and_next_) {
     if (cur_node->min_offset_ > max_offset) {
       cur_node->and_next_ = nullptr;
-    } else if (cur_node->max_offset_ > max_offset) {
-      max_offset = cur_node->max_offset_;
+    } else if (cur_node->max_offset_ >= max_offset) {
+      max_offset = cur_node->max_offset_ + 1;
     }
   }
   return ret;
