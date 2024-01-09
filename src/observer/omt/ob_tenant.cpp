@@ -162,7 +162,7 @@ int ObPxPools::ThreadRecyclePoolFunc::operator() (common::hash::HashMapPair<int6
   return ret;
 }
 
-int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
+int ObPxPools::StopPoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
 {
   int ret = OB_SUCCESS;
   int64_t &group_id = kv.first;
@@ -172,13 +172,40 @@ int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, Ob
   } else {
     pool->stop();
     LOG_INFO("DEL_POOL_STEP_1: mark px pool stop succ!", K(group_id));
+  }
+  return ret;
+}
+
+int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, ObPxPool*> &kv)
+{
+  int ret = OB_SUCCESS;
+  int64_t &group_id = kv.first;
+  ObPxPool *pool = kv.second;
+  if (NULL == pool) {
+    LOG_WARN("pool is null", K(group_id));
+  } else {
     pool->wait();
     LOG_INFO("DEL_POOL_STEP_2: wait pool empty succ!", K(group_id));
     pool->destroy();
-    LOG_INFO("DEL_POOL_STEP_3: pool destroy succ!", K(group_id));
+    LOG_INFO("DEL_POOL_STEP_3: pool destroy succ!", K(group_id), K(pool->get_queue_size()));
     common::ob_delete(pool);
   }
   return ret;
+}
+
+void ObPxPools::mtl_stop(ObPxPools *&pools)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(pools)) {
+    // pools will be null if it's creating tenant and failed.
+    LOG_WARN("pools is null");
+  } else {
+    common::SpinWLockGuard g(pools->lock_);
+    StopPoolFunc stop_pool_func;
+    if (OB_FAIL(pools->pool_map_.foreach_refactored(stop_pool_func))) {
+      LOG_WARN("failed to do foreach", K(ret));
+    }
+  }
 }
 
 void ObPxPools::destroy()
@@ -226,7 +253,8 @@ void ObPxPool::handle(ObLink *task)
   if (t == nullptr) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "px task is invalid");
   } else {
-    t->func_();
+    bool need_exec = true;
+    t->func_(need_exec);
     OB_DELETE(Task, "PxTask", t);
   }
   ATOMIC_DEC(&concurrency_);
@@ -311,6 +339,22 @@ void ObPxPool::try_recycle(int64_t idle_time)
       }
       recycle_lock_.unlock();
     }
+  }
+}
+
+void ObPxPool::stop()
+{
+  int ret = OB_SUCCESS;
+  Threads::stop();
+  ObLink *task = nullptr;
+  bool need_exec = false;
+  while (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
+    Task *t  = static_cast<Task*>(task);
+    if (OB_NOT_NULL(t)) {
+      t->func_(need_exec);
+      OB_DELETE(Task, "PxTask", t);
+    }
+    ATOMIC_DEC(&concurrency_);
   }
 }
 
