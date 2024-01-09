@@ -16427,7 +16427,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_schemas.count(); i++) {
       ObTableSchema &table_schema = aux_table_schemas.at(i);
       // allow offline ddl execute if there's no offline ddl doing
-      table_schema.set_in_offline_ddl_white_list(orig_table_schema.check_can_do_ddl());
+      table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list);
       if (OB_FAIL(schemas.push_back(&table_schema))) {
         LOG_WARN("fail to push back aux table schema" , K(ret));
       } else if (table_schema.is_aux_lob_piece_table()) {
