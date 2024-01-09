@@ -56,6 +56,29 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 %endif
 ")
 
+if (OB_BUILD_OPENSOURCE)
+  set(CPACK_RPM_PACKAGE_REQUIRES "jq, systemd")
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh
+                @ONLY)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_POST_INSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_PRE_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh)
+endif()
+
 ## TIPS
 #
 # - PATH is relative to the **ROOT directory** of project other than the cmake directory.
@@ -68,6 +91,7 @@ install(PROGRAMS
   tools/import_time_zone_info.py
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
+  deps/3rd/home/admin/oceanbase/bin/obshell
   DESTINATION bin
   COMPONENT server)
 else()
@@ -98,6 +122,17 @@ install(FILES
 install(
   DIRECTORY src/share/inner_table/sys_package/
   DESTINATION admin
+  COMPONENT server)
+
+install(FILES
+  tools/rpm/systemd/profile/oceanbase.cnf
+  tools/rpm/systemd/profile/oceanbase-pre.json
+  tools/rpm/systemd/profile/oceanbase.service
+  tools/rpm/systemd/profile/oceanbase-service.sh
+  tools/rpm/systemd/profile/post_install.sh
+  tools/rpm/systemd/profile/post_uninstall.sh
+  tools/rpm/systemd/profile/pre_uninstall.sh
+  DESTINATION profile
   COMPONENT server)
 
 ## oceanbase-cdc
