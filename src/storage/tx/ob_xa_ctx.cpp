@@ -832,15 +832,19 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(req), K(*this));
+  } else if (is_terminated_) {
+    ret = OB_TRANS_XA_BRANCH_FAIL;
+    TRANS_LOG(INFO, "xa trans is terminating", K(ret), K(xid));
   } else if (is_exiting_) {
-    ret = OB_TRANS_IS_EXITING;
+    if (is_tightly_coupled_) {
+      ret = OB_TRANS_XA_BRANCH_FAIL;
+    } else {
+      ret = OB_TRANS_IS_EXITING;
+    }
     TRANS_LOG(WARN, "xa trans is exiting", K(ret), K(req), K(*this));
   } else if (NULL == tx_desc_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected tx desc", K(ret), K(req), K(*this));
-  } else if (OB_FAIL(check_for_execution_(xid, false))) {
-    // include branch fail
-    TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
   } else {
     if (OB_FAIL(update_xa_branch_info_(xid,
                                        ObXATransState::IDLE,
@@ -1664,9 +1668,16 @@ int ObXACtx::xa_end(const ObXATransID &xid,
   } else if (tx_desc_ != tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected tx desc", K(ret), K(xid), K(*this));
-  } else if (OB_FAIL(check_for_execution_(xid, false))) {
-    // include branch fail
-    TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
+  } else if (is_terminated_) {
+    ret = OB_TRANS_XA_BRANCH_FAIL;
+    TRANS_LOG(INFO, "xa trans is terminating", K(ret), K(xid));
+  } else if (is_exiting_) {
+    if (is_tightly_coupled_) {
+      ret = OB_TRANS_XA_BRANCH_FAIL;
+    } else {
+      ret = OB_TRANS_IS_EXITING;
+    }
+    TRANS_LOG(INFO, "xa trans is exiting", K(ret), K(xid));
   } else {
     if (is_executing_ && xid.all_equal_to(executing_xid_)) {
       TRANS_LOG(ERROR, "unexpected local lock", K(xid), K(*this));
@@ -2172,17 +2183,11 @@ int ObXACtx::xa_end_tight_local_(const ObXATransID &xid,
   int ret = OB_SUCCESS;
   const int64_t fake_timeout = 60;
 
-  if (OB_FAIL(check_for_execution_(xid, false))) {
-    if (OB_TRANS_XA_BRANCH_FAIL == ret) {
-      TRANS_LOG(WARN, "xa trans has terminated", K(ret), K(xid), K(*this));
-    } else {
-      TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
-    }
-  } else if (OB_FAIL(update_xa_branch_info_(xid,
-                                            ObXATransState::IDLE,
-                                            GCTX.self_addr(),
-                                            fake_timeout,
-                                            flags))) {
+  if (OB_FAIL(update_xa_branch_info_(xid,
+                                     ObXATransState::IDLE,
+                                     GCTX.self_addr(),
+                                     fake_timeout,
+                                     flags))) {
     TRANS_LOG(WARN, "update xa branch info failed", K(ret), K(xid), K(*this));
   } else if (OB_FAIL(register_xa_timeout_task_())) {
     TRANS_LOG(WARN, "register xa timeout task failed", K(ret), K(xid), K(*this));
@@ -2702,6 +2707,7 @@ int ObXACtx::check_for_execution_(const ObXATransID &xid, const bool is_new_bran
       }
     } else {
       //join, xa end, lock...
+      // xa end no longer rollback
       if (ObXATransState::PREPARING == xa_trans_state_) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = xa_rollback_terminate_(ObTxAbortCause::IMPLICIT_ROLLBACK))) {
