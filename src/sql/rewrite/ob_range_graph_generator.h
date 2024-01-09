@@ -145,6 +145,7 @@ private:
   {
     return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx;
   }
+  int relink_standard_range_if_needed(ObRangeNode *&range_node);
 private:
   ObRangeGraphGenerator();
 private:

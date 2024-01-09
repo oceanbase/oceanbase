@@ -76,6 +76,8 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       }
     } else if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, final_range_node))) {
       LOG_WARN("failed to and range nodes");
+    } else if (is_standard_range(final_range_node) && OB_FAIL(relink_standard_range_if_needed(final_range_node))) {
+      LOG_WARN("failed to relink standard range if needed");
     } else if (OB_FAIL(formalize_final_range_node(final_range_node))) {
       LOG_WARN("failed to formalize final range node");
     } else if (OB_FAIL(check_graph_type(final_range_node))) {
@@ -1193,6 +1195,40 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       LOG_WARN("failed to assign in params");
     } else {
       pre_range_graph_->set_contain_exec_param(cnt_exec_param);
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::relink_standard_range_if_needed(ObRangeNode *&range_node)
+{
+  int ret = OB_SUCCESS;
+  bool need_relink = false;
+  int64_t last_off = -1;
+  for (const ObRangeNode *cur_node = range_node; !need_relink && cur_node != nullptr; cur_node = cur_node->and_next_) {
+    if (cur_node->min_offset_ < last_off) {
+      need_relink = true;
+    } else {
+      last_off = cur_node->min_offset_;
+    }
+  }
+  if (OB_UNLIKELY(need_relink)) {
+    ObSEArray<ObRangeNode*, 4> range_nodes;
+    ObRangeNode *cur_node = range_node;
+    while (cur_node != nullptr) {
+      if (OB_FAIL(range_nodes.push_back(cur_node))) {
+        LOG_WARN("failed to push back range node");
+      } else {
+        ObRangeNode *last_node = cur_node;
+        cur_node = cur_node->and_next_;
+        last_node->and_next_ = nullptr;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      range_node = nullptr;
+      if (OB_FAIL(and_range_nodes(range_nodes, ctx_.column_cnt_, range_node))) {
+        LOG_WARN("failed to and range nodes");
+      }
     }
   }
   return ret;
