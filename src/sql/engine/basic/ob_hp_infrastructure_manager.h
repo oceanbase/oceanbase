@@ -121,9 +121,9 @@ class ObHashPartInfrastructureMgr
 public:
   static const int64_t MIN_BUCKET_COUNT = 1L << 1;  //2;
   static const int64_t MAX_BUCKET_COUNT = 1L << 19; //524288;
-  ObHashPartInfrastructureMgr()
-    : arena_alloc_("HPInfrasGroup"), inited_(false),
-      tenant_id_(UINT64_MAX), enable_sql_dumped_(false), est_rows_(0), width_(0),
+  ObHashPartInfrastructureMgr(const uint64_t tenant_id)
+    : arena_alloc_("HPInfrasGroup", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id), inited_(false),
+      tenant_id_(tenant_id), enable_sql_dumped_(false), est_rows_(0), width_(0),
       unique_(false), ways_(1), eval_ctx_(nullptr), sql_mem_processor_(nullptr),
       io_event_observer_(nullptr), hp_infras_group_(arena_alloc_)
   {

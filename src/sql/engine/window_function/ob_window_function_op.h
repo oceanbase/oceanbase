@@ -798,7 +798,7 @@ public:
       mem_context_(NULL),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_),
-      hp_infras_mgr_(),
+      hp_infras_mgr_(exec_ctx.get_my_session()->get_effective_tenant_id()),
       distinct_aggr_count_(0),
       global_mem_limit_version_(0),
       amm_periodic_cnt_(0)

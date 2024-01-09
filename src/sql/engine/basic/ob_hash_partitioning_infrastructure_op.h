@@ -254,7 +254,8 @@ public:
     items_(nullptr), distinct_map_(), hash_col_buffer_(nullptr),
     hash_col_buffer_idx_(MAX_HASH_COL_CNT), is_push_down_(false),
     store_row_buffer_(nullptr), store_row_buffer_cnt_(0),
-    need_rewind_(false), is_inited_pre_part_(false), has_dump_preprocess_part_(false)
+    need_rewind_(false), is_inited_pre_part_(false), has_dump_preprocess_part_(false),
+    is_destroyed_(false)
   {}
   ~ObHashPartInfrastructure();
 public:
@@ -737,6 +738,7 @@ public:
     }
     return slice_cnt;
   }
+  bool is_destroyed() const { return is_destroyed_; }
   TO_STRING_KV(K_(tenant_id),
                K_(preprocess_part),
                K_(enable_sql_dumped),
@@ -824,6 +826,7 @@ private:
   bool need_rewind_;
   bool is_inited_pre_part_;
   bool has_dump_preprocess_part_;
+  bool is_destroyed_;
   HpGroupAggrFunc total_mem_used_func_;
   HpGroupAggrFunc slice_cnt_func_;
 };
@@ -1029,6 +1032,7 @@ void ObHashPartInfrastructure<HashCol, HashRowStore>::destroy()
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = NULL;
   }
+  is_destroyed_ = true;
 }
 
 template<typename HashCol, typename HashRowStore>

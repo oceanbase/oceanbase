@@ -45,7 +45,7 @@ public:
     : ObGroupByOp(exec_ctx, spec, input), started_(false), dir_id_(-1),
       profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_),
-      hp_infras_mgr_()
+      hp_infras_mgr_(exec_ctx.get_my_session()->get_effective_tenant_id())
   {
   }
 
