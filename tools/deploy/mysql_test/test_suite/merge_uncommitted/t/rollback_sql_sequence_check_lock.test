@@ -1,4 +1,4 @@
-# owner: lixia.yq
+# owner: gengli.wzy
 # owner group: transaction
 # description: 本case是为了测试在含未提交事务的状态下，with savepoint
 --disable_query_log
