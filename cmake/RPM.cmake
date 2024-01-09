@@ -127,6 +127,7 @@ install(
   DESTINATION admin
   COMPONENT server)
 
+if (OB_BUILD_OPENSOURCE)
 install(FILES
   tools/rpm/systemd/profile/oceanbase.cnf
   tools/rpm/systemd/profile/oceanbase-pre.json
@@ -138,6 +139,7 @@ install(FILES
   tools/rpm/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
+endif()
 
 ## oceanbase-cdc
 if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
