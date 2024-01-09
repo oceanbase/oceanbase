@@ -2768,7 +2768,14 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
         LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
       } else {
         ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
-        if (INT64_MAX == sstable->get_upper_trans_version()) {
+        if (INT64_MAX != sstable->get_upper_trans_version()) {
+        } else if (0 == sstable->get_data_macro_block_count() && INT64_MAX == sstable->get_max_merged_trans_version()) {
+          if (OB_FAIL(sstable->set_upper_trans_version(0, true/*force_update*/))) {
+            LOG_WARN("failed to force set upper trans version", K(ret), KPC(sstable));
+          } else {
+            FLOG_INFO("sstable has no data but max merged version is INT64_MAX, force set upper trans version", K(ret), KPC(sstable));
+          }
+        } else {
           int64_t max_trans_version = INT64_MAX;
           SCN tmp_scn = SCN::max_scn();
           if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(sstable->get_end_scn(), tmp_scn))) {
@@ -2782,7 +2789,7 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
               FLOG_INFO("get max_trans_version = 0, maybe all the trans have been rollbacked", K(ret), K(ls_id), K(tablet_id),
                   K(max_trans_version), KPC(sstable));
             }
-            if (OB_FAIL(sstable->set_upper_trans_version(max_trans_version))) {
+            if (OB_FAIL(sstable->set_upper_trans_version(max_trans_version, false/*force_update*/))) {
               LOG_WARN("failed to set_upper_trans_version", K(ret), KPC(sstable));
             } else {
               is_updated = true;
