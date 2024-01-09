@@ -197,7 +197,8 @@ struct ObCostTableScanInfo
      join_filter_sel_(1.0),
      ss_prefix_ndv_(1.0),
      ss_postfix_range_filters_sel_(1.0),
-     batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE)
+     batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
+     at_most_one_range_(false)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -250,6 +251,7 @@ struct ObCostTableScanInfo
   double ss_postfix_range_filters_sel_;
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
+  bool at_most_one_range_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };

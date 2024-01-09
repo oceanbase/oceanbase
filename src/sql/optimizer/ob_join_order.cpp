@@ -74,6 +74,7 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
   const ObQueryRangeArray &ss_ranges = range_info.get_ss_ranges();
   est_cost_info.ranges_.reset();
   est_cost_info.ss_ranges_.reset();
+  est_cost_info.at_most_one_range_ = false;
   // maintain query range info
   for(int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
     if (OB_ISNULL(ranges.at(i))) {
@@ -90,6 +91,37 @@ int ObJoinOrder::fill_query_range_info(const QueryRangeInfo &range_info,
     } else if (OB_FAIL(est_cost_info.ss_ranges_.push_back(*ss_ranges.at(i)))) {
       LOG_WARN("failed to add range", K(ret));
     } else { /*do nothing*/ }
+  }
+
+  if (OB_SUCC(ret) && ranges.count() > 1) {
+    // if there is more than one range and it is exists exec params in ranges_exprs, check at most one range.
+    // for (min; max) range extract from range_exprs contain exec params, do nothing now.
+    ObSEArray<ObRawExpr*, 4> cur_const_exprs;
+    ObSEArray<ObRawExpr*, 16> columns;
+    bool has_exec_param = false;
+    if (OB_ISNULL(range_info.get_query_range_provider())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL", K(ret), K(range_info.get_query_range_provider()));
+    } else if (OB_FAIL(check_has_exec_param(*range_info.get_query_range_provider(), has_exec_param))) {
+      LOG_WARN("failed to check has exec param", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(range_info.get_query_range_provider()->get_range_exprs(),
+                                                            columns))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else if (columns.empty() || !has_exec_param) {
+      /* do nothing */
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(range_info.get_query_range_provider()->get_range_exprs(),
+                                                            cur_const_exprs))) {
+      // for inner path, const expr is computed without pushdown filter.
+      // need compute const expr by range_exprs.
+      LOG_WARN("failed to compute const exprs", K(ret));
+    } else {
+      bool at_most_one_range = true;
+      for (int64_t i = 0; at_most_one_range && i < columns.count(); ++i) {
+        at_most_one_range = ObOptimizerUtil::find_equal_expr(cur_const_exprs, columns.at(i),
+                                                             get_output_equal_sets());
+      }
+      est_cost_info.at_most_one_range_ = at_most_one_range;
+    }
   }
   return ret;
 }
@@ -1002,7 +1034,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::check_has_exec_param(ObQueryRangeProvider &query_range,
+int ObJoinOrder::check_has_exec_param(const ObQueryRangeProvider &query_range,
                                       bool &has_exec_param)
 {
   int ret = OB_SUCCESS;
