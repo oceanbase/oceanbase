@@ -4111,6 +4111,8 @@ int ObDDLOperator::update_single_column_group(common::ObMySQLTransaction &trans,
     RS_LOG(WARN, "fail check whether each cg exist", K(ret));
   } else if (!is_each_cg_exist) {
     /* if each cg not exist skip*/
+  } else if (column_schema.is_virtual_generated_column()) {
+    /* skip virtual generated_column*/
   } else if (OB_FAIL(origin_column_schema.get_each_column_group_name(cg_name_str))) {
     RS_LOG(WARN, "fail to get each column group name", K(ret));
   } else if (OB_FAIL(origin_table_schema.get_column_group_by_name(cg_name_str, ori_cg))) {
