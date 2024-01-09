@@ -1233,7 +1233,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
 
   if (OB_SUCC(ret)
       && ObTimeUtility::fast_current_time() - ATOMIC_LOAD(&last_readable_sync_succ_time_)
-             <= 30 * 60 * 1000 * 1000) {
+             <= 30 * 1000 * 1000) {
     ret = OB_LOG_TOO_LARGE;
     DUP_TABLE_LOG(DEBUG,
                   "Too many readable tablets log entry. Stop serializing readable tablet log",
