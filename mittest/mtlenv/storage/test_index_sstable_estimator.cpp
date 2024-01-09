@@ -81,6 +81,8 @@ void TestIndexSSTableEstimator::SetUp()
 void TestIndexSSTableEstimator::TearDown()
 {
   destroy_query_param();
+  tablet_handle_.get_obj()->ddl_kv_count_ = 0;
+  tablet_handle_.get_obj()->ddl_kvs_ = nullptr;
   tablet_handle_.reset();
   TestIndexBlockDataPrepare::TearDown();
 }

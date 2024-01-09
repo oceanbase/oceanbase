@@ -1192,23 +1192,15 @@ int ObDDLMergeBlockRowIterator::get_readable_ddl_kvs(const ObIndexBlockIterParam
   } else {
     ObTablet *cur_tablet = const_cast<ObTablet *>(iter_param.tablet_);
     const uint16_t sstable_cg_idx = iter_param.sstable_->get_key().get_column_group_id();
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
-    ObArray<ObDDLKVHandle> ddl_kvs_handle;
+    ObArray<ObDDLKV *> ddl_kvs;
     if (OB_ISNULL(cur_tablet)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet is null", K(ret), KP(cur_tablet));
-    } else if (OB_FAIL(cur_tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("ddl kv mgr not exist", K(ret), K(iter_param), KPC(cur_tablet));
-      } else {
-        LOG_WARN("get ddl kv mgr failed", K(ret), K(iter_param), KPC(cur_tablet));
-      }
-    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*not frozen_only*/, ddl_kvs_handle))) {
-      LOG_WARN("get freezed ddl kv failed", K(ret), K(ddl_kv_mgr_handle));
+    } else if (OB_FAIL(cur_tablet->get_ddl_kvs(ddl_kvs))) {
+      LOG_WARN("failed to get ddl kvs array from tablet", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs_handle.count(); ++i) {
-        ObDDLKV *ddl_kv = ddl_kvs_handle.at(i).get_obj();
+      for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
+        ObDDLKV *ddl_kv = ddl_kvs.at(i);
         bool skip = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < ddl_kv->get_ddl_memtables().count(); ++j) {
           ObDDLMemtable *cur_ddl_memtable = ddl_kv->get_ddl_memtables().at(j);

@@ -112,6 +112,7 @@ protected:
   ObSSTable sstable_;
   storage::ObDDLMemtable ddl_kv_;
   storage::ObDDLKVHandle ddl_kvs_;
+  ObDDLKV *ddl_kv_ptr_;
   ObSSTableIndexBuilder *root_index_builder_;
   ObSSTableIndexBuilder *merge_root_index_builder_;
   ObMicroBlockData root_block_data_buf_;
@@ -319,6 +320,7 @@ void TestIndexBlockDataPrepare::TearDown()
   partial_sstable_.reset();
   ddl_kv_.reset();
   ddl_kvs_.reset();
+  ddl_kv_ptr_ = nullptr;
   cg_read_info_handle_.reset();
   if (nullptr != root_block_data_buf_.buf_) {
     allocator_.free((void *)root_block_data_buf_.buf_);
@@ -1181,6 +1183,9 @@ void TestIndexBlockDataPrepare::prepare_merge_ddl_kvs()
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true /*CREATE*/));
   ddl_kv_mgr_handle.get_obj()->set_ddl_kv(0, ddl_kvs_);
   ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(ddl_start_scn, sstable_.get_data_version(), 4000, ddl_start_scn);
+  ddl_kv_ptr_ = ddl_kvs_.get_obj();
+  tablet_handle.get_obj()->ddl_kvs_ = &ddl_kv_ptr_;
+  tablet_handle.get_obj()->ddl_kv_count_ = 1;
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
     ObDatumRange query_range;
     query_range.set_whole_range();
