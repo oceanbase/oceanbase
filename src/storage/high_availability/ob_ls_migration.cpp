@@ -37,6 +37,7 @@ using namespace share;
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_DATA_TABLETS_MIGRATION_TASK_FATAL_FAILURE);
 ERRSIM_POINT_DEF(EN_BUILD_SYS_TABLETS_DAG_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_LS_MIGRATION_STATUS_FAILED);
 ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
@@ -1172,18 +1173,6 @@ int ObStartMigrationTask::choose_src_()
           }
         }
       }
-#if ERRSIM
-      const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
-      if (!errsim_server.empty() && !ctx_->arg_.ls_id_.is_sys_ls() && ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP) {
-        SERVER_EVENT_ADD("storage_ha", "after_choose_src",
-                         "tenant_id", ctx_->tenant_id_,
-                         "ls_id", ctx_->arg_.ls_id_.id(),
-                         "local_rebuild_seq", ctx_->local_rebuild_seq_,
-                         "transfer_scn", ctx_->src_ls_meta_package_.ls_meta_.get_transfer_scn());
-        DEBUG_SYNC(ALTER_LS_CHOOSE_SRC);
-      }
-#endif
-
       FLOG_INFO("succeed choose src",  K(src_info),
           K(ls_info), K(ctx_->sys_tablet_id_array_), K(ctx_->data_tablet_id_array_));
     }
@@ -1475,6 +1464,17 @@ int ObStartMigrationTask::build_ls_()
       }
     }
   }
+#if ERRSIM
+  const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
+  if (!errsim_server.empty() && !ctx_->arg_.ls_id_.is_sys_ls() && ctx_->arg_.type_ != ObMigrationOpType::REBUILD_LS_OP) {
+    SERVER_EVENT_ADD("storage_ha", "after_choose_src",
+                      "tenant_id", ctx_->tenant_id_,
+                      "ls_id", ctx_->arg_.ls_id_.id(),
+                      "local_rebuild_seq", ctx_->local_rebuild_seq_,
+                      "transfer_scn", ctx_->src_ls_meta_package_.ls_meta_.get_transfer_scn());
+    DEBUG_SYNC(ALTER_LS_CHOOSE_SRC);
+  }
+#endif
   return ret;
 }
 
@@ -3289,6 +3289,12 @@ int ObDataTabletsMigrationTask::process()
         if (OB_FAIL(ret)) {
           STORAGE_LOG(ERROR, "fake EN_DATA_TABLETS_MIGRATION_TASK_FAILED", K(ret));
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = EN_DATA_TABLETS_MIGRATION_TASK_FATAL_FAILURE ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_DATA_TABLETS_MIGRATION_TASK_FATAL_FAILURE", K(ret));
       }
     }
 #endif
