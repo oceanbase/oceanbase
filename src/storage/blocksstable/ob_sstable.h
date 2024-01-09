@@ -139,7 +139,9 @@ public:
       const blocksstable::ObDatumRowkey &rowkey,
       ObStoreRowLockState &lock_state);
 
-  int set_upper_trans_version(const int64_t upper_trans_version);
+  int set_upper_trans_version(
+      const int64_t upper_trans_version,
+      const bool force_update);
   virtual int64_t get_upper_trans_version() const override
   {
     return upper_trans_version_;
