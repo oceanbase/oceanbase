@@ -5456,7 +5456,7 @@ int ObPLJsonBaseType::deep_copy(ObPLOpaque *dst)
       copy->set_data(data_);
       copy->set_shallow_copy(1);
     } else {
-      ObJsonNode *json_dst = data_->clone(&copy->get_allocator());
+      ObJsonNode *json_dst = data_->clone(&copy->get_allocator(), true);
       if (OB_ISNULL(json_dst)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory for clone json node failed", K(ret));
