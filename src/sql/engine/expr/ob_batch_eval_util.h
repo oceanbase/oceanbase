@@ -422,6 +422,9 @@ inline int ObDoNumberVectorEval(VECTOR_EVAL_FUNC_ARG_DECL, const bool right_eval
         eval_flags.set(idx);
         continue;
       }
+      if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+        res_vec->unset_null(idx);
+      }
       ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
       if (OB_SUCC(ret)) { eval_flags.set(idx); }
     }
