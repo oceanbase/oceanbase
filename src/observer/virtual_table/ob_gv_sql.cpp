@@ -148,6 +148,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
   ObString stmt;
   const ObPhysicalPlan *plan = NULL;
   const pl::ObPLCacheObject *pl_object = NULL;
+  bool cache_stat_updated = false;
   if (OB_ISNULL(cache_obj) || OB_ISNULL(allocator_)) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid argument", K(cache_obj), K(ret));
@@ -155,12 +156,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     if (OB_ISNULL(plan = dynamic_cast<const ObPhysicalPlan *>(cache_obj))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected null plan", K(ret), K(plan));
+    } else {
+      cache_stat_updated = plan->stat_.is_updated();
     }
   } else if ((cache_obj->get_ns() >= ObLibCacheNameSpace::NS_PRCR && cache_obj->get_ns() <= ObLibCacheNameSpace::NS_PKG) ||
       cache_obj->get_ns() == ObLibCacheNameSpace::NS_CALLSTMT) {
     if (OB_ISNULL(pl_object = dynamic_cast<const pl::ObPLCacheObject *>(cache_obj))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "unexpected null pl object", K(ret));
+    } else {
+      cache_stat_updated = pl_object->get_stat().is_updated();
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -200,34 +205,38 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
       //sql_id
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SQL_ID: {
-      ObString sql_id;
-      if (OB_NOT_NULL(pl_object)) {
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    pl_object->get_stat().sql_id_,
-                                    sql_id))) {
+      if (cache_stat_updated) {
+        ObString sql_id;
+        if (OB_NOT_NULL(pl_object)) {
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      pl_object->get_stat().sql_id_,
+                                      sql_id))) {
+            SERVER_LOG(ERROR, "copy sql_id failed", K(ret));
+          } else {
+            cells[i].set_varchar(sql_id);
+            cells[i].set_collation_type(ObCharset::get_default_collation(
+                                          ObCharset::get_default_charset()));
+          }
+        } else if (!cache_obj->is_sql_crsr()) {
+          cells[i].set_null();
+        } else if (OB_FAIL(ob_write_string(*allocator_,
+                                           plan->stat_.sql_id_,
+                                           sql_id))) {
           SERVER_LOG(ERROR, "copy sql_id failed", K(ret));
         } else {
           cells[i].set_varchar(sql_id);
           cells[i].set_collation_type(ObCharset::get_default_collation(
                                         ObCharset::get_default_charset()));
         }
-      } else if (!cache_obj->is_sql_crsr()) {
-        cells[i].set_null();
-      } else if (OB_FAIL(ob_write_string(*allocator_,
-                                         plan->stat_.sql_id_,
-                                         sql_id))) {
-        SERVER_LOG(ERROR, "copy sql_id failed", K(ret));
       } else {
-        cells[i].set_varchar(sql_id);
-        cells[i].set_collation_type(ObCharset::get_default_collation(
-                                      ObCharset::get_default_charset()));
+        cells[i].set_null();
       }
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::TYPE: {
       if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->get_plan_type());
-      } else if (NULL != pl_object) {
+      } else if (NULL != pl_object && cache_stat_updated) {
         cells[i].set_int(pl_object->get_stat().type_);
       } else {
         cells[i].set_null();
@@ -235,7 +244,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_BIND_SENSITIVE: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.is_bind_sensitive_);
       } else {
         cells[i].set_int(0);
@@ -243,7 +254,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_BIND_AWARE: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.is_bind_aware_);
       } else {
         cells[i].set_int(0);
@@ -251,7 +264,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DB_ID: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(plan->stat_.db_id_);
       } else {
         cells[i].set_uint64(0);
@@ -262,7 +277,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       ObString statement;
       ObString src_stmt;
       ObCollationType tmp_sql_cs_type;
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         if (plan->need_param()) {
           src_stmt = plan->stat_.stmt_;
         } else {
@@ -315,7 +332,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::QUERY_SQL: {
-      if (cache_obj->is_sql_crsr() || cache_obj->is_anon()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr() || cache_obj->is_anon()) {
         ObString tmp_sql;
         ObCollationType tmp_sql_cs_type;
         if (cache_obj->is_anon()) {
@@ -348,7 +367,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SPECIAL_PARAMS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString sp_info_str;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.sp_info_str_,
@@ -365,7 +386,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PARAM_INFOS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString param_info_lob_str;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.param_infos_,
@@ -383,7 +406,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SYS_VARS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString sys_vars_str;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.sys_vars_str_,
@@ -400,7 +425,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::CONFIGS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString config_str;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.config_str_,
@@ -417,7 +444,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PLAN_HASH: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(plan->stat_.plan_hash_value_);
       } else {
         cells[i].set_uint64(0);
@@ -426,7 +455,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FIRST_LOAD_TIME: {
       int64_t gen_time = 0;
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         gen_time = plan->stat_.gen_time_;
       } else if (NULL != pl_object) {
         gen_time = pl_object->get_stat().gen_time_;
@@ -435,7 +466,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SCHEMA_VERSION: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.schema_version_);
       } else if (NULL != pl_object) {
         cells[i].set_int(pl_object->get_stat().schema_version_);
@@ -446,7 +479,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::LAST_ACTIVE_TIME: {
       int64_t last_active_time = 0;
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         last_active_time = plan->stat_.last_active_time_;
       } else if (NULL != pl_object) {
         last_active_time = pl_object->get_stat().last_active_time_;
@@ -455,7 +490,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::AVG_EXE_USEC: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         if (plan->stat_.execute_times_ != 0) {
           cells[i].set_int(plan->stat_.elapsed_time_ / plan->stat_.execute_times_);
         } else {
@@ -473,7 +510,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SLOWEST_EXE_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_timestamp(plan->stat_.slowest_exec_time_);
       } else if (NULL != pl_object) {
         cells[i].set_timestamp(pl_object->get_stat().slowest_exec_time_);
@@ -483,7 +522,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SLOWEST_EXE_USEC: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.slowest_exec_usec_);
       } else if (NULL != pl_object) {
         cells[i].set_int(pl_object->get_stat().slowest_exec_usec_);
@@ -493,7 +534,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SLOW_COUNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.slow_count_);
       } else {
         cells[i].set_int(0);
@@ -502,7 +545,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::HIT_COUNT: {
       int64_t hit_count = 0;
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         hit_count = plan->stat_.hit_count_;
       } else if (NULL != pl_object) {
         hit_count = pl_object->get_stat().hit_count_;
@@ -512,7 +557,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PLAN_SIZE: {
       int64_t mem_used = 0;
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         mem_used = plan->stat_.mem_used_;
       } else {
         mem_used = cache_obj->get_mem_size();
@@ -521,7 +568,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::EXECUTIONS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.execute_times_);
       } else if (NULL != pl_object) {
         cells[i].set_int(pl_object->get_stat().execute_times_);
@@ -531,7 +580,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DISK_READS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.disk_reads_);
       } else {
         cells[i].set_int(0);
@@ -539,7 +590,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DIRECT_WRITES: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.direct_writes_);
       } else {
         cells[i].set_int(0);
@@ -547,7 +600,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::BUFFER_GETS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.buffer_gets_);
       } else {
         cells[i].set_int(0);
@@ -555,7 +610,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::APPLICATION_WAIT_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(static_cast<uint64_t>(plan->stat_.application_wait_time_));
       } else {
         cells[i].set_uint64(0);
@@ -563,7 +620,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::CONCURRENCY_WAIT_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(static_cast<uint64_t>(plan->stat_.concurrency_wait_time_));
       } else {
         cells[i].set_uint64(0);
@@ -571,7 +630,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::USER_IO_WAIT_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(static_cast<uint64_t>(plan->stat_.user_io_wait_time_));
       } else {
         cells[i].set_uint64(0);
@@ -579,7 +640,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ROWS_PROCESSED: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.rows_processed_);
       } else {
         cells[i].set_int(0);
@@ -587,7 +650,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ELAPSED_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(static_cast<uint64_t>(plan->stat_.elapsed_time_));
       } else if (NULL != pl_object) {
         cells[i].set_uint64(static_cast<uint64_t>(pl_object->get_stat().elapsed_time_));
@@ -597,7 +662,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::CPU_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(static_cast<uint64_t>(plan->stat_.cpu_time_));
       } else {
         cells[i].set_uint64(0);
@@ -605,7 +672,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::LARGE_QUERYS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.large_querys_);
       } else {
         cells[i].set_int(0);
@@ -613,7 +682,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DELAYED_LARGE_QUERYS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.delayed_large_querys_);
       } else {
         cells[i].set_int(0);
@@ -621,7 +692,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::OUTLINE_VERSION: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.outline_version_);
       } else {
         cells[i].set_int(0);
@@ -629,7 +702,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::OUTLINE_ID: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.outline_id_);
       } else {
         cells[i].set_int(0);
@@ -637,7 +712,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::HINTS_INFO: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString hints_info;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.hints_info_,
@@ -655,7 +732,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::OUTLINE_DATA: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString outline_data;
         if (OB_FAIL(ob_write_string(*allocator_,
                                     plan->stat_.outline_data_,
@@ -673,7 +752,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ACS_SEL_INFO: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString acs_info;
         stmt.assign_ptr(plan->stat_.plan_sel_info_str_, plan->stat_.plan_sel_info_str_len_);
         if (OB_FAIL(ob_write_string(*allocator_,
@@ -708,7 +789,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::HINTS_ALL_WORKED: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_bool(plan->stat_.hints_all_worked_);
       } else {
         cells[i].set_bool(false);
@@ -716,7 +799,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::EVO_EXECUTIONS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.evolution_stat_.executions_);
       } else {
         cells[i].set_int(0);
@@ -724,7 +809,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::EVO_CPU_TIME: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(plan->stat_.evolution_stat_.cpu_time_);
       } else {
         cells[i].set_uint64(0);
@@ -732,7 +819,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::TIMEOUT_COUNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.timeout_count_);
       } else {
         cells[i].set_int(0);
@@ -740,7 +829,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::PS_STMT_ID: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.ps_stmt_id_);
       } else if (NULL != pl_object) {
         cells[i].set_int(pl_object->get_stat().ps_stmt_id_);
@@ -750,7 +841,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DELAYED_PX_QUERYS: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.delayed_px_querys_);
       } else {
         cells[i].set_int(0);
@@ -758,7 +851,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SESSID: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_uint64(plan->stat_.sessid_);
       } else {
         cells[i].set_uint64(OB_INVALID_ID);
@@ -766,7 +861,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::TEMP_TABLES: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         ObString tmp_tbls;
         stmt.assign_ptr(plan->stat_.plan_tmp_tbl_name_str_, plan->stat_.plan_tmp_tbl_name_str_len_);
         if (OB_FAIL(ob_write_string(*allocator_,
@@ -784,7 +881,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_USE_JIT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_bool(plan->stat_.is_use_jit_);
       } else {
         cells[i].set_bool(false);
@@ -829,7 +928,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ENABLE_BF_CACHE: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_bool(plan->stat_.enable_bf_cache_);
       } else {
         cells[i].set_bool(false);
@@ -837,7 +938,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::BF_FILTER_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.bf_filter_cnt_);
       } else {
         cells[i].set_int(0);
@@ -845,7 +948,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::BF_ACCESS_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.bf_access_cnt_);
       } else {
         cells[i].set_int(0);
@@ -853,7 +958,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ENABLE_ROW_CACHE: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_bool(plan->stat_.enable_fuse_row_cache_);
       } else {
         cells[i].set_bool(false);
@@ -861,7 +968,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ROW_CACHE_HIT_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.row_cache_hit_cnt_);
       } else {
         cells[i].set_int(0);
@@ -869,7 +978,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ROW_CACHE_MISS_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.row_cache_miss_cnt_);
       } else {
         cells[i].set_int(0);
@@ -877,7 +988,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ENABLE_FUSE_ROW_CACHE: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_bool(plan->stat_.enable_fuse_row_cache_);
       } else {
         cells[i].set_bool(false);
@@ -885,7 +998,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FUSE_ROW_CACHE_HIT_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.fuse_row_cache_hit_cnt_);
       } else {
         cells[i].set_int(0);
@@ -893,7 +1008,9 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::FUSE_ROW_CACHE_MISS_CNT: {
-      if (cache_obj->is_sql_crsr()) {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
         cells[i].set_int(plan->stat_.fuse_row_cache_miss_cnt_);
       } else {
         cells[i].set_int(0);
