@@ -5,12 +5,11 @@ C++ STL提供了很多很方便的容器，比如vector、map、unordered_map等
 > 本篇文档假设你对C++ STL 容器已经有了一定的理解。
 
 > pair不属于容器，因此可以使用。
+
 > 由于历史遗留原因，OceanBase中包含了一些不再建议使用但是没有删除的容器代码。
 
 # 字符串
-OceanBase 提供的字符串类是 ObString。
-
-代码参考 ob_string.h。
+OceanBase 提供的字符串类是 ObString。代码参考 ob_string.h。
 
 在介绍ObString的接口之前，先介绍一下ObSring的内存管理方式，这样会更加容易理解ObString的接口设计。
 
@@ -171,14 +170,14 @@ int assign(const ObIArray &other);
 ## ObArray
 ObArray 自己管理内存，在声明ObArray模板类时，需要指定分配器，或者使用默认分配器 `ModulePageAllocator`。由于OceanBase要求所有的动作都要判断返回值，因此ObArray的 `operator=` 等不带返回值的函数，不建议使用。
 
-ObArray的很多行为表现与vector类似，每次内存扩展时表现也类似，会扩展两倍当前数据大小，但是最多是一个 `block_size_`。一个 `block_size_` 默认值是 `OB_MALLOC_NORMAL_BLOCK_SIZE` （可以认为是8K）。
+ObArray的很多行为表现与STL vector类似，每次内存扩展时表现也类似，会扩展两倍当前数据大小，但最多 `block_size_` 大小。一个 `block_size_` 默认值是 `OB_MALLOC_NORMAL_BLOCK_SIZE` （可以认为是8K）。
 
 代码参考 ob_array.h。
 
 ## ObSEArray
-与ObArray类似，扩展时也会按照两倍大小，不超过`block_size_`
-。
-与ObArray不同的是，ObSEArray多了一个模板参数 `LOCAL_ARRAY_SIZE`，表示在数组初始化时，就可以容纳一定量的元素：
+与ObArray类似，扩展时也会按照两倍大小，不超过`block_size_`。
+
+与ObArray不同的是，ObSEArray多了一个模板参数 `LOCAL_ARRAY_SIZE`，不需要额外的内存分配即可容纳一定量的元素。因此OBSEArray可能可以直接使用栈内存而不是堆内存：
 
 ```cpp
 char local_data_buf_[LOCAL_ARRAY_SIZE * sizeof(T)];
@@ -200,6 +199,14 @@ ObVector 不属于 ObIArray的子类，其表现和接口设计与ObIArray很类
 
 ObList 是一个普通的循环双链表，代码参考`ob_list.h`。在构造时，需要传入内存分配器。常用的接口如下。
 ```cpp
+/**
+ * 声明
+ * @param T 元素类型
+ * @param Allocator 内存分配器
+ */
+template <class T, class Allocator = ObMalloc>
+class ObList;
+
 /**
  * 构造函数。必须传入内存分配器
  */
@@ -285,10 +292,58 @@ int64_t size() const;
 
 ObDList 也是一个双链表，与ObList不同的是，它的元素内存布局与内存管理方式不一样。ObList 由用户传入对象，ObList 内部申请内存复制对象，构造链表节点的前后指针。而 ObDList 由用户直接传入包含前后节点指针的对象。由于ObDList的这个特性，会导致它与使用STL list的方法不同。
 
-ObDList 不管理内存也完全不需要管理内存，它的模板参数只有一个 `DLinkNode`，是一个包含前后节点指针的对象与一些节点操作通用函数，ObDList 的声明如下：
+ObDList 不管理内存也完全不需要管理内存，它的模板参数没有内存分配器，只有一个 `DLinkNode`，`DLinkNode` 需要包含你需要的元素对象、前后节点指针和并实现一些通用的操作（有辅助实现基类），ObDList 的声明和一些接口如下：
 ```cpp
 template <typename DLinkNode>
-class ObDList
+class ObDList;
+
+/// 把当前链表上的元素都移动到list上去
+int move(ObDList &list);
+
+/// 获取头节点（不是第一个元素）
+DLinkNode *get_header();
+const DLinkNode *get_header() const;
+
+/// 获取最后一个元素
+DLinkNode *get_last();
+
+/// 获取第一个元素
+const DLinkNode *get_first() const;
+const DLinkNode *get_first_const() const;
+
+/// 在尾巴上添加一个节点
+bool add_last(DLinkNode *e);
+
+/// 在头上添加一个节点
+bool add_first(DLinkNode *e);
+
+/// 在指定位置添加节点
+bool add_before(const DLinkNode *pos, DLinkNode *e);
+
+/// 指定节点移动到最前面
+bool move_to_first(DLinkNode *e);
+/// 指定节点移动到最后
+bool move_to_last(DLinkNode *e);
+
+/// 删除最后一个节点
+DLinkNode *remove_last();
+/// 删除最前面一个节点
+DLinkNode *remove_first();
+
+/// 在链表开头插入另一个链表
+void push_range(ObDList<DLinkNode> &range);
+
+/// 从开头删除指定个数的元素，删除的元素放到了range中
+void pop_range(int32_t num, ObDList<DLinkNode> &range);
+
+/// 是否空链表
+bool is_empty() const
+/// 元素个数
+int32_t get_size() const
+/// 删除指定元素
+DLinkNode *remove(DLinkNode *e);
+/// 清空链表
+void clear();
 ```
 
 OceanBase 提供了辅助 `DLinkNode` 实现 `ObDLinkNode` 和 `ObDLinkDerived`，只需要使用任一复制类即可轻松地使用 ObDList。
@@ -334,7 +389,7 @@ ObDLinkDerived<MyObj> *nodep = alist.get_first();
 // do something with myobj or directly with nodep
 ```
 
-上面已经有了ObDList的简单用法示例，继续看 ObDList。由于 ObDList 不管理节点内存，那么使用时就需要特别小心，注意管理好各个元素的生命周期，在执行清理动作之前，比如`clear`、`reset`，一定要把内存先释放掉。ObDList的接口声明非常清晰，只是与STL::list命名习惯不同，可以直接参考代码 `ob_dlist.h` 的接口声明使用即可，不再罗列。
+由于 ObDList 不管理节点内存，那么使用时就需要特别小心，注意管理好各个元素的生命周期，在执行清理动作之前，比如`clear`、`reset`，一定要把内存先释放掉。ObDList的接口声明非常清晰，只是与STL::list命名习惯不同，可以直接参考代码 `ob_dlist.h` 的接口声明使用即可，不再罗列。
 
 # Map
 Map 是一个常用的数据结构，它的插入和查询的效率都非常高。通常情况下，Map有两种实现方法，一种是平衡查找树，典型的是红黑树，常见的编译器使用这种方式实现，一种是散列表，STL中是unordered_map。
@@ -350,11 +405,11 @@ ObHashMap 的实现在 ob_hashmap.h 中，为了方便理解 ObHashMap 的实现
 在STL中，unordered_map的声明如下：
 ```cpp
 template<
-    class Key,
-    class T,
-    class Hash = std::hash<Key>,
-    class KeyEqual = std::equal_to<Key>,
-    class Allocator = std::allocator<std::pair<const Key, T>>
+    class Key,  /// 键类型
+    class T,    /// 值类型
+    class Hash = std::hash<Key>,          /// 根据Key计算hash值
+    class KeyEqual = std::equal_to<Key>,  /// 判断Key是否相等
+    class Allocator = std::allocator<std::pair<const Key, T>> /// 内存分配器
 > class unordered_map;
 ```
 
@@ -377,7 +432,7 @@ class ObHashMap;
 
 其中 `_key_type`、`_value_type`、`_hashfunc`、`_equal`，与STL::unordered_map的声明参数含义是一样的。这里多了一些参数：
 
-- `_defendmode`: OceanBase 提供了有限条件的线程安全hashmap实现，当前先忽略，你可以直接使用默认值，稍后会介绍；
+- `_defendmode`: OceanBase 提供了有限条件的线程安全hashmap实现，可以使用默认值，当前先忽略，稍后会介绍；
 - `_allocer`与`_bucket_allocer`：STL::unordered_map只需要一个分配器，而这里要求提供两个分配器。hashmap中，通常会有一个数组作为桶(bucket)数组，元素进行hash后，找到对应桶，然后将元素”挂载“在对应的桶上。`_bucket_allocer` 就是桶数组的分配器，而`_allocer` 是元素的分配器，也就是建值对的分配器；
 - EXTEND_RATIO：如果EXTEND_RATIO是1，就不会进行扩展。
 
@@ -394,8 +449,7 @@ class ObHashMap;
 int create(int64_t bucket_num, 
            const ObMemAttr &bucket_attr,
            const ObMemAttr &node_attr);
-int create(int64_t bucket_num,
-             const ObMemAttr &bucket_attr);
+int create(int64_t bucket_num, const ObMemAttr &bucket_attr);
 int create(int64_t bucket_num, 
            const lib::ObLabel &bucket_label,
            const lib::ObLabel &node_label = ObModIds::OB_HASH_NODE, 
@@ -417,8 +471,8 @@ int clear();
 int reuse();
 
 /**
- * 获取执行键值的元素值
- * 虽然也提供了get，但是建议使用当前函数。
+ * 获取指定键值的元素值
+ * 虽然也提供了get函数，但是建议使用当前函数。
  * @param timeout_us：获取元素的超时时间。超时的实现原理后面会介绍
  * @return 找到了返回成功
  */
@@ -435,15 +489,17 @@ int get_refactored(const _key_type &key, _value_type &value, const int64_t timeo
  */
 template <typename _callback = void>
 int set_refactored(const _key_type &key, 
-                   const _value_type &value, int flag = 0,
+                   const _value_type &value,
+                   int flag = 0,
                    int broadcast = 0, 
                    int overwrite_key = 0, 
                    _callback *callback = nullptr);
                  
 /**
  * 遍历所有元素
- * @note 1. 不能在遍历的过程中做删除元素、插入等动作。
- *          因为遍历的过程中会加一些锁，而插入、删除等动作也会加锁，所以可能会产生锁冲突；
+ * @note
+ * 1. 不能在遍历的过程中做删除元素、插入等动作。
+ *    因为遍历的过程中会加一些锁，而插入、删除等动作也会加锁，所以可能会产生锁冲突；
  * 2. callback 动作尽量小，因为它是在锁范围内工作的
  */
 template<class _callback>
@@ -460,7 +516,7 @@ int erase_refactored(const _key_type &key, _value_type *value = NULL);
  */
 template <class _callback>
 int set_or_update(const _key_type &key, const _value_type &value,
-                    _callback &callback);
+                  _callback &callback);
 
 /**
  * 删除指定键值并满足特定条件的元素
@@ -490,9 +546,9 @@ ObHashMap 底层依赖 ObHashTable，代码参考 `ob_hashtable.h`，ObHashMap �
 
 **有条件的线程安全**
 
-如果模板参数`_defendmode` 选择有效的锁模式，而ObHashTable 的每个桶都有一个读写锁，那么ObHashTable就会提供有条件的线程安全。在访问桶上的元素时，都会加对应的锁，包括带有 `callback` 的接口也是，所以`callback`中的动作应该尽量轻量而且不应该再访问ObHashTable的其它元素防止死锁。
+如果模板参数`_defendmode` 选择有效的锁模式，而 ObHashTable 的每个桶都有一个读写锁，那么ObHashTable就会提供有条件的线程安全。在访问桶上的元素时，都会加对应的锁，包括带有 `callback` 的接口也是，所以`callback`中的动作应该尽量轻量而且不应该再访问ObHashTable的其它元素防止死锁。
 
-但是 ObHashMap 在扩容时不是线程安全的。如果提供的模板参数 EXTEND_RATIO 不是1，在需要的时候就会扩容。
+ObHashMap 在扩容时不是线程安全的。如果提供的模板参数 EXTEND_RATIO 不是1，在需要的时候就会扩容，并且这对用户是透明的。
 
 ObHashMap `_defendmode` 的默认值就是一个有效的线程安全保护模式 `LatchReadWriteDefendMode`。
 
@@ -517,18 +573,18 @@ _defendmode 定义了不同的桶加锁方式，在 `ob_hashutils.h` 中提供�
 与 ObHashMap类似，ObHashSet是基于ObHashTable封装了一个只有key没有value的实现，请参考代码ob_hashset.h，不再赘述。
 
 ## ObLinkHashMap
-ObLinkHashMap 是一个读写性能兼顾、线程安全（包括扩容）的无锁hash map，使用拉链式解决hash 冲突。
+ObLinkHashMap 是一个读写性能兼顾、线程安全（包括扩容）的无锁hash map，使用拉链式方法解决 hash 冲突。
 下面列举一下这个类的特点：
 
 - 读写性能兼顾；
 - 基于无锁方案实现线程安全；
-- 引入retire station，节点会延迟释放，因此建议 Key 不宜过大；
+- 引入retire station，节点会延迟释放，因此建议 Key 尽量小；
 - 存在一定的内存浪费；
 - 扩缩容时采用批量搬迁方式完成；
 - 有热点key时，get性能由于引用计数问题不佳；
 - bucket 过多扩容时，初始化Array较慢。
 
-> 关于 retire station，请参考论文 [Reclaiming Memory for Lock-Free Data Structures:There has to be a Better Way](https://www.cs.utoronto.ca/%7Etabrown/debra/fullpaper.pdf)
+> 关于 retire station，请参考论文 [Reclaiming Memory for Lock-Free Data Structures:There has to be a Better Way](https://www.cs.utoronto.ca/%7Etabrown/debra/fullpaper.pdf)。
 
 下面列一些常用的接口以及使用时的注意事项。
 
@@ -537,13 +593,17 @@ ObLinkHashMap 是一个读写性能兼顾、线程安全（包括扩容）的无
  * ObLinkHashMap的声明
  * 模板参数：
  * @param Key 键值类型
- * @param Value 值的类型，比如继承自 LinkHashValue（参考 ob_link_hashmap_deps.h）
+ * @param Value 值的类型，需要继承自 LinkHashValue（参考 ob_link_hashmap_deps.h）
  * @param AllocHandle 分配释放值和节点的类 （参考 ob_link_hashmap_deps.h）
  * @param RefHandle 引用计数的函数。如果你没有深入理解它的原理，不要修改
- * @param SHRINK_THRESHOLD 当前节点的个数太多或者太少时就会扩缩容，尽量让当前节点保持在比例[1/SHRINK_THRESHOLD, 1]之间（不精准）
+ * @param SHRINK_THRESHOLD 当前节点的个数太多或者太少时就会扩缩容，尽量让当前节点保持在
+ *        比例[1/SHRINK_THRESHOLD, 1]之间（非精准控制）
  */
-template<typename Key, typename Value, typename AllocHandle=AllocHandle<Key, Value>, typename RefHandle=RefHandle, int64_t SHRINK_THRESHOLD
-= 8>
+template<typename Key,
+         typename Value,
+         typename AllocHandle=AllocHandle<Key, Value>,
+         typename RefHandle=RefHandle,
+         int64_t SHRINK_THRESHOLD = 8>
 class ObLinkHashMap;
 
 
@@ -552,7 +612,7 @@ int64_t size() const;
 
 /**
  * 插入一个元素
- * @note 如果返回成功，需要执行 revert
+ * @note 如果返回成功，需要执行 hash.revert(value)
  */
 int insert_and_get(const Key &key, Value* value);
 
@@ -576,7 +636,7 @@ int contains_key(const Key &key);
 
 /**
  * 遍历所有元素
- * @param fn bool fn(Key &key, Value *value); 其中bool返回值表示是否还要继续遍历
+ * @param fn : bool fn(Key &key, Value *value); 其中bool返回值表示是否还要继续遍历
  */
 template <typename Function> int for_each(Function &fn);
 
