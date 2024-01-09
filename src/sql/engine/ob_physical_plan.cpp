@@ -135,6 +135,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     is_enable_px_fast_reclaim_(false),
     use_rich_format_(false),
     subschema_ctx_(allocator_),
+    disable_auto_memory_mgr_(false),
     all_local_session_vars_(&allocator_)
 {
 }
@@ -261,6 +262,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
   //copy plan_id/hint/privs
   object_id_ = src.object_id_;
   min_cluster_version_ = src.min_cluster_version_;
+  disable_auto_memory_mgr_ = src.disable_auto_memory_mgr_;
   if (OB_FAIL(set_phy_plan_hint(src.get_phy_plan_hint()))) {
     LOG_WARN("Failed to copy query hint", K(ret));
   } else if (OB_FAIL(set_stmt_need_privs(src.get_stmt_need_privs()))) {
@@ -789,7 +791,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     gtt_session_scope_ids_,
                     gtt_trans_scope_ids_,
                     use_rich_format_,
-                    subschema_ctx_);
+                    subschema_ctx_,
+                    disable_auto_memory_mgr_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

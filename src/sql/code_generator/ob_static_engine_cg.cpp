@@ -835,6 +835,22 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
   if (OB_SUCC(ret) && need_check_output_datum) {
     OZ(add_output_datum_check_flag(spec));
   }
+  if (OB_SUCC(ret)) {
+    CK (OB_NOT_NULL(op.get_plan())
+        && OB_NOT_NULL(op.get_plan()->get_stmt())
+        && OB_NOT_NULL(op.get_plan()->get_stmt()->get_query_ctx()));
+    CK (OB_NOT_NULL(phy_plan_));
+    if (OB_SUCC(ret)) {
+      ObObj val;
+      ObLogPlan *log_plan = op.get_plan();
+      const ObOptParamHint *opt_params = &log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
+      if (OB_FAIL(opt_params->get_opt_param(ObOptParamHint::WORKAREA_SIZE_POLICY, val))) {
+        LOG_WARN("fail to check rowsets enabled", K(ret));
+      } else if (val.is_varchar() && 0 == val.get_varchar().case_compare("MANULE")) {
+        phy_plan_->disable_auto_memory_mgr();
+      }
+    }
+  }
   return ret;
 }
 

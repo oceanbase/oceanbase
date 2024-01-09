@@ -43,7 +43,7 @@ public:
     session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
-    calc_count_(0)
+    calc_count_(0), disable_auto_mem_mgr_(false)
   {
     sql_id_[0] = '\0';
     ObRandom rand;
@@ -111,7 +111,7 @@ public:
   OB_INLINE bool is_hash_join_wa() const { return ObSqlWorkAreaType::HASH_WORK_AREA == type_; }
   OB_INLINE bool is_sort_wa() const { return ObSqlWorkAreaType::SORT_WORK_AREA == type_; }
   OB_INLINE ObSqlWorkAreaType get_work_area_type() const { return type_; }
-  OB_INLINE bool get_auto_policy() const { return OB_INVALID_ID != expect_size_; }
+  OB_INLINE bool get_auto_policy() const { return !disable_auto_mem_mgr_ && OB_INVALID_ID != expect_size_; }
 
   OB_INLINE void set_active_time(int64_t active_time) { active_time_ = active_time; }
   OB_INLINE int64_t get_active_time() const { return active_time_; }
@@ -199,6 +199,7 @@ public:
   int64_t active_time_;   // init: start_time, unregister:
   int64_t number_pass_;
   int64_t calc_count_;    // the times of calculate global bound
+  bool disable_auto_mem_mgr_;
 };
 
 static constexpr const char *EXECUTION_OPTIMAL = "OPTIMAL";
