@@ -422,8 +422,9 @@ public:
       ObTablet &tablet,
       const share::SCN &start_scn,
       const share::SCN &commit_scn,
-      const uint64_t table_id = 0,
-      const int64_t ddl_task_id = 0); // schedule build a major sstable
+      const uint64_t table_id,
+      const int64_t ddl_task_id,
+      const bool is_replay); // schedule build a major sstable
 
   void set_commit_scn_nolock(const share::SCN &scn);
   int set_commit_scn(const share::SCN &scn);
@@ -441,7 +442,7 @@ public:
   INHERIT_TO_STRING_KV("ObTabletDirectLoadMgr", ObTabletDirectLoadMgr, K_(start_scn), K_(commit_scn), K_(execution_id));
 private:
   bool is_started() { return start_scn_.is_valid_and_not_min(); }
-  int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated); // try wait build major sstable
+  int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated, const bool is_replay); // try wait build major sstable
   int cleanup_unlock();
   int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();

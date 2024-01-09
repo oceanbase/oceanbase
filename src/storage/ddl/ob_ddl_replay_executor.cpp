@@ -428,7 +428,7 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle) //TODO(
   } else if (OB_ISNULL(data_direct_load_mgr = direct_load_mgr_handle.get_full_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(table_key));
-  } else if (OB_FAIL(data_direct_load_mgr->commit(*tablet_handle.get_obj(), log_->get_start_scn(), scn_, false/*wait_major_generate*/))) {
+  } else if (OB_FAIL(data_direct_load_mgr->commit(*tablet_handle.get_obj(), log_->get_start_scn(), scn_, 0/*unused table_id*/, 0/*unused ddl_task_id*/, true/*is replay*/))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
       ret = OB_SUCCESS; // exit when tablet not exist or task expired
     } else {
