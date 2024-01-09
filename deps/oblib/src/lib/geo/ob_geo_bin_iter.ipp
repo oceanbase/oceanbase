@@ -353,6 +353,8 @@ void ObWkbUtils::get_sub_addr_common(const T& obj,
     // TODO: prealloc whole array?
     if (enable_offset_info && OB_FAIL(offsets->prepare_allocate(obj.iter_idx_max()))) {
       COMMON_LOG(WARN, "failed to reserve for offsets!", K(ret), K(obj.iter_idx_max()));
+      // allocate memory failed, can't maintain ObWkbIterOffsetArray
+      enable_offset_info = false;
     }
     // assum offsets -> prepare_allocate will do memset 0
     uint64_t base_offset = (enable_offset_info) ?  offsets->operator[](st) : 0;

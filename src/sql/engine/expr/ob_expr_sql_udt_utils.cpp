@@ -288,6 +288,9 @@ int ObSqlUdtUtils::ob_udt_calc_sql_varray_length(const ObObj *cur_obj,
     // count length
     varray_len += sizeof(uint32);
 
+    // null count
+    varray_len += sizeof(uint32);
+
     // null bitmap length
     varray_len += ObSqlUDT::get_offset_array_len(count);
 
@@ -408,6 +411,12 @@ int ObSqlUdtUtils::ob_udt_convert_pl_varray_to_sql_varray(const ObObj *cur_obj,
     count = varray->get_count();
     *(reinterpret_cast<uint32_t *>(&buf[pos])) = count;
 
+    // null count
+    pos += sizeof(uint32_t);
+    uint32_t null_count_offset = pos;
+    *(reinterpret_cast<uint32_t *>(&buf[pos])) = 0;
+
+    // bitmap
     pos += sizeof(uint32_t);
     char *leaf_bitmap_ptr = buf + pos;
     uint32_t leaf_bitmap_len = ObSqlUDT::get_null_bitmap_len(count);
@@ -426,9 +435,11 @@ int ObSqlUdtUtils::ob_udt_convert_pl_varray_to_sql_varray(const ObObj *cur_obj,
       cur_obj = &varray->get_data()[i];
       if (cur_obj == NULL|| cur_obj->is_null()) {
         offset_ptr[i] = pos - related_start;
-        if (ObSqlUDT::set_null_bitmap_pos(leaf_bitmap_ptr, leaf_bitmap_len, i)) {
+        if (OB_FAIL(ObSqlUDT::set_null_bitmap_pos(leaf_bitmap_ptr, leaf_bitmap_len, i))) {
           LOG_WARN("Failed to set varray element null bitmap",
                    K(ret), K(leaf_bitmap_ptr), K(leaf_bitmap_len), K(i));
+        } else {
+          ObSqlUDT::increase_varray_null_count(buf + null_count_offset);
         }
       } else if (cur_obj->is_ext() || cur_obj->is_user_defined_sql_type()) {
         ret = OB_NOT_SUPPORTED;
@@ -495,7 +506,7 @@ int ObSqlUdtUtils::ob_udt_convert_sorted_objs_array_to_udf_format(const ObObj **
       offset_ptr[i] = 0;
       if (OB_ISNULL(cur_element)) {
         offset_ptr[i] = pos;
-        if (ObSqlUDT::set_null_bitmap_pos(leaf_bitmap_ptr, leaf_bitmap_len, i)) {
+        if (OB_FAIL(ObSqlUDT::set_null_bitmap_pos(leaf_bitmap_ptr, leaf_bitmap_len, i))) {
           LOG_WARN("Failed to set varray element null bitmap",
                    K(ret), K(leaf_bitmap_ptr), K(leaf_bitmap_len), K(i));
         }
