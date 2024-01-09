@@ -2913,9 +2913,17 @@ int ObTransformPredicateMoveAround::pushdown_semi_info_right_filter(ObDMLStmt *s
         LOG_WARN("unexpected temp table info", K(ret));
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < info->table_infos_.count(); ++j) {
-        ObDMLStmt *&upper_stmt = info->table_infos_.at(j).upper_stmt_;
-        if (upper_stmt == stmt) {
-          upper_stmt = view_table->ref_query_;
+        if (OB_ISNULL(info->table_infos_.at(j).table_item_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (info->table_infos_.at(j).table_item_->table_id_ == right_table->table_id_) {
+          ObDMLStmt *&upper_stmt = info->table_infos_.at(j).upper_stmt_;
+          if (OB_UNLIKELY(upper_stmt != stmt)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          } else {
+            upper_stmt = view_table->ref_query_;
+          }
         }
       }
     }
