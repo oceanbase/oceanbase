@@ -539,8 +539,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool has_trigger() const { return has_trigger_; }
   void set_has_pl_udf(bool v) { has_pl_udf_ = v; }
   bool has_pl_udf() const { return has_pl_udf_; }
-  void set_allow_parallel_trigger(bool v) { is_allow_parallel_trigger_ = v; }
-  bool is_allow_parallel_trigger() const { return is_allow_parallel_trigger_; }
   void set_has_cursor_expression(bool v) { has_cursor_expression_ = v; }
   bool has_cursor_expression() const { return has_cursor_expression_; }
   void set_has_dblink(bool v) { has_dblink_ = v; }
@@ -638,7 +636,6 @@ private:
       int8_t has_pl_udf_                       : 1; //this sql has pl user defined function
       int8_t has_subquery_in_function_table_   : 1; //this stmt has function table
       int8_t has_dblink_                       : 1; //this stmt has dblink table
-      int8_t is_allow_parallel_trigger_        : 1; //this sql linked trigger can parallel execute
       int8_t has_cursor_expression_            : 1; //this sql has cursor expression
     };
   };

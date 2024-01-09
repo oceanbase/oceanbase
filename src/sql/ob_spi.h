@@ -243,6 +243,22 @@ class ObSPIService
 public:
   struct ObSPIPrepareResult
   {
+    ObSPIPrepareResult() :
+    type_(stmt::T_NONE),
+    for_update_(false),
+    has_hidden_rowid_(false),
+    exec_params_(),
+    into_exprs_(),
+    ref_objects_(),
+    route_sql_(),
+    record_type_(nullptr),
+    tg_timing_event_(),
+    rowid_table_id_(OB_INVALID_ID),
+    ps_sql_(),
+    is_bulk_(false),
+    has_dup_column_name_(false),
+    has_link_table_(false)
+    {}
     stmt::StmtType type_; //prepare的语句类型
     bool for_update_;
     bool has_hidden_rowid_;
