@@ -97,7 +97,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
   // handle data2(path text)
   if (OB_SUCC(ret) && OB_LIKELY(!is_null)) {
     if (OB_ISNULL(data2)) { // have no path
-      res_len = j_base->element_count();
+      res_len = j_base->member_count();
     } else { // handle json path
       ObObjType type2 = meta2.type_;
       if (type2 == ObNullType) { // null should display "NULL"
@@ -116,7 +116,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         } else if (hit.size() != 1) { // not found node by path, display "NULL"
           is_null = true;
         } else {
-          res_len = hit[0]->element_count();
+          res_len = hit[0]->member_count();
         }
       }
     }

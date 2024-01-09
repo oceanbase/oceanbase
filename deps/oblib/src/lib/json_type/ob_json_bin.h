@@ -297,6 +297,7 @@ public:
   uint64_t get_obj_size_offset() const;
 
   uint64_t element_count() const { return element_count_; }
+
   void set_element_count(uint64_t count)
   {
     element_count_ = count;
@@ -539,6 +540,12 @@ public:
     return meta_.field_type_;
   }
   int get_total_value(ObStringBuffer &res) const;
+
+  virtual uint64_t member_count() const override
+  {
+    return (meta_.get_type() == static_cast<uint8_t>(ObJsonNodeType::J_ARRAY) || meta_.get_type() == static_cast<uint8_t>(ObJsonNodeType::J_OBJECT)) ?
+      element_count() : 1;
+  }
 
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;

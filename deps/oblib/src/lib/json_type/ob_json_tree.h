@@ -70,6 +70,7 @@ public:
   int get_obtime(ObTime &t) const override;
   OB_INLINE ObJsonInType get_internal_type() const override { return ObJsonInType::JSON_TREE; }
   OB_INLINE uint64_t element_count() const override { return 1; }
+  virtual uint64_t member_count() const override { return element_count(); }
   OB_INLINE ObObjType field_type() const override
   {
     return ObMaxType; // ObJsonOpaque override

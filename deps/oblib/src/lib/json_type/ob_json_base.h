@@ -195,6 +195,11 @@ public:
   // @return json containner returns the capacity, json scalar return 1.
   virtual uint64_t element_count() const = 0;
 
+  // Get member count of json.
+  // scalar 1, array, object as child number
+  // @return json containner returns the capacity, json scalar return 1.
+  virtual uint64_t member_count() const = 0;
+
   // Get json node type.
   //
   // @return see ObJsonNodeType.
