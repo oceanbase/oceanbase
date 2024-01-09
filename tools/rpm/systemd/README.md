@@ -9,7 +9,7 @@ If you want to deploy OceanBase on a Linux RPM platform, you can use yum for sin
 ## Installation Method
 Now systemd only support RPM platform and you can install and run oceanbase service using the following command:
 ```bash
-yum install oceanbase
+yum install oceanbase-ce
 systemctl start oceanbase
 ```
 

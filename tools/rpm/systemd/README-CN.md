@@ -9,7 +9,7 @@
 ## 安装方法
 现在暂时只支持RPM平台系统，可以通过以下指令进行安装和启动：
 ```bash
-yum install oceanbase
+yum install oceanbase-ce
 systemctl start oceanbase
 ```
 
