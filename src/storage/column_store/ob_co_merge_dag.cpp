@@ -749,9 +749,7 @@ int ObCOMergeBatchExeTask::process()
     } else {
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this, KPC(dag_));
     }
-    if (nullptr != merger_) {
-      merger_->reset();
-    }
+    merger_->reset();
   }
   return ret;
 }
