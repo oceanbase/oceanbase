@@ -37,10 +37,11 @@ ob_set_subtarget(ob_pl common
   ob_pl_persistent.cpp
 )
 
-ob_set_subtarget(ob_pl pl_cache
+ob_set_subtarget(ob_pl common_mixed
   pl_cache/ob_pl_cache.cpp
   pl_cache/ob_pl_cache_mgr.cpp
   pl_cache/ob_pl_cache_object.cpp
+  dblink/ob_pl_dblink_guard.cpp
 )
 
 ob_set_subtarget(ob_pl sys_package
@@ -54,10 +55,6 @@ ob_set_subtarget(ob_pl sys_package
   sys_package/ob_dbms_user_define_rule.cpp
   sys_package/ob_dbms_workload_repository.cpp
   sys_package/ob_pl_dbms_resource_manager.cpp
-)
-
-ob_set_subtarget(ob_pl dblink
-  dblink/ob_pl_dblink_guard.cpp
 )
 
 ob_server_add_target(ob_pl)

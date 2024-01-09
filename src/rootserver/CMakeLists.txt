@@ -111,7 +111,6 @@ ob_set_subtarget(ob_rootserver balance
 ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_column_redefinition_task.cpp
   ddl_task/ob_constraint_task.cpp
-
   ddl_task/ob_ddl_retry_task.cpp
   ddl_task/ob_ddl_scheduler.cpp
   ddl_task/ob_ddl_single_replica_executor.cpp

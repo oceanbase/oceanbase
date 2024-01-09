@@ -1,6 +1,5 @@
 ob_set_subtarget(ob_server ALONE
   ob_server.cpp
-  ob_service.cpp
 )
 
 ob_set_subtarget(ob_server common
@@ -39,6 +38,7 @@ ob_set_subtarget(ob_server common
   ob_server_startup_task_handler.cpp
   ob_srv_rpc_handler.cpp
   ob_check_params.cpp
+  ob_service.cpp
 )
 
 ob_set_subtarget(ob_server common_mixed
@@ -46,9 +46,9 @@ ob_set_subtarget(ob_server common_mixed
   report/ob_tablet_table_updater.cpp
   report/ob_tenant_meta_checker.cpp
   report/ob_server_meta_table_checker.cpp
-)
-
-ob_set_subtarget(ob_server dbms_job
+  net/ob_ingress_bw_alloc_service.cpp
+  net/ob_net_endpoint_ingress_rpc_proccessor.cpp
+  net/ob_net_endpoint_ingress_rpc_struct.cpp
   dbms_job/ob_dbms_job_executor.cpp
   dbms_job/ob_dbms_job_master.cpp
   dbms_job/ob_dbms_job_rpc_processor.cpp
@@ -100,12 +100,6 @@ ob_set_subtarget(ob_server mysql
   mysql/obsm_row.cpp
   mysql/obsm_utils.cpp
   mysql/obmp_set_option.cpp
-)
-
-ob_set_subtarget(ob_server net
-  net/ob_ingress_bw_alloc_service.cpp
-  net/ob_net_endpoint_ingress_rpc_proccessor.cpp
-  net/ob_net_endpoint_ingress_rpc_struct.cpp
 )
 
 ob_set_subtarget(ob_server omt

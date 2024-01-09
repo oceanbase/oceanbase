@@ -69,6 +69,8 @@ ob_set_subtarget(ob_logservice common_mixed
   replayservice/ob_replay_handler.cpp
   replayservice/ob_replay_status.cpp
   replayservice/ob_tablet_replay_executor.cpp
+  common_util/ob_log_time_utils.cpp
+  common_util/ob_log_ls_define.cpp
 )
 
 ob_set_subtarget(ob_logservice leader_coordinator
@@ -229,11 +231,6 @@ ob_set_subtarget(ob_logservice logfetcher
   logfetcher/ob_log_progress_info.cpp
   logfetcher/ob_log_timer.cpp
   logfetcher/ob_log_config.cpp
-)
-
-ob_set_subtarget(ob_logservice common_util
-  common_util/ob_log_time_utils.cpp
-  common_util/ob_log_ls_define.cpp
 )
 
 ob_server_add_target(ob_logservice)

@@ -91,10 +91,6 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/neon/ob_raw_decoder_neon.cpp
 )
 
-ob_set_subtarget(ob_storage blockstore
-  blockstore/ob_shared_block_reader_writer.cpp
-)
-
 ob_set_subtarget(ob_storage slog
   slog/ob_server_slog_writer.cpp
   slog/ob_storage_log_batch_header.cpp
@@ -494,6 +490,9 @@ ob_set_subtarget(ob_storage common_mixed
   meta_mem/ob_tenant_meta_obj_pool.cpp
   meta_mem/ob_storage_meta_cache.cpp
   utl_file/ob_utl_file_handler.cpp
+  blockstore/ob_shared_block_reader_writer.cpp
+  concurrency_control/ob_multi_version_garbage_collector.cpp
+  concurrency_control/ob_trans_stat_row.cpp
 )
 
 ob_set_subtarget(ob_storage compaction
@@ -527,11 +526,6 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_partition_rows_merger.cpp
   compaction/ob_storage_locality_cache.cpp
   compaction/ob_medium_list_checker.cpp
-)
-
-ob_set_subtarget(ob_storage concurrency_control
-  concurrency_control/ob_multi_version_garbage_collector.cpp
-  concurrency_control/ob_trans_stat_row.cpp
 )
 
 ob_set_subtarget(ob_storage memtable
