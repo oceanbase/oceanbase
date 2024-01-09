@@ -1042,7 +1042,7 @@ int ObExtendHashTableVec<GroupRowBucket>::get(const RowMeta &row_meta,
     if (bucket->is_valid()) {
       RowItemType *it = &(bucket->get_item());
       while (OB_SUCC(ret) && nullptr != it) {
-        if (OB_FAIL(likely_equal(row_meta, static_cast<ObCompactRow&>(*it), batch_idx, result))) {
+        if (OB_FAIL(likely_equal_nullable(row_meta, static_cast<ObCompactRow&>(*it), batch_idx, result))) {
           LOG_WARN("failed to cmp", K(ret));
         } else if (result) {
           item = it;

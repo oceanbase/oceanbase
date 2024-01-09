@@ -659,7 +659,7 @@ OB_INLINE int ObBitVectorImpl<WordType>::inner_foreach(const ObBitVectorImpl<Wor
           if (tmp_step + step_size > size) {
             mini_cnt = size - tmp_step;
           }
-          for (int64_t j = 0; j < mini_cnt; j++) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < mini_cnt; j++) {
             int64_t k = j + tmp_step;
             ret = op(k);
           }

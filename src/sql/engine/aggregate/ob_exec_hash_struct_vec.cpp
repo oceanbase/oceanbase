@@ -557,9 +557,14 @@ int ObExtendHashTableVec<GroupRowBucket>::set_distinct_batch(const RowMeta &row_
 {
   int ret = OB_SUCCESS;
   new_row_selector_cnt_ = 0;
-  if (auto_extend_ && OB_UNLIKELY((size_ + batch_size) * SIZE_BUCKET_SCALE >= get_bucket_num())) {
+  while (OB_SUCC(ret) && auto_extend_ && OB_UNLIKELY((size_ + batch_size)
+                                                      * SIZE_BUCKET_SCALE >= get_bucket_num())) {
+    int64_t pre_bkt_num = get_bucket_num();
     if (OB_FAIL(extend())) {
       SQL_ENG_LOG(WARN, "extend failed", K(ret));
+    } else if (get_bucket_num() <= pre_bkt_num) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(locate_buckets_)) {
