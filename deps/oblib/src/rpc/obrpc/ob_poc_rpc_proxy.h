@@ -15,6 +15,7 @@
 #include "rpc/obrpc/ob_rpc_endec.h"
 #include "rpc/frame/ob_req_transport.h"
 #include "rpc/ob_request.h"
+#include "rpc/obrpc/ob_rpc_stat.h"
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 
 extern "C" {
@@ -31,7 +32,7 @@ public:
   ~ObSyncRespCallback() {}
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
   int handle_resp(int io_err, const char* buf, int64_t sz);
-  int wait();
+  int wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz);
   const char* get_resp(int64_t& sz) {
     sz = sz_;
     return resp_;
@@ -148,13 +149,17 @@ public:
           &cb))) {
         ret = translate_io_error(sys_err);
         RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
-      } else if (OB_FAIL(cb.wait())) {
-        RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode));
-      } else if (NULL == (resp = cb.get_resp(resp_sz))) {
-        ret = common::OB_ERR_UNEXPECTED;
-        RPC_LOG(WARN, "sync rpc execute success but resp is null", K(ret), K(addr), K(pcode));
-      } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
-        RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret));
+      } else {
+        EVENT_INC(RPC_PACKET_OUT);
+        EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
+        if (OB_FAIL(cb.wait(get_proxy_timeout(proxy), pcode, req_sz))) {
+          RPC_LOG(WARN, "sync rpc execute fail", K(ret), K(addr), K(pcode));
+        } else if (NULL == (resp = cb.get_resp(resp_sz))) {
+          ret = common::OB_ERR_UNEXPECTED;
+          RPC_LOG(WARN, "sync rpc execute success but resp is null", K(ret), K(addr), K(pcode));
+        } else if (OB_FAIL(rpc_decode_resp(resp, resp_sz, out, resp_pkt, rcode))) {
+          RPC_LOG(WARN, "execute rpc fail", K(addr), K(pcode), K(ret));
+        }
       }
     }
     if (rcode.rcode_ != OB_DESERIALIZE_ERROR) {
@@ -167,6 +172,16 @@ public:
         set_handle(proxy, handle, pcode, opts, resp_pkt.is_stream_next(), resp_pkt.get_session_id());
       }
     }
+    rpc::RpcStatPiece piece;
+    piece.size_ = req_sz;
+    piece.time_ = ObTimeUtility::current_time() - start_ts;
+    if (OB_FAIL(ret)) {
+      piece.failed_ = true;
+      if (OB_TIMEOUT == ret) {
+        piece.is_timeout_ = true;
+      }
+    }
+    RPC_STAT(pcode, src_tenant_id, piece);
     return ret;
   }
   template<typename Input, typename UCB>
@@ -225,6 +240,9 @@ public:
             )) {
           ret = translate_io_error(sys_err);
           RPC_LOG(WARN, "pn_send fail", K(sys_err), K(addr), K(pcode));
+        } else {
+          EVENT_INC(RPC_PACKET_OUT);
+          EVENT_ADD(RPC_PACKET_OUT_BYTES, req_sz);
         }
       }
     }

@@ -83,7 +83,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
         &cb))) {
       ret = ObPocClientStub::translate_io_error(pn_err);
       RPC_LOG(WARN, "pnio post fail", K(pn_err));
-    } else if (OB_FAIL(cb.wait())) {
+    } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
       ret = common::OB_ERR_UNEXPECTED;
@@ -219,7 +219,7 @@ int SSHandle<pcodeStruct>::abort()
         &cb))) {
       ret = ObPocClientStub::translate_io_error(pn_err);
       RPC_LOG(WARN, "pnio post fail", K(pn_err));
-    } else if (OB_FAIL(cb.wait())) {
+    } else if (OB_FAIL(cb.wait(proxy_.timeout(), pcode_, pnio_req_sz))) {
       RPC_LOG(WARN, "stream rpc execute fail", K(ret), K(dst_));
     } else if (NULL == (resp = cb.get_resp(resp_sz))) {
       ret = common::OB_ERR_UNEXPECTED;
