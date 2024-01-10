@@ -2476,12 +2476,12 @@ struct NullAwareAntiJoinInfo {
                                 ObRawExpr *escape_expr,
                                 const TableItem *table_item,
                                 ObItemType type,
-                                ObRawExpr *&new_expr,
+                                ObIArray<ObRawExpr*> &new_exprs,
                                 PathHelper &helper);
 
     int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                     const TableItem *table_item,
-                                    ObRawExpr *&new_expr,
+                                    ObIArray<ObRawExpr*> &new_exprs,
                                     PathHelper &helper);
 
     int deduce_common_gen_col_index_expr(ObRawExpr *qual,
