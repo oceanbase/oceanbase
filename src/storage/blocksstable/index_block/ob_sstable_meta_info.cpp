@@ -956,7 +956,8 @@ int ObSSTableMacroInfo::deserialize_(
     char *reader_buf = nullptr;
     int64_t pos = 0;
     int64_t reader_len = 0;
-    if (OB_FAIL(block_reader.init(entry_id_))) {
+    ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
+    if (OB_FAIL(block_reader.init(entry_id_, mem_attr))) {
       LOG_WARN("fail to initialize reader", K(ret), K(entry_id_));
     } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) {// read data ids
       LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
@@ -1002,10 +1003,11 @@ int ObSSTableMacroInfo::read_block_ids(
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemReader block_reader;
+  ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
   if (OB_UNLIKELY(!entry_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(entry_id));
-  } else if (OB_FAIL(block_reader.init(entry_id))) {
+  } else if (OB_FAIL(block_reader.init(entry_id, mem_attr))) {
     LOG_WARN("fail to initialize reader", K(ret), K(entry_id));
   } else if (OB_FAIL(read_block_ids(allocator, block_reader, data_blk_ids, data_blk_cnt,
       other_blk_ids, other_blk_cnt))) {
@@ -1121,11 +1123,12 @@ int ObSSTableMacroInfo::write_block_ids(
   int ret = OB_SUCCESS;
   const int64_t data_blk_cnt = data_ids.count();
   const int64_t other_blk_cnt = other_ids.count();
+  ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
   if (OB_UNLIKELY(0 == data_blk_cnt && 0 == other_blk_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data_blk_cnt and other_blk_cnt shouldn't be both 0", K(ret), K(data_blk_cnt),
         K(other_blk_cnt));
-  } else if (OB_FAIL(writer.init(false /*whether need addr*/))) {
+  } else if (OB_FAIL(writer.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to initialize item writer", K(ret));
   } else if (OB_FAIL(flush_ids(data_ids, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_blk_cnt));

@@ -331,7 +331,8 @@ int ObTabletMacroInfo::persist_macro_ids(
     ObLinkedMacroBlockItemWriter &linked_writer)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(linked_writer.init(false /*whether need addr*/))) {
+  ObMemAttr mem_attr(MTL_ID(), "TabletBlockId");
+  if (OB_FAIL(linked_writer.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to init linked writer", K(ret));
   } else if (OB_FAIL(do_flush_ids(ObTabletMacroType::META_BLOCK, meta_block_info_arr_, allocator, linked_writer))) {
     LOG_WARN("fail to persist meta block ids", K(ret));

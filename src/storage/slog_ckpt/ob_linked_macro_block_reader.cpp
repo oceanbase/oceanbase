@@ -28,18 +28,19 @@ using namespace oceanbase::blocksstable;
 
 ObLinkedMacroBlockReader::ObLinkedMacroBlockReader()
   : is_inited_(false), handle_pos_(0), macros_handle_(), prefetch_macro_block_idx_(0),
-    read_macro_block_cnt_(0), allocator_("LMBR_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), io_buf_{nullptr, nullptr}
+    read_macro_block_cnt_(0), allocator_(), io_buf_{nullptr, nullptr}
 {
   handles_[0].reset();
   handles_[1].reset();
 }
 
-int ObLinkedMacroBlockReader::init(const MacroBlockId &entry_block)
+int ObLinkedMacroBlockReader::init(const MacroBlockId &entry_block, const ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLinkedMacroBlockReader has been inited twice", K(ret));
+  } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
   } else if (OB_FAIL(get_meta_blocks(entry_block))) {
     LOG_WARN("fail to get meta blocks", K(ret));
   } else if (OB_ISNULL(io_buf_[0] =
@@ -76,7 +77,7 @@ int ObLinkedMacroBlockReader::get_meta_blocks(const MacroBlockId &entry_block)
     int64_t handle_pos = 0;
     MacroBlockId previous_block_id;
     handles_[handle_pos].reset();
-    common::ObArenaAllocator allocator("META_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    common::ObArenaAllocator allocator;
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret), K(read_info.size_));
@@ -274,11 +275,11 @@ int ObLinkedMacroBlockReader::get_previous_block_id(
 
 ObLinkedMacroBlockItemReader::ObLinkedMacroBlockItemReader()
   : is_inited_(false), common_header_(nullptr), linked_header_(nullptr), block_reader_(),
-    buf_(nullptr), buf_pos_(0), buf_len_(0), allocator_(ObModIds::OB_CHECKPOINT)
+    buf_(nullptr), buf_pos_(0), buf_len_(0), allocator_()
 {
 }
 
-int ObLinkedMacroBlockItemReader::init(const MacroBlockId &entry_block)
+int ObLinkedMacroBlockItemReader::init(const MacroBlockId &entry_block, const ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -287,9 +288,10 @@ int ObLinkedMacroBlockItemReader::init(const MacroBlockId &entry_block)
   } else if (OB_UNLIKELY(!entry_block.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(entry_block));
-  } else if (OB_FAIL(block_reader_.init(entry_block))) {
+  } else if (OB_FAIL(block_reader_.init(entry_block, mem_attr))) {
     LOG_WARN("fail to init ObLinkedMacroBlockReader", K(ret));
   } else {
+    allocator_.set_attr(mem_attr);
     is_inited_ = true;
   }
   return ret;

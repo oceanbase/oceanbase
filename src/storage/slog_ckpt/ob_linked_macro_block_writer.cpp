@@ -142,13 +142,12 @@ ObLinkedMacroBlockItemWriter::ObLinkedMacroBlockItemWriter()
   : is_inited_(false), is_closed_(false), written_items_cnt_(0),
     need_disk_addr_(false), first_inflight_item_idx_(0),
     pre_block_inflight_items_cnt_(0), curr_block_inflight_items_cnt_(0),
-    allocator_(ObModIds::OB_CHECKPOINT, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    block_writer_(), io_buf_(nullptr), io_buf_size_(0),
+    allocator_(), block_writer_(), io_buf_(nullptr), io_buf_size_(0),
     io_buf_pos_(0), common_header_(nullptr), linked_header_(nullptr)
 {
 }
 
-int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr)
+int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr, const ObMemAttr &mem_attr)
 {
   int ret = OB_SUCCESS;
   const int64_t macro_block_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
@@ -161,6 +160,7 @@ int ObLinkedMacroBlockItemWriter::init(const bool need_disk_addr)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret), K(macro_block_size));
   } else {
+    allocator_.set_attr(mem_attr);
     need_disk_addr_ = need_disk_addr;
     io_buf_size_ = macro_block_size;
     common_header_ = reinterpret_cast<ObMacroBlockCommonHeader *>(io_buf_);
