@@ -5401,7 +5401,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(const log_op_def::ObLogOpType op
     /*do nothing*/
   } else if (LOG_EXCHANGE == get_type()) {
     ObLogExchange *op = static_cast<ObLogExchange *>(this);
-    if (op->is_rescanable()) {
+    if (op->is_rescanable() && !op->is_task_order()) {
       op->set_px_batch_op_id(op_id);
       op->set_px_batch_op_type(op_type);
       find = true;
