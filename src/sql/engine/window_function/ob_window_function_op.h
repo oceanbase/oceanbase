@@ -229,6 +229,7 @@ public:
       rd_pby_sort_cnt_(0),
       role_type_(0),
       wf_aggr_status_expr_(NULL),
+      input_rows_mem_bound_ratio_(0.5),
       estimated_part_cnt_(1),
       enable_hash_base_distinct_(false)
   {
@@ -291,6 +292,8 @@ public:
   int64_t rd_pby_sort_cnt_;
   int64_t role_type_;
   ObExpr *wf_aggr_status_expr_;
+  // The percentage of memory used by input_rows to the total memory used by input_rows and res_rows
+  double input_rows_mem_bound_ratio_;
   int64_t estimated_part_cnt_;
   bool enable_hash_base_distinct_;
 
@@ -342,12 +345,13 @@ public:
       output_row_idx_(0),
       need_output_(false),
       prior_dumping_rows_stores_(op.get_local_allocator()),
-      has_input_prior_stores_(false)
+      local_mem_limit_version_(0)
       {}
     ~RowsStore() { destroy(); }
     void destroy() { ra_rs_.reset(); }
 
-    int process_dump();
+    template <bool IS_INPUT>
+    int process_dump(const bool found_part_end = false);
 
     // for input
     inline int add_row(const common::ObIArray<ObExpr*> &exprs,
@@ -357,7 +361,7 @@ public:
     {
       int ret = common::OB_SUCCESS;
       // skip process dump when store contains only one block
-      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump())) {
+      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<true>())) {
         SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret), K(ObToStringExprRow(*ctx, exprs)));
       } else if (OB_FAIL(ra_rs_.add_row(exprs, ctx, stored_row))) {
         SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
@@ -375,7 +379,7 @@ public:
     {
       int ret = common::OB_SUCCESS;
       // skip process dump when store contains only one block
-      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump())) {
+      if (!ra_rs_.is_empty_save_row_cnt() && OB_FAIL(process_dump<false>())) {
         SQL_ENG_LOG(WARN, "fail to dump_by_priority", K(ret));
       } else if (OB_FAIL(ra_rs_.add_row(datums, stored_row))) {
         SQL_ENG_LOG(WARN, "fail to add_row for ra_rs_", K(ret));
@@ -403,6 +407,10 @@ public:
       return ret;
     }
     inline int64_t count() const { return row_cnt_; }
+    inline bool need_check_dump(const int64_t g_mem_version) const
+    {
+      return g_mem_version != local_mem_limit_version_;
+    }
     // return row count which computed but not outputed
     inline int64_t to_output_rows() const {
       return row_cnt_ - output_row_idx_;
@@ -440,8 +448,8 @@ public:
       output_row_idx_ = 0;
       stored_row_cnt_ = 0;
       row_cnt_ = 0;
+      local_mem_limit_version_ = 0;
       prior_dumping_rows_stores_.clear();
-      has_input_prior_stores_ = false;
       return reset_buf(tenant_id);
     }
     inline int get_row(const int64_t row_idx, const ObRADatumStore::StoredRow *&sr)
@@ -486,7 +494,9 @@ public:
     // record whether the input row of consolidator need to output
     bool need_output_;
     common::ObFixedArray<RowsStore*, common::ObIAllocator> prior_dumping_rows_stores_;
-    bool has_input_prior_stores_;
+    // each RowsStore may trigger a new mem_limit fetch
+    // synchronize this version to others to let them update the mem_limit
+    int64_t local_mem_limit_version_;
   };
 
   struct Stores
@@ -790,6 +800,7 @@ public:
       sql_mem_processor_(profile_, op_monitor_info_),
       hp_infras_mgr_(exec_ctx.get_my_session()->get_effective_tenant_id()),
       distinct_aggr_count_(0),
+      global_mem_limit_version_(0),
       amm_periodic_cnt_(0)
   {
   }
@@ -816,6 +827,9 @@ public:
                       const int64_t val);
 
   inline common::ObArenaAllocator& get_local_allocator() { return local_allocator_; }
+  inline double get_input_rows_mem_bound_ratio() const
+  { return MY_SPEC.input_rows_mem_bound_ratio_; }
+  inline int64_t get_global_mem_limit_version() const { return global_mem_limit_version_; }
 
 protected:
   int init();
@@ -952,7 +966,7 @@ protected:
   int check_interval_valid(ObExpr &expr);
   int init_distinct_set(ObAggregateProcessor &aggr_processor);
   int init_hp_infras_group_mgr();
-  inline int update_mem_limit_version_periodically(bool &need_dump);
+  inline int update_mem_limit_version_periodically();
 
 private:
   int init_mem_context();
@@ -1047,6 +1061,9 @@ private:
   HashPartInfrasMgr hp_infras_mgr_;
   int64_t distinct_aggr_count_;
 
+  // Each RowsStore may trigger a new mem_limit fetch, this records newest mem_limit version
+  // Synchronize this version to others to let them update the mem_limit
+  int64_t global_mem_limit_version_;
   // Only increase, not decrease, used for update_max_available_mem_size_periodically
   // Means the total count of rows which have been added to the each ra datum store
   int64_t amm_periodic_cnt_;
@@ -1079,14 +1096,14 @@ int ObWindowFunctionSpec::rd_sort_cmp(const STORE_ROW_L *l,
   }
   return ret;
 }
-int ObWindowFunctionOp::update_mem_limit_version_periodically(bool &check_need_dump)
+int ObWindowFunctionOp::update_mem_limit_version_periodically()
 {
   int ret = common::OB_SUCCESS;
   // update global mem bound every 1024 rows
   // use total_stored_row_cnt of wf op instead of row_cnt of each ra_rs_ here
   // because total_stored_row_cnt is monotone increasing
   bool updated = false;
-  check_need_dump = false;
+  bool need_inc_version = false;
   const static int64_t UPDATE_MEM_SIZE_PERIODIC_CNT = 1024;
   if (!GCONF.is_sql_operator_dump_enabled()) {
     // do nothing, disable dump
@@ -1107,8 +1124,12 @@ int ObWindowFunctionOp::update_mem_limit_version_periodically(bool &check_need_d
                 [&](int64_t max_memory_size) {
                   return sql_mem_processor_.get_data_size() > max_memory_size;
                 },
-                check_need_dump, sql_mem_processor_.get_data_size()))) {
+                need_inc_version, sql_mem_processor_.get_data_size()))) {
     LOG_WARN("fail to extend max memory size", K(ret), K(updated), K(need_dump()));
+  } else if (need_inc_version) {
+    // use the mem_limit_version_ of wf op to trigger updating mem_limit of each ra_rs_
+    // using newest global mem bound while add_row to ra_rs_
+    ++global_mem_limit_version_;
   }
   return ret;
 }

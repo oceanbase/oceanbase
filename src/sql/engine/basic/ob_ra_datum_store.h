@@ -361,6 +361,8 @@ public:
   int add_row(const StoredRow &src_stored_row,
               StoredRow **stored_row = nullptr);
   int finish_add_row();
+
+  bool is_all_dumped() const { return blk_mem_list_.is_empty(); }
   int dump(const bool all_dump, const int64_t target_dump_size = INT64_MAX);
   int dump_block_if_need(const int64_t extra_size);
   bool need_dump(const int64_t extra_size);

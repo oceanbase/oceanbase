@@ -6208,6 +6208,7 @@ int ObStaticEngineCG::generate_spec(ObLogWindowFunction &op, ObWindowFunctionSpe
   } else {
     spec.single_part_parallel_ = op.is_single_part_parallel();
     spec.range_dist_parallel_ = op.is_range_dist_parallel();
+    spec.input_rows_mem_bound_ratio_ = op.get_input_rows_mem_bound_ratio();
     spec.estimated_part_cnt_ = op.get_estimated_part_cnt();
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_window_exprs().count(); ++i) {
       ObWinFunRawExpr *wf_expr = op.get_window_exprs().at(i);

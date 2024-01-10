@@ -70,6 +70,7 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     rd_pby_sort_cnt_,
                     role_type_,
                     wf_aggr_status_expr_,
+                    input_rows_mem_bound_ratio_,
                     estimated_part_cnt_,
                     enable_hash_base_distinct_);
 
@@ -1178,7 +1179,7 @@ int ObWindowFunctionOp::init()
         K(est_rows), K(MY_SPEC.width_), K(MY_SPEC.estimated_part_cnt_));
     } else {
       LOG_DEBUG("show some est values", K(ret), K(MY_SPEC.rows_), K(est_rows), K(MY_SPEC.width_),
-                K(MY_SPEC.estimated_part_cnt_));
+                K(MY_SPEC.estimated_part_cnt_), K(MY_SPEC.input_rows_mem_bound_ratio_));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1534,6 +1535,7 @@ int ObWindowFunctionOp::inner_rescan()
   last_row_same_order_cache_ = SAME_ORDER_CACHE_DEFAULT;
   last_computed_part_rows_ = 0;
   last_aggr_status_ = 0;
+  global_mem_limit_version_ = 0;
   amm_periodic_cnt_ = 0;
 
   next_wf_pby_expr_cnt_to_transmit_ =
@@ -1667,8 +1669,8 @@ int ObWindowFunctionOp::create_row_store(RowsStore *&s)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else if (OB_FAIL(s->prior_dumping_rows_stores_.init(
-                       1 + (MY_SPEC.is_vectorized() + MY_SPEC.range_dist_parallel_) * 2))) {
-      // one for processed of vec, one for first of rd and rest for input_rows_
+                       MY_SPEC.is_vectorized() + MY_SPEC.range_dist_parallel_))) {
+      // one for processed of vec and one for first of rd
       LOG_WARN("prior_dumping_rows_stores_ prepare allocate failed",
                K(ret), K(MY_SPEC.is_vectorized()), K(MY_SPEC.range_dist_parallel_));
     }
@@ -2162,29 +2164,11 @@ int ObWindowFunctionOp::found_part_end(const WinFuncCell *end, bool add_row_cnt 
       }
     }
   }
-  for (WinFuncCell *wf = wf_list_.get_first(); OB_SUCC(ret) && wf != end; wf = wf->get_next()) {
-    if (OB_ISNULL(wf)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("WinFuncCell is null", K(ret), KP(wf));
-    } else if (OB_ISNULL(wf->res_.cur_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("WinFuncCell result store is null", K(ret), KP(wf));
-    } else if (!wf->res_.cur_->has_input_prior_stores_) {
-      RowsStore *input_store = input_rows_.cur_;
-      RowsStore *res_store = wf->res_.cur_;
-      for (int64_t i = 0; OB_SUCC(ret) && i < input_store->prior_dumping_rows_stores_.count();
-           ++i) {
-        if (OB_FAIL(res_store->prior_dumping_rows_stores_.push_back(
-              input_store->prior_dumping_rows_stores_.at(i)))) {
-          LOG_WARN("fail to push input stores to result stores", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(res_store->prior_dumping_rows_stores_.push_back(input_store))) {
-          LOG_WARN("fail to push input stores to result stores", K(ret));
-        }
-      }
-      wf->res_.cur_->has_input_prior_stores_ = true;
+  if (OB_SUCC(ret) && !rows_store->ra_rs_.is_empty_save_row_cnt()) {
+    // If there are at least two blocks in the store, we need to check if we need to
+    // dump the input_rows at the end of one partition
+    if (OB_FAIL(rows_store->process_dump<true>(true))) {
+      LOG_WARN("fail to process dump for input store", K(ret));
     }
   }
   return ret;
@@ -3721,7 +3705,6 @@ int ObWindowFunctionOp::process_child_batch(
               } else {
                 s.processed_->ra_rs_.finish_add_row();
                 s.processed_->prior_dumping_rows_stores_.clear();
-                s.processed_->has_input_prior_stores_ = false;
               }
               return ret;
             });
@@ -4146,48 +4129,67 @@ int ObWindowFunctionOp::check_interval_valid(ObExpr &expr)
   return ret;
 }
 
-int ObWindowFunctionOp::RowsStore::process_dump()
+template <bool IS_INPUT>
+int ObWindowFunctionOp::RowsStore::process_dump(const bool found_part_end /*false*/)
 {
   int ret = OB_SUCCESS;
   bool need_dump = false;
-  if (OB_FAIL(op_.update_mem_limit_version_periodically(need_dump))) {
+  if (OB_FAIL(op_.update_mem_limit_version_periodically())) {
     LOG_WARN("fail to update op global memory limit version periodically", K(ret));
-  } else if (OB_UNLIKELY(need_dump)) {
-    const int64_t oversize_mem = op_.sql_mem_processor_.get_data_size() -
-        op_.sql_mem_processor_.get_mem_bound();
-    // dump BIG_BLOCK_SIZE * 2 at least, because dump is already needed at this time,
-    // ensure the minimum amount of memory for each dump.
-    const static int64_t MIN_DUMP_SIZE = (256L << 10) * 2;
-    int64_t target_dump_size = MAX(oversize_mem, MIN_DUMP_SIZE);
-    int64_t pop_count = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && target_dump_size > 0
-          && i < prior_dumping_rows_stores_.count(); ++i) {
-      const int64_t mem_hold = prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
-      if (OB_FAIL(prior_dumping_rows_stores_.at(i)->ra_rs_.dump(false, target_dump_size))) {
-        LOG_WARN("fail to dump row stores", K(ret), K(i),
-          K(prior_dumping_rows_stores_.at(i)->ra_rs_));
+  } else if (OB_UNLIKELY(found_part_end || need_check_dump(op_.get_global_mem_limit_version()))) {
+    local_mem_limit_version_ = op_.get_global_mem_limit_version();
+    int64_t target_dump_size = 0;
+    if (IS_INPUT) {
+      const static double MEM_DISCOUNT_FOR_PART_END = 0.8;
+      const double mem_bound_ratio = !found_part_end ? op_.get_input_rows_mem_bound_ratio() :
+         op_.get_input_rows_mem_bound_ratio() * MEM_DISCOUNT_FOR_PART_END;
+      target_dump_size = -(op_.sql_mem_processor_.get_mem_bound() * mem_bound_ratio);
+      for (int64_t i = 0; i < prior_dumping_rows_stores_.count(); ++i) {
+        target_dump_size += prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
+      }
+      target_dump_size += ra_rs_.get_mem_hold();
+    } else { // for result
+      // dump BIG_BLOCK_SIZE * 2 at least, because dump is already needed at this time,
+      // ensure the minimum amount of memory for each dump.
+      const static int64_t MIN_DUMP_SIZE = (256L << 10) * 2;
+      target_dump_size = (op_.sql_mem_processor_.get_data_size() - op_.sql_mem_processor_.get_mem_bound());
+      target_dump_size = MAX(target_dump_size, MIN_DUMP_SIZE);
+    }
+
+    if (OB_UNLIKELY(target_dump_size > 0)) {
+      // dump prior_dump_stores until the mem hold of that less than mem limit
+      // the max count of prior_dumping_rows_stores_ is 2, one for first and one for processed
+      const static int64_t MAX_PRIOR_ELEMENT_COUNT = 2;
+      if (prior_dumping_rows_stores_.count() > MAX_PRIOR_ELEMENT_COUNT) { // defense check
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the cnt of elements is unexpected", K(ret),
+          K(prior_dumping_rows_stores_.count()));
       } else {
-        target_dump_size -=
-          (mem_hold - prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold());
-        pop_count += (target_dump_size > 0);
+        int64_t pop_count = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && target_dump_size > 0
+              && i < prior_dumping_rows_stores_.count(); ++i) {
+          const int64_t mem_hold = prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold();
+          if (OB_FAIL(prior_dumping_rows_stores_.at(i)->ra_rs_.dump(false, target_dump_size))) {
+            LOG_WARN("fail to dump row stores", K(ret), K(i),
+              K(prior_dumping_rows_stores_.at(i)->ra_rs_));
+          } else {
+            target_dump_size -=
+              (mem_hold - prior_dumping_rows_stores_.at(i)->ra_rs_.get_mem_hold());
+            pop_count += prior_dumping_rows_stores_.at(i)->ra_rs_.is_all_dumped();
+          }
+        }
+        if (OB_SUCC(ret) && target_dump_size > 0) {
+          ret = ra_rs_.dump(false, target_dump_size);
+        }
+        if (prior_dumping_rows_stores_.count() == pop_count) {
+          prior_dumping_rows_stores_.clear();
+        } else if (1 == pop_count) {
+          prior_dumping_rows_stores_.at(0) = prior_dumping_rows_stores_.at(1);
+          prior_dumping_rows_stores_.pop_back(); // pop_back is only --count_ for array
+        }
+        op_.sql_mem_processor_.set_number_pass(1);
       }
     }
-    if (OB_SUCC(ret) && target_dump_size > 0) {
-      ret = ra_rs_.dump(false, target_dump_size);
-    }
-    if (prior_dumping_rows_stores_.count() == pop_count) {
-      prior_dumping_rows_stores_.clear();
-    } else if (pop_count > 0) {
-      const int64_t array_count = prior_dumping_rows_stores_.count();
-      for (int64_t i = pop_count; OB_SUCC(ret) && i < array_count; ++i) {
-        prior_dumping_rows_stores_.at(i - pop_count) = prior_dumping_rows_stores_.at(i);
-      }
-      while (pop_count > 0) {
-        prior_dumping_rows_stores_.pop_back(); // pop_back is only --count_ for array
-        --pop_count;
-      }
-    }
-    op_.sql_mem_processor_.set_number_pass(1);
   }
   return ret;
 }
