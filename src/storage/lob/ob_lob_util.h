@@ -197,7 +197,7 @@ class ObInsertLobColumnHelper final
 {
 public:
   static const uint64_t LOB_ACCESS_TX_TIMEOUT = 60000000; // 60s
-  static const uint64_t LOB_ALLOCATOR_RESET_CYCLE = 128;
+  static const uint64_t LOB_ALLOCATOR_RESET_THRESHOLD = 32 * 1024L * 1024L; // 32M
 public:
   static int start_trans(const share::ObLSID &ls_id,
                          const bool is_for_read,

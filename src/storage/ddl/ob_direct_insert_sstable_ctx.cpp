@@ -366,7 +366,7 @@ int ObSSTableInsertSliceWriter::append_row(const ObNewRow &row_val)
         LOG_WARN("fail to appen row", KR(ret));
       }
     }
-    if (lob_cnt_ % ObInsertLobColumnHelper::LOB_ALLOCATOR_RESET_CYCLE == 0) {
+    if (lob_allocator_.total() >= ObInsertLobColumnHelper::LOB_ALLOCATOR_RESET_THRESHOLD) {
       lob_allocator_.reuse(); // reuse after append_row to macro block to save memory
     }
   }
