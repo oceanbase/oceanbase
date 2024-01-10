@@ -63,9 +63,6 @@ void ObS3Logger::Log(Logging::LogLevel logLevel, const char* tag, const char* fo
     switch (logLevel) {
       case Logging::LogLevel::Fatal:
       case Logging::LogLevel::Error:
-        ret = OB_S3_ERROR;
-        _OB_LOG(ERROR, new_format, tag, arg_buf);
-        break;
       case Logging::LogLevel::Warn:
         ret = OB_S3_ERROR;
         _OB_LOG(WARN, new_format, tag, arg_buf);
@@ -638,7 +635,11 @@ static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
-  OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+  if (OB_CHECKSUM_ERROR == ob_errcode) {
+    OB_LOG_RET(ERROR, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+  } else {
+    OB_LOG_RET(WARN, ob_errcode, "S3 info", K(request_id), K(code), K(exception), K(err_msg));
+  }
 }
 
 template<typename OutcomeType>

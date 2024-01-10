@@ -126,7 +126,7 @@ public:
   virtual bool is_inited();
   int get_oss_file_meta(const common::ObString &bucket, const common::ObString &object,
                         bool &is_file_exist, char *&remote_md5, int64_t &file_length);
-  void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret);
+  void print_oss_info(aos_table_t *resp_headers, aos_status_s *aos_ret, const int ob_errcode);
 
   int init_with_storage_info(common::ObObjectStorageInfo *storage_info);
   int init_oss_endpoint();
