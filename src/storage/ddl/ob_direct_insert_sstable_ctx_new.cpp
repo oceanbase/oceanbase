@@ -757,6 +757,10 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObSSTableMetaHandle sst_meta_hdl;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t data_format_version = 0;
+  int64_t snapshot_version = 0;
+  share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
   const ObSSTable *first_major_sstable = nullptr;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const int64_t max_wait_timeout_us = 30L * 1000L * 1000L; // 30s
@@ -797,6 +801,8 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
       LOG_WARN("check if major sstable exist failed", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_FAIL(first_major_sstable->get_meta(sst_meta_hdl))) {
       LOG_WARN("fail to get sstable meta handle", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, data_format_version, snapshot_version, unused_task_status))) {
+      LOG_WARN("get ddl cluster version failed", K(ret), K(tenant_id), K(task_id));
     } else {
       const int64_t *column_checksums = sst_meta_hdl.get_sstable_meta().get_col_checksum();
       int64_t column_count = sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt();
@@ -811,7 +817,8 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
             execution_id,
             task_id,
             co_column_checksums.empty() ? column_checksums : co_column_checksums.get_data(),
-            co_column_checksums.empty() ? column_count : co_column_checksums.count()))) {
+            co_column_checksums.empty() ? column_count : co_column_checksums.count(),
+            data_format_version))) {
         LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id), K(tablet_id), K(execution_id));
       } else {
         break;
@@ -2217,7 +2224,8 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
                   execution_id,
                   sqc_build_ctx_.build_param_.runtime_only_param_.task_id_,
                   co_column_checksums.empty() ? column_checksums : co_column_checksums.get_data(),
-                  co_column_checksums.empty() ? column_count : co_column_checksums.count()))) {
+                  co_column_checksums.empty() ? column_count : co_column_checksums.count(),
+                  data_format_version_))) {
             LOG_WARN("report ddl column checksum failed", K(ret), K(ls_id_), K(tablet_id_), K(execution_id), K(sqc_build_ctx_));
           } else {
             break;

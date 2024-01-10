@@ -1508,11 +1508,13 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else {
         if (OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
                 param_->orig_table_id_,
+                param_->orig_tablet_id_.id(),
                 param_->task_id_,
                 report_col_checksums,
                 report_col_ids,
                 1/*execution_id*/,
                 param_->tablet_task_id_ << ObDDLChecksumItem::PX_SQC_ID_OFFSET | task_id_,
+                param_->data_format_version_,
                 *GCTX.sql_proxy_))) {
           LOG_WARN("fail to report origin table checksum", K(ret));
         } else {
@@ -1587,7 +1589,8 @@ int ObComplementMergeTask::process()
                                                             1 /* execution_id */,
                                                             param_->task_id_,
                                                             sst_meta_hdl.get_sstable_meta().get_col_checksum(),
-                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
+                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt(),
+                                                            param_->data_format_version_))) {
       LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
     } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(param_->dest_ls_id_, param_->dest_tablet_id_))) {
       LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
@@ -1596,11 +1599,13 @@ int ObComplementMergeTask::process()
     LOG_WARN("get column checksum failed", K(ret));
   } else if (param_->use_new_checksum() && OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
           param_->orig_table_id_,
+          param_->orig_tablet_id_.id(),
           param_->task_id_,
           report_col_checksums,
           report_col_ids,
           1/*execution_id*/,
           param_->orig_tablet_id_.id(),
+          param_->data_format_version_,
           *GCTX.sql_proxy_))) {
     LOG_WARN("fail to report origin table checksum", K(ret));
   } else if (OB_FAIL(add_build_hidden_table_sstable())) {
