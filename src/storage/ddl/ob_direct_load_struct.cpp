@@ -85,6 +85,7 @@ int ObDDLInsertRowIterator::close_lob_sstable_slice()
 }
 
 int ObDDLInsertRowIterator::get_next_row(
+    const bool skip_lob,
     const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -162,7 +163,7 @@ int ObDDLInsertRowIterator::get_next_row(
             }
           }
 
-          if (OB_SUCC(ret) && lob_column_idxs.count() > 0) {
+          if (OB_SUCC(ret) && !skip_lob && lob_column_idxs.count() > 0) {
             //handle lob
             if (lob_id_cache_.remain_count() < lob_column_idxs.count()) {
               if (OB_FAIL(switch_to_new_lob_slice())) {

@@ -273,7 +273,12 @@ public:
       const int64_t context_id,
       const int64_t parallel_idx);
   virtual ~ObDDLInsertRowIterator();
-  virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
+  virtual int get_next_row(const blocksstable::ObDatumRow *&row) override
+  {
+    const bool skip_lob = false;
+    return get_next_row(skip_lob, row);
+  }
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
   TO_STRING_KV(K_(ls_id), K_(current_tablet_id), K_(current_row), K_(is_slice_empty), K_(is_next_row_cached), K_(rowkey_count), K_(snapshot_version),
       K_(lob_slice_id), K_(lob_id_cache), K_(context_id));
 public:
