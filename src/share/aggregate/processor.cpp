@@ -222,6 +222,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         if (OB_ISNULL(out_expr)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null expr", K(ret));
+        } else if (OB_UNLIKELY(out_expr->is_const_expr())) {
+          // do not project const exprs
+          // do nothing
         } else if (OB_FAIL(out_expr->init_vector_default(agg_ctx_.eval_ctx_, output_batch_size))) {
           SQL_LOG(WARN, "init vector failed", K(ret));
         } else if (OB_FAIL(out_expr->get_vector(agg_ctx_.eval_ctx_)
@@ -230,7 +233,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         }
       }
       for (int i = 0; OB_SUCC(ret) && i < groupby_exprs.count(); i++) {
-        groupby_exprs.at(i)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        if (!groupby_exprs.at(i)->is_const_expr()) {
+          groupby_exprs.at(i)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        }
       }
     }
     LOG_DEBUG("collect group results", K(ret), K(output_size), K(cur_group_id), K(output_brs),
@@ -277,6 +282,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         if (OB_ISNULL(out_expr)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null output expr", K(ret));
+        } else if (OB_UNLIKELY(out_expr->is_const_expr())) {
+          // do not project const exprs
+          // do nothing
         } else if (OB_FAIL(out_expr->init_vector_default(agg_ctx_.eval_ctx_, batch_size))) {
           SQL_LOG(WARN, "init vector failed", K(ret));
         } else if (OB_FAIL(out_expr->get_vector(agg_ctx_.eval_ctx_)
@@ -285,7 +293,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         }
       }
       for (int col_id = 0; OB_SUCC(ret) && col_id < groupby_exprs.count(); col_id++) {
-        groupby_exprs.at(col_id)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        if (!groupby_exprs.at(col_id)->is_const_expr()) {
+          groupby_exprs.at(col_id)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        }
       }
     }
     LOG_DEBUG("collect group results", K(ret), K(batch_size), K(output_brs));
