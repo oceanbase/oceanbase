@@ -2308,7 +2308,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   uint64_t database_id = OB_INVALID_ID;
   session.get_database_id(database_id);
-  pc_key.db_id_ = (database_id == OB_INVALID_ID) ? OB_OUTLINE_DEFAULT_DATABASE_ID : database_id;
+  pc_key.db_id_ = (database_id == OB_INVALID_ID) ? OB_MOCK_DEFAULT_DATABASE_ID : database_id;
   pc_key.namespace_ = ns;
   pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
   pc_key.config_str_ = session.get_config_in_pc_str();
