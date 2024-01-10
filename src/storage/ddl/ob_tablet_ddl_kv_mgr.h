@@ -40,7 +40,8 @@ public:
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int set_max_freeze_scn(const share::SCN &checkpoint_scn);
   int get_or_create_ddl_kv(
-      const share::SCN &scn,
+      const share::SCN &macro_redo_scn,
+      const share::SCN &macro_redo_start_scn,
       ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
       ObDDLKVHandle &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
