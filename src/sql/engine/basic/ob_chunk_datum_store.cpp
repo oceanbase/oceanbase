@@ -633,9 +633,7 @@ void ObChunkDatumStore::reset()
     if (nullptr != callback_) {
       callback_->free(item->get_buffer()->mem_size());
     }
-    if (NULL != item) {
-      allocator_->free(item);
-    }
+    allocator_->free(item);
   }
 
   if (NULL != batch_ctx_) {
