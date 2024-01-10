@@ -140,6 +140,7 @@ ObMemtable::ObMemtable()
       max_column_cnt_(0)
 {
   mt_stat_.reset();
+  migration_clog_checkpoint_scn_.set_min();
 }
 
 ObMemtable::~ObMemtable()
@@ -271,6 +272,7 @@ void ObMemtable::destroy()
   transfer_freeze_flag_ = false;
   recommend_snapshot_version_.reset();
   max_end_scn_ = ObScnRange::MIN_SCN;
+  migration_clog_checkpoint_scn_.set_min();
   rec_scn_ = SCN::max_scn();
   read_barrier_ = false;
   is_tablet_freeze_ = false;
@@ -1426,7 +1428,7 @@ void ObMemtable::resolve_left_boundary_for_active_memtable()
 {
   int ret = OB_SUCCESS;
   storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr_();
-  const SCN new_start_scn = get_end_scn();
+  const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
     do {
@@ -1511,6 +1513,23 @@ int ObMemtable::get_frozen_schema_version(int64_t &schema_version) const
 {
   UNUSED(schema_version);
   return OB_NOT_SUPPORTED;
+}
+
+int ObMemtable::set_migration_clog_checkpoint_scn(const SCN &clog_checkpoint_scn)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not inited", K(ret));
+  } else if (clog_checkpoint_scn <= ObScnRange::MIN_SCN) {
+    ret = OB_SCN_OUT_OF_BOUND;
+    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
+  } else {
+    (void)migration_clog_checkpoint_scn_.atomic_store(clog_checkpoint_scn);
+  }
+
+  return ret;
 }
 
 int ObMemtable::set_snapshot_version(const SCN snapshot_version)
@@ -1963,6 +1982,38 @@ int ObMemtable::resolve_right_boundary()
   if (OB_FAIL(set_end_scn(end_scn))) {
     TRANS_LOG(ERROR, "fail to set end_scn", K(ret));
   }
+
+  return ret;
+}
+
+int ObMemtable::resolve_right_boundary_for_migration()
+{
+  bool bool_ret = false;
+  int ret = OB_SUCCESS;
+  share::ObLSID ls_id = freezer_->get_ls_id();
+  int64_t start_time = ObTimeUtility::current_time();
+
+  do {
+    bool_ret = is_frozen_memtable() && 0 == get_write_ref();
+    if (bool_ret) {
+      if (OB_FAIL(resolve_snapshot_version_())) {
+        TRANS_LOG(WARN, "fail to resolve snapshot version", K(ret), KPC(this), K(ls_id));
+      } else if (OB_FAIL(resolve_max_end_scn_())) {
+        TRANS_LOG(WARN, "fail to resolve max_end_scn", K(ret), KPC(this), K(ls_id));
+      } else {
+        resolve_right_boundary();
+        TRANS_LOG(INFO, "resolve_right_boundary_for_migration", K(ls_id), KPC(this));
+      }
+    } else {
+      const int64_t cost_time = ObTimeUtility::current_time() - start_time;
+      if (cost_time > 5 * 1000 * 1000) {
+        if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+          TRANS_LOG(WARN, "cannot resolve_right_boundary_for_migration", K(ret), KPC(this), K(ls_id));
+        }
+      }
+      ob_usleep(100);
+    }
+  } while (!bool_ret);
 
   return ret;
 }

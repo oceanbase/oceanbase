@@ -427,6 +427,7 @@ public:
       int64_t &required_size,
       const bool need_checksums = true);
   int check_and_set_initial_state();
+  int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
   int read_mds_table(
       common::ObIAllocator &allocator,
       ObTabletMdsData &mds_data,
