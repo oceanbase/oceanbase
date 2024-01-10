@@ -2570,7 +2570,14 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
     base_ctdef.rowkey_cnt_ = index_schema->get_rowkey_info().get_size();
     base_ctdef.spk_cnt_ = index_schema->get_shadow_rowkey_info().get_size();
 
-    // add rowkey column infos
+    /*
+      add rowkey column infos:
+      rowkey columns in rowkey_info is different:
+      - for primary table: primary keys
+      - for index table:
+        - unique index (local and global): index columns + shadow primary keys
+        - not unique index: index columns + primary keys
+    */
     const ObRowkeyInfo &rowkey_info = index_schema->get_rowkey_info();
     for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
       const ObRowkeyColumn *rowkey_column = rowkey_info.get_column(i);
@@ -2585,7 +2592,7 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
       }
       if (index_schema->is_index_table()) {
         const ObTableColumnItem *item = nullptr;
-        if (is_shadow_column(column->get_column_id())) {
+        if (!column->is_index_column() || is_shadow_column(column->get_column_id())) {
           // skip
         } else if (OB_FAIL(ctx.get_column_item_by_column_id(column->get_column_id(), item))) {
           LOG_WARN("fail to get column item", K(ret), K(column->get_column_id()), K(index_tid));
