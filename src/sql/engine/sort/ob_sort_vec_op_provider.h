@@ -69,6 +69,7 @@ public:
   void set_operator_type(ObPhyOperatorType op_type);
   void set_operator_id(uint64_t op_id);
   void set_io_event_observer(ObIOEventObserver *observer);
+  common::ObIAllocator *get_malloc_allocator() { return alloc_; }
 
 private:
   int init_mem_context(uint64_t tenant_id);
