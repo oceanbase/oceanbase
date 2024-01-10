@@ -91,6 +91,9 @@ private:
   int get_next_row_from_child();
   int insert_row_to_das();
   int delete_row_to_das();
+  int calc_del_tablet_loc(ObExpr *calc_part_id_expr,
+                          ObDASTableLoc &table_loc,
+                          ObDASTabletLoc *&tablet_loc);
   int post_das_task();
   int check_values(bool &is_equal,
                    const ObChunkDatumStore::StoredRow *replace_row,

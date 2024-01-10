@@ -572,6 +572,11 @@ int ObTableExprCgService::get_part_key_column_expr(ObTableCtx &ctx,
     } else if (OB_ISNULL(column_item) || OB_ISNULL(column_item->raw_expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column item is NULL", K(ret), K(column_item));
+    }  else if (!column_item->raw_expr_->is_column_ref_expr() ||
+                (column_item->raw_expr_->is_column_ref_expr() && column_item->is_generated_column_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("non-common column partition key  is not supported", K(ret), K(column_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-common column partition key");
     } else if (OB_FAIL(part_keys_expr.push_back(column_item->raw_expr_))) {
       LOG_WARN("fail to push back raw expr", K(ret));
     }
@@ -2605,6 +2610,7 @@ int ObTableDmlCgService::generate_column_info(ObTableID index_tid,
                   (item->raw_expr_->is_column_ref_expr() && item->is_generated_column_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("index with non-common column is not supported", K(ret), K(column->get_column_id()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "index with non-common column");
         }
       }
       if (OB_FAIL(ret)) {
