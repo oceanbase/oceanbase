@@ -254,7 +254,9 @@ int ObMPStmtPrexecute::before_process()
                                K(ret), K(cli_ret), K(get_retry_ctrl().need_retry()), K(sql_));
                       ret = cli_ret;
                     }
-                    session->set_session_in_retry(retry_ctrl_.need_retry());
+                    if (OB_FAIL(ret)) {
+                      session->set_session_in_retry(retry_ctrl_.need_retry());
+                    }
                   }
                 }
               } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
