@@ -3154,7 +3154,7 @@ do {                                                                  \
        */
       if (func_.get_in_args().has_member(i)) {
         const ObPLDataType &pl_type = func_.get_variables().at(i);
-        if (is_anonymous) {
+        if (is_anonymous && !func_.get_params_info().at(i).flag_.need_to_check_type_) {
           OX (get_params().at(i) = params->at(i));
         } else if (params->at(i).is_pl_mock_default_param()) { // 使用参数默认值
           ObObjParam result;
