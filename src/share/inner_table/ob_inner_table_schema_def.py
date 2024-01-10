@@ -810,6 +810,7 @@ def_table_schema(
         ('max_iops', 'int'),
         ('min_iops', 'int'),
         ('iops_weight', 'int'),
+        ('data_disk_size', 'int', 'false', '-1'),
     ],
 )
 
