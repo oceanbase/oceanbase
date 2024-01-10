@@ -125,6 +125,7 @@ private:
   static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000; // 2m
   static const int64_t DEAL_REST_TABLE_CNT_THRESHOLD = 100;
   static const int64_t DEAL_REST_TABLE_INTERVAL = 10 * 60 * 1000 * 1000L; // 10m
+  static const int64_t ASSGIN_FAILURE_RETRY_TIMES = 10;
 private:
   bool is_inited_;
   bool first_loop_in_cur_round_;

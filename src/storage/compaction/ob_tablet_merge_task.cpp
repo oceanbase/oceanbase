@@ -266,6 +266,7 @@ int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
 ObCompactionParam::ObCompactionParam()
   : score_(0),
     occupy_size_(0),
+    estimate_phy_size_(0),
     replay_interval_(0),
     add_time_(0),
     last_end_scn_(),
