@@ -741,8 +741,10 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
   } else {
     obsys::ObWLockGuard lock_guard(lock_);
     if (OB_FAIL(tablet_id_map_.get_refactored(tablet_id, tmp_flag))) {
-      if (OB_HASH_NOT_EXIST == ret && OB_FAIL(tablet_id_map_.set_refactored(tablet_id, input_flag))) {
-        LOG_WARN("failed to stop tablet schedule medium", K(ret), K(tablet_id), K(input_flag));
+      if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(tablet_id_map_.set_refactored(tablet_id, input_flag))) {
+          LOG_WARN("failed to stop tablet schedule medium", K(ret), K(tablet_id), K(input_flag));
+        }
       } else {
         LOG_WARN("failed to get map", K(ret), K(tablet_id), K(tmp_flag));
       }
@@ -751,7 +753,7 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
       LOG_TRACE("flag in conflict", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
     } else { // tmp_flag == input_flag
       ret = OB_ERR_UNEXPECTED;
-      LOG_TRACE("flag in already exist", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
+      LOG_WARN("flag in already exist", K(ret), K(tablet_id), K(tmp_flag), K(input_flag));
     }
   }
   return ret;
@@ -947,7 +949,7 @@ int ObTenantTabletScheduler::tablet_start_schedule_medium(const ObTabletID &tabl
       tablet_could_schedule_medium = false;
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to add flag for tablet schedule medium", K(ret));
+      LOG_WARN("failed to add flag for tablet schedule medium", K(ret), K(tablet_id));
     }
   } else {
     tablet_could_schedule_medium = true;
@@ -1441,6 +1443,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       bool tablet_merge_finish = false;
       // ATTENTION!!! load weak ts before get tablet
       const share::SCN &weak_read_ts = ls.get_ls_wrs_handler()->get_ls_weak_read_ts();
+      tablet_could_schedule_medium = false;
       if (OB_FAIL(medium_ls_tablet_iter_.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
@@ -1461,19 +1464,19 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
       } else if (FALSE_IT(tablet_id = tablet->get_tablet_meta().tablet_id_)) {
       } else if (tablet_id.is_ls_inner_tablet()) {
         // do nothing
-      } else if (FALSE_IT(tablet_could_schedule_medium = false)) {
       } else if (is_leader && could_major_merge
               && OB_TMP_FAIL(tablet_start_schedule_medium(tablet_id, tablet_could_schedule_medium))) {
-        LOG_WARN("failed to set start schedule medium", K(ret), K(tmp_ret), K(ls_id));
+        LOG_WARN("failed to set start schedule medium", K(ret), K(tmp_ret), K(ls_id), K(tablet_id));
       } else if (OB_TMP_FAIL(schedule_tablet_medium(
                      ls_handle, tablet_handle, major_frozen_scn, weak_read_ts,
                      could_major_merge, enable_adaptive_compaction, tablet_could_schedule_medium, ls_locality,
                      merge_version, is_leader, tablet_merge_finish))) {
         LOG_WARN("fail to schedule tablet medium", K(tmp_ret));
-      } else if (tablet_could_schedule_medium
+      }
+      if (tablet_could_schedule_medium
               && OB_TMP_FAIL(clear_prohibit_medium_flag(tablet_id, ObProhibitScheduleMediumMap::MEDIUM))) {
         // clear flags set by tablet_start_schedule_medium
-        LOG_WARN("failed to clear prohibit schedule medium flag", K(tmp_ret), K(ret), K(ls_id));
+        LOG_WARN("failed to clear prohibit schedule medium flag", K(tmp_ret), K(ret), K(ls_id), K(tablet_id));
       }
       medium_ls_tablet_iter_.update_merge_finish(tablet_merge_finish);
     } // end of while
