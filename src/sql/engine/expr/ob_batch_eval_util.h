@@ -615,9 +615,11 @@ int def_fixed_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
           VEC_ARG_LIST, args...);
     }
   }
-  SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  if (OB_SUCC(ret)) {
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  }
   return ret;
 }
 
@@ -658,9 +660,11 @@ int def_variable_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
           VEC_ARG_LIST, args...);
     }
   }
-  SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  if (OB_SUCC(ret)) {
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  }
   return ret;
 }
 #undef FORMAT_DISPATCH_BRANCH
