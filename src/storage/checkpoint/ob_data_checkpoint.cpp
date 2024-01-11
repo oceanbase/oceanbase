@@ -905,6 +905,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(const int64_t trace_id,
 void ObDataCheckpoint::add_diagnose_info_for_ls_frozen_()
 {
   ObCheckpointIterator iterator;
+  RLOCK(LS_FROZEN);
   ls_frozen_list_.get_iterator(iterator);
   while (iterator.has_next()) {
     memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable*>(iterator.get_next());
