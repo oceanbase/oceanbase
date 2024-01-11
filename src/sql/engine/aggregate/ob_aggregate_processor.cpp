@@ -770,6 +770,7 @@ int ObAggregateProcessor::GroupConcatExtraResult::init(const uint64_t tenant_id,
   } else {
     row_count_ = 0;
     iter_idx_ = 0;
+    need_rewind_ = need_rewind;
 
     if (aggr_info.has_order_by_) {
       if (OB_ISNULL(sort_op_ = static_cast<ObSortOpImpl *>(alloc_.alloc(sizeof(ObSortOpImpl))))) {
