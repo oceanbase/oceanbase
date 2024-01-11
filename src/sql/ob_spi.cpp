@@ -6048,9 +6048,9 @@ int ObSPIService::spi_destruct_obj(ObPLExecCtx *ctx,
       obj->is_pl_extend() &&
       obj->get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
     OZ (ObUserDefinedType::destruct_obj(*obj, ctx->exec_ctx_->get_my_session()));
+    OX (obj->set_null());
   }
 
-  SET_SPI_STATUS;
   return ret;
 }
 

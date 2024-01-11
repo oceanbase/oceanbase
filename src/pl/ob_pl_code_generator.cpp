@@ -1713,6 +1713,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
         int64_t udt_id = GET_USING_EXPR(i)->get_result_type().get_udt_id();
         if (s.is_pure_out(i)) {
           OZ (generator_.generate_new_objparam(p_result_obj, udt_id));
+          OZ (generator_.add_out_params(p_result_obj));
         } else if (!GET_USING_EXPR(i)->is_obj_access_expr()
                    || !(static_cast<const ObObjAccessRawExpr *>(GET_USING_EXPR(i))->for_write())) {
           OZ (generator_.generate_expr(s.get_using_index(i), s, OB_INVALID_INDEX, p_result_obj));
@@ -1735,6 +1736,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
             ObLLVMValue src_obj;
             ObLLVMValue p_dest_obj;
             OZ (generator_.generate_new_objparam(p_result_obj));
+            OZ (generator_.add_out_params(p_result_obj));
             OZ (generator_.extract_extend_from_objparam(address, final_type, p_obj));
             OZ (generator_.get_adt_service().get_obj(obj_type));
             OZ (obj_type.get_pointer_to(obj_type_ptr));
@@ -1751,6 +1753,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLExecuteStmt &s)
             OZ (generator_.extract_allocator_from_context(
               generator_.get_vars().at(generator_.CTX_IDX), allocator));
             OZ (generator_.generate_new_objparam(p_result_obj, udt_id));
+            OZ (generator_.add_out_params(p_result_obj));
             OZ (generator_.extract_obobj_ptr_from_objparam(p_result_obj, dest_datum));
             OZ (generator_.extract_obobj_ptr_from_objparam(address, src_datum));
             OZ (final_type.generate_copy(generator_,
@@ -2580,6 +2583,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                                                          p_result_obj));
           } else {
             OZ (generator_.generate_new_objparam(p_result_obj), K(i), KPC(var));
+            OZ (generator_.add_out_params(p_result_obj));
           }
           if (OB_SUCC(ret)
               && OB_ISNULL(pl_type)
@@ -2672,6 +2676,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               ObLLVMValue src_obj;
               ObLLVMValue p_dest_obj;
               OZ (generator_.generate_new_objparam(p_result_obj));
+              OZ (generator_.add_out_params(p_result_obj));
               OZ (generator_.extract_extend_from_objparam(address, final_type, p_obj));
               OZ (generator_.get_adt_service().get_obj(obj_type));
               OZ (obj_type.get_pointer_to(obj_type_ptr));
@@ -2688,6 +2693,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               OZ (generator_.extract_allocator_from_context(
                 generator_.get_vars().at(generator_.CTX_IDX), allocator));
               OZ (generator_.generate_new_objparam(p_result_obj, udt_id));
+              OZ (generator_.add_out_params(p_result_obj));
               OZ (generator_.extract_obobj_ptr_from_objparam(p_result_obj, dest_datum));
               OZ (generator_.extract_obobj_ptr_from_objparam(address, src_datum));
               OZ (final_type.generate_copy(generator_,
@@ -7171,7 +7177,15 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
   if (OB_SUCC(ret)) {
     ObLLVMValue ret_value;
     ObLLVMValue exception_result;
-
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_out_params().count(); ++i) {
+      ObLLVMValue src_datum;
+      jit::ObLLVMValue ret_err;
+      ObSEArray<jit::ObLLVMValue, 2> args;
+      OZ (extract_obobj_ptr_from_objparam(get_out_params().at(i), src_datum));
+      OZ (args.push_back(get_vars()[CTX_IDX]));
+      OZ (args.push_back(src_datum));
+      OZ (helper_.create_call(ObString("spi_destruct_obj"), get_spi_service().spi_destruct_obj_, args, ret_err));
+    }
     /*
      * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
      * 因为此时已经在exception过程中，只尝试关闭，不再check_success
@@ -8163,12 +8177,7 @@ int ObPLCodeGenerator::generate_out_param(
                                     s.get_block()->in_notfound(),
                                     s.get_block()->in_warning(),
                                     OB_INVALID_ID));
-          if (OB_FAIL(ret)) {
-          } else if (PL_CALL == s.get_type()) {
-            OZ (generate_destruct_obj(s, src_datum));
-          } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
-            OZ (generate_destruct_obj(s, src_datum));
-          }
+          OZ (generate_destruct_obj(s, src_datum));
         }
       }
     } else { //处理基础类型的出参
@@ -8259,7 +8268,7 @@ int ObPLCodeGenerator::generate_out_param(
           } else {
             OZ (generate_destruct_obj(s, src_datum));
           }
-        } else if (PL_EXECUTE == s.get_type() && param_desc.at(i).is_pure_out()) {
+        } else if (PL_EXECUTE == s.get_type()) {
           OZ (generate_destruct_obj(s, src_datum));
         }
       }
@@ -8299,6 +8308,7 @@ int ObPLCodeGenerator::generate_out_params(
       OZ (generate_out_param(s, param_desc, params, i));
     }
   }
+  reset_out_params();
   return ret;
 }
 
