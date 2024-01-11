@@ -42,7 +42,7 @@ obdevtools-llvm-11.0.1-312022092921.el8.aarch64.rpm
 [tools-deps]
 devdeps-oblogmsg-1.0-52022113019.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
-obshell-4.2.2.0-72024010917.el8.aarch64.rpm target=community
+obshell-4.2.2.0-82024011102.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-1.6.0-41.el8.aarch64.rpm target=community
