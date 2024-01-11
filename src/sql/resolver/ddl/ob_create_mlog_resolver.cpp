@@ -603,10 +603,8 @@ int ObCreateMLogResolver::resolve_purge_node(
         } else {
           ParseNode *purge_start_node = purge_type_node->children_[0];
           ParseNode *purge_next_node = purge_type_node->children_[1];
-          if (OB_NOT_NULL(purge_start_node) || OB_NOT_NULL(purge_next_node)) {
-            if (OB_FAIL(resolve_purge_start_next_node(purge_start_node, purge_next_node, create_mlog_stmt))) {
-              LOG_WARN("failed to resolve purge start next node", KR(ret));
-            }
+          if (OB_FAIL(resolve_purge_start_next_node(purge_start_node, purge_next_node, create_mlog_stmt))) {
+            LOG_WARN("failed to resolve purge start next node", KR(ret));
           }
         }
         break;
@@ -625,47 +623,53 @@ int ObCreateMLogResolver::resolve_purge_start_next_node(
     ObCreateMLogStmt &create_mlog_stmt)
 {
   int ret = OB_SUCCESS;
-  int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
-  int64_t start_time = current_time;
-  ObCreateMLogArg &create_mlog_arg = create_mlog_stmt.get_create_mlog_arg();
+  if (OB_NOT_NULL(purge_start_node) || OB_NOT_NULL(purge_next_node)) {
+    int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+    int64_t start_time = OB_INVALID_TIMESTAMP;
+    ObCreateMLogArg &create_mlog_arg = create_mlog_stmt.get_create_mlog_arg();
 
-  if (OB_NOT_NULL(purge_start_node)
-      && (T_MLOG_PURGE_START_TIME_EXPR == purge_start_node->type_)
-      && (1 == purge_start_node->num_child_)
-      && OB_NOT_NULL(purge_start_node->children_)
-      && OB_NOT_NULL(purge_start_node->children_[0])) {
-    if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
-        *session_info_, *(purge_start_node->children_[0]), *allocator_, start_time))) {
-      LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
-    } else if (start_time < current_time) {
-      ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-      LOG_WARN("the parameter start date must evaluate to a time in the future",
-          KR(ret), K(current_time), K(start_time));
-      LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    create_mlog_arg.purge_options_.start_datetime_expr_.set_timestamp(start_time);
-    create_mlog_stmt.set_purge_mode(ObMLogPurgeMode::DEFERRED);
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(purge_next_node)) {
-    int64_t next_time = 0;
-    if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
-        *session_info_, *purge_next_node, *allocator_, next_time))) {
-      LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
-    } else if (next_time <= current_time) {
-      ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-      LOG_WARN("the parameter next date must evaluate to a time in the future",
-          KR(ret), K(current_time), K(next_time));
-      LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
-    } else {
-      ObString next_date_str(purge_next_node->str_len_, purge_next_node->str_value_);
-      if (OB_FAIL(ob_write_string(*allocator_, next_date_str,
-          create_mlog_arg.purge_options_.next_datetime_expr_))) {
-        LOG_WARN("fail to write string", KR(ret));
+    if (OB_NOT_NULL(purge_start_node)
+        && (T_MLOG_PURGE_START_TIME_EXPR == purge_start_node->type_)
+        && (1 == purge_start_node->num_child_)
+        && OB_NOT_NULL(purge_start_node->children_)
+        && OB_NOT_NULL(purge_start_node->children_[0])) {
+      if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
+          *session_info_, *(purge_start_node->children_[0]), *allocator_, start_time))) {
+        LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+      } else if (start_time < current_time) {
+        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+        LOG_WARN("the parameter start date must evaluate to a time in the future",
+            KR(ret), K(current_time), K(start_time));
+        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
       }
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(purge_next_node)) {
+      int64_t next_time = OB_INVALID_TIMESTAMP;
+      if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(params_,
+          *session_info_, *purge_next_node, *allocator_, next_time))) {
+        LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+      } else if (next_time < current_time) {
+        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+        LOG_WARN("the parameter next date must evaluate to a time in the future",
+            KR(ret), K(current_time), K(next_time));
+        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
+      } else if (OB_INVALID_TIMESTAMP == start_time) {
+        start_time = next_time;
+      }
+
+      if (OB_SUCC(ret)) {
+        ObString next_date_str(purge_next_node->str_len_, purge_next_node->str_value_);
+        if (OB_FAIL(ob_write_string(*allocator_, next_date_str,
+            create_mlog_arg.purge_options_.next_datetime_expr_))) {
+          LOG_WARN("fail to write string", KR(ret));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      create_mlog_arg.purge_options_.start_datetime_expr_.set_timestamp(start_time);
+      create_mlog_stmt.set_purge_mode(ObMLogPurgeMode::DEFERRED);
     }
   }
   return ret;
