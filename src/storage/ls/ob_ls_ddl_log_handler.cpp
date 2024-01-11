@@ -228,13 +228,19 @@ int ObLSDDLLogHandler::online()
     } else {
       while (OB_SUCC(ret)) {
         ObTabletHandle tablet_handle;
-        if (OB_FAIL(tablet_iter.get_next_tablet(tablet_handle))) {
+        ObDDLKvMgrHandle ddl_kv_mgr_handle;
+        if (OB_FAIL(tablet_iter.get_next_ddl_kv_mgr(ddl_kv_mgr_handle))) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
             break;
           } else {
-            LOG_WARN("get next tablet failed", K(ret));
+            LOG_WARN("failed to get next ddl kv mgr", K(ret));
           }
+        } else if (OB_UNLIKELY(!ddl_kv_mgr_handle.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid tablet handle", K(ret), K(ddl_kv_mgr_handle));
+        } else if (OB_FAIL(ls_->get_tablet(ddl_kv_mgr_handle.get_obj()->get_tablet_id(), tablet_handle))) {
+          LOG_WARN("get tablet handle failed", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
         } else if (OB_FAIL(tablet_handle.get_obj()->start_direct_load_task_if_need())) {
           LOG_WARN("start ddl if need failed", K(ret));
         }
