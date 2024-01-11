@@ -128,6 +128,7 @@ protected:
   int stored_row_to_exprs(const ObChunkDatumStore::StoredRow &row,
                           const common::ObIArray<ObExpr*> &exprs,
                           ObEvalCtx &ctx);
+  int check_row_null(const ObExprPtrIArray &row, const ColContentIArray &column_infos);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

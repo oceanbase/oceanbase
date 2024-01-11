@@ -132,6 +132,10 @@ int ObTableLoginP::get_ids()
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
       LOG_WARN("get_schema_guard failed", K(ret));
     } else if (OB_FAIL(guard.get_tenant_id(arg_.tenant_name_, result_.tenant_id_))) {
+      if (ret == OB_ERR_INVALID_TENANT_NAME) {
+        ret = OB_TENANT_NOT_EXIST;
+        LOG_USER_ERROR(OB_TENANT_NOT_EXIST, arg_.tenant_name_.length(), arg_.tenant_name_.ptr());
+      }
       LOG_WARN("get_tenant_id failed", K(ret), "tenant", arg_.tenant_name_);
     } else if (OB_INVALID_ID == result_.tenant_id_) {
       ret = OB_ERR_INVALID_TENANT_NAME;
@@ -142,14 +146,19 @@ int ObTableLoginP::get_ids()
                                              result_.database_id_))) {
       LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
     } else if (OB_INVALID_ID == result_.database_id_) {
-      ret = OB_WRONG_DB_NAME;
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, arg_.database_name_.length(), arg_.database_name_.ptr());
       LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
     } else if (OB_FAIL(guard.get_user_id(result_.tenant_id_, arg_.user_name_,
                                          ObString::make_string("%")/*assume there is no specific host*/,
                                          result_.user_id_))) {
+      if (ret == OB_ERR_USER_NOT_EXIST) {
+        LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
+      }
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     } else if (OB_INVALID_ID == result_.user_id_) {
       ret = OB_ERR_USER_NOT_EXIST;
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     }
   }
@@ -183,6 +192,9 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
     } else if (gctx_.schema_service_->get_tenant_schema_guard(tenant_id, guard)) {
       LOG_WARN("fail to get tenant guard", KR(ret), K(tenant_id));
     } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+      if (ret == OB_PASSWORD_WRONG) {
+        LOG_USER_ERROR(OB_PASSWORD_WRONG, user.length(), user.ptr(), tenant.length(), tenant.ptr(), "YES"/*using password*/);
+      }
       LOG_WARN("User access denied", K(login_info), K(ret));
     } else if (OB_ISNULL(user_info)) {
       ret = OB_ERR_UNEXPECTED;
@@ -273,7 +285,12 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));
   } else if (sess_credetial->hash_val_ != credential_.hash_val_) {
-    ret = OB_ERR_NO_PRIVILEGE;
+    ret = OB_KV_CREDENTIAL_NOT_MATCH;
+    char user_cred_info[128];
+    char sess_cred_info[128];
+    int user_len = credential_.to_string(user_cred_info, 128);
+    int sess_len = sess_credetial->to_string(sess_cred_info, 128);
+    LOG_USER_ERROR(OB_KV_CREDENTIAL_NOT_MATCH, user_len, user_cred_info, sess_len, sess_cred_info);
     LOG_WARN("invalid credential", K(ret), K_(credential), K(*sess_credetial));
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
@@ -446,6 +463,7 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
   bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
   if ((!is_readonly) && (ObTableConsistencyLevel::EVENTUAL == consistency_level)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
     LOG_WARN("some options not supported yet", K(ret), K(is_readonly), K(consistency_level));
   }
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);

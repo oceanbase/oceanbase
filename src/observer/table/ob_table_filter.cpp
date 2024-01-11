@@ -103,6 +103,7 @@ int ObTableComparator::compare_to(const ObIArray<ObString> &select_columns,
       } else {
         // not support others
         ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "only for int and string, other column type");
         LOG_WARN("do not support other column type, only for int, string", K(ret), K(column_type));
       }
     } else {
