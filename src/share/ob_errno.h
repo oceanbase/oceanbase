@@ -1456,13 +1456,13 @@ constexpr int OB_ERR_NULL_FOR_XML_CONSTRUCTOR = -7416;
 constexpr int OB_ERR_XML_INDEX = -7417;
 constexpr int OB_ERR_UPDATE_XML_WITH_INVALID_NODE = -7418;
 constexpr int OB_LOB_VALUE_NOT_EXIST = -7419;
+constexpr int OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = -7420;
 constexpr int OB_ERR_XQUERY_MULTI_VALUE = -7421;
 constexpr int OB_ERR_LACK_XQUERY_LITERAL = -7423;
 constexpr int OB_ERR_XQUERY_TYPE_MISMATCH = -7425;
 constexpr int OB_ERR_XQUERY_UNSUPPORTED = -7428;
 constexpr int OB_ERR_INVALID_XML_CHILD_NAME = -7429;
 constexpr int OB_ERR_XML_NOT_SUPPORT_OPERATION = -7430;
-constexpr int OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = -7431;
 constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
 constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
 constexpr int OB_SERVER_IS_INIT = -8001;
@@ -3611,7 +3611,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__USER_ERROR_MSG "cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__USER_ERROR_MSG "XML nodes must be updated with valid nodes and of the same type'"
 #define OB_LOB_VALUE_NOT_EXIST__USER_ERROR_MSG "LOB value does not exist"
-#define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__USER_ERROR_MSG "Input to JSON generation function has unsupported data type"
 #define OB_ERR_XQUERY_MULTI_VALUE__USER_ERROR_MSG "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
 #define OB_ERR_PARSE_XQUERY_EXPR__USER_ERROR_MSG "XPST0003 - error during parsing the XQuery expression : %.*s"
 #define OB_ERR_LACK_XQUERY_LITERAL__USER_ERROR_MSG "XQuery string literal expected"
@@ -3622,7 +3622,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XQUERY_UNSUPPORTED__USER_ERROR_MSG "unsupported XQuery expression"
 #define OB_ERR_INVALID_XML_CHILD_NAME__USER_ERROR_MSG "The document being inserted does not conform to specified child name"
 #define OB_ERR_XML_NOT_SUPPORT_OPERATION__USER_ERROR_MSG "XML node '' (type=%s) does not support this operation"
-#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__USER_ERROR_MSG "Input to JSON generation function has unsupported data type"
+#define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__USER_ERROR_MSG "cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
@@ -5796,7 +5796,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__ORA_USER_ERROR_MSG "ORA-02327: cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__ORA_USER_ERROR_MSG "ORA-31067: XML nodes must be updated with valid nodes and of the same type"
 #define OB_LOB_VALUE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22922: LOB value does not exist"
-#define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__ORA_USER_ERROR_MSG "ORA-40654: Input to JSON generation function has unsupported data type"
 #define OB_ERR_XQUERY_MULTI_VALUE__ORA_USER_ERROR_MSG "ORA-19279: XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
 #define OB_ERR_PARSE_XQUERY_EXPR__ORA_USER_ERROR_MSG "ORA-19114: XPST0003 - error during parsing the XQuery expression : %.*s"
 #define OB_ERR_LACK_XQUERY_LITERAL__ORA_USER_ERROR_MSG "ORA-19102: XQuery string literal expected"
@@ -5807,7 +5807,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XQUERY_UNSUPPORTED__ORA_USER_ERROR_MSG "ORA-19110: unsupported XQuery expression"
 #define OB_ERR_INVALID_XML_CHILD_NAME__ORA_USER_ERROR_MSG "ORA-31056: The document being inserted does not conform to specified child name"
 #define OB_ERR_XML_NOT_SUPPORT_OPERATION__ORA_USER_ERROR_MSG "ORA-31195: XML node '' (type=%s) does not support this operation"
-#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__ORA_USER_ERROR_MSG "ORA-40654: Input to JSON generation function has unsupported data type"
+#define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__ORA_USER_ERROR_MSG "ORA-22901: cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__ORA_USER_ERROR_MSG "ORA-31003: Parent %.*s already contains child entry %s%.*s"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"

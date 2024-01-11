@@ -1959,7 +1959,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expect
 DEFINE_ORACLE_ERROR(OB_ERR_XML_INDEX, -7417, -1, "42000", "cannot create index on expression with datatype ADT '%.*s'", 2327 ,"cannot create index on expression with datatype ADT '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_XML_WITH_INVALID_NODE, -7418, -1, "42000", "XML nodes must be updated with valid nodes and of the same type'", 31067 ,"XML nodes must be updated with valid nodes and of the same type");
 DEFINE_ORACLE_ERROR(OB_LOB_VALUE_NOT_EXIST, -7419, -1, "42000", "LOB value does not exist", 22922 ,"LOB value does not exist");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7420, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7420, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
 DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_MULTI_VALUE, -7421, -1, "42000", "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence", 19279, "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_PARSE_XQUERY_EXPR, -7422, -1, "42000", "XPST0003 - error during parsing the XQuery expression", "XPST0003 - error during parsing the XQuery expression : %.*s", 19114, "XPST0003 - error during parsing the XQuery expression", "XPST0003 - error during parsing the XQuery expression : %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_LACK_XQUERY_LITERAL, -7423, -1, "42000", "XQuery string literal expected", 19102, "XQuery string literal expected");
@@ -1970,7 +1970,7 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_XPATH_NO_NODE, -7427, -1, "42000", "XPST0005 
 DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_UNSUPPORTED, -7428, -1, "42000", "unsupported XQuery expression", 19110, "unsupported XQuery expression");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XML_CHILD_NAME, -7429, -1, "42000", "The document being inserted does not conform to specified child name", 31056, "The document being inserted does not conform to specified child name");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML node '' (type=%s) does not support this operation", 31195, "XML node '' (type=%s) does not support this operation");
-DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7431, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7431, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
 DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
 
