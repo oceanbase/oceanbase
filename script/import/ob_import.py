@@ -17,7 +17,7 @@ param['null'] = '\3'
 
 param['table_name'] = 't1'
 param['column_count'] = 4
-param['host'] = "10.232.38.8"
+param['host'] = "127.0.0.1"
 param['port'] = 35999
 param['user'] = "admin"
 param['passwd'] = "admin"
