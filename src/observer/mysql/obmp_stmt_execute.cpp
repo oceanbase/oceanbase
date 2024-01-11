@@ -1366,8 +1366,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     }
 
     //update v$sql statistics
-    if ((OB_SUCC(ret) || audit_record.is_timeout())
-        && session.get_local_ob_enable_plan_cache()
+    if (session.get_local_ob_enable_plan_cache()
         && !retry_ctrl_.need_retry()
         && !is_ps_cursor()) {
       // ps cursor do this in inner open
