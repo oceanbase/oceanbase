@@ -895,7 +895,7 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
   REC_TRANS_TRACE_EXT2(tlog_, commit, OB_ID(ret), ret,
                        OB_ID(tid), GETTID(),
                        OB_ID(ref), get_ref());
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_EAGAIN != ret && OB_TRANS_COMMITED != ret) {
     TRANS_LOG(WARN, "trx commit failed", KR(ret), KPC(this));
   }
   return ret;

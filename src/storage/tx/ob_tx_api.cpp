@@ -477,6 +477,7 @@ int ObTransService::submit_commit_tx(ObTxDesc &tx,
       if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
         TX_STAT_TIMEOUT_INC
         TRANS_LOG(WARN, "tx has timeout, it has rollbacked internally", K_(tx.expire_ts), K(tx));
+        tx.print_trace_();
         ret = OB_TRANS_ROLLBACKED;
         handle_tx_commit_result_(tx, OB_TRANS_ROLLBACKED);
       } else if (tx.flags_.PARTS_INCOMPLETE_) {
@@ -1837,7 +1838,8 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
       // interrupted, fail fastly
       if (tx.flags_.INTERRUPTED_) {
         ret = OB_ERR_INTERRUPTED;
-        TRANS_LOG(WARN, "rollback was interrupted", K_(tx.tx_id),
+        TRANS_LOG(WARN, "rollback was interrupted", "caused_by", ObTxAbortCauseNames::of(tx.abort_cause_),
+                  "trans_id", tx.tx_id_,
                   K(remain_cnt), K(waittime), K(retries));
       }
     }
@@ -2010,7 +2012,12 @@ OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx, const bool in_stmt)
         break;
       }
     case ObTxDesc::State::ABORTED:
-      ret = tx.abort_cause_ < 0 ? tx.abort_cause_ : OB_TRANS_NEED_ROLLBACK;
+      {
+        const int cause = tx.abort_cause_;
+        ret = cause < 0 ? cause : OB_TRANS_NEED_ROLLBACK;
+        const char *err_name = cause < 0 ? common::ob_error_name(cause) : ObTxAbortCauseNames::of(cause);
+        TRANS_LOG(WARN, "trans has been aborted", "caused_by", err_name, K(ret), "txid", tx.tx_id_);
+      }
       break;
     case ObTxDesc::State::COMMITTED:
       ret = OB_TRANS_COMMITED;

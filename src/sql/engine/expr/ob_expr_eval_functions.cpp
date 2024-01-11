@@ -338,6 +338,7 @@
 #include "ob_expr_between.h"
 #include "ob_expr_align_date4cmp.h"
 #include "ob_expr_extract_cert_expired_time.h"
+#include "ob_expr_transaction_id.h"
 
 namespace oceanbase
 {
@@ -1109,7 +1110,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprDocID::generate_doc_id,                              /* 667 */
   NULL, // ObExprWordSegment::generate_fulltext_column,               /* 668 */
   NULL, // ObExprWordCount::generate_word_count,                      /* 669 */
-  NULL, // ObExprBM25::eval_bm25_relevance_expr,                      /* 690 */
+  NULL, // ObExprBM25::eval_bm25_relevance_expr,                      /* 670 */
+  ObExprTransactionId::eval_transaction_id,                           /* 671 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

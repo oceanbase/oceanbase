@@ -887,7 +887,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_LAST_INSERT_ID == type_
           || T_FUN_SYS_ROW_COUNT == type_
           || T_FUN_SYS_FOUND_ROWS == type_
-          || T_FUN_SYS_CURRENT_USER_PRIV == type_) {
+          || T_FUN_SYS_CURRENT_USER_PRIV == type_
+          || T_FUN_SYS_TRANSACTION_ID == type_) {
       is_non_pure = true;
     }
   }

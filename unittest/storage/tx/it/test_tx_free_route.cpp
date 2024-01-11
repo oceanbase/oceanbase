@@ -12,6 +12,7 @@
 
 #include <gtest/gtest.h>
 #include <thread>
+#include <sys/resource.h>
 #include <functional>
 #define private public
 #define protected public
@@ -205,7 +206,8 @@ class MockObServer {
 public:
   MockObServer(const int64_t ls_id, const char*addr, const int32_t port, MsgBus &msg_bus)
     : addr_(ObAddr(ObAddr::VER::IPV4, addr, port)),
-      tx_node_(ls_id, addr_, msg_bus),
+      tx_node_ptr_(new ObTxNode(ls_id, addr_, msg_bus)),
+      tx_node_(*tx_node_ptr_),
       allocator_(), session_()
   {
     session_.test_init(1, 1111, 2222, &allocator_);
@@ -218,6 +220,7 @@ public:
       tx_node_.release_tx(*session_.get_tx_desc());
       session_.get_tx_desc() = NULL;
     }
+    delete tx_node_ptr_;
   }
   int start() { return tx_node_.start(); }
 public:
@@ -261,7 +264,8 @@ private:
   int handle_msg_(int type, void *msg);
   int handle_msg_check_alive_resp__(ObTxFreeRouteCheckAliveRespMsg *msg);
   ObAddr addr_;
-  ObTxNode tx_node_;
+  ObTxNode *tx_node_ptr_;
+  ObTxNode &tx_node_;
   ObMalloc allocator_;
   sql::ObSQLSessionInfo session_;
   TO_STRING_KV(K_(tx_node), K_(session));
@@ -657,6 +661,9 @@ public:
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
     MTL_MEM_ALLOC_MGR.init();
+    struct rlimit rl;
+    getrlimit(RLIMIT_STACK, &rl);
+    setrlimit(20*1024*1024, &rl);
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }

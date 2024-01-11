@@ -844,7 +844,7 @@ public:
       LOG_TRACE("revert_sock: sock still readable", K(*s));
       int ret = OB_SUCCESS;
       if (OB_FAIL(handler_.on_readable(s->sess_))) {
-        LOG_TRACE("push to omt queue fail", K(ret), K(*s));
+        LOG_WARN("push to omt queue fail, will close socket", K(ret), K(*s));
         push_close_req(s);
         s->disable_may_handling_flag();
       }
