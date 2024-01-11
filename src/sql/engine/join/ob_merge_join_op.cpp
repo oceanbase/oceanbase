@@ -131,8 +131,6 @@ int ObMergeJoinOp::inner_open()
   } else if (OB_FAIL(init_mem_context())) {
     LOG_WARN("fail to init memory context", K(ret));
   } else if (MY_SPEC.is_vectorized()) {
-    const ExprFixedArray &left_outputs = left_->get_spec().output_;
-    const ExprFixedArray &right_outputs = right_->get_spec().output_;
     const uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
     match_groups_.set_attr(ObMemAttr(tenant_id, "SqlMJGroups"));
     output_cache_.set_attr(ObMemAttr(tenant_id, "SqlMJOutput"));
@@ -1530,8 +1528,6 @@ int ObMergeJoinOp::match_group_rows(const int64_t max_row_cnt)
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_idx(0);
   batch_info_guard.set_batch_size(1);
-  const ExprFixedArray &left_output = left_->get_spec().output_;
-  const ExprFixedArray &right_output = right_->get_spec().output_;
   const int64_t batch_size = MIN(max_row_cnt, MY_SPEC.max_batch_size_);
   bool has_next = true;
   // before matching group, re-project current left row to other conds, because the memory of the
@@ -1576,7 +1572,7 @@ int ObMergeJoinOp::match_group_rows(const int64_t max_row_cnt)
           clear_evaluated_flag();
           if (OB_FAIL(right_brs_fetcher_.get_list_row(r_idx, r_stored_row))) {
             LOG_WARN("get row in list failed", K(ret));
-          } else if (OB_FAIL(r_stored_row->to_expr(right_output, eval_ctx_))) {
+          } else if (OB_FAIL(r_stored_row->to_expr(*right_brs_fetcher_.all_exprs_, eval_ctx_))) {
             LOG_WARN("right datums to expr failed", K(ret));
           } else if (OB_FAIL(calc_other_conds(is_match))) {
             LOG_WARN("calc other conds failed", K(ret));
@@ -1685,7 +1681,7 @@ int ObMergeJoinOp::output_cache_rows()
     if (-1 != l_idx) {
       if (OB_FAIL(left_brs_fetcher_.get_list_row(l_idx, left_row))) {
         LOG_WARN("fail to get left row from ra datum store", K(ret));
-      } else if (OB_FAIL(left_row->to_expr(left_output, eval_ctx_))) {
+      } else if (OB_FAIL(left_row->to_expr(*left_brs_fetcher_.all_exprs_, eval_ctx_))) {
         LOG_WARN("left row to expr failed", K(ret));
       }
     } else if (need_blank_left) {
@@ -1698,7 +1694,7 @@ int ObMergeJoinOp::output_cache_rows()
     } else if (-1 != r_idx) {
       if (OB_FAIL(right_brs_fetcher_.get_list_row(r_idx, right_row))) {
         LOG_WARN("fail to get right row from ra datum store", K(ret));
-      } else if (OB_FAIL(right_row->to_expr(right_output, eval_ctx_))) {
+      } else if (OB_FAIL(right_row->to_expr(*right_brs_fetcher_.all_exprs_, eval_ctx_))) {
         LOG_WARN("right row to expr failed", K(ret));
       }
     } else if (need_blank_right) {
@@ -1868,7 +1864,7 @@ int ObMergeJoinOp::left_row_to_other_conds()
     ObRADatumStore::StoredRow *l_stored_row = NULL;
     if (OB_FAIL(left_brs_fetcher_.get_list_row(left_group_.cur_, l_stored_row))) {
       LOG_WARN("fail to get row from list", K(ret));
-    } else if (OB_FAIL(l_stored_row->to_expr(left_->get_spec().output_, eval_ctx_))) {
+    } else if (OB_FAIL(l_stored_row->to_expr(*left_brs_fetcher_.all_exprs_, eval_ctx_))) {
       LOG_WARN("left datums to expr failed", K(ret));
     }
   }
