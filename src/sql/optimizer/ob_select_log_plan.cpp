@@ -4545,8 +4545,11 @@ int ObSelectLogPlan::allocate_plan_top()
 
     // allocate root exchange
     if (OB_SUCC(ret) && is_final_root_plan()) {
-      // allocate material if there is for update.
-      if (optimizer_context_.has_for_update() && OB_FAIL(candi_allocate_for_update_material())) {
+      // allocate material if there is for update without skip locked.
+      // FOR UPDATE SKIP LOCKED does not need SQL-level retry, hence we don't need a MATERIAL to
+      // block the output.
+      if (optimizer_context_.has_no_skip_for_update()
+          && OB_FAIL(candi_allocate_for_update_material())) {
         LOG_WARN("failed to allocate material", K(ret));
         //allocate temp-table transformation if needed.
       } else if (!get_optimizer_context().get_temp_table_infos().empty() &&

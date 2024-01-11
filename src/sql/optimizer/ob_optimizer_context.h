@@ -224,7 +224,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     aggregation_optimization_settings_(0),
     query_ctx_(query_ctx),
     nested_sql_flags_(0),
-    has_for_update_(false),
+    has_no_skip_for_update_(false),
     has_var_assign_(false),
     is_var_assign_only_in_root_stmt_(false),
     failed_ds_tab_list_(),
@@ -582,8 +582,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool contain_nested_sql() const { return nested_sql_flags_ > 0; }
   //use nested sql can't in online DDL session
   bool contain_user_nested_sql() const { return nested_sql_flags_ > 0 && !is_online_ddl_; }
-  void set_for_update() { has_for_update_ = true; }
-  bool has_for_update() { return has_for_update_;};
+  inline void set_no_skip_for_update() { has_no_skip_for_update_ = true; }
+  inline bool has_no_skip_for_update() const { return has_no_skip_for_update_; }
   inline bool has_var_assign() { return has_var_assign_; }
   inline void set_has_var_assign(bool v) { has_var_assign_ = v; }
   inline bool is_var_assign_only_in_root_stmt() { return is_var_assign_only_in_root_stmt_; }
@@ -672,7 +672,7 @@ private:
       int8_t has_cursor_expression_            : 1; //this sql has cursor expression
     };
   };
-  bool has_for_update_;
+  bool has_no_skip_for_update_;
   bool has_var_assign_;
   bool is_var_assign_only_in_root_stmt_;
   //record the dynamic sampling falied table list, avoid repeated dynamic sampling.
