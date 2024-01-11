@@ -21489,17 +21489,17 @@ static const _error _error_OB_LOB_VALUE_NOT_EXIST = {
       .oracle_str_error      = "ORA-22922: LOB value does not exist",
       .oracle_str_user_error = "ORA-22922: LOB value does not exist"
 };
-static const _error _error_OB_ERR_DUP_DEF_NAMESPACE = {
-      .error_name            = "OB_ERR_DUP_DEF_NAMESPACE",
+static const _error _error_OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = {
+      .error_name            = "OB_ERR_JSON_FUN_UNSUPPORTED_TYPE",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
-      .sqlstate              = "42000",
-      .str_error             = "XQST0066 - duplicate default namespace definition - string",
-      .str_user_error        = "XQST0066 - duplicate default namespace definition - %s.",
-      .oracle_errno          = 19118,
-      .oracle_str_error      = "ORA-19118: XQST0066 - duplicate default namespace definition - string.",
-      .oracle_str_user_error = "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
+      .sqlstate              = "HY000",
+      .str_error             = "Input to JSON generation function has unsupported data type",
+      .str_user_error        = "Input to JSON generation function has unsupported data type",
+      .oracle_errno          = 40654,
+      .oracle_str_error      = "ORA-40654: Input to JSON generation function has unsupported data type",
+      .oracle_str_user_error = "ORA-40654: Input to JSON generation function has unsupported data type"
 };
 static const _error _error_OB_ERR_XQUERY_MULTI_VALUE = {
       .error_name            = "OB_ERR_XQUERY_MULTI_VALUE",
@@ -21621,17 +21621,17 @@ static const _error _error_OB_ERR_XML_NOT_SUPPORT_OPERATION = {
       .oracle_str_error      = "ORA-31195: XML node '' (type=%s) does not support this operation",
       .oracle_str_user_error = "ORA-31195: XML node '' (type=%s) does not support this operation"
 };
-static const _error _error_OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = {
-      .error_name            = "OB_ERR_JSON_FUN_UNSUPPORTED_TYPE",
+static const _error _error_OB_ERR_DUP_DEF_NAMESPACE = {
+      .error_name            = "OB_ERR_DUP_DEF_NAMESPACE",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
-      .sqlstate              = "HY000",
-      .str_error             = "Input to JSON generation function has unsupported data type",
-      .str_user_error        = "Input to JSON generation function has unsupported data type",
-      .oracle_errno          = 40654,
-      .oracle_str_error      = "ORA-40654: Input to JSON generation function has unsupported data type",
-      .oracle_str_user_error = "ORA-40654: Input to JSON generation function has unsupported data type"
+      .sqlstate              = "42000",
+      .str_error             = "XQST0066 - duplicate default namespace definition - string",
+      .str_user_error        = "XQST0066 - duplicate default namespace definition - %s.",
+      .oracle_errno          = 19118,
+      .oracle_str_error      = "ORA-19118: XQST0066 - duplicate default namespace definition - string.",
+      .oracle_str_user_error = "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
 };
 static const _error _error_OB_ERR_COMPARE_VARRAY_LOB_ATTR = {
       .error_name            = "OB_ERR_COMPARE_VARRAY_LOB_ATTR",
@@ -28433,7 +28433,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_XML_INDEX] = &_error_OB_ERR_XML_INDEX;
     _errors[-OB_ERR_UPDATE_XML_WITH_INVALID_NODE] = &_error_OB_ERR_UPDATE_XML_WITH_INVALID_NODE;
     _errors[-OB_LOB_VALUE_NOT_EXIST] = &_error_OB_LOB_VALUE_NOT_EXIST;
-    _errors[-OB_ERR_DUP_DEF_NAMESPACE] = &_error_OB_ERR_DUP_DEF_NAMESPACE;
+    _errors[-OB_ERR_JSON_FUN_UNSUPPORTED_TYPE] = &_error_OB_ERR_JSON_FUN_UNSUPPORTED_TYPE;
     _errors[-OB_ERR_XQUERY_MULTI_VALUE] = &_error_OB_ERR_XQUERY_MULTI_VALUE;
     _errors[-OB_ERR_PARSE_XQUERY_EXPR] = &_error_OB_ERR_PARSE_XQUERY_EXPR;
     _errors[-OB_ERR_LACK_XQUERY_LITERAL] = &_error_OB_ERR_LACK_XQUERY_LITERAL;
@@ -28444,7 +28444,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_XQUERY_UNSUPPORTED] = &_error_OB_ERR_XQUERY_UNSUPPORTED;
     _errors[-OB_ERR_INVALID_XML_CHILD_NAME] = &_error_OB_ERR_INVALID_XML_CHILD_NAME;
     _errors[-OB_ERR_XML_NOT_SUPPORT_OPERATION] = &_error_OB_ERR_XML_NOT_SUPPORT_OPERATION;
-    _errors[-OB_ERR_JSON_FUN_UNSUPPORTED_TYPE] = &_error_OB_ERR_JSON_FUN_UNSUPPORTED_TYPE;
+    _errors[-OB_ERR_DUP_DEF_NAMESPACE] = &_error_OB_ERR_DUP_DEF_NAMESPACE;
     _errors[-OB_ERR_COMPARE_VARRAY_LOB_ATTR] = &_error_OB_ERR_COMPARE_VARRAY_LOB_ATTR;
     _errors[-OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD] = &_error_OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD;
     _errors[-OB_SERVER_IS_INIT] = &_error_OB_SERVER_IS_INIT;
