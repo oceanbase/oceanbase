@@ -167,8 +167,6 @@ int TestOpEngine::prepare_io(const string & test_data_name_suffix)
     LOG_WARN("add device channel failed", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
-  } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SYS_TENANT_ID, io_config))) {
-    LOG_WARN("add tenant io config failed", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
     STORAGE_LOG(WARN, "init block manager fail", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir))) {

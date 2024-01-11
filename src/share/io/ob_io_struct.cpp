@@ -772,13 +772,12 @@ int ObIOTuner::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::IO_TUNING, *this))) {
+    LOG_WARN("start io scheduler failed", K(ret));
   } else {
     is_inited_ = true;
-    if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::IO_TUNING, *this))) {
-      LOG_WARN("start io scheduler failed", K(ret));
-    }
   }
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_FAIL(ret)) {
     destroy();
   }
   return ret;
@@ -862,14 +861,17 @@ void ObIOTuner::print_sender_status()
 int ObIOTuner::try_release_thread()
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
-  if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
-    LOG_WARN("get tenant id failed", K(ret));
-  } else if (tenant_ids.count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+  ObVector<uint64_t> tenant_ids;
+  if (OB_NOT_NULL(GCTX.omt_)) {
+    GCTX.omt_->get_tenant_ids(tenant_ids);
+  }
+  if (tenant_ids.size() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (is_virtual_tenant_id(cur_tenant_id)) {
+        // do nothing
+      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
       } else {
         tenant_holder.get_ptr()->get_callback_mgr().try_release_thread();
@@ -882,14 +884,17 @@ int ObIOTuner::try_release_thread()
 void ObIOTuner::print_io_status()
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
-  if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
-    LOG_WARN("get tenant id failed", K(ret));
-  } else if (tenant_ids.count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+  ObVector<uint64_t> tenant_ids;
+  if (OB_NOT_NULL(GCTX.omt_)) {
+    GCTX.omt_->get_tenant_ids(tenant_ids);
+  }
+  if (tenant_ids.size() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (is_virtual_tenant_id(cur_tenant_id)) {
+        // do nothing
+      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
         } else {
@@ -1042,7 +1047,7 @@ public:
           LOG_WARN("get tenant io manager failed", K(ret), K(entry.first));
         } else {
           entry.second->~ObIOGroupQueues();
-          if (OB_NOT_NULL(tenant_holder.get_ptr()->get_tenant_io_allocator())) {
+          if (OB_NOT_NULL(tenant_holder.get_ptr()) && OB_NOT_NULL(tenant_holder.get_ptr()->get_tenant_io_allocator())) {
             tenant_holder.get_ptr()->get_tenant_io_allocator()->free(entry.second);
           }
         }
