@@ -102,6 +102,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     batch_type_ = est_cost_info.batch_type_;
     sample_info_ = est_cost_info.sample_info_;
     use_column_store_ = est_cost_info.use_column_store_;
+    at_most_one_range_ = est_cost_info.at_most_one_range_;
     // no need to copy table scan param
   }
   return ret;
@@ -1773,7 +1774,11 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
     }
     // CPU代价，包括get_next_row调用的代价和谓词代价
     double range_cost = 0;
-    range_cost = est_cost_info.ranges_.count() * cost_params_.get_range_cost(sys_stat_);
+    double range_count = est_cost_info.ranges_.count();
+    if (range_count > 1 && est_cost_info.at_most_one_range_) {
+      range_count = 1;
+    }
+    range_cost = range_count * cost_params_.get_range_cost(sys_stat_);
     cost = row_count * cost_params_.get_cpu_tuple_cost(sys_stat_);
     cost += range_cost + qual_cost + project_cost;
 

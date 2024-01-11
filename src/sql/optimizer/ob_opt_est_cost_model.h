@@ -229,7 +229,8 @@ struct ObCostTableScanInfo
      index_back_row_count_(0.0),
      output_row_count_(0.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
-     use_column_store_(false)
+     use_column_store_(false),
+     at_most_one_range_(false)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -290,7 +291,7 @@ struct ObCostTableScanInfo
   SampleInfo sample_info_;
   bool use_column_store_;
   common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> column_group_infos_;
-
+  bool at_most_one_range_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
 };
