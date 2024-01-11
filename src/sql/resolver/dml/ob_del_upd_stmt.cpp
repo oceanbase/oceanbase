@@ -739,16 +739,22 @@ int ObDelUpdStmt::extract_need_filter_null_table(const JoinedTable *cur_table,
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_PDML_WITH_TRANSFORMED_JOIN);
 int ObDelUpdStmt::check_dml_source_from_join()
 {
   int ret = OB_SUCCESS;
-  TableItem *dml_table = nullptr;
-  if (get_from_item_size() == 1 &&
-      nullptr != (dml_table = get_table_item(get_from_item(0))) &&
-      dml_table->is_basic_table()) {
-    // do nothing
+  if (ERRSIM_ENABLE_PDML_WITH_TRANSFORMED_JOIN) {
+    TableItem *dml_table = nullptr;
+    if (get_from_item_size() == 1 &&
+        nullptr != (dml_table = get_table_item(get_from_item(0))) &&
+        dml_table->is_basic_table()) {
+      // do nothing
+    } else {
+      set_dml_source_from_join(true);
+    }
   } else {
     set_dml_source_from_join(true);
   }
+
   return ret;
 }
