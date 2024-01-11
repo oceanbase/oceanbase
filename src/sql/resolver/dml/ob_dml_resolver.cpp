@@ -13013,7 +13013,7 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
         uint64_t version = 0;
         ObString ver_str(child0->str_len_, child0->str_value_);
         if (ver_str.empty()) {
-          global_hint.merge_opt_features_version_hint(LASTED_COMPAT_VERSION);
+          global_hint.merge_opt_features_version_hint(DEFAULT_USED_VERSION);
         } else if (OB_FAIL(ObClusterVersion::get_version(ver_str, version))) {
           ret = OB_SUCCESS; // just ignore this invalid hint
           LOG_WARN("failed to get version in hint");

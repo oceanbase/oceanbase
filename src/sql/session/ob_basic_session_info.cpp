@@ -5267,7 +5267,8 @@ int ObBasicSessionInfo::get_optimizer_features_enable_version(uint64_t &version)
 {
   int ret = OB_SUCCESS;
   // if OPTIMIZER_FEATURES_ENABLE is set as '', use LASTED_COMPAT_VERSION
-  version = LASTED_COMPAT_VERSION;
+  //DEFAULT_USED_VERSION is only used on 4.2.1, use LASTED_COMPAT_VERSION if version > 4.2.1
+  version = DEFAULT_USED_VERSION;
   ObString version_str;
   uint64_t tmp_version = 0;
   if (OB_FAIL(get_string_sys_var(SYS_VAR_OPTIMIZER_FEATURES_ENABLE, version_str))) {

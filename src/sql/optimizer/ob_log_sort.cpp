@@ -339,11 +339,44 @@ int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     card = param.need_row_count_;
   }
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child)) {
+  if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
+      || OB_ISNULL(get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FALSE_IT(param.need_row_count_ = -1)) {
-    //limit N在sort算子被阻塞
+  } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_1_BP4) {
+    param.need_row_count_ = -1;
+  } else if (-1 == param.need_row_count_) {
+    //do nothing
+  } else if (!is_prefix_sort()) {
+    param.need_row_count_ = -1;
+  } else {
+    ObSEArray<ObRawExpr*, 4> prefix_ordering;
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_prefix_pos(); ++i) {
+      if (OB_FAIL(prefix_ordering.push_back(sort_keys_.at(i).expr_))) {
+        LOG_WARN("push back order key expr failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      double prefix_ndv = 0.0;
+      if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                        get_plan()->get_selectivity_ctx(),
+                                                        prefix_ordering,
+                                                        child->get_card(),
+                                                        prefix_ndv))) {
+        LOG_WARN("failed to calculate distinct", K(ret));
+      } else if (OB_UNLIKELY(std::fabs(prefix_ndv) < 1.0)) {
+        param.need_row_count_ = -1;
+      } else {
+        double num_rows_per_group = child->get_card() / prefix_ndv;
+        double num_groups = std::ceil(param.need_row_count_ / num_rows_per_group);
+        param.need_row_count_ = num_groups * num_rows_per_group;
+        if (param.need_row_count_ >= child->get_card()) {
+          param.need_row_count_ = -1;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(inner_est_cost(parallel, child_card, double_topn_count, op_cost))) {

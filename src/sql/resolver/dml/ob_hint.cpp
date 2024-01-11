@@ -504,8 +504,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
     int64_t cur_pos = 0;
     // if enabled trace point outline valid check tp_no = 551 and opt_features_version_ is LASTED_COMPAT_VERSION,
     // just print OPTIMIZER_FEATURES_ENABLE('') to avoid mysqltest changed repeatedly after upgrade LASTED_COMPAT_VERSION
+    //DEFAULT_USED_VERSION is only used on 4.2.1, use LASTED_COMPAT_VERSION if version > 4.2.1
     const bool print_empty_str = (OB_SUCCESS != (OB_E(EventTable::EN_EXPLAIN_GENERATE_PLAN_WITH_OUTLINE) OB_SUCCESS)
-                                 && LASTED_COMPAT_VERSION == opt_features_version_);
+                                 && DEFAULT_USED_VERSION == opt_features_version_);
     if (OB_FAIL(BUF_PRINTF("%s%s(\'", outline_indent, "OPTIMIZER_FEATURES_ENABLE"))) {
       LOG_WARN("failed to print hint", K(ret));
     } else if (!print_empty_str &&
