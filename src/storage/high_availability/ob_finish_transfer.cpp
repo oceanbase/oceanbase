@@ -1104,8 +1104,8 @@ int ObTxFinishTransfer::record_server_event_(
   ObSqlString extra_info_str;
   const share::ObTransferStatus doing_status(ObTransferStatus::DOING);
   const share::ObTransferStatus finish_status(ObTransferStatus::COMPLETED);
-  const int64_t start_scn_ts = start_scn.convert_to_ts();
-  const int64_t elapsed_us_from_start_scn = ObTimeUtility::current_time() - start_scn_ts;
+  const int64_t start_scn_ts = start_scn.is_valid() ? start_scn.convert_to_ts() : 0;
+  const int64_t elapsed_us_from_start_scn = start_scn.is_valid() ? ObTimeUtility::current_time() - start_scn_ts : 0;
   if (OB_SUCCESS == result) {
     if (is_ready) {
       if (OB_FAIL(extra_info_str.append_fmt("msg:\"transfer doing success\";"))) {
@@ -1120,7 +1120,7 @@ int ObTxFinishTransfer::record_server_event_(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(extra_info_str.append_fmt("round:%ld;", round))) {
       LOG_WARN("fail to printf retry time", K(ret));
-    } else if (OB_FAIL(extra_info_str.append_fmt("elapsed_us_from_start_scn:%ld;", elapsed_us_from_start_scn))) {
+    } else if (elapsed_us_from_start_scn > 0 && OB_FAIL(extra_info_str.append_fmt("elapsed_us_from_start_scn:%ld;", elapsed_us_from_start_scn))) {
       LOG_WARN("fail to printf retry time", K(ret));
     } else {
       if (OB_SUCCESS == result && is_ready) {
