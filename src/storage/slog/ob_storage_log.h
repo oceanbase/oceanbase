@@ -179,20 +179,8 @@ protected:
 
 using ObCreateLSPrepareSlog = ObLSMetaLog;
 using ObCreateLSAbortSLog = ObLSIDLog;
+using ObCreateLSCommitSLog = ObLSIDLog;
 using ObDeleteLSLog = ObLSIDLog;
-
-struct ObCreateLSCommitSLog: public ObLSIDLog
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObCreateLSCommitSLog(share::ObLSID &ls_id, const int64_t create_type);
-  virtual ~ObCreateLSCommitSLog() {}
-  virtual bool is_valid() const override;
-  int64_t get_create_type() const { return create_type_; }
-  DECLARE_TO_STRING;
-private:
-  int64_t create_type_;
-};
 
 struct ObCreateTabletLog : public ObIBaseStorageLogEntry
 {

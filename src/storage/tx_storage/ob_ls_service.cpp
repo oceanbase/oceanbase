@@ -349,12 +349,11 @@ int ObLSService::write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const
   return ret;
 }
 
-int ObLSService::write_commit_create_ls_slog_(const share::ObLSID &ls_id,
-                                              const int64_t create_type) const
+int ObLSService::write_commit_create_ls_slog_(const share::ObLSID &ls_id) const
 {
   int ret = OB_SUCCESS;
   share::ObLSID tmp_ls_id = ls_id;
-  ObCreateLSCommitSLog slog_entry(tmp_ls_id, create_type);
+  ObCreateLSCommitSLog slog_entry(tmp_ls_id);
   ObStorageLogParam log_param;
   ObStorageLogger *slogger = MTL(ObStorageLogger*);
   log_param.data_ = &slog_entry;
@@ -587,13 +586,13 @@ int ObLSService::replay_remove_ls(const share::ObLSID &ls_id)
   return ret;
 }
 
-int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id,
-                                         const int64_t create_type)
+int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
+  int64_t create_type;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
@@ -607,37 +606,41 @@ int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id,
     LOG_WARN("ls is null", K(ls_id));
   } else {
     ObLSLockGuard lock_ls(ls);
-    switch(create_type) {
-    case ObLSCreateType::NORMAL: {
-      if (OB_FAIL(ls->set_start_work_state())) {
-        LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
+    if (OB_FAIL(ls->get_create_type(create_type))) {
+      LOG_WARN("get ls create type failed", K(ret));
+    } else {
+      switch(create_type) {
+      case ObLSCreateType::NORMAL: {
+        if (OB_FAIL(ls->set_start_work_state())) {
+          LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
+        }
+        break;
       }
-      break;
+      case ObLSCreateType::RESTORE: {
+        if (OB_FAIL(ls->set_start_ha_state())) {
+          LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+        }
+        break;
+      }
+      case ObLSCreateType::MIGRATE: {
+        if (OB_FAIL(ls->set_start_ha_state())) {
+          LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+        }
+        break;
+      }
+      case ObLSCreateType::CLONE: {
+        if (OB_FAIL(ls->set_start_ha_state())) {
+          LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
+        }
+        break;
+      }
+      default: {
+        if (OB_FAIL(ls->set_start_work_state())) {
+          LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
+        }
+      } // default
+      } // switch
     }
-    case ObLSCreateType::RESTORE: {
-      if (OB_FAIL(ls->set_start_ha_state())) {
-        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
-      }
-      break;
-    }
-    case ObLSCreateType::MIGRATE: {
-      if (OB_FAIL(ls->set_start_ha_state())) {
-        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
-      }
-      break;
-    }
-    case ObLSCreateType::CLONE: {
-      if (OB_FAIL(ls->set_start_ha_state())) {
-        LOG_ERROR("ls set start ha state failed", KR(ret), K(ls_id));
-      }
-      break;
-    }
-    default: {
-      if (OB_FAIL(ls->set_start_work_state())) {
-        LOG_ERROR("ls set start work state failed", KR(ret), K(ls_id));
-      }
-    } // default
-    } // switch
     FLOG_INFO("replay create ls", KR(ret), K(ls_id));
   }
   return ret;
@@ -1077,8 +1080,7 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                                           arg.create_scn_))) {
         LOG_WARN("create ls inner tablet failed", K(ret), K(ls_meta));
       } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_TABLET_CREATED)) {
-      } else if (OB_BREAK_FAIL(write_commit_create_ls_slog_(ls->get_ls_id(),
-                                                            arg.create_type_))) {
+      } else if (OB_BREAK_FAIL(write_commit_create_ls_slog_(ls->get_ls_id()))) {
         LOG_WARN("fail to write create log stream commit slog", K(ret), K(ls_meta));
       } else if (OB_BREAK_FAIL(ls->finish_create_ls())) {
         LOG_WARN("finish create ls failed", KR(ret));
