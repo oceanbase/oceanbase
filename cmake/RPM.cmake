@@ -44,13 +44,18 @@ set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase is a distributed relational databas
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
 set(CPACK_RPM_DEFAULT_USER "admin")
 set(CPACK_RPM_DEFAULT_GROUP "admin")
+if (OB_BUILD_OPENSOURCE)
+set(DEBUG_INSTALL_POST "mv $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell %{_builddir}/obshell; %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir}; mv %{_builddir}/obshell $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell; %{nil}")
+else()
+set(DEBUG_INSTALL_POST "%{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}")
+endif()
 set(CPACK_RPM_SPEC_MORE_DEFINE
   "%global _missing_build_ids_terminate_build 0
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
 %undefine __brp_mangle_shebangs
 %global __requires_exclude ^\(/bin/bash\|/usr/bin/\.*\)$
-%define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
+%define __debug_install_post ${DEBUG_INSTALL_POST}
 %if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
 %debug_package
 %endif
