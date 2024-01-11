@@ -316,7 +316,7 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
   return ret;
 }
 
-int ObBlockMetaTree::get_sorted_meta_array(ObIArray<const ObDataMacroBlockMeta *> &meta_array)
+int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
 {
   int ret = OB_SUCCESS;
   meta_array.reset();
@@ -352,8 +352,13 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<const ObDataMacroBlockMeta *
       } else if (((uint64_t)(tree_value) & 7ULL) != 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid btree value", K(ret), K(tree_value));
-      } else if (OB_FAIL(meta_array.push_back(tree_value->block_meta_))) {
-        LOG_WARN("push back block meta failed", K(ret), K(*tree_value->block_meta_));
+      } else {
+        ObDDLBlockMeta ddl_block_meta;
+        ddl_block_meta.block_meta_ = tree_value->block_meta_;
+        ddl_block_meta.end_row_offset_ = tree_value->co_sstable_row_offset_;
+        if (OB_FAIL(meta_array.push_back(ddl_block_meta))) {
+          LOG_WARN("push back block meta failed", K(ret), K(ddl_block_meta));
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -860,20 +865,6 @@ void ObDDLMemtable::set_scn_range(
 {
   key_.scn_range_.start_scn_ = start_scn;
   key_.scn_range_.end_scn_ = end_scn;
-}
-
-int ObDDLMemtable::get_sorted_meta_array(
-    ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array)
-{
-  int ret = OB_SUCCESS;
-  meta_array.reset();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), KP(this));
-  } else if (OB_FAIL(block_meta_tree_.get_sorted_meta_array(meta_array))) {
-    LOG_WARN("get sorted array failed", K(ret));
-  }
-  return ret;
 }
 
 int ObDDLMemtable::init_ddl_index_iterator(const blocksstable::ObStorageDatumUtils *datum_utils,

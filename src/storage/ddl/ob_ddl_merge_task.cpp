@@ -544,7 +544,7 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
 
 int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                         const ObTabletDDLParam &ddl_param,
-                                        const ObIArray<const ObDataMacroBlockMeta *> &meta_array,
+                                        const ObIArray<ObDDLBlockMeta> &meta_array,
                                         const ObSSTable *first_ddl_sstable,
                                         const ObStorageSchema *storage_schema,
                                         common::ObArenaAllocator &allocator,
@@ -568,7 +568,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
             storage_schema,
             data_desc))) {
       LOG_WARN("prepare data store desc failed", K(ret), K(ddl_param));
-    } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0)->get_meta_val().column_count_)) {
+    } else if (FALSE_IT(macro_block_column_count = meta_array.empty() ? 0 : meta_array.at(0).block_meta_->get_meta_val().column_count_)) {
     } else if (meta_array.count() > 0 && OB_FAIL(data_desc.get_col_desc().mock_valid_col_default_checksum_array(macro_block_column_count))) {
       LOG_WARN("mock valid column default checksum failed", K(ret), "firt_macro_block_meta", to_cstring(meta_array.at(0)), K(ddl_param));
     } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(),
@@ -578,14 +578,23 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
     } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder,
             false/*need_sort*/,
             nullptr/*task_idx*/,
-            true/*use_absolute_offset*/))) {
+            ddl_param.table_key_.is_ddl_merge_sstable()/*use_absolute_offset*/))) {
       LOG_WARN("fail to alloc index builder", K(ret));
     } else if (meta_array.empty()) {
       // do nothing
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
-        if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i)))) {
-          LOG_WARN("append block meta failed", K(ret), K(i));
+      if (ddl_param.table_key_.is_ddl_merge_sstable()) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
+          const ObDDLBlockMeta &ddl_block_meta = meta_array.at(i);
+          if (OB_FAIL(index_block_rebuilder.append_macro_row(*ddl_block_meta.block_meta_, ddl_block_meta.end_row_offset_))) {
+            LOG_WARN("append block meta failed", K(ret), K(i), K(ddl_block_meta));
+          }
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
+          if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i).block_meta_))) {
+            LOG_WARN("append block meta failed", K(ret), K(i));
+          }
         }
       }
     }
@@ -764,13 +773,129 @@ int get_sstables(const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs, const int64_t cg
   }
   return ret;
 }
+
+ObDDLMacroBlockIterator::ObDDLMacroBlockIterator()
+  : is_inited_(false), sstable_(nullptr), allocator_(nullptr), macro_block_iter_(nullptr), sec_meta_iter_(nullptr)
+{
+
+}
+
+ObDDLMacroBlockIterator::~ObDDLMacroBlockIterator()
+{
+  if ((nullptr != macro_block_iter_ || nullptr != sec_meta_iter_) && OB_ISNULL(allocator_)) {
+    int ret = OB_ERR_SYS;
+    LOG_ERROR("the iterator is allocated, but allocator is null", K(ret), KP(macro_block_iter_), KP(allocator_));
+  } else if (nullptr != macro_block_iter_) {
+    macro_block_iter_->~ObIMacroBlockIterator();
+    allocator_->free(macro_block_iter_);
+    macro_block_iter_ = nullptr;
+  } else if (nullptr != sec_meta_iter_) {
+    sec_meta_iter_->~ObSSTableSecMetaIterator();
+    allocator_->free(sec_meta_iter_);
+    sec_meta_iter_ = nullptr;
+  }
+}
+
+int ObDDLMacroBlockIterator::open(ObSSTable *sstable, const ObDatumRange &query_range, const ObITableReadInfo &read_info, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(nullptr == sstable || !query_range.is_valid() || !read_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(sstable), K(query_range), K(read_info));
+  } else if (sstable->is_ddl_mem_sstable()) { // ddl mem, scan keybtree
+    ObDDLMemtable *ddl_memtable = static_cast<ObDDLMemtable *>(sstable);
+    if (OB_ISNULL(ddl_memtable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl memtable cast failed", K(ret));
+    } else if (OB_FAIL(ddl_memtable->get_block_meta_tree()->get_keybtree().set_key_range(
+            ddl_iter_,
+            ObDatumRowkeyWrapper(&query_range.get_start_key(), &read_info.get_datum_utils()),
+            query_range.is_left_open(),
+            ObDatumRowkeyWrapper(&query_range.get_end_key(), &read_info.get_datum_utils()),
+            query_range.is_right_open(),
+            INT64_MAX/*version*/))) {
+      LOG_WARN("ddl memtable locate range failed", K(ret));
+    }
+  } else if (sstable->is_ddl_merge_sstable()) { // co ddl partial data, need scan macro block
+    if (OB_FAIL(sstable->scan_macro_block(
+            query_range,
+            read_info,
+            allocator,
+            macro_block_iter_,
+            false/*is_reverse_scan*/,
+            false/*need_record_micro_info*/,
+            true/*need_scan_sec_meta*/))) {
+      LOG_WARN("scan macro block iterator open failed", K(ret));
+    }
+  } else {
+    ObSSTableSecMetaIterator *sec_meta_iter;
+    if (OB_ISNULL(sec_meta_iter = OB_NEWx(ObSSTableSecMetaIterator, &allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory for sec meta iterator failed", K(ret));
+    } else if (OB_FAIL(sec_meta_iter->open(query_range, ObMacroBlockMetaType::DATA_BLOCK_META, *sstable, read_info, allocator))) {
+      LOG_WARN("open sec meta iterator failed", K(ret));
+      sec_meta_iter->~ObSSTableSecMetaIterator();
+      allocator.free(sec_meta_iter);
+    } else {
+      sec_meta_iter_ = sec_meta_iter;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    sstable_ = sstable;
+    allocator_ = &allocator;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int64_t &end_row_offset)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (sstable_->is_ddl_mem_sstable()) {
+    ObDatumRowkeyWrapper tree_key;
+    ObBlockMetaTreeValue *tree_value = nullptr;
+    if (OB_FAIL(ddl_iter_.get_next(tree_key, tree_value))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next tree value failed", K(ret));
+      }
+    } else if (OB_FAIL(data_macro_meta.assign(*tree_value->block_meta_))) {
+      LOG_WARN("assign block meta failed", K(ret));
+    } else {
+      end_row_offset = tree_value->co_sstable_row_offset_;
+    }
+  } else if (sstable_->is_ddl_merge_sstable()) {
+    ObMacroBlockDesc block_desc;
+    block_desc.macro_meta_ = &data_macro_meta;
+    if (OB_FAIL(macro_block_iter_->get_next_macro_block(block_desc))) {
+      LOG_WARN("get next macro block failed", K(ret));
+    } else {
+      end_row_offset = block_desc.start_row_offset_ + block_desc.row_count_;
+    }
+  } else {
+    if (OB_FAIL(sec_meta_iter_->get_next(data_macro_meta))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get data macro meta failed", K(ret));
+      }
+    } else {
+      end_row_offset = -1;
+    }
+  }
+  return ret;
+}
+
  // for cg sstable, endkey is end row id, confirm read_info not used
 int get_sorted_meta_array(
     const ObIArray<ObSSTable *> &sstables,
     const ObITableReadInfo &read_info,
     ObBlockMetaTree &meta_tree,
     ObIAllocator &allocator,
-    ObArray<const ObDataMacroBlockMeta *> &sorted_metas)
+    ObArray<ObDDLBlockMeta> &sorted_metas)
 {
   int ret = OB_SUCCESS;
   sorted_metas.reset();
@@ -778,59 +903,54 @@ int get_sorted_meta_array(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(sstables), K(read_info), K(meta_tree));
   } else {
-    SMART_VAR(ObSSTableSecMetaIterator, meta_iter) {
-      ObDatumRange query_range;
-      query_range.set_whole_range();
-      ObDataMacroBlockMeta data_macro_meta;
-      for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-        ObSSTable *cur_sstable = sstables.at(i);
-        if (OB_ISNULL(cur_sstable)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(cur_sstable));
-        } else {
-          meta_iter.reset();
-          ObDataMacroBlockMeta *copied_meta = nullptr; // copied meta will destruct in the meta tree
-          if (OB_FAIL(meta_iter.open(query_range,
-                  ObMacroBlockMetaType::DATA_BLOCK_META,
-                  *cur_sstable,
-                  read_info,
-                  allocator))) {
-            LOG_WARN("sstable secondary meta iterator open failed", K(ret), KPC(cur_sstable), K(read_info));
+    ObDatumRange query_range;
+    query_range.set_whole_range();
+    ObDataMacroBlockMeta data_macro_meta;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
+      ObSSTable *cur_sstable = sstables.at(i);
+      ObDDLMacroBlockIterator block_iter;
+      if (OB_ISNULL(cur_sstable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(cur_sstable));
+      } else if (cur_sstable->is_empty()) {
+        // do nothing, skip
+      } else if (OB_FAIL(block_iter.open(cur_sstable, query_range, read_info, allocator))) {
+        LOG_WARN("open macro block iterator failed", K(ret), K(read_info), KPC(cur_sstable));
+      } else {
+        ObDataMacroBlockMeta *copied_meta = nullptr; // copied meta will destruct in the meta tree
+        int64_t end_row_offset = 0;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(block_iter.get_next(data_macro_meta, end_row_offset))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("get data macro meta failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
           } else {
-            while (OB_SUCC(ret)) {
-              if (OB_FAIL(meta_iter.get_next(data_macro_meta))) {
-                if (OB_ITER_END != ret) {
-                  LOG_WARN("get data macro meta failed", K(ret));
-                } else {
-                  ret = OB_SUCCESS;
-                  break;
-                }
-              } else {
-                ObDDLMacroHandle macro_handle;
-                bool is_exist = false;
-                if (OB_FAIL(meta_tree.exist(&data_macro_meta.end_key_, is_exist))) {
-                  LOG_WARN("check block meta exist failed", K(ret), K(data_macro_meta));
-                } else if (is_exist) {
-                  // skip
-                  FLOG_INFO("append meta tree skip", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                      "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(data_macro_meta.end_key_));
-                } else if (OB_FAIL(macro_handle.set_block_id(data_macro_meta.get_macro_id()))) {
-                  LOG_WARN("hold macro block failed", K(ret));
-                } else if (OB_FAIL(data_macro_meta.deep_copy(copied_meta, allocator))) {
-                  LOG_WARN("deep copy macro block meta failed", K(ret));
-                } else if (OB_FAIL(meta_tree.insert_macro_block(macro_handle, &copied_meta->end_key_, copied_meta))) { // useless co_sstable_row_offset
-                  LOG_WARN("insert meta tree failed", K(ret), K(macro_handle), KPC(copied_meta));
-                  copied_meta->~ObDataMacroBlockMeta();
-                } else {
-                  FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
-                      "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_));
-                }
-              }
+            ObDDLMacroHandle macro_handle;
+            bool is_exist = false;
+            if (OB_FAIL(meta_tree.exist(&data_macro_meta.end_key_, is_exist))) {
+              LOG_WARN("check block meta exist failed", K(ret), K(data_macro_meta));
+            } else if (is_exist) {
+              // skip
+              FLOG_INFO("append meta tree skip", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
+                  "data_checksum", data_macro_meta.val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(data_macro_meta.end_key_));
+            } else if (OB_FAIL(macro_handle.set_block_id(data_macro_meta.get_macro_id()))) {
+              LOG_WARN("hold macro block failed", K(ret));
+            } else if (OB_FAIL(data_macro_meta.deep_copy(copied_meta, allocator))) {
+              LOG_WARN("deep copy macro block meta failed", K(ret));
+            } else if (OB_FAIL(meta_tree.insert_macro_block(macro_handle, &copied_meta->end_key_, copied_meta, end_row_offset))) {
+              LOG_WARN("insert meta tree failed", K(ret), K(macro_handle), KPC(copied_meta));
+              copied_meta->~ObDataMacroBlockMeta();
+            } else {
+              FLOG_INFO("append meta tree success", K(ret), "table_key", cur_sstable->get_key(), "macro_block_id", data_macro_meta.get_macro_id(),
+                  "data_checksum", copied_meta->val_.data_checksum_, K(meta_tree.get_macro_block_cnt()), "macro_block_end_key", to_cstring(copied_meta->end_key_));
             }
           }
-          LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
-              K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_));
         }
+        LOG_INFO("append meta tree finished", K(ret), "table_key", cur_sstable->get_key(), "data_macro_block_cnt_in_sstable", cur_sstable->get_data_macro_block_count(),
+            K(meta_tree.get_macro_block_cnt()), "sstable_end_key", OB_ISNULL(copied_meta) ? "NOT_EXIST": to_cstring(copied_meta->end_key_));
       }
     }
   }
@@ -840,7 +960,7 @@ int get_sorted_meta_array(
     } else {
       int64_t sstable_checksum = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < sorted_metas.count(); ++i) {
-        const ObDataMacroBlockMeta *cur_macro_meta = sorted_metas.at(i);
+        const ObDataMacroBlockMeta *cur_macro_meta = sorted_metas.at(i).block_meta_;
         sstable_checksum = ob_crc64_sse42(sstable_checksum, &cur_macro_meta->val_.data_checksum_, sizeof(cur_macro_meta->val_.data_checksum_));
         FLOG_INFO("sorted meta array", K(i), "macro_block_id", cur_macro_meta->get_macro_id(), "data_checksum", cur_macro_meta->val_.data_checksum_, K(sstable_checksum), "macro_block_end_key", cur_macro_meta->end_key_);
       }
@@ -862,7 +982,7 @@ int compact_sstables(
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("compact_sst", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObBlockMetaTree meta_tree;
-  ObArray<const ObDataMacroBlockMeta *> sorted_metas;
+  ObArray<ObDDLBlockMeta> sorted_metas;
   if (OB_FAIL(meta_tree.init(tablet, ddl_param.table_key_, ddl_param.start_scn_, ddl_param.data_format_version_, storage_schema))) {
     LOG_WARN("init meta tree failed", K(ret), K(ddl_param));
   } else if (OB_FAIL(get_sorted_meta_array(sstables, read_info, meta_tree, arena, sorted_metas))) {
