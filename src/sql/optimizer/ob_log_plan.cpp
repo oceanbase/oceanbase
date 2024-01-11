@@ -4831,16 +4831,16 @@ void ObLogPlan::compute_null_distribution_info(const ObJoinType &join_type,
         right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::DROP;
         break;
       case ObJoinType::LEFT_OUTER_JOIN:
-        left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::RANDOM;
+        left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::NONE;
         right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::DROP;
         break;
       case ObJoinType::RIGHT_OUTER_JOIN:
         left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::DROP;
-        right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::RANDOM;
+        right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::NONE;
         break;
       case ObJoinType::FULL_OUTER_JOIN:
-        left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::RANDOM;
-        right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::RANDOM;
+        left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::NONE;
+        right_exch_info.null_row_dist_method_ = ObNullDistributeMethod::NONE;
         break;
       default:
         left_exch_info.null_row_dist_method_ = ObNullDistributeMethod::NONE;
