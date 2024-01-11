@@ -926,6 +926,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       // Step5: decode value
       for (int64_t i = 0; OB_SUCC(ret) && i < input_param_num; ++i) {
         ObObjParam &param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
+        param.reset();
         if (OB_SUCC(ret) && OB_FAIL(parse_request_param_value(alloc,
                                                               session,
                                                               pos,
