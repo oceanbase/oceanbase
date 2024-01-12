@@ -1768,6 +1768,10 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
         // stmt_id is OB_INVALID_ID for anonymous block from text protocol
         OZ (compiler.compile(block, OB_INVALID_ID, *routine, &params, false));
         OX (routine->set_debug_priv());
+        if (OB_SUCC(ret) && params.count() != routine->get_params_info().count()) {
+          ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
+          LOG_WARN("text anonymous can not contain bind variable", K(ret));
+        }
       }
     }
     // restore work timeout
@@ -2443,7 +2447,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
     OZ (compiler.compile(
       block_node, stmt_id, *routine, &params, ctx.get_sql_ctx()->is_prepare_protocol_));
-    OZ (routine->set_params_info(params));
+    OZ (routine->set_params_info(params, true));
   }
 
   int64_t compile_end = ObTimeUtility::current_time();

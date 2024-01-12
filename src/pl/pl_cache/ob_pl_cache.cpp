@@ -747,6 +747,9 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
       is_same = false;
     } else {
       is_same = (param.get_scale() == param_info.scale_);
+      if (is_same && param.is_number() && PL_INTEGER_TYPE == param_info.pl_type_) {
+        is_same = param.get_number().is_valid_int();
+      }
     }
   }
   if (is_same && param_info.flag_.need_to_check_bool_value_) {
