@@ -393,7 +393,7 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
         LOG_WARN("failed to get table schema", K(ret));
       }
       if (OB_SUCC(ret)) {
-        if (table_schema->is_oracle_tmp_table() && !in_pl_) {
+        if (table_schema->is_oracle_tmp_table() && !params_.is_prepare_stage_) {
           //oracle临时表各session不会创建自己的私有对象只能在数据增加时设置标记
           session_info_->set_has_temp_table_flag();
           set_is_oracle_tmp_table(true);

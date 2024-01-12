@@ -273,7 +273,7 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
                                                   table_schema,
                                                   table_item->is_link_table()))) {
       LOG_WARN("failed to get table schema", K(ret));
-    } else if (table_schema->is_oracle_tmp_table() && !in_pl_) {
+    } else if (table_schema->is_oracle_tmp_table() && !params_.is_prepare_stage_) {
         session_info_->set_has_temp_table_flag();
         set_is_oracle_tmp_table(true);
         set_oracle_tmp_table_type(table_schema->is_oracle_sess_tmp_table() ? 0 : 1);
