@@ -348,7 +348,7 @@ int ObIOManager::adjust_tenant_clock()
       }
     }
     if (!io_clocks.empty()) {
-      if (OB_FAIL(io_clocks.at(0)->sync_clocks(io_clocks))) {
+      if (OB_FAIL(ObTenantIOClock::sync_clocks(io_clocks))) {
         LOG_WARN("sync io clocks failed", K(ret), K(io_clocks));
       }
     }
@@ -521,7 +521,8 @@ int ObIOManager::get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObT
     ObTenantIOManager *tenant_io_mgr = MTL(ObTenantIOManager*);
     tenant_holder.hold(tenant_io_mgr);
   } else {
-    MTL_SWITCH(tenant_id) {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (OB_SUCC(guard.switch_to(tenant_id, false))) {
       ObTenantIOManager *tenant_io_mgr = MTL(ObTenantIOManager*);
       tenant_holder.hold(tenant_io_mgr);
     }
