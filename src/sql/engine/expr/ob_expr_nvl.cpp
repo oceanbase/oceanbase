@@ -495,7 +495,7 @@ int ObExprNaNvl::eval_nanvl(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
   bool ret_bool = false;
   if (OB_FAIL(expr.args_[0]->eval(ctx, param1))) {
     LOG_WARN("eval first param failed", K(ret));
-  } else if (param1->is_null()) {
+  } else if (param1->is_null() && ObOBinDoubleType != ob_obj_type_to_oracle_type(expr.args_[0]->datum_meta_.get_type())) {
     expr_datum.set_null();
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, param2))) {
     LOG_WARN("eval second param failed", K(ret));
@@ -530,7 +530,7 @@ int ObExprNaNvl::eval_nanvl_batch(const ObExpr &expr,
       }
       ObDatum *param1 = NULL;
       param1 = &expr.args_[0]->locate_expr_datum(ctx, i);
-      if (param1->is_null()) {
+      if (param1->is_null() && ObOBinDoubleType != ob_obj_type_to_oracle_type(expr.args_[0]->datum_meta_.get_type())) {
         results[i].set_null();
         eval_flags.set(i);
         my_skip.set(i);
