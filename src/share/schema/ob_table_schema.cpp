@@ -7988,7 +7988,12 @@ int ObColumnIterByPrevNextID::next(const ObColumnSchemaV2 *&column_schema)
     }
   } else {
     if (OB_ISNULL(last_column_schema_)) {
-      column_schema = get_first_column();
+      if (table_schema_.is_sys_view() && 0 == table_schema_.get_column_count()) {
+        is_end_ = true;
+        ret = OB_ITER_END;
+      } else {
+        column_schema = get_first_column();
+      }
     } else if (BORDER_COLUMN_ID == last_column_schema_->get_next_column_id()) {
       is_end_ = true;
       ret = OB_ITER_END;

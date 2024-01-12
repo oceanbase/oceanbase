@@ -544,7 +544,7 @@ class ObDWARFHelper
 public:
   ObDWARFHelper(ObIAllocator &allocator, char* debug_buf, int64_t debug_len)
     : Allocator(allocator), DebugBuf(debug_buf), DebugLen(debug_len), Context(nullptr) {}
-  ~ObDWARFHelper() {}
+  ~ObDWARFHelper();
 
   int init();
 

@@ -43,12 +43,14 @@ const char *S3_REGION = INVALID_STR;
 const char *S3_ENDPOINT = INVALID_STR;
 const char *S3_AK = INVALID_STR;
 const char *S3_SK = INVALID_STR;
+const char *S3_CHECKSUM_TYPE = INVALID_STR;
 
 // OSS CONFIG
 const char *OSS_BUCKET = INVALID_STR;
 const char *OSS_ENDPOINT = INVALID_STR;
 const char *OSS_AK = INVALID_STR;
 const char *OSS_SK = INVALID_STR;
+const char *OSS_CHECKSUM_TYPE = INVALID_STR;
 
 // COS CONFIG
 const char *COS_BUCKET = INVALID_STR;
@@ -56,6 +58,7 @@ const char *COS_ENDPOINT = INVALID_STR;
 const char *COS_AK = INVALID_STR;
 const char *COS_SK = INVALID_STR;
 const char *COS_APPID = INVALID_STR;
+const char *COS_CHECKSUM_TYPE = INVALID_STR;
 
 // NFS CONFIG
 const char *FS_PATH = INVALID_STR; // if FS_PATH value not equals to invalid string, we will use current path as FS_PATH
@@ -82,6 +85,7 @@ public:
   char endpoint_[CFG_BUF_LEN];
   char ak_[CFG_BUF_LEN];
   char sk_[CFG_BUF_LEN];
+  char checksum_type_[CFG_BUF_LEN];
   union {
     char appid_[CFG_BUF_LEN];
     char fs_path_[CFG_BUF_LEN];
@@ -109,10 +113,12 @@ public:
   SET_FIELD(sk);
   SET_FIELD(appid);
   SET_FIELD(fs_path);
+  SET_FIELD(checksum_type);
 
   bool is_valid() const { return is_valid_; }
 
-  TO_STRING_KV(K_(bucket), K_(region), K_(endpoint), K_(ak), K_(sk), K_(appid), K_(fs_path));
+  TO_STRING_KV(K_(bucket),
+      K_(region), K_(endpoint), K_(ak), K_(sk), K_(appid), K_(fs_path), K_(checksum_type));
 };
 
 struct ObTestStorageMeta

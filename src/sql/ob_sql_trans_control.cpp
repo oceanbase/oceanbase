@@ -560,7 +560,8 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     ar_snapshot.version_ = snapshot.core_.version_;
     ar_snapshot.tx_id_ = snapshot.core_.tx_id_.get_id();
     ar_snapshot.scn_ = snapshot.core_.scn_.cast_to_int();
-    ar_snapshot.source_ = snapshot.get_source_name().ptr();
+    (void)snapshot.format_source_for_display(audit_record.snapshot_source_, sizeof(audit_record.snapshot_source_));
+    ar_snapshot.source_ = audit_record.snapshot_source_;
   }
   if (OB_SUCC(ret) && !session->has_start_stmt()) {
     OZ (session->set_start_stmt());

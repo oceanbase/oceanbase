@@ -930,6 +930,9 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         } else if (result->get_accuracy() == invalid_accuracy) {
           result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
         }
+        if (result->is_null()) {
+          result->set_null_meta(param.get_null_meta());
+        }
         if (has_lob_header) {
           result->ObObj::set_has_lob_header();
         }
@@ -4630,8 +4633,7 @@ int ObSPIService::spi_alloc_complex_var(pl::ObPLExecCtx *ctx,
         need_alloc = false;
         int tmp = OB_SUCCESS;
         if (OB_SUCCESS != (tmp = ObUserDefinedType::destruct_obj(ctx->params_->at(var_idx),
-                                                                  ctx->exec_ctx_->get_my_session(),
-                                                                  false))) {
+                                                                  ctx->exec_ctx_->get_my_session()))) {
           LOG_WARN("fail to destruct obj", K(tmp));
         }
       }
@@ -5585,10 +5587,15 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
             CK (type->is_collection_type());
             CK (OB_NOT_NULL(collection_type = static_cast<const ObCollectionType*>(type)));
             OZ (collection_type->get_element_type().newx(*coll.get_allocator(), ns, ptr));
-            if (OB_SUCC(ret) && collection_type->get_element_type().is_collection_type()) {
+            if (OB_FAIL(ret)) {
+            } else if (collection_type->get_element_type().is_collection_type()) {
               ObPLCollection *collection = NULL;
               CK (OB_NOT_NULL(collection = reinterpret_cast<ObPLCollection*>(ptr)));
               OX (collection->set_count(0));
+            } else if (collection_type->get_element_type().is_record_type()) {
+              ObPLRecord *record = NULL;
+              CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(ptr)));
+              OX (record->set_null());
             }
             OZ (collection_type->get_element_type().get_size(*ns, PL_TYPE_INIT_SIZE, init_size));
             OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
@@ -5743,6 +5750,9 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
     ALLOC_ASSOC_ARRAY(ObObj, key);
 
     ALLOC_ASSOC_ARRAY(int64_t, sort);
+    if (nullptr != assoc_array.get_key() && nullptr == assoc_array.get_sort()) {
+      assoc_array.set_key(nullptr);
+    }
 
     // NOTE: init extend key avoid to deep copy core!!!
     if (OB_SUCC(ret)) {
@@ -5780,6 +5790,15 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
     REALLOC_ASSOC_ARRAY(ObObj, key);
 
     REALLOC_ASSOC_ARRAY(int64_t, sort);
+    if (OB_FAIL(ret)) {
+      for (int64_t i = assoc_array.get_count() - 1; i >= assoc_array.get_count() - n; --i) {
+        int tmp = ObUserDefinedType::destruct_obj(assoc_array.get_data()[i]);
+        if (OB_SUCCESS != tmp) {
+          LOG_WARN("fail to destruct obj", K(tmp), K(ret));
+        }
+      }
+      assoc_array.set_count(assoc_array.get_count() - n);
+    }
 
     // NOTE: init extend key avoid to deep copy core!!!
     if (OB_SUCC(ret)) {
@@ -6071,10 +6090,12 @@ int ObSPIService::spi_interface_impl(pl::ObPLExecCtx *ctx, const char *interface
     LOG_WARN("Argument passed in is NULL", K(ctx), K(interface_name), K(ret));
   } else if (OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->params_)
-      || OB_ISNULL(ctx->result_)) {
+      || OB_ISNULL(ctx->result_)
+      || OB_ISNULL(ctx->exec_ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid context", K(ctx->exec_ctx_), K(ctx->params_), K(ctx->result_));
   } else {
+    ctx->exec_ctx_->get_my_session()->init_use_rich_format();
     ObString name(interface_name);
     PL_C_INTERFACE_t fp = GCTX.pl_engine_->get_interface_service().get_entry(name);
     if (nullptr != fp) {

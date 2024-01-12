@@ -540,7 +540,11 @@ int ObAccessService::check_read_allowed_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, scan_param.timeout_,
          ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard))) {
-      LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
+      if (OB_SNAPSHOT_DISCARDED == ret && scan_param.fb_snapshot_.is_valid()) {
+        ret = OB_TABLE_DEFINITION_CHANGED;
+      } else {
+        LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
+      }
     }
   }
   return ret;

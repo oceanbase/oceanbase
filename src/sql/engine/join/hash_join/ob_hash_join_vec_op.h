@@ -600,6 +600,7 @@ private:
   bool skip_right_null_;
 
   OutputInfo output_info_;
+  ObTempRowStore::IterationAge iter_age_;
 };
 
 } // end namespace sql

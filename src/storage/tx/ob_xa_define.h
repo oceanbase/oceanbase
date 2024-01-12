@@ -61,7 +61,6 @@ public:
   {
     return COMMITTING == state
            || ROLLBACKING == state
-           || PREPARING == state
            || ROLLBACKED == state
            || COMMITTED == state
            || PREPARED == state;

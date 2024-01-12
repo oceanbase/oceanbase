@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX TRANS
 
 #include "ob_ls_tx_service.h"
+#include "share/throttle/ob_throttle_unit.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tx/ob_trans_ctx_mgr.h"
@@ -78,6 +79,22 @@ int ObLSTxService::get_tx_ctx(const transaction::ObTransID &tx_id,
   } else {
     ret = mgr_->get_tx_ctx(tx_id, for_replay, ctx);
   }
+  return ret;
+}
+
+int ObLSTxService::get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                                           const bool for_replay,
+                                           transaction::ObPartTransCtx *&tx_ctx,
+                                           const int64_t lock_timeout) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret));
+  } else {
+    ret = mgr_->get_tx_ctx_with_timeout(tx_id, for_replay, tx_ctx, lock_timeout);
+  }
+
   return ret;
 }
 
@@ -175,6 +192,12 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
+    int64_t abs_expire_ts = ObClockGenerator::getClock() + tx.get_timeout_us();
+    if (abs_expire_ts < 0) {
+      abs_expire_ts = ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME;
+    }
+
+    ObTxDataThrottleGuard tx_data_throttle_guard(false /* for_replay */, abs_expire_ts);
     ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, spec_seq_no, false);
   }
   return ret;
@@ -365,6 +388,20 @@ int ObLSTxService::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
     TRANS_LOG(WARN, "iter set ready failed", K(ret));
   } else {
     TRANS_LOG(INFO, "iter set ready success", K(ret));
+  }
+  return ret;
+}
+
+int ObLSTxService::iterate_tx_ctx(ObLSTxCtxIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(iter.set_ready(mgr_))) {
+    TRANS_LOG(WARN, "get tx obj lock op iter failed", K(ret), K_(ls_id));
+  } else {
+    TRANS_LOG(INFO, "iter set ready success", K(ret), K_(ls_id));
   }
   return ret;
 }

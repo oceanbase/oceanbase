@@ -186,7 +186,8 @@ int ObTransService::reuse_tx(ObTxDesc &tx)
     // before we reuse it
 
     // if reuse come from commit_cb, assume current thread hold one reference
-    final_ref_cnt = tx.commit_cb_lock_.self_locked() ? 2 : 1;
+    int64_t cb_tid = ATOMIC_LOAD_ACQ(&tx.cb_tid_);
+    final_ref_cnt = cb_tid == GETTID() ? 2 : 1;
     while (tx.get_ref() > final_ref_cnt) {
       PAUSE();
       if (++spin_cnt > 2000) {
@@ -935,7 +936,7 @@ int ObTransService::create_implicit_savepoint(ObTxDesc &tx,
     // TODO: rework this interface, allow skip pass tx_param if not required
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "tx param invalid", K(ret), K(tx_param), K(tx));
-  } else if (OB_FAIL(tx_sanity_check_(tx))) {
+  } else if (OB_FAIL(tx_sanity_check_(tx, !release))) {
   } else if (tx.state_ >= ObTxDesc::State::IN_TERMINATE) {
     ret = OB_TRANS_INVALID_STATE;
     TRANS_LOG(WARN, "create implicit savepoint but tx terminated", K(ret), K(tx));
@@ -1038,7 +1039,7 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
-  if (OB_FAIL(tx_sanity_check_(tx))) {
+  if (OB_FAIL(tx_sanity_check_(tx, true))) {
   } else if (savepoint.get_branch() // NOTE: branch savepoint only support local rollback
              || tx.flags_.SHADOW_) {
     if (OB_NOT_NULL(extra_touched_ls)) {
@@ -1981,7 +1982,7 @@ int ObTransService::release_tx_ref(ObTxDesc &tx)
   return tx_desc_mgr_.release_tx_ref(&tx);
 }
 
-OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
+OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx, const bool in_stmt)
 {
   int ret = OB_SUCCESS;
   if (tx.expire_ts_ <= ObClockGenerator::getClock()) {
@@ -1996,8 +1997,14 @@ OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
     case ObTxDesc::State::ACTIVE:
     case ObTxDesc::State::IMPLICIT_ACTIVE:
       if (tx.flags_.PART_ABORTED_) {
-        TRANS_LOG(WARN, "some participant was aborted, abort tx now");
-        abort_tx_(tx, tx.abort_cause_);
+        if (!in_stmt) {
+          // not inside of stmt(stmt has not began to execute), abort tx now
+          TRANS_LOG(WARN, "some participant was aborted, abort tx now");
+          abort_tx_(tx, tx.abort_cause_);
+        } else {
+          // abort tx after stmt has executed
+          TRANS_LOG(WARN, "some participant was aborted, but inside stmt, not abort tx now");
+        }
         // go through
       } else {
         break;

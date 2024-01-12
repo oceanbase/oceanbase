@@ -389,7 +389,8 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
-int tx_sanity_check_(ObTxDesc &tx);
+// in_stmt means stmt is executing
+int tx_sanity_check_(ObTxDesc &tx, const bool in_stmt = false);
 bool tx_need_reset_(const int error_code) const;
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,

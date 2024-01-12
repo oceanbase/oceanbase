@@ -3107,16 +3107,19 @@ int ObLogicalOperator::alloc_op_pre(AllocOpContext& ctx)
         sys_rownum_expr->set_op_id(op_id_);
       }
     }
-    const ObRawExpr *rownum_expr = NULL;
-    if (OB_SUCC(ret) && OB_SUCC(find_rownum_expr(rownum_expr)) && rownum_expr != NULL) {
-      const ObSysFunRawExpr *sys_rownum_expr = static_cast<const ObSysFunRawExpr *>(rownum_expr);
-      uint64_t count_op_id = sys_rownum_expr->get_op_id();
-      LOG_DEBUG("the coun_op_id of rownum is", K(count_op_id));
-      // rownum expr may be above count
-      if (count_op_id != OB_INVALID_ID) {
-        if (OB_FAIL(disable_rownum_expr(ctx.disabled_op_set_, count_op_id))) {
-          LOG_WARN("fail to disable rownum", K(ret), K(count_op_id));
+    ObLogicalOperator *rownum_op = NULL;
+    if (OB_SUCC(ret) && OB_SUCC(find_rownum_expr(op_id_, rownum_op)) && rownum_op != NULL) {
+      uint64_t op_id = rownum_op->get_op_id();
+      ObLogicalOperator *parent = rownum_op->get_parent();
+      while (OB_SUCC(ret) && op_id != op_id_ && parent != NULL) {
+        ret = ctx.disabled_op_set_.set_refactored(op_id_);
+        if (ret != OB_SUCCESS && ret != OB_HASH_EXIST) {
+          LOG_WARN("set_refactored fail", K(ret));
+        } else {
+          ret = OB_SUCCESS;
         }
+        op_id = parent->get_op_id();
+        parent = parent->get_parent();
       }
     }
     // disable all right childs of nlj and spf
@@ -3153,40 +3156,31 @@ int ObLogicalOperator::alloc_op_post(AllocOpContext& ctx)
   if (query_ctx->get_global_hint().alloc_op_hints_.empty()){
     /*no ops will be allocated, skip*/
   } else {
-    ret = ctx.disabled_op_set_.exist_refactored(op_id_);
-    if (OB_HASH_EXIST == ret) {
-      /*skip*/
-      ret = OB_SUCCESS;
-    } else if (OB_HASH_NOT_EXIST == ret){
-      ret = OB_SUCCESS;
-      const ObIArray<ObAllocOpHint> &alloc_op_hints = query_ctx->get_global_hint().alloc_op_hints_;
-      // There won't be too many 'blocking or tracing' hints, so it is acceptable for us to traverse the entire array three times:
-      // Allocate `all` level nodes first
-      // Allocate `dfo` level nodes srcond
-      // Allocate enumerate level nodes finally
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_ALL == alloc_op_hints.at(i).alloc_level_ &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at all level", K(ret));
-        }
+    const ObIArray<ObAllocOpHint> &alloc_op_hints = query_ctx->get_global_hint().alloc_op_hints_;
+    // There won't be too many 'blocking or tracing' hints, so it is acceptable for us to traverse the entire array three times:
+    // Allocate `all` level nodes first
+    // Allocate `dfo` level nodes srcond
+    // Allocate enumerate level nodes finally
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_ALL == alloc_op_hints.at(i).alloc_level_ &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at all level", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
-            (log_op_def::LOG_EXCHANGE == type_ &&
-            static_cast<ObLogExchange*>(this)->is_consumer()) &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at dfo level", K(ret));
-        }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_DFO == alloc_op_hints.at(i).alloc_level_ &&
+          (log_op_def::LOG_EXCHANGE == type_ &&
+          static_cast<ObLogExchange*>(this)->is_consumer()) &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at dfo level", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
-        if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
-            alloc_op_hints.at(i).id_ == op_id_ &&
-            OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
-          LOG_WARN("fail to alloc op at enumerate level", K(ret));
-        }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < alloc_op_hints.count(); ++i) {
+      if (ObAllocOpHint::OB_ENUMERATE == alloc_op_hints.at(i).alloc_level_ &&
+          alloc_op_hints.at(i).id_ == op_id_ &&
+          OB_FAIL(alloc_nodes_above(ctx, alloc_op_hints.at(i).flags_))) {
+        LOG_WARN("fail to alloc op at enumerate level", K(ret));
       }
-    } else {
-      LOG_WARN("exist_refactored fail", K(ret));
     }
   }
   return ret;
@@ -5413,7 +5407,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(const log_op_def::ObLogOpType op
     /*do nothing*/
   } else if (LOG_EXCHANGE == get_type()) {
     ObLogExchange *op = static_cast<ObLogExchange *>(this);
-    if (op->is_rescanable()) {
+    if (op->is_rescanable() && !op->is_task_order()) {
       op->set_px_batch_op_id(op_id);
       op->set_px_batch_op_type(op_type);
       find = true;
@@ -5705,81 +5699,75 @@ int ObLogicalOperator::collect_batch_exec_param(void* ctx,
   return ret;
 }
 
-int ObLogicalOperator::find_rownum_expr_recursively(const ObRawExpr *&rownum_expr, const ObRawExpr *expr)
+// Recursively search in all subexpressions
+int ObLogicalOperator::find_rownum_expr_recursively(const uint64_t &count_op_id,
+                                                    ObLogicalOperator *&rownum_op,
+                                                    const ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (expr->get_expr_type() == T_FUN_SYS_ROWNUM) {
-    rownum_expr = expr;
+  } else if (!expr->has_flag(CNT_ROWNUM)) {
+    /* expr do not have rownum, need not to search recursively, do nothing */
+  } else if (expr->get_expr_type() == T_FUN_SYS_ROWNUM
+             && static_cast<const ObSysFunRawExpr *>(expr)->get_op_id() == count_op_id) {
+    rownum_op = this;
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && rownum_expr == NULL && i < expr->get_param_count(); i++) {
-      if (OB_FAIL(SMART_CALL(find_rownum_expr_recursively(rownum_expr, expr->get_param_expr(i))))) {
+    for (int64_t i = 0; OB_SUCC(ret) && NULL == rownum_op && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(
+            find_rownum_expr_recursively(count_op_id, rownum_op, expr->get_param_expr(i))))) {
         LOG_WARN("fail to find rownum expr recursively", K(ret));
       }
     }
   }
   LOG_DEBUG("find_rownum_expr_recursively finished", K(expr->get_param_count()),
-           K(expr->get_expr_type()));
+           K(expr->get_expr_type()), K(NULL == rownum_op));
   return ret;
 }
-
-int ObLogicalOperator::find_rownum_expr(const ObRawExpr *&rownum_expr, const ObIArray<ObRawExpr *> &exprs)
+int ObLogicalOperator::find_rownum_expr(const uint64_t &count_op_id, ObLogicalOperator *&rownum_op,
+                                        const ObIArray<ObRawExpr *> &exprs)
 {
-  LOG_DEBUG("find_rownum_expr begin", K(exprs.count()));
+  LOG_DEBUG("find_rownum_expr begin", K(exprs.count()), K(NULL == rownum_op));
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && rownum_expr == NULL && i < exprs.count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == rownum_op && i < exprs.count(); i++) {
     ObRawExpr *expr = exprs.at(i);
-    ret = find_rownum_expr_recursively(rownum_expr, expr);
-    LOG_DEBUG("find_rownum_expr_recursively done:", K(expr->get_expr_type()), K(i),
-              K(expr->get_param_count()));
+    ret = find_rownum_expr_recursively(count_op_id, rownum_op, expr);
+    LOG_DEBUG(
+        "find_rownum_expr_recursively done:", K(expr->get_expr_type()),
+        K(NULL == rownum_op), K(i), K(expr->get_param_count()));
   }
   return ret;
 }
-
-// rownum expr can show up in the following 4 cases, check them all
-// - filter expr
 // - output expr
 // - join conditions: equal ("=")
 // - join conditions: filter (">", "<", ">=", "<=")
-int ObLogicalOperator::find_rownum_expr(const ObRawExpr *&rownum_expr)
+int ObLogicalOperator::find_rownum_expr(const uint64_t &count_op_id, ObLogicalOperator *&rownum_op)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("find_rownum_expr debug: ", K(get_name()));
-  if (OB_FAIL(find_rownum_expr(rownum_expr, get_filter_exprs()))) {
+  LOG_DEBUG("find_rownum_expr debug: ", K(get_name()), K(count_op_id));
+  if (OB_FAIL(find_rownum_expr(count_op_id, rownum_op, get_filter_exprs()))) {
     LOG_WARN("failure encountered during find rownum expr", K(ret));
-  } else if (OB_FAIL(find_rownum_expr(rownum_expr, get_output_exprs()))) {
+  } else if (OB_FAIL(find_rownum_expr(count_op_id, rownum_op, get_output_exprs()))) {
     LOG_WARN("failure encountered during find rownum expr", K(ret));
-  } else if (rownum_expr == NULL && get_type() == log_op_def::LOG_JOIN) {
+  } else if (NULL == rownum_op && get_type() == log_op_def::LOG_JOIN) {
     ObLogJoin *join_op = dynamic_cast<ObLogJoin *>(this);
     // NO NPE check for join_op as it should NOT be nullptr
     if (OB_ISNULL(join_op)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("join op is null", K(ret));
-    } else if (OB_FAIL(find_rownum_expr(rownum_expr, join_op->get_other_join_conditions()))) {
+    } else if (OB_FAIL(
+                 find_rownum_expr(count_op_id, rownum_op, join_op->get_other_join_conditions()))) {
       LOG_WARN("failure encountered during find rownum expr", K(ret));
-    } else if (OB_FAIL(find_rownum_expr(rownum_expr, join_op->get_equal_join_conditions()))) {
+    } else if (OB_FAIL(
+                 find_rownum_expr(count_op_id, rownum_op, join_op->get_equal_join_conditions()))) {
       LOG_WARN("failure encountered during find rownum expr", K(ret));
     }
   }
-  return ret;
-}
-
-/**
-After finding the rownum expression, the count operator is searched from bottom to top, and
-the operators on the path are marked as not being able to add materialization.
-*/
-int ObLogicalOperator::disable_rownum_expr(hash::ObHashSet<uint64_t> &disabled_op_set,
-                                           const uint64_t &count_op_id)
-{
-  int ret = OB_SUCCESS;
-  uint64_t op_id = op_id_;
-  ObLogicalOperator *parent = get_parent();
-  while (OB_SUCC(ret) && op_id != count_op_id && parent != NULL) {
-    ret = disabled_op_set.set_refactored(op_id);
-    op_id = parent->get_op_id();
-    parent = parent->get_parent();
+  for (int64_t i = 0; NULL == rownum_op && OB_SUCC(ret) && i < get_num_of_child(); i++) {
+    if (OB_FAIL(SMART_CALL(get_child(i)->find_rownum_expr(count_op_id, rownum_op)))) {
+      LOG_WARN("fail to find rownum expr", K(ret));
+    }
   }
   return ret;
 }
@@ -5822,16 +5810,25 @@ int ObLogicalOperator::alloc_nodes_above(AllocOpContext& ctx, const uint64_t &fl
   int ret = OB_SUCCESS;
   if (flags & ObAllocOpHint::OB_MATERIAL
       && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MATERIAL)) {
-    if (OB_FAIL(allocate_material_node_above())) {
-      LOG_WARN("failed to allocate material above", K(ret));
-    } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MATERIAL))) {
-      LOG_WARN("failed to visit alloc op", K(ret));
+    ret = ctx.disabled_op_set_.exist_refactored(op_id_);
+    if (OB_HASH_EXIST == ret) {
+      /*op cant not add material, skip*/
+      ret = OB_SUCCESS;
+    } else if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(allocate_material_node_above())) {
+        LOG_WARN("failed to allocate material above", K(ret));
+      } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MATERIAL))) {
+        LOG_WARN("failed to visit alloc op", K(ret));
+      }
+    } else {
+      LOG_WARN("exist_refactored fail", K(ret));
     }
   }
   if (OB_SUCC(ret)
-      && ((flags & ObAllocOpHint::OB_MONITOR_STAT)
-      || (flags & ObAllocOpHint::OB_MONITOR_TRACING))
-      && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING)) {
+        && ((flags & ObAllocOpHint::OB_MONITOR_STAT)
+              || (flags & ObAllocOpHint::OB_MONITOR_TRACING))
+             && !ctx.is_visited(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING)) {
     if (OB_FAIL(allocate_monitoring_dump_node_above(flags, op_id_))) {
       LOG_WARN("failed to allocate monitoring dump above", K(ret));
     } else if (OB_FAIL(ctx.visit(op_id_, ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING))) {

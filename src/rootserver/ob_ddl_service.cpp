@@ -6098,7 +6098,7 @@ int ObDDLService::lock_tablets(ObMySQLTransaction &trans,
 }
 
 int ObDDLService::lock_table(ObMySQLTransaction &trans,
-                             const ObTableSchema &table_schema)
+                             const ObSimpleTableSchemaV2 &table_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -6131,23 +6131,27 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
 }
 
 int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schema,
-                                          ObSchemaGetterGuard &schema_guard,
                                           ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = database_schema.get_tenant_id();
   const uint64_t database_id = database_schema.get_database_id();
-  ObArray<uint64_t> table_ids;
-  if (OB_FAIL(schema_guard.get_table_ids_in_database(tenant_id,
-                                                     database_id,
-                                                     table_ids))) {
+  ObArray<const ObSimpleTableSchemaV2*> table_schemas;
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schemas_in_database(tenant_id,
+                                                                database_id,
+                                                                table_schemas))) {
     LOG_WARN("fail to get table ids in database", K(tenant_id), K(database_id), K(ret));
   } else {
-    const ObTableSchema *table_schema = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_ids.at(i), table_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), "table_id", table_ids.at(i));
-      } else if (OB_ISNULL(table_schema)) {
+    const ObSimpleTableSchemaV2 *table_schema = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+      table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema should not be null", K(ret));
       } else if (!table_schema->check_can_do_ddl()) {
@@ -6163,28 +6167,32 @@ int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schem
 }
 
 int ObDDLService::lock_tables_in_recyclebin(const ObDatabaseSchema &database_schema,
-                                            ObSchemaGetterGuard &schema_guard,
                                             ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
   ObArray<ObRecycleObject> recycle_objs;
   ObSchemaService *schema_service = nullptr;
+  const uint64_t tenant_id = database_schema.get_tenant_id();
+  const uint64_t database_id = database_schema.get_database_id();
   if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret));
   } else if (OB_ISNULL(schema_service = schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service is null", K(ret));
-  } else if (OB_FAIL(schema_service->fetch_recycle_objects_of_db(database_schema.get_tenant_id(),
-                                                                 database_schema.get_database_id(),
+  } else if (OB_FAIL(schema_service->fetch_recycle_objects_of_db(tenant_id,
+                                                                 database_id,
                                                                  trans,
                                                                  recycle_objs))) {
     LOG_WARN("fetch recycle objects of db failed", K(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < recycle_objs.count(); ++i) {
       const ObRecycleObject &recycle_obj = recycle_objs.at(i);
-      const ObTableSchema* table_schema = NULL;
-      if (OB_FAIL(schema_guard.get_table_schema(recycle_obj.get_tenant_id(),
+      const ObSimpleTableSchemaV2* table_schema = NULL;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(recycle_obj.get_tenant_id(),
           recycle_obj.get_table_id(), table_schema))) {
         LOG_WARN("get table schema failed", K(ret), K(recycle_obj));
       } else if (OB_ISNULL(table_schema)) {
@@ -16419,7 +16427,7 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_schemas.count(); i++) {
       ObTableSchema &table_schema = aux_table_schemas.at(i);
       // allow offline ddl execute if there's no offline ddl doing
-      table_schema.set_in_offline_ddl_white_list(orig_table_schema.check_can_do_ddl());
+      table_schema.set_in_offline_ddl_white_list(in_offline_ddl_white_list);
       if (OB_FAIL(schemas.push_back(&table_schema))) {
         LOG_WARN("fail to push back aux table schema" , K(ret));
       } else if (table_schema.is_aux_lob_piece_table()) {
@@ -17278,7 +17286,7 @@ int ObDDLService::rebuild_hidden_table_index_in_trans(obrpc::ObAlterTableArg &al
       }
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+      if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret), K(alter_table_schema), KPC(orig_table_schema));
       } else if (OB_FAIL(get_all_dropped_column_ids(alter_table_arg, *orig_table_schema, drop_cols_id_arr))) {
         LOG_WARN("fail to get drop cols id set", K(ret));
@@ -17488,7 +17496,7 @@ int ObDDLService::rebuild_hidden_table_constraints(
     LOG_WARN("fail to get constraints that need to rebuild", K(ret));
   } else if (rebuild_constraints.count() == 0) {
     // no constraints, or constraints have been rebuilt.
-  } else if (OB_FAIL(col_name_map.init(orig_table_schema, alter_table_arg.alter_table_schema_))) {
+  } else if (OB_FAIL(col_name_map.init(orig_table_schema, hidden_table_schema, alter_table_arg.alter_table_schema_))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     new_table_schema.clear_constraint();
@@ -17978,7 +17986,7 @@ int ObDDLService::rebuild_hidden_table_foreign_key(
     LOG_WARN("fail to get fk infos that need to rebuild", K(ret));
   } else if (OB_FAIL(inc_table_schema.set_foreign_key_infos(rebuild_fk_infos))) {
     LOG_WARN("fail to set fk infos", K(ret));
-  } else if (OB_FAIL(col_name_map.init(orig_table_schema, alter_table_arg.alter_table_schema_))) {
+  } else if (OB_FAIL(col_name_map.init(orig_table_schema, hidden_table_schema, alter_table_arg.alter_table_schema_))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     ObIArray<ObForeignKeyInfo> &foreign_key_infos = inc_table_schema.get_foreign_key_infos();
@@ -19294,7 +19302,7 @@ int ObDDLService::modify_hidden_table_fk_state(obrpc::ObAlterTableArg &alter_tab
       uint64_t hidden_column_id = 0;
       if (nullptr == orig_table_schema->get_column_schema(orig_column_id)) {
         hidden_column_id = orig_column_id;
-      } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+      } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *hidden_table_schema, alter_table_schema))) {
         LOG_WARN("failed to init column name map", K(ret));
       } else if (OB_FAIL(get_hidden_table_column_id_by_orig_column_id(*orig_table_schema,
                                                                       *hidden_table_schema,
@@ -22299,13 +22307,12 @@ int ObDDLService::purge_database(
     } else if (OB_ISNULL(pr_trans)
         && OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(lock_tables_of_database(*database_schema, schema_guard, OB_ISNULL(pr_trans) ? trans : *pr_trans))) {
+    } else if (OB_FAIL(lock_tables_of_database(*database_schema, OB_ISNULL(pr_trans) ? trans : *pr_trans))) {
       LOG_WARN("failed to lock tables of database", K(ret));
-    } else if (OB_FAIL(lock_tables_in_recyclebin(*database_schema, schema_guard, OB_ISNULL(pr_trans) ? trans : *pr_trans))) {
+    } else if (OB_FAIL(lock_tables_in_recyclebin(*database_schema, OB_ISNULL(pr_trans) ? trans : *pr_trans))) {
       LOG_WARN("failed to lock tables in recyclebin", K(ret));
     } else if (OB_FAIL(ddl_operator.purge_database_in_recyclebin(*database_schema,
                                                                  OB_ISNULL(pr_trans) ? trans : *pr_trans,
-                                                                 schema_guard,
                                                                  &arg.ddl_stmt_str_))) {
       LOG_WARN("purge database failed", K(ret));
     }
@@ -24430,7 +24437,8 @@ int ObDDLService::create_tenant_schema(
                          compat_mode,
                          pools, user_tenant_id,
                          false/*is_bootstrap*/,
-                         arg.source_tenant_id_))) {
+                         arg.source_tenant_id_,
+                         false/*check_data_version*/))) {
         LOG_WARN("grant_pools_to_tenant failed", KR(ret), K(arg), K(pools), K(user_tenant_id));
       }
       LOG_INFO("[CREATE_TENANT] STEP 1.2. finish grant pools", KR(ret), K(user_tenant_id),
@@ -26423,7 +26431,8 @@ int ObDDLService::modify_and_cal_resource_pool_diff(
           LOG_WARN("fail to grant pool", K(ret), K(diff_pools));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
                 trans, new_ug_id_array, compat_mode, diff_pools, tenant_id,
-                false/*is_bootstrap*/, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+                false/*is_bootstrap*/, OB_INVALID_TENANT_ID/*source_tenant_id*/,
+                true/*check_data_version*/))) {
           LOG_WARN("fail to grant pools", K(ret));
         }
       } else if (new_pool_name_list.count() + 1 == old_pool_name_list.count()) {
@@ -28232,24 +28241,25 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLSQLTransaction &actual_trans = OB_ISNULL(ora_user_trans) ? trans : *ora_user_trans;
-      const ObTableSchema *schema = NULL;
       // lock table when drop data table
-      if (OB_FAIL(lock_tables_of_database(*db_schema, schema_guard, actual_trans))) {
+      if (OB_FAIL(lock_tables_of_database(*db_schema, actual_trans))) {
         LOG_WARN("lock tables of database", K(ret));
-      } else if (!arg.to_recyclebin_ && OB_FAIL(lock_tables_in_recyclebin(*db_schema, schema_guard, actual_trans))) {
+      } else if (!arg.to_recyclebin_ && OB_FAIL(lock_tables_in_recyclebin(*db_schema, actual_trans))) {
         LOG_WARN("failed to lock tables in recyclebin", K(ret));
       }
 
       if (OB_SUCC(ret) && arg.to_recyclebin_ && !is_inner_db(db_schema->get_database_id())) {
         if (OB_FAIL(ddl_operator.drop_database_to_recyclebin(*db_schema,
-            actual_trans, schema_guard, &arg.ddl_stmt_str_))) {
+                                                             actual_trans,
+                                                             &arg.ddl_stmt_str_))) {
           LOG_WARN("drop database to recyclebin failed", K(arg), K(ret));
         }
       } else {
         if (OB_FAIL(ret)) {
           // FAIL
-        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema, actual_trans,
-                   schema_guard, &arg.ddl_stmt_str_))) {
+        } else if (OB_FAIL(ddl_operator.drop_database(*db_schema,
+                                                      actual_trans,
+                                                      &arg.ddl_stmt_str_))) {
           LOG_WARN("ddl_operator drop_database failed", K(tenant_id), KT(database_id), K(ret));
         }
       }
@@ -31859,8 +31869,8 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
     uint64_t database_id = OB_INVALID_ID;
     if (OB_SUCC(ret)) {
       bool database_exist = false;
-      if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
-        database_id = OB_OUTLINE_DEFAULT_DATABASE_ID;
+      if (database_name == OB_MOCK_DEFAULT_DATABASE_NAME) {
+        database_id = OB_MOCK_DEFAULT_DATABASE_ID;
         database_exist = true;
       } else if (OB_FAIL(schema_service_->check_database_exist(tenant_id,
                                                         database_name,

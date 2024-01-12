@@ -281,35 +281,42 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       const ObITable::TableKey &table_key = redo_info.table_key_;
       bool is_major_sstable_exist = false;
       uint64_t data_format_version = redo_info.data_format_version_;
-      if (data_format_version <= 0) {
-        // to upgrade from lower version without `data_format_version` in redo log,
-        // use data_format_version in start log instead.
-        ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
-        ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
-        if (OB_ISNULL(tenant_direct_load_mgr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected err", K(ret));
-        } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-                ls_->get_ls_id(),
-                redo_info.table_key_.tablet_id_,
-                true/* is_full_direct_load */,
-                direct_load_mgr_handle,
-                is_major_sstable_exist))) {
-          if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-            ret = OB_SUCCESS;
-            LOG_INFO("major sstable already exist", K(ret), K(scn_), K(table_key));
-          } else {
-            LOG_WARN("get tablet mgr failed", K(ret), K(table_key));
-          }
+
+      // to upgrade from lower version without `data_format_version` in redo log,
+      // use data_format_version in start log instead.
+      ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
+      ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+      if (OB_ISNULL(tenant_direct_load_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected err", K(ret));
+      } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
+              ls_->get_ls_id(),
+              redo_info.table_key_.tablet_id_,
+              true/* is_full_direct_load */,
+              direct_load_mgr_handle,
+              is_major_sstable_exist))) {
+        if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
+          need_replay = false;
+          ret = OB_SUCCESS;
+          LOG_INFO("major sstable already exist, ship replay", K(ret), K(scn_), K(table_key));
         } else {
-          data_format_version = direct_load_mgr_handle.get_obj()->get_data_format_version();
+          LOG_WARN("get tablet mgr failed", K(ret), K(table_key));
         }
+      } else if (data_format_version <= 0) {
+        data_format_version = direct_load_mgr_handle.get_obj()->get_data_format_version();
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block,
-          snapshot_version, data_format_version))) {
-        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block),
-          K(snapshot_version), K(data_format_version));
+      if (OB_SUCC(ret) && need_replay) {
+        if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block,
+            snapshot_version, data_format_version, direct_load_mgr_handle))) {
+          if (OB_TASK_EXPIRED == ret) {
+            need_replay = false;
+            LOG_INFO("task expired, skip replay the redo", K(ret), K(macro_block), KPC(direct_load_mgr_handle.get_obj()));
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block),
+              K(snapshot_version), K(data_format_version));
+          }
+        }
       }
     }
   }
@@ -392,7 +399,7 @@ int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle) //TODO(
   } else if (OB_ISNULL(data_direct_load_mgr = direct_load_mgr_handle.get_full_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(table_key));
-  } else if (OB_FAIL(data_direct_load_mgr->commit(*tablet_handle.get_obj(), log_->get_start_scn(), scn_, false/*wait_major_generate*/))) {
+  } else if (OB_FAIL(data_direct_load_mgr->commit(*tablet_handle.get_obj(), log_->get_start_scn(), scn_, 0/*unused table_id*/, 0/*unused ddl_task_id*/, true/*is replay*/))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
       ret = OB_SUCCESS; // exit when tablet not exist or task expired
     } else {

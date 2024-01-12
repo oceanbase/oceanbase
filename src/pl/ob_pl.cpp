@@ -2559,7 +2559,7 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
       && params->at(var_idx).is_pl_extend()
       && params->at(var_idx).get_ext() != 0
       && params->at(var_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session(), false));
+    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
   }
 
   if (OB_FAIL(ret)) {
@@ -3154,14 +3154,20 @@ do {                                                                  \
        */
       if (func_.get_in_args().has_member(i)) {
         const ObPLDataType &pl_type = func_.get_variables().at(i);
-        if (is_anonymous) {
+        if (is_anonymous && !func_.get_params_info().at(i).flag_.need_to_check_type_) {
           OX (get_params().at(i) = params->at(i));
         } else if (params->at(i).is_pl_mock_default_param()) { // 使用参数默认值
           ObObjParam result;
           sql::ObSqlExpression *default_expr = func_.get_default_expr(i);
           OV (OB_NOT_NULL(default_expr), OB_ERR_UNEXPECTED, K(i), K(func_.get_default_idxs()));
           OZ (ObSPIService::spi_calc_expr(&ctx_, default_expr, OB_INVALID_INDEX, &result));
-          OX (get_params().at(i) = result);
+          if (OB_SUCC(ret) && result.is_null()) {
+            ObObjMeta null_meta = get_params().at(i).get_meta();
+            get_params().at(i).set_null();
+            get_params().at(i).set_null_meta(null_meta);
+          } else {
+            OX (get_params().at(i) = result);
+          }
           if (pl_type.is_composite_type() && result.is_null()) {
             OZ (init_complex_obj(
               (*get_allocator()), func_.get_variables().at(i), get_params().at(i)));
@@ -4312,12 +4318,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     CK (OB_NOT_NULL(coll));
     OX (set_allocator ? coll->set_allocator(&allocator) : coll->set_allocator(NULL));
     if (OB_FAIL(ret)) {
-    } else if (!set_null) {
-      if (user_type->is_associative_array_type()) {
-        OX (coll->set_inited());
-      } else {
-        OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : coll->set_inited());
-      }
+    } else if (user_type->is_associative_array_type()) {
+      OX (coll->set_inited());
+    } else {
+      OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : (set_null ? (void)NULL : coll->set_inited()));
     }
     OX (coll->set_type(pl_type.get_type()));
     OZ (get_element_data_type(pl_type, elem_desc, &allocator));

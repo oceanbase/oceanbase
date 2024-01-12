@@ -40,10 +40,9 @@ public:
   int init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id); // init before memtable mgr
   int set_max_freeze_scn(const share::SCN &checkpoint_scn);
   int get_or_create_ddl_kv(
-      const share::SCN &start_scn,
-      const share::SCN &scn,
-      const int64_t snapshot_version,
-      const uint64_t data_format_version,
+      const share::SCN &macro_redo_scn,
+      const share::SCN &macro_redo_start_scn,
+      ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
       ObDDLKVHandle &kv_handle); // used in active ddl kv guard
   int get_freezed_ddl_kv(const share::SCN &freeze_scn, ObDDLKVHandle &kv_handle); // locate ddl kv with exeact freeze log ts
   int get_ddl_kvs(const bool frozen_only, ObIArray<ObDDLKVHandle> &kv_handle_array); // get all freeze ddl kvs
@@ -55,6 +54,7 @@ public:
       const share::SCN &freeze_scn = share::SCN::min_scn()); // freeze the active ddl kv, when memtable freeze or ddl commit
   int release_ddl_kvs(const share::SCN &rec_scn); // release persistent ddl kv, used in ddl merge task for free ddl kv
   int check_has_effective_ddl_kv(bool &has_ddl_kv); // used in ddl log handler for checkpoint
+  int check_has_freezed_ddl_kv(bool &has_freezed_ddl_kv);
   int64_t get_count();
   void set_ddl_kv(const int64_t idx, ObDDLKVHandle &kv_handle); //for unittest
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }

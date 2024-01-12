@@ -386,6 +386,9 @@ public:
   //method called when leader revoke
   virtual int commit_to_replay();
   virtual int fill_redo_log(ObTxFillRedoCtx &ctx);
+  bool is_logging_blocked(bool &has_pending_log) const {
+    return trans_mgr_.is_logging_blocked(has_pending_log);
+  }
   void check_all_redo_flushed();
   int get_log_guard(const transaction::ObTxSEQ &write_seq,
                     ObCallbackListLogGuard &log_guard,

@@ -39,6 +39,7 @@ using namespace share;
 using namespace storage;
 using namespace memtable;
 using namespace common;
+using namespace oceanbase::lib;
 
 namespace transaction
 {
@@ -146,9 +147,11 @@ int ObLockMemtable::lock_(
   // 1. record lock myself(check conflict).
   // 2. record lock at memtable ctx.
   // 3. create lock callback and list it on the callback list of memtable ctx.
+
   do {
     // retry if there is lock conflict at part trans ctx.
     need_retry = false;
+
     {
       succ_step = STEP_BEGIN;
       lock_exist = false;
@@ -327,6 +330,7 @@ int ObLockMemtable::unlock_(
   // 1. record unlock op myself(check conflict).
   // 2. record unlock op at memtable ctx.
   // 3. create unlock callback and list it on the callback list of memtable ctx.
+  Thread::WaitGuard guard(Thread::WAIT);
   do {
     // retry if there is lock conflict at part trans ctx.
     need_retry = false;
@@ -548,6 +552,7 @@ int ObLockMemtable::lock(
 {
   int ret = OB_SUCCESS;
   LOG_DEBUG("ObLockMemtable::lock ", K(lock_op));
+  Thread::WaitGuard guard(Thread::WAIT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockMemtable not inited.", K(ret));
@@ -574,6 +579,7 @@ int ObLockMemtable::unlock(
   // only has OUT_TRANS_UNLOCK
   int ret = OB_SUCCESS;
   LOG_DEBUG("ObLockMemtable::unlock ", K(unlock_op));
+  Thread::WaitGuard guard(Thread::WAIT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockMemtable not inited.", K(ret));
@@ -725,6 +731,7 @@ int ObLockMemtable::get_lock_op_iter(const ObLockID &lock_id,
 int ObLockMemtable::check_and_clear_obj_lock(const bool force_compact)
 {
   int ret = OB_SUCCESS;
+  Thread::WaitGuard guard(Thread::WAIT);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TABLELOCK_LOG(WARN, "ObLockMemtable not inited.", K(ret));

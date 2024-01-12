@@ -72,7 +72,7 @@ private:
   int fill_create_tenant_arg(const share::ObPhysicalRestoreJob &job_info,
                              const ObSqlString &pool_list,
                              obrpc::ObCreateTenantArg &arg);
-  int convert_parameters(const share::ObPhysicalRestoreJob &job_info);
+  int convert_tde_parameters(const share::ObPhysicalRestoreJob &job_info);
   int restore_root_key(const share::ObPhysicalRestoreJob &job_info);
   int restore_keystore(const share::ObPhysicalRestoreJob &job_info);
 

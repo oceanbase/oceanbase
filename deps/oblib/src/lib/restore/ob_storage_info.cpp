@@ -21,9 +21,11 @@ namespace oceanbase
 
 namespace common
 {
+
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE)
+  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+    checksum_type_(ObStorageChecksumType::OB_NO_CHECKSUM_ALGO)
 {
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
@@ -39,6 +41,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 void ObObjectStorageInfo::reset()
 {
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
+  checksum_type_ = ObStorageChecksumType::OB_NO_CHECKSUM_ALGO;
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
@@ -54,6 +57,7 @@ int64_t ObObjectStorageInfo::hash() const
 {
   int64_t hash_value = 0;
   hash_value = murmurhash(&device_type_, static_cast<int32_t>(sizeof(device_type_)), hash_value);
+  hash_value = murmurhash(&checksum_type_, static_cast<int32_t>(sizeof(checksum_type_)), hash_value);
   hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(access_key_, static_cast<int32_t>(strlen(access_key_)), hash_value);
@@ -64,6 +68,7 @@ int64_t ObObjectStorageInfo::hash() const
 bool ObObjectStorageInfo::operator ==(const ObObjectStorageInfo &storage_info) const
 {
   return device_type_ == storage_info.device_type_
+      && checksum_type_ == storage_info.checksum_type_
       && (0 == STRCMP(endpoint_, storage_info.endpoint_))
       && (0 == STRCMP(access_id_, storage_info.access_id_))
       && (0 == STRCMP(access_key_, storage_info.access_key_))
@@ -83,6 +88,11 @@ const char *ObObjectStorageInfo::get_type_str() const
 ObStorageType ObObjectStorageInfo::get_type() const
 {
   return device_type_;
+}
+
+ObStorageChecksumType ObObjectStorageInfo::get_checksum_type() const
+{
+  return checksum_type_;
 }
 
 // oss:host=xxxx&access_id=xxx&access_key=xxx
@@ -198,6 +208,16 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           OB_LOG(WARN, "failed to check delete mode", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set delete mode", K(ret), K(token));
+        }
+      } else if (0 == strncmp(CHECKSUM_TYPE, token, strlen(CHECKSUM_TYPE))) {
+        const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
+        if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_MD5)) {
+          checksum_type_ = OB_MD5_ALGO;
+        } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_CRC32)) {
+          checksum_type_ = OB_CRC32_ALGO;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "invalid checksum type", K(ret), K(checksum_type_str));
         }
       } else {
       }

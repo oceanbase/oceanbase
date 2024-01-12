@@ -209,7 +209,7 @@ int ObCloneScheduler::process_sys_clone_job(const share::ObCloneJob &job)
       case ObTenantCloneStatus::Status::CLONE_SYS_CREATE_TENANT_FAIL:
       case ObTenantCloneStatus::Status::CLONE_SYS_WAIT_TENANT_RESTORE_FINISH_FAIL:
       case ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL:
-      case ObTenantCloneStatus::Status::CLONE_SYS_CANCELED:
+      case ObTenantCloneStatus::Status::CLONE_SYS_CANCELING:
         ret = clone_recycle_failed_job(job);
         break;
       default:
@@ -266,6 +266,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_LOCK_ERROR);
 int ObCloneScheduler::clone_lock(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_LOCK);
   const uint64_t tenant_id = job.get_tenant_id();
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const int64_t job_id = job.get_job_id();
@@ -359,6 +360,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_RESOURCE_POOL_ERROR);
 int ObCloneScheduler::clone_create_resource_pool(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_CREATE_INNER_RESOURCE_POOL);
   obrpc::ObCloneResourcePoolArg arg;
   int64_t timeout = GCONF._ob_ddl_timeout;
   uint64_t resource_pool_id = job.get_resource_pool_id();
@@ -411,6 +413,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_CREATE_SNAPSHOT_ERROR);
 int ObCloneScheduler::clone_create_snapshot_for_fork_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_CREATE_SNAPSHOT);
   int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = job.get_tenant_id();
   const uint64_t source_tenant_id = job.get_source_tenant_id();
@@ -511,6 +514,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_WAIT_CREATE_SNAPSHOT_ERROR);
 int ObCloneScheduler::clone_wait_create_snapshot_for_fork_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_WAIT_CREATE_SNAPSHOT);
   const uint64_t tenant_id = job.get_tenant_id();
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantCloneJobType type = job.get_job_type();
@@ -593,6 +597,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_CREATE_TENANT_ERROR);
 int ObCloneScheduler::clone_create_tenant(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_CREATE_TENANT);
   obrpc::ObCreateTenantArg arg;
   uint64_t clone_tenant_id = job.get_clone_tenant_id();
   const uint64_t tenant_id = job.get_tenant_id();
@@ -647,6 +652,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_WAIT_CREATE_TENANT_ERROR);
 int ObCloneScheduler::clone_wait_tenant_restore_finish(const ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_WAIT_TENANT_RESTORE_FINISH);
   bool user_finished = false;
 
   ObTenantCloneTableOperator clone_op;
@@ -727,6 +733,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_RELEASE_RESOURCE_ERROR);
 int ObCloneScheduler::clone_release_resource(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_RELEASE_RESOURCE);
   const uint64_t tenant_id = job.get_tenant_id();
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantSnapshotID snapshot_id = job.get_tenant_snapshot_id();
@@ -770,6 +777,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_SYS_FINISH_ERROR);
 int ObCloneScheduler::clone_sys_finish(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_SUCCESS);
   bool clone_tenant_exist = true;
   const uint64_t tenant_id = job.get_tenant_id(); //sys tenant id
   const uint64_t clone_tenant_id = job.get_clone_tenant_id();
@@ -1172,6 +1180,7 @@ ERRSIM_POINT_DEF(ERRSIM_CLONE_RECYCLE_FAILED_JOB_ERROR);
 int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(HANG_IN_CLONE_SYS_FAILED_STATUS);
   const uint64_t tenant_id = job.get_tenant_id();
   const uint64_t source_tenant_id = job.get_source_tenant_id();
   const ObTenantCloneStatus job_status = job.get_status();
@@ -1200,6 +1209,8 @@ int ObCloneScheduler::clone_recycle_failed_job(const share::ObCloneJob &job)
     LOG_WARN("fail to release resource of clone tenant", KR(ret), K(job));
   } else if (OB_FAIL(ObTenantCloneUtil::release_source_tenant_resource_of_clone_job(*sql_proxy_, job))) {
     LOG_WARN("fail to release resource of source tenant", KR(ret), K(job));
+  } else if (job_status.is_sys_canceling_status()) {
+    const_cast<ObCloneJob&>(job).set_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELED);
   }
 
   if (OB_SUCC(ret)) {

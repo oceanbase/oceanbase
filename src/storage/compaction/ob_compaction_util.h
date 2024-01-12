@@ -29,6 +29,8 @@ enum ObMergeType
   DDL_KV_MERGE = 6, // only use for ddl dag
   BACKFILL_TX_MERGE = 7,
   MDS_TABLE_MERGE = 8,
+  // add new merge type here
+  // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX
 };
 

@@ -130,6 +130,8 @@ public:
 
   inline void set_all(const int64_t start_idx, const int64_t end_idx);
 
+  inline void unset_all(const int64_t start_idx, const int64_t end_idx);
+
   inline bool is_all_true(const int64_t start_idx, const int64_t end_idx) const;
 
   inline void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
@@ -556,6 +558,27 @@ inline void ObBitVectorImpl<WordType>::set_all(const int64_t start_idx, const in
 }
 
 template<typename WordType>
+inline void ObBitVectorImpl<WordType>::unset_all(const int64_t start_idx, const int64_t end_idx)
+{
+  int64_t start_cnt = 0;
+  int64_t end_cnt = 0;
+  WordType start_mask = 0;
+  WordType end_mask = 0;
+  get_start_end_mask(start_idx, end_idx, start_mask, end_mask, start_cnt, end_cnt);
+
+  if (start_cnt == end_cnt) {
+    data_[start_cnt] &= (~(start_mask & end_mask));
+  } else {
+    data_[start_cnt] &= (~start_mask);
+    MEMSET(data_ + start_cnt + 1, 0x0, (end_cnt - start_cnt - 1) * BYTES_PER_WORD);
+    if (end_mask > 0) {
+      data_[end_cnt] &= (~end_mask);
+    }
+  }
+}
+
+
+template<typename WordType>
 inline void ObBitVectorImpl<WordType>::deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t start_idx,
                                 const int64_t end_idx)
 {
@@ -636,7 +659,7 @@ OB_INLINE int ObBitVectorImpl<WordType>::inner_foreach(const ObBitVectorImpl<Wor
           if (tmp_step + step_size > size) {
             mini_cnt = size - tmp_step;
           }
-          for (int64_t j = 0; j < mini_cnt; j++) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < mini_cnt; j++) {
             int64_t k = j + tmp_step;
             ret = op(k);
           }

@@ -254,8 +254,8 @@ void ObTenantTabletTTLMgr::check_ttl_tenant_state()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fatal err, ttl ctx in map is null", K(local_tenant_task_.tenant_id_));
       } else {
-          tenant_dirty = tenant_dirty ? tenant_dirty : ctx->is_dirty_;
-          tenant_finish = tenant_finish ?  (ctx->task_status_ != OB_TTL_TASK_CANCEL && ctx->task_status_ != OB_TTL_TASK_FINISH) : tenant_finish;
+        tenant_dirty = tenant_dirty ? tenant_dirty : ctx->is_dirty_;
+        tenant_finish = tenant_finish ?  (ctx->task_status_ == OB_TTL_TASK_CANCEL || ctx->task_status_ == OB_TTL_TASK_FINISH) : tenant_finish;
       }
     }
     if (OB_SUCC(ret) && !tenant_dirty) {
@@ -1192,7 +1192,7 @@ int ObTenantTabletTTLMgr::try_schedule_task(ObTTLTaskCtx* ctx)
         ctx->task_start_time_ = ObTimeUtility::current_time();
       }
       ctx->task_status_ = OB_TTL_TASK_RUNNING;
-      mark_ttl_ctx_dirty(local_tenant_task_, *ctx);
+      // mark ctx dirty later in report_task_status in case of watting too long in dag queue
     }
   } else {
     LOG_DEBUG("status when try schedule task", K(local_tenant_task_.ttl_continue_), K(local_tenant_task_.state_), K(ctx->task_status_));

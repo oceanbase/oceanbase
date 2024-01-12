@@ -244,6 +244,11 @@ public:
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   int get_tx_ctx(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
 
+  int get_tx_ctx_with_timeout(const ObTransID &tx_id,
+                              const bool for_replay,
+                              ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout);
+
   // Find specified TxCtx directly from the ObLSTxCtxMgr's hash_map
   // @param [in] tx_id: transaction ID
   // @param [out] tx_ctx: context found through ObLSTxCtxMgr's hash table

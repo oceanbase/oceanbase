@@ -525,13 +525,15 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
       LOG_INFO("data version is smaller than 4200, no need check", K(user_compat_version));
     } else {
       bool is_finish = false;
-      ObBalanceTaskHelper ls_balance_task;
+      ObArray<ObBalanceTaskHelper> ls_balance_tasks;
       ObBalanceTaskArray balance_task_array;
       share::ObAllTenantInfo cur_tenant_info;
       int tmp_ret = OB_SUCCESS;
+      SCN max_scn;
+      max_scn.set_max();
       while (!THIS_WORKER.is_timeout() && OB_SUCC(ret) && !is_finish) {
-        if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
-                *sql_proxy_, ls_balance_task))) {
+        if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(tenant_id_,
+                *sql_proxy_, max_scn, ls_balance_tasks))) {
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           balance_task_array.reset();
@@ -579,7 +581,7 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
             LOG_WARN("failed to notify recovery ls service", KR(tmp_ret));
           }
           usleep(100L * 1000L);
-          LOG_INFO("has balance task not finish", K(ls_balance_task),
+          LOG_INFO("has balance task not finish", K(ls_balance_tasks),
               K(balance_task_array), K(cur_tenant_info));
         }
       }

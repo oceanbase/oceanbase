@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+
 #ifndef OCEABASE_SHARE_THROTTLE_OB_SHARE_RESOURCE_THROTTLE_TOOL_IPP
 #define OCEABASE_SHARE_THROTTLE_OB_SHARE_RESOURCE_THROTTLE_TOOL_IPP
 
@@ -17,6 +18,8 @@
 #define OCEABASE_SHARE_THROTTLE_OB_SHARE_RESOURCE_THROTTLE_TOOL_H_IPP
 #include "ob_share_resource_throttle_tool.h"
 #endif
+
+
 
 namespace oceanbase {
 namespace share {
@@ -187,26 +190,28 @@ int64_t ObShareResourceThrottleTool<FakeAllocator, Args...>::expected_wait_time(
   return expected_wait_time;
 }
 
-#define PRINT_THROTTLE_WARN                                                               \
-  do {                                                                                    \
-    const int64_t WARN_LOG_INTERVAL = 1LL * 60L * 1000L * 1000L /* one minute */;         \
-    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {  \
-      SHARE_LOG(WARN,                                                                     \
-                "[Throttling] Attention!! Sleep More Than One Minute!!",                  \
-                "Throttle Unit Name",                                                     \
-                ALLOCATOR::throttle_unit_name(),                                          \
-                K(sleep_time),                                                            \
-                K(left_interval),                                                         \
-                K(expected_wait_t));                                                      \
-      if (!has_printed_lbt) {                                                             \
-        has_printed_lbt = true;                                                           \
-        SHARE_LOG(WARN,                                                                   \
-          "[Throttling] (report write throttle info) LBT Info",                           \
-          "Throttle Unit Name",                                                           \
-          ALLOCATOR::throttle_unit_name(),                                                \
-          K(lbt()));                                                                       \
-      }                                                                                   \
-    }                                                                                     \
+#define PRINT_THROTTLE_WARN                                                              \
+  do {                                                                                   \
+    const int64_t WARN_LOG_INTERVAL = 1LL * 60L * 1000L * 1000L /* one minute */;        \
+    if (sleep_time > (WARN_LOG_INTERVAL) && TC_REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) { \
+      SHARE_LOG(WARN,                                                                    \
+                "[Throttling] Attention!! Sleep More Than One Minute!!",                 \
+                "Throttle Unit Name",                                                    \
+                ALLOCATOR::throttle_unit_name(),                                         \
+                K(sleep_time),                                                           \
+                K(left_interval),                                                        \
+                K(expected_wait_t),                                                      \
+                K(abs_expire_time));                                                     \
+      if (!has_printed_lbt) {                                                            \
+        has_printed_lbt = true;                                                          \
+        oceanbase::share::ObTaskController::get().allow_next_syslog();                   \
+        SHARE_LOG(INFO,                                                                  \
+                  "[Throttling] (report write throttle info) LBT Info",                  \
+                  "Throttle Unit Name",                                                  \
+                  ALLOCATOR::throttle_unit_name(),                                       \
+                  K(lbt()));                                                             \
+      }                                                                                  \
+    }                                                                                    \
   } while (0)
 
 #define PRINT_THROTTLE_STATISTIC                                                       \

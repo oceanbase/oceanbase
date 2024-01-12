@@ -38,6 +38,28 @@ using namespace share;
 using namespace transaction;
 namespace sql
 {
+
+bool ObDMLService::check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row)
+{
+  bool bret = false;
+  if (OB_ISNULL(expr) || expr->parent_cnt_ <= 0) {
+    bret = false;
+  } else {
+    for (int i = 0; !bret && i < expr->parent_cnt_; ++i) {
+      ObExpr *parent_expr = expr->parents_[i];
+      if (parent_expr != nullptr) {
+        if (parent_expr->type_ == T_FUN_COLUMN_CONV) {
+          bret = has_exist_in_array(row, parent_expr);
+        }
+      }
+      if (!bret) {
+        bret = check_cascaded_reference(parent_expr, row);
+      }
+    }
+  }
+  return bret;
+}
+
 int ObDMLService::check_row_null(const ObExprPtrIArray &row,
                                  ObEvalCtx &eval_ctx,
                                  int64_t row_num,
@@ -74,6 +96,12 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
             ret = OB_BAD_NULL_ERROR;
             LOG_WARN("dml with ignore not supported in geometry type");
             LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
+        } else if (check_cascaded_reference(row.at(col_idx), row)) {
+          //This column is dependent on other columns and cannot be modified again;
+          //otherwise, it will necessitate a cascading recalculation of the dependent expression results.
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("dml with ignore not supported with cascaded column", KPC(row.at(col_idx)));
+          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
         } else if (OB_FAIL(ObObjCaster::get_zero_value(
             row.at(col_idx)->obj_meta_.get_type(),
             row.at(col_idx)->obj_meta_.get_collation_type(),
@@ -998,6 +1026,13 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                                                 stored_row);
 }
 
+/*
+ * Note: During the update process,
+ * ObDMLService::check_row_whether_changed() and ObDMLService::update_row() must be executed together
+ * within a single iteration,
+ * because the update_row process relies on check_row_whether_changed to determine
+ * whether the new and old values of the row being updated have changed.
+ **/
 int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,
                              const ObDASTabletLoc *old_tablet_loc,

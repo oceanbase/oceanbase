@@ -142,6 +142,7 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
 }
 
 int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
+                          const ObTableSchema &new_table_schema,
                           const AlterTableSchema &alter_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -203,6 +204,66 @@ int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
           LOG_DEBUG("ignore unexpected operator", K(ret), KPC(alter_column_schema));
           break;
         }
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(init_xml_hidden_column_name_map(orig_table_schema, new_table_schema))) {
+    LOG_WARN("failed to init xml hidden column name map", K(ret));
+  }
+  return ret;
+}
+
+int ObColumnNameMap::init_xml_hidden_column_name_map(const ObTableSchema &orig_table_schema,
+                                                     const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  lib::CompatModeGuard guard(compat_mode_);
+  for (ObTableSchema::const_column_iterator it = orig_table_schema.column_begin();
+      OB_SUCC(ret) && it != orig_table_schema.column_end(); it++) {
+    ObColumnSchemaV2 *column = *it;
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column", K(ret));
+    } else if (column->is_xmltype()) {
+      ObString new_column_name;
+      const ObColumnSchemaV2 *new_column = nullptr;
+      if (OB_FAIL(get(column->get_column_name_str(), new_column_name))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get new xml column name", K(ret));
+        }
+      } else if (OB_ISNULL(new_column = new_table_schema.get_column_schema(new_column_name))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find new column", K(ret), K(new_column_name), K(new_table_schema));
+      } else if (new_column->is_xmltype()) {
+        const uint64_t orig_column_id = column->get_column_id();
+        const uint64_t orig_udt_set_id = column->get_udt_set_id();
+        const uint64_t new_column_id = new_column->get_column_id();
+        const uint64_t new_udt_set_id = new_column->get_udt_set_id();
+        ObColumnSchemaV2 *orig_xml_hidden_column = nullptr;
+        ObColumnSchemaV2 *new_xml_hidden_column = nullptr;
+        if (OB_UNLIKELY(orig_udt_set_id <= 0 || new_udt_set_id <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid udt set id for xml column", K(ret), KPC(column), KPC(new_column));
+        } else if (OB_ISNULL(orig_xml_hidden_column = orig_table_schema.get_xml_hidden_column_schema(orig_column_id, orig_udt_set_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("orig xml hidden column not found", K(ret), K(orig_column_id), K(orig_udt_set_id));
+        } else if (OB_ISNULL(new_xml_hidden_column = new_table_schema.get_xml_hidden_column_schema(new_column_id, new_udt_set_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new xml hidden column not found", K(ret), K(new_column_id), K(new_udt_set_id));
+        } else {
+          const ObString &orig_xml_hidden_column_name = orig_xml_hidden_column->get_column_name_str();
+          const ObString &new_xml_hidden_column_name = new_xml_hidden_column->get_column_name_str();
+          if (orig_xml_hidden_column_name != new_xml_hidden_column_name) {
+            if (OB_FAIL(col_name_map_.erase_refactored(ObColumnNameHashWrapper(orig_xml_hidden_column_name)))) {
+              LOG_WARN("failed to erase col name map", K(ret));
+            } else if (OB_FAIL(set(orig_xml_hidden_column_name, new_xml_hidden_column_name))) {
+              LOG_WARN("failed to set column name map", K(ret));
+            }
+          }
         }
       }
     }

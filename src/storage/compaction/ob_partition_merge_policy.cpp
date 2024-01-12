@@ -53,6 +53,9 @@ ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[
       ObPartitionMergePolicy::get_mini_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
       ObPartitionMergePolicy::get_medium_merge_tables,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::not_support_merge_type
     };
 
 
@@ -62,6 +65,7 @@ int ObPartitionMergePolicy::get_neighbour_freeze_info(
     ObTenantFreezeInfoMgr::NeighbourFreezeInfo &freeze_info,
     const bool is_multi_version_merge)
 {
+  STATIC_ASSERT(static_cast<int64_t>(MERGE_TYPE_MAX) == ARRAYSIZEOF(get_merge_tables), "get merge table func cnt is mismatch");
   int ret = OB_SUCCESS;
   if (OB_FAIL(MTL(ObTenantFreezeInfoMgr *)->get_neighbour_major_freeze(snapshot_version, freeze_info))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -472,7 +476,7 @@ int ObPartitionMergePolicy::get_boundary_snapshot_version(
       min_snapshot = freeze_info.prev.frozen_scn_.get_val_for_tx();
     }
 
-    if (INT64_MAX == freeze_info.next.frozen_scn_.is_max() && is_multi_version_merge) {
+    if (freeze_info.next.frozen_scn_.is_max() && is_multi_version_merge) {
       max_snapshot = MTL(ObTenantFreezeInfoMgr*)->get_snapshot_gc_ts();
     } else {
       max_snapshot = freeze_info.next.frozen_scn_.get_val_for_tx();

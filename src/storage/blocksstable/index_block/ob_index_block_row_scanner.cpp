@@ -389,6 +389,7 @@ void ObRAWIndexBlockRowIterator::reset()
   }
   micro_reader_helper_.reset();
   allocator_ = nullptr;
+  endkey_.reset();
 }
 
 void ObRAWIndexBlockRowIterator::reuse()
@@ -397,6 +398,7 @@ void ObRAWIndexBlockRowIterator::reuse()
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   end_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   idx_row_parser_.reset();
+  endkey_.reset();
 }
 
 int ObRAWIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,

@@ -15,10 +15,11 @@
 
 const bool enable_test = false;
 const char *bucket = "xxx";
-const char *region = "xxx";
 const char *endpoint = "xxx";
 const char *secretid = "xxx";
 const char *secretkey = "xxx";
+const char *region = "xxx";
 const char *appid = "xxx";
+const char *extension = nullptr;
 
 #endif

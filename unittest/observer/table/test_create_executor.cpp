@@ -353,7 +353,7 @@ TEST_F(TestCreateExecutor, insertup)
   fake_ctx.set_entity(&entity);
   schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up(false));
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());

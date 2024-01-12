@@ -2037,15 +2037,17 @@ int ObTransformJoinElimination::adjust_source_table(ObDMLStmt *source_stmt,
   } else {
     uint64_t source_table_id = source_table->table_id_;
     uint64_t target_table_id = target_table->table_id_;
-    ColumnItem new_col;
-    ObColumnRefRawExpr *col_expr = NULL;
     ObRawExprCopier expr_copier(*ctx_->expr_factory_);
+    ObSEArray<ColumnItem*, 4> columns_need_copy;
+    ObSEArray<uint64_t, 4> column_ids_for_copy;
+    // 1. collect column map already exists
     for (int64_t i = 0; OB_SUCC(ret) && i < target_column_items.count(); ++i) {
       ColumnItem *target_col = NULL;
       ColumnItem *source_col = NULL;
       uint64_t column_id = OB_INVALID_ID;
       if (OB_ISNULL(target_col = target_stmt->get_column_item_by_id(target_table_id,
-                                                  target_column_items.at(i).column_id_))) {
+                                              target_column_items.at(i).column_id_)) ||
+          OB_ISNULL(target_col->get_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (NULL == output_map) {
@@ -2066,41 +2068,73 @@ int ObTransformJoinElimination::adjust_source_table(ObDMLStmt *source_stmt,
           source_col = source_stmt->get_column_item_by_id(source_table_id, column_id);
         }
       }
-      if (OB_FAIL(ret) || NULL != source_col) { // add new column to source_stmt
-      } else if (OB_FAIL(new_col.deep_copy(expr_copier, *target_col))) {
-        LOG_WARN("failed to deep copy column item", K(ret));
-      } else if (OB_ISNULL(col_expr = new_col.get_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else {
-        source_col = &new_col;
-        new_col.table_id_ = source_table_id;
-        new_col.column_id_ = column_id;
-        col_expr->set_ref_id(source_table_id, column_id);
-        col_expr->set_table_name(source_table->get_table_name());
-        col_expr->get_relation_ids().reuse();
-        int64_t rel_id = source_stmt->get_table_bit_index(source_table_id);
-        if (OB_UNLIKELY(rel_id <= 0 || rel_id > source_stmt->get_table_items().count())) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("invalid argument", K(ret), K(rel_id));
-        } else if (OB_FAIL(col_expr->add_relation_id(rel_id))) {
-          LOG_WARN("fail to add relation id", K(rel_id), K(ret));
-        } else if (OB_FAIL(col_expr->pull_relation_id())) {
-          LOG_WARN("failed to pull relation id and levels");
-        } else if (OB_FAIL(col_expr->formalize(ctx_->session_info_))) {
-          LOG_WARN("failed to formalize a new expr", K(ret));
-        } else if (OB_FAIL(source_stmt->add_column_item(new_col))) {
-          LOG_WARN("failed to add column item", K(new_col), K(ret));
-        }
-      }
       if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(source_col) || OB_ISNULL(target_col)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_ISNULL(source_col)) {  // no map relationship found
+        if (OB_FAIL(columns_need_copy.push_back(target_col))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(column_ids_for_copy.push_back(column_id))) {
+          LOG_WARN("failed to push back uint64_t", K(ret));
+        }
+      } else if (OB_FAIL(expr_copier.add_replaced_expr(target_col->get_expr(),
+                                                       source_col->get_expr()))) {
+        // reuse the existing column mapping for copying the dependant expr of generated column
+        LOG_WARN("failed to add replaced expr", K(ret));
       } else if (OB_FAIL(source_col_exprs.push_back(source_col->get_expr()))) {
         LOG_WARN("failed to push back epxr", K(ret));
       } else if (OB_FAIL(target_col_exprs.push_back(target_col->get_expr()))) {
         LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    // 2. deep copy column item if need
+    if (OB_FAIL(ret)) {
+    } else if (columns_need_copy.count() != column_ids_for_copy.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected array count", K(columns_need_copy.count()), K(column_ids_for_copy.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < columns_need_copy.count(); ++i) {
+        ColumnItem new_col;
+        ObColumnRefRawExpr *col_expr = NULL;
+        ColumnItem *target_col = columns_need_copy.at(i);
+        ColumnItem *source_col = NULL;
+        uint64_t column_id = column_ids_for_copy.at(i);
+        if (OB_ISNULL(target_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(new_col.deep_copy(expr_copier, *target_col))) {
+          LOG_WARN("failed to deep copy column item", K(ret));
+        } else if (OB_ISNULL(col_expr = new_col.get_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else {
+          source_col = &new_col;
+          new_col.table_id_ = source_table_id;
+          new_col.column_id_ = column_id;
+          col_expr->set_ref_id(source_table_id, column_id);
+          col_expr->set_table_name(source_table->get_table_name());
+          col_expr->get_relation_ids().reuse();
+          int64_t rel_id = source_stmt->get_table_bit_index(source_table_id);
+          if (OB_UNLIKELY(rel_id <= 0 || rel_id > source_stmt->get_table_items().count())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid argument", K(ret), K(rel_id));
+          } else if (OB_FAIL(col_expr->add_relation_id(rel_id))) {
+            LOG_WARN("fail to add relation id", K(rel_id), K(ret));
+          } else if (OB_FAIL(col_expr->pull_relation_id())) {
+            LOG_WARN("failed to pull relation id and levels");
+          } else if (OB_FAIL(col_expr->formalize(ctx_->session_info_))) {
+            LOG_WARN("failed to formalize a new expr", K(ret));
+          } else if (OB_FAIL(source_stmt->add_column_item(new_col))) {
+            LOG_WARN("failed to add column item", K(new_col), K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(source_col) || OB_ISNULL(target_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(source_col_exprs.push_back(source_col->get_expr()))) {
+          LOG_WARN("failed to push back epxr", K(ret));
+        } else if (OB_FAIL(target_col_exprs.push_back(target_col->get_expr()))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       }
     }
   }

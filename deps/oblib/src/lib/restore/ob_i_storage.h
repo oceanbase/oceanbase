@@ -37,12 +37,6 @@ enum StorageOpenMode
   CREATE_OPEN_NOLOCK = 3, // create and open nolock
 };
 
-enum ObStorageCRCAlgorithm
-{
-  OB_INVALID_CRC_ALGO = 0,
-  OB_CRC32_ALGO = 1,
-};
-
 enum ObStorageObjectMetaType
 {
   OB_OBJ_INVALID = 0,

@@ -222,6 +222,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         if (OB_ISNULL(out_expr)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null expr", K(ret));
+        } else if (OB_UNLIKELY(out_expr->is_const_expr())) {
+          // do not project const exprs
+          // do nothing
         } else if (OB_FAIL(out_expr->init_vector_default(agg_ctx_.eval_ctx_, output_batch_size))) {
           SQL_LOG(WARN, "init vector failed", K(ret));
         } else if (OB_FAIL(out_expr->get_vector(agg_ctx_.eval_ctx_)
@@ -230,7 +233,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         }
       }
       for (int i = 0; OB_SUCC(ret) && i < groupby_exprs.count(); i++) {
-        groupby_exprs.at(i)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        if (!groupby_exprs.at(i)->is_const_expr()) {
+          groupby_exprs.at(i)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        }
       }
     }
     LOG_DEBUG("collect group results", K(ret), K(output_size), K(cur_group_id), K(output_brs),
@@ -277,6 +282,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         if (OB_ISNULL(out_expr)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_LOG(WARN, "invalid null output expr", K(ret));
+        } else if (OB_UNLIKELY(out_expr->is_const_expr())) {
+          // do not project const exprs
+          // do nothing
         } else if (OB_FAIL(out_expr->init_vector_default(agg_ctx_.eval_ctx_, batch_size))) {
           SQL_LOG(WARN, "init vector failed", K(ret));
         } else if (OB_FAIL(out_expr->get_vector(agg_ctx_.eval_ctx_)
@@ -285,7 +293,9 @@ int Processor::collect_group_results(const RowMeta &row_meta,
         }
       }
       for (int col_id = 0; OB_SUCC(ret) && col_id < groupby_exprs.count(); col_id++) {
-        groupby_exprs.at(col_id)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        if (!groupby_exprs.at(col_id)->is_const_expr()) {
+          groupby_exprs.at(col_id)->set_evaluated_projected(agg_ctx_.eval_ctx_);
+        }
       }
     }
     LOG_DEBUG("collect group results", K(ret), K(batch_size), K(output_brs));
@@ -654,11 +664,19 @@ int Processor::prepare_adding_one_row()
     for (int i = 0; OB_SUCC(ret) && i < agg_ctx_.aggr_infos_.count(); i++) {
       ObAggrInfo &info = agg_ctx_.aggr_infos_.at(i);
       add_one_row_fn fn_ptr = nullptr;
-      if (info.param_exprs_.count() <= 0 || info.param_exprs_.count() > 1) {
+      if ((info.param_exprs_.count() <= 0 && !info.is_implicit_first_aggr())
+          || info.param_exprs_.count() > 1) {
         fn_ptr = aggregate::add_one_row<ObVectorBase>;
       } else {
-        ObDatumMeta meta = info.param_exprs_.at(0)->datum_meta_;
-        VectorFormat fmt = info.param_exprs_.at(0)->get_format(agg_ctx_.eval_ctx_);
+        ObDatumMeta meta;
+        VectorFormat fmt;
+        if (info.is_implicit_first_aggr()) {
+          meta = info.expr_->datum_meta_;
+          fmt = info.expr_->get_format(agg_ctx_.eval_ctx_);
+        } else {
+          meta = info.param_exprs_.at(0)->datum_meta_;
+          fmt = info.param_exprs_.at(0)->get_format(agg_ctx_.eval_ctx_);
+        }
         VecValueTypeClass vec_tc = get_vec_value_tc(meta.type_, meta.scale_, meta.precision_);
         switch(fmt) {
           case common::VEC_UNIFORM: {

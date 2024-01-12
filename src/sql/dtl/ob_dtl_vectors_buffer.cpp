@@ -321,24 +321,29 @@ int ObDtlVectors::init(const common::ObIArray<ObExpr*> &exprs, ObEvalCtx &ctx)
         }
       }
       if (OB_SUCC(ret) && *col_cnt_ > 0) {
-        row_size_ = row_size;
-        row_limit_ = remain_size / row_size;
-        if (row_size * row_limit_ + *col_cnt_ * ObBitVector::memory_size(row_limit_) > remain_size) {
-          row_limit_ = (remain_size - *col_cnt_ * ObBitVector::memory_size(row_limit_)) / row_size;
-        }
-        if (row_limit_ <= 0) {
-          ret =OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to calc max row cnt", K(remain_size), K(row_size), K(ret));
-        } else {
-          for (int64_t i = 0; i < exprs.count(); ++i) {
-            VectorInfo &info = infos_[i];
-            info.nulls_offset_ = pos;
-            ObBitVector *nulls = to_bit_vector(buf_ + pos);
-            nulls->reset(row_limit_);
-            pos += ObBitVector::memory_size(row_limit_);
-            info.data_offset_ = pos;
-            pos += row_limit_ * info.fixed_len_;
+        if (row_size != 0){
+          row_size_ = row_size;
+          row_limit_ = remain_size / row_size;
+          if (row_size * row_limit_ + *col_cnt_ * ObBitVector::memory_size(row_limit_) > remain_size) {
+            row_limit_ = (remain_size - *col_cnt_ * ObBitVector::memory_size(row_limit_)) / row_size;
           }
+          if (row_limit_ <= 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to calc max row cnt", K(remain_size), K(row_size), K(ret));
+          } else {
+            for (int64_t i = 0; i < exprs.count(); ++i) {
+              VectorInfo &info = infos_[i];
+              info.nulls_offset_ = pos;
+              ObBitVector *nulls = to_bit_vector(buf_ + pos);
+              nulls->reset(row_limit_);
+              pos += ObBitVector::memory_size(row_limit_);
+              info.data_offset_ = pos;
+              pos += row_limit_ * info.fixed_len_;
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected row_size", K(row_size), K(ret));
         }
       }
     }

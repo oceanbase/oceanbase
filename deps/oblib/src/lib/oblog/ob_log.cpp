@@ -39,21 +39,6 @@ namespace oceanbase
 {
 namespace common
 {
-
-int64_t ObSyslogTimeGuard::to_string(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (click_count_ > 0) {
-    ret = databuff_printf(buf, buf_len, pos, "time dist: %s=%d", click_str_[0], click_[0]);
-    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
-      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
-    }
-  }
-  if (OB_FAIL(ret)) pos = 0;
-  return pos;
-}
-
 void __attribute__((weak)) allow_next_syslog(int64_t)
 {
   // do nothing
@@ -71,6 +56,7 @@ _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
 static const int64_t limiter_initial = 1000;
 static const int64_t limiter_thereafter = 100;
 ObSyslogSampleRateLimiter ObLogger::per_log_limiters_[];
+ObSyslogSampleRateLimiter ObLogger::per_error_log_limiters_[];
 _RLOCAL(int32_t, ObLogger::tl_type_);
 _RLOCAL(uint64_t, ObLogger::curr_logging_seq_);
 _RLOCAL(uint64_t, ObLogger::last_logging_seq_);
@@ -1438,6 +1424,9 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     for (int i = 0; i < ARRAYSIZEOF(per_log_limiters_); i++) {
       new (&per_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
+    for (int i = 0; i < ARRAYSIZEOF(per_error_log_limiters_); i++) {
+      new (&per_error_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
+    }
     const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8; // 256M
     log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
     allocator_ = new (log_mem_limiter_ + 1) ObVSliceAlloc();
@@ -1691,10 +1680,13 @@ int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
         if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [bandwidth]"; }
       }
       if (allow) {
-        int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
-        int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
-        bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
-        bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
+        int n_limiter = (OB_LOG_LEVEL_ERROR == level) ? N_ERROR_LIMITER : N_LIMITER;
+        ObSyslogSampleRateLimiter *log_sample_rate_limiters =
+            (OB_LOG_LEVEL_ERROR == level) ? per_error_log_limiters_ : per_log_limiters_;
+        int64_t idx0 = (location_hash_val >> 32) % n_limiter;
+        int64_t idx1 = ((location_hash_val << 32) >> 32) % n_limiter;
+        bool r0 = OB_SUCCESS == log_sample_rate_limiters[idx0].try_acquire(1, level, errcode);
+        bool r1 = OB_SUCCESS == log_sample_rate_limiters[idx1].try_acquire(1, level, errcode);
         allow = r0 && r1;
         if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [frequency]"; }
       }

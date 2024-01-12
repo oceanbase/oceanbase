@@ -1350,9 +1350,9 @@ int ToStrVectorHeader::to_string_helper(char *buf, const int64_t buf_len) const
         ObLength length = vector->get_length(i);
         BUF_PRINTF(", len: %d, ptr: %p, hex: ", length, vector->get_payload(i));
         hex_print(vector->get_payload(i), length, buf, buf_len, pos);
+        ObDatum tmp_datum(vector->get_payload(i), length, vector->is_null(i));
         ObObj tmp_obj;
-        ObDatum* tmp_datum = new ObDatum(vector->get_payload(i), length, vector->is_null(i));
-        if (OB_SUCCESS == tmp_datum->to_obj(tmp_obj, expr_.obj_meta_, expr_.obj_datum_map_)) {
+        if (OB_SUCCESS == tmp_datum.to_obj(tmp_obj, expr_.obj_meta_, expr_.obj_datum_map_)) {
           BUF_PRINTF(", value: ");
           pos += tmp_obj.to_string(buf + pos, buf_len - pos);
         }

@@ -700,6 +700,7 @@ void ObTxExecInfo::reset()
   incremental_participants_.reset();
   intermediate_participants_.reset();
   commit_parts_.reset();
+  transfer_parts_.reset();
   prev_record_lsn_.reset();
   redo_lsns_.reset();
   scheduler_.reset();

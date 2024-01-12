@@ -17,7 +17,8 @@ namespace storage
 {
 
 ObCGGroupByScanner::ObCGGroupByScanner()
-  : ObCGRowScanner(),
+    : ObCGRowScanner(),
+    output_exprs_(nullptr),
     group_by_agg_idxs_(),
     group_by_cell_(nullptr)
 {}

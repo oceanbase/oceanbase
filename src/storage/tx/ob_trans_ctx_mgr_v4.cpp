@@ -524,6 +524,28 @@ int ObLSTxCtxMgr::get_tx_ctx(const ObTransID &tx_id, const bool for_replay, ObPa
   return ret;
 }
 
+int ObLSTxCtxMgr::get_tx_ctx_with_timeout(const ObTransID &tx_id,
+                                          const bool for_replay,
+                                          ObPartTransCtx *&tx_ctx,
+                                          const int64_t lock_timeout)
+{
+  int ret = OB_SUCCESS;
+
+  RWLock::RLockGuardWithTimeout guard(rwlock_, ObTimeUtility::fast_current_time() + lock_timeout,
+                                      ret);
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(DEBUG, "acquire lock failed in ObLSTxCtxMgr", K(ret), K(lock_timeout), K(tx_id),
+              KPC(this));
+  } else if (OB_FAIL(get_tx_ctx_(tx_id, for_replay, tx_ctx))) {
+    TRANS_LOG(DEBUG, "get transaction context error", K(tx_id));
+  } else {
+    // do nothing
+  }
+
+  return ret;
+}
+
 int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&ctx)
 {
   int ret = OB_SUCCESS;

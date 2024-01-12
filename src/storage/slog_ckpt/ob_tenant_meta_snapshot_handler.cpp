@@ -462,6 +462,7 @@ int ObTenantMetaSnapshotHandler::find_tablet_meta_entry(
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemReader ls_ckpt_reader;
+  ObMemAttr mem_attr(MTL_ID(), "Snapshot");
 
   if (OB_UNLIKELY(!ls_meta_entry.is_valid() || !ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -469,7 +470,7 @@ int ObTenantMetaSnapshotHandler::find_tablet_meta_entry(
   } else if (OB_UNLIKELY(IS_EMPTY_BLOCK_LIST(ls_meta_entry))) {
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("ls snapshot doesn't exist", K(ret), K(ls_meta_entry));
-  } else if (OB_FAIL(ls_ckpt_reader.init(ls_meta_entry))) {
+  } else if (OB_FAIL(ls_ckpt_reader.init(ls_meta_entry, mem_attr))) {
     LOG_WARN("fail to init log stream item reader", K(ret), K(ls_meta_entry));
   } else {
     char *item_buf = nullptr;

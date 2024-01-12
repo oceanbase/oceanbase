@@ -40,6 +40,9 @@ public:
   }
 
 private:
+  int64_t calc_remaining_time(sql::ObLoadDataStat &job_status) const;
+
+private:
   enum TABLE_COLUMN
   {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,

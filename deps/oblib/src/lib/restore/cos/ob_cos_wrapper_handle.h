@@ -47,7 +47,7 @@ public:
 
   int init(const common::ObObjectStorageInfo *storage_info);
   void reset();
-  int create_cos_handle();
+  int create_cos_handle(const bool check_md5);
   void destroy_cos_handle();
   qcloud_cos::ObCosWrapper::Handle *get_ptr() { return handle_; }
 

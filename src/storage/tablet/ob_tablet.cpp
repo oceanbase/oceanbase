@@ -2410,7 +2410,7 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
           LOG_WARN("fail to free block", K(ret), K(block_info));
         }
 #ifndef OB_BUILD_RPM
-        if (OB_FAIL(tmp_ret)) {
+        if (OB_TMP_FAIL(tmp_ret)) {
           // do nothing
         } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
           LOG_WARN("fail to push macro id into print array", K(tmp_ret));
@@ -3667,7 +3667,14 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
         LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
       } else {
         ObSSTable *sstable = reinterpret_cast<ObSSTable *>(table);
-        if (INT64_MAX == sstable->get_upper_trans_version()) {
+        if (INT64_MAX != sstable->get_upper_trans_version()) {
+        } else if (0 == sstable->get_data_macro_block_count() && INT64_MAX == sstable->get_max_merged_trans_version()) {
+          if (OB_FAIL(sstable->set_upper_trans_version(0, true/*force_update*/))) {
+            LOG_WARN("failed to force set upper trans version", K(ret), KPC(sstable));
+          } else {
+            FLOG_INFO("sstable has no data but max merged version is INT64_MAX, force set upper trans version", K(ret), KPC(sstable));
+          }
+        } else {
           int64_t max_trans_version = INT64_MAX;
           SCN tmp_scn = SCN::max_scn();
           if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(sstable->get_end_scn(), tmp_scn))) {
@@ -3681,7 +3688,7 @@ int ObTablet::update_upper_trans_version(ObLS &ls, bool &is_updated)
               FLOG_INFO("get max_trans_version = 0, maybe all the trans have been rollbacked", K(ret), K(ls_id), K(tablet_id),
                   K(max_trans_version), KPC(sstable));
             }
-            if (OB_FAIL(sstable->set_upper_trans_version(max_trans_version))) {
+            if (OB_FAIL(sstable->set_upper_trans_version(max_trans_version, false/*force_update*/))) {
               LOG_WARN("failed to set_upper_trans_version", K(ret), KPC(sstable));
             } else {
               is_updated = true;
@@ -5801,7 +5808,7 @@ int ObTablet::prepare_param(
   param.table_id_ = relative_table.get_table_id();
   param.tablet_id_ = tablet_meta_.tablet_id_;
   param.read_info_ = rowkey_read_info_;
-
+  param.set_tablet_handle(relative_table.get_tablet_handle());
   return ret;
 }
 
@@ -7158,7 +7165,7 @@ int ObTablet::check_snapshot_readable_with_cache(
         bool is_committed = false;
         if (OB_FAIL(ObITabletMdsInterface::get_latest_ddl_data(tmp_ddl_data, is_committed))) {
           if (OB_EMPTY_RESULT == ret) {
-            is_committed = false;
+            is_committed = true;
             tmp_ddl_data.set_default_value(); // use default value
             ret = OB_SUCCESS;
           } else {

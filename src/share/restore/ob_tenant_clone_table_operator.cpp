@@ -68,6 +68,8 @@ const ObTenantCloneStatus::TenantCloneStatusStrPair ObTenantCloneStatus::TENANT_
                            "CLONE_SYS_WAIT_TENANT_RESTORE_FINISH_FAIL"),
   TenantCloneStatusStrPair(ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL,
                            "CLONE_SYS_RELEASE_RESOURCE_FAIL"),
+  TenantCloneStatusStrPair(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING,
+                           "CLONE_SYS_CANCELING"),
   TenantCloneStatusStrPair(ObTenantCloneStatus::Status::CLONE_SYS_CANCELED,
                            "CLONE_SYS_CANCELED"),
 };
@@ -162,9 +164,9 @@ bool ObTenantCloneStatus::is_sys_processing_status() const
   return b_ret;
 }
 
-bool ObTenantCloneStatus::is_sys_canceled_status() const
+bool ObTenantCloneStatus::is_sys_canceling_status() const
 {
-  return ObTenantCloneStatus::Status::CLONE_SYS_CANCELED == status_;
+  return ObTenantCloneStatus::Status::CLONE_SYS_CANCELING == status_;
 }
 
 bool ObTenantCloneStatus::is_sys_failed_status() const
@@ -178,6 +180,7 @@ bool ObTenantCloneStatus::is_sys_failed_status() const
       ObTenantCloneStatus::Status::CLONE_SYS_CREATE_TENANT_FAIL == status_ ||
       ObTenantCloneStatus::Status::CLONE_SYS_WAIT_TENANT_RESTORE_FINISH_FAIL == status_ ||
       ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL == status_ ||
+      ObTenantCloneStatus::Status::CLONE_SYS_CANCELING == status_ ||
       ObTenantCloneStatus::Status::CLONE_SYS_CANCELED == status_) {
     b_ret = true;
   }
@@ -224,6 +227,9 @@ bool ObTenantCloneStatus::is_sys_release_clone_resource_status() const
       ObTenantCloneStatus::Status::CLONE_SYS_RELEASE_RESOURCE_FAIL > status_) {
     // CLONE_SYS_RELEASE_RESOURCE means the clone_tenant has been created and restored successful.
     // thus, if the clone_job is in or is failed in this status, we just need to release the according snapshot.
+    b_ret = true;
+  } else if (ObTenantCloneStatus::Status::CLONE_SYS_CANCELING == status_) {
+    // job has been canceled by user
     b_ret = true;
   }
 

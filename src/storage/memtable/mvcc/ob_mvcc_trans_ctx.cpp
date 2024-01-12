@@ -743,37 +743,11 @@ bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx, const int64
   return ret;
 }
 
-int ObTransCallbackMgr::get_next_flush_log_guard(ObCallbackListLogGuard &lock_guard, int &list_idx)
-{
-  int ret = OB_SUCCESS;
-  int list_cnt = get_logging_list_count();
-  int64_t epoch = INT64_MAX;
-  int idx = -1;
-  ObTxCallbackList *l = NULL;
-  for (int i =0; i< list_cnt; i++) {
-    ObTxCallbackList *list = get_callback_list_(i, false);
-    if (list->get_log_epoch() < epoch) {
-      epoch = list->get_log_epoch();
-      idx = i;
-      l = list;
-    }
-  }
-  common::ObByteLock *lock = NULL;
-  if (idx == -1) {
-    ret = OB_ENTRY_NOT_EXIST;
-  } else if (OB_ISNULL(lock = l->try_lock_log())) {
-    ret = OB_NEED_RETRY;
-  } else {
-    lock_guard.set(lock);
-    list_idx = idx;
-  }
-  return ret;
-}
-
 // retval:
 // - OB_EAGAIN: other list has small log_epoch
 // - OB_ENTRY_NOT_EXIST: no need log
 // - OB_NEED_RETRY: lock hold by other thread
+// - OB_BLOCK_FROZEN: next to logging callback's memtable was logging blocked
 int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
                                       ObCallbackListLogGuard &lock_guard,
                                       int &list_idx)
@@ -788,9 +762,12 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
     int64_t my_epoch = list->get_log_epoch();
     int64_t min_epoch = 0;
     int min_epoch_idx =-1;
+    bool flush_min_epoch_list = false;
     common::ObByteLock *log_lock = NULL;
     if (my_epoch == INT64_MAX) {
       ret = OB_ENTRY_NOT_EXIST;
+    } else if (OB_UNLIKELY(list->is_logging_blocked())) {
+      ret = OB_BLOCK_FROZEN;
     } else if (OB_ISNULL(log_lock = list->try_lock_log())) {
       ret = OB_NEED_RETRY;
     } else if (!check_list_has_min_epoch_(list_idx, my_epoch, min_epoch, min_epoch_idx)) {
@@ -800,11 +777,26 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
         TRANS_LOG(WARN, "has smaller epoch unlogged", KPC(this),
                   K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
       }
+      // if current list pending size too large, try to submit the min_epoch list
+      if (OB_UNLIKELY(list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
+        flush_min_epoch_list = true;
+      }
     } else {
       lock_guard.set(log_lock);
     }
     if (OB_FAIL(ret) && log_lock) {
       log_lock->unlock();
+    }
+    if (OB_UNLIKELY(flush_min_epoch_list)) {
+      ObTxCallbackList *min_epoch_list = get_callback_list_(min_epoch_idx, false);
+      if (OB_ISNULL(log_lock = min_epoch_list->try_lock_log())) {
+        // lock conflict, acquired by others
+      } else {
+        TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
+        list_idx = min_epoch_idx;
+        lock_guard.set(log_lock);
+        ret = OB_SUCCESS;
+      }
     }
   }
   return ret;
@@ -1539,11 +1531,6 @@ int ObMvccRowCallback::del()
     ObIMemtable *last_mt = NULL;
     log_submitted(share::SCN(), last_mt);
   }
-  // set block_frozen_memtable if the first callback is linked to a logging_blocked memtable
-  // to prevent the case where the first callback is removed but the block_frozen_memtable pointer is still existed
-  // clear block_frozen_memtable once a callback is deleted
-  transaction::ObPartTransCtx *part_ctx = static_cast<transaction::ObPartTransCtx *>(get_trans_ctx());
-  part_ctx->clear_block_frozen_memtable();
 
   ret = remove();
   return ret;
@@ -1733,6 +1720,8 @@ int ObMvccRowCallback::checkpoint_callback()
     TRANS_LOG(ERROR, "checkpoint never called on submitted callback", KPC(this));
   } else if (OB_FAIL(value_.remove_callback(*this))) {
     TRANS_LOG(ERROR, "remove callback from trans node failed", K(ret), K(*this));
+  } else if (OB_NOT_NULL(tnode_)) {
+    (void)value_.update_dml_flag_(get_dml_flag(), tnode_->get_scn());
   }
 
   return ret;
@@ -2192,6 +2181,25 @@ void ObTransCallbackMgr::update_serial_sync_scn_(const share::SCN scn)
 void ObTransCallbackMgr::set_skip_checksum_calc()
 {
   ATOMIC_STORE(&skip_checksum_, true);
+}
+
+bool ObTransCallbackMgr::is_logging_blocked(bool &has_pending_log) const
+{
+  int ret = OB_SUCCESS;
+  bool all_blocked = false;
+  RDLockGuard guard(rwlock_);
+  CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+    if (list->has_pending_log()) {
+      has_pending_log = true;
+      if (list->is_logging_blocked()) {
+        all_blocked = true;
+      } else {
+        all_blocked = false;
+        break;
+      }
+    }
+  }
+  return all_blocked;
 }
 
 }; // end namespace mvcc

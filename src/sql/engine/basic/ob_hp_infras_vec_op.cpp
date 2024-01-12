@@ -1286,13 +1286,12 @@ int64_t ObHashPartInfrastructureVecImpl::est_bucket_count(
   const int64_t min_bucket_cnt,
   const int64_t max_bucket_cnt)
 {
+  int64_t est_bucket_cnt = 0;
   HP_INFRAS_STATUS_CHECK
   {
-    if (OB_FAIL(hp_infras_->est_bucket_count(rows, width, min_bucket_cnt, max_bucket_cnt))) {
-      LOG_WARN("failed to est bucket count", K(ret));
-    }
+    est_bucket_cnt = hp_infras_->est_bucket_count(rows, width, min_bucket_cnt, max_bucket_cnt);
   }
-  return ret;
+  return est_bucket_cnt;
 }
 
 int ObHashPartInfrastructureVecImpl::set_funcs(

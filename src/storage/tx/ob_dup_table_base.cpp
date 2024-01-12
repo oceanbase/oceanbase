@@ -1229,11 +1229,14 @@ int ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::operator()(
   }
 
   if (OB_SUCC(ret) && OB_SUCCESS == tmp_ret) {
-    if (OB_TMP_FAIL(ls_handle_.get_ls()->get_tx_ctx(redo_sync_hash_pair.first.tx_id_,
-                                                    false /*for_replay*/, tx_ctx))) {
+    if (OB_TMP_FAIL(ls_handle_.get_ls()->get_tx_ctx_with_timeout(
+            redo_sync_hash_pair.first.tx_id_, false /*for_replay*/, tx_ctx, 100 * 1000))) {
       TRANS_LOG(WARN, "get tx ctx failed", K(ret), K(tmp_ret), K(redo_sync_hash_pair.first),
                 K(ls_handle_), KP(tx_ctx));
-    } else if (OB_TMP_FAIL(tx_ctx->dup_table_tx_redo_sync(false/*need_retry_by_task*/))) {
+      if (tmp_ret == OB_TIMEOUT) {
+        tmp_ret = OB_SUCCESS;
+      }
+    } else if (OB_TMP_FAIL(tx_ctx->dup_table_tx_redo_sync(false /*need_retry_by_task*/))) {
       TRANS_LOG(WARN, "dup table redo sync failed", K(ret), K(tmp_ret),
                 K(redo_sync_hash_pair.first), K(ls_handle_), KP(tx_ctx));
       if (tmp_ret == OB_EAGAIN) {
@@ -1246,7 +1249,7 @@ int ObTxRedoSyncRetryTask::ObTxRedoSyncIterFunc::operator()(
     }
   }
 
-  TRANS_LOG(INFO, "iter tx redo sync by task", K(redo_sync_hash_pair.first), K(tmp_ret), K(ret),
+  TRANS_LOG(DEBUG, "iter tx redo sync by task", K(redo_sync_hash_pair.first), K(tmp_ret), K(ret),
             KP(this));
 
   if (OB_SUCCESS != tmp_ret) {

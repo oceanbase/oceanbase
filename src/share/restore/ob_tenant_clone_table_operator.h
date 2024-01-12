@@ -57,6 +57,7 @@ public:
     CLONE_SYS_WAIT_TENANT_RESTORE_FINISH_FAIL,
     CLONE_SYS_RELEASE_RESOURCE_FAIL,
     //This status corresponds to the user's command to cancel cloning job
+    CLONE_SYS_CANCELING,
     CLONE_SYS_CANCELED,
     CLONE_MAX_STATUS = 200
   };
@@ -87,7 +88,7 @@ public:
   bool is_user_status() const;
   bool is_user_success_status() const;
   bool is_sys_status() const;
-  bool is_sys_canceled_status() const;
+  bool is_sys_canceling_status() const;
   bool is_sys_failed_status() const;
   bool is_sys_success_status() const;
   bool is_sys_processing_status() const;

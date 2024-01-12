@@ -711,9 +711,9 @@ public:
         datum_eval_flags_(nullptr)
   {}
   ~ObPhysicalFilterExecutor();
-  int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, bool &ret_val);
+  int filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &ret_val);
   virtual int init_evaluated_datums() override;
-  virtual int filter(ObEvalCtx &eval_ctx, bool &filtered) = 0;
+  virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) = 0;
   INHERIT_TO_STRING_KV("ObPhysicalFilterExecutor", ObPushdownFilterExecutor,
                        K_(n_eval_infos), KP_(eval_infos));
 protected:
@@ -750,7 +750,7 @@ public:
   int get_datums_from_column(common::ObIArray<blocksstable::ObSqlDatumInfo> &datum_infos);
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterExecutor", ObPhysicalFilterExecutor,
                        K_(filter), KP_(skip_bit));
-  virtual int filter(ObEvalCtx &eval_ctx, bool &filtered) override;
+  virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
 private:
   int eval_exprs_batch(ObBitVector &skip, const int64_t bsize);
 
@@ -792,7 +792,7 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownWhiteFilterExecutor", ObPushdownFilterExecutor,
                        K_(null_param_contained), K_(datum_params), K(param_set_.created()),
                        K_(filter));
-  virtual int filter(ObEvalCtx &eval_ctx, bool &filtered) override;
+  virtual int filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered) override;
 protected:
   void check_null_params();
   int init_obj_set();
@@ -971,7 +971,7 @@ public:
   OB_INLINE int64_t get_batch_size() const { return expr_spec_.max_batch_size_; }
   // filter row for storage callback.
   // clear expression evaluated flag if row filtered.
-  OB_INLINE int filter_row_outside(const ObExprPtrIArray &exprs, bool &filtered);
+  OB_INLINE int filter_row_outside(const ObExprPtrIArray &exprs, const sql::ObBitVector &skip_bit, bool &filtered);
   // Notice:
   // clear one/current datum eval flag at a time, do NOT call it
   // unless fully understand this API.
@@ -990,10 +990,14 @@ public:
 };
 
 // filter row for storage callback.
-OB_INLINE int ObPushdownOperator::filter_row_outside(const ObExprPtrIArray &exprs, bool &filtered)
+OB_INLINE int ObPushdownOperator::filter_row_outside(const ObExprPtrIArray &exprs, const sql::ObBitVector &skip_bit, bool &filtered)
 {
   int ret = common::OB_SUCCESS;
-  ret = ObOperator::filter_row(eval_ctx_, exprs, filtered);
+  if (!enable_rich_format_) {
+    ret = ObOperator::filter_row(eval_ctx_, exprs, filtered);
+  } else {
+    ret = ObOperator::filter_row_vector(eval_ctx_, exprs, skip_bit, filtered);
+  }
   // always clear evaluated flag, because filter expr and table scan output expr may have
   // common expr, when eval filter expr, memory of dependence column may from storage,
   // if not filter and we don't clear eval flag, output expr will used the result datum
@@ -1030,6 +1034,7 @@ struct PushdownFilterInfo
       row_ids_(nullptr),
       len_array_(nullptr),
       ref_bitmap_(nullptr),
+      skip_bit_(nullptr),
       col_datum_buf_(),
       allocator_(nullptr),
       param_(nullptr),
@@ -1045,7 +1050,8 @@ struct PushdownFilterInfo
       ret = ret && (nullptr != datum_buf_);
     }
     if (0 < batch_size_) {
-      ret = ret && (nullptr != cell_data_ptrs_) && (nullptr != row_ids_);
+      ret = ret && (nullptr != cell_data_ptrs_) && (nullptr != row_ids_)
+          && (nullptr != skip_bit_);
     }
     return ret;
   }
@@ -1068,7 +1074,7 @@ struct PushdownFilterInfo
 
   TO_STRING_KV(K_(is_pd_filter), K_(is_pd_to_cg), K_(start), K_(count), K_(col_capacity), K_(batch_size),
                KP_(datum_buf), KP_(filter), KP_(cell_data_ptrs), KP_(row_ids), KP_(ref_bitmap),
-               K_(col_datum_buf), KP_(param), KP_(context));
+               K_(col_datum_buf), KP_(param), KP_(context), KP_(skip_bit));
 
   bool is_inited_;
   bool is_pd_filter_;
@@ -1084,6 +1090,7 @@ struct PushdownFilterInfo
   int64_t *row_ids_;
   uint32_t *len_array_;
   common::ObBitmap *ref_bitmap_;
+  sql::ObBitVector *skip_bit_;
   mutable TmpColDatumBuf col_datum_buf_;
   common::ObIAllocator *allocator_;
   const storage::ObTableIterParam *param_;

@@ -224,8 +224,11 @@ protected:
   void set_blk_holder(ObTempRowStore::BlockHolder *blk_holder);
   // for topn sort
   int add_heap_sort_row(const Store_Row *&store_row);
+  // load data to comp_
+  int load_data_to_comp(const ObBatchRows &input_brs);
   int add_heap_sort_batch(const ObBatchRows &input_brs, const int64_t start_pos /* 0 */,
-                          int64_t *append_row_count = nullptr);
+                          int64_t *append_row_count = nullptr,
+                          bool need_load_data = true);
   int add_heap_sort_batch(const ObBatchRows &input_brs, const uint16_t selector[],
                           const int64_t size);
   int adjust_topn_heap(const Store_Row *&store_row);

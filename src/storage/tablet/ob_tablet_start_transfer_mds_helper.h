@@ -171,6 +171,7 @@ private:
       const bool for_replay,
       const ObTXStartTransferInInfo &tx_start_transfer_in_info);
   static int check_transfer_src_tablet_(
+      const share::SCN &scn,
       const bool for_replay,
       const ObMigrationTabletParam &tablet_meta,
       ObLS *src_ls);
@@ -234,7 +235,9 @@ private:
       const ObMigrationTabletParam &tablet_meta,
       bool &can_skip);
   static int set_dest_ls_rebuild_(
-      const share::ObLSID &dest_ls_id);
+      const share::ObLSID &dest_ls_id,
+      const share::SCN &scn,
+      const bool for_replay);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);

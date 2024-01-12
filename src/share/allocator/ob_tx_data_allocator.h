@@ -20,6 +20,12 @@
 namespace oceanbase {
 namespace share {
 
+OB_INLINE int64_t &tx_data_throttled_alloc()
+{
+  RLOCAL_INLINE(int64_t, tx_data_throttled_alloc);
+  return tx_data_throttled_alloc;
+}
+
 class ObTenantTxDataAllocator {
 public:
   using SliceAllocator = ObSliceAlloc;
@@ -55,6 +61,18 @@ private:
   TxShareThrottleTool *throttle_tool_;
   common::ObBlockAllocMgr block_alloc_;
   SliceAllocator slice_allocator_;
+};
+
+class ObTxDataThrottleGuard
+{
+public:
+  ObTxDataThrottleGuard(const bool for_replay, const int64_t abs_expire_time);
+  ~ObTxDataThrottleGuard();
+
+private:
+  bool for_replay_;
+  int64_t abs_expire_time_;
+  share::TxShareThrottleTool *throttle_tool_;
 };
 
 }  // namespace share

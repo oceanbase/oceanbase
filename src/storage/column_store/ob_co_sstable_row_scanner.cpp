@@ -942,44 +942,49 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
 {
   int ret = OB_SUCCESS;
   const ObCGBitmap *result_bitmap = nullptr;
+  ObICGIterator *group_by_iter = nullptr;
   ObICGGroupByProcessor *group_by_processor = group_by_iters_.at(0);
-  ObICGIterator *group_by_iter = dynamic_cast<ObICGIterator*>(group_by_processor);
-  while(OB_SUCC(ret)) {
-    if (can_forward_row_scanner() &&
-        OB_FAIL(row_scanner_->forward_blockscan(end_, blockscan_state_, current_))) {
-      LOG_WARN("Fail to forward blockscan border", K(ret));
-    } else if (end_of_scan()) {
-      LOG_DEBUG("cur scan finished, update state", K(blockscan_state_), K(state_), KPC(this));
-      ret = OB_ITER_END;
-    } else if (OB_FAIL(group_by_iter->locate(ObCSRange(current_, end_ - current_ + 1)))) {
-      LOG_WARN("Failed to locate", K(ret));
-    } else if (OB_FAIL(group_by_processor->decide_group_size(group_size_))) {
-      LOG_WARN("Failed to decide group size", K(ret));
-    } else if (nullptr != rows_filter_) {
-      if (OB_FAIL(rows_filter_->apply(ObCSRange(current_, group_size_)))) {
-        LOG_WARN("Fail to apply rows filter", K(ret), K(current_), K(group_size_));
-      } else if (OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
-      } else {
-        EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
-        access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += result_bitmap->popcnt();
-        if (result_bitmap->is_all_false()) {
-          update_current(group_size_);
-          continue;
+  if (OB_ISNULL(group_by_iter = dynamic_cast<ObICGIterator*>(group_by_processor))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null group_by_iter", K(ret), KPC(group_by_processor));
+  } else {
+    while(OB_SUCC(ret)) {
+      if (can_forward_row_scanner() &&
+          OB_FAIL(row_scanner_->forward_blockscan(end_, blockscan_state_, current_))) {
+        LOG_WARN("Fail to forward blockscan border", K(ret));
+      } else if (end_of_scan()) {
+        LOG_DEBUG("cur scan finished, update state", K(blockscan_state_), K(state_), KPC(this));
+        ret = OB_ITER_END;
+      } else if (OB_FAIL(group_by_iter->locate(ObCSRange(current_, end_ - current_ + 1)))) {
+        LOG_WARN("Failed to locate", K(ret));
+      } else if (OB_FAIL(group_by_processor->decide_group_size(group_size_))) {
+        LOG_WARN("Failed to decide group size", K(ret));
+      } else if (nullptr != rows_filter_) {
+        if (OB_FAIL(rows_filter_->apply(ObCSRange(current_, group_size_)))) {
+          LOG_WARN("Fail to apply rows filter", K(ret), K(current_), K(group_size_));
+        } else if (OB_ISNULL(result_bitmap = rows_filter_->get_result_bitmap())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected result bitmap", K(ret), KPC(rows_filter_));
+        } else {
+          EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, result_bitmap->popcnt());
+          access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += result_bitmap->popcnt();
+          if (result_bitmap->is_all_false()) {
+            update_current(group_size_);
+            continue;
+          }
         }
+      } else {
+        EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size_);
+        access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += group_size_;
       }
-    } else {
-      EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, group_size_);
-      access_ctx_->table_store_stat_.pushdown_row_select_cnt_ += group_size_;
-    }
-    if (OB_SUCC(ret)) {
-      break;
+      if (OB_SUCC(ret)) {
+        break;
+      }
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(project_iter_->locate(
-      ObCSRange(current_, group_size_),
-      result_bitmap))) {
+              ObCSRange(current_, group_size_),
+              result_bitmap))) {
     LOG_WARN("Fail to locate", K(ret), K(current_), K(group_size_), KP(result_bitmap));
   } else {
     is_new_group_ = true;
@@ -989,7 +994,7 @@ int ObCOSSTableRowScanner::filter_group_by_rows()
     access_ctx_->table_store_stat_.physical_read_cnt_ += group_size_;
   }
   LOG_TRACE("[GROUP BY PUSHDOWN]", K(ret), K(current_), K(end_), K(blockscan_state_),
-      "popcnt", nullptr == result_bitmap ? group_size_ : result_bitmap->popcnt());
+            "popcnt", nullptr == result_bitmap ? group_size_ : result_bitmap->popcnt());
   return ret;
 }
 
@@ -1135,19 +1140,20 @@ int ObCOSSTableRowScanner::init_group_by_info(ObTableAccessContext &context)
 int ObCOSSTableRowScanner::push_group_by_processor(ObICGIterator *cg_iterator)
 {
   int ret = OB_SUCCESS;
+  ObICGGroupByProcessor *group_by_processor = nullptr;
   if (OB_ISNULL(cg_iterator)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret));
-  } else if (cg_iterator->get_type() != ObICGIterator::OB_CG_GROUP_BY_SCANNER) {
+  } else if (OB_UNLIKELY(!ObICGIterator::is_valid_group_by_cg_scanner(cg_iterator->get_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected cg scanner", K(ret), K(cg_iterator->get_type()));
-  } else {
-    ObICGGroupByProcessor *group_by_processor = dynamic_cast<ObICGGroupByProcessor*>(cg_iterator);
-    if (OB_FAIL(group_by_processor->init_group_by_info())) {
-      LOG_WARN("Failed to init group by info", K(ret));
-    } else if (OB_FAIL(group_by_iters_.push_back(group_by_processor))) {
-      LOG_WARN("Failed to push back", K(ret));
-    }
+  } else if (OB_ISNULL(group_by_processor = dynamic_cast<ObICGGroupByProcessor*>(cg_iterator))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null group_by_processor", K(ret), KPC(cg_iterator));
+  } else if (OB_FAIL(group_by_processor->init_group_by_info())) {
+    LOG_WARN("Failed to init group by info", K(ret));
+  } else if (OB_FAIL(group_by_iters_.push_back(group_by_processor))) {
+    LOG_WARN("Failed to push back", K(ret));
   }
   return ret;
 }

@@ -47,15 +47,16 @@ ObTenantStorageCheckpointWriter::ObTenantStorageCheckpointWriter()
 int ObTenantStorageCheckpointWriter::init(const ObTenantStorageMetaType meta_type)
 {
   int ret = OB_SUCCESS;
+  ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_CHECKPOINT);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTenantStorageCheckpointWriter init twice", K(ret));
   } else if (OB_UNLIKELY(ObTenantStorageMetaType::INVALID_TYPE == meta_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(meta_type));
-  } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/))) {
+  } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to init ls item writer", K(ret));
-  } else if (OB_FAIL(tablet_item_writer_.init(false /*whether need addr*/))) {
+  } else if (OB_FAIL(tablet_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to init tablet item writer", K(ret));
   } else {
     meta_type_ = meta_type;
@@ -155,9 +156,10 @@ int ObTenantStorageCheckpointWriter::record_ls_meta(MacroBlockId &ls_entry_block
 
   ls_item_writer_.reset();
   tablet_item_writer_.reset();
+  ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_CHECKPOINT);
   if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream iter", K(ret));
-  } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/))) {
+  } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("failed to init log stream item writer", K(ret));
   } else {
     share::SCN unused_scn;
@@ -295,7 +297,8 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
   char slog_buf[sizeof(ObUpdateTabletLog)];
 
   tablet_item_writer_.reuse_for_next_round();
-  if (OB_FAIL(tablet_item_writer_.init(false /*whether need addr*/))) {
+  ObMemAttr mem_attr(MTL_ID(), ObModIds::OB_CHECKPOINT);
+  if (OB_FAIL(tablet_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("failed to init tablet item writer", K(ret));
   } else if (OB_FAIL(ls.get_tablet_svr()->build_tablet_iter(tablet_iter))) {
     LOG_WARN("fail to build ls tablet iter", K(ret), K(ls));

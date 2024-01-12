@@ -2453,7 +2453,8 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
                                                  arg_.start_scn_,
                                                  commit_scn,
                                                  arg_.table_id_,
-                                                 arg_.ddl_task_id_))) {
+                                                 arg_.ddl_task_id_,
+                                                 false/*is replay*/))) {
         LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
       } else {
         result_ = commit_scn.get_val_for_tx();

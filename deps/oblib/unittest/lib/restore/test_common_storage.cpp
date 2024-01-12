@@ -83,6 +83,10 @@ void ObTestStorageMeta::build_s3_cfg()
       config_.set_ak(S3_AK);
       config_.set_sk(S3_SK);
       config_.is_valid_ = true;
+
+      if (0 != STRCMP(S3_CHECKSUM_TYPE, INVALID_STR)) {
+        config_.set_checksum_type(S3_CHECKSUM_TYPE);
+      }
     } else {
       config_.is_valid_ = false;
     }
@@ -101,6 +105,10 @@ void ObTestStorageMeta::build_oss_cfg()
       config_.set_ak(OSS_AK);
       config_.set_sk(OSS_SK);
       config_.is_valid_ = true;
+
+      if (0 != STRCMP(OSS_CHECKSUM_TYPE, INVALID_STR)) {
+        config_.set_checksum_type(OSS_CHECKSUM_TYPE);
+      }
     } else {
       config_.is_valid_ = false;
     }
@@ -121,6 +129,10 @@ void ObTestStorageMeta::build_cos_cfg()
       config_.set_sk(COS_SK);
       config_.set_appid(COS_APPID);
       config_.is_valid_ = true;
+
+      if (0 != STRCMP(COS_CHECKSUM_TYPE, INVALID_STR)) {
+        config_.set_checksum_type(COS_CHECKSUM_TYPE);
+      }
     } else {
       config_.is_valid_ = false;
     }
@@ -347,7 +359,7 @@ int TestCommonStorage::mainly_check(const bool is_basic_situation, const bool cl
       OB_LOG(WARN, "meta should not be invalid", K(ret), K(meta));
     } else if (meta.is_obj_type() && OB_FAIL(TestCommonStorageUtil::build_object_storage_info(meta.config_.bucket_,
                meta.config_.endpoint_, meta.config_.ak_, meta.config_.sk_, meta.config_.region_, meta.config_.appid_,
-               cur_storage_info_))) {
+               meta.config_.checksum_type_, cur_storage_info_))) {
       OB_LOG(WARN, "fail to build object storage info", K(ret), K(meta));
     } else if (meta.is_file_type() && OB_FAIL(TestCommonStorageUtil::build_fs_storage_info(cur_storage_info_))) {
       OB_LOG(WARN, "fail to build fs storage info", K(ret), K(meta));

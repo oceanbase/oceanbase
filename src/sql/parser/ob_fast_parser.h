@@ -710,11 +710,6 @@ private:
 	 */
 	int process_string(const bool in_q_quote);
 	int process_identifier_begin_with_n();
-	char *parse_strndup_with_trim_space_for_new_line(const char *str,
-                                                     size_t nbyte,
-													 char *buf,
-													 int *connection_collation,
-												     int64_t *new_len);
 
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserOracle);

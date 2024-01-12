@@ -233,6 +233,7 @@ public:
   int check_modify_time_elapsed(const ObTabletID &tablet_id,
                                 const int64_t timestamp);
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
+  int iterate_tx_lock_stat(ObTxLockStatIterator &iter);
   int get_memtable_key_arr(ObMemtableKeyArray &memtable_key_arr);
   uint64_t get_lock_for_read_retry_count() const { return mt_ctx_.get_lock_for_read_retry_count(); }
 
@@ -362,7 +363,7 @@ public:
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
   int submit_redo_log_for_freeze();
   int return_redo_log_cb(ObTxLogCb *log_cb);
-  int push_repalying_log_ts(const share::SCN log_ts_ns, const bool is_first);
+  int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
                            const palf::LSN &offset,
                            const int64_t log_entry_no);
@@ -372,8 +373,7 @@ public:
   int replay_one_part_of_big_segment(const palf::LSN &offset,
                                      const share::SCN &timestamp,
                                      const int64_t &part_log_no);
-  int set_replay_completeness(const bool complete);
-  bool is_replay_completeness_unknown() const;
+
   int replay_redo_in_ctx(const ObTxRedoLog &redo_log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
@@ -639,6 +639,7 @@ private:
                                  const share::SCN &timestamp,
                                  const int64_t &part_log_no);
   bool is_support_parallel_replay_() const;
+  int set_replay_completeness_(const bool complete);
   int errsim_notify_mds_();
 protected:
   virtual int get_gts_(share::SCN &gts);
@@ -848,13 +849,11 @@ public:
    */
   int end_access();
   int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn, ObIArray<ObTxLSEpochPair> &downstream_parts);
-  int set_block_frozen_memtable(memtable::ObMemtable *memtable);
-  void clear_block_frozen_memtable();
-  bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
   int handle_tx_keepalive_response(const int64_t status);
 private:
+  bool fast_check_need_submit_redo_for_freeze_() const;
   int check_status_();
   int tx_keepalive_response_(const int64_t status);
   void post_keepalive_msg_(const int status);
@@ -961,7 +960,6 @@ private:
   TransModulePageAllocator reserve_allocator_;
   // ========================================================
   // newly added for 4.0
-  share::ObLSID ls_id_;
   // persistent state
   ObTxExecInfo exec_info_;
   ObCtxTxData ctx_tx_data_;

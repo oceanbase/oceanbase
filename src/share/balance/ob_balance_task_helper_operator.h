@@ -118,6 +118,7 @@ public:
            const share::ObLSID &dest_ls,
            const uint64_t ls_group_id);
   bool is_valid() const;
+  int assign(const ObBalanceTaskHelper &other);
   TO_STRING_KV(K_(balance_task_helper_meta), K_(operation_scn));
   share::SCN get_operation_scn() const
   {
@@ -161,18 +162,20 @@ public:
   static int insert_ls_balance_task(const ObBalanceTaskHelper &ls_balance_task,
                      ObISQLClient &client);
   /**
-   * @description: get task has min operation scn
+   * @description: get task which operation scn less than max_scn
    * @param[in] tenant_id : user_tenant_id
    * @param[in] client : sql client or trans
-   * @param[out] ls_balance_task : ls_balance_task of min operation_scn
+   * @param[in] max_operation_scn : max_scn
+   * @param[out] ls_balance_tasks : ls_balance_task's operation_scn less than max_scn
    * @return :
-   *  OB_SUCCESS : get a valid ls_balance_task
+   *  OB_SUCCESS : get valid ls_balance_task array
    *  OB_ENTRY_NOT_EXIST : empty
    *  OTHER : fail
    */
-  static int pop_task(const uint64_t tenant_id,
+  static int load_tasks_order_by_scn(const uint64_t tenant_id,
                       ObISQLClient &client,
-                      ObBalanceTaskHelper &ls_balance_task);
+                      const share::SCN &max_operation_scn,
+                      ObIArray<ObBalanceTaskHelper> &ls_balance_task);
   /**
    * @description: remove task of operation_scn
    * @param[in] tenant_id : user_tenant_id
@@ -207,10 +210,13 @@ public:
                                    ObISQLClient &client,
                                    ObBalanceTaskHelper &ls_balance_task);
 private:
-  static int exec_get_single_row_(const common::ObSqlString &sql,
+  static int exec_get_rows_(const common::ObSqlString &sql,
                              const uint64_t tenant_id,
                              ObISQLClient &client,
-                             ObBalanceTaskHelper &ls_balance_task);
+                             ObIArray<ObBalanceTaskHelper> &ls_balance_tasks);
+  static int exec_get_single_row_(const common::ObSqlString &sql,
+      const uint64_t tenant_id, ObISQLClient &client,
+      ObBalanceTaskHelper &ls_balance_task);
 };
 }
 }

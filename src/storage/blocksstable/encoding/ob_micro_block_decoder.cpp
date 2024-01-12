@@ -1711,7 +1711,7 @@ int ObMicroBlockDecoder::filter_pushdown_filter(
       }
       bool filtered = false;
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(filter.filter(datum_buf, col_count, filtered))) {
+        if (OB_FAIL(filter.filter(datum_buf, col_count, *pd_filter_info.skip_bit_, filtered))) {
           LOG_WARN("Failed to filter row with black filter", K(ret), "datum_buf", common::ObArrayWrap<ObStorageDatum>(datum_buf, col_count));
         } else if (!filtered) {
           if (OB_FAIL(result_bitmap.set(offset))) {

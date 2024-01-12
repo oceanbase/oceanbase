@@ -2004,7 +2004,7 @@ int64_t ObStorageAppender::get_length()
 
   if (OB_ISNULL(appender_)) {
     STORAGE_LOG_RET(WARN, common::OB_ERR_UNEXPECTED, "appender not opened");
-  } else if (type_ != OB_STORAGE_S3) {
+  } else if (OB_STORAGE_S3 != type_) {
     ret_int = appender_->get_length();
   } else {
     int ret = OB_SUCCESS;
@@ -2060,7 +2060,7 @@ int ObStorageAppender::seal_for_adaptive()
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not opened", K(ret));
-  } else if (type_ != OB_STORAGE_S3) {
+  } else if (OB_STORAGE_S3 != type_) {
   } else {
     char *buf = NULL;
     char seal_meta_uri[OB_MAX_URI_LENGTH] = { 0 };

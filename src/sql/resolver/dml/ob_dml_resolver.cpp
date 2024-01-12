@@ -16258,6 +16258,32 @@ int ObDMLResolver::add_udt_dependency(const pl::ObUserDefinedType &udt_type)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema checker or schema guard", K(params_.schema_checker_));
   } else {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < udt_type.get_member_count(); ++i) {
+      const ObPLDataType *element_type = udt_type.get_member(i);
+      const ObUserDefinedType *user_type = NULL;
+      if (OB_ISNULL(element_type)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("element type is null", K(ret), KPC(element_type), K(i), K(udt_type));
+      } else if (element_type->is_obj_type()) { // basic type
+      } else { // composite type
+        ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
+        if (OB_FAIL(ObResolverUtils::get_user_type(
+              params_.allocator_, params_.session_info_, params_.sql_proxy_,
+              params_.schema_checker_->get_schema_guard(),
+              package_guard,
+              element_type->get_user_type_id(),
+              user_type))) {
+          LOG_WARN("failed to get user type by user type id", K(ret), KPC(element_type));
+        } else if (OB_ISNULL(user_type)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user type is null", K(ret), KPC(element_type));
+        } else if (SMART_CALL(add_udt_dependency(*user_type))) {
+          LOG_WARN("failed to add udt depenency", K(ret), KPC(user_type));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     ObSchemaGetterGuard &schema_guard = *params_.schema_checker_->get_schema_guard();
     ObSchemaObjVersion version;
     switch (udt_type.get_type_from()) {

@@ -1651,7 +1651,7 @@ ObPhysicalFilterExecutor::~ObPhysicalFilterExecutor()
   }
 }
 
-int ObPhysicalFilterExecutor::filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, bool &filtered)
+int ObPhysicalFilterExecutor::filter(blocksstable::ObStorageDatum *datums, int64_t col_cnt, const sql::ObBitVector &skip_bit, bool &filtered)
 {
   int ret = OB_SUCCESS;
   const common::ObIArray<ObExpr *> *column_exprs = get_cg_col_exprs();
@@ -1666,7 +1666,7 @@ int ObPhysicalFilterExecutor::filter(blocksstable::ObStorageDatum *datums, int64
         LOG_WARN("Failed to convert object from datum", K(ret), K(datums[i]));
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(filter(eval_ctx, filtered))) {
+    if (OB_SUCC(ret) && OB_FAIL(filter(eval_ctx, skip_bit, filtered))) {
       LOG_WARN("Failed to calc filter", K(ret));
     }
   }
@@ -1875,15 +1875,26 @@ bool ObWhiteFilterExecutor::is_cmp_op_with_null_ref_value() const
   return is_cmp_op && has_single_null_ref_value;
 }
 
-int ObWhiteFilterExecutor::filter(ObEvalCtx &eval_ctx, bool &filtered)
+int ObWhiteFilterExecutor::filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered)
 {
   int ret = OB_SUCCESS;
   filtered = false;
-  ObDatum *cmp_res = nullptr;
-  if (OB_FAIL(filter_.expr_->eval(eval_ctx, cmp_res))) {
-    LOG_WARN("Failed to eval", K(ret));
+  if (!op_.enable_rich_format_) {
+    ObDatum *cmp_res = nullptr;
+    if (OB_FAIL(filter_.expr_->eval(eval_ctx, cmp_res))) {
+      LOG_WARN("Failed to eval", K(ret));
+    } else {
+      filtered = is_row_filtered(*cmp_res);
+    }
   } else {
-    filtered = is_row_filtered(*cmp_res);
+    const int64_t batch_idx = eval_ctx.get_batch_idx();
+    EvalBound eval_bound(eval_ctx.get_batch_size(), batch_idx, batch_idx + 1, false);
+    if (OB_FAIL(filter_.expr_->eval_vector(eval_ctx, skip_bit, eval_bound))) {
+      LOG_WARN("Failed to eval vector", K(ret));
+    } else {
+      ObIVector *res = filter_.expr_->get_vector(eval_ctx);
+      filtered = !res->is_true(batch_idx);
+    }
   }
 
   if (op_.is_vectorized()) {
@@ -1902,16 +1913,30 @@ ObBlackFilterExecutor::~ObBlackFilterExecutor()
   }
 }
 
-int ObBlackFilterExecutor::filter(ObEvalCtx &eval_ctx, bool &filtered)
+int ObBlackFilterExecutor::filter(ObEvalCtx &eval_ctx, const sql::ObBitVector &skip_bit, bool &filtered)
 {
   int ret = OB_SUCCESS;
   filtered = false;
-  ObDatum *cmp_res = nullptr;
-  FOREACH_CNT_X(e, filter_.filter_exprs_, OB_SUCC(ret) && !filtered) {
-    if (OB_FAIL((*e)->eval(eval_ctx, cmp_res))) {
-      LOG_WARN("failed to filter child", K(ret));
-    } else {
-      filtered = is_row_filtered(*cmp_res);
+  const bool enable_rich_format = op_.enable_rich_format_;
+  if (!enable_rich_format) {
+    ObDatum *cmp_res = nullptr;
+    FOREACH_CNT_X(e, filter_.filter_exprs_, OB_SUCC(ret) && !filtered) {
+      if (OB_FAIL((*e)->eval(eval_ctx, cmp_res))) {
+        LOG_WARN("failed to filter child", K(ret));
+      } else {
+        filtered = is_row_filtered(*cmp_res);
+      }
+    }
+  } else {
+    const int64_t batch_idx = eval_ctx.get_batch_idx();
+    EvalBound eval_bound(eval_ctx.get_batch_size(), batch_idx, batch_idx + 1, false);
+    FOREACH_CNT_X(e, filter_.filter_exprs_, OB_SUCC(ret) && !filtered) {
+      if (OB_FAIL((*e)->eval_vector(eval_ctx, skip_bit, eval_bound))) {
+        LOG_WARN("Failed to evaluate vector", K(ret));
+      } else {
+        ObIVector *res = (*e)->get_vector(eval_ctx);
+        filtered = !res->is_true(batch_idx);
+      }
     }
   }
 
@@ -2447,14 +2472,24 @@ int ObPushdownOperator::reset_trans_info_datum()
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(expr_spec_.trans_info_expr_)) {
-    if (expr_spec_.trans_info_expr_->is_batch_result()) {
-      ObDatum *datums = expr_spec_.trans_info_expr_->locate_datums_for_update(eval_ctx_, expr_spec_.max_batch_size_);
-      for (int64_t i = 0; i < expr_spec_.max_batch_size_; i++) {
-        datums[i].set_null();
+    if (enable_rich_format_) {
+      if (OB_FAIL(expr_spec_.trans_info_expr_->init_vector(
+                  eval_ctx_,
+                  VectorFormat::VEC_UNIFORM,
+                  expr_spec_.trans_info_expr_->is_batch_result() ? expr_spec_.max_batch_size_ : 1))) {
+        LOG_WARN("Fail to init vector", K(ret), K(expr_spec_.max_batch_size_));
       }
-    } else {
-      ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
-      datum.set_null();
+    }
+    if (OB_SUCC(ret)) {
+      if (expr_spec_.trans_info_expr_->is_batch_result()) {
+        ObDatum *datums = expr_spec_.trans_info_expr_->locate_datums_for_update(eval_ctx_, expr_spec_.max_batch_size_);
+        for (int64_t i = 0; i < expr_spec_.max_batch_size_; i++) {
+          datums[i].set_null();
+        }
+      } else {
+        ObDatum &datum = expr_spec_.trans_info_expr_->locate_datum_for_write(eval_ctx_);
+        datum.set_null();
+      }
     }
   }
   return ret;
@@ -2564,6 +2599,10 @@ void PushdownFilterInfo::reset()
       allocator_->free(ref_bitmap_);
       ref_bitmap_ = nullptr;
     }
+    if (nullptr != skip_bit_) {
+      allocator_->free(skip_bit_);
+      skip_bit_ = nullptr;
+    }
     allocator_ = nullptr;
   }
   filter_ = nullptr;
@@ -2614,7 +2653,8 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
     col_capacity_ = out_col_cnt;
   }
 
-  if (OB_SUCC(ret) && (iter_param.vectorized_enabled_ || iter_param.enable_pd_aggregate())) {
+  if (OB_SUCC(ret) && (iter_param.vectorized_enabled_ || iter_param.enable_pd_aggregate() ||
+                       (nullptr != iter_param.op_ && iter_param.op_->enable_rich_format_))) {
     batch_size_ = iter_param.vectorized_enabled_ ? iter_param.op_->get_batch_size() : storage::AGGREGATE_STORE_BATCH_SIZE;
     if (OB_FAIL(col_datum_buf_.init(batch_size_, alloc))) {
       LOG_WARN("fail to init tmp col datum buf", K(ret));
@@ -2622,6 +2662,9 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc cell data ptr", K(ret), K(batch_size_));
     } else if (FALSE_IT(cell_data_ptrs_ = reinterpret_cast<const char **>(buf))) {
+    } else if (OB_ISNULL(skip_bit_ = to_bit_vector(alloc.alloc(ObBitVector::memory_size(batch_size_))))) {
+      ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Failed to alloc skip bit", K(ret), K_(batch_size));
     } else if (OB_ISNULL(buf = alloc.alloc(sizeof(int64_t) * batch_size_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc row_ids", K(ret), K(batch_size_));
@@ -2629,6 +2672,7 @@ int PushdownFilterInfo::init(const storage::ObTableIterParam &iter_param, common
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc len_array_buf", K(ret), K_(batch_size));
     } else {
+      skip_bit_->init(batch_size_);
       row_ids_ = reinterpret_cast<int64_t *>(buf);
       len_array_ = reinterpret_cast<uint32_t *>(len_array_buf);
     }

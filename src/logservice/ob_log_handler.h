@@ -709,6 +709,7 @@ public:
 private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
   typedef common::TCRWLock::RLockGuardWithTimeout RLockGuardWithTimeout;
+  typedef common::TCRWLock::RLockGuard RLockGuard;
   typedef common::TCRWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);

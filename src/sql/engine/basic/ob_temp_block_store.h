@@ -387,7 +387,6 @@ public:
   inline int64_t get_index_block_cnt() const { return index_block_cnt_; }
   inline int64_t get_block_cnt_on_disk() const { return block_cnt_on_disk_; }
   inline int64_t get_block_cnt_in_mem() const { return block_cnt_ - block_cnt_on_disk_; }
-  inline int64_t get_blk_mem_list_cnt() const { return blk_mem_list_.get_size(); }
   inline int64_t get_block_list_cnt() { return blk_mem_list_.get_size(); }
   inline int64_t get_mem_hold() const { return mem_hold_; }
   inline int64_t get_mem_used() const { return mem_used_; }

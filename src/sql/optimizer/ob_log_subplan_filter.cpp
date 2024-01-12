@@ -535,17 +535,10 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
+    enable_das_group_rescan_ = false;
   } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_group_rescan_))) {
     LOG_WARN("failed to get enable batch variable", K(ret));
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-    if (tenant_config.is_valid()) {
-      enable_das_group_rescan_ = tenant_config->_enable_spf_batch_rescan;
-      LOG_TRACE("trace disable hash groupby in second stage for three-stage",
-        K(enable_das_group_rescan_));
-    } else {
-      enable_das_group_rescan_ = false;
-    }
   }
   // check use batch
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {
@@ -568,6 +561,10 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
         enable_das_group_rescan_ = false;
       }
     }
+  }
+  if (OB_SUCC(ret) && enable_das_group_rescan_ &&
+      OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, enable_das_group_rescan_))) {
+      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
   }
   // check if exec params contain sub_query
   for (int64_t i = 0; OB_SUCC(ret) && enable_das_group_rescan_ && i < exec_params_.count(); i++) {
@@ -753,6 +750,8 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
                                                   input_esets,
                                                   strong_sharding))) {
     LOG_WARN("failed to rebuild repart sharding info", K(ret));
+  } else if (NULL == strong_sharding) {
+    strong_sharding = get_plan()->get_optimizer_context().get_distributed_sharding();
   }
 
   if (OB_SUCC(ret)) {
@@ -767,6 +766,8 @@ int ObLogSubPlanFilter::get_repart_sharding_info(ObLogicalOperator* child_op,
                                              input_esets,
                                              out_sharding))) {
       LOG_WARN("failed to rebuild repart sharding info", K(ret));
+    } else if (NULL == out_sharding) {
+      /* do nothing */
     } else if (OB_FAIL(weak_sharding.push_back(out_sharding))) {
       LOG_WARN("failed to push back sharding", K(ret));
     }
@@ -789,6 +790,23 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
       OB_ISNULL(input_sharding)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                      src_keys,
+                                                      target_keys,
+                                                      input_sharding->get_partition_keys(),
+                                                      repart_exprs,
+                                                      true))) {
+    LOG_WARN("failed to get repartition keys", K(ret));
+  } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
+                                                      src_keys,
+                                                      target_keys,
+                                                      input_sharding->get_sub_partition_keys(),
+                                                      repart_sub_exprs,
+                                                      true))) {
+    LOG_WARN("failed to get sub repartition keys", K(ret));
+  } else if (input_sharding->get_partition_keys().count() != repart_exprs.count()
+             || input_sharding->get_sub_partition_keys().count() != repart_sub_exprs.count()) {
+    out_sharding = NULL;
   } else if (OB_ISNULL(out_sharding = reinterpret_cast<ObShardingInfo*>(
                        get_plan()->get_allocator().alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -798,20 +816,7 @@ int ObLogSubPlanFilter::rebuild_repart_sharding_info(const ObShardingInfo *input
     LOG_WARN("failed to assign sharding info", K(ret));
   } else {
     ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-    if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
-                                                 src_keys,
-                                                 target_keys,
-                                                 input_sharding->get_partition_keys(),
-                                                 repart_exprs))) {
-      LOG_WARN("failed to get repartition keys", K(ret));
-    } else if (OB_FAIL(get_plan()->get_repartition_keys(input_esets,
-                                                        src_keys,
-                                                        target_keys,
-                                                        input_sharding->get_sub_partition_keys(),
-                                                        repart_sub_exprs))) {
-      LOG_WARN("failed to get sub repartition keys", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_partition_keys(),
-                                                repart_exprs))) {
+    if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_partition_keys(), repart_exprs))) {
       LOG_WARN("failed to add replace pair", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(input_sharding->get_sub_partition_keys(),
                                                 repart_sub_exprs))) {

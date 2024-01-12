@@ -142,6 +142,7 @@ protected:
   ObGetTableParam *get_table_param_;
   bool read_memtable_only_;
   ObBlockRowStore *block_row_store_;
+  sql::ObBitVector *skip_bit_;
   common::ObSEArray<share::schema::ObColDesc, 32> out_project_cols_;
   ObLobDataReader lob_reader_;
 private:

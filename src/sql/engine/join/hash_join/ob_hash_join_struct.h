@@ -314,10 +314,11 @@ public:
                      const ObHJStoredRow **stored_row) {
     int ret = OB_SUCCESS;
     if (mem_bound_ < INT64_MAX
-        && (cur_mem_ > mem_bound_ || cur_row_cnt_ > row_bound_)) {
+        && (cur_mem_ > mem_bound_ || cur_row_cnt_ >= row_bound_)) {
       ret = OB_ITER_END;
     } else {
-      ret = part_->get_next_batch(exprs, ctx, max_rows, read_rows, stored_row);
+      int64_t max_read_rows = min(max_rows, row_bound_ - cur_row_cnt_);
+      ret = part_->get_next_batch(exprs, ctx, max_read_rows, read_rows, stored_row);
     }
     if (OB_SUCC(ret)) {
       cur_row_cnt_ += read_rows;
@@ -333,10 +334,11 @@ public:
                      int64_t &read_rows) {
     int ret = OB_SUCCESS;
     if (mem_bound_ < INT64_MAX
-        && (cur_mem_ > mem_bound_ || cur_row_cnt_ > row_bound_)) {
+        && (cur_mem_ > mem_bound_ || cur_row_cnt_ >= row_bound_)) {
       ret = OB_ITER_END;
     } else {
-      ret = part_->get_next_batch(stored_row, max_rows, read_rows);
+      int64_t max_read_rows = min(max_rows, row_bound_ - cur_row_cnt_);
+      ret = part_->get_next_batch(stored_row, max_read_rows, read_rows);
     }
     if (OB_SUCC(ret)) {
       cur_row_cnt_ += read_rows;

@@ -196,10 +196,11 @@ int ObPxPools::DeletePoolFunc::operator() (common::hash::HashMapPair<int64_t, Ob
 void ObPxPools::mtl_stop(ObPxPools *&pools)
 {
   int ret = OB_SUCCESS;
-  common::SpinWLockGuard g(pools->lock_);
   if (OB_ISNULL(pools)) {
+    // pools will be null if it's creating tenant and failed.
     LOG_WARN("pools is null");
   } else {
+    common::SpinWLockGuard g(pools->lock_);
     StopPoolFunc stop_pool_func;
     if (OB_FAIL(pools->pool_map_.foreach_refactored(stop_pool_func))) {
       LOG_WARN("failed to do foreach", K(ret));
@@ -1053,10 +1054,10 @@ void ObTenant::destroy()
   ObTenantSwitchGuard guard(this);
   destroy_mtl_module();
   // 1.some mtl module(eg: ObDataAccessService) remove tmp file when destroy,
-  //   so free_tenant_file_store must be after destroy_mtl_module.
-  // 2.there is tg in ObTmpTenantMemBlockManager, so free_tenant_file_store must be before
+  //   so remove_tenant_file must be after destroy_mtl_module.
+  // 2.there is tg in ObTmpTenantMemBlockManager, so remove_tenant_file must be before
   //   ObTenantBase::destroy() in which tg leak is checked.
-  if (OB_TMP_FAIL(OB_TMP_FILE_STORE.free_tenant_file_store(id_))) {
+  if (OB_TMP_FAIL(FILE_MANAGER_INSTANCE_V2.remove_tenant_file(id_))) {
     if (OB_ENTRY_NOT_EXIST == tmp_ret) {
       tmp_ret = OB_SUCCESS;
     } else {

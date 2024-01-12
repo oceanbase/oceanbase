@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include "share/throttle/ob_throttle_unit.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_tx_service.h"
 #include "storage/memtable/ob_memtable.h"
@@ -286,22 +287,17 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
                         scheduler,
                         INT64_MAX,         /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
+      ObTxDataThrottleGuard tx_data_throttle_guard(
+          true /* for_replay_ */,
+          ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
         TRANS_LOG(WARN, "get_tx_ctx error", K(ret), K(tx_id), KP(ctx_));
       } else {
         first_created_ctx_ = !tx_ctx_existed;
       }
     }
-    if (OB_NOT_NULL(ctx_)) {
-      if (replaying_log_entry_no_ == 0) {
-        ret = ctx_->set_replay_completeness(true);
-      } else if (is_tx_log_replay_queue() && ctx_->is_replay_completeness_unknown()) {
-        TRANS_LOG(INFO, "tx replay from middle", K(tx_id), K_(replaying_log_entry_no), K_(lsn), K_(log_ts_ns));
-        ret = ctx_->set_replay_completeness(false);
-      }
-      if (OB_SUCC(ret) && is_tx_log_replay_queue()) {
-        ret = ctx_->push_repalying_log_ts(log_ts_ns_, replaying_log_entry_no_ == 0);
-      }
+    if (OB_SUCC(ret) && OB_NOT_NULL(ctx_) && is_tx_log_replay_queue()) {
+      ret = ctx_->push_replaying_log_ts(log_ts_ns_, replaying_log_entry_no_);
     }
   }
   return ret;
@@ -406,6 +402,9 @@ int ObTxReplayExecutor::replay_rollback_to_()
   const bool tx_queue = is_tx_log_replay_queue();
   ObTxRollbackToLog log;
   const bool pre_barrier = base_header_.need_pre_replay_barrier();
+  ObTxDataThrottleGuard tx_data_throttle_guard(
+      true /* for_replay_ */,
+      ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", KR(ret), "log_type", "RollbackTo",
               K(lsn_), K(log_ts_ns_));
@@ -451,6 +450,11 @@ int ObTxReplayExecutor::replay_multi_source_data_()
 {
   int ret = OB_SUCCESS;
   ObTxMultiDataSourceLog log;
+
+  ObMdsThrottleGuard mds_throttle_guard(true /* for_replay */,
+                                        ObClockGenerator::getClock() +
+                                            share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME);
+
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", KR(ret), K(lsn_), K(log_ts_ns_));
   } else if (OB_FAIL(ctx_->replay_multi_data_source(log, lsn_, log_ts_ns_, tx_part_log_no_))) {

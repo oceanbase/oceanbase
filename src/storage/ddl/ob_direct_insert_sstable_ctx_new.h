@@ -184,12 +184,23 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const bool is_full_direct_load);
+  int gc_tablet_direct_load(ObLS &ls);
   // remove tablet direct load mgr from hashmap,
   // for full direct load, it will be called when physical major generates,
   // for incremental direct load, it will be called when all KVs dump.
   int remove_tablet_direct_load(const ObTabletDirectLoadMgrKey &mgr_key);
   ObIAllocator &get_allocator() { return allocator_; }
 private:
+  struct GetGcCandidateOp final {
+  public:
+    GetGcCandidateOp(ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs) : candidate_mgrs_(candidate_mgrs) {}
+    ~GetGcCandidateOp() {}
+    int operator() (common::hash::HashMapPair<ObTabletDirectLoadMgrKey, ObTabletDirectLoadMgr *> &kv);
+  private:
+    DISALLOW_COPY_AND_ASSIGN(GetGcCandidateOp);
+    ObIArray<ObTabletDirectLoadMgrKey> &candidate_mgrs_;
+  };
+
   int try_create_tablet_direct_load_mgr(
       const int64_t context_id,
       const int64_t execution_id,
@@ -329,6 +340,7 @@ public:
   // virtual int get_online_stat_collect_result();
 
   virtual int wrlock(const int64_t timeout_us, uint32_t &lock_tid);
+  virtual int rdlock(const int64_t timeout_us, uint32_t &lock_tid);
   virtual void unlock(const uint32_t lock_tid);
   int prepare_index_builder_if_need(const ObTableSchema &table_schema);
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const share::SCN &start_scn);
@@ -411,8 +423,9 @@ public:
       ObTablet &tablet,
       const share::SCN &start_scn,
       const share::SCN &commit_scn,
-      const uint64_t table_id = 0,
-      const int64_t ddl_task_id = 0); // schedule build a major sstable
+      const uint64_t table_id,
+      const int64_t ddl_task_id,
+      const bool is_replay); // schedule build a major sstable
 
   void set_commit_scn_nolock(const share::SCN &scn);
   int set_commit_scn(const share::SCN &scn);
@@ -430,7 +443,7 @@ public:
   INHERIT_TO_STRING_KV("ObTabletDirectLoadMgr", ObTabletDirectLoadMgr, K_(start_scn), K_(commit_scn), K_(execution_id));
 private:
   bool is_started() { return start_scn_.is_valid_and_not_min(); }
-  int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated); // try wait build major sstable
+  int schedule_merge_task(const share::SCN &start_scn, const share::SCN &commit_scn, const bool wait_major_generated, const bool is_replay); // try wait build major sstable
   int cleanup_unlock();
   int init_ddl_table_store(const share::SCN &start_scn, const int64_t snapshot_version, const share::SCN &ddl_checkpoint_scn);
   int update_major_sstable();

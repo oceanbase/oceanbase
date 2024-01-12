@@ -73,6 +73,8 @@ public:
         throttle_max_duration_(0),
         last_advance_clock_ts_us_(0),
         last_print_throttle_info_ts_(0),
+        last_update_limit_ts_(0),
+        tenant_id_(0),
         decay_factor_(0),
         throttle_info_map_() {}
   ~ObThrottleUnit() {}
@@ -138,6 +140,9 @@ public:
   int64_t expected_wait_time(share::ObThrottleInfoGuard &ti_guard, const int64_t holding_size);
 
   TO_STRING_KV(K(unit_name_),
+               K(is_inited_),
+               K(enable_adaptive_limit_),
+               K(config_specify_resource_limit_),
                K(resource_limit_),
                K(sequence_num_),
                K(clock_),
@@ -145,7 +150,10 @@ public:
                K(throttle_trigger_percentage_),
                K(throttle_max_duration_),
                K(last_advance_clock_ts_us_),
+               K(last_print_throttle_info_ts_),
+               K(last_update_limit_ts_),
                K(decay_factor_));
+
 public: // throttle configs setter
   void enable_adaptive_limit();
   void set_throttle_trigger_percentage(const int64_t throttle_trigger_percentage);

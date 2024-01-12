@@ -55,6 +55,8 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
                                              ObIArray<ObRawExpr*> &params)
 {
   int ret = OB_SUCCESS;
+  bool has_assign_param = false;
+
   CK (OB_NOT_NULL(routine_info));
   CK (OB_NOT_NULL(call_proc_info));
 
@@ -64,7 +66,6 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
   }
   // Step 2: 从ParamsNode中解析参数
   if (OB_SUCC(ret) && OB_NOT_NULL(params_node)) {
-    bool has_assign_param = false;
     if (T_SP_CPARAM_LIST != params_node->type_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid params list node", K(ret), K(params_node->type_));
@@ -107,7 +108,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
   }
 
   if (OB_SUCC(ret)) { // 判断所有参数没有复杂表达式参数
-    bool v = true;
+    bool v = (false == has_assign_param);
     for (int64_t i = 0; v && OB_SUCC(ret) && i < params.count(); i ++) {
       if (OB_ISNULL(params.at(i))) {
         ret = OB_INVALID_ARGUMENT;

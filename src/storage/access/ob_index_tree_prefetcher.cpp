@@ -123,7 +123,7 @@ int ObIndexTreePrefetcher::init_basic_info(
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
       } else {
-        const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+        const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
         index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
       }
     } else if (OB_FAIL(init_index_scanner(index_scanner_))) {
@@ -279,7 +279,7 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
   } else {
-    const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+    const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
     index_scanner.set_iter_param(sstable_, cur_tablet);
   }
   return ret;
@@ -789,7 +789,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::s
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
         } else {
-          const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+          const ObTablet *cur_tablet = OB_ISNULL(iter_param_->tablet_handle_) ? nullptr : iter_param_->tablet_handle_->get_obj();
           tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
         }
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {

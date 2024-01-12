@@ -32,6 +32,10 @@ using namespace share;
 static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
 
 namespace share {
+
+ObMdsThrottleGuard::~ObMdsThrottleGuard() {}
+ObTxDataThrottleGuard::~ObTxDataThrottleGuard() {}
+
 int ObTenantTxDataAllocator::init(const char *label)
 {
   int ret = OB_SUCCESS;

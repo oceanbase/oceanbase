@@ -174,7 +174,8 @@ bool ObTenantFreezer::exist_ls_freezing()
       for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
         int tmp_ret = OB_SUCCESS;
         ObRole role;
-        if (OB_TMP_FAIL(ls->get_ls_role(role))) {
+        int64_t proposal_id = 0;
+        if (OB_TMP_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
           LOG_WARN("get ls role failed", KR(tmp_ret), K(ls->get_ls_id()));
         } else if (common::is_strong_leader(role)) {
           // skip check leader logstream
@@ -1003,6 +1004,11 @@ int ObTenantFreezer::get_tenant_memstore_limit(int64_t &mem_limit)
   return ret;
 }
 
+int64_t ObTenantFreezer::get_memstore_limit_percentage()
+{
+  return get_memstore_limit_percentage_();
+}
+
 int ObTenantFreezer::get_tenant_mem_usage_(ObTenantFreezeCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1241,18 +1247,35 @@ int64_t ObTenantFreezer::get_freeze_trigger_percentage_()
 int64_t ObTenantFreezer::get_memstore_limit_percentage_()
 {
   int ret = OB_SUCCESS;
-  static const int64_t DEFAULT_MEMSTORE_LIMIT_PERCENTAGE = 50;
-  int64_t percent = DEFAULT_MEMSTORE_LIMIT_PERCENTAGE;
+  static const int64_t SMALL_TENANT_MEMORY_LIMIT = 8 * 1024 * 1024 * 1024L; // 8G
+  static const int64_t SMALL_MEMSTORE_LIMIT_PERCENTAGE = 40;
+  static const int64_t LARGE_MEMSTORE_LIMIT_PERCENTAGE = 50;
+
+  const int64_t tenant_memory = lib::get_tenant_memory_limit(MTL_ID());
+  const int64_t cluster_memstore_limit_percent = GCONF.memstore_limit_percentage;
+  int64_t tenant_memstore_limit_percent = 0;
+  int64_t percent = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
-    percent = tenant_config->memstore_limit_percentage;
+    tenant_memstore_limit_percent = tenant_config->_memstore_limit_percentage;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("memstore limit percentage is invalid", K(ret));
   }
+  if (tenant_memstore_limit_percent != 0) {
+    percent = tenant_memstore_limit_percent;
+  } else if (cluster_memstore_limit_percent != 0) {
+    percent = cluster_memstore_limit_percent;
+  } else {
+    // both is default value, adjust automatically
+    if (tenant_memory <= SMALL_TENANT_MEMORY_LIMIT) {
+      percent = SMALL_MEMSTORE_LIMIT_PERCENTAGE;
+    } else {
+      percent = LARGE_MEMSTORE_LIMIT_PERCENTAGE;
+    }
+  }
   return percent;
 }
-
 
 int ObTenantFreezer::post_freeze_request_(
     const storage::ObFreezeType freeze_type,

@@ -378,7 +378,6 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
 {
   int ret = OB_SUCCESS;
   ObITable::TableKey hidden_table_key;
-  SCN start_scn;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObComplementDataContext not init", K(ret));
@@ -396,8 +395,11 @@ int ObComplementDataContext::write_start_log(const ObComplementDataParam &param)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
     } else if (OB_FAIL(tenant_direct_load_mgr->open_tablet_direct_load(true, /*is_full_direct_load*/
-      param.dest_ls_id_, param.dest_tablet_id_, context_id_, start_scn, tablet_direct_load_mgr_handle_))) {
+      param.dest_ls_id_, param.dest_tablet_id_, context_id_, start_scn_, tablet_direct_load_mgr_handle_))) {
       LOG_WARN("write ddl start log failed", K(ret));
+    } else if (OB_UNLIKELY(!start_scn_.is_valid_and_not_min())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid start scn", K(ret), K(start_scn_));
     }
     LOG_INFO("complement task start ddl redo success", K(ret), K(param));
   }
@@ -1367,10 +1369,13 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_UNLIKELY(!direct_load_hdl.get_full_obj()->get_start_scn().is_valid_and_not_min())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected err", K(ret), K(direct_load_hdl.get_full_obj()->get_start_scn()));
+      } else if (OB_UNLIKELY(context_->start_scn_ != direct_load_hdl.get_full_obj()->get_start_scn())) {
+        ret = OB_TASK_EXPIRED;
+        LOG_WARN("task expired", K(ret), K(context_->start_scn_), "start_scn", direct_load_hdl.get_full_obj()->get_start_scn());
       } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE,
                                        hidden_table_key,
                                        param_->task_id_,
-                                       direct_load_hdl.get_full_obj()->get_start_scn(),
+                                       context_->start_scn_,
                                        param_->data_format_version_,
                                        &sstable_redo_writer))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
@@ -1428,7 +1433,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
         LOG_WARN("tmp_row is nullptr", K(ret));
       } else if (OB_FAIL(add_extra_rowkey(rowkey_column_cnt, extra_rowkey_cnt, *tmp_row))) {
         LOG_WARN("fail to add extra rowkey", K(ret));
-      } else if (OB_FAIL(append_lob(rowkey_column_cnt, extra_rowkey_cnt, row_iter, lob_allocator))) {
+      } else if (!ddl_committed && OB_FAIL(append_lob(rowkey_column_cnt, extra_rowkey_cnt, row_iter, lob_allocator))) {
         LOG_WARN("append lob into macro block failed", K(ret));
       } else if (OB_FAIL(new_row_builder.build(write_row_, tmp_store_row))) {
       } else if (OB_FAIL(ObRowReshapeUtil::reshape_table_rows(
@@ -1503,11 +1508,13 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else {
         if (OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
                 param_->orig_table_id_,
+                param_->orig_tablet_id_.id(),
                 param_->task_id_,
                 report_col_checksums,
                 report_col_ids,
                 1/*execution_id*/,
                 param_->tablet_task_id_ << ObDDLChecksumItem::PX_SQC_ID_OFFSET | task_id_,
+                param_->data_format_version_,
                 *GCTX.sql_proxy_))) {
           LOG_WARN("fail to report origin table checksum", K(ret));
         } else {
@@ -1582,7 +1589,8 @@ int ObComplementMergeTask::process()
                                                             1 /* execution_id */,
                                                             param_->task_id_,
                                                             sst_meta_hdl.get_sstable_meta().get_col_checksum(),
-                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt()))) {
+                                                            sst_meta_hdl.get_sstable_meta().get_col_checksum_cnt(),
+                                                            param_->data_format_version_))) {
       LOG_WARN("report ddl column checksum failed", K(ret), K(*param_));
     } else if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(param_->dest_ls_id_, param_->dest_tablet_id_))) {
       LOG_WARN("fail to submit tablet update task", K(ret), K(*param_));
@@ -1591,11 +1599,13 @@ int ObComplementMergeTask::process()
     LOG_WARN("get column checksum failed", K(ret));
   } else if (param_->use_new_checksum() && OB_FAIL(ObDDLChecksumOperator::update_checksum(param_->dest_tenant_id_,
           param_->orig_table_id_,
+          param_->orig_tablet_id_.id(),
           param_->task_id_,
           report_col_checksums,
           report_col_ids,
           1/*execution_id*/,
           param_->orig_tablet_id_.id(),
+          param_->data_format_version_,
           *GCTX.sql_proxy_))) {
     LOG_WARN("fail to report origin table checksum", K(ret));
   } else if (OB_FAIL(add_build_hidden_table_sstable())) {

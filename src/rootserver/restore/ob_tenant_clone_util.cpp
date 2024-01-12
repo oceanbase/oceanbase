@@ -534,7 +534,7 @@ int ObTenantCloneUtil::cancel_clone_job(common::ObISQLClient &sql_client,
   ObCloneJob clone_job;
   ObMySQLTransaction trans;
   ObSqlString err_msg;
-  const ObTenantCloneStatus next_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELED);
+  const ObTenantCloneStatus next_status(ObTenantCloneStatus::Status::CLONE_SYS_CANCELING);
 
   if (OB_UNLIKELY(clone_tenant_name.empty())) {
     ret = OB_INVALID_ARGUMENT;

@@ -64,6 +64,12 @@ void test_range(ObBitVector *dest_bit_vector, ObBitVector *src_bit_vector, int64
   dest_bit_vector->unset(middle);
   expect_range(dest_bit_vector, start, middle, end);
 
+  dest_bit_vector->set_all(start, end);
+  dest_bit_vector->unset_all(start, end);
+  for (int64_t i = 0; i < end + 100; i++) {
+    EXPECT_EQ(0, dest_bit_vector->at(i));
+  }
+
   src_bit_vector->unset(middle);
   dest_bit_vector->deep_copy(*src_bit_vector, start, end);
   expect_range(dest_bit_vector, start, middle, end);

@@ -54,11 +54,15 @@ const char *const all_compressor_name[] =
 };
 
 STATIC_ASSERT(ARRAYSIZEOF(all_compressor_name) == ObCompressorType::MAX_COMPRESSOR, "compressor count mismatch");
+
+#define DISABLED_ZLIB_1_COMPRESS_IDX 3
+
 const char *const compress_funcs[] =
 {
   "lz4_1.0",
   "none",
   "snappy_1.0",
+  "zlib_1.0", // temporarily disable zlib_1.0
   "zstd_1.0",
   "zstd_1.3.8",
   "lz4_1.9.1",

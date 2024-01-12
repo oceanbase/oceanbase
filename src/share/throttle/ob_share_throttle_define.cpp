@@ -14,6 +14,7 @@
 
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/alloc/alloc_func.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 namespace oceanbase {
 
@@ -41,7 +42,7 @@ void FakeAllocatorForTxShare::init_throttle_config(int64_t &resource_limit,
     int64_t share_mem_limit = tenant_config->_tx_share_memory_limit_percentage;
     // if _tx_share_memory_limit_percentage equals 1, use (memstore_limit_percentage + 10) as default value
     if (0 == share_mem_limit) {
-      share_mem_limit = tenant_config->memstore_limit_percentage + 10;
+      share_mem_limit = MTL(ObTenantFreezer*)->get_memstore_limit_percentage() + 10;
     }
     resource_limit = total_memory * share_mem_limit / 100LL;
     trigger_percentage = tenant_config->writing_throttling_trigger_percentage;
@@ -76,12 +77,15 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
 
   int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_update_limit_ts;
-  if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
+  if (OB_UNLIKELY(old_ts - cur_ts > UPDATE_LIMIT_INTERVAL)) {
+    SHARE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid timestamp", K(cur_ts), K(old_ts));
+  } else if ((cur_ts - old_ts > UPDATE_LIMIT_INTERVAL) && ATOMIC_BCAS(&last_update_limit_ts, old_ts, cur_ts)) {
     int64_t remain_memory = lib::get_tenant_memory_remain(tenant_id);
     int64_t usable_remain_memory = remain_memory / 100 * USABLE_REMAIN_MEMORY_PERCETAGE;
     if (remain_memory > MAX_UNUSABLE_MEMORY) {
       usable_remain_memory = std::max(usable_remain_memory, remain_memory - MAX_UNUSABLE_MEMORY);
     }
+
 
     is_updated = false;
     if (holding_size + usable_remain_memory < config_specify_resource_limit) {

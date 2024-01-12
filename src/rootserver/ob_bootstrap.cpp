@@ -1505,8 +1505,9 @@ int ObBootstrap::create_sys_resource_pool()
   ObArray<ObUnit> sys_units;
   ObArray<ObResourcePoolName> pool_names;
   share::ObResourcePool pool;
-  bool is_bootstrap = true;
+  const bool is_bootstrap = true;
   const bool if_not_exist = false;
+  const bool check_data_version = false;
   common::ObMySQLTransaction trans;
   common::ObArray<uint64_t> new_ug_id_array;
   if (OB_FAIL(check_inner_stat())) {
@@ -1528,7 +1529,8 @@ int ObBootstrap::create_sys_resource_pool()
   } else if (OB_FAIL(unit_mgr_.grant_pools(
           trans, new_ug_id_array,
           lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/,
+          check_data_version))) {
     LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
         "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
   } else {

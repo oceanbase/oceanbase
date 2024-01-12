@@ -93,6 +93,7 @@ public:
   const ObTablet *get_tablet() const { return tablet_handle_.get_obj(); }
   ObTablet *get_tablet() { return tablet_handle_.get_obj(); }
   const ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
+  const ObTabletHandle *get_tablet_handle_ptr() const { return &tablet_handle_; }
   int set_tablet_handle(const ObTabletHandle &tablet_handle);
   int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
   int refresh_read_tables_from_tablet(

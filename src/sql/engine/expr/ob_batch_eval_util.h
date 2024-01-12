@@ -178,12 +178,12 @@ struct ObDoArithVectorBaseEval
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     const int64_t cond =
       (bound.get_all_rows_active() << 2) | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    if (cond == 4) { // all_rolls_active == true, evaluated = false, all_not_null = false
+    if (cond == 4) { // all_rows_active == true, evaluated = false, all_not_null = false
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::null_check_vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
       eval_flags.set_all(bound.start(), bound.end());
-    } else if (cond == 5) { // all_rolls_active == true, evaluated = false, all_not_null = true
+    } else if (cond == 5) { // all_rows_active == true, evaluated = false, all_not_null = true
       for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
         ret = ArithOp::vector_op(*res_vec, *left_vec, *right_vec, idx, args...);
       }
@@ -223,11 +223,12 @@ struct ObDoArithFixedVectorEval
 
     const int64_t cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], right_arr[idx], args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
         // do nothing
@@ -268,11 +269,12 @@ struct ObDoArithFixedConstVectorEval
 
     const int cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], left_arr[idx], *right_val, args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && ob_is_int_less_than_64(expr.args_[0]->datum_meta_.type_)
           && INT_MIN < *right_val < INT_MAX) {
         // do nothing
@@ -313,11 +315,12 @@ struct ObDoArithConstFixedVectorEval
 
     const int cond = (ArithOp::is_raw_op_supported() << 3) | (bound.get_all_rows_active() << 2)
                      | (expr.get_eval_info(ctx).evaluated_ << 1) | all_not_null;
-    // 1101: row_op_support = true, all_rolls_active == true, evaluated = false, all_not_null = true
+    // 1101: row_op_support = true, all_rows_active == true, evaluated = false, all_not_null = true
     if (cond == 13) {
       for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
         ArithOp::raw_op(res_arr[idx], *left_val, right_arr[idx], args...);
       }
+      res_vec->get_nulls()->unset_all(bound.start(), bound.end());
       if (expr.may_not_need_raw_check_ && INT_MIN < *left_val < INT_MAX
           && ob_is_int_less_than_64(expr.args_[1]->datum_meta_.type_)) {
       } else {
@@ -394,11 +397,18 @@ inline int ObDoNumberVectorEval(VECTOR_EVAL_FUNC_ARG_DECL, const bool right_eval
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); idx++) {
         ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
       }
+      if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+        reinterpret_cast<ObDiscreteFormat *>(res_vec)->get_nulls()->unset_all(bound.start(),
+                                                                              bound.end());
+      }
     } else {
       for (int idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); idx++) {
         if (left_vec->is_null(idx) || right_vec->is_null(idx)) {
           res_vec->set_null(idx);
         } else {
+          if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+            res_vec->unset_null(idx);
+          }
           ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
         }
       }
@@ -411,6 +421,9 @@ inline int ObDoNumberVectorEval(VECTOR_EVAL_FUNC_ARG_DECL, const bool right_eval
         res_vec->set_null(idx);
         eval_flags.set(idx);
         continue;
+      }
+      if (std::is_same<ResVector, ObDiscreteFormat>::value) {
+        res_vec->unset_null(idx);
       }
       ret = nmb_eval_op(idx, left_vec, right_vec, res_vec, nmb_fast_op, local_alloc);
       if (OB_SUCC(ret)) { eval_flags.set(idx); }
@@ -602,9 +615,11 @@ int def_fixed_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
           VEC_ARG_LIST, args...);
     }
   }
-  SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  if (OB_SUCC(ret)) {
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  }
   return ret;
 }
 
@@ -645,9 +660,11 @@ int def_variable_len_vector_arith_op(VECTOR_EVAL_FUNC_ARG_DECL, Args &... args)
           VEC_ARG_LIST, args...);
     }
   }
-  SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
-  SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  if (OB_SUCC(ret)) {
+    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, pvt_bound)));
+    SQL_LOG(DEBUG, "expr.args_[1]", K(ToStrVectorHeader(expr.args_[1]->get_vector_header(ctx), *expr.args_[1], &skip, pvt_bound)));
+  }
   return ret;
 }
 #undef FORMAT_DISPATCH_BRANCH
@@ -806,6 +823,7 @@ struct ObVectorArithOpWrap : public Base
     if (left_vec.is_null(idx) || right_vec.is_null(idx)) {
       res_vec.set_null(idx);
     } else {
+      res_vec.unset_null(idx);
       ret = ObVectorArithOpWrap()(res_vec, left_vec, right_vec, idx, args...);
     }
     return ret;

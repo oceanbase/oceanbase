@@ -61,7 +61,8 @@ public:
     ASSERT_EQ(OB_SUCCESS, init_cos_env());
     ASSERT_EQ(OB_SUCCESS, init_s3_env());
     if (enable_test) {
-      set_storage_info(bucket, endpoint, secretid, secretkey, appid, region, info_base);
+      ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                             appid, region, extension, info_base));
     }
   }
   static void TearDownTestCase()
@@ -96,31 +97,52 @@ public:
     return ret;
   }
 
-  static void set_storage_info(const char *bucket, const char *endpoint,
+  static int set_storage_info(const char *bucket, const char *endpoint,
       const char *secretid, const char *secretkey, const char *appid, const char *region,
-      ObObjectStorageInfo &info_base)
+      const char *extension, ObObjectStorageInfo &info_base)
   {
+    int ret = OB_SUCCESS;
     char account[OB_MAX_URI_LENGTH] = { 0 };
     ObStorageType storage_type = ObStorageType::OB_STORAGE_MAX_TYPE;
-    ASSERT_EQ(OB_SUCCESS, get_storage_type_from_path(bucket, storage_type));
-    ASSERT_NE(ObStorageType::OB_STORAGE_MAX_TYPE, storage_type);
-    if (storage_type == ObStorageType::OB_STORAGE_FILE) {
-      ASSERT_EQ(OB_SUCCESS, info_base.set(storage_type, account));
+    if (OB_FAIL(get_storage_type_from_path(bucket, storage_type))) {
+      OB_LOG(WARN, "fail to get storage type", K(ret), K(bucket));
+    } else if (OB_UNLIKELY(ObStorageType::OB_STORAGE_MAX_TYPE == storage_type)) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "storage type invalid", K(ret), K(storage_type), K(bucket));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (storage_type == ObStorageType::OB_STORAGE_FILE) {
+      if (OB_FAIL(info_base.set(storage_type, account))) {
+        OB_LOG(WARN, "fail to set storage info", K(ret), K(storage_type));
+      }
     } else {
       int64_t pos = 0;
-      ASSERT_EQ(OB_SUCCESS, databuff_printf(account, sizeof(account), pos,
-                                            "host=%s&access_id=%s&access_key=%s",
-                                            endpoint, secretid, secretkey));
-        if (ObStorageType::OB_STORAGE_COS == storage_type) {
-          ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(account, sizeof(account), pos, "&appid=%s", appid));
-        } else if (ObStorageType::OB_STORAGE_S3 == storage_type) {
-          ASSERT_EQ(OB_SUCCESS,
-              databuff_printf(account, sizeof(account), pos, "&s3_region=%s", region));
+      if (OB_FAIL(databuff_printf(account, sizeof(account), pos,
+                                  "host=%s&access_id=%s&access_key=%s",
+                                  endpoint, secretid, secretkey))) {
+        OB_LOG(WARN, "fail to set account", K(ret), K(endpoint), K(secretid), K(secretkey));
+      } else if (ObStorageType::OB_STORAGE_COS == storage_type) {
+        if (OB_FAIL(databuff_printf(account, sizeof(account), pos, "&appid=%s", appid))) {
+          OB_LOG(WARN, "fail to set appid", K(ret), K(pos), K(account), K(appid));
         }
+      } else if (ObStorageType::OB_STORAGE_S3 == storage_type) {
+        if (OB_FAIL(databuff_printf(account, sizeof(account), pos, "&s3_region=%s", region))) {
+          OB_LOG(WARN, "fail to set region", K(ret), K(pos), K(account), K(region));
+        }
+      }
 
-        ASSERT_EQ(OB_SUCCESS, info_base.set(storage_type, account));
+      if (OB_SUCC(ret) && OB_NOT_NULL(extension)) {
+        if (OB_FAIL(databuff_printf(account, sizeof(account), pos, "&%s", extension))) {
+          OB_LOG(WARN, "fail to set extension", K(ret), K(pos), K(account), K(extension));
+        }
+      }
+
+      if (OB_SUCC(ret) && OB_FAIL(info_base.set(storage_type, account))) {
+        OB_LOG(WARN, "fail to set storage info", K(ret), K(storage_type), K(account));
+      }
     }
+    return ret;
   }
 
 protected:
@@ -434,7 +456,7 @@ TEST_F(TestObjectStorage, test_check_storage_obj_meta)
       ASSERT_EQ(OB_SUCCESS, appender.pwrite(content, strlen(content), 0));
       is_obj_exist = true;
       ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, false/*is_adaptive*/, is_obj_exist));
-      if (info_base.get_type() == ObStorageType::OB_STORAGE_S3) {
+      if (ObStorageType::OB_STORAGE_S3 == info_base.get_type()) {
         ASSERT_FALSE(is_obj_exist);
       } else {
         ASSERT_TRUE(is_obj_exist);
@@ -1141,8 +1163,8 @@ TEST_F(TestObjectStorage, test_cross_testing)
   int ret = OB_SUCCESS;
   ObObjectStorageInfo cross_info;
   if (enable_test) {
-    set_storage_info(bucket, endpoint,
-        secretid, secretkey, appid, region, cross_info);
+    ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                           appid, region, nullptr, cross_info));
     ObStorageUtil util;
     ASSERT_EQ(OB_SUCCESS, util.open(&cross_info));
 
@@ -1330,6 +1352,7 @@ TEST_F(TestObjectStorage, test_multipart_write)
     ASSERT_EQ(OB_SUCCESS, writer.write(write_buf, content_size));
     ASSERT_EQ(content_size, writer.get_length());
     ASSERT_EQ(OB_SUCCESS, writer.close());
+    OB_LOG(INFO, "-----------------------------------------------------------------------------");
 
     ObStorageReader reader;
     int64_t read_size = -1;
@@ -1379,12 +1402,85 @@ TEST_F(TestObjectStorage, test_del_unmerged_parts)
     ASSERT_EQ(OB_SUCCESS, util.del_unmerged_parts(uri));
     if (info_base.get_type() == ObStorageType::OB_STORAGE_OSS) {
       ASSERT_EQ(OB_OSS_ERROR, writer.close());
-    } else if (info_base.get_type() == ObStorageType::OB_STORAGE_S3) {
+    } else if (ObStorageType::OB_STORAGE_S3 == info_base.get_type()) {
       ASSERT_EQ(OB_S3_ERROR, writer.close());
     } else if (info_base.get_type() == ObStorageType::OB_STORAGE_COS) {
       ASSERT_EQ(OB_COS_ERROR, writer.close());
     }
 
+  }
+}
+
+TEST_F(TestObjectStorage, test_util_is_tagging)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test) {
+    ObStorageUtil util;
+    const char *tmp_util_dir = "test_util_is_tagging";
+    const int64_t ts = ObTimeUtility::current_time();
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+      bucket, dir_name, tmp_util_dir, ts));
+
+    bool is_tagging = true;
+    char tmp_account[OB_MAX_URI_LENGTH];
+    ObObjectStorageInfo tmp_info_base;
+    const char *write_content = "123456789ABCDEF";
+
+    // wrong tag mode
+    ASSERT_EQ(OB_INVALID_ARGUMENT, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                                    appid, region, "delete_mode=tag", tmp_info_base));
+    tmp_info_base.reset();
+
+
+    ASSERT_EQ(OB_INVALID_ARGUMENT, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                                    appid, region, "delete_mode=delete_delete", tmp_info_base));
+    tmp_info_base.reset();
+
+    // delete mode
+    ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                           appid, region, "delete_mode=delete", tmp_info_base));
+
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/delete_mode", dir_uri));
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
+    ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
+
+    ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
+    ASSERT_FALSE(is_tagging);
+
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    tmp_info_base.reset();
+    util.close();
+
+    // tagging mode
+    ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                           appid, region, "delete_mode=tagging", tmp_info_base));
+
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
+    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
+
+    is_tagging = true;
+    ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
+    ASSERT_FALSE(is_tagging);
+
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    ASSERT_EQ(OB_SUCCESS, util.is_tagging(uri, is_tagging));
+    ASSERT_TRUE(is_tagging);
+
+    tmp_info_base.reset();
+    util.close();
+
+    // clean
+    ASSERT_EQ(OB_SUCCESS, set_storage_info(bucket, endpoint, secretid, secretkey,
+                                           appid, region, nullptr, tmp_info_base));
+
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/tagging_mode", dir_uri));
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_info_base));
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    ASSERT_EQ(OB_BACKUP_FILE_NOT_EXIST, util.is_tagging(uri, is_tagging));
+    util.close();
   }
 }
 

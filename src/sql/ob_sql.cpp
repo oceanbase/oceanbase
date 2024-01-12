@@ -1571,7 +1571,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
 #endif
   if (OB_SUCC(ret) && session.get_in_transaction()) {
     if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
-        ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
+        ObStmt::is_savepoint_stmt(result.get_stmt_type()) ||
+        (ObStmt::is_select_stmt(result.get_stmt_type()) && OB_NOT_NULL(result.get_physical_plan()) && result.get_physical_plan()->has_for_update())) {
       session.set_has_exec_inner_dml(true);
     }
   }
@@ -2510,7 +2511,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
       LOG_WARN("Failed to get database id", K(ret));
     } else if (FALSE_IT(context.spm_ctx_.bl_key_.db_id_ =
                                   (database_id == OB_INVALID_ID) ?
-                                      OB_OUTLINE_DEFAULT_DATABASE_ID:
+                                      OB_MOCK_DEFAULT_DATABASE_ID:
                                       database_id)) {
       // do nothing
     } else if (!use_plan_cache) {
@@ -4337,6 +4338,8 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.enable_udr_ = enable_udr;
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+      // pc_key_ may be modified elsewhere, so reset it before adding plan
+      pc_ctx.fp_result_.pc_key_.key_id_ = pc_ctx.sql_ctx_.statement_id_;
       //远程SQL第二次进入plan，将raw_sql作为pc_key存入plan cache中，
       //然后使用ps接口直接用参数化后的sql作为key来查plan cache，可以节省一次对SQL fast parse的代价
       if (pc_ctx.sql_ctx_.is_remote_sql_) {

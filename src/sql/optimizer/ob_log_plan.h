@@ -669,7 +669,8 @@ public:
                            const ObIArray<ObRawExpr*> &src_keys,
                            const ObIArray<ObRawExpr*> &target_keys,
                            const ObIArray<ObRawExpr*> &target_part_keys,
-                           ObIArray<ObRawExpr *> &src_part_keys);
+                           ObIArray<ObRawExpr *> &src_part_keys,
+                           const bool ignore_no_match = false);
 
   /** @brief Allcoate operator for subquery path */
   int allocate_subquery_path(SubQueryPath *subpath,
@@ -1003,8 +1004,6 @@ public:
   inline void set_signature(uint64_t hash_value) { hash_value_ = hash_value; }
 
   int candi_allocate_subplan_filter_for_where();
-
-  int candi_allocate_subplan_filter_for_exprs(ObIArray<ObRawExpr*> &exprs);
 
   int candi_allocate_subplan_filter(const ObIArray<ObRawExpr *> &subquery_exprs,
                                     const ObIArray<ObRawExpr *> *filters = NULL,

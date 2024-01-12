@@ -89,18 +89,6 @@ public:
     return 0;
   }
 
-  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
-                         const bool is_null, const char *data, const int32_t data_len,
-                         int32_t agg_col_idx, char *agg_cell) override
-  {
-    UNUSEDx(is_null, data, data_len);
-    int ret = OB_SUCCESS;
-    sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
-    char mock_skip_data[1] = {0};
-    ObBitVector &mock_skip = *to_bit_vector(mock_skip_data);
-    return static_cast<Derived *>(this)->add_batch_rows(agg_ctx, agg_col_idx, mock_skip, bound,
-                                                        agg_cell);
-  }
   int add_batch_rows(RuntimeContext &agg_ctx, const int32_t agg_col_id,
                      const sql::ObBitVector &skip, const sql::EvalBound &bound, char *agg_cell,
                      const RowSelector row_sel = RowSelector{}) override
@@ -709,6 +697,17 @@ public:
     return OB_SUCCESS;
   }
 
+  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell) override
+  {
+    // FIXME: opt performance
+    sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
+    char mock_skip_data[1] = {0};
+    ObBitVector &mock_skip = *to_bit_vector(mock_skip_data);
+    return static_cast<Aggregate *>(agg_)->add_batch_rows(agg_ctx, agg_col_idx, mock_skip, bound,
+                                                          agg_cell);
+  }
   void reuse() override
   {
     if (agg_ != NULL) {

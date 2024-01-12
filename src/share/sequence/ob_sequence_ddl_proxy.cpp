@@ -254,7 +254,6 @@ int ObSequenceDDLProxy::alter_sequence(
                               opt_bitset.has_member(ObSequenceArg::RESTART);
       bool need_clean_cache = opt_bitset.has_member(ObSequenceArg::START_WITH) ||
                               opt_bitset.has_member(ObSequenceArg::RESTART) ||
-                              (opt_bitset.has_member(ObSequenceArg::NOCACHE) && opt_old.get_cache_size() > static_cast<int64_t>(1)) ||
                               (opt_bitset.has_member(ObSequenceArg::ORDER) && !opt_old.get_order_flag());
       seq_schema.set_sequence_id(sequence_id);
       seq_schema.set_schema_version(new_schema_version);

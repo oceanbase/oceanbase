@@ -23,6 +23,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
+#include "sql/engine//expr/ob_datum_cast.h"
 
 //if cnd is true get full range key part which is always true
 //else, get empty key part which is always false
@@ -6146,6 +6147,14 @@ OB_NOINLINE int ObQueryRange::cold_cast_cur_node(const ObKeyPart *cur,
     ObAccuracy res_acc;
     if (cur->pos_.column_type_.is_decimal_int()) {
       res_acc = cur->pos_.column_type_.get_accuracy();
+      ObScale in_scale = cur_val.get_scale();
+      int32_t in_bytes = cur_val.get_int_bytes();
+      ObScale out_scale = res_acc.get_scale();
+      int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(res_acc.get_precision());
+      if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {
+        // simply get range, using eq const mode
+        cast_ctx.cast_mode_ |= CM_CONST_TO_DECIMAL_INT_EQ;
+      }
       cast_ctx.res_accuracy_ = &res_acc;
     }
     EXPR_CAST_OBJ_V2(expect_type, cur_val, dest_val);
@@ -6889,7 +6898,17 @@ if (OB_SUCC(ret) ) { \
   const ObObj *dest_val = NULL; \
   if (!start.is_min_value() && !start.is_max_value() && !start.is_unknown() \
     && (!ObSQLUtils::is_same_type_for_compare(start.get_meta(), column_type.get_obj_meta()) || start.is_decimal_int())) { \
-    ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+    ObCastMode cm = CM_WARN_ON_FAIL;\
+    if (ObDecimalIntType == expect_type.get_type() && start.is_decimal_int()) {\
+      int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
+      ObScale in_scale = column_type.get_accuracy().get_scale();\
+      int32_t out_bytes = start.get_int_bytes();\
+      ObScale out_scale = start.get_scale();\
+      if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+        cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_GE, true);\
+      }\
+    }\
+    ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
     if (ObDecimalIntType == expect_type.get_type()) {\
       cast_ctx.res_accuracy_ = &acc;\
     }\
@@ -6929,7 +6948,17 @@ if (OB_SUCC(ret) ) { \
   if (OB_SUCC(ret)) { \
     if (!end.is_min_value() && !end.is_max_value() && !end.is_unknown() \
       && (!ObSQLUtils::is_same_type_for_compare(end.get_meta(), column_type.get_obj_meta()) || end.is_decimal_int())) { \
-      ObCastCtx cast_ctx(&allocator, &dtc_params, CM_WARN_ON_FAIL, expect_type.get_collation_type()); \
+      ObCastMode cm = CM_WARN_ON_FAIL;\
+      if (ObDecimalIntType == expect_type.get_type() && end.is_decimal_int()) {\
+        int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
+        ObScale in_scale = column_type.get_accuracy().get_scale();\
+        int32_t out_bytes = start.get_int_bytes();\
+        ObScale out_scale = start.get_scale();\
+        if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+          cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_LE, true);\
+        }\
+      }\
+      ObCastCtx cast_ctx(&allocator, &dtc_params, cm, expect_type.get_collation_type()); \
       if (ObDecimalIntType == expect_type.get_type()) {\
         cast_ctx.res_accuracy_ = &acc;\
       }\

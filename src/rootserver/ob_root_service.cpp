@@ -5520,11 +5520,17 @@ int ObRootService::do_restart()
   }
 
   // broadcast root server address, ignore error
-  if (OB_SUCC(ret)) {
-    int tmp_ret = update_rslist();
-    if (OB_SUCCESS != tmp_ret) {
-      FLOG_WARN("failed to update rslist but ignored", KR(tmp_ret));
-    }
+  // not full service, can not update rs_list success
+  //if (OB_SUCC(ret)) {
+  //  int tmp_ret = update_rslist();
+  //  if (OB_SUCCESS != tmp_ret) {
+  //    FLOG_WARN("failed to update rslist but ignored", KR(tmp_ret));
+  //  }
+  //}
+  if (FAILEDx(submit_update_rslist_task(true))) {
+    FLOG_WARN("submit_update_rslist_task failed", KR(ret));
+  } else {
+    FLOG_INFO("submit_update_rslist_task succeed");
   }
 
   if (OB_SUCC(ret)) {
@@ -5634,17 +5640,17 @@ int ObRootService::do_restart()
 
   // broadcast root server address again, this task must be in the end part of do_restart,
   // because system may work properly without it.
-  if (FAILEDx(update_rslist())) {
-    FLOG_WARN("broadcast root address failed but ignored", KR(ret));
+  //if (FAILEDx(update_rslist())) {
+  //  FLOG_WARN("broadcast root address failed but ignored", KR(ret));
     // it's ok ret be overwritten, update_rslist_task will retry until succeed
-    if (OB_FAIL(submit_update_rslist_task(true))) {
-      FLOG_WARN("submit_update_rslist_task failed", KR(ret));
-    } else {
-      FLOG_INFO("submit_update_rslist_task succeed");
-    }
+  if (FAILEDx(submit_update_rslist_task(true))) {
+    FLOG_WARN("submit_update_rslist_task failed", KR(ret));
   } else {
-    FLOG_INFO("broadcast root address succeed");
+    FLOG_INFO("submit_update_rslist_task succeed");
   }
+  //} else {
+  //  FLOG_INFO("broadcast root address succeed");
+  //}
 
   if (FAILEDx(report_single_replica(tenant_id, SYS_LS))) {
     FLOG_WARN("report all_core_table replica failed, but ignore",
@@ -6406,9 +6412,9 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     const ObDatabaseSchema *db_schema = NULL;
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
-    } else if (database_name == OB_OUTLINE_DEFAULT_DATABASE_NAME) {
+    } else if (database_name == OB_MOCK_DEFAULT_DATABASE_NAME) {
       // if not specify database, set default database name and database id;
-      outline_info.set_database_id(OB_OUTLINE_DEFAULT_DATABASE_ID);
+      outline_info.set_database_id(OB_MOCK_DEFAULT_DATABASE_ID);
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
     } else if (NULL == db_schema) {
@@ -9965,6 +9971,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_tx_share_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), MEMSTORE_LIMIT_PERCENTAGE)) {
       ret = check_memstore_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), TENANT_MEMSTORE_LIMIT_PERCENTAGE)) {
+      ret = check_tenant_memstore_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _TX_DATA_MEMORY_LIMIT_PERCENTAGE)) {
       ret = check_tx_data_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), _MDS_MEMORY_LIMIT_PERCENTAGE)) {
@@ -10066,6 +10074,19 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     }                                                                                      \
   } while (0)
 
+#define CHECK_CLUSTER_CONFIG_WITH_FUNC(FUNCTOR, LOG_INFO)                                  \
+  do {                                                                                     \
+    bool valid = true;                                                                     \
+    for (int i = 0; i < tenant_ids.count() && valid; i++) {                                \
+      valid = valid && FUNCTOR::check(tenant_ids.at(i), item);                             \
+      if (!valid) {                                                                        \
+        ret = OB_INVALID_ARGUMENT;                                                         \
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, LOG_INFO);                                     \
+        LOG_WARN("config invalid", "item", item, K(ret), K(i), K(tenant_ids.at(i)));       \
+      }                                                                                    \
+    }                                                                                      \
+  } while (0)
+
 int ObRootService::check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item)
 {
   int ret = OB_SUCCESS;
@@ -10079,9 +10100,32 @@ int ObRootService::check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &ite
 int ObRootService::check_memstore_limit_(obrpc::ObAdminSetConfigItem &item)
 {
   int ret = OB_SUCCESS;
-  const char *warn_log = "tenant config memstore_limit_percentage. "
-                         "It should less than or equal with _tx_share_memory_limit_percentage";
-  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigTxDataLimitChecker, warn_log);
+  const char *warn_log = "cluster config memstore_limit_percentage. "
+                         "It should less than or equal with all tenant's _tx_share_memory_limit_percentage";
+  ObArray<uint64_t> tenant_ids;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("get schema guard failed", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("failed to get all tenant ids", KR(ret), K(tenant_ids));
+  } else {
+    CHECK_CLUSTER_CONFIG_WITH_FUNC(ObConfigMemstoreLimitChecker, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_tenant_memstore_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant config _memstore_limit_percentage. "
+    "It should less than or equal with _tx_share_memory_limit_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigMemstoreLimitChecker, warn_log);
   return ret;
 }
 
@@ -10122,6 +10166,7 @@ int ObRootService::check_write_throttle_trigger_percentage(obrpc::ObAdminSetConf
 }
 
 #undef CHECK_TENANTS_CONFIG_WITH_FUNC
+#undef CHECK_CLUSTER_CONFIG_WITH_FUNC
 
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg &arg)
 {
@@ -11253,6 +11298,26 @@ int ObRootService::get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg,
   } else if (OB_FAIL(ObDDLService::notify_root_key(rpc_proxy_, arg, active_server_list, result,
                                                    enable_default, true/*skip_call_rs*/))) {
     LOG_WARN("failed to notify root key", KR(ret));
+  }
+  return ret;
+}
+
+int ObRootService::reload_master_key(const obrpc::ObReloadMasterKeyArg &arg,
+                                     obrpc::ObReloadMasterKeyResult &result)
+{
+  int ret = OB_SUCCESS;
+  uint64_t max_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (OB_FAIL(master_key_mgr_.reload_tenant_max_key_version(arg.tenant_id_, max_version))) {
+    LOG_WARN("failed to reload master key version", K(ret), K(arg));
+  } else {
+    result.tenant_id_ = arg.tenant_id_;
+    result.master_key_id_ = max_version;
   }
   return ret;
 }

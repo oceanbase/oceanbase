@@ -476,6 +476,10 @@ public:
   static int filter_row(ObEvalCtx &eval_ctx,
                         const common::ObIArray<ObExpr *> &exprs,
                         bool &filtered);
+  static int filter_row_vector(ObEvalCtx &eval_ctx,
+                               const common::ObIArray<ObExpr *> &exprs,
+                               const sql::ObBitVector &skip_bit,
+                               bool &filtered);
   ObBatchRows &get_brs() { return brs_; }
   // Drain exchange in data for PX, or producer DFO will be blocked.
   int drain_exch();

@@ -1158,6 +1158,7 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     } else if (is_ls_offline_gc_state(gc_state)) {
       (void)try_check_and_set_wait_gc_(ls_status);
     } else {
+      DEBUG_SYNC(LS_GC_BEFORE_SUBMIT_OFFLINE_LOG);
       if (OB_FAIL(submit_log_(ObGCLSLOGType::OFFLINE_LS, is_success))) {
         CLOG_LOG(WARN, "failed to submit OFFLINE_LS log", K(ls_id), K(gc_state));
       } else if (is_success) {

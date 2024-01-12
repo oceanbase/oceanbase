@@ -450,18 +450,18 @@ int ObCOSSTableV2::deep_copy(
     LOG_WARN("failed to deep copy co sstable", K(ret));
   } else {
     new_co_table = static_cast<ObCOSSTableV2 *>(meta_obj);
-  }
 
-  // set cg sstable addr
-  ObSSTableArray &new_cg_sstables = new_co_table->meta_->get_cg_sstables();
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < new_cg_sstables.count(); ++idx) {
-    ObSSTable *cg_table = new_cg_sstables[idx];
-    const ObMetaDiskAddr &cg_addr = cg_addrs.at(idx);
-    if (OB_ISNULL(cg_table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null cg table", K(ret), KPC(this));
-    } else if (OB_FAIL(cg_table->set_addr(cg_addr))) {
-      LOG_WARN("failed to set cg addr", K(ret));
+    // set cg sstable addr
+    ObSSTableArray &new_cg_sstables = new_co_table->meta_->get_cg_sstables();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < new_cg_sstables.count(); ++idx) {
+      ObSSTable *cg_table = new_cg_sstables[idx];
+      const ObMetaDiskAddr &cg_addr = cg_addrs.at(idx);
+      if (OB_ISNULL(cg_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null cg table", K(ret), KPC(this));
+      } else if (OB_FAIL(cg_table->set_addr(cg_addr))) {
+        LOG_WARN("failed to set cg addr", K(ret));
+      }
     }
   }
 
@@ -526,6 +526,9 @@ int ObCOSSTableV2::get_cg_sstable(
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(cg_wrapper.sstable_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null sstable", K(ret));
   } else if (cg_wrapper.sstable_->is_co_sstable()) {
     // do nothing
   } else if (cg_wrapper.sstable_->is_loaded()) {
@@ -598,7 +601,7 @@ int ObCOSSTableV2::scan(
     // TODO: check whether use row_store/rowkey sstable when primary keys accessed only
     ObStoreRowIterator *row_scanner = nullptr;
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObCOSSTableRowScanner, row_scanner);
-    if (OB_SUCC(ret) && OB_FAIL(row_scanner->init(param, context, this, &key_range))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(row_scanner) && OB_FAIL(row_scanner->init(param, context, this, &key_range))) {
       LOG_WARN("Fail to open row scanner", K(ret), K(param), K(context), K(key_range), K(*this));
     }
 
@@ -639,7 +642,7 @@ int ObCOSSTableV2::multi_scan(
     // TODO: check whether use row_store/rowkey sstable when primary keys accessed only
     ObStoreRowIterator *row_scanner = nullptr;
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObCOSSTableRowMultiScanner, row_scanner);
-    if (OB_SUCC(ret) && OB_FAIL(row_scanner->init(param, context, this, &ranges))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(row_scanner) && OB_FAIL(row_scanner->init(param, context, this, &ranges))) {
       LOG_WARN("Fail to open row scanner", K(ret), K(param), K(context), K(ranges), K(*this));
     }
 
@@ -716,8 +719,10 @@ int ObCOSSTableV2::cg_scan(
     if (OB_SUCC(ret)) {
       cg_iter = cg_scanner;
     } else {
-      cg_scanner->~ObICGIterator();
-      FREE_TABLE_STORE_CG_IETRATOR(context, cg_scanner);
+      if (nullptr != cg_scanner) {
+        cg_scanner->~ObICGIterator();
+        FREE_TABLE_STORE_CG_IETRATOR(context, cg_scanner);
+      }
     }
   }
   return ret;
@@ -746,7 +751,7 @@ int ObCOSSTableV2::get(
   } else {
     ObStoreRowIterator *row_getter = nullptr;
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObCOSSTableRowGetter, row_getter);
-    if (OB_SUCC(ret) && OB_FAIL(row_getter->init(param, context, this, &rowkey))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(row_getter) && OB_FAIL(row_getter->init(param, context, this, &rowkey))) {
       LOG_WARN("Fail to open row scanner", K(ret), K(param), K(context), K(rowkey), K(*this));
     }
 
@@ -786,7 +791,7 @@ int ObCOSSTableV2::multi_get(
   } else {
     ObStoreRowIterator *row_getter = nullptr;
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context, ObCOSSTableRowMultiGetter, row_getter);
-    if (OB_SUCC(ret) && OB_FAIL(row_getter->init(param, context, this, &rowkeys))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(row_getter) && OB_FAIL(row_getter->init(param, context, this, &rowkeys))) {
       LOG_WARN("Fail to open row scanner", K(ret), K(param), K(context), K(rowkeys), K(*this));
     }
 

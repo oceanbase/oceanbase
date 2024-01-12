@@ -46,6 +46,7 @@ constexpr int OB_IO_LIMIT                            = -9061;
 constexpr int OB_BACKUP_PERMISSION_DENIED            = -9071;
 constexpr int OB_BACKUP_PWRITE_OFFSET_NOT_MATCH      = -9083;
 
+const int COS_BAD_REQUEST = 400;
 const int COS_OBJECT_NOT_EXIST  = 404;
 const int COS_PERMISSION_DENIED = 403;
 const int COS_APPEND_POSITION_ERROR = 409;
@@ -91,6 +92,13 @@ static void convert_io_error(cos_status_t *cos_ret, int &ob_errcode)
       case COS_SERVICE_UNAVAILABLE: {
         ob_errcode = OB_IO_LIMIT;
         break;
+      }
+      case COS_BAD_REQUEST: {
+        if (0 == strcmp("InvalidDigest", cos_ret->error_code)) {
+          ob_errcode = OB_CHECKSUM_ERROR;
+        } else {
+          ob_errcode = OB_COS_ERROR;
+        }
       }
       default: {
         ob_errcode = OB_COS_ERROR;
@@ -231,18 +239,31 @@ struct CosContext
   }
 };
 
-static void log_status(cos_status_t *s)
+static void log_status(cos_status_t *s, const int ob_errcode)
 {
   if (NULL != s) {
-    cos_warn_log("[COS]status->code: %d", s->code);
-    if (s->error_code) {
-      cos_warn_log("[COS]status->error_code: %s", s->error_code);
-    }
-    if (s->error_msg) {
-      cos_warn_log("[COS]status->error_msg: %s", s->error_msg);
-    }
-    if (s->req_id) {
-      cos_warn_log("[COS]status->req_id: %s", s->req_id);
+    if (OB_CHECKSUM_ERROR == ob_errcode) {
+      cos_error_log("[COS]status->code: %d", s->code);
+      if (s->error_code) {
+        cos_error_log("[COS]status->error_code: %s", s->error_code);
+      }
+      if (s->error_msg) {
+        cos_error_log("[COS]status->error_msg: %s", s->error_msg);
+      }
+      if (s->req_id) {
+        cos_error_log("[COS]status->req_id: %s", s->req_id);
+      }
+    } else {
+      cos_warn_log("[COS]status->code: %d", s->code);
+      if (s->error_code) {
+        cos_warn_log("[COS]status->error_code: %s", s->error_code);
+      }
+      if (s->error_msg) {
+        cos_warn_log("[COS]status->error_msg: %s", s->error_msg);
+      }
+      if (s->req_id) {
+        cos_warn_log("[COS]status->req_id: %s", s->req_id);
+      }
     }
   }
 }
@@ -268,6 +289,7 @@ int ObCosWrapper::CosListObjPara::set_cur_obj_meta(
 int ObCosWrapper::create_cos_handle(
     OB_COS_customMem &custom_mem,
     const struct ObCosAccount &account,
+    const bool check_md5,
     ObCosWrapper::Handle **h)
 {
   int ret = OB_SUCCESS;
@@ -314,6 +336,14 @@ int ObCosWrapper::create_cos_handle(
       ctx->options->ctl->options->dns_cache_timeout = 120;
       ctx->options->ctl->options->speed_time = 60;
       ctx->options->ctl->options->speed_limit = 16000;
+
+      if (check_md5) {
+        cos_set_content_md5_enable(ctx->options->ctl, COS_TRUE);
+        ctx->options->ctl->options->enable_crc = false;
+      } else {
+        cos_set_content_md5_enable(ctx->options->ctl, COS_FALSE);
+        ctx->options->ctl->options->enable_crc = true;
+      }
     }
   }
 
@@ -375,11 +405,11 @@ int ObCosWrapper::put(
       cos_warn_log("[COS]fail to pack buf, ret=%d\n", ret);
     } else {
       cos_list_add_tail(&content->node, &buffer);
-      if (NULL == (cos_ret = cos_put_object_from_buffer(ctx->options, &bucket, &object, &buffer, NULL, &resp_headers))
+      if (NULL == (cos_ret = cos_put_object_from_buffer(ctx->options, &bucket, &object, &buffer, nullptr, &resp_headers))
          || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to put one object to cos, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       }
     }
   }
@@ -422,22 +452,33 @@ int ObCosWrapper::append(
     cos_string_t object;
     cos_str_set(&bucket, bucket_name.data_);
     cos_str_set(&object, object_name.data_);
-    cos_table_t *resp_headers = NULL;
-    cos_status_t *cos_ret = NULL;
+    cos_table_t *headers = nullptr;
+    cos_table_t *resp_headers = nullptr;
+    cos_status_t *cos_ret = nullptr;
     cos_list_t buffer;
-    cos_buf_t *content = NULL;
+    cos_buf_t *content = nullptr;
     cos_list_init(&buffer);
 
-    if (NULL == (content = cos_buf_pack(ctx->mem_pool, buf, static_cast<int32_t>(buf_size)))) {
+    if (nullptr == (headers = cos_table_make(ctx->mem_pool, 1))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to allocate header memory, ret=%d\n", ret);
+    } else if (nullptr == (content = cos_buf_pack(ctx->mem_pool, buf, static_cast<int32_t>(buf_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to pack buf, ret=%d\n", ret);
     } else {
       cos_list_add_tail(&content->node, &buffer);
-      if(NULL == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object,
-         offset, &buffer, NULL, &resp_headers)) || !cos_status_is_ok(cos_ret)) {
+      // If content MD5 is enabled, the function 'cos_add_content_md5_from_buffer'
+      // will calculate the MD5 checksum and add it to the headers.
+      // If the option is disabled, the MD5 checksum will not be calculated.
+      int tmp_ret = cos_add_content_md5_from_buffer(ctx->options, &buffer, headers);
+      if (COSE_OK != tmp_ret) {
+        ret = OB_COS_ERROR;
+        cos_warn_log("[COS]fail to add content md5, ret=%d, tmp_ret=%d\n", ret, tmp_ret);
+      } else if (nullptr == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object,
+         offset, &buffer, headers, &resp_headers)) || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to append object from buffer to cos, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       }
     }
   }
@@ -483,7 +524,8 @@ int ObCosWrapper::head_object_meta(
     const char COS_OBJECT_TYPE[] = "x-cos-object-type";
 
     if (NULL == (headers = cos_table_make(ctx->mem_pool, 0))) {
-
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to allocate header memory, ret=%d\n", ret);
     } else if (NULL == (cos_ret = cos_head_object(ctx->options, &bucket, &object, headers, &resp_headers))
         || !cos_status_is_ok(cos_ret)) {
       if (NULL != cos_ret && COS_OBJECT_NOT_EXIST == cos_ret->code) {
@@ -491,7 +533,7 @@ int ObCosWrapper::head_object_meta(
       } else {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to get file meta, ret=%d.\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       }
     }
 
@@ -572,7 +614,7 @@ int ObCosWrapper::del(
         || !cos_status_is_ok(cos_ret)) {
       convert_io_error(cos_ret, ret);
       cos_warn_log("[COS]fail to delete object, ret=%d\n", ret);
-      log_status(cos_ret);
+      log_status(cos_ret, ret);
     }
   }
 
@@ -622,7 +664,7 @@ int ObCosWrapper::tag(
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to tag object, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       }
     }
   }
@@ -688,7 +730,7 @@ int ObCosWrapper::del_objects_in_dir(
         if (NULL == cos_ret || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to list object, ret=%d\n", ret);
-          log_status(cos_ret);
+          log_status(cos_ret, ret);
         } else {
           // Traverse the returned objects
           cos_list_for_each_entry(cos_list_object_content_t, content, &params->object_list, node) {
@@ -717,7 +759,7 @@ int ObCosWrapper::del_objects_in_dir(
                 || !cos_status_is_ok(cos_ret)) {
               convert_io_error(cos_ret, ret);
               cos_warn_log("[COS]delete objects failed, ret=%d.\n", ret);
-              log_status(cos_ret);
+              log_status(cos_ret, ret);
             }
 
             // Traverse the deleted objects
@@ -799,7 +841,7 @@ int ObCosWrapper::update_object_modified_ts(
       if (NULL == cos_ret || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to call copy object, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       } else {
         cos_warn_log("[COS]cos put copy succeeded, ret=%d.\n", ret);
       }
@@ -813,9 +855,9 @@ int ObCosWrapper::pread(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
-    int64_t offset,
+    const int64_t offset,
     char *buf,
-    int64_t buf_size,
+    const int64_t buf_size,
     const bool is_range_read,
     int64_t &read_size)
 {
@@ -867,14 +909,17 @@ int ObCosWrapper::pread(
         } else {
           apr_table_set(headers, COS_RANGE_KEY, range_size);
         }
+      } else {
+        // support crc checksum when reading entire object
+        ctx->options->ctl->options->enable_crc = true;
       }
 
       if (OB_SUCCESS != ret) {
-      } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, NULL, &buffer, &resp_headers)) ||
+      } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, nullptr, &buffer, &resp_headers)) ||
           !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to get object to buffer, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       } else {
         read_size = 0;
         int64_t size = 0;
@@ -890,7 +935,7 @@ int ObCosWrapper::pread(
           if (is_range_read && (buf_pos + size > buf_size)) {
             ret = OB_COS_ERROR;
             cos_warn_log("[COS]unexpected error, too much data returned, ret=%d, range_size=%s, buf_pos=%ld, size=%ld, req_id=%s.\n", ret, range_size, buf_pos, size, cos_ret->req_id);
-            log_status(cos_ret);
+            log_status(cos_ret, ret);
             break;
           } else {
             // copy to buf
@@ -959,7 +1004,7 @@ int ObCosWrapper::is_object_tagging(
                &version_id, headers, result, &resp_headers)) ||  !cos_status_is_ok(cos_ret)) {
       convert_io_error(cos_ret, ret);
       cos_warn_log("[COS]fail to get object tagging, ret=%d\n", ret);
-      log_status(cos_ret);
+      log_status(cos_ret, ret);
     } else {
       cos_tagging_tag_t *tag = NULL;
       cos_list_for_each_entry(cos_tagging_tag_t, tag, &result->node, node) {
@@ -1072,7 +1117,7 @@ static int do_list_(
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to list object, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       }
     }
   }
@@ -1385,7 +1430,7 @@ int ObCosWrapper::init_multipart_upload(
         !cos_status_is_ok(cos_ret) || upload_id.len < 1) {
       convert_io_error(cos_ret, ret);
       cos_warn_log("[COS]fail to init multipart upload, ret=%d, upload_id_length=%d\n", ret, upload_id.len);
-      log_status(cos_ret);
+      log_status(cos_ret, ret);
     } else {
       const int64_t upload_id_len = upload_id.len + 1;
       upload_id_str = static_cast<char*>(ctx->custom_mem.customAlloc(ctx->custom_mem.opaque, upload_id_len));
@@ -1408,8 +1453,7 @@ int ObCosWrapper::upload_part_from_buffer(
     const CosStringBuffer &upload_id_str,
     const int part_num,
     const char *buf,
-    const int64_t buf_size,
-    uint64_t &total_crc)
+    const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   CosContext *ctx = reinterpret_cast<CosContext *>(h);
@@ -1452,10 +1496,7 @@ int ObCosWrapper::upload_part_from_buffer(
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to upload part to cos, ret=%d, part_num=%d\n", ret, part_num);
-        log_status(cos_ret);
-      } else {
-        // TODO @fangdan: supports parallel uploads
-        total_crc = cos_crc64(total_crc, (void *)buf, buf_size);
+        log_status(cos_ret, ret);
       }
     }
   }
@@ -1466,8 +1507,7 @@ int ObCosWrapper::complete_multipart_upload(
     Handle *h,
     const CosStringBuffer &bucket_name,
     const CosStringBuffer &object_name,
-    const CosStringBuffer &upload_id_str,
-    const uint64_t total_crc)
+    const CosStringBuffer &upload_id_str)
 {
   int ret = OB_SUCCESS;
   CosContext *ctx = reinterpret_cast<CosContext *>(h);
@@ -1508,7 +1548,7 @@ int ObCosWrapper::complete_multipart_upload(
             || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to list upload part, ret=%d\n", ret);
-          log_status(cos_ret);
+          log_status(cos_ret, ret);
         } else {
           cos_list_for_each_entry(cos_list_part_content_t, part_content, &params->part_list, node) {
             complete_part = cos_create_complete_part_content(ctx->mem_pool);
@@ -1543,17 +1583,7 @@ int ObCosWrapper::complete_multipart_upload(
             || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
-          log_status(cos_ret);
-        } else {
-          const char *expected_crc_str = (const char *)(apr_table_get(resp_headers, COS_HASH_CRC64_ECMA));
-          if (NULL != expected_crc_str) {
-            uint64_t expected_crc = cos_atoui64(expected_crc_str);
-            if (expected_crc != total_crc) {
-              ret = OB_CHECKSUM_ERROR;
-              cos_warn_log("[COS]multipart object crc is not equal to returned crc, ret=%d, upload_id=%s, total_crc=%llu, expected_crc=%llu\n",
-                  ret, upload_id_str.data_, total_crc, expected_crc);
-            }
-          }
+          log_status(cos_ret, ret);
         }
       }
 
@@ -1601,7 +1631,7 @@ int ObCosWrapper::abort_multipart_upload(
       convert_io_error(cos_ret, ret);
       cos_warn_log("[COS]fail to abort multipart upload, ret=%d, bucket=%s, object=%s, upload_id=%s\n",
           ret, bucket_name.data_, object_name.data_, upload_id_str.data_);
-      log_status(cos_ret);
+      log_status(cos_ret, ret);
     }
   }
   return ret;
@@ -1655,7 +1685,7 @@ int ObCosWrapper::del_unmerged_parts(
           || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]fail to list multipart uploads, ret=%d\n", ret);
-        log_status(cos_ret);
+        log_status(cos_ret, ret);
       } else {
         cos_list_for_each_entry(cos_list_multipart_upload_content_t, content, &params->upload_list, node) {
           if (NULL == (cos_ret = cos_abort_multipart_upload(ctx->options, &bucket, &(content->key),
@@ -1664,7 +1694,7 @@ int ObCosWrapper::del_unmerged_parts(
             convert_io_error(cos_ret, ret);
             cos_warn_log("[COS]fail to abort multipart upload, ret=%d, bucket=%s, object=%s, upload_id=%s\n",
                 ret, bucket_name.data_, content->key.data, content->upload_id.data);
-            log_status(cos_ret);
+            log_status(cos_ret, ret);
             break;
           } else {
             cos_info_log("[COS]succeed to abort multipart upload, bucket=%s, object=%s, upload_id=%s\n",

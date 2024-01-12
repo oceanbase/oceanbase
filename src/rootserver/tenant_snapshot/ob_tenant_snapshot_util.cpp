@@ -1391,7 +1391,7 @@ int ObTenantSnapshotUtil::check_tenant_is_in_transfer_procedure_(
                          trans,
                          tenant_id,
                          OB_ALL_BALANCE_JOB_TID,
-                         EXCLUSIVE))) {
+                         EXCLUSIVE, false/*is_from_sql*/))) {
     LOG_WARN("lock inner table failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObBalanceJobTableOperator::get_balance_job(
                          tenant_id,

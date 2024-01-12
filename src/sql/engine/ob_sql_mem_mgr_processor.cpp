@@ -53,6 +53,10 @@ int ObSqlMemMgrProcessor::init(
     LOG_WARN("failed to set exec info", K(ret));
   } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
+    if (OB_NOT_NULL(exec_ctx->get_physical_plan_ctx())
+        && OB_NOT_NULL(exec_ctx->get_physical_plan_ctx()->get_phy_plan())) {
+      profile_.disable_auto_mem_mgr_ = exec_ctx->get_physical_plan_ctx()->get_phy_plan()->is_disable_auto_memory_mgr();
+    }
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
       tmp_enable_auto_mem_mgr = true;
       if (profile_.get_auto_policy()) {

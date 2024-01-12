@@ -635,17 +635,17 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         // Expr rownum() shows up in both operator 0 and 2, which leads circular
         // dependency and breaks rownum's defination.
         //
-        const ObRawExpr *rownum_expr = NULL;
-        for (int64_t i = 0; rownum_expr == NULL && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+        ObLogicalOperator *rownum_op = NULL;
+         for (int64_t i = 0; rownum_op == NULL && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
           ObLogicalOperator *child = op->get_child(i);
           if (OB_ISNULL(child)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("op child is null", K(ret));
-          } else if (OB_FAIL(child->find_rownum_expr(rownum_expr))) {
+          } else if (OB_FAIL(child->find_rownum_expr(op->get_op_id(), rownum_op))) {
             LOG_WARN("find rownum expr error", K(ret));
           }
         }
-        if (NULL != rownum_expr) {
+        if (NULL != rownum_op) {
           LOG_DEBUG("rownum expr is in count operator's subplan tree. Stop vectorization exec");
           disable_vectorize = true;
         }
@@ -842,6 +842,22 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
   }
   if (OB_SUCC(ret) && need_check_output_datum) {
     OZ(add_output_datum_check_flag(spec));
+  }
+  if (OB_SUCC(ret)) {
+    CK (OB_NOT_NULL(op.get_plan())
+        && OB_NOT_NULL(op.get_plan()->get_stmt())
+        && OB_NOT_NULL(op.get_plan()->get_stmt()->get_query_ctx()));
+    CK (OB_NOT_NULL(phy_plan_));
+    if (OB_SUCC(ret)) {
+      ObObj val;
+      ObLogPlan *log_plan = op.get_plan();
+      const ObOptParamHint *opt_params = &log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
+      if (OB_FAIL(opt_params->get_opt_param(ObOptParamHint::WORKAREA_SIZE_POLICY, val))) {
+        LOG_WARN("fail to check rowsets enabled", K(ret));
+      } else if (val.is_varchar() && 0 == val.get_varchar().case_compare("MANULE")) {
+        phy_plan_->disable_auto_memory_mgr();
+      }
+    }
   }
   return ret;
 }

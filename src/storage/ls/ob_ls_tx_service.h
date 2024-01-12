@@ -48,6 +48,7 @@ class ObTxLSLogWriter;
 class ObTxStartWorkingLog;
 class ObITxLogAdapter;
 class ObTxCreateArg;
+class ObLSTxCtxIterator;
 }
 
 namespace storage
@@ -89,6 +90,10 @@ public:
   int get_tx_ctx(const transaction::ObTransID &tx_id,
                  const bool for_replay,
                  transaction::ObPartTransCtx *&ctx) const;
+  int get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                              const bool for_replay,
+                              transaction::ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout) const;
   int get_tx_scheduler(const transaction::ObTransID &tx_id,
                        ObAddr &scheduler) const;
   int revert_tx_ctx(transaction::ObTransCtx *ctx) const;
@@ -147,6 +152,7 @@ public:
                                 transaction::ObTransID &block_tx_id);
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
+  int iterate_tx_ctx(transaction::ObLSTxCtxIterator &iter) const;
   int get_tx_ctx_count(int64_t &tx_ctx_count);
   int get_active_tx_count(int64_t &active_tx_count);
   int print_all_tx_ctx(const int64_t print_num);

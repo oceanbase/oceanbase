@@ -89,7 +89,7 @@ class ObXACtx;
 class ObITxCallback;
 class ObTxMultiDataSourceLog;
 typedef palf::LSN LogOffSet;
-enum { MAX_CALLBACK_LIST_COUNT = OB_MAX_CPU_NUM };
+enum { MAX_CALLBACK_LIST_COUNT = 64 };
 class ObTransErrsim
 {
 public:

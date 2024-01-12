@@ -108,6 +108,41 @@ public:
     return ret;
   }
 
+  inline int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+                         const bool is_null, const char *data, const int32_t data_len,
+                         int32_t agg_col_idx, char *agg_cell) override
+  {
+    int ret = OB_SUCCESS;
+    NotNullBitVector &not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, agg_cell);
+    if (OB_LIKELY(not_nulls.at(agg_col_idx))) {
+      // already copied
+    } else if (!is_null) {
+      if (data_len > 0) {
+        if (OB_ISNULL(data)) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_LOG(WARN, "invalid null payload", K(ret));
+        } else {
+          void *tmp_buf = agg_ctx.allocator_.alloc(data_len);
+          if (OB_ISNULL(tmp_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SQL_LOG(WARN, "allocate memory failed", K(ret));
+          } else {
+            MEMCPY(tmp_buf, data, data_len);
+            // store data ptr and len
+            agg_ctx.set_agg_cell((char *)tmp_buf, data_len, agg_col_idx, agg_cell);
+          }
+        }
+      } else {
+        agg_ctx.set_agg_cell(nullptr, data_len, agg_col_idx, agg_cell);
+      }
+      not_nulls.set(agg_col_idx);
+    } else {
+      agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_idx, agg_cell);
+      not_nulls.set(agg_col_idx);
+    }
+    return ret;
+  }
+
   template <typename ColumnFmt>
   inline int collect_group_result(RuntimeContext &agg_ctx, const sql::ObExpr &agg_expr,
                                   const int32_t agg_col_id, const char *agg_cell,

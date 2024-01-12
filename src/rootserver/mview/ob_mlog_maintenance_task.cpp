@@ -38,6 +38,7 @@ ObMLogMaintenanceTask::ObMLogMaintenanceTask()
     start_time_(-1),
     start_gc_mlog_time_(-1),
     cost_us_(-1),
+    prepare_cost_us_(-1),
     gc_mlog_cost_us_(-1),
     fetch_finish_(false),
     in_sched_(false),
