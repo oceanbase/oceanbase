@@ -288,7 +288,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
       errmsg = ObString(strlen(ob_errpkt_strerror(ret, lib::is_oracle_mode())),
                         ob_errpkt_strerror(ret, lib::is_oracle_mode()));
     }
-    if ((tmp_ret = table_operator_.update_for_end(tenant_id, job_info, ret, errmsg)) != OB_SUCCESS) {
+    if ((tmp_ret = table_operator_.update_for_end(job_info, ret, errmsg)) != OB_SUCCESS) {
       LOG_WARN("update dbms sched job failed", K(tmp_ret), K(ret));
     }
     ret = OB_SUCCESS == ret ? tmp_ret : ret;

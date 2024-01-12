@@ -56,8 +56,17 @@ public:
 
   int update_for_start(
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
-  int update_for_end(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
+
+  int _build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_finished_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_rollback_start_dml(ObDBMSSchedJobInfo &job_info, ObSqlString &sql);
+  int _build_job_log_dml(int64_t now, ObDBMSSchedJobInfo &job_info, int err, const ObString &errmsg, ObSqlString &sql);
+  int _check_need_record(ObDBMSSchedJobInfo &job_info, bool &need_record, bool err_state = true);
+  int update_for_missed(ObDBMSSchedJobInfo &job_info);
+  int update_for_enddate(ObDBMSSchedJobInfo &job_info);
+  int update_for_rollback(ObDBMSSchedJobInfo &job_info);
+  int update_for_timeout(ObDBMSSchedJobInfo &job_info);
+  int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
 
   int seperate_job_id_from_name(common::ObString &job_name, int64_t &job_id);
 
