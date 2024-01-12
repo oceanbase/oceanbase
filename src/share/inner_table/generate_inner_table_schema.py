@@ -66,6 +66,7 @@ def is_sys_index_table(table_id):
   table_id = int(table_id)
   return (table_id > min_sys_index_id) and (table_id < max_sys_index_id)
 
+new_keywords = {}
 cpp_f = None
 h_f = None
 fileds = None
@@ -933,7 +934,7 @@ def check_fileds(fields, keywords):
   non_field_keywords = ('index', 'enable_column_def_enum', 'base_def_keywords',
                         'self_tid', 'mapping_tid', 'real_vt', 'meta_record_in_sys')
   for kw in keywords:
-    if kw not in fields and not keywords.has_key('index_name') and kw not in non_field_keywords and keywords['table_type'] != 'AUX_LOB_META' and keywords['table_type'] != 'AUX_LOB_PIECE':
+    if not kw.startswith("base_table_name") and kw not in fields and not keywords.has_key('index_name') and kw not in non_field_keywords and keywords['table_type'] != 'AUX_LOB_META' and keywords['table_type'] != 'AUX_LOB_PIECE':
       raise IOError("unknown field {0} found in def_table_schema, table_name={1}".format(kw, keywords["table_name"]))
 
 def fill_default_values(default_filed_values, keywords, missing_fields, index_value=('', [])):
@@ -949,8 +950,58 @@ def fill_default_values(default_filed_values, keywords, missing_fields, index_va
         keywords[key] = default_filed_values[key]
         missing_fields[key] = True
 
-def gen_history_table_def(table_id, keywords):
+def copy_keywords(keywords):
+  tname = keywords["table_name"];
+  tid = keywords["table_id"];
+  base_tname = ''
+  base_tname1 = ''
+  base_tname2 = ''
+
+  if "base_table_name" in keywords:
+    base_tname = keywords["base_table_name"];
+  else:
+    keywords["base_table_name"] = ''
+
+  if "base_table_name1" in keywords:
+    base_tname1 = keywords["base_table_name1"];
+  else:
+    keywords["base_table_name1"] = ''
+
+  if "base_table_name2" in keywords:
+    base_tname2 = keywords["base_table_name2"];
+  else:
+    keywords["base_table_name2"] = ''
+
+  print "copy_keywords in: table_id=", tid, ",  table_name=" + tname, ", base_table_name=" + base_tname, ", base_table_name1=" + base_tname1, ", base_table_name2=" + base_tname2
+
+  # 默认base_table_name等于其表名
+  # base_table_name[1,2] 记录了多层schema嵌套定义场景的原始基表名
+  # 例如：15118号表schema，它嵌套定义了两层基表:
+  # 真实表名：ALL_VIRTUAL_GLOBAL_TRANSACTION
+  # 第一层基表：__all_tenant_global_transaction
+  # 第二层基表: __all_virtual_global_transaction
+  if base_tname == '':
+    base_tname = tname;
+    keywords["base_table_name"] = tname;
+  elif base_tname1 == '' and tname != base_tname:
+    base_tname1 = tname;
+    keywords["base_table_name1"] = tname;
+  elif base_tname2 == '' and base_tname1 != '' and tname != base_tname and tname != base_tname1:
+    base_tname2 = tname;
+    keywords["base_table_name2"] = tname;
+  elif base_tname1 != '' and base_tname2 != '' and tname != base_tname and tname != base_tname1 and tname != base_tname2:
+    print "ERROR: should not be here. need design new base_table_name"
+
+  # 执行拷贝
   new_keywords = copy.deepcopy(keywords)
+
+  print "copy_keywords out: table_id=", tid, ",  table_name=" + tname, ", base_table_name=" + base_tname, ", base_table_name1=" + base_tname1, ", base_table_name2=" + base_tname2
+
+  return new_keywords
+
+def gen_history_table_def(table_id, keywords):
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_id"] = table_id
   new_keywords["table_name"] = "%s_history" % new_keywords["table_name"]
   rowkey_columns = new_keywords["rowkey_columns"]
@@ -976,7 +1027,8 @@ def gen_history_table_def(table_id, keywords):
   return new_keywords
 
 def gen_history_table_def_of_task(table_id, keywords):
-  new_keywords = copy.deepcopy(keywords)
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_id"] = table_id
   new_keywords["table_name"] = "%s_history" % new_keywords["table_name"]
 
@@ -999,7 +1051,14 @@ def def_all_lob_aux_table():
       def_table_schema(**gen_inner_lob_aux_table_def(line[1], line[2], line[3], line[4], line[5], line[6]))
 
 def gen_inner_lob_aux_table_def(data_table_name, table_id, table_type, keywords, is_in_tenant_space = False, cluster_private = False):
-  new_keywords = copy.deepcopy(keywords)
+  keywords["table_id"] = table_id
+  keywords["table_name"] = data_table_name
+  keywords["base_table_name"] = data_table_name
+  keywords["base_table_name1"] = ''
+  keywords["base_table_name2"] = ''
+
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_id"] = table_id
   new_keywords["table_type"] = table_type
   dtid = table_name2tid(data_table_name)
@@ -1017,7 +1076,8 @@ def gen_inner_lob_aux_table_def(data_table_name, table_id, table_type, keywords,
   return new_keywords
 
 def gen_iterate_core_inner_table_def(table_id, table_name, table_type, keywords):
-  new_keywords = copy.deepcopy(keywords)
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_id"] = table_id
   new_keywords["table_name"] = table_name
   new_keywords["table_type"] = table_type
@@ -1067,7 +1127,8 @@ def __gen_oracle_vt_base_on_mysql(table_id, keywords, table_name_suffix):
   is_cluster_private = keywords.has_key('is_cluster_private') and keywords['is_cluster_private']
   if in_tenant_space and is_cluster_private:
     raise Exception("real table must be not cluster_private")
-  new_keywords = copy.deepcopy(keywords)
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_type"] = 'VIRTUAL_TABLE'
   new_keywords["in_tenant_space"] = True
   new_keywords["table_id"] = table_id
@@ -1112,7 +1173,8 @@ def __gen_mysql_vt(table_id, keywords, table_name_suffix):
     raise Exception("base table should not in_tenant_space")
   elif 'SYSTEM_TABLE' != keywords['table_type'] and 'VIRTUAL_TABLE' != keywords['table_type']:
     raise Exception("unsupported table type", keywords['table_type'])
-  new_keywords = copy.deepcopy(keywords)
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_type"] = 'VIRTUAL_TABLE'
   new_keywords["in_tenant_space"] = True
   new_keywords["table_id"] = table_id
@@ -1194,7 +1256,8 @@ def gen_oracle_mapping_real_virtual_table_def(table_id, keywords):
   return new_keywords
 
 def gen_cluster_config_def(table_id, table_name, keywords):
-  new_keywords = copy.deepcopy(keywords)
+  new_keywords = copy_keywords(keywords)
+
   new_keywords["table_id"] = table_id
   new_keywords["table_name"] = table_name
   return new_keywords
@@ -1323,7 +1386,8 @@ def def_sys_index_table(index_name, index_table_id, index_columns, index_using_t
   global StringIO
   global sys_index_tables
 
-  kw = copy.deepcopy(keywords)
+  kw = copy_keywords(keywords)
+
   if kw.has_key('index'):
     raise Exception("should not have index", kw['table_name'])
   if not is_sys_table(kw['table_id']):
@@ -1360,8 +1424,9 @@ def def_agent_index_table(index_name, index_table_id, index_columns, index_using
   global cpp_f_tmp
   global StringIO
   global sys_index_tables
-  kw = copy.deepcopy(keywords)
-  index_kw = copy.deepcopy(all_def_keywords[real_table_name + '_' + real_index_name])
+  kw = copy_keywords(keywords)
+
+  index_kw = copy_keywords(all_def_keywords[real_table_name + '_' + real_index_name])
   if kw.has_key('index'):
     raise Exception("should not have index", kw['table_name'])
   if not kw['real_vt']:
@@ -1415,7 +1480,7 @@ def def_agent_index_table(index_name, index_table_id, index_columns, index_using
 def gen_iterate_private_virtual_table_def(
     table_id, table_name, keywords, in_tenant_space = False):
   global all_iterate_private_virtual_tables
-  kw = copy.deepcopy(keywords)
+  kw = copy_keywords(keywords)
   kw['table_id'] = table_id
   kw['table_name'] =  table_name
 
@@ -1506,9 +1571,11 @@ def generate_iterate_private_virtual_table_misc_data(f):
 # Define virtual table to iterate one tenant space table's data of all tenant.
 def gen_iterate_virtual_table_def(table_id, table_name, keywords, in_tenant_space = False):
   global all_iterate_virtual_tables
-  kw = copy.deepcopy(keywords);
+
+  kw = copy_keywords(keywords)
   kw['table_id'] = table_id
   kw['table_name'] =  table_name
+
   if 'SYSTEM_TABLE' != kw['table_type']:
     raise Exception("unsupported table type", kw['table_type'])
   elif not kw.has_key('in_tenant_space') or not kw['in_tenant_space']:
@@ -1543,7 +1610,7 @@ def gen_iterate_virtual_table_def(table_id, table_name, keywords, in_tenant_spac
     kw['gm_columns'] = []
   kw['base_def_keywords'] = keywords
 
-  save_kw = copy.deepcopy(kw)
+  save_kw = copy_keywords(kw)
   all_iterate_virtual_tables.append(save_kw)
   return kw
 
@@ -1685,14 +1752,15 @@ def def_table_schema(**keywords):
 
   if not keywords.has_key('index_name'):
     if 'name_postfix' in keywords:
-      all_def_keywords[keywords['table_name'] + keywords['name_postfix']] = copy.deepcopy(keywords)
+      all_def_keywords[keywords['table_name'] + keywords['name_postfix']] = copy_keywords(keywords)
     else:
-      all_def_keywords[keywords['table_name']] = copy.deepcopy(keywords)
+      all_def_keywords[keywords['table_name']] = copy_keywords(keywords)
+      keywords = copy.deepcopy(all_def_keywords[keywords['table_name']])
   else:
     if 'name_postfix' in keywords:
-      all_def_keywords[keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name']] = copy.deepcopy(keywords)
+      all_def_keywords[keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name']] = copy_keywords(keywords)
     else:
-      all_def_keywords[keywords['table_name'] + '_' + keywords['index_name']] = copy.deepcopy(keywords)
+      all_def_keywords[keywords['table_name'] + '_' + keywords['index_name']] = copy_keywords(keywords)
 
   index_defs = []
   index_def = ''
@@ -1726,22 +1794,26 @@ def def_table_schema(**keywords):
     print_method_start(keywords['table_name'] + keywords['name_postfix'] + '_' + keywords['index_name'])
     if True == is_ora_virtual_table(int(keywords['table_id'])):
       if keywords.has_key('real_vt') and True == keywords['real_vt']:
-        index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+        index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
       else:
-        index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+        index_name_ids.append([keywords['index_name'], int(ora_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
         ora_virtual_index_table_id -= 1
     elif True == is_mysql_virtual_table(int(keywords['table_id'])):
-      index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+      index_name_ids.append([keywords['index_name'], int(ob_virtual_index_table_id), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
       ob_virtual_index_table_id -= 1
     elif True == is_sys_table(int(keywords['table_id'])):
       if not keywords.has_key('index_table_id'):
         raise Exception("must specific index_table_id", int(keywords['table_id']))
-      index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id']])
+      index_name_ids.append([keywords['index_name'], int(keywords['index_table_id']), keywords['table_name'] + keywords['name_postfix'], keywords['tenant_id'], keywords['table_id'], keywords['base_table_name'], keywords['base_table_name1']])
   else:
     print_method_start(keywords['table_name'] + keywords['name_postfix'])
     table_name_postfix_ids.append((keywords['table_name']+ keywords['name_postfix'], int(keywords['table_id'])))
     table_name_postfix_table_names.append((keywords['table_name']+ keywords['name_postfix'], keywords['table_name']))
-    table_name_ids.append((keywords['table_name'], int(keywords['table_id'])))
+
+    table_name_ids.append((keywords['table_name'], int(keywords['table_id']), keywords['base_table_name'], keywords['base_table_name1'], keywords['base_table_name2']))
+
+  print "\table_id=",  keywords['table_id'], ", table_name=" + keywords['table_name'], ", base_table_name=", keywords['base_table_name'], ", base_table_name1=" + keywords['base_table_name1'], ", base_table_name2=" + keywords['base_table_name2']
+
   print "\nSTART TO GENERATE: " + keywords['table_name']+ keywords['name_postfix']
   if True == is_ora_virtual_table(int(keywords['table_id'])):
     column_collation = 'CS_TYPE_UTF8MB4_BIN'
@@ -1952,7 +2024,7 @@ def def_table_schema(**keywords):
      and (is_sys_table(table_id) or is_sys_index_table(table_id) or is_lob_table(table_id)):
     if is_sys_table(table_id) and not keywords.has_key('meta_record_in_sys'):
       raise Exception("meta_record_in_sys must be defined when is_cluster_private = true")
-    kw = copy.deepcopy(keywords)
+    kw = copy_keywords(keywords)
     cluster_private_tables.append(kw)
 
   if keywords.has_key('index_name'):
@@ -2026,7 +2098,9 @@ namespace share
 
 def start_generate_constants_h(h_file_name):
   global constants_h_f
+  global id_to_name_f
   constants_h_f = open(h_file_name, 'w')
+  id_to_name_f = open("table_id_to_name", 'w')
   head = copyright + """
 #ifndef _OB_INNER_TABLE_SCHEMA_CONSTANTS_H_
 #define _OB_INNER_TABLE_SCHEMA_CONSTANTS_H_
@@ -2067,10 +2141,16 @@ def end_generate_cpp():
   cpp_f.write(end)
   cpp_f.close()
 
+# 在生成constants.h的同时，生成table_id_to_name文件
 def generate_constants_h_content():
   global constants_h_f
+  global id_to_name_f
   last_table_id = 0;
 
+  id_to_name_f.write("########## Table ID 到 Table Name 映射 ##########\n")
+  id_to_name_f.write("# 为了方便分析占位情况，同一个ID可能会映射多个Name\n\n")
+
+  ################# 生成xx_TID定义 ################
   table_id_line = 'const uint64_t OB_{0}_TID = {1}; // "{2}"\n'
   for (table_name, table_id) in table_name_postfix_ids:
     constants_h_f.write(table_id_line.format(table_name.replace('$', '_').upper().strip('_'), table_id, table_name))
@@ -2081,18 +2161,60 @@ def generate_constants_h_content():
     constants_h_f.write(table_id_line.format(line[2].replace('$', '_').upper().strip('_')+'_'+line[0].upper(), line[1], line[2]))
 
   constants_h_f.write("\n")
+  ###################################################
+
+  ################# 生成xx_TNAME定义 ################
+  # 同时生成table_id_to_name文件
   table_name_line = 'const char *const OB_{0}_TNAME = "{1}";\n'
   for (table_name_postfix, table_name) in table_name_postfix_table_names:
     constants_h_f.write(table_name_line.format(table_name_postfix.replace('$', '_').upper().strip('_'), table_name))
 
-  index_name_line = 'const char *const OB_{0}_TNAME = "__idx_{1}_{2}";\n'
+  table_id_to_name_line = '# {0}: {1}\n'
+  base_table_id_to_name_line = '# {0}: {1}  # BASE_TABLE_NAME\n'
+  base_table_id_to_name_line1 = '# {0}: {1}  # BASE_TABLE_NAME1\n'
+  base_table_id_to_name_line2 = '# {0}: {1}  # BASE_TABLE_NAME2\n'
+  for (table_name, table_id, base_table_name, base_table_name1, base_table_name2) in table_name_ids:
+    # lob表不记录在table_id_to_name文件中
+    if not is_lob_table(table_id):
+      id_to_name_f.write(table_id_to_name_line.format(table_id, table_name))
+      # 如果base_table_name不同，则输出base_table_name
+      if base_table_name != table_name:
+        id_to_name_f.write(base_table_id_to_name_line.format(table_id, base_table_name))
+      if base_table_name1 != '' and base_table_name1 != table_name:
+        id_to_name_f.write(base_table_id_to_name_line1.format(table_id, base_table_name1))
+      if base_table_name2 != '' and base_table_name2 != table_name:
+        id_to_name_f.write(base_table_id_to_name_line2.format(table_id, base_table_name2))
+
+  index_table_name_format = "__idx_{0}_{1}"
+  index_name_line = 'const char *const OB_{0}_TNAME = "{1}";\n'
+  index_id_to_name_line = '# {0}: {1}\n'
+  base_index_id_to_name_line = '# {0}: {1}  # INDEX_NAME\n'
+  data_tname_id_to_name_line = '# {0}: {1}  # DATA_BASE_TABLE_NAME\n'
+  data_tname_id_to_name_line1 = '# {0}: {1}  # DATA_BASE_TABLE_NAME1\n'
 
   for line in index_name_ids:
+    index_name = line[0]
+    table_id = line[1]
     data_table_id =  int(line[4]) & (0xFFFFFFFFFF)
-    constants_h_f.write(index_name_line.format(line[2].replace('$', '_').upper().strip('_')+'_'+line[0].upper(), str(data_table_id), line[0]))
-  constants_h_f.write("\n")
+    data_table_name = line[5]
+    data_table_name1 = line[6]
+    index_table_name = index_table_name_format.format(str(data_table_id), index_name)
 
+    constants_h_f.write(index_name_line.format(line[2].replace('$', '_').upper().strip('_')+'_'+line[0].upper(), index_table_name))
+    id_to_name_f.write(index_id_to_name_line.format(table_id, index_table_name))
+    id_to_name_f.write(base_index_id_to_name_line.format(table_id, index_name))
+    id_to_name_f.write(data_tname_id_to_name_line.format(table_id, data_table_name))
+    if data_table_name1 != '':
+      id_to_name_f.write(data_tname_id_to_name_line1.format(table_id, data_table_name1))
+
+  constants_h_f.write("\n")
+  ###################################################
+
+
+  ########### 生成all_privilege_init_data ###########
   gen_all_privilege_init_data(constants_h_f);
+  ###################################################
+
 
 def generate_h_content():
   global table_name_ids
@@ -2465,7 +2587,7 @@ static inline bool is_restrict_access_virtual_table(const uint64_t tid)
   h_f.write("const int64_t OB_CORE_SCHEMA_VERSION = %d;\n" % core_schema_version)
   h_f.write("const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = %d;\n" % bootstrap_version)
 
-  for (table_name, table_id) in table_name_ids:
+  for (table_name, table_id, base_table_name, base_table_name1, base_table_name2) in table_name_ids:
     if table_id >= max_sys_index_id:
       raise IOError("invalid table_id: {0} table_name:{1}".format(table_id, table_name))
 
@@ -2481,6 +2603,7 @@ def end_generate_h():
 
 def end_generate_constants_h():
   global constants_h_f
+  global id_to_name_f
   end = """
 } // end namespace share
 } // end namespace oceanbase
@@ -2488,6 +2611,7 @@ def end_generate_constants_h():
 """
   constants_h_f.write(end)
   constants_h_f.close()
+  id_to_name_f.close()
 
 def write_vt_mapping_cpp(h_file_name):
   global cpp_f

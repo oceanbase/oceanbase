@@ -34,6 +34,54 @@
 #    Specially, when column types are as follows:
 #    1. double、number：default value is not supported, so new column definition should be "nullable".
 #    2. longtext、timestamp：mysql can't cast default value to specified column type, so new column definition should be "nullable".
+#
+# 添加内部表编码指引详见：
+################################################################################
+
+################################################################################
+# Column definition:
+# - Use [column_name, column_type, nullable, default_value] to specify column definition.
+# - Use lowercase to define column names.
+# - Define primary keys in rowkey_columns, and define other columns in normal_columns.
+#
+# Partition definition:
+# - Defined by partition_expr and partition_columns.
+# - Use [partition_type, expr, partition_num] to define partition_expr.
+# - Use [col1, col2, ...] to define partition_columns.
+# - Two different partition_type are supported: hash/key
+#   - hash: expr means expression.
+#   - key: expr means list of partition columns.
+# - Distributed virtual table's partition_columns should be [`svr_ip`, `svr_port`].
+# - rowkey_columns must contains columns defined in partition_columns.
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 global fields
 fields = [
@@ -114,21 +162,6 @@ default_filed_values = {
     'vtable_route_policy' : 'local',
     'tablet_id' : '0',
 }
-#
-# Column definition:
-# - Use [column_name, column_type, nullable, default_value] to specify column definition.
-# - Use lowercase to define column names.
-# - Define primary keys in rowkey_columns, and define other columns in normal_columns.
-#
-# Partition definition:
-# - Defined by partition_expr and partition_columns.
-# - Use [partition_type, expr, partition_num] to define partition_expr.
-# - Use [col1, col2, ...] to define partition_columns.
-# - Two different partition_type are supported: hash/key
-#   - hash: expr means expression.
-#   - key: expr means list of partition columns.
-# - Distributed virtual table's partition_columns should be [`svr_ip`, `svr_port`].
-# - rowkey_columns must contains columns defined in partition_columns.
 
 ################################################################################
 # System Table(0,10000]
@@ -185,7 +218,7 @@ def_table_schema(
   ],
 )
 
-# 2: __all_root_table is deprecated in 4.0.
+# 2: __all_root_table # abandoned in 4.0.
 
 all_table_def = dict(
     owner = 'yanmu.ztl',
@@ -354,14 +387,14 @@ def_table_schema(
 
 )
 
-# 6 is for __all_freeze_info, which is abandon in 4.0
-# 7 is for __all_table_v2, which is abandon in 4.0
+# 6: __all_freeze_info  # abandoned in 4.0
+# 7: __all_table_v2 # abandoned in 4.0
 
 #
 # System Table (100, 1000]
 #
 
-# 101: __all_meta_table is deprecated in 4.0.
+# 101: __all_meta_table # abandoned in 4.0
 
 all_user_def = dict(
     owner = 'xinqi.zlm',
@@ -728,7 +761,7 @@ def_table_schema(
     ],
 )
 
-# 122: __all_column_statistic, abandoned on 4.0
+# 122: __all_column_statistic # abandoned in 4.0
 
 def_table_schema(
     owner = 'wanhong.wwh',
@@ -914,9 +947,9 @@ def_table_schema(
   normal_columns = [],
 )
 
-# table_id = 137: __all_clog_history_info not used on 4.0
+# 137: __all_clog_history_info # abandoned in 4.0
 
-# table_id = 139: __all_clog_history_info_v2 not used on 4.0
+# 139: __all_clog_history_info_v2 # abandoned in 4.0
 
 def_table_schema(
     owner = 'msy164651',
@@ -999,7 +1032,7 @@ def_table_schema(**all_outline_def)
 
 def_table_schema(**gen_history_table_def(143, all_outline_def))
 
-# table_id = 144: __all_election_event_history not used on 4.0
+# 144: __all_election_event_history # abandoned in 4.0
 
 def_table_schema(
   owner = 'bin.lb',
@@ -1252,7 +1285,7 @@ def_table_schema(
     ],
 )
 
-# 156: __all_unit_load_history is deprecated in 4.0.
+# 156: __all_unit_load_history # abandoned in 4.0.
 
 all_sys_variable_history_def= dict(
     owner = 'xiaochu.yh',
@@ -1300,7 +1333,7 @@ def_table_schema(
       ],
 )
 
-# 159: __all_restore_task, abandoned on 4.0
+# 159: __all_restore_task # abandoned in 4.0
 
 # __all_restore_job_history
 all_restore_job_history_def = dict(
@@ -1471,7 +1504,7 @@ def_table_schema(
     ],
 )
 
-# 183: __all_tenant_meta_table is deprecated in 4.0.
+# 183: __all_tenant_meta_table # abandoned in 4.0.
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -1621,7 +1654,7 @@ def_table_schema(
   ],
 )
 
-# table_id = 205: __all_tenant_gc_partition_info not used on 4.0
+# 205: __all_tenant_gc_partition_info # abandoned in 4.0
 
 all_constraint_def = dict(
     owner = 'bin.lb',
@@ -1786,10 +1819,10 @@ def_table_schema(
   ],
 )
 
-# table id 216 used by deleted table __all_tenant_plan_baseline
-# table id 217 used by deleted table __all_tenant_plan_baseline_history
+# 216: __all_tenant_plan_baseline # abandoned in 4.0
+# 217: __all_tenant_plan_baseline_history abandoned in 4.0
 
-#abandoned on 4.0 table_id = 218 __all_ddl_helper
+# 218: __all_ddl_helper # abandoned in 4.0
 
 # TODO: abandoned
 def_table_schema(
@@ -1938,13 +1971,13 @@ def_table_schema(
   ],
 )
 
-#abandoned on 4.0 table_id = 228 __all_cluster
+# 228: __all_cluster # abandoned in 4.0
 
-# table_id = 229: __all_gts not used on 4.0
+# 229: __all_gts # abandoned in 4.0
 
-# table_id = 230: __all_tenant_gts not used on 4.0
+# 230: __all_tenant_gts # abandoned in 4.0
 
-#abandoned on 4.0 table_id = 231 __all_partition_member_list
+# 231: __all_partition_member_list # abandoned in 4.0
 
 all_dblink_def = dict(
   owner = 'longzhong.wlz',
@@ -1988,7 +2021,7 @@ all_dblink_def = dict(
 def_table_schema(**all_dblink_def)
 def_table_schema(**gen_history_table_def(233, all_dblink_def))
 
-# 234: __all_tenant_partition_meta_table is deprecated in 4.0.
+# 234: __all_tenant_partition_meta_table # abandoned in 4.0.
 
 all_tenant_role_grantee_map_def = dict(
   owner = 'sean.yyj',
@@ -2297,9 +2330,9 @@ def_table_schema(
     ],
 )
 
-#__all_failover_scn : 257 abandoned on 4.0
+# 257: __all_failover_scn # abandoned in 4.0
 
-# 258: __all_tenant_sstable_column_checksum abandoned on 4.0
+# 258: __all_tenant_sstable_column_checksum # abandoned in 4.0
 
 all_tenant_security_audit_record_def = dict(
     owner = 'xinqi.zlm',
@@ -2407,7 +2440,7 @@ def_table_schema(**all_objauth_def)
 def_table_schema(**gen_history_table_def(263, all_objauth_def))
 
 
-# 264: __all_tenant_backup_info, abandoned on 4.0
+# 264: __all_tenant_backup_info # abandoned in 4.0
 
 # __all_restore_info
 all_restore_info_def = dict(
@@ -2430,12 +2463,12 @@ all_restore_info_def = dict(
 )
 def_table_schema(**all_restore_info_def)
 
-# 266: __all_tenant_backup_log_archive_status, abandoned on 4.0
-# 267: __all_backup_log_archive_status_history, abandoned on 4.0
-# 268: __all_tenant_backup_task, abandoned on 4.0
-# 269: __all_backup_task_history, abandoned on 4.0
-# 270: __all_tenant_pg_backup_task, abandoned on 4.0
-# 271:__all_failover_info abandoned on 4.0
+# 266: __all_tenant_backup_log_archive_status # abandoned in 4.0
+# 267: __all_backup_log_archive_status_history # abandoned in 4.0
+# 268: __all_tenant_backup_task # abandoned in 4.0
+# 269: __all_backup_task_history # abandoned in 4.0
+# 270: __all_tenant_pg_backup_task # abandoned in 4.0
+# 271:__all_failover_info # abandoned in 4.0
 
 all_tenant_error_def = dict(
     owner = 'lj229669',
@@ -2463,12 +2496,12 @@ all_tenant_error_def = dict(
 )
 def_table_schema(**all_tenant_error_def)
 
-# 273: __all_server_recovery_status abandoned on 4.0
-# 274: __all_datafile_recovery_status abandoned on 4.0
+# 273: __all_server_recovery_status # abandoned in 4.0
+# 274: __all_datafile_recovery_status # abandoned in 4.0
 
-# 276: all_tenant_backup_clean_info, abandoned on 4.0
-# 277: __all_backup_clean_info_history, abandoned on 4.0
-# 278: __all_backup_task_clean_history, abandoned on 4.0
+# 276: all_tenant_backup_clean_info # abandoned in 4.0
+# 277: __all_backup_clean_info_history # abandoned in 4.0
+# 278: __all_backup_task_clean_history # abandoned in 4.0
 
 # __all_restore_progress
 all_restore_progress_def = dict(
@@ -2498,9 +2531,9 @@ all_restore_progress_def = dict(
 )
 def_table_schema(**all_restore_progress_def)
 
-# 280: __all_restore_history, abandoned on 4.0
-# 281: __all_tenant_restore_pg_info, abandoned on 4.0
-# 282 is for __all_table_v2_history, which is abandoned in 4.0
+# 280: __all_restore_history # abandoned in 4.0
+# 281: __all_tenant_restore_pg_info # abandoned in 4.0
+# 282: __all_table_v2_history # abandoned in 4.0
 
 all_tenant_object_type_def = dict(
   owner = 'lj229669',
@@ -2541,11 +2574,11 @@ def_table_schema(**all_tenant_object_type_def)
 
 def_table_schema(**gen_history_table_def(284, all_tenant_object_type_def))
 
-# 285: __all_backup_validation_job, abandoned on 4.0
-# 286: __all_backup_validation_job_history, abandoned on 4.0
-# 287: __all_tenant_backup_validation_task, abandoned on 4.0
-# 288: __all_backup_validation_task_history, abandoned on 4.0
-# 289: __all_tenant_pg_backup_validation_task, abandoned on 4.0
+# 285: __all_backup_validation_job # abandoned in 4.0
+# 286: __all_backup_validation_job_history # abandoned in 4.0
+# 287: __all_tenant_backup_validation_task # abandoned in 4.0
+# 288: __all_backup_validation_task_history # abandoned in 4.0
+# 289: __all_tenant_pg_backup_validation_task # abandoned in 4.0
 
 def_table_schema(
   owner = 'dachuan.sdc',
@@ -2702,13 +2735,13 @@ all_tenant_dependency_def = dict(
 
 def_table_schema(**all_tenant_dependency_def)
 
-# 298: __all_backup_backupset_job, abandoned on 4.0
-# 299: __all_backup_backupset_job_history, abandoned on 4.0
-# 300: __all_tenant_backup_backupset_task, abandoned on 4.0
-# 301: __all_backup_backupset_task_history, abandoned on 4.0
-# 302: __all_tenant_pg_backup_backupset_task, abandoned on 4.0
-# 303: __all_tenant_backup_backup_log_archive_status, abandoned on 4.0
-# 304: __all_backup_backup_log_archive_status_history, abandoned on 4.0
+# 298: __all_backup_backupset_job # abandoned in 4.0
+# 299: __all_backup_backupset_job_history # abandoned in 4.0
+# 300: __all_tenant_backup_backupset_task # abandoned in 4.0
+# 301: __all_backup_backupset_task_history # abandoned in 4.0
+# 302: __all_tenant_pg_backup_backupset_task # abandoned in 4.0
+# 303: __all_tenant_backup_backup_log_archive_status # abandoned in 4.0
+# 304: __all_backup_backup_log_archive_status_history # abandoned in 4.0
 
 
 def_table_schema(
@@ -2816,11 +2849,11 @@ def_table_schema(
     is_cluster_private = True,
 )
 
-# 310: __all_backup_backuppiece_job, abandoned on 4.0
-# 311: __all_backup_backuppiece_job_history, abandoned on 4.0
-# 312: __all_backup_backuppiece_task, abandoned on 4.0
-# 313: __all_backup_backuppiece_task_history, abandoned on 4.0
-# 314: __all_backup_piece_files, abandoned on 4.0
+# 310: __all_backup_backuppiece_job # abandoned in 4.0
+# 311: __all_backup_backuppiece_job_history # abandoned in 4.0
+# 312: __all_backup_backuppiece_task # abandoned in 4.0
+# 313: __all_backup_backuppiece_task_history # abandoned in 4.0
+# 314: __all_backup_piece_files # abandoned in 4.0
 
 all_backup_set_files_def = dict(
   owner = 'chongrong.th',
@@ -2913,7 +2946,7 @@ all_backup_info_def = dict(
 )
 def_table_schema(**all_backup_info_def)
 
-# 318: __all_backup_log_archive_status_v2, abandoned on 4.0
+# 318: __all_backup_log_archive_status_v2 # abandoned in 4.0
 
 def_table_schema(
   owner = 'zhenjiang.xzj',
@@ -2961,7 +2994,7 @@ def_table_schema(
   ],
 )
 
-# 321: __all_backup_backup_log_archive_status_v2, abandoned on 4.0
+# 321: __all_backup_backup_log_archive_status_v2 # abandoned in 4.0
 
 def_table_schema(
   owner = 'xuwang.txw',
@@ -3500,7 +3533,7 @@ def_table_schema(
     ],
 )
 
-# 346: __all_zone_v2
+# 346: __all_zone_v2 # abandoned in 4.0
 
 # __all_log_archive_progress
 all_log_archive_progress_def = dict(
@@ -3671,8 +3704,7 @@ def_table_schema(
   ],
 )
 
-# the table id 353 is used for standby status
-# 353: __all_tenant_stats
+# 353: abandoned
 
 def_table_schema(
   owner = 'wenjinyu.wjy',
@@ -4087,8 +4119,8 @@ def_table_schema(
   ],
 )
 
-#abandoned on 4.0 table_id = 367 __all_cluster_info
-#abandoned on 4.0 table_id = 368 __all_cluster_config
+# 367: __all_cluster_info # abandoned in 4.0
+# 368: __all_cluster_config # abandoned in 4.0
 
 def_table_schema(
   owner = 'yanmu.ztl',
@@ -5234,8 +5266,8 @@ def_table_schema(
   ],
 )
 
-# 417 : __all_switchover_checkpoint
-# 418 : EMPTY
+# 417 : abandoned
+# 418 : abandoned
 # 419 : __all_column_group
 # 420 : __all_column_group_history
 # 421 : __all_column_group_mapping
@@ -6320,14 +6352,46 @@ all_transfer_partition_task_def= dict(
         ('comment', 'longtext', 'true'),
     ],
 )
+
 def_table_schema(**all_transfer_partition_task_def)
 def_table_schema(**gen_history_table_def_of_task(499, all_transfer_partition_task_def))
+
 #
-# 余留位置
+# 余留位置（此行之前占位）
+# 本区域占位建议：采用真实表名进行占位
+################################################################################
+# End of System Table(0,10000]
 ################################################################################
 
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
-
+################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
 ################################################################################
@@ -6617,8 +6681,8 @@ def_table_schema(
   vtable_route_policy = 'distributed'
 )
 
-# table_id = 10013: __tenant_virtual_interm_result not used on 4.0
-# table_id = 10014: __tenant_virtual_partition_stat not used on 4.0
+# 10013: __tenant_virtual_interm_result # abandoned in 4.0
+# 10014: __tenant_virtual_partition_stat # abandoned in 4.0
 
 def_table_schema(
   owner = 'yuzhong.zhao',
@@ -6755,7 +6819,7 @@ def_table_schema(
     ],
 )
 
-# 11002: __all_virtual_zone_stat is deprecated in 4.0.
+# 11002: __all_virtual_zone_stat # abandoned in 4.0.
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -7028,8 +7092,8 @@ def_table_schema(
   ],
 )
 
-# 11011: __all_virtual_server_stat is deprecated in 4.0.
-# table_id = 11012: __all_virtual_rebalance_task_stat not used on 4.0
+# 11011: __all_virtual_server_stat # abandoned in 4.0.
+# 11012: __all_virtual_rebalance_task_stat # abandoned in 4.0
 
 def_table_schema(
   owner = 'yuzhong.zhao',
@@ -7590,7 +7654,7 @@ def_table_schema(
                      'index_using_type' : 'USING_BTREE'}},
 )
 
-## 11033:__all_virtual_partition_sstable_image_info, abandoned 4.0
+## 11033:__all_virtual_partition_sstable_image_info # abandoned in 4.0
 
 def_table_schema(**gen_iterate_core_inner_table_def(11035, '__all_virtual_core_all_table', 'VIRTUAL_TABLE', all_table_def))
 
@@ -7655,7 +7719,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# table_id = 11040: __all_virtual_partition_replay_status not used on 4.0
+# 11040: __all_virtual_partition_replay_status # abandoned in 4.0
 
 def_table_schema(
   owner = 'guoyun.lgy',
@@ -8130,16 +8194,16 @@ def_table_schema(
   ],
 )
 
-# 11060 __all_virtual_proxy_route has been deleted
-# 11061: __all_virtual_rebalance_tenant_stat is deprecated in 4.0.
-# 11062: __all_virtual_rebalance_unit_stat is deprecated in 4.0.
+# 11060: __all_virtual_proxy_route # abandoned in 4.0
+# 11061: __all_virtual_rebalance_tenant_stat # abandoned in 4.0
+# 11062: __all_virtual_rebalance_unit_stat # abandoned in 4.0.
 
-# table_id = 11063: __all_virtual_rebalance_replica_stat not used on 4.0
-# table_id = 11067: __all_virtual_election_event_history not used on 4.0
+# 11063: __all_virtual_rebalance_replica_stat # abandoned in 4.0
+# 11067: __all_virtual_election_event_history # abandoned in 4.0
 
-# table_id = 11069: __all_virtual_leader_stat not used on 4.0
+# 11069: __all_virtual_leader_stat # abandoned in 4.0
 
-# 11070: __all_virtual_partition_migration_status, abandoned on 4.0
+# 11070: __all_virtual_partition_migration_status # abandoned in 4.0
 
 
 def_table_schema(
@@ -8200,11 +8264,11 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 11074: __all_virtual_rootservice_stat is deprecated in 4.0.
+# 11074: __all_virtual_rootservice_stat # abandoned in 4.0.
 
-# table_id = 11076: __all_virtual_tenant_disk_stat not used on 4.0
-# 11078: __all_virtual_rebalance_map_stat is deprecated in 4.0.
-# 11079: __all_virtual_rebalance_map_item_stat is deprecated in 4.0.
+# 11076: __all_virtual_tenant_disk_stat # abandoned in 4.0
+# 11078: __all_virtual_rebalance_map_stat # abandoned in 4.0.
+# 11079: __all_virtual_rebalance_map_item_stat # abandoned in 4.0.
 
 def_table_schema(
   owner = 'chaser.ch',
@@ -8260,8 +8324,8 @@ def_table_schema(
   vtable_route_policy = 'only_rs',
 )
 
-# 11082: __all_virtual_rebalance_unit_migrate_stat is deprecated in 4.0.
-# 11083: __all_virtual_rebalance_unit_distribution_stat is deprecated in 4.0.
+# 11082: __all_virtual_rebalance_unit_migrate_stat # abandoned in 4.0.
+# 11083: __all_virtual_rebalance_unit_distribution_stat # abandoned in 4.0.
 
 def_table_schema(
   owner = 'nijia.nj',
@@ -8361,9 +8425,9 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 11090 : __all_virtual_trans_result_info_stat abandoned on 4.0
+# 11090: __all_virtual_trans_result_info_stat # abandoned in 4.0
 
-# 11091: __all_virtual_duplicate_partition_mgr_stat, abandoned on 4.0
+# 11091: __all_virtual_duplicate_partition_mgr_stat # abandoned in 4.0
 
 def_table_schema(
     owner = 'fyy280124',
@@ -8962,7 +9026,6 @@ def_table_schema(
 # table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
 
 ################################################################
-################################################################
 # INFORMATION SCHEMA
 ################################################################
 def_table_schema(
@@ -8981,32 +9044,10 @@ def_table_schema(
   ],
 )
 
-# 12002 virtual table "TABLE_PRIVILEGES"  not used anymore
-# 12003 virtual table "USER_PRIVILEGES"   not used anymore
-# 12004 virtual table "SCHEMA_PRIVILEGES" not used anymore
-
-############################ NOTE: Id 12005 is deprecated, do not reuse ############################
-#def_table_schema(
-#  owner = 'bin.lb',
-#  tablegroup_id = 'OB_INVALID_ID',
-#  database_id   = 'OB_INFORMATION_SCHEMA_ID',
-#  table_name    = 'TABLE_CONSTRAINTS',
-#  table_id      = '12005',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns    = [],
-#  rowkey_columns = [],
-#  in_tenant_space = True,
-#
-#  normal_columns = [
-#  ('CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
-#  ('CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('CONSTRAINT_NAME', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false', ''),
-#  ('TABLE_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('TABLE_NAME', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false', ''),
-#  ('CONSTRAINT_TYPE', 'varchar:INDEX_NULL_LENGTH', 'false', ''),
-#  ('ENFORCED', 'varchar:MAX_BOOL_STR_LENGTH', 'false', ''),
-#  ]
-#)
+# 12002: TABLE_PRIVILEGES # abandoned in 4.0
+# 12003: USER_PRIVILEGES # abandoned in 4.0
+# 12004: SCHEMA_PRIVILEGES # abandoned in 4.0
+# 12005: TABLE_CONSTRAINTS # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaochu.yh',
@@ -9024,46 +9065,7 @@ def_table_schema(
   ],
 )
 
-############################ NOTE: Id 12007 is deprecated, do not reuse ############################
-#def_table_schema(
-#  owner = 'yanmu.ztl',
-#  tablegroup_id = 'OB_INVALID_ID',
-#  database_id    = 'OB_INFORMATION_SCHEMA_ID',
-#  table_name     = 'PARTITIONS',
-#  table_id       = '12007 ',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns = [],
-#  rowkey_columns = [],
-#  in_tenant_space = True,
-#
-#  normal_columns = [
-#  ('TABLE_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
-#  ('TABLE_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('TABLE_NAME', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false', ''),
-#  ('PARTITION_NAME', 'varchar:OB_MAX_PARTITION_NAME_LENGTH', 'true'),
-#  ('SUBPARTITION_NAME', 'varchar:OB_MAX_PARTITION_NAME_LENGTH', 'true'),
-#  ('PARTITION_ORDINAL_POSITION', 'uint', 'true'),
-#  ('SUBPARTITION_ORDINAL_POSITION', 'uint', 'true'),
-#  ('PARTITION_METHOD', 'varchar:OB_MAX_PARTITION_METHOD_LENGTH', 'true'),
-#  ('SUBPARTITION_METHOD', 'varchar:OB_MAX_PARTITION_METHOD_LENGTH', 'true'),
-#  ('PARTITION_EXPRESSION', 'varchar:OB_MAX_PART_FUNC_EXPR_LENGTH', 'true'),
-#  ('SUBPARTITION_EXPRESSION', 'varchar:OB_MAX_PART_FUNC_EXPR_LENGTH', 'true'),
-#  ('PARTITION_DESCRIPTION', 'varchar:OB_MAX_PARTITION_DESCRIPTION_LENGTH', 'true'),
-#  ('TABLE_ROWS', 'uint', 'false', '0'),
-#  ('AVG_ROW_LENGTH', 'uint', 'false', '0'),
-#  ('DATA_LENGTH', 'uint', 'false', '0'),
-#  ('MAX_DATA_LENGTH', 'uint', 'true'),
-#  ('INDEX_LENGTH', 'uint', 'false', '0'),
-#  ('DATA_FREE', 'uint', 'false', '0'),
-#  ('CREATE_TIME', 'timestamp', 'true'),
-#  ('UPDATE_TIME', 'timestamp', 'true'),
-#  ('CHECK_TIME', 'timestamp', 'true'),
-#  ('CHECKSUM', 'int', 'true'),
-#  ('PARTITION_COMMENT', 'varchar:OB_MAX_PARTITION_COMMENT_LENGTH', 'false', ''),
-#  ('NODEGROUP', 'varchar:OB_MAX_NODEGROUP_LENGTH', 'false', ''),
-#  ('TABLESPACE_NAME', 'varchar:OB_MAX_TABLEGROUP_NAME_LENGTH','true'),
-#  ],
-#)
+# 12007: PARTITIONS # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaochu.yh',
@@ -9180,7 +9182,7 @@ def_table_schema(
   ],
 )
 
-# table_id = 12012: __all_virtual_partition_table not used on 4.0
+# 12012: __all_virtual_partition_table # abandoned in 4.0
 
 def_table_schema(
   owner = 'shanyan.g',
@@ -9219,10 +9221,10 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12014 for __all_virtual_partition_item is abandoned in 4.0
+# 12014: __all_virtual_partition_item # abandoned in 4.0
 
-# table_id = 12015: __all_virtual_replica_task not used on 4.0
-# table_id = 12016: __all_virtual_partition_location not used on 4.0
+# 12015: __all_virtual_replica_task # abandoned in 4.0
+# 12016: __all_virtual_partition_location # abandoned in 4.0
 
 def_table_schema(
    owner = 'linlin.xll',
@@ -9361,35 +9363,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_freeze_info'],
   in_tenant_space = True))
 
-############################NOTE: Id 12037 is deprecated, do not reuse ############################
-# def_table_schema(
-#   owner = 'linlin.xll',
-#   database_id    = 'OB_INFORMATION_SCHEMA_ID',
-#   table_name     = 'PARAMETERS',
-#   table_id       = '12037',
-#   table_type = 'VIRTUAL_TABLE',
-#   gm_columns = [],
-#   rowkey_columns = [],
-#   in_tenant_space = True,
-#   normal_columns = [
-#   ('SPECIFIC_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', 'def'),
-#   ('SPECIFIC_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#   ('SPECIFIC_NAME', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH', 'false', ''),
-#   ('ORDINAL_POSITION', 'int', 'false', '0'),
-#   ('PARAMETER_MODE', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH', 'true'),
-#   ('PARAMETER_NAME', 'varchar:OB_MAX_DEFAULT_VALUE_LENGTH', 'true'),
-#   ('DATA_TYPE', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH',  'false', ''),
-#   ('CHARACTER_MAXIMUM_LENGTH', 'uint',  'true'),
-#   ('CHARACTER_OCTET_LENGTH', 'uint', 'true'),
-#   ('NUMERIC_PRECISION', 'uint', 'true'),
-#   ('NUMERIC_SCALE','uint', 'true'),
-#   ('DATETIME_PRECISION', 'uint', 'true'),
-#   ('CHARACTER_SET_NAME', 'varchar:MAX_CHARSET_LENGTH', 'true'),
-#   ('COLLATION_NAME', 'varchar:MAX_COLLATION_LENGTH', 'true'),
-#   ('DTD_IDENTIFIER', 'varchar:OB_MAX_SYS_PARAM_NAME_LENGTH', 'false'),
-#   ('ROUTINE_TYPE', 'varchar:9', 'false', ''),
-#   ],
-# )
+# 12037: PARAMETERS # abandoned in 4.0
 
 def_table_schema(
   owner = 'jianyun.sjy',
@@ -9442,9 +9416,9 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-## abandoned on 4.0 table_id = 12042 __all_virtual_weak_read_stat
+# 12042: __all_virtual_weak_read_stat # abandoned in 4.0
 
-## abandoned on 4.0 table_id = 12054 __all_virtual_partition_audit
+# 12054: __all_virtual_partition_audit # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12055',
@@ -9456,7 +9430,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_sequence_value',
   keywords = all_def_keywords['__all_sequence_value']))
 
-#abandoned on 4.0 table_id = 12057 __all_virtual_cluster
+# 12057: __all_virtual_cluster # abandoned in 4.0
 
 def_table_schema(
   owner = 'yht146493',
@@ -9784,10 +9758,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_recyclebin',
   keywords = all_def_keywords['__all_recyclebin']))
 
-# table_id = 12116: __all_virtual_tenant_gc_partition_info not used on 4.0
+# 12116: __all_virtual_tenant_gc_partition_info # abandoned in 4.0
 
-# table id 12117 used by deleted table __all_virtual_tenant_plan_baseline
-# table id 12118 used by deleted table __all_virtual_tenant_plan_baseline_history
+# 12117: __all_virtual_tenant_plan_baseline # abandoned in 4.0
+# 12118: __all_virtual_tenant_plan_baseline_history # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12119',
@@ -9824,7 +9798,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# table_id = 12122: __all_virtual_server_log_meta not used on 4.0
+# 12122: __all_virtual_server_log_meta # abandoned in 4.0
 
 # start for DTL
 def_table_schema(
@@ -9974,7 +9948,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # end label security
 
-# 12141 : __all_virtual_deadlock_stat abandoned on 4.0
+# 12141: __all_virtual_deadlock_stat # abandoned in 4.0
 
 # tablespace begin
 def_table_schema(**gen_iterate_virtual_table_def(
@@ -10061,9 +10035,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_trigger_history',
   keywords = all_def_keywords['__all_tenant_trigger_history']))
 
-#12153 __all_virtual_cluster_stats abandoned on 4.0
+# 12153: __all_virtual_cluster_stats # abandoned in 4.0
 
-# 12154: __all_tenant_sstable_column_checksum abandoned on 4.0
+# 12154: __all_tenant_sstable_column_checksum # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -10117,7 +10091,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-#12157 __all_virtual_standby_status abandoned on 4.0
+# 12157: __all_virtual_standby_status # abandoned in 4.0
 
 def_table_schema(
   owner = 'longzhong.wlz',
@@ -10263,12 +10237,12 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_backup_info'],
   in_tenant_space = True))
 
-# 12168: __all_virtual_backup_log_archive_status, abandoned on 4.0
-# 12170: __all_virtual_backup_task, abandoned on 4.0
-# 12171: __all_virtual_pg_backup_task, abandoned on 4.0
+# 12168: __all_virtual_backup_log_archive_status # abandoned in 4.0
+# 12170: __all_virtual_backup_task # abandoned in 4.0
+# 12171: __all_virtual_pg_backup_task # abandoned in 4.0
 
-# 12173: __all_virtual_pg_backup_log_archive_status, abandoned on 4.0
-# 12174: __all_virtual_server_backup_log_archive_status, abandoned on 4.0
+# 12173: __all_virtual_pg_backup_log_archive_status # abandoned in 4.0
+# 12174: __all_virtual_server_backup_log_archive_status # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12175',
@@ -10302,43 +10276,16 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-############################ NOTE: Id 12177 is deprecated, do not reuse ############################
-#def_table_schema(
-#  owner = 'bin.lb',
-#  tablegroup_id = 'OB_INVALID_ID',
-#  database_id   = 'OB_INFORMATION_SCHEMA_ID',
-#  table_name    = 'REFERENTIAL_CONSTRAINTS',
-#  table_id      = '12177',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns    = [],
-#  rowkey_columns = [],
-#  in_tenant_space = True,
-#
-#  normal_columns = [
-#  ('CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
-#  ('CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'false', ''),
-#  ('UNIQUE_CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
-#  ('UNIQUE_CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('UNIQUE_CONSTRAINT_NAME', 'varchar:OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE', 'true', 'NULL'),
-#  ('MATCH_OPTION', 'varchar:64', 'false', ''),
-#  ('UPDATE_RULE', 'varchar:64', 'false', ''),
-#  ('DELETE_RULE', 'varchar:64', 'false', ''),
-#  ('TABLE_NAME', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false', ''),
-#  ('REFERENCED_TABLE_NAME', 'varchar:OB_MAX_TABLE_NAME_LENGTH', 'false', '')
-#  ]
-#)
-
-## 12179: __all_virtual_table_modifications, abandoned on 4.0
-
-# 12180: __all_virtual_backup_clean_info, abandoned on 4.0
+# 12177: REFERENTIAL_CONSTRAINTS # abandoned in 4.0
+# 12179: __all_virtual_table_modifications # abandoned in 4.0
+# 12180: __all_virtual_backup_clean_info # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12182',
   table_name = '__all_virtual_object_type',
   keywords = all_def_keywords['__all_tenant_object_type']))
 
-# 12184: __all_virtual_pg_log_archive_stat, abandoned on 4.0
+# 12184: __all_virtual_pg_log_archive_stat # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaochu.yh',
@@ -10447,8 +10394,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12188: __all_virtual_backup_validation_task, abandoned on 4.0
-# 12189: __all_virtual_pg_backup_validation_task, abandoned on 4.0
+# 12188: __all_virtual_backup_validation_task # abandoned in 4.0
+# 12189: __all_virtual_pg_backup_validation_task # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12190',
@@ -10565,21 +10512,19 @@ def_table_schema(
   ],
 )
 
-# 12200: __all_virtual_reserved_table_mgr, abandoned on 4.0
+# 12200: __all_virtual_reserved_table_mgr # abandoned in 4.0
+# 12201: __all_virtual_backupset_history_mgr # abandoned in 4.0
+# 12202: __all_virtual_backup_backupset_task # abandoned in 4.0
+# 12203: __all_virtual_pg_backup_backupset_task # abandoned in 4.0
 
-# 12201: __all_virtual_backupset_history_mgr, abandoned on 4.0
-# 12202: __all_virtual_backup_backupset_task, abandoned on 4.0
-# 12203: __all_virtual_pg_backup_backupset_task, abandoned on 4.0
-
-
-# 12205 __all_virtual_cluster_failover_info abandoned on 4.0
+# 12205: __all_virtual_cluster_failover_info # abandoned in 4.0
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12206',
   table_name = '__all_virtual_global_transaction',
   keywords = all_def_keywords['__all_tenant_global_transaction']))
 
-#12207 __all_virtual_all_clusters abandoned on 4.0
+# 12207: __all_virtual_all_clusters # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12208',
@@ -10621,7 +10566,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12212 __all_virtual_clog_agency_info, abandoned on 4.0
+# 12212: __all_virtual_clog_agency_info # abandoned in 4.0
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12213',
@@ -10677,42 +10622,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
-############################ NOTE: Id 12221 is deprecated, do not reuse ############################
-# def_table_schema(
-#     owner = 'webber.wb',
-#     tablegroup_id   = 'OB_INVALID_ID',
-#     database_id     = 'OB_INFORMATION_SCHEMA_ID',
-#     table_name      = 'TRIGGERS',
-#     table_id        = '12221',
-#     table_type      = 'VIRTUAL_TABLE',
-#     gm_columns      = [],
-#     rowkey_columns  = [],
-#     in_tenant_space = True,
-#     normal_columns = [
-#     ('TRIGGER_CATALOG', 'varchar:512', 'false', ''),
-#     ('TRIGGER_SCHEMA', 'varchar:64', 'false', ''),
-#     ('TRIGGER_NAME', 'varchar:64', 'false', ''),
-#     ('EVENT_MANIPULATION', 'varchar:6', 'false', ''),
-#     ('EVENT_OBJECT_CATALOG', 'varchar:512', 'false', ''),
-#     ('EVENT_OBJECT_SCHEMA', 'varchar:64', 'false', ''),
-#     ('EVENT_OBJECT_TABLE', 'varchar:64', 'false', ''),
-#     ('ACTION_ORDER', 'bigint:4', 'false', 0),
-#     ('ACTION_CONDITION', 'longtext', 'true'),
-#     ('ACTION_STATEMENT', 'longtext', 'false'),
-#     ('ACTION_ORIENTATION', 'varchar:9', 'false', ''),
-#     ('ACTION_TIMING', 'varchar:6', 'false', ''),
-#     ('ACTION_REFERENCE_OLD_TABLE', 'varchar:64', 'true'),
-#     ('ACTION_REFERENCE_NEW_TABLE', 'varchar:64', 'true'),
-#     ('ACTION_REFERENCE_OLD_ROW', 'varchar:3', 'false', ''),
-#     ('ACTION_REFERENCE_NEW_ROW', 'varchar:3', 'false', ''),
-#     ('CREATED', 'datetime', 'true'),
-#     ('SQL_MODE', 'varchar:8192', 'false', ''),
-#     ('DEFINER', 'varchar:189', 'false', ''),
-#     ('CHARACTER_SET_CLIENT', 'varchar:32', 'false', ''),
-#     ('COLLATION_CONNECTION', 'varchar:32', 'false', ''),
-#     ('DATABASE_COLLATION', 'varchar:32', 'false', ''),
-#     ],
-# )
+
+# 12221: TRIGGERS # abandoned in 4.0
 
 def_table_schema(
   owner = 'webber.wb',
@@ -10851,24 +10762,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_ls_log_archive_progress'],
   in_tenant_space = True))
 
-############################ NOTE: Id 12235 is deprecated, do not reuse ############################
-#def_table_schema(
-#  owner = 'bin.lb',
-#  tablegroup_id = 'OB_INVALID_ID',
-#  database_id   = 'OB_INFORMATION_SCHEMA_ID',
-#  table_name    = 'CHECK_CONSTRAINTS',
-#  table_id      = '12235',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns    = [],
-#  rowkey_columns = [],
-#  in_tenant_space = True,
-#  normal_columns = [
-#  ('CONSTRAINT_CATALOG', 'varchar:MAX_TABLE_CATALOG_LENGTH', 'false', ''),
-#  ('CONSTRAINT_SCHEMA', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'false', ''),
-#  ('CONSTRAINT_NAME', 'varchar:OB_MAX_COLUMN_NAME_LENGTH', 'false', ''),
-#  ('CHECK_CLAUSE', 'varchar:OB_MAX_CONSTRAINT_EXPR_LENGTH', 'false', ''),
-#  ]
-#)
+# 12235: CHECK_CONSTRAINTS # abandoned in 4.0
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12236',
@@ -11989,8 +11883,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12332: __all_virtual_switchover_checkpoint
-# 12333: EMPTY
+# 12332: abandoned
+# 12333: abandoned
 
 def_table_schema(
     owner = 'lixia.yq',
@@ -12353,8 +12247,8 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed'
 )
-# 12360 abandoned
-# 12361 abandoned
+# 12360: abandoned
+# 12361: abandoned
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12362',
@@ -13028,8 +12922,39 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_transfer_partition_task_history']))
 
 
-# 余留位置
+# 余留位置（此行之前占位）
+# 本区域占位建议：采用真实表名进行占位
+################################################################################
+# End of Mysql Virtual Table (10000, 15000]
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
 #
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 ################################################################################
 # Oracle Virtual Table(15000,20000]
@@ -13105,7 +13030,7 @@ def_table_schema(**gen_sys_agent_virtual_table_def('15116', all_def_keywords['__
 def_table_schema(**gen_sys_agent_virtual_table_def('15117', all_def_keywords['__all_routine']))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15118', all_def_keywords['__all_virtual_global_transaction'])))
-# def_table_schema(**gen_agent_virtual_table_def('15119', all_def_keywords['__all_acquired_snapshot']))
+# 15119: __all_acquired_snapshot
 
 ## define oracle virtual table that is mapping real table
 ## real table must has in_tenant_space=True if use gen_oracle_mapping_real_virtual_table_def
@@ -13168,7 +13093,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15186', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15187', all_def_keywords['__all_column_stat']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15188', all_def_keywords['__all_histogram_stat']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15189', all_def_keywords['__all_virtual_tenant_memory_info'])))
-# 15190 for __all_virtual_partition_item is abandoned in 4.0
+# 15190: __all_virtual_partition_item # abandoned in 4.0
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15191', all_def_keywords['__tenant_virtual_show_create_trigger']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15192', all_def_keywords['__all_virtual_px_target_monitor'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15193', all_def_keywords['__all_monitor_modified']))
@@ -13255,7 +13180,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15267', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15268', all_def_keywords['__all_virtual_ls_election_reference_info']))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15269', all_def_keywords['__all_virtual_tenant_info']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15270', all_def_keywords['__all_freeze_info']))
-# 15271: __all_virtual_switchover_checkpoint
+# 15271: abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15272', all_def_keywords['__all_virtual_ls_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15273', all_def_keywords['__all_virtual_ls_replica_task_plan'])))
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15274', all_def_keywords['__all_virtual_show_trace']))
@@ -13268,11 +13193,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15281', all_def_keywords['__all_tenant_rewrite_rules']))
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15282', all_def_keywords['__all_tenant'])))
 
-# 15283: __all_virtual_tenant_info_agent abandoned
+# 15283: abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15284', all_def_keywords['__all_virtual_sql_plan'])))
-# 15285 abandoned
-# 15286 abandoned
+# 15285: abandoned
+# 15286: abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15287', all_def_keywords['__all_virtual_trans_scheduler'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15288', all_def_keywords['__all_virtual_ls_arb_replica_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15289', all_def_keywords['__all_virtual_ls_arb_replica_task_history'])))
@@ -13427,16 +13352,50 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
-# 15417: __all_virtual_column_group_mapping
-
+# 15417: abandoned
 # 15418: __all_virtual_cgroup_config
-# 15419: __all_virutal_column_group_history
-# 15420: __all_virutal_column_group_maping_history
+# 15419: abandoned
+# 15420: abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15430', all_def_keywords['__all_transfer_partition_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15431', all_def_keywords['__all_transfer_partition_task_history'])))
 
-# 余留位置
+# 余留位置（此行之前占位）
+# 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
+# - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#   * 基表表名占位：# 15009: __all_virtual_sql_audit
+#   * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+################################################################################
+# End of Oracle Virtual Table(15000,20000]
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 ################################################################################
 # System View (20000,30000]
@@ -14058,7 +14017,7 @@ def_table_schema(
   ],
 )
 
-# table_id = 20013: DBA_OB_OUTLINES (from all_outline) not used on 4.0
+# 20013: DBA_OB_OUTLINES # abandoned in 4.0
 
 def_table_schema(
   owner = 'jiangxiu.wt',
@@ -15405,56 +15364,10 @@ def_table_schema(
 
 )
 
-# table_id = 21039: GV$OB_OUTLINES not used on 4.0
-# table_id = 21040: GV$OB_CONCURRENT_LIMIT_SQL not used on 4.0
-
-# gv$sql_plan_statistics/v$sql_plan_statistics is not compatible with oracle.
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'GV$SQL_PLAN_STATISTICS',
-#    table_id       = '21041',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """
-# SELECT tenant_id as CON_ID,
-#        svr_ip as SVR_IP,
-#        svr_port as SVR_PORT,
-#        plan_id as PLAN_ID,
-#        operation_id as OPERATION_ID,
-#        executions as EXECUTIONS,
-#        output_rows as OUTPUT_ROWS,
-#        input_rows as INPUT_ROWS,
-#        rescan_times as RESCAN_TIMES,
-#        buffer_gets as BUFFER_GETS,
-#        disk_reads as DISK_READS,
-#        disk_writes as DISK_WRITES,
-#        elapsed_time as ELAPSED_TIME,
-#        extend_info1 as EXTEND_INFO1,
-#        extend_info2 as EXTEND_INFO2
-#        FROM oceanbase.__all_virtual_sql_plan_statistics
-#""".replace("\n", " "),
-#
-#    normal_columns = [
-#    ],
-#),
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'V$SQL_PLAN_STATISTICS',
-#    table_id       = '21042',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """
-#    SELECT * FROM OCEANBASE.GV$SQL_PLAN_STATISTICS
-#    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
-#""".replace("\n", " "),
-#
-#    normal_columns = [
-#    ],
-#),
+# 21039: GV$OB_OUTLINES # abandoned in 4.0
+# 21040: GV$OB_CONCURRENT_LIMIT_SQL # abandoned in 4.0
+# 21041: GV$SQL_PLAN_STATISTICS # abandoned in 4.0
+# 21042: V$SQL_PLAN_STATISTICS # abandoned in 4.0
 
 def_table_schema(
   owner = 'dachuan.sdc',
@@ -15596,7 +15509,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21067 is abandoned
+# 21067: abandoned
 
 def_table_schema(
   owner = 'bin.lb',
@@ -15710,13 +15623,13 @@ def_table_schema(
 # )
 
 
-#abandoned on 4.0 table_id 21075 V$OB_CLUSTER
+# 21075: V$OB_CLUSTER # abandoned in 4.0
 
-#21076 v$ob_standby_status abandoned on 4.0
+# 21076: v$ob_standby_status # abandoned in 4.0
 
-#21077 v$ob_cluster_stats abandoned on 4.0
+# 21077: v$ob_cluster_stats # abandoned in 4.0
 
-#abandoned on 4.0 table_id 21078 V$OB_CLUSTER_EVENT_HISTORY
+# 21078: V$OB_CLUSTER_EVENT_HISTORY # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -16105,14 +16018,14 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
-# 21102: CDB_OB_BACKUP_ARCHIVELOG_SUMMARY, abandoned on 4.0
-# 21103: CDB_OB_BACKUP_JOB_DETAILS abandoned on 4.0
-# 21104: CDB_OB_BACKUP_SET_DETAILS abandoned on 4.0
-# 21105: CDB_OB_BACKUP_SET_EXPIRED abandoned on 4.0
-# 21106: CDB_OB_BACKUP_PROGRESS abandoned on 4.0
-# 21107: CDB_OB_BACKUP_ARCHIVELOG_PROGRESS, abandoned on 4.0
-# 21108: CDB_OB_BACKUP_CLEAN_HISTORY, abandoned on 4.0
-# 21109: CDB_OB_BACKUP_TASK_CLEAN_HISTORY, abandoned on 4.0
+# 21102: CDB_OB_BACKUP_ARCHIVELOG_SUMMARY # abandoned in 4.0
+# 21103: CDB_OB_BACKUP_JOB_DETAILS # abandoned in 4.0
+# 21104: CDB_OB_BACKUP_SET_DETAILS # abandoned in 4.0
+# 21105: CDB_OB_BACKUP_SET_EXPIRED # abandoned in 4.0
+# 21106: CDB_OB_BACKUP_PROGRESS # abandoned in 4.0
+# 21107: CDB_OB_BACKUP_ARCHIVELOG_PROGRESS # abandoned in 4.0
+# 21108: CDB_OB_BACKUP_CLEAN_HISTORY # abandoned in 4.0
+# 21109: CDB_OB_BACKUP_TASK_CLEAN_HISTORY # abandoned in 4.0
 
 def_table_schema(
   owner = 'wangxiaohui.wxh',
@@ -16505,10 +16418,10 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21122: CDB_OB_BACKUP_VALIDATION_JOB, abandoned on 4.0
-# 21123: CDB_OB_BACKUP_VALIDATION_JOB_HISTORY, abandoned on 4.0
-# 21124: CDB_OB_TENANT_BACKUP_VALIDATION_TASK, abandoned on 4.0
-# 21125: CDB_OB_BACKUP_VALIDATION_TASK_HISTORY, abandoned on 4.0
+# 21122: CDB_OB_BACKUP_VALIDATION_JOB # abandoned in 4.0
+# 21123: CDB_OB_BACKUP_VALIDATION_JOB_HISTORY # abandoned in 4.0
+# 21124: CDB_OB_TENANT_BACKUP_VALIDATION_TASK # abandoned in 4.0
+# 21125: CDB_OB_BACKUP_VALIDATION_TASK_HISTORY # abandoned in 4.0
 
 
 #FIXME: This view will be supported later
@@ -16531,13 +16444,13 @@ def_table_schema(
 #  """.replace("\n", " ")
 #)
 
-# 21127: CDB_OB_BACKUP_SET_OBSOLETE, abandoned on 4.0
-# 21128: CDB_OB_BACKUP_BACKUPSET_JOB, abandoned on 4.0
-# 21129: CDB_OB_BACKUP_BACKUPSET_JOB_HISTORY, abandoned on 4.0
-# 21130: CDB_OB_BACKUP_BACKUPSET_TASK, abandoned on 4.0
-# 21131: CDB_OB_BACKUP_BACKUPSET_TASK_HISTORY, abandoned on 4.0
-# 21132: CDB_OB_BACKUP_BACKUP_ARCHIVELOG_SUMMARY, abandoned on 4.0
-# 21133: v$ob_cluster_failover_info abandoned on 4.0
+# 21127: CDB_OB_BACKUP_SET_OBSOLETE # abandoned in 4.0
+# 21128: CDB_OB_BACKUP_BACKUPSET_JOB # abandoned in 4.0
+# 21129: CDB_OB_BACKUP_BACKUPSET_JOB_HISTORY # abandoned in 4.0
+# 21130: CDB_OB_BACKUP_BACKUPSET_TASK # abandoned in 4.0
+# 21131: CDB_OB_BACKUP_BACKUPSET_TASK_HISTORY # abandoned in 4.0
+# 21132: CDB_OB_BACKUP_BACKUP_ARCHIVELOG_SUMMARY # abandoned in 4.0
+# 21133: v$ob_cluster_failover_info # abandoned in 4.0
 
 def_table_schema(
   owner = 'sean.yyj',
@@ -16770,15 +16683,15 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21138: CDB_OB_BACKUP_BACKUPPIECE_JOB, abandoned on 4.0
-# 21139: CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY, abandoned on 4.0
-# 21140: CDB_OB_BACKUP_BACKUPPIECE_TASK, abandoned on 4.0
-# 21141: CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY, abandoned on 4.0
+# 21138: CDB_OB_BACKUP_BACKUPPIECE_JOB # abandoned in 4.0
+# 21139: CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY # abandoned in 4.0
+# 21140: CDB_OB_BACKUP_BACKUPPIECE_TASK # abandoned in 4.0
+# 21141: CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY # abandoned in 4.0
 
-#21142 v$ob_all_clusters abandoned on 4.0
+# 21142: v$ob_all_clusters # abandoned in 4.0
 
-# 21143: CDB_OB_BACKUP_ARCHIVELOG, abandoned on 4.0
-# 21144: CDB_OB_BACKUP_BACKUP_ARCHIVELOG, abandoned on 4.0
+# 21143: CDB_OB_BACKUP_ARCHIVELOG # abandoned in 4.0
+# 21144: CDB_OB_BACKUP_BACKUP_ARCHIVELOG # abandoned in 4.0
 
 def_table_schema(
   owner = 'jim.wjh',
@@ -26422,8 +26335,9 @@ def_table_schema(
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
-# 21343 abandoned
-# 21344 abandoned
+
+# 21343: abandoned
+# 21344: abandoned
 
 def_table_schema(
     owner = 'yanmu.ztl',
@@ -30150,7 +30064,39 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# 余留位置
+# 余留位置（此行之前占位）
+# 本区域占位建议：采用真实视图名进行占位
+################################################################################
+# End of MySQL System View (20000, 25000]
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 ################################################################################
 # Oracle System View (25000, 30000]
@@ -48896,15 +48842,47 @@ def_table_schema(
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
-# 余留位置
 
-#### End Data Dictionary View
+#
+# 余留位置（此行之前占位）
+# 本区域占位建议：采用真实视图名进行占位
 ################################################################################
+# End of Oracle Data Dictionary View (25000, 28000]
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
+
 
 ################################################################################
 #### Performance View (28000, 30000]
 ################################################################################
-# table_id = 28001, GV$OB_OUTLINES not used on 4.0
+# 28001: GV$OB_OUTLINES # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -49657,7 +49635,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# table_id = 28031: GV$OB_CONCURRENT_LIMIT_SQL not used on 4.0
+# 28031: GV$OB_CONCURRENT_LIMIT_SQL # abandoned in 4.0
 
 #### End Performance View
 
@@ -50611,42 +50589,7 @@ def_table_schema(
 #               'TIME_TRUNCATE_FRACTIONAL')            => NULL
 # OTHERS: varchar                                      => CHARACTER
 
-############################NOTE: Id 28071 is deprecated, do not reuse ############################
-# def_table_schema(
-#     table_name      = 'TRIGGERS',
-#     table_id        = '28071',
-#     database_id     = 'OB_INFORMATION_SCHEMA_ID',
-#     table_type      = 'SYSTEM_VIEW',
-#     rowkey_columns  = [],
-#     normal_columns  = [],
-#     gm_columns      = [],
-#     view_definition = """SELECT
-#           CAST(NULL AS CHARACTER(64)) AS TRIGGER_CATALOG,
-#           CAST(NULL AS CHARACTER(64)) AS TRIGGER_SCHEMA,
-#           CAST(NULL AS CHARACTER(64)) AS TRIGGER_NAME,
-#           NULL AS EVENT_MANIPULATION,
-#           CAST(NULL AS CHARACTER(64)) AS EVENT_OBJECT_CATALOG,
-#           CAST(NULL AS CHARACTER(64)) AS EVENT_OBJECT_SCHEMA,
-#           CAST(NULL AS CHARACTER(64)) AS EVENT_OBJECT_TABLE,
-#           CAST(NULL AS UNSIGNED) AS ACTION_ORDER,
-#           CAST(NULL AS BINARY(0)) AS ACTION_CONDITION,
-#           NULL AS ACTION_STATEMENT,
-#           CAST(NULL AS CHARACTER(3))  AS ACTION_ORIENTATION,
-#           NULL AS ACTION_TIMING,
-#           CAST(NULL AS BINARY(0)) AS ACTION_REFERENCE_OLD_TABLE,
-#           CAST(NULL AS BINARY(0)) AS ACTION_REFERENCE_NEW_TABLE,
-#           CAST(NULL AS CHARACTER(3))  AS ACTION_REFERENCE_OLD_ROW,
-#           CAST(NULL AS CHARACTER(3))  AS ACTION_REFERENCE_NEW_ROW,
-#           CAST(NULL AS TIME(2)) AS CREATED,
-#           NULL AS SQL_MODE,
-#           CAST(NULL AS CHARACTER(288)) AS DEFINER,
-#           CAST(NULL AS CHARACTER(64)) AS CHARACTER_SET_CLIENT,
-#           CAST(NULL AS CHARACTER(64)) AS COLLATION_CONNECTION,
-#           CAST(NULL AS CHARACTER(64)) AS DATABASE_COLLATION
-#         FROM DUAL
-#         WHERE 1 = 0
-# """.replace("\n", " "),
-# )
+# 28071: TRIGGERS # abandoned in 4.0
 
 def_table_schema(
   owner = 'sean.yyj',
@@ -54452,8 +54395,8 @@ def_table_schema(
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
-# 28174 abandoned
-# 28175 abandoned
+# 28174: abandoned
+# 28175: abandoned
 
 def_table_schema(
   owner           = 'zhaoyongheng.zyh',
@@ -55021,6 +54964,41 @@ def_table_schema(
 # 28199: V$OB_PL_CACHE_OBJECT
 # 28200: GV$OB_CGROUP_CONFIG
 # 28201: V$OB_CGROUP_CONFIG
+
+
+# 余留位置（此行之前占位）
+# 本区域占位建议：采用真实视图名进行占位
+################################################################################
+#### End of Oracle Performance View (28000, 30000]
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 ################################################################################
 # Lob Table (50000, 70000)
@@ -55805,7 +55783,7 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_dbms_lock_allocated'])
 
-# 101092 : placeholder for index of __all_tablet_reorganize_history
+# 101092: __all_tablet_reorganize_history
 
 def_sys_index_table(
   index_name = 'idx_kv_ttl_task_table_id',
@@ -55830,6 +55808,43 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_transfer_partition_task'])
+
+#
+# 余留位置（此行之前占位）
+# 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
+################################################################################
+# End of Sys table Index (100000, 200000)
+#     Index for core table (100000, 101000)
+#     Index for other sys table (101000, 200000)
+################################################################################
+
+################################### 占位须知 ###################################
+# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
+# TABLE_ID: TABLE_NAME
+#
+# FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
+#
+# 注意：
+# 0. 在‘余留位置’之前占位
+# 1. 始终先在master占位，保证master分支是其他所有分支的超集，避免NAME和ID冲突
+# 2. master占位之后，开发分支上不要变更NAME，否则FARM会认为ID占位冲突，如果有这种场景，需要先修改master占位
+# 3. 默认建议采用准确的TABLE_NAME进行占位，TABLE_ID和TABLE_NAME在系统内部是一一对应的
+# 4. 部分表是基于其他基表的schema定义的(例如：gen_xx_table_def())，其真实表名比较复杂，为了方便占位，建议采用基表表名进行占位
+#    - 示例1：def_table_schema(**gen_mysql_sys_agent_virtual_table_def('12393', all_def_keywords['__all_virtual_long_ops_status']))
+#      * 基表表名占位：# 12393: __all_virtual_long_ops_status
+#      * 真实表名占位：# 12393: __all_virtual_virtual_long_ops_status_mysql_sys_agent
+#    - 示例2：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
+#      * 基表表名占位：# 15009: __all_virtual_sql_audit
+#      * 真实表名占位：# 15009: ALL_VIRTUAL_SQL_AUDIT
+#    - 示例3：def_table_schema(**gen_sys_agent_virtual_table_def('15111', all_def_keywords['__all_routine_param']))
+#      * 基表表名占位：# 15111: __all_routine_param
+#      * 真实表名占位：# 15111: ALL_VIRTUAL_ROUTINE_PARAM_SYS_AGENT
+# 5. 索引表占位要求TABLE_NAME采用以下方式：基表（数据表）表名、索引名(index_name)、真实的索引表表名
+#    例如：100001 索引表占位方式可以为：
+#       * # 100001: __idx_3_idx_data_table_id
+#       * # 100001: idx_data_table_id
+#       * # 100001: __all_table
+################################################################################
 
 ################################################################################
 # Oracle Agent table Index
