@@ -20,6 +20,7 @@
 #include "ob_admin_utils.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "logservice/palf/log_define.h"
 
 using namespace std;
 
@@ -861,5 +862,67 @@ DEF_COMMAND(SERVER, unlock_member_list, 1, "tenant_id:ls_id:lock_id # unlock_mem
     }
   }
   COMMON_LOG(INFO, "unlock_member_list", K(ret), K(arg));
+  return ret;
+}
+
+DEF_COMMAND(SERVER, force_set_sys_tenant_log_disk, 1, "log_disk_size=xx# set sys log disk")
+{
+  string arg_str;
+  int ret = OB_SUCCESS;
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument, should provide new log disk size");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+    const char *arg_cstr = arg_str.c_str();
+    int64_t log_disk_size = 0;
+    uint64_t tenant_id = OB_SYS_TENANT_ID;
+    if (1 != sscanf(arg_str.c_str(), "log_disk_size=%ld", &log_disk_size)) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid argument", K(arg_cstr));
+    } else {
+      ObForceSetTenantLogDiskArg arg;
+      arg.set(tenant_id, log_disk_size);
+      if (OB_FAIL(client_->force_set_tenant_log_disk(arg))) {
+        CLOG_LOG(WARN, "force_set_tenant_log_disk failed", K(arg_cstr));
+      }
+    }
+  }
+  return ret;
+}
+
+DEF_COMMAND(SERVER, dump_server_usage, 1, "output: [server_info]\n\
+                                                   log_disk_assigned=xx\n\
+                                                   log_disk_capacity=xx\n\
+                                                   [unit_info]\n\
+                                                   tenant_id=xx\n\
+                                                   log_disk_in_use=xx\n\
+                                                   log_disk_size=xx")
+{
+  string arg_str;
+  int ret = OB_SUCCESS;
+  if (cmd_ != action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument, no need provide argument");
+  } else {
+    ObDumpServerUsageRequest arg;
+    ObDumpServerUsageResult result;
+    if (OB_FAIL(client_->dump_server_usage(arg, result))) {
+      CLOG_LOG(WARN, "dump_tenant_log_disk failed");
+    } else {
+      ObDumpServerUsageResult::ObServerInfo &server_info = result.server_info_;
+      ObSArray<ObDumpServerUsageResult::ObUnitInfo> &unit_info = result.unit_info_;
+      fprintf(stdout, "[server info]\n");
+      fprintf(stdout, "log_disk_assigned=%ld\n", server_info.log_disk_assigned_);
+      fprintf(stdout, "log_disk_capacity=%ld\n", server_info.log_disk_capacity_);
+      for (int i = 0; i < unit_info.count(); i++) {
+        ObDumpServerUsageResult::ObUnitInfo &info = unit_info[i];
+        fprintf(stdout, "[unit info]\n");
+        fprintf(stdout, "tenant_id=%ld\n", info.tenant_id_);
+        fprintf(stdout, "log_disk_assigned=%ld\n", info.log_disk_in_use_);
+        fprintf(stdout, "log_disk_capacity=%ld\n", info.log_disk_size_);
+      }
+    }
+  }
   return ret;
 }
