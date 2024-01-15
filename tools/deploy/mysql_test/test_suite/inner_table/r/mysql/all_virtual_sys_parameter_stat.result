@@ -271,6 +271,7 @@ _enable_balance_kill_transaction
 _enable_block_file_punch_hole
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
+_enable_dblink_reuse_connection
 _enable_defensive_check
 _enable_easy_keepalive
 _enable_hash_join_hasher
