@@ -1439,8 +1439,6 @@ int ObLSService::dump_ls_info()
   return ret;
 }
 
-
-
 } // storage
 } // oceanbase
 
