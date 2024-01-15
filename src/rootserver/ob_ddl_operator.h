@@ -352,9 +352,9 @@ public:
       share::schema::DropTableIdHashSet* drop_table_set = NULL, const bool is_drop_db = false,
       bool* is_delay_delete = NULL /* Bring out the delayed delete behavior */);
   virtual int drop_table_for_not_dropped_schema(const share::schema::ObTableSchema& table_schema,
-      common::ObMySQLTransaction& trans, const common::ObString* ddl_stmt_str = NULL,
-      const bool is_truncate_table = false, share::schema::DropTableIdHashSet* drop_table_set = NULL,
-      const bool is_drop_db = false);
+      common::ObMySQLTransaction& trans, const common::ObString* ddl_stmt_str,
+      const bool is_truncate_table, share::schema::DropTableIdHashSet* drop_table_set,
+      const bool is_drop_db, const bool force_drop);
   virtual int drop_table_to_recyclebin(const share::schema::ObTableSchema& table_schema,
       share::schema::ObSchemaGetterGuard& schema_guard, common::ObMySQLTransaction& trans,
       const common::ObString* ddl_stmt_str, /*= NULL*/
