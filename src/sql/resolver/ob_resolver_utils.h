@@ -311,6 +311,7 @@ public:
                                          ObRawExpr *&expr);
 
   static int revert_external_param_info(ExternalParams &param_info,
+                                        ObRawExprFactory &expr_factory,
                                         ObRawExpr *expr);
 
    /**

@@ -1111,8 +1111,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             ExternalParams& extern_params = params.external_param_info_;
             for (int i = 0; OB_SUCC(ret) && i < extern_params.count(); ++i) {
-              if (extern_params.at(i).second->same_as(*c_expr)) {
-                ObRawExpr *rawexpr = extern_params.at(i).first;
+              if (extern_params.at(i).element<1>()->same_as(*c_expr)) {
+                ObRawExpr *rawexpr = extern_params.at(i).element<0>();
                 if (T_OBJ_ACCESS_REF == rawexpr->get_expr_type()) {
                   OZ (pl::ObPLResolver::set_write_property(
                     rawexpr, *(params.expr_factory_), params.session_info_, params.schema_checker_->get_schema_guard(), true));
