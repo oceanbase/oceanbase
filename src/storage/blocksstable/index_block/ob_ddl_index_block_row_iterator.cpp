@@ -1201,8 +1201,8 @@ int ObDDLMergeBlockRowIterator::get_readable_ddl_kvs(const ObIndexBlockIterParam
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
         ObDDLKV *ddl_kv = ddl_kvs.at(i);
-        bool skip = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < ddl_kv->get_ddl_memtables().count(); ++j) {
+          bool skip = false;
           ObDDLMemtable *cur_ddl_memtable = ddl_kv->get_ddl_memtables().at(j);
           if (OB_NOT_NULL(cur_ddl_memtable)) {
             if (cur_ddl_memtable->is_table_with_scn_range() && OB_NOT_NULL(iter_param.sstable_)) {
