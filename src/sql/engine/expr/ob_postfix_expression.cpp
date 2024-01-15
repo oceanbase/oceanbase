@@ -123,6 +123,27 @@ int ObPostExprItem::assign(ObItemType item_type)
   return ret;
 }
 
+int ObPostExprItem::deep_copy(common::ObIAllocator &alloc, const ObPostExprItem &other)
+{
+  int ret = OB_SUCCESS;
+  const int64_t buf_len = other.get_serialize_size();
+  char *buf = NULL;
+  int64_t ser_pos = 0;
+  int64_t deser_pos = 0;
+  if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc memory", K(ret), K(buf_len));
+  } else if (OB_FAIL(other.serialize(buf, buf_len, ser_pos))) {
+    LOG_WARN("fail to serialize item", K(ret), K(buf_len), K(ser_pos));
+  } else if (ser_pos != buf_len) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("serialize len mismatch", K(ret), K(ser_pos), K(buf_len));
+  } else if (OB_FAIL(deserialize(alloc, buf, buf_len, deser_pos))) {
+    LOG_WARN("fail to deserialize item", K(ret), K(buf_len), K(deser_pos));
+  }
+  return ret;
+}
+
 /* for unittest only */
 int ObPostExprItem::set_op(ObIAllocator& alloc, const char* op_name, ObExprOperator*& op)
 {
