@@ -361,7 +361,7 @@ public:
   int try_submit_next_log();
   // for instant logging and freezing
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
-  int submit_redo_log_for_freeze();
+  int submit_redo_log_for_freeze(const uint32_t freeze_clock);
   int return_redo_log_cb(ObTxLogCb *log_cb);
   int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
@@ -872,7 +872,7 @@ private:
                                     const share::ObLSID &ori_ls_id, const ObAddr &ori_addr);
   int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
-  int submit_redo_log_for_freeze_(bool &try_submit);
+  int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
 public:
   int prepare_for_submit_redo(ObTxLogCb *&log_cb,

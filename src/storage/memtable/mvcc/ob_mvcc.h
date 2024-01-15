@@ -59,6 +59,7 @@ public:
   virtual bool on_memtable(const ObIMemtable * const memtable)
   { UNUSED(memtable); return false; }
   virtual ObIMemtable* get_memtable() const { return nullptr; }
+  virtual uint32_t get_freeze_clock() const { return 0; }
   virtual transaction::ObTxSEQ get_seq_no() const { return transaction::ObTxSEQ::INVL(); }
   virtual int del() { return remove(); }
   virtual bool is_need_free() const { return true; }
@@ -71,6 +72,7 @@ public:
   void after_append_cb(const bool is_replay);
   bool need_submit_log() const { return need_submit_log_; }
   virtual bool is_logging_blocked() const { return false; }
+  virtual bool on_frozen_memtable(ObIMemtable *&last_frozen_mt) const { return true; }
   int log_submitted_cb(const share::SCN scn, ObIMemtable *&last_mt);
   int log_sync_fail_cb(const share::SCN scn);
   // interface should be implement by subclasses

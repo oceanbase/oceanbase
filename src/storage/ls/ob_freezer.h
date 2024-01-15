@@ -166,8 +166,8 @@ public:
   bool need_rewrite_meta();
   void set_state(int state);
   int get_state();
-  void set_freeze_clock(const int64_t freeze_clock);
-  int64_t get_freeze_clock();
+  void set_freeze_clock(const uint32_t freeze_clock);
+  uint32_t get_freeze_clock();
   void set_start_time(int64_t start_time);
   int64_t get_start_time();
   void set_end_time(int64_t end_time);
@@ -177,7 +177,7 @@ public:
   void set_freeze_snapshot_version(const share::SCN &freeze_snapshot_version);
   share::SCN get_freeze_snapshot_version();
   int deep_copy_to(ObFreezerStat &other);
-  int begin_set_freeze_stat(const int64_t freeze_clock,
+  int begin_set_freeze_stat(const uint32_t freeze_clock,
                             const int64_t start_time,
                             const int state,
                             const share::SCN &freeze_snapshot_version,
@@ -191,7 +191,7 @@ private:
   ObTabletID tablet_id_;
   bool need_rewrite_meta_;
   int state_;
-  int64_t freeze_clock_;
+  uint32_t freeze_clock_;
   int64_t start_time_;
   int64_t end_time_;
   int ret_code_;
@@ -298,8 +298,8 @@ private:
 
   /* inner subfunctions for freeze process */
   int inner_logstream_freeze(ObFuture<int> *result);
-  int submit_log_for_freeze(bool is_try);
-  void try_submit_log_for_freeze_();
+  int submit_log_for_freeze(const bool is_tablet_freeze, const bool is_try);
+  void try_submit_log_for_freeze_(const bool is_tablet_freeze);
   int ls_freeze_task();
   int tablet_freeze_task(ObTableHandleV2 handle);
   int submit_freeze_task(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);

@@ -1512,6 +1512,16 @@ bool ObMvccRowCallback::is_logging_blocked() const
   return is_blocked;
 }
 
+uint32_t ObMvccRowCallback::get_freeze_clock() const
+{
+  if (OB_ISNULL(memtable_)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mvcc row memtable is NULL", KPC(this));
+    return 0;
+  } else {
+    return memtable_->get_freeze_clock();
+  }
+}
+
 int ObMvccRowCallback::clean()
 {
   unlink_trans_node();

@@ -89,14 +89,14 @@ namespace checkpoint
 } // namespace storage
 namespace transaction
 {
-int ObPartTransCtx::submit_redo_log_for_freeze()
+int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
 {
   int ret = OB_SUCCESS;
   int64_t sleep_time = rand() % SLEEP_TIME;
   ob_usleep(sleep_time);
   CtxLockGuard guard(lock_);
   bool submitted = false;
-  ret = submit_redo_log_for_freeze_(submitted);
+  ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
   if (sleep_time > 50 && sleep_time < 90) {
     ret = OB_TX_NOLOGCB;
   } else if (sleep_time >= 90) {

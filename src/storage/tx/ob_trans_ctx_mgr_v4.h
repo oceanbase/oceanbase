@@ -269,7 +269,8 @@ public:
   int del_tx_ctx(ObTransCtx *ctx);
 
   // Freeze process needs to traverse TxCtx to submit log
-  int traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id);
+  // @param[in] freeze_clock, the freeze clock after which will not be traversaled
+  int traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const uint32_t freeze_clock = UINT32_MAX);
   int traverse_tx_to_submit_next_log();
 
   // Get the min prepare version of transaction module of current observer for slave read

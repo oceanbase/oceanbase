@@ -111,7 +111,8 @@ public:
                           const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL()) const;
   int revert_store_ctx(storage::ObStoreCtx &store_ctx) const;
   // Freeze process needs to traverse trans ctx to submit redo log
-  int traverse_trans_to_submit_redo_log(transaction::ObTransID &fail_tx_id);
+  int traverse_trans_to_submit_redo_log(transaction::ObTransID &fail_tx_id,
+                                        const uint32_t freeze_clock = UINT32_MAX);
   // submit next log when all trx in frozen memtable have submitted log
   int traverse_trans_to_submit_next_log();
   // check schduler status for gc

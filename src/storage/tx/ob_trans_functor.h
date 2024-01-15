@@ -1292,8 +1292,8 @@ private:
 class ObTxSubmitLogFunctor
 {
 public:
-  explicit ObTxSubmitLogFunctor(const int action)
-    : action_(action), result_(common::OB_SUCCESS), fail_tx_id_()
+  explicit ObTxSubmitLogFunctor(const int action, const uint32_t freeze_clock = UINT32_MAX)
+    : action_(action), freeze_clock_(freeze_clock), result_(common::OB_SUCCESS), fail_tx_id_()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -1312,7 +1312,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else if (ObTxSubmitLogFunctor::SUBMIT_REDO_LOG == action_) {
-      if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze())) {
+      if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze(freeze_clock_))) {
         TRANS_LOG(WARN, "failed to submit redo log", K(ret), K(tx_id));
       }
     } else if (ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG == action_) {
@@ -1337,6 +1337,7 @@ public:
 
 private:
   int action_;
+  uint32_t freeze_clock_;
   int result_;
   ObTransID fail_tx_id_;
 };
