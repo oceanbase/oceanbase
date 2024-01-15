@@ -151,17 +151,31 @@ public:
    */
   template <typename OP>
   static OB_INLINE int flip_foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op);
+  template <typename OP>
+  static OB_INLINE int flip_foreach(const ObBitVectorImpl<WordType> &skip, const EvalBound &bound,
+                                    OP op);
 
   /**
    * access all bit that it's 1
    */
   template <typename OP>
   static OB_INLINE int foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op);
+  template <typename OP>
+  static OB_INLINE int foreach(const ObBitVectorImpl<WordType> &skip, const EvalBound &bound,
+                               OP op);
 public:
   OB_INLINE static int64_t popcount64(uint64_t v);
 private:
+  /**
+   * the pos in [start_idx, end_idx) will be traversed
+   */
   template <bool IS_FLIP, typename OP>
-  static OB_INLINE int inner_foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op);
+  static OB_INLINE int inner_foreach(const ObBitVectorImpl<WordType> &skip, int64_t start_idx,
+                                     int64_t end_idx, OP op);
+  template <typename OP>
+  static OB_INLINE int inner_foreach_one_word(const WordType &s_word, const int64_t step_size,
+                                              int64_t &step, OP op);
+
 public:
   WordType data_[0];
 };
@@ -629,54 +643,93 @@ inline void ObBitVectorImpl<WordType>::bit_or(const ObBitVectorImpl<WordType> &s
   }
 }
 
-template<typename WordType>
+template <typename WordType>
+template <typename OP>
+OB_INLINE int ObBitVectorImpl<WordType>::inner_foreach_one_word(const WordType &s_word,
+                                                                const int64_t step_size,
+                                                                int64_t &step, OP op)
+{
+  int ret = OB_SUCCESS;
+  if (s_word > 0) {
+    WordType tmp_s_word = s_word;
+    int64_t tmp_step = step;
+    do {
+      uint16_t step_val = tmp_s_word & 0xFFFF;
+      if (0xFFFF == step_val) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < step_size; j++) {
+          int64_t k = j + tmp_step;
+          ret = op(k);
+        }
+      } else if (step_val > 0) {
+        do {
+          int64_t start_bit_idx = __builtin_ctz(step_val);
+          int64_t k = start_bit_idx + tmp_step;
+          ret = op(k);
+          step_val &= (step_val - 1);
+        } while (step_val > 0 && OB_SUCC(ret)); // end for, for one step size
+      }
+      tmp_step += step_size;
+      tmp_s_word >>= step_size;
+    } while (tmp_s_word > 0 && OB_SUCC(ret)); // one word-uint64_t
+  }
+  step += WORD_BITS;
+  return ret;
+}
+
+template <typename WordType>
 template <bool IS_FLIP, typename OP>
-OB_INLINE int ObBitVectorImpl<WordType>::inner_foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op)
+OB_INLINE int ObBitVectorImpl<WordType>::inner_foreach(const ObBitVectorImpl<WordType> &skip,
+                                                       int64_t start_idx, int64_t end_idx, OP op)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_step = 0;
   typedef uint16_t StepType;
   const int64_t step_size = sizeof(StepType) * CHAR_BIT;
-  int64_t word_cnt = ObBitVectorImpl<WordType>::word_count(size);
-  int64_t step = 0;
-  const int64_t remain = size % ObBitVectorImpl<WordType>::WORD_BITS;
-  for (int64_t i = 0; i < word_cnt && OB_SUCC(ret); ++i) {
-    WordType s_word = (IS_FLIP ? ~skip.data_[i] : skip.data_[i]);
-    // bool all_bits = (IS_FLIP ? skip.data_[i] == 0 : (~skip.data_[i]) == 0);
-    if (i >= word_cnt - 1 && remain > 0) {
-      // all_bits = ((IS_FLIP ? skip.data_[i] : ~skip.data_[i]) & ((1LU << remain) - 1)) == 0;
-      s_word = s_word & ((1LU << remain) - 1);
+
+  int64_t start_cnt = 0;
+  int64_t end_cnt = 0;
+  WordType start_mask = 0;
+  WordType end_mask = 0;
+  get_start_end_mask(start_idx, end_idx, start_mask, end_mask, start_cnt, end_cnt);
+  // eg. start_remain = 5, start_mask = 11111....11100000
+  //                                                |   |
+  //                                                 \ /
+  //                                         nums of '0' == start_remain
+
+  // eg. end_remain = 5, end_mask = 00000000....11111
+  //                                            |   |
+  //                                             \ /
+  //                                     nums of '1' == end_remain
+  int64_t step = WORD_BITS * start_cnt; // the bit pos offset of the first word
+  if (start_cnt == end_cnt) {
+    // if only one word, both start_mask and end_mask should be used
+    WordType one_word_mask = start_mask & end_mask;
+    WordType s_word = (IS_FLIP ? ~skip.data_[start_cnt] : skip.data_[start_cnt]);
+    s_word = s_word & one_word_mask;
+    ret = inner_foreach_one_word(s_word, step_size, step, op);
+  } else {
+    // process first word, which may not a complete word
+    WordType s_word = (IS_FLIP ? ~skip.data_[start_cnt] : skip.data_[start_cnt]);
+    if (start_mask > 0) {
+      s_word = s_word & start_mask;
     }
-    if (s_word > 0) {
-      WordType tmp_s_word = s_word;
-      tmp_step = step;
-      do {
-        uint16_t step_val = tmp_s_word & 0xFFFF;
-        if (0xFFFF == step_val) {
-          // no skip
-          // last batch ?
-          int64_t mini_cnt = step_size;
-          if (tmp_step + step_size > size) {
-            mini_cnt = size - tmp_step;
-          }
-          for (int64_t j = 0; OB_SUCC(ret) && j < mini_cnt; j++) {
-            int64_t k = j + tmp_step;
-            ret = op(k);
-          }
-        } else if (step_val > 0) {
-          do {
-            int64_t start_bit_idx = __builtin_ctz(step_val);
-            int64_t k = start_bit_idx + tmp_step;
-            ret = op(k);
-            step_val &= (step_val - 1);
-          } while (step_val > 0 && OB_SUCC(ret)); // end for, for one step size
-        }
-        tmp_step += step_size;
-        tmp_s_word >>= step_size;
-      } while (tmp_s_word > 0 && OB_SUCC(ret)); // one word-uint64_t
+    // process words in the middle, all of these are whole word
+    if (OB_FAIL(inner_foreach_one_word(s_word, step_size, step, op))) {
+    } else {
+      for (int64_t i = start_cnt + 1; i < end_cnt && OB_SUCC(ret); ++i) {
+        WordType s_word = (IS_FLIP ? ~skip.data_[i] : skip.data_[i]);
+        ret = inner_foreach_one_word(s_word, step_size, step, op);
+      }
     }
-    step += ObBitVectorImpl<WordType>::WORD_BITS;
-  } // end for
+    if (OB_SUCC(ret)) {
+      // if end_mask > 0, means there is a incomplete word in the last
+      if (end_mask > 0) {
+        WordType s_word = (IS_FLIP ? ~skip.data_[end_cnt] : skip.data_[end_cnt]);
+        s_word = s_word & end_mask;
+        ret = inner_foreach_one_word(s_word, step_size, step, op);
+      }
+    }
+  }
   return ret;
 }
 
@@ -684,14 +737,30 @@ template<typename WordType>
 template <typename OP>
 OB_INLINE int ObBitVectorImpl<WordType>::flip_foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op)
 {
-  return ObBitVectorImpl<WordType>::inner_foreach<true, OP>(skip, size, op);
+  return ObBitVectorImpl<WordType>::inner_foreach<true, OP>(skip, 0 /*start_idx*/, size, op);
 }
 
 template<typename WordType>
 template <typename OP>
 OB_INLINE int ObBitVectorImpl<WordType>::foreach(const ObBitVectorImpl<WordType> &skip, int64_t size, OP op)
 {
-  return ObBitVectorImpl<WordType>::inner_foreach<false, OP>(skip, size, op);
+  return ObBitVectorImpl<WordType>::inner_foreach<false, OP>(skip, 0 /*start_idx*/, size, op);
+}
+
+template <typename WordType>
+template <typename OP>
+OB_INLINE int ObBitVectorImpl<WordType>::flip_foreach(const ObBitVectorImpl<WordType> &skip,
+                                                      const EvalBound &bound, OP op)
+{
+  return ObBitVectorImpl<WordType>::inner_foreach<true, OP>(skip, bound.start(), bound.end(), op);
+}
+
+template <typename WordType>
+template <typename OP>
+OB_INLINE int ObBitVectorImpl<WordType>::foreach (const ObBitVectorImpl<WordType> &skip,
+                                                  const EvalBound &bound, OP op)
+{
+  return ObBitVectorImpl<WordType>::inner_foreach<false, OP>(skip, bound.start(), bound.end(), op);
 }
 
 } // end namespace sql

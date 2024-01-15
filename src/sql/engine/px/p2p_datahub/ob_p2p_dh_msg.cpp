@@ -157,15 +157,15 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
 template <>
 int ObP2PDatahubMsgBase::proc_filter_empty<IntegerFixedVec>(IntegerFixedVec *res_vec,
                                                             const ObBitVector &skip,
-                                                            int64_t batch_size,
+                                                            const EvalBound &bound,
                                                             int64_t &total_count,
                                                             int64_t &filter_count)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 0, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
 
-  int64_t valid_cnt = batch_size - skip.accumulate_bit_cnt(batch_size);
+  int64_t valid_cnt = bound.range_size() - skip.accumulate_bit_cnt(bound);
   total_count += valid_cnt;
   filter_count += valid_cnt;
   return ret;
@@ -174,12 +174,13 @@ int ObP2PDatahubMsgBase::proc_filter_empty<IntegerFixedVec>(IntegerFixedVec *res
 template <>
 int ObP2PDatahubMsgBase::proc_filter_empty<IntegerUniVec>(IntegerUniVec *res_vec,
                                                           const ObBitVector &skip,
-                                                          int64_t batch_size, int64_t &total_count,
+                                                          const EvalBound &bound,
+                                                          int64_t &total_count,
                                                           int64_t &filter_count)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, batch_size, [&](int64_t idx) __attribute__((always_inline)) {
+          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
             res_vec->set_int(idx, 0);
             ++filter_count;
             ++total_count;
@@ -190,11 +191,11 @@ int ObP2PDatahubMsgBase::proc_filter_empty<IntegerUniVec>(IntegerUniVec *res_vec
   return ret;
 }
 
-int ObP2PDatahubMsgBase::preset_not_match(IntegerFixedVec *res_vec, int64_t batch_size)
+int ObP2PDatahubMsgBase::preset_not_match(IntegerFixedVec *res_vec, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data, 0, (batch_size * res_vec->get_length(0)));
+  MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
   return ret;
 }
 

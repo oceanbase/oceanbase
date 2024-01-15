@@ -115,7 +115,7 @@ private:
   int insert_partition_bloom_filter(ArgVec *arg_vec, const ObBatchRows *child_brs,
                                     uint64_t *batch_hash_values);
   template <VectorFormat ResFormat, typename ResVec>
-  int fill_vec_result(ResVec *res_vec, const ObBitVector &skip, int64_t batch_size,
+  int fill_vec_result(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound,
                       uint64_t *hash_values, int64_t &total_count, int64_t &filter_count);
 
 public:
