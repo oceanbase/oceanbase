@@ -22498,8 +22498,8 @@ def_table_schema(
   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,
   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
-  CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
-  CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
+  CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
+  CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
   cast(NULL as CHAR(80)) as  NOTES,
   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
   cast((case when stat.histogram_type = 1 then 'FREQUENCY'
@@ -22513,7 +22513,7 @@ def_table_schema(
             TABLE_ID,
             TABLE_NAME
           FROM
-            OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
+            oceanbase.__all_virtual_core_all_table
           WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
      UNION ALL
      SELECT TENANT_ID,
@@ -22521,12 +22521,12 @@ def_table_schema(
             table_id,
             table_name
       FROM oceanbase.__all_table where table_type in (0,2,3,6,14)
-      and table_mode >> 12 & 15 in (0,1)) T
+      and table_mode >> 12 & 15 in (0,1)) t
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
     AND db.database_id = t.database_id
-    AND T.TENANT_ID = 0
+    and t.tenant_id = 0
   JOIN
     (SELECT CAST(0 AS SIGNED) AS TENANT_ID,
             TABLE_ID,
@@ -22576,8 +22576,8 @@ def_table_schema(
   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,
   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
-  CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
-  CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
+  CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
+  CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
   cast(NULL as CHAR(80)) as  NOTES,
   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
   cast((case when stat.histogram_type = 1 then 'FREQUENCY'
@@ -22590,7 +22590,7 @@ def_table_schema(
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
     AND db.database_id = t.database_id
-    AND T.TENANT_ID = 0
+    and t.tenant_id = 0
   JOIN
     oceanbase.__all_column c
     ON c.tenant_id = t.tenant_id
@@ -22634,8 +22634,8 @@ def_table_schema(
   cast(stat.bucket_cnt as NUMBER) as  NUM_BUCKETS,
   cast(stat.last_analyzed as DATETIME(6)) as  LAST_ANALYZED,
   cast(stat.sample_size as NUMBER) as  SAMPLE_SIZE,
-  CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
-  CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
+  CAST((CASE stat.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
+  CAST((CASE stat.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
   cast(NULL as CHAR(80)) as  NOTES,
   cast(stat.avg_len as NUMBER) as  AVG_COL_LEN,
   cast((case when stat.histogram_type = 1 then 'FREQUENCY'
@@ -22648,7 +22648,7 @@ def_table_schema(
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
     AND db.database_id = t.database_id
-    AND T.TENANT_ID = 0
+    and t.tenant_id = 0
   JOIN
     oceanbase.__all_column c
     ON c.tenant_id = t.tenant_id
@@ -22695,19 +22695,19 @@ def_table_schema(
             TABLE_ID,
             TABLE_NAME
           FROM
-            OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE
+            oceanbase.__all_virtual_core_all_table
      UNION ALL
      SELECT TENANT_ID,
             database_id,
             table_id,
             table_name
       FROM oceanbase.__all_table where table_type in (0,3,6,14)
-      and table_mode >> 12 & 15 in (0,1)) T
+      and table_mode >> 12 & 15 in (0,1)) t
   JOIN
     oceanbase.__all_database db
     ON db.tenant_id = t.tenant_id
     AND db.database_id = t.database_id
-    AND T.TENANT_ID = 0
+    and t.tenant_id = 0
   JOIN
     oceanbase.__all_column c
     ON c.tenant_id = t.tenant_id
@@ -22747,7 +22747,7 @@ def_table_schema(
       oceanbase.__all_database db
       ON db.tenant_id = t.tenant_id
       AND db.database_id = t.database_id
-      AND T.TENANT_ID = 0
+      and t.tenant_id = 0
     JOIN
       oceanbase.__all_column c
       ON c.tenant_id = t.tenant_id
@@ -22794,7 +22794,7 @@ def_table_schema(
       oceanbase.__all_database db
       ON db.tenant_id = t.tenant_id
       AND db.database_id = t.database_id
-      AND T.TENANT_ID = 0
+      and t.tenant_id = 0
     JOIN
       oceanbase.__all_column c
       ON c.tenant_id = t.tenant_id
