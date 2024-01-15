@@ -72,6 +72,7 @@ class ObTableSchema;
 class ObMultiVersionSchemaService;
 class ObNeedPriv;
 class ObSchemaMgr;
+class ObMViewInfo;
 }
 }
 
@@ -2698,6 +2699,7 @@ private:
                                         const ObIArray<ObDependencyInfo> *dep_infos,
                                         common::ObIAllocator &allocator,
                                         const uint64_t tenant_data_version,
+                                        const share::schema::ObMViewInfo &mview_info,
                                         ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;

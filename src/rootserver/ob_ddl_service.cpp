@@ -2412,6 +2412,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
     int64_t refreshed_schema_version = 0;
     ObDDLTaskRecord task_record;
     ddl_task_id = 0;
+    ObMViewInfo mview_info;
     if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
@@ -2563,7 +2564,8 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                   db_schema->get_database_name_str(),
                                   table_schema.get_table_name_str(),
                                   table_schema.get_view_schema().get_mv_refresh_info(),
-                                  table_schema.get_schema_version()))) {
+                                  table_schema.get_schema_version(),
+                                  mview_info))) {
             LOG_WARN("fail to start mview refresh job", KR(ret));
           }
         }
@@ -2618,6 +2620,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
                                                         dep_infos,
                                                         allocator,
                                                         tenant_data_version,
+                                                        mview_info,
                                                         task_record))) {
             LOG_WARN("failed to start mview complete refresh task", KR(ret));
           } else {
@@ -2673,6 +2676,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     const ObIArray<ObDependencyInfo> *dep_infos,
     common::ObIAllocator &allocator,
     const uint64_t tenant_data_version,
+    const ObMViewInfo &mview_info,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
@@ -2692,6 +2696,8 @@ int ObDDLService::start_mview_complete_refresh_task(
   if (OB_UNLIKELY(nullptr == dep_infos || nullptr == mv_refresh_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("dep_infos is nullptr", KR(ret) , KP(dep_infos), KP(mv_refresh_info));
+  } else if (OB_FAIL(arg.last_refresh_scn_.convert_for_inner_table_field(mview_info.get_last_refresh_scn()))) {
+    LOG_WARN("fail to covert for inner table field", KR(ret), K(mview_info));
   } else if (OB_FAIL(share::ObBackupUtils::get_tenant_sys_time_zone_wrap(tenant_id,
                                                                   time_zone,
                                                                   arg.tz_info_wrap_))) {

@@ -29,6 +29,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "storage/tx/ob_ts_mgr.h"
 
 namespace oceanbase
 {
@@ -175,11 +176,14 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
                                                          const ObString &db_name,
                                                          const ObString &table_name,
                                                          const ObMVRefreshInfo *refresh_info,
-                                                         const int64_t schema_version)
+                                                         const int64_t schema_version,
+                                                         ObMViewInfo &mview_info)
 {
   int ret = OB_SUCCESS;
   ObString refresh_job;
   ObArenaAllocator allocator("CreateMVTmp");
+  SCN curr_ts;
+  mview_info.reset();
   if (refresh_info == nullptr) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("refresh_info is null", KR(ret));
@@ -222,15 +226,25 @@ int ObMViewSchedJobUtils::add_mview_info_and_refresh_job(ObISQLClient &sql_clien
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                      GCONF.rpc_timeout,
+                                      curr_ts))) {
+      LOG_WARN("fail to get gts sync", K(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!curr_ts.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected curr_scn", KR(ret), K(tenant_id), K(curr_ts));
+    }
+  }
 
   if (OB_SUCC(ret)) {
-    ObMViewInfo mview_info;
     mview_info.set_tenant_id(tenant_id);
     mview_info.set_mview_id(mview_id);
     mview_info.set_build_mode(ObMViewBuildMode::IMMEDIATE);
     mview_info.set_refresh_mode(refresh_info->refresh_mode_);
     mview_info.set_refresh_method(refresh_info->refresh_method_);
     mview_info.set_refresh_job(refresh_job);
+    mview_info.set_last_refresh_scn(curr_ts.get_val_for_inner_table_field());
     mview_info.set_schema_version(schema_version);
     if (refresh_info->start_time_.is_timestamp()) {
       mview_info.set_refresh_start(refresh_info->start_time_.get_timestamp());

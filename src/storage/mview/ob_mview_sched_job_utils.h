@@ -24,6 +24,7 @@ namespace schema
 class ObMVRefreshInfo;
 class ObSchemaGetterGuard;
 class ObUserInfo;
+class ObMViewInfo;
 }
 }
 namespace common
@@ -76,7 +77,8 @@ public:
                                             const common::ObString &db_name,
                                             const common::ObString &table_name,
                                             const share::schema::ObMVRefreshInfo *refresh_info,
-                                            const int64_t schema_version);
+                                            const int64_t schema_version,
+                                            share::schema::ObMViewInfo &mview_info);
 
   static int disable_mview_refresh_job(common::ObISQLClient &sql_client,
                                        const uint64_t tenant_id,
