@@ -117,9 +117,20 @@ static int pktc_handle_req_queue(pktc_t* io) {
   int cnt = 0;
   while(cnt < 128 && (l = sc_queue_pop(&io->req_queue))) {
     pktc_req_t* req = structof(l, pktc_req_t, link);
-    PNIO_DELAY_WARN(delay_warn("pktc_handle_req_queue", req->ctime_us, HANDLE_DELAY_WARN_US));
-    pktc_post_io(io, req);
-    cnt++;
+    if (unlikely(PN_NORMAL_PKT != req->pkt_type)) {
+      // cmd pkt
+      pn_client_cmd_req_t* cmd_req = structof(req, pn_client_cmd_req_t, req);
+      if (PN_CMD_TERMINATE_PKT == cmd_req->cmd) {
+        // make rpc callback executed in advance
+        rk_info("hand cmd req, cmd=%ld, arg=%ld", cmd_req->cmd, cmd_req->arg);
+        pktc_resp_cb_on_terminate(io, (uint32_t)cmd_req->arg);
+      }
+      cfifo_free(cmd_req);
+    } else {
+      PNIO_DELAY_WARN(delay_warn("pktc_handle_req_queue", req->ctime_us, HANDLE_DELAY_WARN_US));
+      pktc_post_io(io, req);
+      cnt++;
+    }
   }
   return cnt == 0? EAGAIN: 0;
 }

@@ -278,6 +278,7 @@ typedef struct pn_client_req_t
   easy_head_t head;
 } pn_client_req_t;
 
+
 typedef struct pn_client_slice_t
 {
   int64_t ref_;
@@ -307,8 +308,10 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
   cfifo_free(pn_cb);
 }
 
-static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const char* req, int64_t req_sz, int16_t categ_id, int64_t expire_us, client_cb_t client_cb, void* arg)
+static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const pn_pkt_t* pkt)
 {
+  const char* req = pkt->buf;
+  const int64_t req_sz = pkt->sz;
   pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
   if (unlikely(NULL == pn_req)) {
     return NULL;
@@ -320,19 +323,37 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   }
   pktc_cb_t* cb = &pn_cb->cb;
   pktc_req_t* r = &pn_req->req;
-  pn_cb->client_cb = client_cb;
-  pn_cb->arg = arg;
+  pn_cb->client_cb = pkt->cb;
+  pn_cb->arg = pkt->arg;
   cb->id = pkt_id;
-  cb->expire_us = expire_us;
+  cb->expire_us = pkt->expire_us;
   cb->resp_cb = pn_pktc_resp_cb;
   cb->errcode = PNIO_OK;
   cb->req = r;
+  r->pkt_type = PN_NORMAL_PKT;
   r->flush_cb = pn_pktc_flush_cb;
   r->resp_cb = cb;
   r->dest = dest;
-  r->categ_id = categ_id;
+  r->categ_id = pkt->categ_id;
   dlink_init(&r->link);
   eh_copy_msg(&r->msg, cb->id, req, req_sz);
+  return r;
+}
+
+static pktc_req_t* pn_create_cmd_req(pn_t* pn, int64_t cmd, uint64_t pkt_id)
+{
+  pktc_req_t* r = NULL;
+  pn_client_cmd_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req));
+  if (likely(pn_req)) {
+    memset(pn_req, 0, sizeof(*pn_req));
+    r = &pn_req->req;
+    r->pkt_type = PN_CMD_PKT;
+    r->flush_cb = NULL;
+    r->resp_cb = NULL;
+    pn_req->cmd = cmd;
+    pn_req->arg = pkt_id;
+    eh_copy_msg(&r->msg, pkt_id, NULL, 0);
+  }
   return r;
 }
 
@@ -348,9 +369,15 @@ static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
   return pgrp->pn_array[tid % pgrp->count];
 }
 
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int64_t sz, int16_t categ_id, int64_t expire_us, client_cb_t cb, void* arg)
+PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
 {
   int err = 0;
+  const char* buf = pkt->buf;
+  const int64_t sz = pkt->sz;
+  const int16_t categ_id = pkt->categ_id;
+  const int64_t expire_us = pkt->expire_us;
+  const void* arg = pkt->arg;
+
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
   addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
@@ -364,12 +391,13 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   } else if (LOAD(&pn->is_stop_)) {
     err = PNIO_STOPPED;
   } else {
-    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, buf, sz, categ_id, expire_us, cb, arg);
+    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, pkt);
     if (NULL == r) {
       err = ENOMEM;
     } else {
       if (NULL != arg) {
         *((void**)arg) = r;
+        *pkt_id_ret = pkt_id;
       }
       err = pktc_post(&pn->pktc, r);
     }
@@ -572,6 +600,24 @@ PN_API uint64_t pn_get_rxbytes(int grp_id) {
     bytes = LOAD(&grp->rx_bytes);
   }
   return bytes;
+}
+
+PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id) {
+  int err = 0;
+  pn_grp_t* pgrp = locate_grp(gtid>>32);
+  if (NULL == pgrp) {
+    err = EINVAL;
+  } else {
+    pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
+    pktc_req_t* r = pn_create_cmd_req(pn, PN_CMD_TERMINATE_PKT, pkt_id);
+    if (NULL == r) {
+      err = ENOMEM;
+      rk_warn("create cmd req failed, gtid=0x%lx, pkt_id=%u", gtid, pkt_id);
+    } else {
+      err = pktc_post(&pn->pktc, r);
+    }
+  }
+  return err;
 }
 
 int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)

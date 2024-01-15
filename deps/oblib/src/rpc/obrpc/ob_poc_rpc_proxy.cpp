@@ -14,6 +14,7 @@
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "share/ob_errno.h"
 extern "C" {
 #include "rpc/pnio/r0/futex.h"
 }
@@ -63,8 +64,20 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
 int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz)
 {
   ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, wait_timeout_us / 1000, pcode, req_sz);
+  const struct timespec ts = {1, 0};
+  bool has_terminated = false;
   while(ATOMIC_LOAD(&cond_) == 0) {
-    rk_futex_wait(&cond_, 0, NULL);
+    if (!has_terminated && OB_ERR_SESSION_INTERRUPTED == THIS_WORKER.check_status()) {
+      RPC_LOG(INFO, "check session killed, will execute pn_terminate_pkt", K(gtid_), K(pkt_id_));
+      int err = 0;
+      if ((err = pn_terminate_pkt(gtid_, pkt_id_)) != 0) {
+        int tmp_ret = tranlate_to_ob_error(err);
+        RPC_LOG_RET(WARN, tmp_ret, "pn_terminate_pkt failed", K(err));
+      } else {
+        has_terminated = true;
+      }
+    }
+    rk_futex_wait(&cond_, 0, &ts);
   }
   return send_ret_;
 }
