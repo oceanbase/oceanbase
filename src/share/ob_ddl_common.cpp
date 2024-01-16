@@ -346,9 +346,9 @@ int ObDDLUtil::get_tablets(
     LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("get table schema failed", K(ret), K(table_id));
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(table_schema->get_tablet_ids(tablet_ids))) {
-    LOG_WARN("get tablets failed", K(ret), K(*table_schema));
+    LOG_WARN("get tablets failed", K(ret), KPC(table_schema));
   }
   return ret;
 }
@@ -2434,7 +2434,7 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
   const uint64_t index_table_id,
   const uint64_t ddl_task_id,
   const int64_t execution_id,
-  ObIArray<ObTabletID> &tablet_ids,
+  const ObIArray<ObTabletID> &tablet_ids,
   bool &is_checksums_all_report)
 {
   int ret = OB_SUCCESS;
@@ -2557,6 +2557,7 @@ int ObCheckTabletDataComplementOp::check_finish_report_checksum(
     LOG_WARN("fail to check report checksum finished", K(ret), K(tenant_id), K(index_table_id), K(execution_id), K(ddl_task_id));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, index_table_id, dest_tablet_ids))) {
     LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_FALSE_IT(std::sort(dest_tablet_ids.begin(), dest_tablet_ids.end()))) { // sort in ASC order.
   } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, index_table_id, ddl_task_id, execution_id, dest_tablet_ids, is_checksums_all_report))) {
     LOG_WARN("fail to check tablet checksum update status, maybe EAGAIN", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
   } else if (!is_checksums_all_report) {
