@@ -38,9 +38,10 @@ ObActiveSessionStat &ObActiveSessionGuard::get_stat()
   return *get_stat_ptr();
 }
 
+// called when forground session ends.
 void ObActiveSessionGuard::setup_default_ash()
 {
-  setup_thread_local_ash();
+  resetup_thread_local_ash();
 }
 
 void ObActiveSessionGuard::setup_ash(ObActiveSessionStat &stat)
@@ -65,6 +66,7 @@ void ObActiveSessionGuard::resetup_thread_local_ash()
   get_stat_ptr() = &thread_local_stat_;
 }
 
+// called when background session start to activate.
 void ObActiveSessionGuard::setup_thread_local_ash()
 {
   get_stat_ptr() = &thread_local_stat_;
@@ -335,7 +337,7 @@ ObRPCActiveGuard::~ObRPCActiveGuard()
   if (OB_UNLIKELY(stat != &ObActiveSessionGuard::thread_local_stat_)) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "ash stat didn't reset to thread local ash",
         KPC(stat), K_(ObActiveSessionGuard::thread_local_stat), K(stat), K(&ObActiveSessionGuard::thread_local_stat_));
-    ObActiveSessionGuard::setup_thread_local_ash();
+    ObActiveSessionGuard::setup_default_ash();
   }
   ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
   ObActiveSessionGuard::get_stat().pcode_ = 0;

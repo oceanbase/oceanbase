@@ -35,8 +35,10 @@ int ObInitSqcP::init()
   ObPxSqcHandler *sqc_handler = nullptr;
   if (OB_ISNULL(sqc_handler = ObPxSqcHandler::get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
+    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
+    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("Failed to init sqc handler", K(ret));
   } else {
     arg_.sqc_handler_ = sqc_handler;
@@ -357,8 +359,10 @@ int ObInitFastSqcP::init()
   ObPxSqcHandler *sqc_handler = nullptr;
  if (OB_ISNULL(sqc_handler = ObPxSqcHandler::get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
+    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
+    ObActiveSessionGuard::setup_default_ash();
     LOG_WARN("Failed to init sqc handler", K(ret));
   } else {
     arg_.sqc_handler_ = sqc_handler;
