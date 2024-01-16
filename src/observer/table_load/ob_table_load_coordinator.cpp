@@ -353,6 +353,12 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           ret = OB_TIMEOUT;
           LOG_WARN("gen_apply_arg wait too long", KR(ret));
           break;
+        } else if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+          LOG_WARN("fail to check status", KR(ret));
+          break;
+        } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
+          LOG_WARN("fail to check status", KR(ret));
+          break;
         } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
                                                                                        apply_arg.tenant_id_,
                                                                                        share::SYS_LS,
