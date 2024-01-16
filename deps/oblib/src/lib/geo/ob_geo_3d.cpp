@@ -72,7 +72,7 @@ int ObGeometry3D::to_2d_geo(ObIAllocator &allocator, ObGeometry *&res)
     } else if (OB_FAIL(visit_wkb_inner(visitor))) {
       LOG_WARN("fail to convert to 2d wkb", K(ret));
     } else if (!is_end()) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("has extra byte unparse", K(ret), K(cur_pos_), K(length()));
     } else {
       wkb_2d.assign_ptr(wkb_buf->ptr(), wkb_buf->length());
@@ -153,7 +153,7 @@ int ObGeometry3D::to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid/*
   } else if (OB_FAIL(visit_wkb_inner(visitor))) {
     LOG_WARN("fail to convert to wkt", K(ret));
   } else if (!is_end()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ERR_GIS_INVALID_DATA;
     LOG_WARN("has extra buffer in wkb", K(ret), K(cur_pos_), K(length()));
   } else {
     wkt.assign_ptr(buf->ptr(), buf->length());

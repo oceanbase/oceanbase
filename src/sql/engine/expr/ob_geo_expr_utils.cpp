@@ -851,13 +851,13 @@ int ObGeoExprUtils::length_unit_conversion(const ObString &unit_str, const ObSrs
 }
 
 int ObGeoExprUtils::get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    omt::ObSrsCacheGuard &srs_guard, const char *func_name,
     const ObSrsItem *&srs, ObGeometry *&geo)
 {
   int ret = OB_SUCCESS;
   ObString wkb = gis_datum->get_string();
   ObGeoType type = ObGeoType::GEOTYPEMAX;
   uint32_t srid = -1;
-  omt::ObSrsCacheGuard srs_guard;
   if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
           *gis_datum,
           gis_arg->datum_meta_,
@@ -876,7 +876,7 @@ int ObGeoExprUtils::get_input_geometry(ObIAllocator &allocator, ObDatum *gis_dat
                   wkb,
                   geo,
                   srs,
-                  N_PRIV_ST_EQUALS,
+                  func_name,
                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     LOG_WARN("get first geo by wkb failed", K(ret));
   }

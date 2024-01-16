@@ -66,6 +66,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   ObDatum *gis_datum1 = nullptr;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = nullptr;
   ObGeometry *geo = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum1))) {
@@ -73,7 +74,7 @@ int ObExprPrivSTMakeValid::eval_priv_st_makevalid(const ObExpr &expr, ObEvalCtx 
   } else if (gis_datum1->is_null()) {
     res.set_null();
   } else if (OB_FAIL(ObGeoExprUtils::get_input_geometry(tmp_allocator, gis_datum1, ctx,
-                                                        expr.args_[0], srs, geo))) {
+                                                        expr.args_[0], srs_guard, N_PRIV_ST_MAKEVALID, srs, geo))) {
     LOG_WARN("eval geo args failed", K(ret));
   } else if (geo->crs() != ObGeoCRS::Cartesian) {
     ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;

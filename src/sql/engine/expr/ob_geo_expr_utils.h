@@ -181,6 +181,7 @@ public:
   static int reverse_coordinate(ObGeometry *geo, const char *func_name);
   static int length_unit_conversion(const ObString &unit_str, const ObSrsItem *srs, double in_num, double &out_num);
   static int get_input_geometry(ObIAllocator &allocator, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg,
+    omt::ObSrsCacheGuard &srs_guard, const char *func_name,
     const ObSrsItem *&srs, ObGeometry *&geo);
   static int make_valid_polygon_inner(
     ObCartesianPolygon &poly, ObIAllocator &allocator, ObGeometry *&valid_poly);

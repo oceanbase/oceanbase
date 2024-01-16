@@ -8350,6 +8350,9 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
           LOG_WARN("invalid type for layer name", K(ret), K(type));
         } else if (OB_FAIL(ob_write_string(allocator, tmp_obj[i].get_string(), mvt_res.feature_id_name_))) {
           LOG_WARN("write string failed", K(ret), K(tmp_obj[i].get_string()));
+        } else if (mvt_res.feature_id_name_.empty()) {
+          ret = OB_WRONG_COLUMN_NAME;
+          LOG_WARN("input an empty feature id name", K(ret));
         }
       }
     }
