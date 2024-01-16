@@ -1103,7 +1103,7 @@ int ObTableSqlService::add_columns_for_core(ObISQLClient &sql_client, const ObTa
   }
   // for batch sql query
   bool enable_stash_query = false;
-  ObSqlTransQueryStashDesc *stash_desc;
+  ObSqlTransQueryStashDesc *stash_desc = NULL;
   ObMySQLTransaction* trans = dynamic_cast<ObMySQLTransaction*>(&sql_client);
   if (OB_SUCC(ret) && trans != nullptr && trans->get_enable_query_stash()) {
     enable_stash_query = true;
@@ -1186,8 +1186,8 @@ int ObTableSqlService::add_columns_for_not_core(ObISQLClient &sql_client,
   ObSqlString *column_history_sql_ptr = &column_history_sql_obj;
   // for batch sql query
   bool enable_stash_query = false;
-  ObSqlTransQueryStashDesc *stash_desc;
-  ObSqlTransQueryStashDesc *stash_desc2;
+  ObSqlTransQueryStashDesc *stash_desc = NULL;
+  ObSqlTransQueryStashDesc *stash_desc2 = NULL;
   ObMySQLTransaction* trans = dynamic_cast<ObMySQLTransaction*>(&sql_client);
   if (OB_SUCC(ret) && trans != nullptr && trans->get_enable_query_stash()) {
     if (OB_FAIL(trans->get_stash_query(tenant_id, OB_ALL_COLUMN_TNAME, stash_desc))) {

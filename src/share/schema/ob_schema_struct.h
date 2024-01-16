@@ -4453,7 +4453,9 @@ struct ObRoutinePrivDBKey
 
 struct ObRoutinePrivSortKey
 {
-  ObRoutinePrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
+  ObRoutinePrivSortKey() :
+    tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
+    db_(), routine_(), routine_type_(0)
   {}
   ObRoutinePrivSortKey(const uint64_t tenant_id, const uint64_t user_id,
                      const common::ObString &db, const common::ObString &routine, int64_t routine_type)

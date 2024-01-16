@@ -232,7 +232,10 @@ int ObUpdateIndexStatusHelper::update_status_()
     } else if (arg_.task_id_ != 0) {
       ObSchemaVersionGenerator *tsi_generator = GET_TSI(TSISchemaVersionGenerator);
       int64_t consensus_schema_version = OB_INVALID_VERSION;
-      if (OB_FAIL(tsi_generator->get_end_version(consensus_schema_version))) {
+      if (OB_ISNULL(tsi_generator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tsi schema version generator is null", KR(ret));
+      } else if (OB_FAIL(tsi_generator->get_end_version(consensus_schema_version))) {
         LOG_WARN("fail to get end version", KR(ret), K_(tenant_id), K_(arg));
       } else if (OB_FAIL(ObDDLTaskRecordOperator::update_consensus_schema_version(
                          trans_, tenant_id_, arg_.task_id_, consensus_schema_version))) {

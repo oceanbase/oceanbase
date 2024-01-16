@@ -6917,7 +6917,7 @@ int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &genera
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard schema_guard;
       ObRawExpr *expr = NULL;
-      lib::Worker::CompatMode compat_mode;
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
       if (OB_FAIL(default_session.init(0, 0, &allocator))) {
         LOG_WARN("init empty session failed", K(ret));
@@ -6988,7 +6988,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
       const ObTenantSchema *tenant_schema = NULL;
       ObSchemaGetterGuard schema_guard;
       ObRawExpr *expr = NULL;
-      lib::Worker::CompatMode compat_mode;
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
       if (OB_FAIL(default_session.init(0, 0, &allocator))) {
         LOG_WARN("init empty session failed", K(ret));
       } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -7227,7 +7227,7 @@ int ObDDLService::modify_func_expr_column_name(
     } else {
       char *new_part_func_expr_buf = NULL;
       int64_t outer_pos = 0;
-      lib::Worker::CompatMode compat_mode;
+      lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
       if (OB_ISNULL(new_part_func_expr_buf =
                     static_cast<char *>(allocator.alloc(OB_MAX_SQL_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -7615,7 +7615,7 @@ int ObDDLService::rebuild_constraint_check_expr(
       } else {
         char *new_check_expr_buf = NULL;
         int64_t outer_pos = 0;
-        lib::Worker::CompatMode compat_mode;
+        lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
         if (OB_ISNULL(new_check_expr_buf =
                       static_cast<char *>(allocator.alloc(OB_MAX_SQL_LENGTH)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
