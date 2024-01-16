@@ -4525,13 +4525,12 @@ opt_table_option_list opt_partition_option
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor '(' table_element_list ')'
  opt_table_option_list opt_partition_option opt_as select_stmt
 {
-  (void)($1);
   (void)$11;
   ParseNode *table_elements = NULL;
   ParseNode *table_options = NULL;
   merge_nodes(table_elements, result, T_TABLE_ELEMENT_LIST, $7);
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $9);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
@@ -4539,16 +4538,16 @@ opt_table_option_list opt_partition_option
                            table_options,        /* table option(s) */
                            $10,                  /* partition optition */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
-                           $12);                 /* select_stmt */
+                           $12,                  /* select_stmt */
+                           $1);                  /* hints */
   $$->reserved_ = 0;
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor table_option_list opt_partition_option opt_as select_stmt
 {
-  (void)($1);
   (void)$8;
   ParseNode *table_options = NULL;
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
@@ -4556,14 +4555,14 @@ opt_table_option_list opt_partition_option
                            table_options,        /* table option(s) */
                            $7,                   /* partition optition */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
-                           $9);                  /* select_stmt */
+                           $9,                   /* select_stmt */
+                           $1);                  /* hints */
   $$->reserved_ = 0;
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor partition_option opt_as select_stmt
 {
-  (void)($1);
   (void)$7;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
@@ -4571,13 +4570,13 @@ opt_table_option_list opt_partition_option
                            NULL,                 /* table option(s) */
                            $6,                   /* partition optition */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
-                           $8);                  /* select_stmt */
+                           $8,                   /* select_stmt */
+                           $1);                  /* hints */
   $$->reserved_ = 1; /* mean partition optition is partition_option, not opt_partition_option*/
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor select_stmt
 {
-  (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
@@ -4585,13 +4584,13 @@ opt_table_option_list opt_partition_option
                            NULL,                 /* table option(s) */
                            NULL,                 /* partition optition */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
-                           $6);                  /* select_stmt */
+                           $6,                   /* select_stmt */
+                           $1);                  /* hints */
   $$->reserved_ = 0;
 }
 | create_with_opt_hint special_table_type TABLE opt_if_not_exists relation_factor AS select_stmt
 {
-  (void)($1);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 8,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_TABLE, 9,
                            $2,                   /* temporary option */
                            $4,                   /* if not exists */
                            $5,                   /* table name */
@@ -4599,7 +4598,8 @@ opt_table_option_list opt_partition_option
                            NULL,                 /* table option(s) */
                            NULL,                 /* partition optition */
                            NULL,                 /* oracle兼容模式下存放临时表的 on commit 选项 */
-                           $7);                  /* select_stmt */
+                           $7,                   /* select_stmt */
+                           $1);                  /* hints */
   $$->reserved_ = 0;
 }
 ;

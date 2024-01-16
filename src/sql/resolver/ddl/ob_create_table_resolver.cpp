@@ -839,6 +839,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to deep copy string in part expr");
       }
     }
+    if (OB_SUCC(ret) && is_create_as_sel) {
+      if (OB_FAIL(resolve_hints(create_table_node->children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1],
+                               *create_table_stmt,
+                               create_table_stmt->get_create_table_arg().schema_))) {
+        LOG_WARN("fail to resolve hint", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -1737,7 +1744,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
   const ObTableSchema *base_table_schema = NULL;
-  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1];
+  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 2];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
   select_resolver.params_.is_from_create_table_ = true;

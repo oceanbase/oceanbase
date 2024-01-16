@@ -97,9 +97,9 @@ private:
   //  }
   //
   // create table xxx as already_exist_table, pay attention to whether data are need
-    protected:
-      ObSelectStmt *sub_select_stmt_; //create table  ... as select...
-      ObSelectStmt *view_define_;
+protected:
+  ObSelectStmt *sub_select_stmt_; //create table  ... as select...
+  ObSelectStmt *view_define_;
 };
 
 inline obrpc::ObCreateTableArg &ObCreateTableStmt::get_create_table_arg()
