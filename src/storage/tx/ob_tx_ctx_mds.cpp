@@ -193,7 +193,47 @@ int ObTxMDSCache::decide_cache_state_log_mds_barrier_type(
   return ret;
 }
 
-int ObTxMDSCache::copy_to(ObTxBufferNodeArray &tmp_array) const
+int ObTxMDSCache::reserve_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(final_notify_array_.reserve(mds_list_.size() + mds_durable_arr.count()))) {
+    TRANS_LOG(WARN, "reserve notify array space failed", K(ret), K(mds_list_.size()),
+              K(mds_durable_arr.count()));
+  }
+
+  return ret;
+}
+
+int ObTxMDSCache::generate_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr,
+                                               bool need_merge_cache,
+                                               bool allow_log_overflow)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(final_notify_array_.assign(mds_durable_arr))) {
+    TRANS_LOG(WARN, "assign mds_durable_arr failed", K(ret), K(mds_durable_arr.count()),
+              K(final_notify_array_.get_capacity()), KPC(this));
+
+  } else if (need_merge_cache) {
+    if (OB_FAIL(copy_to_(final_notify_array_))) {
+      TRANS_LOG(WARN, "merge mds_cache into final_notify_array failed", K(ret),
+                K(mds_durable_arr.count()), K(final_notify_array_.get_capacity()), KPC(this));
+    }
+  }
+
+  if (!allow_log_overflow) {
+    if (final_notify_array_.get_serialize_size() > ObTxMultiDataSourceLog::MAX_MDS_LOG_SIZE) {
+      TRANS_LOG(WARN, "MDS array is overflow, use empty MDS array",
+                K(final_notify_array_.get_serialize_size()), K(mds_durable_arr.count()), KPC(this));
+      final_notify_array_.reuse();
+    }
+  }
+
+  return ret;
+}
+
+int ObTxMDSCache::copy_to_(ObTxBufferNodeArray &tmp_array) const
 {
   int ret = OB_SUCCESS;
 
