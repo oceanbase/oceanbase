@@ -1004,7 +1004,8 @@ int ObTransService::create_global_implicit_savepoint_(ObTxDesc &tx,
 int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
                                                    const ObTxSEQ savepoint,
                                                    const int64_t expire_ts,
-                                                   const share::ObLSArray *extra_touched_ls)
+                                                   const share::ObLSArray *extra_touched_ls,
+                                                   const int exec_errcode)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(tx.lock_);
@@ -1021,7 +1022,8 @@ int ObTransService::rollback_to_implicit_savepoint(ObTxDesc &tx,
     ret = rollback_to_global_implicit_savepoint_(tx,
                                                  savepoint,
                                                  expire_ts,
-                                                 extra_touched_ls);
+                                                 extra_touched_ls,
+                                                 exec_errcode);
   }
   return ret;
 }
@@ -1074,12 +1076,13 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                                            const ObTxSEQ savepoint,
                                                            const int64_t expire_ts,
-                                                           const share::ObLSArray *extra_touched_ls)
+                                                           const share::ObLSArray *extra_touched_ls,
+                                                           const int exec_errcode)
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
   tx.inc_op_sn();
-  bool reset_tx = false, normal_rollback = false;
+  bool reset_tx = false, normal_rollback = false, reset_tx_state = false;
   // merge extra touched ls
   if (OB_NOT_NULL(extra_touched_ls) && !extra_touched_ls->empty()) {
     if (OB_FAIL(tx.update_parts(*extra_touched_ls))) {
@@ -1106,12 +1109,15 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
           && !tx.has_implicit_savepoint() // to first savepoint
           && tx.active_scn_ >= savepoint  // rollback all dirty state
           && !tx.has_extra_state_()) {    // hasn't explicit savepoint or serializable snapshot
-        reset_tx = true;
         /*
-         * Avoid lock conflicts between first stmt retry and tx async abort(end first stmt caused)
-         * Add a sync rollback process before async abort tx.
+         * if sql execute error code don't need reset(abort) tx but need rollback stmt and retry
+         * e.g. "lock conflict error"
+         * to ensure next retry can still recognize it is first stmt in transaction
+         * we should reset tx state
          */
-        normal_rollback = true;
+        reset_tx = tx_need_reset_(exec_errcode);
+        reset_tx_state = !reset_tx;
+        normal_rollback = !reset_tx;
       } else {
         normal_rollback = true;
       }
@@ -1147,7 +1153,13 @@ int ObTransService::rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
       tx.inc_op_sn();
       abort_tx_(tx, ObTxAbortCause::SAVEPOINT_ROLLBACK_FAIL);
     } else {
-      /*
+      if (reset_tx_state) {
+        // first stmt retry need reset tx state
+        tx.state_ = ObTxDesc::State::IDLE;
+        tx.parts_.reset();
+        tx.active_scn_.reset();
+      }
+       /*
        * advance txn op_seqence to barrier duplicate rollback msg
        * otherwise, rollback may erase following write
        */
@@ -2001,6 +2013,24 @@ int ObTransService::sql_stmt_end_hook(const ObXATransID &xid, ObTxDesc &tx)
       tx_desc_mgr_.remove(tx);
     }
     TRANS_LOG(INFO, "xa trans end stmt", K(ret), K_(tx.xid), K(xid));
+  }
+  return ret;
+}
+
+// error code whether need reset tx when rollback fisrt stmt
+// error codes do not need reset tx
+// 1. lock conflict error code
+bool ObTransService::tx_need_reset_(const int error_code) const
+{
+  bool ret = true;
+  switch (error_code) {
+    case OB_TRANSACTION_SET_VIOLATION:
+    case OB_TRY_LOCK_ROW_CONFLICT:
+      ret = false;
+      break;
+    default:
+      ret = true;
+      break;
   }
   return ret;
 }

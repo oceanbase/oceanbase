@@ -1037,6 +1037,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   sql::stmt::StmtType stmt_type = sql::stmt::StmtType::T_NONE;
   bool is_plain_select = false;
   transaction::ObTxSEQ savepoint = das_ctx.get_savepoint();
+  int exec_errcode = exec_ctx.get_errcode();
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1064,7 +1065,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
     } else if (rollback) {
       auto stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
       auto &touched_ls = tx_result.get_touched_ls();
-      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls),
+      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
           savepoint, stmt_expire_ts, touched_ls);
       // prioritize returning session error code
       if (session->is_terminate(ret)) {

@@ -370,7 +370,8 @@ int rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            const ObTxSEQ savepoint,
                                            const int64_t expire_ts,
-                                           const share::ObLSArray *extra_touched_ls);
+                                           const share::ObLSArray *extra_touched_ls,
+                                           const int exec_errcode);
 int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const ObTxSEQ savepoint,
                                  const int64_t op_sn,
@@ -378,6 +379,7 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
 int tx_sanity_check_(ObTxDesc &tx);
+bool tx_need_reset_(const int error_code) const;
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,
                         ObTxTableGuard &guard);
