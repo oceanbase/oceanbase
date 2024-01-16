@@ -1461,7 +1461,7 @@ int MdsTableImpl<MdsTableType>::forcely_reset_mds_table(const char *reason)
   if (OB_FAIL(for_each_scan_row(FowEachRowAction::RESET, op))) {
     MDS_LOG_GC(ERROR, "fail to do reset");
   } else {
-    debug_info_.last_reset_ts_ = ObClockGenerator::getCurrentTime();
+    debug_info_.last_reset_ts_ = ObClockGenerator::getClock();
     flushing_scn_.reset();
     last_inner_recycled_scn_ = share::SCN::min_scn();
     rec_scn_ = share::SCN::max_scn();

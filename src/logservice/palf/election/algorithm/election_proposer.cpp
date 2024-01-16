@@ -222,13 +222,13 @@ int ElectionProposer::register_renew_lease_task_()
     int ret = OB_SUCCESS;
     LockGuard lock_guard(p_election_->lock_);
     // 周期性打印选举的状态
-    if (ObClockGenerator::getCurrentTime() > last_dump_proposer_info_ts_ + 3_s) {
-      last_dump_proposer_info_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_proposer_info_ts_ + 3_s) {
+      last_dump_proposer_info_ts_ = ObClockGenerator::getClock();
       ELECT_LOG(INFO, "dump proposer info", K(*this));
     }
     // 周期性打印选举的消息收发统计信息
-    if (ObClockGenerator::getCurrentTime() > last_dump_election_msg_count_state_ts_ + 10_s) {
-      last_dump_election_msg_count_state_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_election_msg_count_state_ts_ + 10_s) {
+      last_dump_election_msg_count_state_ts_ = ObClockGenerator::getClock();
       char ls_id_buffer[32] = {0};
       auto pretend_to_be_ls_id = [ls_id_buffer](const int64_t id) mutable {
         int64_t pos = 0;
@@ -328,7 +328,7 @@ void ElectionProposer::prepare(const ObRole role)
   ELECT_TIME_GUARD(500_ms);
   #define PRINT_WRAPPER KR(ret), K(role), K(*this)
   int ret = OB_SUCCESS;
-  int64_t cur_ts = ObClockGenerator::getCurrentTime();
+  int64_t cur_ts = ObClockGenerator::getClock();
   LogPhase phase = role == ObRole::LEADER ? LogPhase::RENEW_LEASE : LogPhase::ELECT_LEADER;
   if (memberlist_with_states_.get_member_list().get_addr_list().empty()) {
     LOG_PHASE(INFO, phase, "memberlist is empty, give up do prepare this time");
@@ -426,7 +426,7 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
                                                                            .get_addr_list()))) {
         LOG_ELECT_LEADER(ERROR, "broadcast prepare request failed");
       } else {
-        last_do_prepare_ts_ = ObClockGenerator::getCurrentTime();
+        last_do_prepare_ts_ = ObClockGenerator::getClock();
         if (role_ == ObRole::LEADER) {
           LOG_ELECT_LEADER(INFO, "join elect leader phase as leader");
         } else if (role_ == ObRole::FOLLOWER) {

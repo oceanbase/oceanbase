@@ -317,7 +317,7 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   ObCommitVersionsArray past_commit_versions;
   ObCommitVersionsArray merged_commit_versions;
 
-  int64_t current_time = ObClockGenerator::getCurrentTime();
+  int64_t current_time = ObClockGenerator::getClock();
   int64_t prev_recycle_time = memtable_mgr_->get_mini_merge_recycle_commit_versions_ts();
   if (current_time - prev_recycle_time < MINI_RECYCLE_COMMIT_VERSIONS_INTERVAL_US) {
     // tx data mini merge do not recycle commit versions array every time

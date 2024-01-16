@@ -355,8 +355,8 @@ class ElectionMsgCounter
       struct Counter
       {
         Counter() : send_count_(0), receive_count_(0), last_send_ts_(0), last_received_ts_(0) {}
-        void add_send_count() { ++send_count_; last_send_ts_ = ObClockGenerator::getCurrentTime(); }
-        void add_received_count() { ++receive_count_; last_received_ts_ = ObClockGenerator::getCurrentTime(); }
+        void add_send_count() { ++send_count_; last_send_ts_ = ObClockGenerator::getClock(); }
+        void add_received_count() { ++receive_count_; last_received_ts_ = ObClockGenerator::getClock(); }
         void reset() { new (this)Counter(); }
         int64_t send_count_;
         int64_t receive_count_;

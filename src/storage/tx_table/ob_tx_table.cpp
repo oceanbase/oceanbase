@@ -951,7 +951,7 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
   int ret = OB_SUCCESS;
   real_recycle_scn = SCN::min_scn();
 
-  int64_t current_time_us = ObClockGenerator::getCurrentTime();
+  int64_t current_time_us = ObClockGenerator::getClock();
   int64_t tx_result_retention = DEFAULT_TX_RESULT_RETENTION_S;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
@@ -995,7 +995,7 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
 
     // update cache
     recycle_scn_cache_.val_ = real_recycle_scn;
-    recycle_scn_cache_.update_ts_ = ObClockGenerator::getCurrentTime();
+    recycle_scn_cache_.update_ts_ = ObClockGenerator::getClock();
   }
 
   return ret;

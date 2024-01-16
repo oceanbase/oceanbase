@@ -39,10 +39,6 @@ using namespace oceanbase::rpc::frame;
 
 namespace oceanbase
 {
-namespace memtable
-{
-extern TLOCAL(bool, TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR);
-}
 
 namespace omt
 {
@@ -244,7 +240,6 @@ inline void ObThWorker::process_request(rpc::ObRequest &req)
   reset_sql_throttle_current_priority();
   set_req_flag(&req);
 
-  memtable::TLOCAL_NEED_WAIT_IN_LOCK_WAIT_MGR = false;
   MTL(memtable::ObLockWaitMgr*)->setup(req.get_lock_wait_node(), req.get_receive_timestamp());
   if (OB_FAIL(procor_.process(req))) {
     LOG_WARN("process request fail", K(ret));
