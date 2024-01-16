@@ -582,6 +582,7 @@ private:
       uint64_t &database_id,
       bool &is_user_table,
       const int64_t timeout);
+  // For optimization, table_match is not required in drop_table scenario
   int get_schema_info_of_table_id_(const uint64_t table_id,
       const int64_t schema_version,
       const char *&tenant_name,

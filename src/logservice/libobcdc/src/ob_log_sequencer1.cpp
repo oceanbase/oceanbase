@@ -1344,7 +1344,7 @@ int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &ne
       }
     }
   }
-  LOG_INFO("ddl task schema info", KR(ret), K(need_new_schema), K(task));
+  LOG_DEBUG("ddl task needs schema info", KR(ret), K(task), K(need_new_schema));
   return ret;
 }
 
