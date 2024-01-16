@@ -325,8 +325,9 @@ void ObActiveSessionGuard::set_bkgd_sess_inactive()
   get_stat().set_bkgd_sess_inactive();
 }
 
-ObRPCActiveGuard::ObRPCActiveGuard(int pcode)
+ObRPCActiveGuard::ObRPCActiveGuard(int pcode) : prev_is_bkgd_active_(true)
 {
+  prev_is_bkgd_active_ = ObActiveSessionGuard::get_stat().is_bkgd_active_;
   ObActiveSessionGuard::set_bkgd_sess_active();
   ObActiveSessionGuard::get_stat().pcode_ = pcode;
 }
@@ -339,7 +340,7 @@ ObRPCActiveGuard::~ObRPCActiveGuard()
         KPC(stat), K_(ObActiveSessionGuard::thread_local_stat), K(stat), K(&ObActiveSessionGuard::thread_local_stat_));
     ObActiveSessionGuard::setup_default_ash();
   }
-  ObActiveSessionGuard::get_stat().is_bkgd_active_ = false;
+  ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
   ObActiveSessionGuard::get_stat().pcode_ = 0;
 }
 

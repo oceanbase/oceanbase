@@ -2307,7 +2307,8 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
       prev_tenant_id_(OB_SYS_TENANT_ID),
       prev_session_id_(0),
       prev_stat_(nullptr),
-      need_record_(true)
+      need_record_(true),
+      prev_is_bkgd_active_(true)
 {
   if (is_inner_session_ && OB_NOT_NULL(inner_session) &&
       ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session->get_sessid() &&
@@ -2324,6 +2325,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
 
     // 2. switch the ptr of the thread-local ASH stat to the inner session ASH stat.
     prev_stat_ = &(ObActiveSessionGuard::get_stat());
+    prev_is_bkgd_active_ = prev_stat_->is_bkgd_active_;
     inner_session->set_session_active(); // if success, will call setup_ash(). If failed, inner session will not be sampled.
     ObActiveSessionGuard::get_stat().prev_inner_sql_wait_type_id_ = prev_stat_->inner_sql_wait_type_id_;
 
@@ -2366,6 +2368,7 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
     if (OB_NOT_NULL(prev_stat_)) {
       /* resetup ash stat to previous ash stat */
       ObActiveSessionGuard::resetup_ash(*prev_stat_);
+      ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
     } else {
       ObActiveSessionGuard::setup_default_ash();
       LOG_INFO("previous stat ptr is null", K(lbt()));

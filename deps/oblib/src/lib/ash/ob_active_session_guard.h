@@ -321,6 +321,8 @@ class ObRPCActiveGuard
 public:
   ObRPCActiveGuard(int pcode);
   ~ObRPCActiveGuard();
+private:
+  bool prev_is_bkgd_active_;
 };
 
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \

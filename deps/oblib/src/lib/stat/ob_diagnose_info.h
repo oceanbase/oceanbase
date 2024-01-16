@@ -181,9 +181,12 @@ private:
   ObLatchStatArray latch_stats_;
 };
 
-template <ObWaitEventIds::ObWaitEventIdEnum EVENT_ID,
-    bool IS_IDLE = is_idle_wait_event<EVENT_ID>::value,
-    bool IS_PHYSICAL = is_physical_wait_event<EVENT_ID>::value>
+extern void set_ash_stat(const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3);
+extern void reset_ash_stat(const int64_t event_no, bool is_idle);
+
+template <ObWaitEventIds::ObWaitEventIdEnum EVENT_NO,
+    bool IS_IDLE = is_idle_wait_event<EVENT_NO>::value,
+    bool IS_PHYSICAL = is_physical_wait_event<EVENT_NO>::value>
 class ObBaseWaitEventGuard
 {
 public:
@@ -195,12 +198,13 @@ public:
       need_record_ = true;
       di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
       if (NULL != di_) {
-        if (OB_SUCCESS != di_->notify_wait_begin(EVENT_ID, timeout_ms, p1, p2, p3, IS_PHYSICAL)) {
+        if (OB_SUCCESS != di_->notify_wait_begin(EVENT_NO, timeout_ms, p1, p2, p3, IS_PHYSICAL)) {
           need_record_ = false;
         }
       } else {
         wait_begin_time_ = ObTimeUtility::current_time();
         timeout_ms_ = timeout_ms;
+        set_ash_stat(EVENT_NO, p1, p2, p3);
       }
     } else {
       need_record_ = false;
@@ -214,7 +218,7 @@ public:
       if (NULL != di_ && NULL != tenant_di) {
         di_->notify_wait_end(tenant_di, IS_PHYSICAL, IS_IDLE);
       } else if (NULL == di_ && NULL != tenant_di && 0 != wait_begin_time_) {
-        ObWaitEventStat *tenant_event_stat = tenant_di->get_event_stats().get(EVENT_ID);
+        ObWaitEventStat *tenant_event_stat = tenant_di->get_event_stats().get(EVENT_NO);
         tenant_event_stat->total_waits_++;
         wait_time = ObTimeUtility::current_time() - wait_begin_time_;
         tenant_event_stat->time_waited_ += wait_time;
@@ -224,6 +228,7 @@ public:
         if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
           tenant_event_stat->max_wait_ = static_cast<uint32_t>(wait_time);
         }
+        reset_ash_stat(EVENT_NO, IS_IDLE);
       }
     }
   }
@@ -384,33 +389,53 @@ private:
     ret;                                                        \
   })
 
-#define WAIT_BEGIN(stat_no, ...)                                               \
-  do {                                                                         \
-    if (oceanbase::lib::is_diagnose_info_enabled()) {                          \
-      oceanbase::common::ObDiagnoseSessionInfo *di =                           \
-          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
-      if (di) {                                                                \
-        if (OB_SUCCESS != (di->notify_wait_begin(stat_no, ##__VA_ARGS__))) {   \
-          need_record_ = false;                                                \
-        }                                                                      \
-      }                                                                        \
-    } else {                                                                   \
-      need_record_ = false;                                                    \
-    }                                                                          \
+#define WAIT_BEGIN(stat_no, timeout_ms, p1, p2, p3, is_atomic)                                   \
+  do {                                                                                           \
+    if (oceanbase::lib::is_diagnose_info_enabled()) {                                            \
+      oceanbase::common::ObDiagnoseSessionInfo *di =                                             \
+          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();                   \
+      if (di) {                                                                                  \
+        if (OB_SUCCESS != (di->notify_wait_begin(stat_no, timeout_ms, p1, p2, p3, is_atomic))) { \
+          need_record_ = false;                                                                  \
+        }                                                                                        \
+      } else {                                                                                   \
+        if (ObActiveSessionGuard::get_stat().event_no_ == 0 &&                                   \
+            ObActiveSessionGuard::get_stat().is_bkgd_active_) {                                  \
+          ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time(); \
+          ObActiveSessionGuard::get_stat().set_event(stat_no, p1, p2, p3);                       \
+        }                                                                                        \
+      }                                                                                          \
+    } else {                                                                                     \
+      need_record_ = false;                                                                      \
+    }                                                                                            \
   } while (0)
 
-#define WAIT_END(stat_no)                                                      \
-  do {                                                                         \
-    if (oceanbase::lib::is_diagnose_info_enabled() && need_record_) {          \
-      oceanbase::common::ObDiagnoseSessionInfo *di =                           \
-          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info(); \
-      oceanbase::common::ObDiagnoseTenantInfo *tenant_di =                     \
-          oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();  \
-      if (NULL != di && NULL != tenant_di) {                                   \
-        di->notify_wait_end(tenant_di, OB_WAIT_EVENTS[stat_no].is_phy_,        \
-            OB_WAIT_EVENTS[stat_no].wait_class_ == ObWaitClassIds::IDLE);      \
-      }                                                                        \
-    }                                                                          \
+#define WAIT_END(stat_no)                                                                      \
+  do {                                                                                         \
+    if (oceanbase::lib::is_diagnose_info_enabled() && need_record_) {                          \
+      oceanbase::common::ObDiagnoseSessionInfo *di =                                           \
+          oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();                 \
+      oceanbase::common::ObDiagnoseTenantInfo *tenant_di =                                     \
+          oceanbase::common::ObDiagnoseTenantInfo::get_local_diagnose_info();                  \
+      if (NULL != di && NULL != tenant_di) {                                                   \
+        di->notify_wait_end(tenant_di, OB_WAIT_EVENTS[stat_no].is_phy_,                        \
+            OB_WAIT_EVENTS[stat_no].wait_class_ == ObWaitClassIds::IDLE);                      \
+      } else {                                                                                 \
+        if (ObActiveSessionGuard::get_stat().event_no_ == stat_no) {                           \
+          ObWaitEventDesc desc;                                                                \
+          desc.event_no_ = stat_no;                                                            \
+          desc.p1_ = ObActiveSessionGuard::get_stat().p1_;                                     \
+          desc.p2_ = ObActiveSessionGuard::get_stat().p2_;                                     \
+          desc.p3_ = ObActiveSessionGuard::get_stat().p3_;                                     \
+          ObActiveSessionGuard::get_stat().reset_event();                                      \
+          const int64_t cur_wait_time = ObTimeUtility::current_time() -                        \
+                                        ObActiveSessionGuard::get_stat().wait_event_begin_ts_; \
+          ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;                           \
+          ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;         \
+          ObActiveSessionGuard::get_stat().fixup_last_stat(desc);                              \
+        }                                                                                      \
+      }                                                                                        \
+    }                                                                                          \
   } while (0)
 
 #define SLEEP(time)                                                                        \

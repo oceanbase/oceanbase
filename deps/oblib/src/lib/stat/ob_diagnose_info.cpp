@@ -809,6 +809,10 @@ ObWaitEventGuard::ObWaitEventGuard(
     } else {
       wait_begin_time_ = ObTimeUtility::current_time();
       timeout_ms_ = timeout_ms;
+      if (ObActiveSessionGuard::get_stat().event_no_ == 0 && ObActiveSessionGuard::get_stat().is_bkgd_active_) {
+        ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
+        ObActiveSessionGuard::get_stat().set_event(event_no, p1, p2, p3);
+      }
     }
   } else {
     need_record_ = false;
@@ -833,7 +837,54 @@ ObWaitEventGuard::~ObWaitEventGuard()
       if (wait_time > static_cast<int64_t>(tenant_event_stat->max_wait_)) {
         tenant_event_stat->max_wait_ = wait_time;
       }
+      if (ObActiveSessionGuard::get_stat().event_no_ == event_no_) {
+        ObWaitEventDesc desc;
+        desc.event_no_ = event_no_;
+        desc.p1_ = ObActiveSessionGuard::get_stat().p1_;
+        desc.p2_ = ObActiveSessionGuard::get_stat().p2_;
+        desc.p3_ = ObActiveSessionGuard::get_stat().p3_;
+        ObActiveSessionGuard::get_stat().reset_event();
+        const int64_t cur_wait_time =
+            ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
+        ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
+        if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
+          ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
+        } else {
+          ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
+        }
+        ObActiveSessionGuard::get_stat().fixup_last_stat(desc);
+      }
     }
+  }
+}
+
+void set_ash_stat(const int64_t event_no, const int64_t p1, const int64_t p2, const int64_t p3)
+{
+  if (ObActiveSessionGuard::get_stat().event_no_ == 0 &&
+      ObActiveSessionGuard::get_stat().is_bkgd_active_) {
+    ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = ObTimeUtility::current_time();
+    ObActiveSessionGuard::get_stat().set_event(event_no, p1, p2, p3);
+  }
+}
+
+void reset_ash_stat(const int64_t event_no, bool is_idle)
+{
+  if (ObActiveSessionGuard::get_stat().event_no_ == event_no) {
+    ObWaitEventDesc desc;
+    desc.event_no_ = event_no;
+    desc.p1_ = ObActiveSessionGuard::get_stat().p1_;
+    desc.p2_ = ObActiveSessionGuard::get_stat().p2_;
+    desc.p3_ = ObActiveSessionGuard::get_stat().p3_;
+    ObActiveSessionGuard::get_stat().reset_event();
+    const int64_t cur_wait_time =
+        ObTimeUtility::current_time() - ObActiveSessionGuard::get_stat().wait_event_begin_ts_;
+    ObActiveSessionGuard::get_stat().wait_event_begin_ts_ = 0;
+    if (!is_idle) {
+      ObActiveSessionGuard::get_stat().total_non_idle_wait_time_ += cur_wait_time;
+    } else {
+      ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
+    }
+    ObActiveSessionGuard::get_stat().fixup_last_stat(desc);
   }
 }
 
