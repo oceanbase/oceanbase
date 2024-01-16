@@ -80,7 +80,9 @@ private:
     int ret = OB_SUCCESS;
     DLIST_FOREACH(hp_infras, hp_infras_list) {
       // It has been checked whether it is nullptr when it is added, so it will not be checked here
-      if (OB_FAIL((hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...))) {
+      if (hp_infras->is_destroyed()) {
+        // do nothing
+      } else if (OB_FAIL((hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...))) {
         SQL_ENG_LOG(WARN, "failed to execute function", K(ret));
       }
     }
@@ -93,7 +95,11 @@ private:
   {
     DLIST_FOREACH_NORET(hp_infras, hp_infras_list) {
       // It has been checked whether it is nullptr when it is added, so it will not be checked here
-      (hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...);
+      if (hp_infras->is_destroyed()) {
+        // do nothing
+      } else {
+        (hp_infras->*std::forward<F>(func))(std::forward<Args>(args)...);
+      }
     }
   }
   int try_get_hp_infras_from_free_list(HashPartInfras *&hp_infras);

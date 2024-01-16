@@ -442,6 +442,7 @@ int ObAggregateProcessor::HashBasedDistinctExtraResult::rewind()
 
 ObAggregateProcessor::HashBasedDistinctExtraResult::~HashBasedDistinctExtraResult()
 {
+  reuse();
   if (nullptr != hash_values_for_batch_) {
     alloc_.free(hash_values_for_batch_);
     hash_values_for_batch_ = nullptr;
@@ -450,7 +451,7 @@ ObAggregateProcessor::HashBasedDistinctExtraResult::~HashBasedDistinctExtraResul
     alloc_.free(my_skip_);
     my_skip_ = nullptr;
   }
-  brs_holder_.reset();
+  brs_holder_.destroy();
   hp_infras_ = nullptr;
   aggr_info_ = nullptr;
   hp_infras_mgr_ = nullptr;
@@ -509,7 +510,7 @@ int ObAggregateProcessor::HashBasedDistinctExtraResult::init_distinct_set(
       LOG_WARN("failed to init hash values for batch", K(ret), K(eval_ctx.max_batch_size_));
     } else if (OB_FAIL(init_my_skip(eval_ctx.max_batch_size_))) {
       LOG_WARN("failed to init my skip", K(ret), K(eval_ctx.max_batch_size_));
-    } else if (OB_FAIL(brs_holder_.init(aggr_info.param_exprs_, eval_ctx))) {
+    } else if (OB_FAIL(brs_holder_.init(aggr_info.param_exprs_, eval_ctx, &alloc_))) {
       LOG_WARN("failed to init result holder", K(ret));
     }
   }
