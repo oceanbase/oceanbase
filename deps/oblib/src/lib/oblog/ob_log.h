@@ -639,6 +639,8 @@ public:
   // issue a ERROR message for each EDIAG log right now
   void issue_dba_error(const int errcode, const char *file, const int line, const char *info_str);
 
+  bool is_svr_file_opened();
+
 private:
   //@brief If version <= 0, return true.
   //If version > 0, return version > level_version_ and if true, update level_version_.

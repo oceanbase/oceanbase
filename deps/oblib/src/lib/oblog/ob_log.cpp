@@ -1875,6 +1875,11 @@ void ObLogger::issue_dba_error(const int errcode, const char *file, const int li
                 "errcode", errcode, "file", base_file_name, "line_no", line, "info", info_str);
 }
 
+bool ObLogger::is_svr_file_opened()
+{
+  return log_file_[FD_SVR_FILE].is_opened();
+}
+
 }
 }
 

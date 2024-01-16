@@ -75,6 +75,7 @@ DEFINE_LOG_SUB_MOD(MDS)                  // multi data source
 DEFINE_LOG_SUB_MOD(DATA_DICT)            // data_dictionary module
 DEFINE_LOG_SUB_MOD(MVCC)                 // concurrency_control
 DEFINE_LOG_SUB_MOD(WR)                 // workload repository
+DEFINE_LOG_SUB_MOD(LOGMINER)             // logminer
 LOG_MOD_END(ROOT)
 
 //statement of WRS's sub_modules
@@ -457,6 +458,8 @@ LOG_MOD_END(PL)
 #define _MVCC_LOG(level, _fmt_, args...) _OB_MOD_LOG(MVCC, level, _fmt_, ##args)
 #define WR_LOG(level, info_string, args...) OB_MOD_LOG(WR, level, info_string, ##args)
 #define _WR_LOG(level, _fmt_, args...) _OB_MOD_LOG(WR, level, _fmt_, ##args)
+#define LOGMNR_LOG(level, info_string, args...) OB_MOD_LOG(LOGMINER, level, info_string, ##args)
+#define _LOGMNR_LOG(level, _fmt_, args...) _OB_MOD_LOG(LOGMINER, level, _fmt_, ##args)
 
 //dfine ParMod_SubMod_LOG
 #define WRS_CLUSTER_LOG(level, info_string, args...) OB_SUB_MOD_LOG(WRS, CLUSTER, level,        \
@@ -1139,6 +1142,8 @@ LOG_MOD_END(PL)
 #define _OBLOG_DISPATCHER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_DISPATCHER_LOG(level, ##args); }
 #define OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; OBLOG_SORTER_LOG(level, ##args); }
 #define _OBLOG_SORTER_LOG_RET(level, errcode, args...) { int ret = errcode; _OBLOG_SORTER_LOG(level, ##args); }
+#define LOGMNR_LOG_RET(level, errcode, args...) { int ret = errcode; LOGMNR_LOG(level, ##args); }
+#define _LOGMNR_LOG_RET(level, errcode, args...) { int ret = errcode; _LOGMNR_LOG(level, ##args); }
 #define MDS_LOG_RET(level, errcode, args...) { int ret = errcode; MDS_LOG(level, ##args); }
 #define _MDS_LOG_RET(level, errcode, args...) { int ret = errcode; _MDS_LOG(level, ##args); }
 #define DDLOG_RET(level, errcode, args...){ int ret = errcode; DDLOG(level, ##args); }
