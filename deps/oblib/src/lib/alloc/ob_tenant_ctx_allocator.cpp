@@ -137,7 +137,7 @@ void ObTenantCtxAllocator::print_usage() const
       if (l_item->count_ != 0) {
         ret = databuff_printf(
             buf, BUFLEN, pos,
-            "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld block_cnt=% '8ld chunk_cnt=% '8ld mod=%s\n",
+            "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld block_cnt=% '8d chunk_cnt=% '8d mod=%s\n",
             l_item->hold_, l_item->used_, l_item->count_, l_item->used_ / l_item->count_, l_item->block_cnt_, l_item->chunk_cnt_,
             label.str_);
       }
@@ -147,7 +147,7 @@ void ObTenantCtxAllocator::print_usage() const
     if (OB_SUCC(ret) && sum_item.count_ > 0) {
       ret = databuff_printf(
           buf, BUFLEN, pos,
-          "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld mod=%s\n",
+          "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld mod=%s\n",
           sum_item.hold_, sum_item.used_, sum_item.count_,
           sum_item.used_ / sum_item.count_,
           "SUMMARY");
