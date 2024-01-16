@@ -984,11 +984,23 @@ int ObExprToCharCommon::process_number_sci_value(
     LOG_WARN("allocate memory for number string failed", K(ret));
   } else {
     if (is_double) {
-      str_len = ob_gcvt_opt(input.get_double(), OB_GCVT_ARG_DOUBLE,
-          static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
+      double val = input.get_double();
+      if (isnan(fabs(val)) || fabs(val) == INFINITY){
+        str_len = strlen("Nan");
+        strncpy(buf, "Nan", str_len);
+      } else {
+        str_len = ob_gcvt_opt(val, OB_GCVT_ARG_DOUBLE,
+            static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
+      }
     } else if (is_float) {
-      str_len = ob_gcvt_opt(input.get_float(), OB_GCVT_ARG_FLOAT,
-          static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
+      float val = input.get_float();
+      if (isnan(fabs(val)) || fabs(val) == INFINITY){
+        str_len = strlen("Nan");
+        strncpy(buf, "Nan", str_len);
+      } else {
+        str_len = ob_gcvt_opt(val, OB_GCVT_ARG_FLOAT,
+            static_cast<int32_t>(alloc_size), buf, NULL, lib::is_oracle_mode(), TRUE);
+      }
     } else if (is_decimal_int) {
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
       if (OB_FAIL(wide::to_string(input.get_decimal_int(), input.get_int_bytes(),
