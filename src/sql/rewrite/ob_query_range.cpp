@@ -8166,7 +8166,7 @@ OB_NOINLINE int ObQueryRange::deep_copy(const ObQueryRange &other,
   }
 
   const ColumnIdInfoMap& input_srid = other.get_columnId_map();
-  if (input_srid.created()) {
+  if (OB_SUCC(ret) && input_srid.created()) {
     ColumnIdInfoMap::const_iterator iter = input_srid.begin();
     if (!columnId_map_.created()) {
       if (OB_FAIL(columnId_map_.create(OB_DEFAULT_SRID_BUKER, &map_alloc_, &bucket_allocator_wrapper_))) {

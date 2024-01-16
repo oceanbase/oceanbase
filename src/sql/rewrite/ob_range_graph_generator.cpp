@@ -40,7 +40,7 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("get null expr");
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, max_offset))) {
       LOG_WARN("faield to generate range node", K(ret));
-    } else if (range_nodes.push_back(range_node)) {
+    } else if (OB_FAIL(range_nodes.push_back(range_node))) {
       LOG_WARN("failed to push back range node");
     } else if (expr->is_const_expr()) {
       // isolated const expr which can be used as startup filter. Consider it imprecise.
@@ -150,7 +150,7 @@ int ObRangeGraphGenerator::generate_and_range_node(ObRawExpr *and_expr,
       } else if (OB_FAIL(generate_range_node(expr, range_node_generator, tmp_node,
                                              expr_depth, cur_precise, cur_max_offset))) {
         LOG_WARN("failed to generate range node", K(ret));
-      } else if (range_nodes.push_back(tmp_node)) {
+      } else if (OB_FAIL(range_nodes.push_back(tmp_node))) {
         LOG_WARN("failed to push back range node");
       } else {
         is_precise &= cur_precise;
@@ -192,7 +192,7 @@ int ObRangeGraphGenerator::generate_or_range_node(ObRawExpr *or_expr,
       } else if (OB_FAIL(generate_range_node(expr, range_node_generator, tmp_node,
                                              expr_depth, cur_precise, cur_max_offset))) {
         LOG_WARN("failed to generate range node", K(ret));
-      } else if (range_nodes.push_back(tmp_node)) {
+      } else if (OB_FAIL(range_nodes.push_back(tmp_node))) {
         LOG_WARN("failed to push back range node");
       } else {
         is_precise &= cur_precise;

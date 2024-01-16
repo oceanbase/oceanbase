@@ -2231,9 +2231,9 @@ int ObExpandAggregateUtils::add_win_exprs(ObSelectStmt *select_stmt,
         }
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < replace_exprs.count(); ++j) {
-          if (ObRawExprUtils::replace_ref_column(replace_exprs.at(j),
-                                                 new_win_exprs.at(i),
-                                                 win_expr)) {
+          if (OB_FAIL(ObRawExprUtils::replace_ref_column(replace_exprs.at(j),
+                                                         new_win_exprs.at(i),
+                                                         win_expr))) {
             LOG_WARN("failed to replace ref column.", K(ret));
           }
         }

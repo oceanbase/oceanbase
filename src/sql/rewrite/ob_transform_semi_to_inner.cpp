@@ -328,6 +328,7 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
         TableItem *right_table = view_stmt->get_table_item_by_id(semi_info->right_table_id_);
         ObSelectStmt* right_stmt = NULL;
         if (OB_ISNULL(right_table)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (right_table->is_generated_table()) {
           if (OB_ISNULL(right_stmt = right_table->ref_query_)) {

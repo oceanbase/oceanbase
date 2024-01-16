@@ -2311,6 +2311,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
   TableItem *left_table = NULL;
   ObSEArray<ObRawExpr*, 16> dummy_exprs;
   if (OB_ISNULL(stmt) || OB_ISNULL(semi_info)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexcepted null", K(ret), K(stmt), K(semi_info));
   } else if (OB_ISNULL(right_table = stmt->get_table_item_by_id(semi_info->right_table_id_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -2328,6 +2329,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
       target_exprs.reuse();
       stmt_map_info.reset();
       if (OB_ISNULL(left_table = left_tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexcepted null", K(ret), K(left_table));
       } else if (OB_FAIL(ObTransformUtils::check_table_item_containment(stmt, left_table, stmt,
                                                                         right_table, stmt_map_info,
@@ -2453,6 +2455,7 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
           target_exprs.reuse();
           stmt_map_info.reset();
           if (OB_ISNULL(left_table = all_left_tables.at(j))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexcepted null", K(ret), K(left_table));
           } else if (OB_FAIL(ObTransformUtils::check_table_item_containment(stmt,
                                                                             left_table,

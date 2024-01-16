@@ -1667,6 +1667,7 @@ int ObTransformDBlink::formalize_bool_select_expr(ObDMLStmt *stmt)
       ObRawExpr *null_expr = NULL;
       bool is_bool_expr = false;
       if (OB_ISNULL(select_item.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected select item", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::check_is_bool_expr(select_item.expr_, is_bool_expr))) {
         LOG_WARN("failed to check is bool expr", K(ret));

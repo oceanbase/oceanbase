@@ -263,6 +263,7 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
         LOG_WARN("failed to extract column exprs", K(ret));
       } else if (1 == cur_vars.count()) { // only one column, consider null_sel
         if (OB_ISNULL(cur_vars.at(0))) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is null", K(ret));
         } else if (OB_FAIL(ObOptSelectivity::get_column_basic_sel(table_metas, ctx, *cur_vars.at(0),
                                                                   &distinct_sel, &null_sel))) {
@@ -307,7 +308,7 @@ int ObIsSelEstimator::get_is_sel(const OptTableMetas &table_metas,
     LOG_WARN("failed to calculate const or calculable expr", K(ret));
   } else if (!got_result) {
     // do nothing
-  } else if (ObOptSelectivity::remove_ignorable_func_for_est_sel(left_expr)) {
+  } else if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(left_expr))) {
     LOG_WARN("failed to remove ignorable func", KPC(left_expr));
   } else if (left_expr->is_column_ref_expr()) {
     if (OB_FAIL(ObOptSelectivity::check_column_in_current_level_stmt(stmt, *left_expr))) {
@@ -2256,7 +2257,7 @@ int ObInequalJoinSelEstimator::extract_column_offset(const OptSelectivityCtx &ct
     LOG_WARN("unexpected param", KPC(expr));
   } else if (!ob_is_numeric_type(expr->get_data_type())) {
     is_valid = false;
-  } else if (ObOptSelectivity::remove_ignorable_func_for_est_sel(expr)) {
+  } else if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(expr))) {
     LOG_WARN("failed to remove ignorable expr", KPC(expr));
   } else if (!ob_is_numeric_type(expr->get_data_type())) {
     is_valid = false;

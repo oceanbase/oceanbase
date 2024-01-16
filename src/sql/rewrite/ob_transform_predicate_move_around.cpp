@@ -1802,6 +1802,7 @@ int ObTransformPredicateMoveAround::extract_valid_preds(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> parent_set_exprs;
   if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(stmt->get_pure_set_exprs(parent_set_exprs))) {
     LOG_WARN("failed to get parent set exprs", K(ret));
@@ -1848,6 +1849,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_const_select(ObSelect
   ObSEArray<ObRawExpr *, 4> child_select_list;
   ObSEArray<ObRawExpr *, 4> parent_select_list;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid param", K(ret));
   } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_list))) {
     LOG_WARN("get child stmt select exprs failed", K(ret));
@@ -2509,7 +2511,8 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table(
     }
 
     ObSEArray<ObRawExpr *,4 > properites;
-    if (OB_FAIL(append(properites, pullup_preds))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(properites, pullup_preds))) {
       LOG_WARN("failed to push back predicates", K(ret));
     } else if (OB_FAIL(append(properites, pushdown_preds))) {
       LOG_WARN("failed to append predicates", K(ret));
@@ -3233,6 +3236,7 @@ int ObTransformPredicateMoveAround::accept_predicates(ObDMLStmt &stmt,
   ObExprParamCheckContext context;
   ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints;
   if (OB_ISNULL(stmt.get_query_ctx()) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("init param check context failed", K(ret));
   } else if (OB_FAIL(equal_param_constraints.assign(stmt.get_query_ctx()->all_equal_param_constraints_))
              || OB_FAIL(append(equal_param_constraints, ctx_->equal_param_constraints_))) {
