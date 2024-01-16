@@ -207,7 +207,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.is_fast_heap_table_ = store_ctx_->is_fast_heap_table_;
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
   merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
-  if (OB_FAIL(merge_ctx_.init(merge_param, store_ctx_->ls_partition_ids_,
+  if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_ctx_->ls_partition_ids_,
                               store_ctx_->target_ls_partition_ids_))) {
     LOG_WARN("fail to init merge ctx", KR(ret));
   } else if (store_ctx_->is_multiple_mode_) {

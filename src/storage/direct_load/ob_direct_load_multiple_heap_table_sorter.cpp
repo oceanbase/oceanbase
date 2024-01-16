@@ -28,7 +28,8 @@ using namespace observer;
 
 ObDirectLoadMultipleHeapTableSorter::ObDirectLoadMultipleHeapTableSorter(
   ObDirectLoadMemContext *mem_ctx)
-  : mem_ctx_(mem_ctx),
+  : ctx_(nullptr),
+    mem_ctx_(mem_ctx),
     allocator_("TLD_Sorter"),
     extra_buf_(nullptr),
     index_dir_id_(-1),
@@ -147,6 +148,8 @@ int ObDirectLoadMultipleHeapTableSorter::get_tables(
       LOG_WARN("unexpected table", KR(ret), KPC(table));
     } else if (OB_FAIL(heap_table_array_->push_back(heap_table))) {
       LOG_WARN("fail to push back heap table", KR(ret));
+    } else {
+      ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_product_tmp_files_, 1);
     }
   }
   return ret;
@@ -228,6 +231,7 @@ int ObDirectLoadMultipleHeapTableSorter::work()
           LOG_WARN("fail to add item", KR(ret));
         } else {
           row = nullptr;
+          ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_load_rows_, 1);
         }
       }
     }

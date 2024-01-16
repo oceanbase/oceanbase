@@ -73,7 +73,7 @@ bool ObDirectLoadMergeParam::is_valid() const
  */
 
 ObDirectLoadMergeCtx::ObDirectLoadMergeCtx()
-  : allocator_("TLD_MergeCtx"), is_inited_(false)
+  : allocator_("TLD_MergeCtx"), ctx_(nullptr), is_inited_(false)
 {
 }
 
@@ -87,7 +87,8 @@ ObDirectLoadMergeCtx::~ObDirectLoadMergeCtx()
   tablet_merge_ctx_array_.reset();
 }
 
-int ObDirectLoadMergeCtx::init(const ObDirectLoadMergeParam &param,
+int ObDirectLoadMergeCtx::init(ObTableLoadTableCtx *ctx,
+                               const ObDirectLoadMergeParam &param,
                                const ObIArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
                                const ObIArray<ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids)
 {
@@ -95,7 +96,8 @@ int ObDirectLoadMergeCtx::init(const ObDirectLoadMergeParam &param,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMerger init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid()
+  } else if (OB_UNLIKELY(nullptr == ctx
+                         || !param.is_valid()
                          || ls_partition_ids.empty()
                          || target_ls_partition_ids.empty()
                          || (ls_partition_ids.count() != target_ls_partition_ids.count()))) {
@@ -103,6 +105,7 @@ int ObDirectLoadMergeCtx::init(const ObDirectLoadMergeParam &param,
     LOG_WARN("invalid args", KR(ret), K(param), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
     allocator_.set_tenant_id(MTL_ID());
+    ctx_ = ctx;
     param_ = param;
     if (OB_FAIL(create_all_tablet_ctxs(ls_partition_ids, target_ls_partition_ids))) {
       LOG_WARN("fail to create all tablet ctxs", KR(ret));
@@ -129,7 +132,7 @@ int ObDirectLoadMergeCtx::create_all_tablet_ctxs(
     if (OB_ISNULL(partition_ctx = OB_NEWx(ObDirectLoadTabletMergeCtx, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadTabletMergeCtx", KR(ret));
-    } else if (OB_FAIL(partition_ctx->init(param_, ls_partition_id, target_ls_partition_id))) {
+    } else if (OB_FAIL(partition_ctx->init(ctx_, param_, ls_partition_id, target_ls_partition_id))) {
       LOG_WARN("fail to init tablet ctx", KR(ret), K(param_), K(ls_partition_id), K(target_ls_partition_id));
     } else if (OB_FAIL(tablet_merge_ctx_array_.push_back(partition_ctx))) {
       LOG_WARN("fail to push back", KR(ret));
@@ -164,7 +167,8 @@ ObDirectLoadTabletMergeCtx::~ObDirectLoadTabletMergeCtx()
   task_array_.reset();
 }
 
-int ObDirectLoadTabletMergeCtx::init(const ObDirectLoadMergeParam &param,
+int ObDirectLoadTabletMergeCtx::init(ObTableLoadTableCtx *ctx,
+                                     const ObDirectLoadMergeParam &param,
                                      const ObTableLoadLSIdAndPartitionId &ls_partition_id,
                                      const ObTableLoadLSIdAndPartitionId &target_ls_partition_id)
 
@@ -173,7 +177,8 @@ int ObDirectLoadTabletMergeCtx::init(const ObDirectLoadMergeParam &param,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadTabletMergeCtx init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid()
+  } else if (OB_UNLIKELY(nullptr == ctx
+                         || !param.is_valid()
                          || !ls_partition_id.is_valid()
                          || !target_ls_partition_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -187,6 +192,7 @@ int ObDirectLoadTabletMergeCtx::init(const ObDirectLoadMergeParam &param,
       LOG_WARN("fail to init origin sstable", KR(ret));
     } else {
       allocator_.set_tenant_id(MTL_ID());
+      ctx_ = ctx;
       param_ = param;
       tablet_id_ = ls_partition_id.part_tablet_id_.tablet_id_;
       target_tablet_id_ = target_ls_partition_id.part_tablet_id_.tablet_id_;
@@ -338,7 +344,7 @@ int ObDirectLoadTabletMergeCtx::build_empty_data_merge_task(const ObIArray<ObCol
     if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, sstable_array_, range, i))) {
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range, i))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
       LOG_WARN("fail to push back merge task", KR(ret));
@@ -383,7 +389,7 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_merge_task(
     if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, sstable_array_, range, i))) {
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range, i))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
       LOG_WARN("fail to push back merge task", KR(ret));
@@ -429,7 +435,7 @@ int ObDirectLoadTabletMergeCtx::build_pk_table_multiple_merge_task(
                     OB_NEWx(ObDirectLoadPartitionRangeMultipleMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionRangeMultipleMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, multiple_sstable_array_,
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, multiple_sstable_array_,
                                         range, i))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
@@ -476,7 +482,7 @@ int ObDirectLoadTabletMergeCtx::build_merge_task_for_multiple_pk_table(
                       OB_NEWx(ObDirectLoadPartitionRangeMultipleMergeTask, (&allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to new ObDirectLoadPartitionRangeMultipleMergeTask", KR(ret));
-      } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, multiple_sstable_array_,
+      } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, multiple_sstable_array_,
                                           range, i))) {
         LOG_WARN("fail to init merge task", KR(ret));
       } else if (OB_FAIL(task_array_.push_back(merge_task))) {
@@ -520,7 +526,7 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_merge_task(
     if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, sstable_array_, range,
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range,
                                         parallel_idx++))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
@@ -548,7 +554,7 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_merge_task(
                            OB_NEWx(ObDirectLoadPartitionHeapTableMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionHeapTableMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, external_table, pk_interval,
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, external_table, pk_interval,
                                         parallel_idx++))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
@@ -594,7 +600,7 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
     if (OB_ISNULL(merge_task = OB_NEWx(ObDirectLoadPartitionRangeMergeTask, (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionRangeMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, sstable_array_, range,
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, sstable_array_, range,
                                         parallel_idx++))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
@@ -624,7 +630,7 @@ int ObDirectLoadTabletMergeCtx::build_heap_table_multiple_merge_task(
                                               (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionHeapTableMultipleMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, heap_table, pk_interval, parallel_idx++))) {
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, heap_table, pk_interval, parallel_idx++))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {
       LOG_WARN("fail to push back merge task", KR(ret));
@@ -667,7 +673,7 @@ int ObDirectLoadTabletMergeCtx::build_aggregate_merge_task_for_multiple_heap_tab
                                    (&allocator_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObDirectLoadPartitionHeapTableMultipleAggregateMergeTask", KR(ret));
-    } else if (OB_FAIL(merge_task->init(param_, this, &origin_table_, multiple_heap_table_array_,
+    } else if (OB_FAIL(merge_task->init(ctx_, param_, this, &origin_table_, multiple_heap_table_array_,
                                         pk_interval))) {
       LOG_WARN("fail to init merge task", KR(ret));
     } else if (OB_FAIL(task_array_.push_back(merge_task))) {

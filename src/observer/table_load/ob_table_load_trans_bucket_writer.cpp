@@ -199,7 +199,7 @@ int ObTableLoadTransBucketWriter::write(int32_t session_id, ObTableLoadObjRowArr
 
     if (OB_SUCC(ret)) {
       int64_t row_cnt = obj_rows.count();
-      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->coordinator.received_rows_, row_cnt);
+      ATOMIC_AAF(&trans_ctx_->ctx_->job_stat_->coordinator_.received_rows_, row_cnt);
       ATOMIC_AAF(&trans_ctx_->ctx_->coordinator_ctx_->result_info_.records_, row_cnt);
     }
   }

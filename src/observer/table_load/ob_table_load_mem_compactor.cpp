@@ -51,7 +51,7 @@ public:
   int process() override
   {
     int ret = OB_SUCCESS;
-    storage::ObDirectLoadMemSample sample(mem_ctx_);
+    storage::ObDirectLoadMemSample sample(ctx_, mem_ctx_);
     if (OB_FAIL(sample.do_sample())) {
       LOG_WARN("fail to do sample", KR(ret));
     }
@@ -379,7 +379,7 @@ int ObTableLoadMemCompactor::create_mem_loader(ObDirectLoadMemLoader *&mem_loade
   int ret = OB_SUCCESS;
   mem_loader = nullptr;
   if (OB_ISNULL(mem_loader =
-                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), &mem_ctx_))) {
+                  OB_NEWx(ObDirectLoadMemLoader, (&allocator_), store_ctx_->ctx_, &mem_ctx_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new ObDirectLoadMemLoader", KR(ret));
   }

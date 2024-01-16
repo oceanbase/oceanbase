@@ -26,6 +26,7 @@ using namespace common;
 using namespace blocksstable;
 using namespace table;
 using namespace sql;
+using namespace observer;
 
 /**
  * Context
@@ -74,10 +75,12 @@ int ObDirectLoadMemDump::Context::add_table(const ObTabletID &tablet_id, int64_t
  * ObDirectLoadMemDump
  */
 
-ObDirectLoadMemDump::ObDirectLoadMemDump(ObDirectLoadMemContext *mem_ctx,
+ObDirectLoadMemDump::ObDirectLoadMemDump(ObTableLoadTableCtx *ctx,
+                                         ObDirectLoadMemContext *mem_ctx,
                                          const RangeType &range,
                                          ObTableLoadHandle<Context> context_ptr, int64_t range_idx)
   : allocator_("TLD_MemDump"),
+    ctx_(ctx),
     mem_ctx_(mem_ctx),
     range_(range),
     context_ptr_(context_ptr),
@@ -281,6 +284,8 @@ int ObDirectLoadMemDump::dump_tables()
         } else {
           LOG_WARN("fail to append row", KR(ret), K(datum_row));
         }
+      } else {
+        ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_dump_rows_, 1);
       }
     }
   }
@@ -376,6 +381,9 @@ int ObDirectLoadMemDump::compact_tables()
     if (OB_FAIL(compact_tablet_tables(keys.at(i)))) {
       LOG_WARN("fail to compact tablet tables", KR(ret));
     }
+  }
+  if (OB_SUCC(ret)) {
+    ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_product_tmp_files_, keys.count());
   }
   return ret;
 }

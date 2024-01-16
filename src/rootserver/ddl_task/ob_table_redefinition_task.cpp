@@ -1281,9 +1281,9 @@ int ObTableRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
           job_stat.parallel_,
           job_stat.max_allowed_error_rows_,
           job_stat.detected_error_rows_,
-          job_stat.coordinator.received_rows_,
-          job_stat.coordinator.status_.length(),
-          job_stat.coordinator.status_.ptr());
+          job_stat.coordinator_.received_rows_,
+          job_stat.coordinator_.status_.length(),
+          job_stat.coordinator_.status_.ptr());
     }
   }
 
@@ -1391,10 +1391,10 @@ int ObTableRedefinitionTask::get_direct_load_job_stat(common::ObArenaAllocator &
         EXTRACT_INT_FIELD_MYSQL(*select_result, "PARALLEL", job_stat.parallel_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*select_result, "MAX_ALLOWED_ERROR_ROWS", job_stat.max_allowed_error_rows_, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*select_result, "DETECTED_ERROR_ROWS", job_stat.detected_error_rows_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator.received_rows_, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*select_result, "COORDINATOR_RECEIVED_ROWS", job_stat.coordinator_.received_rows_, int64_t);
         EXTRACT_VARCHAR_FIELD_MYSQL(*select_result, "COORDINATOR_STATUS", load_status);
         if (OB_SUCC(ret)
-            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator.status_))) {
+            && OB_FAIL(ob_write_string(allocator, load_status, job_stat.coordinator_.status_))) {
           LOG_WARN("failed to write string", KR(ret));
         }
       }

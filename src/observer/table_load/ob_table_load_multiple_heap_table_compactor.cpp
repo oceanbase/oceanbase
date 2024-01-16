@@ -117,7 +117,7 @@ public:
       if (OB_ISNULL(sorter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected worker", KR(ret), KPC(worker));
-      } else if (FALSE_IT(sorter->set_work_param(index_dir_id_, data_dir_id_, heap_table_array_,
+      } else if (FALSE_IT(sorter->set_work_param(ctx_, index_dir_id_, data_dir_id_, heap_table_array_,
                                                  heap_table_allocator_))) {
       } else if (OB_FAIL(sorter->work())) {
         LOG_WARN("fail to compact", KR(ret));
@@ -155,6 +155,7 @@ private:
       } else {
         heap_table_compactor.reuse();
         std::swap(curr_round, next_round);
+        ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, mem_ctx_->table_data_desc_.merge_count_per_round_ - 1);
       }
     }
     if (OB_SUCC(ret)) {
@@ -171,6 +172,8 @@ private:
           LOG_WARN("fail to do compact", KR(ret));
         } else if (OB_FAIL(mem_ctx_->add_tables_from_table_compactor(heap_table_compactor))) {
           LOG_WARN("fail to add table from table compactor", KR(ret));
+        } else {
+          ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_consume_tmp_files_, curr_round->count());
         }
       }
     }

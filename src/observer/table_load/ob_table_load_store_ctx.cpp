@@ -352,7 +352,7 @@ int ObTableLoadStoreCtx::advance_status(ObTableLoadStatusType status)
     // advance status
     else {
       status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
       LOG_INFO("LOAD DATA STORE advance status", K(status));
     }
   }
@@ -372,7 +372,7 @@ int ObTableLoadStoreCtx::set_status_error(int error_code)
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
       LOG_INFO("LOAD DATA STORE status error", KR(error_code));
     }
   }
@@ -387,7 +387,7 @@ int ObTableLoadStoreCtx::set_status_abort()
     LOG_INFO("LOAD DATA STORE already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    table_load_status_to_string(status_, ctx_->job_stat_->store.status_);
+    table_load_status_to_string(status_, ctx_->job_stat_->store_.status_);
     LOG_INFO("LOAD DATA STORE status abort");
   }
   return ret;

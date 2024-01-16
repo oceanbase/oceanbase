@@ -28,8 +28,8 @@ using namespace observer;
  * ObDirectLoadMemLoader
  */
 
-ObDirectLoadMemLoader::ObDirectLoadMemLoader(ObDirectLoadMemContext *mem_ctx)
-  : mem_ctx_(mem_ctx)
+ObDirectLoadMemLoader::ObDirectLoadMemLoader(observer::ObTableLoadTableCtx *ctx, ObDirectLoadMemContext *mem_ctx)
+  : ctx_(ctx), mem_ctx_(mem_ctx)
 {
 }
 
@@ -135,6 +135,7 @@ int ObDirectLoadMemLoader::work()
           LOG_WARN("fail to add item", KR(ret));
         } else {
           external_row = nullptr;
+          ATOMIC_AAF(&ctx_->job_stat_->store_.compact_stage_load_rows_, 1);
         }
       }
     }

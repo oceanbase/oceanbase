@@ -231,7 +231,7 @@ int ObTableLoadCoordinatorCtx::advance_status(ObTableLoadStatusType status)
     // advance status
     else {
       status_ = status;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR advance status", K(status));
     }
   }
@@ -251,7 +251,7 @@ int ObTableLoadCoordinatorCtx::set_status_error(int error_code)
     } else {
       status_ = ObTableLoadStatusType::ERROR;
       error_code_ = error_code;
-      table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+      table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
       LOG_INFO("LOAD DATA COORDINATOR status error", KR(error_code));
     }
   }
@@ -266,7 +266,7 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
     LOG_INFO("LOAD DATA COORDINATOR already abort");
   } else {
     status_ = ObTableLoadStatusType::ABORT;
-    table_load_status_to_string(status_, ctx_->job_stat_->coordinator.status_);
+    table_load_status_to_string(status_, ctx_->job_stat_->coordinator_.status_);
     LOG_INFO("LOAD DATA COORDINATOR status abort");
   }
   return ret;

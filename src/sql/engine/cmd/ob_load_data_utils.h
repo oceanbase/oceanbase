@@ -331,6 +331,8 @@ struct ObLoadDataStat
                      total_wait_secs_(0),
                      max_allowed_error_rows_(0),
                      detected_error_rows_(0),
+                     coordinator_(),
+                     store_(),
                      message_() {}
   int64_t aquire() {
     return ATOMIC_AAF(&ref_cnt_, 1);
@@ -365,19 +367,47 @@ struct ObLoadDataStat
   int64_t total_wait_secs_;
   int64_t max_allowed_error_rows_;
   int64_t detected_error_rows_;
-  struct {
-    volatile int64_t received_rows_ = 0; // received from client
-    int64_t last_commit_segment_id_ = 0;
-    common::ObString status_ = "none"; // none / inited / loading / frozen / merging / commit / error / abort
-    common::ObString trans_status_ = "none"; // none / inited / running / frozen / commit / error / abort
-  } coordinator;
-
-  struct {
-    volatile int64_t processed_rows_ = 0;
-    int64_t last_commit_segment_id_ = 0;
-    common::ObString status_ = "none";
-    common::ObString trans_status_ = "none";
-  } store;
+  struct coordinator {
+    coordinator()
+      : received_rows_(0),
+        last_commit_segment_id_(0),
+        status_("none"),
+        trans_status_("none")
+    {}
+    volatile int64_t received_rows_; // received from client
+    int64_t last_commit_segment_id_;
+    common::ObString status_; // none / inited / loading / frozen / merging / commit / error / abort
+    common::ObString trans_status_; // none / inited / running / frozen / commit / error / abort
+    TO_STRING_KV(K(received_rows_), K(last_commit_segment_id_), K(status_), K(trans_status_));
+  } coordinator_;
+  struct store {
+    store()
+      : processed_rows_(0),
+        last_commit_segment_id_(0),
+        status_("none"),
+        trans_status_("none"),
+        compact_stage_load_rows_(0),
+        compact_stage_dump_rows_(0),
+        compact_stage_product_tmp_files_(0),
+        compact_stage_consume_tmp_files_(0),
+        compact_stage_merge_write_rows_(0),
+        merge_stage_write_rows_(0)
+    {}
+    volatile int64_t processed_rows_;
+    int64_t last_commit_segment_id_;
+    common::ObString status_;
+    common::ObString trans_status_;
+    int64_t compact_stage_load_rows_ CACHE_ALIGNED;
+    int64_t compact_stage_dump_rows_ CACHE_ALIGNED;
+    int64_t compact_stage_product_tmp_files_ CACHE_ALIGNED;
+    int64_t compact_stage_consume_tmp_files_ CACHE_ALIGNED;
+    int64_t compact_stage_merge_write_rows_ CACHE_ALIGNED;
+    int64_t merge_stage_write_rows_ CACHE_ALIGNED;
+    TO_STRING_KV(K(processed_rows_), K(last_commit_segment_id_), K(status_), K(trans_status_),
+                 K(compact_stage_load_rows_), K(compact_stage_dump_rows_),
+                 K(compact_stage_product_tmp_files_), K(compact_stage_consume_tmp_files_),
+                 K(compact_stage_merge_write_rows_), K(merge_stage_write_rows_));
+  } store_;
   char message_[common::MAX_LOAD_DATA_MESSAGE_LENGTH];
 
   TO_STRING_KV(K(tenant_id_), K(job_id_), K(job_type_),
@@ -388,10 +418,7 @@ struct ObLoadDataStat
       K(parsed_rows_), K(total_shuffle_task_), K(total_insert_task_),
       K(shuffle_rt_sum_), K(insert_rt_sum_), K(total_wait_secs_),
       K(max_allowed_error_rows_), K(detected_error_rows_),
-      K(coordinator.received_rows_), K(coordinator.last_commit_segment_id_),
-      K(coordinator.status_), K(coordinator.trans_status_),
-      K(store.processed_rows_), K(store.last_commit_segment_id_),
-      K(store.status_), K(store.trans_status_), K(message_));
+      K(coordinator_), K(store_), K(message_));
 };
 
 class ObGetAllJobStatusOp
