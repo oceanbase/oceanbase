@@ -41,10 +41,16 @@ private:
   virtual int process_curr_tenant(common::ObNewRow *&row) override;
   virtual void release_last_tenant() override;
   int get_next_ls(ObLS *&ls);
-  int get_next_obj_lock_or_iter_tx(ObLockID &lock_id);
+  int get_next_tx_ctx(transaction::ObPartTransCtx *&tx_ctx);
+  int get_next_lock_id(ObLockID &lock_id);
   int get_next_lock_op(transaction::tablelock::ObTableLockOp &lock_op);
+  int get_next_lock_op_iter(ObLockOpIterator &lock_op_iter);
+  int get_next_lock_op_iter_from_tx_ctx(ObLockOpIterator &lock_op_iter);
+  int get_next_lock_op_iter_from_lock_memtable(ObLockOpIterator &lock_op_iter);
+  int prepare_start_to_read();
 
 private:
+  static const int64_t MAX_RETRY_TIMES = 10;
   enum
   {
     SVR_IP = common::OB_APP_MIN_COLUMN_ID,
@@ -70,6 +76,8 @@ private:
   int64_t ls_id_;
   ObLS *ls_;
   ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
+  // the tx_ctx of a ls
+  transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
   // the lock id of a ls
   ObLockIDIterator obj_lock_iter_;
   // the lock op of a obj lock

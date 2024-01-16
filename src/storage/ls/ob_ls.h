@@ -761,6 +761,7 @@ public:
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_ctx, int);
 
   DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, get_active_tx_count, int);
