@@ -79,7 +79,7 @@ public:
       const uint64_t execution_id,
       const uint64_t table_id,
       const int64_t ddl_task_id,
-      ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &tablet_ids,
       ObMySQLProxy &sql_proxy,
       common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_map);
   static int check_column_checksum(

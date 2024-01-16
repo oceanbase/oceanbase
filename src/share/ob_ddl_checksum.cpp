@@ -257,7 +257,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
   const uint64_t execution_id,
   const uint64_t table_id,
   const int64_t ddl_task_id,
-  ObIArray<ObTabletID> &tablet_ids,
+  const ObIArray<ObTabletID> &tablet_ids,
   ObMySQLProxy &sql_proxy,
   common::hash::ObHashMap<uint64_t, bool> &tablet_checksum_status_map)
 {
@@ -278,7 +278,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
 
     // check every tablet column checksum, task_id is equal to tablet_id
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-      uint64_t last_tablet_id_id = tablet_ids.at(i).id();
+      const uint64_t last_tablet_id_id = tablet_ids.at(i).id();
       if (OB_FAIL(batch_tablet_array.push_back(last_tablet_id_id))) {
         LOG_WARN("fail to push back tablet_id_id", K(ret), K(tenant_id), K(execution_id), K(ddl_task_id));
       } else {
