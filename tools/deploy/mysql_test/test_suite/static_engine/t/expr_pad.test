@@ -116,4 +116,17 @@ select rpad('a', 6, '阿斯'), length(rpad('a', 6, '阿斯')) from dual;
 select rpad('a', 7, '阿斯'), length(rpad('a', 7, '阿斯')) from dual;
 select rpad('a', 8, '阿斯'), length(rpad('a', 8, '阿斯')) from dual;
 
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+create table t1(c1 int);
+insert into t1 values(18);
+select lpad("", cast(c1 as decimal), "") from t1;
+select lpad("123", cast(c1 as decimal), "") from t1;
+select lpad("", cast(c1 as decimal), "123") from t1;
+select rpad("", cast(c1 as decimal), "") from t1;
+select rpad("123", cast(c1 as decimal), "") from t1;
+select rpad("", cast(c1 as decimal), "123") from t1;
+drop table t1;
+
 --sleep 2
