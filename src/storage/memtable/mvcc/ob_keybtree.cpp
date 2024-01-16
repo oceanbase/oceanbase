@@ -1467,6 +1467,7 @@ int ObKeyBtree<BtreeKey, BtreeVal>::destroy(const bool is_batch_destroy)
     WaitQuiescent(get_qsync());
     tg.click();
   }
+  split_info_ = 0;
   return OB_SUCCESS;
 }
 
