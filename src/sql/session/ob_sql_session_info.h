@@ -344,8 +344,9 @@ public:
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos) = 0;
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess)= 0;
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length) = 0;
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length) = 0;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
         int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) = 0;
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -362,8 +363,9 @@ public:
   int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
-  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                              const char* last_sess_buf, int64_t last_sess_length);
+  int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                        int64_t current_sess_length, const char *last_sess_buf,
+                        int64_t last_sess_length);
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
             int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -379,8 +381,9 @@ public:
   int get_serialize_size(ObSQLSessionInfo& sess, int64_t &length) const;
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos);
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
-  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                              const char* last_sess_buf, int64_t last_sess_length);
+  int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                        int64_t current_sess_length, const char *last_sess_buf,
+                        int64_t last_sess_length);
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -410,8 +413,9 @@ public:
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length);
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -427,8 +431,9 @@ public:
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length);
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -444,12 +449,17 @@ public:
   virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length) override;
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length) override;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
                                 int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
           const int16_t type, int64_t index) override;
+  template <bool cmp_only>
+  int cmp_display_sess_info_helper(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                   int64_t current_sess_length, const char *last_sess_buf,
+                                   int64_t last_sess_length, bool &found_mismatch);
 };
 
 class ObControlInfoEncoder : public ObSessInfoEncoder {
@@ -462,8 +472,9 @@ public:
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
                               const int64_t length, int64_t &pos);
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess);
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                    const char* last_sess_buf, int64_t last_sess_length);
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length);
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
           int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length);
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -483,8 +494,9 @@ public:
   virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
   virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override;
   virtual int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override;
-  virtual int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length,
-                                const char* last_sess_buf, int64_t last_sess_length) override;
+  virtual int compare_sess_info(ObSQLSessionInfo &sess, const char *current_sess_buf,
+                                int64_t current_sess_length, const char *last_sess_buf,
+                                int64_t last_sess_length) override;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
                                 int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
   virtual int display_diagnosis_sess_info(ObSQLSessionInfo &sess,
@@ -499,7 +511,7 @@ public:                                                                 \
   int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;    \
   int fetch_sess_info(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos) override; \
   int64_t get_fetch_sess_info_size(ObSQLSessionInfo& sess) override; \
-  int compare_sess_info(const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
+  int compare_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
   int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf, int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override; \
   int display_diagnosis_sess_info(ObSQLSessionInfo &sess, const int16_t type, int64_t index); \
 };
