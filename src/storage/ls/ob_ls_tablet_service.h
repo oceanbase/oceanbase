@@ -190,7 +190,7 @@ public:
       const share::ObLSID &ls_id,
       const ObMigrationTabletParam &tablet_meta,
       ObTabletHandle &tablet_handle);
-  int rollback_tablet(
+  int rollback_remove_tablet(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
 
@@ -492,6 +492,9 @@ private:
       const common::ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle);
   int inner_remove_tablet(
+      const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id);
+  int rollback_remove_tablet_without_lock(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id);
   int rollback_rebuild_tablet(const ObTabletID &tablet_id);

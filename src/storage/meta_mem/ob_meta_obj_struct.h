@@ -272,6 +272,7 @@ void ObMetaObjGuard<T>::reset()
   reset_obj();
   obj_pool_ = nullptr;
   allocator_ = nullptr;
+  hold_start_time_ = INT64_MAX;
   t3m_ = nullptr;
 }
 

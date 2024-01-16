@@ -1306,8 +1306,8 @@ int ObTabletStartTransferInHelper::rollback_transfer_in_tablet_(
     } else {
       LOG_WARN("failed to get tablet", K(ret), KPC(dest_ls), K(tablet_id));
     }
-  } else if (OB_FAIL(dest_ls->get_tablet_svr()->rollback_tablet(dest_ls->get_ls_id(), tablet_id))) {
-    LOG_WARN("failed to rollback tablet", K(ret), K(dest_ls), K(tablet_id));
+  } else if (OB_FAIL(dest_ls->get_tablet_svr()->rollback_remove_tablet(dest_ls->get_ls_id(), tablet_id))) {
+    LOG_WARN("failed to rollback remove tablet", K(ret), K(dest_ls), K(tablet_id));
   }
   return ret;
 }
