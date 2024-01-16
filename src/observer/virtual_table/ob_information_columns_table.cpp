@@ -1061,9 +1061,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case IS_NULLABLE: {
-            ObString nullable_val = ObString::make_string(
-                column_attributes.null_ ? "YES" : "NO");
-            cells[cell_idx].set_varchar(nullable_val);
+            cells[cell_idx].set_varchar(column_attributes.null_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                    ObCharset::get_default_charset()));
             break;
