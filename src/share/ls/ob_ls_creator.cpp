@@ -658,65 +658,91 @@ int ObLSCreator::persist_ls_member_list_(const common::ObMemberList &member_list
 
 }
 
+ERRSIM_POINT_DEF(ERRSIM_CHECK_MEMBER_LIST_SAME_ERROR);
+int ObLSCreator::inner_check_member_list_and_learner_list_(
+    const common::ObMemberList &member_list,
+    const common::GlobalLearnerList &learner_list)
+{
+  int ret = OB_SUCCESS;
+  ObLSInfo ls_info_to_check;
+  if (OB_UNLIKELY(ERRSIM_CHECK_MEMBER_LIST_SAME_ERROR)) {
+    ret = ERRSIM_CHECK_MEMBER_LIST_SAME_ERROR;
+  } else if (OB_ISNULL(GCTX.lst_operator_)
+             || OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(member_list));
+  } else if (OB_FAIL(GCTX.lst_operator_->get(
+                         GCONF.cluster_id, tenant_id_, id_,
+                         share::ObLSTable::DEFAULT_MODE, ls_info_to_check))) {
+    LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K_(id));
+  } else {
+    // check member_list all reported in __all_ls_meta_table
+    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
+      const share::ObLSReplica *replica = nullptr;
+      common::ObAddr server;
+      if (OB_FAIL(member_list.get_server_by_index(i, server))) {
+        LOG_WARN("fail to get server by index", KR(ret), K(i), K(member_list));
+      } else {
+        int tmp_ret = ls_info_to_check.find(server, replica);
+        if (OB_SUCCESS == tmp_ret) {
+          // good, replica exists, bypass
+        } else {
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("has replica only in member list, need try again", KR(ret), KR(tmp_ret),
+                   K(member_list), K(ls_info_to_check), K(i), K(server));
+        }
+      }
+    }
+    // check learner_list all reported in __all_ls_meta_table
+    for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); ++i) {
+      const share::ObLSReplica *replica = nullptr;
+      common::ObAddr server;
+      if (OB_FAIL(learner_list.get_server_by_index(i, server))) {
+        LOG_WARN("fail to get server by index", KR(ret), K(i), K(learner_list));
+      } else {
+        int tmp_ret = ls_info_to_check.find(server, replica);
+        if (OB_SUCCESS == tmp_ret) {
+          // replica exists, bypass
+        } else {
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("has replica only in learner list, need try again", KR(ret), KR(tmp_ret),
+                   K(learner_list), K(ls_info_to_check), K(i), K(server));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSCreator::check_member_list_and_learner_list_all_in_meta_table_(
     const common::ObMemberList &member_list,
     const common::GlobalLearnerList &learner_list)
 {
   int ret = OB_SUCCESS;
-  bool has_replica_only_in_member_list_or_learner_list = true;
-  ObLSInfo ls_info_to_check;
   const int64_t retry_interval_us = 1000l * 1000l; // 1s
   ObTimeoutCtx ctx;
-  if (OB_ISNULL(GCTX.lst_operator_)
-      || OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
+  int tmp_ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!is_valid() || !member_list.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(member_list));
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
     LOG_WARN("failed to set default timeout", KR(ret));
   } else {
-    while (OB_SUCC(ret) && has_replica_only_in_member_list_or_learner_list) {
-      has_replica_only_in_member_list_or_learner_list = false;
+    while (OB_SUCC(ret)) {
       if (ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
-        LOG_WARN("wait member list all reported to meta table timeout", KR(ret), K(member_list), K_(tenant_id), K_(id));
-      } else if (OB_FAIL(GCTX.lst_operator_->get(GCONF.cluster_id, tenant_id_, id_, share::ObLSTable::DEFAULT_MODE, ls_info_to_check))) {
-        LOG_WARN("fail to get ls info", KR(ret), K_(tenant_id), K_(id));
+        LOG_WARN("wait member list and learner list all reported to meta table timeout",
+                 KR(ret), K(member_list), K(learner_list), K_(tenant_id), K_(id));
+      } else if (OB_SUCCESS != (tmp_ret = inner_check_member_list_and_learner_list_(
+                                     member_list, learner_list))) {
+        LOG_WARN("fail to check member list and learner list all reported", KR(tmp_ret),
+                 K_(tenant_id), K_(id), K(member_list), K(learner_list));
+        // has replica only in member_list or learner_list, need try again later
+        ob_usleep(retry_interval_us);
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
-          const share::ObLSReplica *replica = nullptr;
-          common::ObAddr server;
-          if (OB_FAIL(member_list.get_server_by_index(i, server))) {
-            LOG_WARN("fail to get server by index", KR(ret), K(i), K(member_list));
-          } else {
-            int tmp_ret = ls_info_to_check.find(server, replica);
-            if (OB_SUCCESS == tmp_ret) {
-              // replica exists, bypass
-            } else {
-              has_replica_only_in_member_list_or_learner_list = true;
-              LOG_INFO("has replica only in member list", KR(tmp_ret), K(member_list), K(ls_info_to_check), K(i), K(server));
-              break;
-            }
-          }
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < learner_list.get_member_number(); ++i) {
-          const share::ObLSReplica *replica = nullptr;
-          common::ObAddr server;
-          if (OB_FAIL(learner_list.get_server_by_index(i, server))) {
-            LOG_WARN("fail to get server by index", KR(ret), K(i), K(learner_list));
-          } else {
-            int tmp_ret = ls_info_to_check.find(server, replica);
-            if (OB_SUCCESS == tmp_ret) {
-              // replica exists, bypass
-            } else {
-              has_replica_only_in_member_list_or_learner_list = true;
-              LOG_INFO("has replica only in learner list", KR(tmp_ret), K(learner_list), K(ls_info_to_check), K(i), K(server));
-              break;
-            }
-          }
-        }
-        if (OB_SUCC(ret) && has_replica_only_in_member_list_or_learner_list) {
-          ob_usleep(retry_interval_us);
-        }
+        // good, all replicas in member_list and learner_list has already reported
+        break;
       }
     }
   }
