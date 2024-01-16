@@ -160,6 +160,29 @@ public:
                                 const common::ObIArray<int64_t> &nocopy_params,
                                 const common::ObIArray<ObUDFParamDesc> &params_desc,
                                 const common::ObIArray<ObExprResType> &params_type);
+
+  static int is_child_of(ObObj &parent, ObObj &child, bool &is_child);
+  static int process_singal_out_param(int64_t i,
+                                      ObIArray<bool> &dones,
+                                      const ObObj *objs_stack,
+                                      int64_t param_num,
+                                      ParamStore& iparams,
+                                      ObIAllocator &alloc,
+                                      ObExecContext &exec_ctx,
+                                      const ObIArray<int64_t> &nocopy_params,
+                                      const ObIArray<ObUDFParamDesc> &params_desc,
+                                      const ObIArray<ObExprResType> &params_type);
+
+  static int process_package_out_param(int64_t idx,
+                                       ObIArray<bool> &dones,
+                                       const ObObj *objs_stack,
+                                       int64_t param_num,
+                                       ParamStore& iparams,
+                                       ObIAllocator &alloc,
+                                       ObExecContext &exec_ctx,
+                                       const ObIArray<int64_t> &nocopy_params,
+                                       const ObIArray<ObUDFParamDesc> &params_desc,
+                                       const ObIArray<ObExprResType> &params_type);
   static int before_calc_result(share::schema::ObSchemaGetterGuard &schema_guard,
                                 ObSqlCtx &sql_ctx,
                                 ObExecContext &exec_ctx);
