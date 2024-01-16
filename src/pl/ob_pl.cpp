@@ -2989,8 +2989,9 @@ int ObPLExecState::final(int ret)
 }
 
 int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
-                                     const ObPLDataType &pl_type,
-                                     common::ObObjParam &obj)
+                                    const ObPLDataType &pl_type,
+                                    common::ObObjParam &obj,
+                                    bool set_null)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -2998,7 +2999,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
   const ObPLDataType *real_pl_type = &pl_type;
-  bool set_null = pl_type.is_record_type() ? true : (top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_) ? false : true;
+  OX (set_null = pl_type.is_record_type() ? true : set_null);
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
@@ -3479,7 +3480,8 @@ do {                                                                  \
           OX (get_params().at(i) = params->at(i));
           OZ (init_complex_obj(*(get_allocator()),
                                func_.get_variables().at(i),
-                               get_params().at(i)));
+                               get_params().at(i),
+                               !(top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_)));
         }
       }
     }
