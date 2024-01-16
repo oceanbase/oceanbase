@@ -331,7 +331,9 @@ int ObTempRowStore::Iterator::get_next_batch(const IVectorPtrs &vectors,
   }
   if (OB_SUCC(ret) && read_rows > 0) {
     for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < vectors.count(); col_idx ++) {
-      ret = vectors.at(col_idx)->from_rows(row_store_->row_meta_, rows, read_rows, col_idx);
+      if (VEC_UNIFORM_CONST != vectors.at(col_idx)->get_format()) {
+        ret = vectors.at(col_idx)->from_rows(row_store_->row_meta_, rows, read_rows, col_idx);
+      }
     }
   }
   return ret;
