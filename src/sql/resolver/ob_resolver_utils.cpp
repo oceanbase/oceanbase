@@ -90,9 +90,12 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
 {
   int ret = OB_SUCCESS;
   ObRawExpr *table_expr = NULL;
-  ObPLPackageGuard package_guard(params.session_info_->get_effective_tenant_id());
+  ObPLPackageGuard *package_guard = nullptr;
   const ObUserDefinedType *user_type = NULL;
-
+  ObExecContext *exec_ctx = params.session_info_->get_cur_exec_ctx();
+  CK (OB_NOT_NULL(exec_ctx));
+  OZ (exec_ctx->get_package_guard(package_guard));
+  CK (OB_NOT_NULL(package_guard));
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
   CK (table_expr->get_udt_id() != OB_INVALID_ID);
@@ -101,7 +104,7 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
   OZ (ObResolverUtils::get_user_type(
     params.allocator_, params.session_info_, params.sql_proxy_,
     params.schema_checker_->get_schema_guard(),
-    package_guard,
+    *package_guard,
     table_expr->get_udt_id(), user_type));
   CK (OB_NOT_NULL(user_type));
   if (OB_SUCC(ret) && !user_type->is_collection_type()) {
@@ -135,7 +138,7 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
     OZ (ObResolverUtils::get_user_type(
       params.allocator_, params.session_info_, params.sql_proxy_,
       params.schema_checker_->get_schema_guard(),
-      package_guard,
+      *package_guard,
       coll_type->get_element_type().get_user_type_id(), user_type));
     CK (OB_NOT_NULL(user_type));
     CK (user_type->is_record_type());
