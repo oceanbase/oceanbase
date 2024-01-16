@@ -5,14 +5,14 @@ include(cmake/Env.cmake)
 
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.2.2.0
+    VERSION 4.2.3.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
 else()
   project(OceanBase
-    VERSION 4.2.2.0
+    VERSION 4.2.3.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
