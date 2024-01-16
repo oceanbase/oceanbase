@@ -217,8 +217,8 @@ ObSSTableInsertSliceWriter::ObSSTableInsertSliceWriter()
     is_index_table_(false),
     col_descs_(nullptr),
     snapshot_version_(0),
-    allocator_(lib::ObLabel("PartInsSst")),
-    lob_allocator_(lib::ObLabel("PartInsSstLob")),
+    allocator_(lib::ObLabel("PartInsSst"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    lob_allocator_(lib::ObLabel("PartInsSstLob"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     lob_cnt_(0),
     sql_mode_for_ddl_reshape_(0),
     reshape_ptr_(nullptr),
@@ -367,7 +367,7 @@ int ObSSTableInsertSliceWriter::append_row(const ObNewRow &row_val)
         LOG_WARN("fail to appen row", KR(ret));
       }
     }
-    if (lob_cnt_ % ObInsertLobColumnHelper::LOB_ALLOCATOR_RESET_CYCLE == 0) {
+    if (lob_allocator_.total() >= ObInsertLobColumnHelper::LOB_ALLOCATOR_RESET_THRESHOLD) {
       lob_allocator_.reuse(); // reuse after append_row to macro block to save memory
     }
   }
