@@ -268,7 +268,7 @@ inline void ob_reset_tsi_warning_buffer()
   }
 }
 
-// ignore errors in this scope
+// ignore errors & warnings in this scope
 class ObWarningBufferIgnoreScope
 {
 public:
@@ -286,9 +286,28 @@ public:
   ObWarningBufferIgnoreScope &
   operator=(const ObWarningBufferIgnoreScope &) = delete;
 
-private:
+protected:
   ObWarningBuffer ignore_scope_warn_buf_;
   ObWarningBuffer *ori_warn_buf_;
+};
+
+// catch errors if ret != OB_SUCCESS, else ignore errors and warnings
+class ObCatchErrorOnFailureWBScope : public ObWarningBufferIgnoreScope
+{
+public:
+  ObCatchErrorOnFailureWBScope(const int& ret) : ret_(ret) {}
+  ~ObCatchErrorOnFailureWBScope() {
+    if (ret_ != OB_SUCCESS && OB_NOT_NULL(ori_warn_buf_)) {
+      // store errors into upper warning buffer scope
+      ori_warn_buf_->set_error(ignore_scope_warn_buf_.get_err_msg(),
+                               ignore_scope_warn_buf_.get_err_code());
+    } else {
+      // ignore warnings and errors in current scope
+    }
+  }
+
+private:
+  const int& ret_;
 };
 
 }  // end of namespace common

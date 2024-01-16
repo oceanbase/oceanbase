@@ -11784,6 +11784,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
       }
     }
   } else {
+    ObCatchErrorOnFailureWBScope catch_error_wb_scope(ret);
     if (OB_FAIL(resolve_var(q_name, unit_ast, expr))) {
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
         if (OB_FAIL(resolve_sequence_object(q_name, unit_ast, expr))) {
@@ -11811,9 +11812,6 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
       if (OB_ERR_SP_UNDECLARED_VAR == ret) {
         LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, q_name.col_name_.length(), q_name.col_name_.ptr());
       }
-    }
-    if (OB_SUCCESS == ret) {
-      ob_reset_tsi_warning_buffer();
     }
   }
   //in static typing engine, we wont do implict cast at stage of execution,
