@@ -210,7 +210,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     }
       //sql_id
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SQL_ID: {
-      if (!cache_stat_updated) {
+      if (cache_stat_updated) {
         ObString sql_id;
         if (!cache_obj->is_sql_crsr()) {
           cells[i].set_null();
