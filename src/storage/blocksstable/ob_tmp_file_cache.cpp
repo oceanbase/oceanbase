@@ -1132,7 +1132,7 @@ bool ObTmpTenantMemBlockManager::BlockWashScoreCompare::operator() (
 int ObTmpTenantMemBlockManager::cleanup()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("TmpFileRank");
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "TmpFileRank"));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpBlockCache has not been inited", K(ret));
