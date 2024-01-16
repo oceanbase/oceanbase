@@ -316,7 +316,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const ObPLDataType& cursor_type, // cursor返回值类型(record)
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
                                 ObPLCursor::CursorState state,
-                                bool has_dup_column_name)
+                                bool has_dup_column_name,
+                                bool skip_locked)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -339,6 +340,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_cursor_type(cursor_type);
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
+      cursor->set_skip_locked(skip_locked);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
@@ -1138,7 +1140,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const common::ObIArray<int64_t> &formal_params,
                             ObPLCursor::CursorState state,
                             bool has_dup_column_name,
-                            int64_t &index)
+                            int64_t &index,
+                            bool skip_locked)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1170,7 +1173,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       cursor_type,
                                                       formal_params,
                                                       state,
-                                                      has_dup_column_name))) {
+                                                      has_dup_column_name,
+                                                      skip_locked))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);
