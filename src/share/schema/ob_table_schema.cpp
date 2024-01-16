@@ -6011,8 +6011,10 @@ bool ObTableSchema::has_generated_and_partkey_column() const
       if (generated_columns_.has_member(i)) {
         uint64_t generated_column_id = i + OB_APP_MIN_COLUMN_ID;
         const ObColumnSchemaV2 *generated_column = get_column_schema(generated_column_id);
-        if (generated_column->is_tbl_part_key_column()) {
-          result = true;
+        if (OB_NOT_NULL(generated_column)) {
+          if (generated_column->is_tbl_part_key_column()) {
+            result = true;
+          }
         }
       }
     }
