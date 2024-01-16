@@ -55,6 +55,7 @@ private:
                                     ObIAllocator& allocator,
                                     ObLSMetaPackage& ls_meta_package);
   int get_tenant_snapshot_ls_replica_entries_();
+  int construct_sql_(common::ObSqlString &sql);
 
 private:
   static const int64_t LS_META_BUFFER_SIZE = 16 * 1024;
