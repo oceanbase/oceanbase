@@ -463,9 +463,8 @@ int ObTenantStorageCheckpointWriter::copy_tablet(const ObTabletMapKey &tablet_ke
     addr_info.old_addr_ = old_addr;
     addr_info.new_addr_ = slog.disk_addr_;
     addr_info.need_rollback_ = true;
-    if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(tablet_handle.get_buf_len(), addr_info.tablet_pool_type_))) {
-      LOG_WARN("fail to get tablet pool type", K(ret), K(addr_info));
-    } else if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
+    addr_info.tablet_pool_type_ = ObTabletPoolType::TP_MAX; // only used by checkpoint, so we set it to TP_MAX here
+    if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
       LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
     }
   }
