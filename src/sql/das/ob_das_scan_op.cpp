@@ -316,7 +316,7 @@ int ObDASScanOp::open_op()
     LOG_WARN("init scan param failed", K(ret));
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
-      ret = OB_TABLE_DEFINITION_CHANGED;
+      ret = OB_INVALID_QUERY_TIMESTAMP;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));
     }
@@ -366,7 +366,6 @@ int ObDASScanOp::release_op()
   //need to clear the flag:need_switch_param_
   //otherwise table_rescan will jump to the switch iterator path in retry
   scan_param_.need_switch_param_ = false;
-  scan_param_.partition_guard_ = nullptr;
   scan_param_.destroy_schema_guard();
 
   if (retry_alloc_ != nullptr) {
