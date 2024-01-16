@@ -171,6 +171,11 @@ int ObSyncCmdDriver::response_result(ObMySQLResultSet &result)
   } else if (is_prexecute_) {
     if (OB_FAIL(response_query_header(result, false, false , // in prexecute , has_more_result and has_ps out is no matter, it will be recalc
                                       true))) {
+      // need close result set
+      int close_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (close_ret = result.close())) {
+        LOG_WARN("close result failed", K(close_ret));
+      }
       LOG_WARN("prexecute response query head fail. ", K(ret));
     }
   }
