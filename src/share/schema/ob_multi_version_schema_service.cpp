@@ -2396,11 +2396,7 @@ int ObMultiVersionSchemaService::async_refresh_schema(
     const int64_t MAX_RETRY_CNT = 100 * 1000 * 1000L / RETRY_IDLE_TIME; // 100s at most
     const int64_t SUBMIT_TASK_FREQUENCE = 2 * 1000 * 1000L / RETRY_IDLE_TIME; // each 2s
     while (OB_SUCC(ret)) {
-      if (THIS_WORKER.is_timeout()
-          || (INT64_MAX == THIS_WORKER.get_timeout_ts() && retry_cnt >= MAX_RETRY_CNT)) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("already timeout", KR(ret), K(tenant_id), K(schema_version));
-      } else if (OB_FAIL(get_tenant_refreshed_schema_version(
+      if (OB_FAIL(get_tenant_refreshed_schema_version(
                          tenant_id, local_schema_version))) {
         LOG_WARN("fail to get tenant refreshed schema version",
                  KR(ret), K(tenant_id), K(schema_version));
@@ -2408,6 +2404,10 @@ int ObMultiVersionSchemaService::async_refresh_schema(
                  && (!check_formal || ObSchemaService::is_formal_version(local_schema_version))) {
         // success
         break;
+      } else if (THIS_WORKER.is_timeout()
+                || (!THIS_WORKER.is_timeout_ts_valid() && retry_cnt >= MAX_RETRY_CNT)) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("already timeout", KR(ret), K(tenant_id), K(schema_version));
       } else {
         if (0 == retry_cnt % SUBMIT_TASK_FREQUENCE) {
           {
@@ -2437,8 +2437,15 @@ int ObMultiVersionSchemaService::async_refresh_schema(
           }
         }
         if (OB_SUCC(ret)) {
+          int64_t sleep_time = RETRY_IDLE_TIME;
+          if (THIS_WORKER.is_timeout_ts_valid()
+              && THIS_WORKER.get_timeout_remain() < RETRY_IDLE_TIME) {
+            int64_t timeout_remain = THIS_WORKER.get_timeout_remain();
+            sleep_time = timeout_remain > 0 ? timeout_remain : 0;
+          }
           retry_cnt++;
-          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(RETRY_IDLE_TIME, RETRY_IDLE_TIME, schema_version, 0);
+          __useconds_t tmp_sleep_time = static_cast<useconds_t>(sleep_time);
+          ob_usleep<common::ObWaitEventIds::WAIT_REFRESH_SCHEMA>(tmp_sleep_time, tmp_sleep_time, schema_version, 0);
         }
       }
     }
