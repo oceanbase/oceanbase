@@ -42,7 +42,7 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
   char txid_str[ObXATransID::MAX_GTRID_LENGTH];
   memset(txid_str, 0, ObXATransID::MAX_GTRID_LENGTH);
   int txid_str_length = sprintf(txid_str, "%ld", txid_value);
-  if (ObXATransID::MAX_GTRID_LENGTH < txid_str_length + DBLINK_STR_LENGTH) {
+  if (ObXATransID::MAX_GTRID_LENGTH <= txid_str_length + DBLINK_STR_LENGTH) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(txid_str_length));
   } else {
@@ -57,7 +57,7 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
       memset(ip_port, 0, MAX_IP_PORT_LENGTH);
       if (OB_FAIL(GCONF.self_addr_.addr_to_buffer(ip_port, MAX_IP_PORT_LENGTH, ip_str_length))) {
         TRANS_LOG(WARN, "convert server to string failed", K(ret), K(tx_id));
-      } else if (ObXATransID::MAX_GTRID_LENGTH < 1 + ip_str_length + txid_str_length + DBLINK_STR_LENGTH) {
+      } else if (ObXATransID::MAX_GTRID_LENGTH <= 1 + ip_str_length + txid_str_length + DBLINK_STR_LENGTH) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(tx_id), K(txid_str_length), K(ip_port), K(ip_str_length));
       } else {
