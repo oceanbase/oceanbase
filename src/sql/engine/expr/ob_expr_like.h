@@ -170,7 +170,7 @@ template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, 
   template <typename TextVec, typename ResVec>
   static int like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &ctx,
                                              const ObBitVector &skip, const EvalBound &bound,
-                                             ObExpr &text);
+                                             ObExpr &text, ObDatum *pattern_datum);
 
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
