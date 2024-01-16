@@ -3483,6 +3483,8 @@ int ObTransformPreProcess::transform_for_rls_table(ObDMLStmt *stmt, bool &trans_
       || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null unexpected", K(ret), K(stmt), K(ctx_), K(ret));
+  } else if (!lib::is_oracle_mode()) {
+    // do nothing
   } else if (OB_FAIL(check_exempt_rls_policy(exempt_rls_policy))) {
     LOG_WARN("failed to check exempt_rls_policy for rls", K(ret));
   } else {
