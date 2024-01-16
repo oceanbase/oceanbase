@@ -73,6 +73,7 @@
 #include "observer/table_load/ob_table_load_store.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -3663,6 +3664,7 @@ int ObLSTabletService::check_old_row_legitimacy(
             "dml_flag", run_ctx.dml_flag_,
             "store_ctx", run_ctx.store_ctx_,
             "relative_table", run_ctx.relative_table_);
+        concurrency_control::ObDataValidationService::set_delay_resource_recycle(run_ctx.store_ctx_.ls_id_);
         LOG_ERROR("Dump data table info", K(ret), K(data_table));
         run_ctx.store_ctx_.force_print_trace_log();
       }

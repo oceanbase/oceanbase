@@ -493,6 +493,7 @@ ob_set_subtarget(ob_storage common_mixed
   blockstore/ob_shared_block_reader_writer.cpp
   concurrency_control/ob_multi_version_garbage_collector.cpp
   concurrency_control/ob_trans_stat_row.cpp
+  concurrency_control/ob_data_validation_service.cpp
 )
 
 ob_set_subtarget(ob_storage compaction

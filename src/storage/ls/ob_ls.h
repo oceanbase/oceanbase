@@ -353,7 +353,12 @@ public:
   bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
 
-  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle() const;
+  void set_delay_resource_recycle();
+  void clear_delay_resource_recycle();
+
+  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info), K_(need_delay_resource_recycle));
 private:
   int ls_init_for_dup_table_();
   int ls_destory_for_dup_table_();
@@ -932,6 +937,8 @@ private:
   // Record the dependent transfer information when restarting
   ObLSTransferInfo startup_transfer_info_;
 
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle_;
 };
 
 }
