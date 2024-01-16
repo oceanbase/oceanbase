@@ -13923,7 +13923,7 @@ void ObColumnGroupSchema::remove_all_cols() {
 int ObColumnGroupSchema::get_column_group_type_name(ObString &readable_cg_name) const
 {
   int ret = OB_SUCCESS;
-  if (column_group_type_ > ObColumnGroupType::NORMAL_COLUMN_GROUP ||
+  if (column_group_type_ >=  ObColumnGroupType::NORMAL_COLUMN_GROUP ||
       column_group_type_ < ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("receive not suppoted column group type", K(ret), K(column_group_type_));
