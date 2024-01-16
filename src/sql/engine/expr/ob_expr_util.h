@@ -223,6 +223,39 @@ int calc_##tritype##_expr(const ObExpr &expr, ObEvalCtx &ctx,                 \
   }                                                                           \
   return ret;                                                                 \
 }
+
+class ObSolidifiedVarsContext
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObSolidifiedVarsContext() :
+    local_session_var_(NULL),
+    alloc_(NULL),
+    local_tz_wrap_(NULL)
+  {
+  }
+  ObSolidifiedVarsContext(share::schema::ObLocalSessionVar *local_var, common::ObIAllocator *alloc) :
+    local_session_var_(local_var),
+    alloc_(alloc),
+    local_tz_wrap_(NULL)
+  {
+  }
+  virtual ~ObSolidifiedVarsContext() {
+    if (NULL != local_tz_wrap_ && NULL != alloc_) {
+      alloc_->free(local_tz_wrap_);
+      local_tz_wrap_ = NULL;
+    }
+  }
+  int get_local_tz_info(const sql::ObBasicSessionInfo *session, const common::ObTimeZoneInfo *&tz_info);
+  share::schema::ObLocalSessionVar *get_local_vars() const { return local_session_var_; }
+  DECLARE_TO_STRING;
+private:
+  share::schema::ObLocalSessionVar *local_session_var_;
+  common::ObIAllocator *alloc_;
+  //cached vars
+  ObTimeZoneInfoWrap *local_tz_wrap_;
+};
+
 //Get the merged values of solidified vars and current session vars
 //If a var is solidified, return the solidified value. Otherwise return currrent session value.
 //e.g. :
@@ -244,9 +277,8 @@ public:
   //get the specified solidified var
   int get_local_var(share::ObSysVarClassType var_type, share::schema::ObSessionSysVar *&sys_var);
 private:
-  const share::schema::ObLocalSessionVar *local_session_var_;
+  const ObSolidifiedVarsContext *local_session_var_;
   const ObBasicSessionInfo *session_;
-  ObTimeZoneInfoWrap local_tz_wrap_;
 };
 
 }

@@ -877,7 +877,7 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
   return ret;
 }
 
-int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array)
+int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array)
 {
   int ret = OB_SUCCESS;
   var_array = NULL;

@@ -25,6 +25,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "lib/udt/ob_udt_type.h"
 #include "sql/engine/ob_subschema_ctx.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -474,7 +475,7 @@ public:
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
-  int get_local_session_vars(int64_t idx, const ObLocalSessionVar *&local_vars);
+  int get_local_session_vars(int64_t idx, const ObSolidifiedVarsContext *&local_vars);
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -612,7 +613,7 @@ private:
   int64_t spm_ts_timeout_us_;
   ObSubSchemaCtx subschema_ctx_;
   // for dependant exprs of generated columns
-  common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
+  common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
 };
 
 }

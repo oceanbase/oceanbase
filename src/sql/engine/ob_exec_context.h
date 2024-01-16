@@ -485,7 +485,7 @@ public:
     }
     return ret;
   }
-  int get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array);
+  int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
   void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
 private:

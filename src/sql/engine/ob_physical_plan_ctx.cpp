@@ -737,7 +737,12 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ENCODE(all_local_session_vars_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars_.count(); ++i) {
-    OB_UNIS_ENCODE(*all_local_session_vars_.at(i));
+    if (OB_ISNULL(all_local_session_vars_.at(i).get_local_vars())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      OB_UNIS_ENCODE(*all_local_session_vars_.at(i).get_local_vars());
+    }
   }
   return ret;
 }
@@ -831,7 +836,9 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ADD_LEN(all_local_session_vars_.count());
   for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
-    OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i));
+    if (OB_NOT_NULL(all_local_session_vars_.at(i).get_local_vars())) {
+      OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i).get_local_vars());
+    }
   }
   return len;
 }
@@ -939,7 +946,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
     if (NULL == local_vars) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("alloc local var failed", K(ret));
-    } else if (OB_FAIL(all_local_session_vars_.push_back(local_vars))) {
+    } else if (OB_FAIL(all_local_session_vars_.push_back(ObSolidifiedVarsContext(local_vars, &allocator_)))) {
       LOG_WARN("push back local session var array failed", K(ret));
     } else {
       local_vars->set_allocator(&allocator_);
@@ -1099,7 +1106,7 @@ int ObPhysicalPlanCtx::set_all_local_session_vars(ObIArray<ObLocalSessionVar> &a
       LOG_WARN("reserve for local_session_vars failed", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars.count(); ++i) {
-        if (OB_FAIL(all_local_session_vars_.push_back(&all_local_session_vars.at(i)))) {
+        if (OB_FAIL(all_local_session_vars_.push_back(ObSolidifiedVarsContext(&all_local_session_vars.at(i), &allocator_)))) {
           LOG_WARN("push back local session var failed", K(ret));
         }
       }
@@ -1170,7 +1177,7 @@ int ObPhysicalPlanCtx::build_subschema_ctx_by_param_store(share::schema::ObSchem
   return ret;
 }
 
-int ObPhysicalPlanCtx::get_local_session_vars(int64_t local_var_array_id, const ObLocalSessionVar *&local_vars)
+int ObPhysicalPlanCtx::get_local_session_vars(int64_t local_var_array_id, const ObSolidifiedVarsContext *&local_vars)
 {
   int ret = OB_SUCCESS;
   local_vars = NULL;
@@ -1180,7 +1187,7 @@ int ObPhysicalPlanCtx::get_local_session_vars(int64_t local_var_array_id, const 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index out of array range", K(ret), K(local_var_array_id), K(all_local_session_vars_.count()));
   } else {
-    local_vars = all_local_session_vars_.at(local_var_array_id);
+    local_vars = &all_local_session_vars_.at(local_var_array_id);
   }
   return ret;
 }
