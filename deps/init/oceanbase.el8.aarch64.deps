@@ -1,0 +1,52 @@
+[target-default]
+os=8
+arch=aarch64
+repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/8/aarch64/
+
+[target-community]
+os=8
+arch=aarch64
+repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/aarch64/
+
+
+[deps]
+devdeps-gtest-1.8.0-132022101316.el8.aarch64.rpm
+devdeps-isa-l-static-2.22.0-22022092915.el8.aarch64.rpm
+devdeps-libcurl-static-8.2.1-172023092015.el8.aarch64.rpm
+devdeps-mariadb-connector-c-3.1.12-12022100422.el8.aarch64.rpm
+devdeps-libaio-0.3.112-12022092915.el8.aarch64.rpm
+devdeps-relaxed-rapidjson-1.0.0-52023011719.el8.aarch64.rpm
+devdeps-openssl-static-1.1.1u-22023100710.el8.aarch64.rpm
+devdeps-libxml2-2.10.4-42023082915.el8.aarch64.rpm
+devdeps-mxml-2.12.0-12022090616.el8.aarch64.rpm
+devdeps-apr-1.6.5-32022090616.el8.aarch64.rpm
+devdeps-xz-5.2.2-42022090615.el8.aarch64.rpm
+devdeps-lua-5.4.6-22023082916.el8.aarch64.rpm
+devdeps-oss-c-sdk-3.9.2-182022100412.el8.aarch64.rpm
+devdeps-zlib-static-1.2.13-32023061421.el8.aarch64.rpm
+devdeps-ncurses-static-6.2-72022100815.el8.aarch64.rpm
+devdeps-boost-1.74.0-22022110914.el8.aarch64.rpm
+devdeps-s2geometry-0.9.0-12023092021.el8.aarch64.rpm
+devdeps-icu-69.1-72022112416.el8.aarch64.rpm
+devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
+devdeps-protobuf-c-1.4.1-100000072023102410.el8.aarch64.rpm
+
+[tools]
+obdevtools-binutils-2.30-12022100413.el8.aarch64.rpm
+obdevtools-bison-2.4.1-12022100413.el8.aarch64.rpm
+obdevtools-ccache-3.7.12-12022100417.el8.aarch64.rpm
+obdevtools-cmake-3.22.1-22022100417.el8.aarch64.rpm
+obdevtools-flex-2.5.35-12022100417.el8.aarch64.rpm
+obdevtools-gcc9-9.3.0-52022092914.el8.aarch64.rpm
+obdevtools-llvm-11.0.1-312022092921.el8.aarch64.rpm
+
+[tools-deps]
+devdeps-oblogmsg-1.0-62023111417.el8.aarch64.rpm
+devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
+obshell-4.2.2.0-102024011512.el8.aarch64.rpm target=community
+
+[test-utils]
+ob-deploy-1.6.0-41.el8.aarch64.rpm target=community
+obclient-2.2.2-1.el8.aarch64.rpm target=community
+libobclient-2.2.2-3.el8.aarch64.rpm target=community
+
