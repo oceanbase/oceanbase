@@ -1380,7 +1380,8 @@ int ObTransformPredicateMoveAround::pushdown_into_tables_skip_current_level_stmt
     if (OB_ISNULL(table_item = stmt.get_table_item(from_items.at(i)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("params have null", K(ret), K(table_item));
-    } else if (table_item->is_generated_table()) {
+    } else if (table_item->is_generated_table() ||
+               table_item->is_lateral_table()) {
       if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
         LOG_WARN("failed to push down predicates", K(ret));
       }
@@ -1411,7 +1412,8 @@ int ObTransformPredicateMoveAround::pushdown_into_joined_table_skip_current_leve
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(table_item));
-  } else if (table_item->is_generated_table()) {
+  } else if (table_item->is_generated_table() ||
+             table_item->is_lateral_table()) {
     ObArray<ObRawExpr *> dummy_preds;
     if (OB_FAIL(SMART_CALL(pushdown_predicates(table_item->ref_query_, dummy_preds)))) {
       LOG_WARN("failed to push down predicates", K(ret));
