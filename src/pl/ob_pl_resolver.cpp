@@ -12254,6 +12254,12 @@ int ObPLResolver::resolve_udf_info(
           K(routine_type), K(db_name), K(package_name), K(udf_name),
           K(ret));
     }
+    if (OB_SUCC(ret) && resolve_ctx_.is_sql_scope_ && OB_NOT_NULL(udf_info.ref_expr_) && udf_info.ref_expr_->has_param_out()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
+                that contained an OUT parameter. This is not allowed.", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06572: function name has out arguments");
+    }
     if (OB_SUCC(ret) && !resolve_ctx_.is_sql_scope_) {
       ObUDFRawExpr *udf_raw_expr = NULL;
       const ObPLSymbolTable *table = current_block_->get_symbol_table();
