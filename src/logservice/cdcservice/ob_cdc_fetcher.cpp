@@ -373,6 +373,8 @@ int ObCdcFetcher::fetch_log_in_archive_(
     ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  // always reserve 4K for archive header
+  const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L - 4 * 1024;
   if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
     LOG_WARN("init archive source failed", K(ctx), K(ls_id));
   } else {
@@ -383,7 +385,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
     } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
                                                           start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_,
-                                                          log_ext_handler_, ObCdcLSFetchLogResp::FETCH_BUF_LEN))) {
+                                                          log_ext_handler_, SINGLE_READ_SIZE))) {
       LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
     } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
       // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
