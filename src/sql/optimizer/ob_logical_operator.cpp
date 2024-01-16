@@ -657,6 +657,7 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool 
   int ret = OB_SUCCESS;
   const ObLogicalOperator *max_parallel_child = NULL;
   bool parallel_is_different = false;
+  bool max_parallel_from_exch = false;
   int64_t op_parallel = ObGlobalHint::UNSET_PARALLEL;
   int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   const ObLogicalOperator *child = NULL;
@@ -664,18 +665,22 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info(bool 
     if (OB_ISNULL(child = get_child(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("set operator i-th child is null", K(ret), K(i));
-    } else if (child->is_match_all()) {
-      max_parallel_child = (NULL == max_parallel_child && (get_num_of_child() - 1) == i)
-                           ? child : max_parallel_child;
-    } else if (ObGlobalHint::UNSET_PARALLEL == op_parallel) {
-      op_parallel = child->get_parallel();
+    } else if (0 == i) {
       max_parallel_child = child;
-      max_available_parallel = child->get_available_parallel();
+      max_available_parallel = max_parallel_child->get_available_parallel();
+      max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+      op_parallel = child->get_parallel();
+    } else if (!max_parallel_from_exch &&
+               LOG_EXCHANGE == child->get_type()) {
+      //do nothing
     } else {
       parallel_is_different |= child->get_parallel() != op_parallel;
-      max_available_parallel = std::max(max_available_parallel, child->get_available_parallel());
-      max_parallel_child = max_parallel_child->get_parallel() < child->get_parallel()
-                           ? child : max_parallel_child;
+      if (max_parallel_child->get_parallel() < child->get_parallel() ||
+          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type())) {
+        max_available_parallel = child->get_available_parallel();
+        max_parallel_child = child;
+        max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
+      }
     }
   }
 
