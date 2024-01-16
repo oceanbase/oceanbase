@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/oblog/ob_log.h"
-#include <sys/statvfs.h>
 #include <string.h>
 #include <sys/uio.h>
 #include <dirent.h>
@@ -1511,22 +1510,6 @@ void ObLogger::process_log_items(ObIBaseLogItem **items, const int64_t item_cnt,
   }
 }
 
-int ObLogger::get_free_disk_space(const char *path, uint64_t &freeDiskSize)
-{
-  int ret = OB_SUCCESS;
-  struct statvfs stat;
-  if (access(path, F_OK) != 0) {
-      ret = OB_INVALID_ARGUMENT;
-      freeDiskSize = 0;
-  } else if (statvfs(path, &stat) != 0) {
-    ret = OB_ERR_UNEXPECTED;
-    freeDiskSize = 0;
-  } else {
-    // cal the remaining number of bytes
-    freeDiskSize = stat.f_bsize * stat.f_bavail;
-  }
-  return ret;
-}
 void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
 {
   if (OB_NOT_NULL(log_item)
@@ -1535,13 +1518,10 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
       && OB_NOT_NULL(log_item[0])) {
     if (log_item[0]->get_timestamp() > (last_check_disk_ts + DISK_SAMPLE_TIME)) {
       last_check_disk_ts = log_item[0]->get_timestamp();
-      const char* path = "log";
-      uint64_t freeDiskSize = 0;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(get_free_disk_space(path, freeDiskSize))) {
-        LOG_STDERR("get_free_disk_space fail, tmp_ret=%d\n", tmp_ret);
-      } else {
-        can_print_ = (freeDiskSize > CAN_PRINT_DISK_SIZE);
+      check_file(log_file_[FD_SVR_FILE], redirect_flag_, open_wf_flag_);
+      struct statfs disk_info;
+      if (0 == statfs(log_file_[FD_SVR_FILE].filename_, &disk_info)) {
+        can_print_ = ((disk_info.f_bfree * disk_info.f_bsize) > CAN_PRINT_DISK_SIZE);
       }
     }
 
