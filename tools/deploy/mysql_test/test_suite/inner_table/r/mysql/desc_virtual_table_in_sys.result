@@ -8224,7 +8224,7 @@ table_id	bigint(20)	NO	PRI	NULL
 column_group_id	bigint(20)	NO	PRI	NULL	
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
-column_group_name	varchar(256)	NO			
+column_group_name	varchar(389)	NO			
 column_group_type	bigint(20)	NO		NULL	
 block_size	bigint(20)	NO		NULL	
 compressor_type	bigint(20)	NO		NULL	
@@ -8882,7 +8882,7 @@ schema_version	bigint(20)	NO	PRI	NULL
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
 is_deleted	bigint(20)	NO		NULL	
-column_group_name	varchar(256)	YES			
+column_group_name	varchar(389)	YES			
 column_group_type	bigint(20)	YES		NULL	
 block_size	bigint(20)	YES		NULL	
 compressor_type	bigint(20)	YES		NULL	
