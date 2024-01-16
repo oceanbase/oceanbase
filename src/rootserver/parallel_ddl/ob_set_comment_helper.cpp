@@ -241,6 +241,10 @@ int ObSetCommentHelper::check_table_legitimacy_()
     ret = OB_ERR_WRONG_OBJECT;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
     to_cstring(arg_.database_name_), to_cstring(arg_.table_name_), "BASE TABLE");
+  } else if (OB_UNLIKELY(orig_table_schema_->is_sys_view() && !GCONF.enable_sys_table_ddl)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("comment on sys view is not allowed", KR(ret), K(orig_table_schema_->get_table_id()));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter system view");
   } else if (OB_UNLIKELY(orig_table_schema_->is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("can not comment table in recyclebin", KR(ret), K(orig_table_schema_->is_in_recyclebin()));
@@ -270,7 +274,9 @@ int ObSetCommentHelper::lock_for_common_ddl_()
 {
   int ret = OB_SUCCESS;
   int64_t schema_version = OB_INVALID_VERSION;
-  if (OB_UNLIKELY(OB_INVALID_ID == database_id_)) {
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == database_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database is not exist", KR(ret), K_(tenant_id), K_(arg_.database_name));
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id_)) {
