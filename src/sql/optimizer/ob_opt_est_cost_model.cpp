@@ -2337,8 +2337,13 @@ int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
         }
       }
     } else if (T_OP_IN == expr->get_expr_type()) {
-      cost += expr->get_param_count() * cost_params_.CMP_INT_COST / rows;
       need_calc_child_cost = false;
+      if (expr->get_param_count() != 2 || OB_ISNULL(expr->get_param_expr(1))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid in params", K(ret));
+      } else {
+        cost += (expr->get_param_expr(1)->get_param_count() + 1) * cost_params_.CMP_INT_COST / rows;
+      }
     } else {
       cost += cost_params_.CMP_INT_COST / rows;
     }
