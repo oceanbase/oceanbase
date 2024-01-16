@@ -19,7 +19,7 @@ namespace storage {
 
 void ObCGPrefetcher::reset()
 {
-  FREE_PTR_FROM_CONTEXT(access_ctx_, sstable_index_filter_, ObSSTableIndexFilter);
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   query_index_range_.reset();
   query_range_.reset();
   is_reverse_scan_ = false;
@@ -31,7 +31,7 @@ void ObCGPrefetcher::reset()
 
 void ObCGPrefetcher::reuse()
 {
-  FREE_PTR_FROM_CONTEXT(access_ctx_, sstable_index_filter_, ObSSTableIndexFilter);
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
   query_index_range_.reset();
   query_range_.reset();
   filter_bitmap_ = nullptr;
