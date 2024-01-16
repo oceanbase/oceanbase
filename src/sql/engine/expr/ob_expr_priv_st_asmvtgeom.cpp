@@ -112,6 +112,7 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   ObExpr *arg2 = expr.args_[1];
   ObObjType type1 = arg1->datum_meta_.type_;
   ObObjType type2 = arg2->datum_meta_.type_;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs1 = nullptr;
   const ObSrsItem *srs2 = nullptr;
   ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
@@ -137,7 +138,6 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
     common::ObArenaAllocator &ctx_allocator = tmp_alloc_g.get_allocator();
     ObString wkb1 = datum1->get_string();
     ObString wkb2 = datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
     ObGeoEvalCtx box_ctx(&ctx_allocator);
     box_ctx.set_is_called_in_pg_expr(true);
 
@@ -159,11 +159,6 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
         LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
       }
       LOG_WARN("fail to get srs item", K(ret), K(wkb1), K(wkb2));
-    } else if ((OB_NOT_NULL(srs1) && srs1->is_geographical_srs())
-               || (OB_NOT_NULL(srs2) && srs2->is_geographical_srs())) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
-      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1), K(srs2));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(ctx_allocator,
                    wkb1,
                    geo1,
@@ -178,6 +173,16 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
                    N_PRIV_ST_ASMVTGEOM,
                    ObGeoBuildFlag::GEO_DEFAULT | ObGeoBuildFlag::GEO_CHECK_RING))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
+    } else if (OB_NOT_NULL(srs1) && srs1->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
+    } else if (OB_NOT_NULL(srs2) && srs2->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo2->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs2));
     } else if (OB_FAIL(box_ctx.append_geo_arg(geo2))) {
       LOG_WARN("build gis context failed", K(ret), K(box_ctx.get_geo_count()));
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Box>::geo_func::eval(box_ctx, bounds))) {
@@ -228,12 +233,18 @@ int ObExprPrivSTAsMVTGeom::process_input_geometry(const ObExpr &expr, ObEvalCtx 
   }
   // process clip_geom
   clip_geom = true;  // default
+  int8_t clip_num = 0;
   if (OB_SUCC(ret) && num_args >= 5) {
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr.args_[4]->eval(ctx, datum))) {
       LOG_WARN("fail to eval second argument", K(ret));
     } else if (datum->is_null()) {
       // use default value
+    } else if (FALSE_IT(clip_num = datum->get_tinyint())) {
+    } else if (clip_num < 0 || clip_num > 1) {
+      ret = OB_OPERATE_OVERFLOW;
+      LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "clip", N_PRIV_ST_ASMVTGEOM);
+      LOG_WARN("value is out of range", K(ret), K(clip_num));
     } else {
       clip_geom = datum->get_tinyint();
     }
@@ -490,6 +501,13 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
                  is_null_res,
                  res_geo))) {
     LOG_WARN("fail to clip geometry", K(ret));
+  } else if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
+              res_geo, temp_allocator)))) {
+    LOG_WARN("fail to simplify multi geometry", K(ret));
+  } else if (OB_FAIL(ObGeoExprUtils::check_empty(res_geo, is_geo_empty))) {
+    LOG_WARN("check geo empty failed", K(ret));
+  } else if (is_geo_empty) {
+    is_null_res = true;
   }
 
   if (OB_SUCC(ret)) {
@@ -497,10 +515,7 @@ int ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom(const ObExpr &expr, ObEvalCtx 
       res.set_null();
     } else {
       ObGeometry *res_bin = nullptr;
-      if (OB_FAIL((ObGeoFuncUtils::simplify_multi_geo<ObCartesianGeometrycollection>(
-                  res_geo, temp_allocator)))) {
-        LOG_WARN("fail to simplify multi geometry", K(ret));
-      } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, res_geo, res_bin, nullptr))) {
+      if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, res_geo, res_bin, nullptr))) {
         LOG_WARN("fail to convert tree to bin", K(ret));
       } else if (FALSE_IT(res_bin->set_srid(geo1->get_srid()))) {
       } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(

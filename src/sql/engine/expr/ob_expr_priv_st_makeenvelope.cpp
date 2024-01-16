@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_makeenvelope.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "share/object/ob_obj_cast_util.h"
@@ -108,7 +107,7 @@ int ObExprPrivSTMakeEnvelope::string_to_double(const common::ObString &in_str, O
   return ret;
 }
 
-int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSEArray<double, 4> &coords,
+int ObExprPrivSTMakeEnvelope::read_args(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObSEArray<double, 4> &coords,
     ObGeoSrid &srid, bool &is_null_result, const ObSrsItem *&srs_item)
 {
   int ret = OB_SUCCESS;
@@ -143,7 +142,6 @@ int ObExprPrivSTMakeEnvelope::read_args(const ObExpr &expr, ObEvalCtx &ctx, ObSE
     }
   }
 
-  omt::ObSrsCacheGuard srs_guard;
   bool is_geog = false;
   if (expr.arg_cnt_ == 5 && !is_null_result && OB_SUCC(ret)) {
     if (expr.args_[4]->is_boolean_) {
@@ -182,9 +180,10 @@ int ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope(const ObExpr &expr, ObEv
   ObWkbBuffer wkb_buf(tmp_allocator);
   ObWkbBuffer res_wkb_buf(tmp_allocator);
   ObGeometry *geo = NULL;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs_item = NULL;
   // rectangle point -> polygon ewkb
-  if (OB_FAIL(read_args(expr, ctx, coords, srid, is_null_result, srs_item))) {
+  if (OB_FAIL(read_args(srs_guard, expr, ctx, coords, srid, is_null_result, srs_item))) {
     LOG_WARN("fail to read args", K(ret));
   } else if (is_null_result) {
     res.set_null();

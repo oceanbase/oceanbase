@@ -19,7 +19,6 @@
 #include "ob_expr_priv_st_equals.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
-#include "observer/omt/ob_tenant_srs.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -72,7 +71,7 @@ int ObExprPrivSTEquals::calc_result_type2(ObExprResType &type, ObExprResType &ty
   return ret;
 }
 
-int ObExprPrivSTEquals::get_input_geometry(ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg, bool &is_null_geo,
+int ObExprPrivSTEquals::get_input_geometry(omt::ObSrsCacheGuard &srs_guard, ObDatum *gis_datum, ObEvalCtx &ctx, ObExpr *gis_arg, bool &is_null_geo,
     const ObSrsItem *&srs, ObGeometry *&geo, bool &is_geo_empty)
 {
   int ret = OB_SUCCESS;
@@ -86,7 +85,6 @@ int ObExprPrivSTEquals::get_input_geometry(ObDatum *gis_datum, ObEvalCtx &ctx, O
     ObString wkb = gis_datum->get_string();
     ObGeoType type = ObGeoType::GEOTYPEMAX;
     uint32_t srid = -1;
-    omt::ObSrsCacheGuard srs_guard;
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
             *gis_datum,
             gis_arg->datum_meta_,
@@ -126,6 +124,7 @@ int ObExprPrivSTEquals::eval_priv_st_equals(const ObExpr &expr, ObEvalCtx &ctx, 
   bool is_geo2_null = false;
   ObGeometry *geo1 = nullptr;
   ObGeometry *geo2 = nullptr;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs1 = nullptr;
   const ObSrsItem *srs2 = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -136,9 +135,9 @@ int ObExprPrivSTEquals::eval_priv_st_equals(const ObExpr &expr, ObEvalCtx &ctx, 
     LOG_WARN("eval geo args failed", K(ret));
   } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
     res.set_null();
-  } else if (OB_FAIL(get_input_geometry(gis_datum1, ctx, gis_arg1, is_geo1_null, srs1, geo1, is_geo1_empty))) {
+  } else if (OB_FAIL(get_input_geometry(srs_guard, gis_datum1, ctx, gis_arg1, is_geo1_null, srs1, geo1, is_geo1_empty))) {
     LOG_WARN("fail to get input geometry", K(ret));
-  } else if (OB_FAIL(get_input_geometry(gis_datum2, ctx, gis_arg2, is_geo2_null, srs2, geo2, is_geo2_empty))) {
+  } else if (OB_FAIL(get_input_geometry(srs_guard, gis_datum2, ctx, gis_arg2, is_geo2_null, srs2, geo2, is_geo2_empty))) {
     LOG_WARN("fail to get input geometry", K(ret));
   } else {
     uint32_t srid1 = srs1 == nullptr ? 0 : srs1->get_srid();

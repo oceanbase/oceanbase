@@ -16,7 +16,6 @@
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_ibin.h"
 #include "sql/engine/ob_exec_context.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_union.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
@@ -73,7 +72,7 @@ int ObExprSTUnion::calc_result_type2(ObExprResType &type, ObExprResType &type1,
   return ret;
 }
 
-int ObExprSTUnion::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
+int ObExprSTUnion::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx,
     ObIAllocator &allocator, ObGeometry *&geo1, ObGeometry *&geo2, bool &is_null_res,
     const ObSrsItem *&srs)
 {
@@ -96,7 +95,6 @@ int ObExprSTUnion::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
     uint32_t srid2;
     ObString wkb1 = gis_datum1->get_string();
     ObString wkb2 = gis_datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
     bool is_geo1_valid = false;
     bool is_geo2_valid = false;
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
@@ -152,13 +150,14 @@ int ObExprSTUnion::eval_st_union(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
   ObGeometry *geo1_3d = nullptr;
   ObGeometry *geo2_3d = nullptr;
   bool is_null_res = false;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObGeometry *union_res = nullptr;
   bool is_empty_res = false;
   if (OB_FAIL(
-          process_input_geometry(expr, ctx, temp_allocator, geo1_3d, geo2_3d, is_null_res, srs))) {
+          process_input_geometry(srs_guard, expr, ctx, temp_allocator, geo1_3d, geo2_3d, is_null_res, srs))) {
     LOG_WARN("fail to process input geometry", K(ret));
   } else if (!is_null_res) {
     ObGeometry *geo1 = nullptr;

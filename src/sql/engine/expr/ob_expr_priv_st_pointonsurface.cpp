@@ -83,6 +83,11 @@ int ObExprPrivSTPointOnSurface::process_input_geometry(
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(
                    allocator, wkb1, geo1, nullptr, N_PRIV_ST_POINTONSURFACE))) {  // ObIWkbGeom
       LOG_WARN("fail to build geometry from wkb", K(ret), K(wkb1));
+    } else if (OB_NOT_NULL(srs1) && srs1->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
     }
   }
 

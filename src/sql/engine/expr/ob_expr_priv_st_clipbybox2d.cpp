@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_priv_st_clipbybox2d.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_geo_func_register.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "share/object/ob_obj_cast_util.h"
@@ -63,7 +62,7 @@ int ObExprPrivSTClipByBox2D::calc_result_type2(ObExprResType &type, ObExprResTyp
   return ret;
 }
 
-int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
+int ObExprPrivSTClipByBox2D::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
     bool &is_null_res, ObGeometry *&geo1, ObGeometry *&geo2, const ObSrsItem *&srs1,
     const ObSrsItem *&srs2)
 {
@@ -84,7 +83,6 @@ int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCt
   } else {
     ObString wkb1 = datum1->get_string();
     ObString wkb2 = datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
 
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(
             allocator, *datum1, arg1->datum_meta_, arg1->obj_meta_.has_lob_header(), wkb1))) {
@@ -109,6 +107,16 @@ int ObExprPrivSTClipByBox2D::process_input_geometry(const ObExpr &expr, ObEvalCt
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(
                    allocator, wkb2, geo2, nullptr, N_PRIV_ST_CLIPBYBOX2D))) {  // ObIWkbGeom
       LOG_WARN("fail to build geometry from wkb", K(ret), K(wkb2));
+    } else if (OB_NOT_NULL(srs1) && srs1->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo1->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs1));
+    } else if (OB_NOT_NULL(srs2) && srs2->is_geographical_srs()) {
+      ret = OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS;
+      LOG_USER_ERROR(OB_ERR_NOT_IMPLEMENTED_FOR_GEOGRAPHIC_SRS, N_PRIV_ST_ASMVTGEOM,
+                  ObGeoTypeUtil::get_geo_name_by_type(geo2->type()));
+      LOG_WARN("Geometry in geographical srs can not be input", K(ret), K(srs2));
     }
   }
   return ret;
@@ -129,8 +137,9 @@ int ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d(
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObString res_wkb;
+  omt::ObSrsCacheGuard srs_guard;
 
-  if (OB_FAIL(process_input_geometry(expr, ctx, temp_allocator, is_null_res, geo1, geo2, srs1, srs2))) {
+  if (OB_FAIL(process_input_geometry(srs_guard, expr, ctx, temp_allocator, is_null_res, geo1, geo2, srs1, srs2))) {
     LOG_WARN("fail to process input geometry", K(ret), K(geo1), K(geo2), K(is_null_res));
   } else if (is_null_res) {
     // do nothing

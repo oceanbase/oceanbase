@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "observer/omt/ob_tenant_srs.h"
 
 namespace oceanbase
 {
@@ -33,7 +34,7 @@ public:
       ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
 
 private:
-  static int process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator, ObGeometry *&geo1,
+  static int process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator, ObGeometry *&geo1,
       ObGeometry *&geo2, bool &is_null_res, const ObSrsItem *&srs);
 //   static int is_geometry_valid(
     //   ObGeometry *geo, ObIAllocator &allocator, const common::ObSrsItem *srs_item, bool &is_valid);
