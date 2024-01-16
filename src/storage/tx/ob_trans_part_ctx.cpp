@@ -6126,11 +6126,11 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
       ret = OB_ERR_UNDEFINED;
       TRANS_LOG(ERROR, "unexpected mds type", KR(ret), K(*this));
     } else if (old_node.get_data_source_type() <= ObTxDataSourceType::BEFORE_VERSION_4_1
-               && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
-               && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
-               && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
-      TRANS_LOG(INFO, "old mds type, no need process with buffer ctx",
-                K(old_node.get_data_source_type()), K(*this));
+                && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
+                && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
+                && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
+      TRANS_LOG(DEBUG, "old mds type, no need process with buffer ctx",
+                      K(old_node.get_data_source_type()), K(*this));
     } else {
       if (OB_ISNULL(old_node.get_buffer_ctx_node().get_ctx())) { // this is replay path, create ctx
         if (OB_FAIL(mds::MdsFactory::create_buffer_ctx(old_node.get_data_source_type(), trans_id_,
@@ -6160,6 +6160,8 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
   if (OB_FAIL(tmp_buf_arr.reserve(additional_count))) {
     TRANS_LOG(WARN, "reserve array space failed", K(ret));
+  } else if(OB_FAIL(incremental_array.reserve(additional_count))) {
+    TRANS_LOG(WARN, "reserve incremental_array space failed", K(ret));
   } else if (need_replace) {
     ret = exec_info_.multi_data_source_.reserve(additional_count);
   } else {
@@ -6183,6 +6185,11 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
         data.assign_ptr(reinterpret_cast<char *>(ptr), len);
         mds::BufferCtx *new_ctx = nullptr;
         if (OB_FAIL(process_with_buffer_ctx(node, new_ctx))) {
+          mtl_free(ptr);
+          if (OB_NOT_NULL(new_ctx)) {
+            MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
+            new_ctx = nullptr;
+          }
           TRANS_LOG(WARN, "process_with_buffer_ctx failed", KR(ret), K(*this));
         } else if (OB_FAIL(new_node.init(node.get_data_source_type(), data, node.mds_base_scn_,
                                          new_ctx))) {
