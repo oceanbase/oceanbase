@@ -2305,7 +2305,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
       } else if (OB_FAIL(resolve_generated_column_expr_temp(table_item))) {
         LOG_WARN("resolve generated column expr templte failed", K(ret));
-      } else if (OB_FAIL(resolve_table_check_constraint_items(table_item, table_schema))) {
+      } else if (OB_FAIL(resolve_table_constraint_items(table_item, table_schema))) {
         LOG_WARN("resolve table partition expr failed", K(ret), K(table_name));
       } else if (stmt->is_select_stmt() && OB_FAIL(ObMultiModeDMLResolver::geo_resolve_mbr_column(this))) {
         LOG_WARN("resolve geo mbr column failed", K(ret), K(table_name));
@@ -2405,6 +2405,21 @@ int ObDMLResolver::resolve_table_check_constraint_items(const TableItem *table_i
       LOG_TRACE("succeed to resolve table check constraint items", K(table_item->table_id_),
                         K(table_schema->get_table_id()), K(check_constraint_item));
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_table_constraint_items(const TableItem *table_item,
+                                                        const ObTableSchema *table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table_item) || OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item or schema is null", K(ret), K(table_item), K(table_schema));
+  } else if (OB_FAIL(resolve_table_check_constraint_items(table_item, table_schema))) {
+    LOG_WARN("failed to resolve check constraints", K(ret));
+  } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
+    LOG_WARN("failed to resolve foreign key constraint", K(ret));
   }
   return ret;
 }
@@ -4327,7 +4342,18 @@ int ObDMLResolver::resolve_fk_table_partition_expr(const TableItem &table_item, 
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(dml_stmt->set_part_expr(foreign_key_info.foreign_key_id_, fk_scan_tid,
                                 parent_part_expr, parent_subpart_expr))) {
-              LOG_WARN("set part expr to dml stmt failed", K(ret));
+              /*
+                create table t17(a int, b int, c int, d int, primary key (a)) partition by hash(a) partitions 3;
+                create table tf17(a int, b int, c int, d int, primary key (a), foreign key (a) references t17 (a)) partition by hash(a) partitions 3;
+                update tf17 partition(p0) as C, tf17 as P set C.d = C.d + 100 where C.a = P.a;
+                In follwing cases, the partition key of t17 will be resolved twice, but it needs return success for compatibility with oracle
+              */
+              if (ret == OB_ERR_TABLE_EXIST) {
+                ret = OB_SUCCESS;
+                LOG_INFO("Duplicate foreign key", K(lbt()));
+              } else {
+                LOG_WARN("set part expr to dml stmt failed", K(ret));
+              }
             } else {
               LOG_TRACE("resolve partition expr", K(table_item), KPC(parent_part_expr), K(part_str));
             }
