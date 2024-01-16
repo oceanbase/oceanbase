@@ -228,54 +228,8 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
                 cells[i].set_varchar("");
               } else {
                 int64_t pid = getpid();
-                char path[256];
-                snprintf(path, 256, "/proc/%ld/task/%ld/cgroup", pid, tid);
-                FILE *file = fopen(path, "r");
-                if (NULL == file) {
-                  cells[i].set_varchar("");
-                } else {
-                  /*
-                  file content
-                  7:perf_event:/
-                  6:cpuset,cpu,cpuacct:/oceanbase/tenant_0001
-                  5:blkio:/system.slice/staragentctl.service
-                  4:devices:/system.slice/staragentctl.service
-                  3:hugetlb:/
-                  cgroup_path = /tenant_0001
-                  */
-                  bool is_find = false;
-                  int min_len = 2;
-                  int discard_len = 1;
-                  char read_buff[PATH_BUFSIZE];
-                  cgroup_path_buf_[0] = '\0';
-                  while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
-                    const char* match_begin =  strstr(read_buff, ":/");
-                    const char* match_cpu =  strstr(read_buff, "cpu");
-                    if (match_begin != NULL && match_cpu != NULL) {
-                      is_find = true;
-                      match_begin += discard_len;
-                      snprintf(cgroup_path_buf_, PATH_BUFSIZE, "%s", match_begin);
-                    }
-                  }
-                  if (is_find) {
-                    int cgroup_path_len = strlen(cgroup_path_buf_);
-                    if (min_len < cgroup_path_len) {
-                      if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
-                        cgroup_path_buf_[cgroup_path_len - 1] = '\0';
-                      }
-                      cells[i].set_varchar(cgroup_path_buf_);
-                    } else {
-                      cells[i].set_varchar("");
-                    }
-                  } else {
-                    cells[i].set_varchar("");
-                  }
-                }
-                cells[i].set_collation_type(
-                    ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                if (NULL != file) {
-                  fclose(file);
-                }
+                snprintf(cgroup_path_buf_, PATH_BUFSIZE, "/proc/%ld/task/%ld/cgroup", pid, tid);
+                cells[i].set_varchar(cgroup_path_buf_);
               }
               break;
             }
@@ -307,8 +261,71 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next row", K(ret));
       }
+    } else if (OB_FAIL(read_real_cgroup_path())){
+      SERVER_LOG(WARN, "fail to get cgroup path real path", K(ret));
     } else {
       row = &cur_row_;
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualThread::read_real_cgroup_path()
+{
+  int ret = OB_SUCCESS;
+  const int64_t col_count = output_column_ids_.count();
+  for (int64_t i = 0; i < col_count && OB_SUCC(ret); ++i) {
+    const uint64_t col_id = output_column_ids_.at(i);
+    ObObj *cells = cur_row_.cells_;
+    if (col_id == CGROUP_PATH) {
+      char path[PATH_BUFSIZE];
+      snprintf(path, cells[i].get_val_len() + 1, "%s", cells[i].get_varchar().ptr());
+      FILE *file = fopen(path, "r");
+      if (NULL == file) {
+        cells[i].set_varchar("");
+      } else {
+        /*
+        file content
+        7:perf_event:/
+        6:cpuset,cpu,cpuacct:/oceanbase/tenant_0001
+        5:blkio:/system.slice/staragentctl.service
+        4:devices:/system.slice/staragentctl.service
+        3:hugetlb:/
+        cgroup_path = /tenant_0001
+        */
+        bool is_find = false;
+        int min_len = 2;
+        int discard_len = 1;
+        char read_buff[PATH_BUFSIZE];
+        cgroup_path_buf_[0] = '\0';
+        while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
+          const char* match_begin =  strstr(read_buff, ":/");
+          const char* match_cpu =  strstr(read_buff, "cpu");
+          if (match_begin != NULL && match_cpu != NULL) {
+            is_find = true;
+            match_begin += discard_len;
+            snprintf(cgroup_path_buf_, PATH_BUFSIZE, "%s", match_begin);
+          }
+        }
+        if (is_find) {
+          int cgroup_path_len = strlen(cgroup_path_buf_);
+          if (min_len < cgroup_path_len) {
+            if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
+              cgroup_path_buf_[cgroup_path_len - 1] = '\0';
+            }
+            cells[i].set_varchar(cgroup_path_buf_);
+          } else {
+            cells[i].set_varchar("");
+          }
+        } else {
+          cells[i].set_varchar("");
+        }
+      }
+      cells[i].set_collation_type(
+          ObCharset::get_default_collation(ObCharset::get_default_charset()));
+      if (NULL != file) {
+        fclose(file);
+      }
     }
   }
   return ret;
