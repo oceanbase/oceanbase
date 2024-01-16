@@ -752,7 +752,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
           if (OB_FAIL(add_hidden_tablet_seq_col())) {
             SQL_RESV_LOG(WARN, "failed to add hidden primary key tablet seq", K(ret));
-          } else if (OB_FAIL(add_inner_index_for_heap_gtt())) {
+          } else if (!is_create_as_sel && OB_FAIL(add_inner_index_for_heap_gtt())) {
             SQL_RESV_LOG(WARN, "failed to add_inner_index_for_heap_gtt", K(ret));
           }
         }
