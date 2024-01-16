@@ -438,7 +438,7 @@ ObLoadDataDirectImpl::DataReader::DataReader()
     : allocator_("TLD_DataReader"),
       execute_ctx_(nullptr),
       file_reader_(nullptr),
-      end_offset_(0),
+      end_offset_(-1),
       read_raw_(false),
       is_iter_end_(false),
       is_inited_(false)
@@ -631,7 +631,7 @@ bool ObLoadDataDirectImpl::DataReader::is_end_file() const
   bool ret = false;
   if (file_reader_->eof()) {
     ret = true;
-  } else if (end_offset_ > 0) {
+  } else if (end_offset_ >= 0) {
     ret = file_reader_->get_offset() >= end_offset_;
   }
   return ret;
