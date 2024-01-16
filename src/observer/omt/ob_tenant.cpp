@@ -1129,6 +1129,12 @@ void ObTenant::set_unit_min_cpu(double cpu)
   }
 }
 
+int64_t ObTenant::cpu_quota_concurrency() const
+{
+  ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
+  return static_cast<int64_t>((tenant_config.is_valid() ? tenant_config->cpu_quota_concurrency : 4));
+}
+
 int64_t ObTenant::min_worker_cnt() const
 {
   ObTenantConfigGuard tenant_config(TENANT_CONF(id_));
