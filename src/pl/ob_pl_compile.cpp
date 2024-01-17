@@ -437,7 +437,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-    ObRoutinePersistentInfo routine_storage(tenant_id,
+    ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         proc->get_database_id(),
                                         session_info_.get_database_id(),
                                         func_ast.get_id());
@@ -738,7 +738,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
   CK (OB_NOT_NULL(session_info_.get_pl_engine()));
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
-      ObRoutinePersistentInfo routine_storage(get_tenant_id_by_object_id(package.get_id()),
+      ObRoutinePersistentInfo routine_storage(MTL_ID(),
                                         session_info_.get_database_id(),
                                         session_info_.get_database_id(),
                                         package.get_id());
