@@ -217,7 +217,7 @@ int ObTimer::schedule_task(ObTimerTask &task, const int64_t delay, const bool re
 int ObTimer::insert_token(const Token &token)
 {
   int ret = OB_SUCCESS;
-  int32_t max_task_num= max_task_num_;
+  int64_t max_task_num= max_task_num_;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
   } else {
@@ -251,33 +251,33 @@ int ObTimer::cancel_task(const ObTimerTask &task)
   ObMonitor<Mutex>::Lock guard(monitor_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-  } else {
-    if (&task == uncanceled_task_) {
+  } else if (&task == uncanceled_task_) {
       // repeat cancel, do-nothing
-    } else if (&task == running_task_) {
+  } else {
+    if (&task == running_task_) {
       if (uncanceled_task_ != NULL) {
         ret = OB_ERR_UNEXPECTED;
       } else {
-        ATOMIC_STORE(&const_cast<ObTimerTask&>(task).timer_, nullptr);
+        // the token corresponding to running_task_ has been removed in run1(),
+        // so no need remove here
         uncanceled_task_ = &const_cast<ObTimerTask&>(task);
         OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_), K(task));
       }
-    } else {
-      int64_t pos = -1;
-      for (int64_t i = 0; i < tasks_num_; ++i) {
-        if (&task == tokens_[i].task) {
-          pos = i;
-          break;
+    }
+    if (OB_SUCC(ret)) {
+      ATOMIC_STORE(&const_cast<ObTimerTask&>(task).timer_, nullptr);
+      // for any tokens_[i].task == &task, we need remove tokens_[i]
+      int64_t i = 0;
+      while(i < tasks_num_) {
+        if (tokens_[i].task == &task) {
+          if (i + 1 < tasks_num_) {
+            memmove(&tokens_[i], &tokens_[i + 1], sizeof(tokens_[0]) * (tasks_num_ - i - 1));
+          }
+          --tasks_num_;
+          OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_), K(task));
+        } else {
+          ++i;
         }
-      }
-      if (-1 == pos) {
-        // not found, do-nothing
-      } else {
-        ATOMIC_STORE(&const_cast<ObTimerTask&>(task).timer_, nullptr);
-        memmove(&tokens_[pos], &tokens_[pos + 1],
-                sizeof(tokens_[0]) * (tasks_num_ - pos - 1));
-        --tasks_num_;
-        OB_LOG(INFO, "cancel task", KP(this), K_(thread_id), K(wakeup_time_), K(tasks_num_), K(task));
       }
     }
   }
@@ -479,8 +479,8 @@ void ObTimer::run1()
 
 void ObTimer::dump() const
 {
-  for (int32_t i = 0; i < tasks_num_; ++i) {
-    printf("%d : %ld %ld %p\n", i, tokens_[i].scheduled_time, tokens_[i].delay, tokens_[i].task);
+  for (int64_t i = 0; i < tasks_num_; ++i) {
+    printf("%ld : %ld %ld %p\n", i, tokens_[i].scheduled_time, tokens_[i].delay, tokens_[i].task);
   }
 }
 
