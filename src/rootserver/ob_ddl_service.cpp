@@ -23067,7 +23067,8 @@ int ObDDLService::create_tenant_schema(
                          trans, new_ug_id_array,
                          compat_mode,
                          pools, user_tenant_id,
-                         false/*is_bootstrap*/))) {
+                         false/*is_bootstrap*/,
+                         false/*check_data_version*/))) {
         LOG_WARN("grant_pools_to_tenant failed", KR(ret), K(pools), K(user_tenant_id));
       }
       LOG_INFO("[CREATE_TENANT] STEP 1.2. finish grant pools", KR(ret), K(user_tenant_id),
@@ -25040,7 +25041,8 @@ int ObDDLService::modify_and_cal_resource_pool_diff(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("fail to grant pool", K(ret), K(diff_pools));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
-                trans, new_ug_id_array, compat_mode, diff_pools, tenant_id))) {
+                trans, new_ug_id_array, compat_mode, diff_pools, tenant_id,
+                false/*is_bootstrap*/, true/*check_data_version*/))) {
           LOG_WARN("fail to grant pools", K(ret));
         }
       } else if (new_pool_name_list.count() + 1 == old_pool_name_list.count()) {

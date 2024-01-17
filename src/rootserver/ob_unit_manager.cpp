@@ -719,13 +719,13 @@ int ObUnitManager::create_resource_pool(
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
-  if (OB_FAIL(inner_create_resource_pool(resource_pool, config_name, if_not_exist))) {
+  if (OB_FAIL(inner_create_resource_pool_(resource_pool, config_name, if_not_exist))) {
     LOG_WARN("fail to inner create resource pool", K(ret));
   }
   return ret;
 }
 
-int ObUnitManager::inner_create_resource_pool(
+int ObUnitManager::inner_create_resource_pool_(
     share::ObResourcePool &resource_pool,
     const ObUnitConfigName &config_name,
     const bool if_not_exist)
@@ -3609,8 +3609,9 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
                                const lib::Worker::CompatMode compat_mode,
                                const ObIArray<ObResourcePoolName> &pool_names,
                                const uint64_t tenant_id,
-                               const bool is_bootstrap
-                               /*arg "const bool skip_offline_server" is no longer supported*/)
+                               const bool is_bootstrap,
+                               /*arg "const bool skip_offline_server" is no longer supported*/
+                               const bool check_data_version)
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(lock_);
@@ -3661,7 +3662,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_WARN("fail to generate new unit group id", KR(ret), K(tenant_id), K(legal_unit_num));
   } else if (OB_FAIL(do_grant_pools_(
           trans, new_unit_group_id_array, compat_mode,
-          pool_names, tenant_id, is_bootstrap))) {
+          pool_names, tenant_id, is_bootstrap,
+          check_data_version))) {
     LOG_WARN("do grant pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id),
                                          K(compat_mode), K(is_bootstrap));
   }
@@ -4785,7 +4787,8 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     const lib::Worker::CompatMode compat_mode,
     const share::ObUnit &unit,
     const bool if_not_grant,
-    const bool skip_offline_server)
+    const bool skip_offline_server,
+    const bool check_data_version)
 {
   int ret = OB_SUCCESS;
   bool is_alive = false;
@@ -4804,10 +4807,14 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     // STEP 1: Get and init notifying arg
     obrpc::TenantServerUnitConfig tenant_unit_server_config;
     if (!is_delete) {
+      const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
       if (OB_FAIL(build_notify_create_unit_resource_rpc_arg_(
                     tenant_id, unit, compat_mode, unit_config_id, if_not_grant,
                     tenant_unit_server_config))) {
         LOG_WARN("fail to init tenant_unit_server_config", KR(ret), K(tenant_id), K(is_delete));
+      } else if (should_check_data_version
+                 && OB_FAIL(check_dest_data_version_is_loaded_(tenant_id, unit.server_))) {
+        LOG_WARN("fail to check dest data_version is loaded", KR(ret), K(tenant_id), "dst", unit.server_);
       }
     } else {
       if (OB_FAIL(tenant_unit_server_config.init_for_dropping(tenant_id, is_delete))) {
@@ -4827,6 +4834,83 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     }
   }
   return ret;
+}
+
+int ObUnitManager::check_dest_data_version_is_loaded_(
+    const uint64_t tenant_id, const ObAddr &addr)
+{
+ int ret = OB_SUCCESS;
+ ObTimeoutCtx ctx;
+ const int64_t DEFTAULT_TIMEOUT_TS = 5 * GCONF.rpc_timeout;
+ char ip_buf[OB_IP_STR_BUFF] = "";
+ if (OB_UNLIKELY(!check_inner_stat())) {
+   ret = OB_INNER_STAT_ERROR;
+   LOG_WARN("check_inner_stat failed", KR(ret), K(inited_), K(loaded_));
+ } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+            || !addr.is_valid()
+            || OB_ISNULL(proxy_))) {
+   ret = OB_INVALID_ARGUMENT;
+   LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(addr), KP_(proxy));
+ } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, DEFTAULT_TIMEOUT_TS))) {
+   LOG_WARN("fail to set default timeout ctx", KR(ret));
+ } else if (OB_UNLIKELY(!addr.ip_to_string(ip_buf, sizeof(ip_buf)))) {
+   ret = OB_ERR_UNEXPECTED;
+   LOG_WARN("fail to convert ip to string", KR(ret), K(tenant_id), K(addr));
+ } else {
+   const int64_t start_timeout_ts = ObTimeUtility::current_time();
+   const int64_t CHECK_INTERVAL_TS = 500 * 1000L; // 500ms
+   const int64_t SLEEP_TS = 100 * 1000L; // 100ms
+   ObSqlString sql;
+   if (OB_FAIL(sql.assign_fmt("SELECT IF(value = '0.0.0.0', 0, 1) AS loaded "
+                              "FROM %s WHERE tenant_id = %lu AND name = 'compatible' "
+                              "AND svr_ip = '%s' AND svr_port = %d",
+                              OB_ALL_VIRTUAL_TENANT_PARAMETER_INFO_TNAME,
+                              tenant_id, ip_buf, addr.get_port()))) {
+     LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(addr));
+   }
+   while (OB_SUCC(ret)) {
+     if (OB_UNLIKELY(ctx.is_timeouted())) {
+       ret = OB_TIMEOUT;
+       LOG_WARN("check dest data version timeout", KR(ret),
+                K(start_timeout_ts), "abs_timeout", ctx.get_abs_timeout());
+     } else {
+       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+         sqlclient::ObMySQLResult *result = NULL;
+         if (OB_FAIL(proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+           LOG_WARN("fail to read by sql", KR(ret), K(sql));
+         } else if (OB_ISNULL(result = res.get_result())) {
+           ret = OB_ERR_UNEXPECTED;
+           LOG_WARN("result is null", KR(ret));
+         } else if (OB_FAIL(result->next())) {
+           if (OB_ITER_END == ret) {
+             ret = OB_SUCCESS;
+             if (REACH_TIME_INTERVAL(CHECK_INTERVAL_TS)) {
+               LOG_WARN_RET(OB_EAGAIN, "check data_version is loaded, but result is empty, try later",
+                            K(tenant_id), K(addr));
+             }
+           } else {
+             LOG_WARN("fail to get next row", KR(ret));
+           }
+         } else {
+           int64_t loaded = 0;
+           EXTRACT_INT_FIELD_MYSQL(*result, "loaded", loaded, int64_t);
+           if (OB_SUCC(ret)) {
+             if (1 == loaded) {
+               break;
+             } else if (REACH_TIME_INTERVAL(CHECK_INTERVAL_TS))
+               LOG_WARN_RET(OB_EAGAIN, "check data_version is loaded, but it's not refreshed yet, try later",
+                            K(tenant_id), K(addr));
+           }
+         }
+       } // end SMART_VAR
+
+       if (OB_SUCC(ret)) {
+         ob_usleep(SLEEP_TS);
+       }
+     }
+   } // end while
+ }
+ return ret;
 }
 
 int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
@@ -4928,7 +5012,8 @@ int ObUnitManager::rollback_persistent_units_(
     if (OB_TMP_FAIL(try_notify_tenant_server_unit_resource_(
         pool.tenant_id_, is_delete, notify_proxy,
         pool.unit_config_id_, dummy_mode, unit,
-        false/*if_not_grant*/, false/*skip_offline_server*/))) {
+        false/*if_not_grant*/, false/*skip_offline_server*/,
+        false /*check_data_version*/))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to try notify server unit resource", KR(ret), KR(tmp_ret),
                K(is_delete), K(pool), K(dummy_mode), K(unit));
@@ -5125,7 +5210,7 @@ int ObUnitManager::allocate_pool_units_(
           } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
               pool.tenant_id_, is_delete, notify_proxy,
               pool.unit_config_id_, compat_mode, unit, false/*if not grant*/,
-              false/*skip offline server*/))) {
+              false/*skip offline server*/, true/*check_data_version*/))) {
             LOG_WARN("fail to try notify server unit resource", K(ret));
           } else if (OB_FAIL(add_unit(client, unit))) {
             LOG_WARN("add_unit failed", K(unit), K(ret));
@@ -7966,7 +8051,8 @@ int ObUnitManager::do_grant_pools_(
     const lib::Worker::CompatMode compat_mode,
     const ObIArray<ObResourcePoolName> &pool_names,
     const uint64_t tenant_id,
-    const bool is_bootstrap)
+    const bool is_bootstrap,
+    const bool check_data_version)
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
@@ -8020,7 +8106,8 @@ int ObUnitManager::do_grant_pools_(
           } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
                   tenant_id, false /*is_delete*/, notify_proxy,
                   new_pool.unit_config_id_, compat_mode, *unit,
-                  false/*if_not_grant*/, false/*skip_offline_server*/))) {
+                  false/*if_not_grant*/, false/*skip_offline_server*/,
+                  check_data_version))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
           } else if (FALSE_IT(new_unit = *unit)) {
             // shall never be here
@@ -8120,7 +8207,8 @@ int ObUnitManager::do_revoke_pools_(
           } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
                   tenant_id, true /*is_delete*/, notify_proxy,
                   new_pool.unit_config_id_, dummy_mode, *unit,
-                  false/*if_not_grant*/, false/*skip_offline_server*/))) {
+                  false/*if_not_grant*/, false/*skip_offline_server*/,
+                  false /*check_data_version*/))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
           } else if (FALSE_IT(new_unit = *unit)) {
             // shall never be here
@@ -8707,7 +8795,8 @@ int ObUnitManager::do_migrate_unit_notify_resource_(const share::ObResourcePool 
     if (OB_FAIL(try_notify_tenant_server_unit_resource_(
             pool.tenant_id_, false/*is_delete*/, notify_proxy, // is_delete is false when migrate unit
             pool.unit_config_id_, compat_mode, new_unit, false/*if not grant*/,
-            false/*skip offline server*/))) {
+            false/*skip offline server*/,
+            true /*check_data_version*/))) {
       LOG_WARN("fail to try notify server unit resource", K(ret));
     }
     int tmp_ret = OB_SUCCESS;
