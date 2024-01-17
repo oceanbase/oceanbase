@@ -850,8 +850,9 @@ int ObOptimizerTraceImpl::trace_env()
   int ret = OB_SUCCESS;
   char buf[1024+1] = {0};
   int64_t buf_len = 1024;
-  get_package_and_svn(buf, buf_len);
-  if (OB_FAIL(new_line())) {
+  if (OB_FAIL(get_package_and_svn(buf, buf_len))) {
+    LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(append_key_value("Version", ObString(strlen(buf), buf)))) {
     LOG_WARN("failed to append msg", K(ret));

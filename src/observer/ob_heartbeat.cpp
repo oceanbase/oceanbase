@@ -119,7 +119,7 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
 {
   int ret = OB_SUCCESS;
   common::ObArray<std::pair<uint64_t, uint64_t> > max_stored_versions;
-
+  lease_request.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -135,13 +135,14 @@ int ObHeartBeatProcess::init_lease_request(ObLeaseRequest &lease_request)
     LOG_WARN("fail to set lease request max stored key versions",
              KR(ret), K(lease_request), K(max_stored_versions));
 #endif
+  } else if (OB_FAIL(get_package_and_svn(lease_request.build_version_, sizeof(lease_request.build_version_)))) {
+    LOG_WARN("fail to get build_version", KR(ret));
   } else {
     lease_request.request_lease_time_ = 0; // this is not a valid member
     lease_request.version_ = ObLeaseRequest::LEASE_VERSION;
     lease_request.zone_ = gctx_.config_->zone.str();
     lease_request.server_ = gctx_.self_addr();
     lease_request.sql_port_ = gctx_.config_->mysql_port;
-    get_package_and_svn(lease_request.build_version_, sizeof(lease_request.build_version_));
     OTC_MGR.get_lease_request(lease_request);
     lease_request.start_service_time_ = gctx_.start_service_time_;
     lease_request.ssl_key_expired_time_ = gctx_.ssl_key_expired_time_;
