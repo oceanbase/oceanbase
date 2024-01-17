@@ -187,6 +187,21 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc, bool can_gc_retain_ctx)
         status = MinStartScnStatus::UNKOWN;
       }
 
+      // During the transfer, we should not update min_start_scn, otherwise we
+      // will ignore the ctx that has been transferred in. So we check whether
+      // transfer is going on there.
+      //
+      // TODO(handora.qc): while after we have checked the transfer and later
+      // submitted the log, the transfer may also happens during these two
+      // operations. So we need double check it in the log application/replay.
+      if(MinStartScnStatus::UNKOWN == status) {
+        // do nothing
+      } else if (cur_ls_ptr->get_transfer_status().get_transfer_prepare_enable()) {
+        TRANS_LOG(INFO, "ignore min start scn during transfer prepare enabled",
+                  K(cur_ls_ptr->get_transfer_status()), K(status), K(min_start_scn));
+        status = MinStartScnStatus::UNKOWN;
+      }
+
       if (MinStartScnStatus::UNKOWN == status) {
         min_start_scn.reset();
       } else if (MinStartScnStatus::NO_CTX == status) {
