@@ -247,7 +247,7 @@ public:
                          bool in_notfound,
                          bool in_warning,
                          bool signal);
-  int clean_for_loop_cursor(bool is_from_exception);
+  int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,
