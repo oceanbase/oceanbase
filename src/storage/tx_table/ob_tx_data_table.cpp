@@ -471,7 +471,10 @@ int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
                 K(tablet_id_));
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(tx_data_guard.tx_data()) && (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
+  if (OB_SUCC(ret) &&
+      OB_NOT_NULL(tx_data_guard.tx_data()) &&
+      !fn.may_exist_undecided_state_in_tx_data_table() &&
+      (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
     ret = OB_EAGAIN;
     STORAGE_LOG(WARN, "read a running state tx data from tx data table, need retry", KR(ret), K(tx_data_guard));
   }
@@ -517,7 +520,8 @@ int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID t
     }
   } else {
     if (find) {
-      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_) {
+      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_ &&
+          !fn.may_exist_undecided_state_in_tx_data_table()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR,
                     "read a running state tx data from tx data table",

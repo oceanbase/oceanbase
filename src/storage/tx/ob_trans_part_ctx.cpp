@@ -196,7 +196,7 @@ int ObPartTransCtx::init_for_transfer_move(const ObTxCtxMoveArg &arg)
     exec_info_.prepare_version_ = arg.prepare_version_;
     ctx_tx_data_.set_commit_version(arg.commit_version_);
   }
-  exec_info_.state_ = arg.tx_state_;
+  set_durable_state_(arg.tx_state_);
   return ret;
 }
 
@@ -9224,6 +9224,52 @@ int ObPartTransCtx::collect_tx_ctx(const ObLSID dest_ls_id,
   return ret;
 }
 
+// For the transfer, the src txn may transfer into the dst txn that has already
+// aborted, and the txn may already release the lock which causes two alive txn
+// on the same row
+int ObPartTransCtx::check_is_aborted_in_tx_data_(const ObTransID tx_id,
+                                                 bool &is_aborted)
+{
+  int ret = OB_SUCCESS;
+  ObTxTable *tx_table = nullptr;
+  ObTxTableGuard guard;
+  int64_t state;
+  share::SCN trans_version;
+  share::SCN recycled_scn;
+  ctx_tx_data_.get_tx_table(tx_table);
+
+  if (OB_FAIL(tx_table->get_tx_table_guard(guard))) {
+    TRANS_LOG(WARN, "fail to get tx table guard", K(ret));
+  } else if (!guard.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "tx table is null", K(ret));
+  } else if (OB_FAIL(guard.try_get_tx_state(tx_id,
+                                            state,
+                                            trans_version,
+                                            recycled_scn))) {
+    if (OB_TRANS_CTX_NOT_EXIST == ret) {
+      is_aborted = false;
+      ret = OB_SUCCESS;
+    } else if (OB_REPLICA_NOT_READABLE == ret) {
+      is_aborted = false;
+      ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(WARN, "get tx state from tx data failed", K(ret), KPC(this));
+    }
+  } else if (ObTxData::ABORT == state) {
+    is_aborted = true;
+    TRANS_LOG(INFO, "check is aborted in tx data", K(tx_id), K(state), KPC(this));
+  } else if (ObTxData::COMMIT == state) {
+    is_aborted = false;
+    TRANS_LOG(ERROR, "check is committed in tx data", K(tx_id), K(state), KPC(this));
+  } else {
+    is_aborted = false;
+    TRANS_LOG(INFO, "check is not aborted in tx data", K(tx_id), K(state), KPC(this));
+  }
+
+  return ret;
+}
+
 // NB: This function can report a retryable error because the outer while loop
 // will ignore the error and continuously retry until it succeeds within the
 // callback function.
@@ -9297,8 +9343,12 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       }
     }
   } else if (NotifyType::ON_COMMIT == move_tx_param.op_type_) {
+    bool is_aborted = false;
     if (exec_info_.max_applying_log_ts_.is_valid() && exec_info_.max_applying_log_ts_ >= move_tx_param.op_scn_) {
       // do nothing
+    } else if (epoch_ == arg.epoch_ && // created by myself
+               OB_FAIL(check_is_aborted_in_tx_data_(trans_id_, is_aborted))) {
+      TRANS_LOG(WARN, "check is aborted in tx data failed", K(ret), KPC(this));
     } else {
       if (is_new_created && is_follower_()) {
         exec_info_.is_empty_ctx_created_by_transfer_ = true;
@@ -9333,6 +9383,15 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
           ctx_tx_data_.set_start_log_ts(arg.tx_start_scn_);
         }
       }
+
+      if (is_aborted) {
+        // If the dest txn already aborted before transfer, the dest txn may
+        // already release its lock and new txn may write new data onto it which
+        // will cause two alive tx node on one row at the same time if transfer
+        // into an alive txn. So we need set these transferred txn as aborted
+        ctx_tx_data_.set_state(ObTxData::ABORT);
+      }
+
       if (!arg.happened_before_) {
         bool epoch_exist = false;
         for (int64_t idx = 0; idx < exec_info_.transfer_parts_.count(); idx++) {
