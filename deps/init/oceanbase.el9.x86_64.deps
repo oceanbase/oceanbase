@@ -1,7 +1,7 @@
 [target-default]
 os=9
 arch=x86_64
-repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/el/8/x86_64/
+repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/8/x86_64/
 
 [target-community]
 os=9
@@ -11,7 +11,7 @@ repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/x86_64/
 [target-el9]
 os=9
 arch=x86_64
-repo=http://yum-test.obvos.alibaba-inc.com/oceanbase/development-kit/el/9/x86_64/
+repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/9/x86_64/
 
 [deps]
 devdeps-gtest-1.8.0-132022101316.el8.x86_64.rpm
