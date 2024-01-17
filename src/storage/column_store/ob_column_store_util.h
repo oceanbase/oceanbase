@@ -62,7 +62,7 @@ struct ObCSRange
   OB_INLINE ObCSRowId begin() const { return start_row_id_; }
   OB_INLINE ObCSRowId end() const { return end_row_id_; }
   OB_INLINE void reset() { start_row_id_ = OB_INVALID_CS_ROW_ID; end_row_id_ = OB_INVALID_CS_ROW_ID; }
-  OB_INLINE bool is_valid() const { return OB_INVALID_CS_ROW_ID != start_row_id_ && end_row_id_ >= start_row_id_; }
+  OB_INLINE bool is_valid() const { return OB_INVALID_CS_ROW_ID != start_row_id_ && end_row_id_ >= start_row_id_ && end_row_id_ >= 0; }
   OB_INLINE int64_t get_row_count() const { return end_row_id_ - start_row_id_ + 1; }
   int compare(const ObCSRowId idx) const
   {

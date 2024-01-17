@@ -103,7 +103,7 @@ int ObSSTableSecMetaIterator::open(
   }
   if (OB_FAIL(ret) || is_prefetch_end_) {
   } else if (is_ddl_mem_sstable) {
-    const bool is_co_sstable = sstable.is_co_sstable() || ObITable::TableType::DDL_MEM_CO_SSTABLE == sstable.get_key().table_type_;
+    const bool is_co_sstable = sstable.is_co_sstable() || sstable.is_ddl_mem_co_cg_sstable();
     const ObMicroBlockData &root_block = sstable_meta_hdl_.get_sstable_meta().get_root_info().get_block_data();
     if (ObMicroBlockData::DDL_BLOCK_TREE != root_block.type_ || nullptr == root_block.buf_) {
       ret = OB_ERR_UNEXPECTED;

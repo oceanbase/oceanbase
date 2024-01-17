@@ -76,7 +76,7 @@ int ObDDLIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
     is_reverse_scan_ = is_reverse_scan;
     iter_step_ = is_reverse_scan_ ? -1 : 1;
     datum_utils_ = datum_utils;
-    is_co_sstable_ = iter_param.is_valid() ? iter_param.sstable_->is_co_sstable() || ObITable::TableType::DDL_MEM_CO_SSTABLE == iter_param.sstable_->get_key().table_type_ : false;
+    is_co_sstable_ = iter_param.is_valid() ? iter_param.sstable_->is_co_sstable() || iter_param.sstable_->is_ddl_mem_co_cg_sstable() : false;
     is_inited_ = true;
   }
   return ret;
