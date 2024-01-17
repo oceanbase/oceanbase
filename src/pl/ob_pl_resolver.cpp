@@ -5603,16 +5603,6 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
         LOG_WARN("failed to set precalc exprs", K(prepare_result.into_exprs_), K(ret));
       } else { /*do nothing*/ }
 
-      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-        if ((stmt::T_SELECT == prepare_result.type_
-             && func.get_compile_flag().compile_with_rnds())
-            || (ObStmt::is_write_stmt(prepare_result.type_, false)
-                && func.get_compile_flag().compile_with_wnds())) {
-          ret = OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA;
-          LOG_WARN("PLS-00452: Subprogram 'string' violates its associated pragma",
-                   K(ret), K(prepare_result.type_), K(func.get_compile_flag()));
-        }
-      }
       if (OB_SUCC(ret)) {
         if (prepare_result.for_update_) {
           func.set_modifies_sql_data();
@@ -5626,6 +5616,15 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
           func.set_modifies_sql_data();
         } else if (!func.is_reads_sql_data() && !func.is_modifies_sql_data()) {
           func.set_contains_sql();
+        }
+      }
+      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+        if ((func.is_reads_sql_data() && func.get_compile_flag().compile_with_rnds())
+            || (func.is_modifies_sql_data() && func.get_compile_flag().compile_with_wnds())) {
+          ret = OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA;
+          LOG_WARN("PLS-00452: Subprogram 'string' violates its associated pragma",
+                   K(ret), K(prepare_result.type_), K(func.get_compile_flag()));
+          LOG_USER_ERROR(OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA, func.get_name().length(), func.get_name().ptr());
         }
       }
 
@@ -10355,8 +10354,17 @@ int ObPLResolver::resolve_inner_call(
         }
       } else if (access_idxs.at(idx_cnt - 1).is_procedure()) {
         ObPLCallStmt *call_stmt = NULL;
+        const ObIRoutineInfo *iroutine_info = access_idxs.at(idx_cnt - 1).routine_info_;
         func.set_external_state();
-        if (OB_FAIL(stmt_factory_.allocate(PL_CALL, current_block_, stmt))) {
+        if (OB_ISNULL(iroutine_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null routine pointer", K(ret), K(idx_cnt), K(access_idxs));
+        } else if ((iroutine_info->is_reads_sql_data() && func.get_compile_flag().compile_with_rnds())
+            || (iroutine_info->is_modifies_sql_data() && func.get_compile_flag().compile_with_wnds())) {
+          ret = OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA;
+          LOG_WARN("PLS-00452: Subprogram 'string' violates its associated pragma", K(ret), K(func.get_compile_flag()));
+          LOG_USER_ERROR(OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA, func.get_name().length(), func.get_name().ptr());
+        } else if (OB_FAIL(stmt_factory_.allocate(PL_CALL, current_block_, stmt))) {
           LOG_WARN("failed to alloc stmt", K(ret));
         } else if (OB_ISNULL(call_stmt = static_cast<ObPLCallStmt *>(stmt))) {
           ret = OB_ERR_UNEXPECTED;
@@ -11409,7 +11417,9 @@ int ObPLResolver::resolve_udf_without_brackets(
   OV (access_idxs.at(access_idxs.count() - 1).is_udf_type());
   OX (expr = access_idxs.at(access_idxs.count() - 1).get_sysfunc_);
   CK (OB_NOT_NULL(expr));
-  if (OB_FAIL(ret) && ret != OB_ERR_INSUFFICIENT_PRIVILEGE) {
+  if ((OB_FAIL(ret) && ret != OB_ERR_INSUFFICIENT_PRIVILEGE)
+      || (OB_NOT_NULL(expr) && T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type())
+      || (OB_NOT_NULL(expr) && T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type())) {
     ret = OB_ERR_SP_UNDECLARED_VAR;
   }
   return ret;
@@ -11734,6 +11744,15 @@ int ObPLResolver::resolve_udf_info(
                                                         expr_params,
                                                         routine_type,
                                                         routine_info), K(udf_info));
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
+    if ((routine_info->is_reads_sql_data() && func.get_compile_flag().compile_with_rnds())
+        || (routine_info->is_modifies_sql_data() && func.get_compile_flag().compile_with_wnds())) {
+      ret = OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA;
+      LOG_WARN("PLS-00452: Subprogram 'string' violates its associated pragma", K(ret), K(func.get_compile_flag()), K(func.get_compile_flag()));
+      LOG_USER_ERROR(OB_ERR_SUBPROGRAM_VIOLATES_PRAGMA, func.get_name().length(), func.get_name().ptr());
+    }
   }
 
 #ifdef OB_BUILD_ORACLE_PL
@@ -13618,9 +13637,7 @@ int ObPLResolver::resolve_function(ObObjAccessIdent &access_ident,
                                      reinterpret_cast<int64_t>(access_ident.udf_info_.ref_expr_)));
   OZ (access_idxs.push_back(access_idx));
 
-  if (OB_SUCC(ret)
-      && access_ident.is_pl_udf()
-      && access_ident.params_.count() > access_ident.udf_info_.param_exprs_.count()) {
+  if (OB_SUCC(ret) && access_ident.is_pl_udf()) {
     OZ (build_return_access(access_ident, access_idxs, func));
   }
   return ret;
@@ -13698,9 +13715,7 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
                                      *user_type,
                                      reinterpret_cast<int64_t>(expr)));
   OZ (access_idxs.push_back(access_idx));
-  if (OB_SUCC(ret)
-      && access_ident.is_pl_udf()
-      && access_ident.params_.count() > access_ident.udf_info_.param_exprs_.count()) {
+  if (OB_SUCC(ret) && access_ident.is_pl_udf()) {
     OZ (build_return_access(access_ident, access_idxs, func));
   }
   return ret;
@@ -15468,27 +15483,12 @@ int ObPLResolver::resolve_cursor(
     CK (OB_NOT_NULL(cur));
     if (ns.get_package_id() != cur->get_package_id()
         || ns.get_routine_id() != cur->get_routine_id()) {
-      // external cursor
-      if (cur->is_package_cursor()) { // package cursor
-        OZ (ns.get_package_var(
-          resolve_ctx_, cur->get_package_id(), cur->get_index(), var),
-          K(ns.get_package_id()), K(cur->get_package_id()),
-          K(ns.get_routine_id()), K(cur->get_routine_id()));
-        OV (OB_NOT_NULL(var),
-          OB_ERR_UNEXPECTED, KPC(cur), K(ns.get_package_id()), K(ns.get_routine_id()));
-      } else {
-        OZ (ns.get_subprogram_var(
-          cur->get_package_id(), cur->get_routine_id(), cur->get_index(), var),
-          K(ns.get_package_id()), K(ns.get_routine_id()),
-          K(cur->get_package_id()), K(cur->get_routine_id()), K(cur->get_index()));
-        OV (OB_NOT_NULL(var),
-          OB_ERR_UNEXPECTED, KPC(cur), K(ns.get_package_id()), K(ns.get_routine_id()));
-      }
+      // external cursor will search by iterator namespace, here do not check, do nothing ...
     } else {
       OV (OB_NOT_NULL(var = symbol_table->get_symbol(cur->get_index())),
         OB_ERR_UNEXPECTED, KPC(cur), K(ns.get_package_id()), K(ns.get_routine_id()));
     }
-    if (OB_SUCC(ret) && 0 == name.case_compare(var->get_name())) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(var) && 0 == name.case_compare(var->get_name())) {
       if (ns.get_block_type() != ObPLBlockNS::BLOCK_ROUTINE
           || ns.get_symbol_table() != current_block_->get_namespace().get_symbol_table()) {
         CK (OB_NOT_NULL(current_block_));
