@@ -475,6 +475,11 @@ STAT_EVENT_ADD_DEF(WR_USER_SUBMIT_SNAPSHOT_CPU_TIME, "wr user submit snapshot cp
 STAT_EVENT_ADD_DEF(WR_COLLECTED_ASH_ROW_COUNT, "wr collected active session history row count", ObStatClassIds::WR, 210009, false, true)
 STAT_EVENT_ADD_DEF(ASH_SCHEDULAR_ELAPSE_TIME, "ash schedular elapse time", ObStatClassIds::WR, 210010, false, true)
 
+// sqlstat related (2200xx)
+STAT_EVENT_ADD_DEF(CCWAIT_TIME, "concurrency wait total time", ObStatClassIds::SYS, 220001, true, true)
+STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds::SYS, 220002, true, true)
+STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, true, true)
+STAT_EVENT_ADD_DEF(SCHEDULE_WAIT_TIME, "schedule wait total time", ObStatClassIds::SYS, 220004, true, true)
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false)
 
