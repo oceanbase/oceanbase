@@ -1167,6 +1167,13 @@ int ObLobManager::erase_one_piece(ObLobAccessParam& param,
   return ret;
 }
 
+void ObLobManager::transform_lob_id(uint64_t src, uint64_t &dst)
+{
+  dst = htonll(src << 1);
+  char *bytes = reinterpret_cast<char*>(&dst);
+  bytes[7] |= 0x01;
+}
+
 int ObLobManager::check_need_out_row(
     ObLobAccessParam& param,
     int64_t add_len,
@@ -1246,6 +1253,7 @@ int ObLobManager::check_need_out_row(
           if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
           } else {
+            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }
@@ -1576,7 +1584,7 @@ int ObLobManager::append(
             } else {
               // prepare read buffer
               ObString read_buffer;
-              uint64_t read_buff_size = LOB_READ_BUFFER_LEN;
+              uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, read_param.byte_size_);
               char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
               if (OB_ISNULL(read_buff)) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1966,6 +1974,7 @@ int ObLobManager::prepare_for_write(
           if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
           } else {
+            transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
         }
@@ -2503,7 +2512,7 @@ int ObLobManager::write_inrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uint
       } else {
         // prepare read buffer
         ObString read_buffer;
-        uint64_t read_buff_size = LOB_READ_BUFFER_LEN;
+        uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, read_param.byte_size_);
         char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
         if (OB_ISNULL(read_buff)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2795,7 +2804,7 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
       } else {
         // prepare read buffer
         ObString read_buffer;
-        uint64_t read_buff_size = LOB_READ_BUFFER_LEN;
+        uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, read_param.byte_size_);
         char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
         if (OB_ISNULL(read_buff)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2914,7 +2923,7 @@ int ObLobManager::write(ObLobAccessParam& param, ObString& data)
         ObLobQueryIter *iter = nullptr;
         // prepare read buffer
         ObString read_buffer;
-        uint64_t read_buff_size = LOB_READ_BUFFER_LEN;
+        uint64_t read_buff_size = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE;
         char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
         if (OB_ISNULL(read_buff)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3725,7 +3734,7 @@ int ObLobQueryIter::open(ObLobAccessParam &param, ObLobCtx& lob_ctx)
   } else if (OB_FAIL(lob_ctx.lob_meta_mngr_->scan(param, meta_iter_))) {
     LOG_WARN("open meta iter failed.");
   } else {
-    last_data_buf_len_ = ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE;
+    last_data_buf_len_ = OB_MIN(ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE, param.byte_size_);
     last_data_ptr_ = reinterpret_cast<char*>(param.allocator_->alloc(last_data_buf_len_));
     if (OB_ISNULL(last_data_ptr_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -4002,6 +4011,9 @@ int ObLobQueryRemoteReader::open(ObLobAccessParam& param, common::ObDataBuffer &
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t buf_len = ObLobQueryArg::OB_LOB_QUERY_BUFFER_LEN;
+  if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_2_0) {
+    buf_len = ObLobQueryArg::OB_LOB_QUERY_OLD_LEN; // compat with old vesion
+  }
   if (NULL == (buf = reinterpret_cast<char*>(param.allocator_->alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret));
@@ -4009,6 +4021,7 @@ int ObLobQueryRemoteReader::open(ObLobAccessParam& param, common::ObDataBuffer &
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to set rpc buffer", K(ret));
   } else if (NULL == (buf = reinterpret_cast<char*>(param.allocator_->alloc(buf_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret));
   } else {
     data_buffer_.assign_buffer(buf, buf_len);

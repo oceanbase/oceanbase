@@ -96,6 +96,7 @@ struct ObLobMetaWriteResult {
 class ObLobMetaWriteIter {
 public:
   ObLobMetaWriteIter(const ObString& data, ObIAllocator* allocator, uint32_t piece_block_size);
+  ~ObLobMetaWriteIter() { close(); }
   int open(ObLobAccessParam &param,
            uint64_t padding_size,
            ObString &post_data,

@@ -3311,9 +3311,10 @@ CAST_FUNC_NAME(text, string)
     ObExprStrResAlloc res_alloc(expr, ctx);
     ObTextStringIter instr_iter(in_type, in_cs_type, child_res->get_string(), has_lob_header);
     if (OB_FAIL(instr_iter.init(0, ctx.exec_ctx_.get_my_session(),
-                                is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator))) {
+                                is_same_charset ? reinterpret_cast<ObIAllocator *>(&res_alloc) : &temp_allocator,
+                                &temp_allocator))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
-    } else if (OB_FAIL(instr_iter.get_full_data(data, &temp_allocator))) {
+    } else if (OB_FAIL(instr_iter.get_full_data(data))) {
       LOG_WARN("init lob str iter failed ", K(ret), K(in_type));
     } else if (lib::is_oracle_mode()
                && ob_is_clob(in_type, in_cs_type)

@@ -65,8 +65,8 @@ ObTextStringIter::~ObTextStringIter()
 
 int ObTextStringIter::init(uint32_t buffer_len,
                            const sql::ObBasicSessionInfo *session,
-                           ObIAllocator *allocator,
-                           bool clone_remote /* false */)
+                           ObIAllocator *res_allocator,
+                           ObIAllocator *tmp_allocator)
 {
   int ret = OB_SUCCESS;
   if (is_init_) {
@@ -80,6 +80,7 @@ int ObTextStringIter::init(uint32_t buffer_len,
   } else {
     ObLobLocatorV2 locator(datum_str_, has_lob_header_);
     is_lob_ = true;
+    tmp_alloc_ = tmp_allocator;
     if (!has_lob_header_) {
       is_outrow_ = false;
 
@@ -88,17 +89,18 @@ int ObTextStringIter::init(uint32_t buffer_len,
       COMMON_LOG(WARN,"Lob: invalid lob", K(ret));
     } else if (FALSE_IT(is_outrow_ = !locator.has_inrow_data())) {
     } else if (!is_outrow_ && !locator.is_delta_temp_lob()) { // inrow lob always get full data, no need ctx_
-    } else if (OB_ISNULL(allocator)) {
+    } else if (OB_ISNULL(res_allocator)) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "Lob: iter with null allocator", K(ret));
     } else { // outrow lob
+      ObIAllocator *allocator = (tmp_allocator == nullptr) ? res_allocator : tmp_allocator;
       char *ctx_buffer = static_cast<char *>(allocator->alloc(sizeof(ObLobTextIterCtx)));
       if (OB_ISNULL(ctx_buffer)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         COMMON_LOG(WARN,"Lob: failed to alloc output buffer", K(ret), KP(ctx_buffer));
       } else {
-        ctx_ = new (ctx_buffer) ObLobTextIterCtx(locator, session, allocator, buffer_len);
-        ctx_ ->init(clone_remote);
+        ctx_ = new (ctx_buffer) ObLobTextIterCtx(locator, session, res_allocator, buffer_len);
+        ctx_ ->init();
       }
     }
   }
@@ -197,7 +199,7 @@ int ObTextStringIter::get_outrow_lob_full_data(ObIAllocator *allocator /*nullptr
     COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
   } else { // outrow persist lob
     storage::ObLobAccessParam param;
-    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, allocator))) {
+    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, tmp_alloc_))) {
       param.len_ = (ctx_->total_access_len_ == 0 ? param.byte_size_ : ctx_->total_access_len_);
 
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
@@ -327,7 +329,7 @@ int ObTextStringIter::get_outrow_prefix_data(uint32_t prefix_char_len)
     COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
   } else { // outrow persist lob
     storage::ObLobAccessParam param;
-    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_))) {
+    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, tmp_alloc_))) {
       param.len_ = prefix_char_len;
 
       if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
@@ -376,7 +378,7 @@ int ObTextStringIter::get_current_block(ObString &str)
   return ret;
 }
 
-int ObTextStringIter::get_full_data(ObString &data_str, ObIAllocator *allocator)
+int ObTextStringIter::get_full_data(ObString &data_str)
 {
   int ret = OB_SUCCESS;
   ObLobLocatorV2 loc(datum_str_, has_lob_header_);
@@ -389,7 +391,7 @@ int ObTextStringIter::get_full_data(ObString &data_str, ObIAllocator *allocator)
   } else if (!is_lob_ || !has_lob_header_) { // string types or 4.0 compatiable text
     data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
   } else if (loc.is_delta_temp_lob()) {
-    if (OB_FAIL(get_delta_lob_full_data(loc, allocator, data_str))) {
+    if (OB_FAIL(get_delta_lob_full_data(loc, tmp_alloc_, data_str))) {
       COMMON_LOG(WARN, "get_delta_lob_full_data fail", K(ret), K(loc));
     }
   } else if (!is_outrow_) { // inrow lob
@@ -398,7 +400,7 @@ int ObTextStringIter::get_full_data(ObString &data_str, ObIAllocator *allocator)
     }
   } else {
     // outrow lob, read full data into a inrow local tmp lob currently
-    if (OB_FAIL(get_outrow_lob_full_data(allocator))) {
+    if (OB_FAIL(get_outrow_lob_full_data())) {
       COMMON_LOG(WARN, "Lob: get lob outrow data failed", K(ret));
     } else {
       data_str.assign_ptr(ctx_->buff_, ctx_->content_byte_len_);
@@ -483,7 +485,7 @@ int ObTextStringIter::get_first_block(ObString &str)
     COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
   } else {
     storage::ObLobAccessParam param;
-    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_))) {
+    if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, tmp_alloc_))) {
       param.scan_backward_ = ctx_->is_backward_;
       param.offset_ = ctx_->start_offset_;
       param.len_ = (ctx_->total_access_len_ == 0 ? param.byte_size_ : ctx_->total_access_len_);
@@ -922,7 +924,7 @@ int ObTextStringIter::get_char_len(int64_t &char_length)
       COMMON_LOG(WARN, "Lob: get lob manager failed.", K(ret));
     } else {
       storage::ObLobAccessParam param;
-      if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_))) {
+      if (OB_SUCC(init_lob_access_param(param, ctx_, cs_type_, tmp_alloc_))) {
         uint64_t length = 0;
         if (!param.ls_id_.is_valid() || !param.tablet_id_.is_valid()) {
           ret = OB_INVALID_ARGUMENT;
@@ -1003,10 +1005,12 @@ int ObTextStringIter::append_outrow_lob_fulldata(ObObj &obj,
         mem_loc_extern->payload_size_ = static_cast<uint32_t>(lob_data_byte_len);
 
         // copy inrow data
+        int64_t tenant_id = (session == nullptr) ? MTL_ID() : session->get_effective_tenant_id();
+        ObArenaAllocator tmp_alloc("ObLobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
         ObTextStringIterState state;
         ObString src_block_data;
         ObTextStringIter instr_iter(obj);
-        if (OB_FAIL(instr_iter.init(0, session, &allocator))) {
+        if (OB_FAIL(instr_iter.init(0, session, &allocator, &tmp_alloc))) {
           COMMON_LOG(WARN, "Lob: init text string iter failed", K(instr_iter));
         } else {
           while (OB_SUCC(ret)
@@ -1064,12 +1068,13 @@ int ObTextStringIter::convert_outrow_lob_to_inrow_templob(const ObObj &in_obj,
         COMMON_LOG(WARN, "Lob: init tmp lob failed", K(ret), K(lob_data_byte_len));
       } else {
         // copy inrow data
+        ObArenaAllocator tmp_alloc("ObLobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObTextStringIterState state;
         ObString src_block_data;
         ObTextStringIter instr_iter(in_obj);
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(instr_iter.init(0, session, allocator))) {
-          COMMON_LOG(WARN, "Lob: init text string iter failed", K(instr_iter));
+        } else if (OB_FAIL(instr_iter.init(0, session, allocator, &tmp_alloc))) {
+          COMMON_LOG(WARN, "Lob: init text string iter failed", K(ret), K(instr_iter));
         } else {
           while (OB_SUCC(ret)
                 && pos < lob_data_byte_len

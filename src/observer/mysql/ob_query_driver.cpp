@@ -696,8 +696,9 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
         LOG_WARN("Lob: handle lob locator v1 failed", K(value), K(GET_MIN_CLUSTER_VERSION()));
       }
     } else { // lob locator v2
+      ObArenaAllocator tmp_alloc("ObLobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info->get_effective_tenant_id());
       ObTextStringIter instr_iter(value);
-      if (OB_FAIL(instr_iter.init(0, session_info, allocator))) {
+      if (OB_FAIL(instr_iter.init(0, session_info, allocator, &tmp_alloc))) {
         LOG_WARN("init lob str inter failed", K(ret), K(value));
       } else if (OB_FAIL(instr_iter.get_full_data(data))) {
         LOG_WARN("Lob: init lob str iter failed ", K(value));
