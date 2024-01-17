@@ -87,6 +87,10 @@ struct ObRawSql {
 	{
 		return search_end_ || cur_pos_ > raw_sql_len_ - 1;
 	}
+	inline bool is_search_end(const int64_t pos)
+	{
+		return search_end_ || pos > raw_sql_len_ - 1;
+	}
 	inline char peek()
 	{
 		if (cur_pos_ >= raw_sql_len_ - 1) {
