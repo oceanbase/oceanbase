@@ -1645,7 +1645,9 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
         && exec_info_.max_applying_log_ts_ == exec_info_.max_applied_log_ts_) {
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(dup_table_before_preapre_(exec_info_.max_applied_log_ts_, true/*before_replay*/))) {
+      } else if (OB_FAIL(dup_table_before_preapre_(
+                     exec_info_.max_applied_log_ts_, true /*after_redo_completed*/,
+                     ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
         TRANS_LOG(WARN, "set commit_info scn as before_prepare_version failed", K(ret), KPC(this));
       }
     }
@@ -2285,14 +2287,19 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
       set_durable_state_(ObTxState::REDO_COMPLETE);
       if (exec_info_.is_dup_tx_) {
         if (is_follower_()) {
-          if (OB_FAIL(dup_table_before_preapre_(log_ts, true/*before_replay*/))) {
+          if (OB_FAIL(dup_table_before_preapre_(
+                  log_ts,
+                  true /*after_redo_completed*/,
+                  ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
             TRANS_LOG(WARN, "set commit_info scn as befre_prepare_version failed", K(ret), KPC(log_cb),
                       KPC(this));
           } else if (OB_FAIL(clear_dup_table_redo_sync_result_())) {
             TRANS_LOG(WARN, "clear redo sync result failed", K(ret));
           }
-          TRANS_LOG(INFO, "need set before_prepare_version in on_success after switch_to_follower",
-                    K(ret), KPC(log_cb));
+          TRANS_LOG(INFO,
+                    "need set before_prepare_version in on_success after switch_to_follower",
+                    K(ret),
+                    KPC(log_cb));
         } else {
           if (OB_FAIL(ret)) {
             // do nothing
@@ -2609,7 +2616,10 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
       if (ObTxLogType::TX_PREPARE_LOG == log_type) {
         if (!exec_info_.is_dup_tx_) {
           // do nothing
-        } else if (OB_FAIL(dup_table_before_preapre_(exec_info_.max_applied_log_ts_, true/*before_replay*/))) {
+        } else if (OB_FAIL(dup_table_before_preapre_(
+                       exec_info_.max_applied_log_ts_,
+                       true /*after_redo_completed*/,
+                       ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
           TRANS_LOG(WARN, "set commit_info scn as befre_prepare_version failed", K(ret), KPC(this));
         } else if (OB_FAIL(clear_dup_table_redo_sync_result_())) {
           TRANS_LOG(WARN, "clear redo sync result failed", K(ret));
@@ -5151,7 +5161,9 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
       // 1. the tx ctx must be committed or aborted.
       // 2. a new lease log ts must be larger than commit log ts.
       //=> no need set before_preapre version for incomplete replay
-      if (OB_FAIL(dup_table_before_preapre_(timestamp))) {
+      if (OB_FAIL(dup_table_before_preapre_(
+              timestamp, false /*after_redo_completed*/,
+              ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
         TRANS_LOG(WARN, "set commit_info scn as before_prepare_version failed", K(ret), KPC(this));
       }
 
@@ -5941,7 +5953,9 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObTxCommitCallback *&cb_list_hea
           && !sub_state_.is_state_log_submitted()) {
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(dup_table_before_preapre_(exec_info_.max_applied_log_ts_, true/*before_replay*/))) {
+        } else if (OB_FAIL(dup_table_before_preapre_(
+                       exec_info_.max_applied_log_ts_, true /*after_redo_completed*/,
+                       ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
           TRANS_LOG(WARN, "set commit_info scn as befre_prepare_version failed", K(ret), KPC(this));
         } else if (OB_FAIL(clear_dup_table_redo_sync_result_())) {
           TRANS_LOG(WARN, "clear redo sync result failed", K(ret));
@@ -6072,7 +6086,9 @@ int ObPartTransCtx::switch_to_follower_gracefully(ObTxCommitCallback *&cb_list_h
         && !sub_state_.is_state_log_submitted()) {
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(dup_table_before_preapre_(exec_info_.max_applied_log_ts_, true/*before_replay*/))) {
+      } else if (OB_FAIL(dup_table_before_preapre_(
+                     exec_info_.max_applied_log_ts_, true /*after_redo_completed*/,
+                     ObDupTableBeforePrepareRequest::BeforePrepareScnSrc::REDO_COMPLETE_SCN))) {
         TRANS_LOG(WARN, "set commit_info scn as befre_prepare_version failed", K(ret), KPC(this));
       } else if (OB_FAIL(clear_dup_table_redo_sync_result_())) {
         TRANS_LOG(WARN, "clear redo sync result failed", K(ret));
@@ -7353,20 +7369,23 @@ int ObPartTransCtx::clear_dup_table_redo_sync_result_()
   return ret;
 }
 
-int ObPartTransCtx::dup_table_before_preapre_(const share::SCN &before_prepare_version,
-                                              const bool before_replay)
+int ObPartTransCtx::dup_table_before_preapre_(
+    const share::SCN &before_prepare_version,
+    const bool after_redo_completed,
+    const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src)
 {
   int ret = OB_SUCCESS;
 
   if (get_downstream_state() != ObTxState::REDO_COMPLETE
-      || (!before_replay && get_upstream_state() != ObTxState::REDO_COMPLETE)
-      || (before_replay && get_upstream_state() > ObTxState::PREPARE) || !exec_info_.is_dup_tx_) {
+      || (!after_redo_completed && get_upstream_state() != ObTxState::REDO_COMPLETE)
+      || (after_redo_completed && get_upstream_state() > ObTxState::PREPARE)
+      || !exec_info_.is_dup_tx_) {
     ret = OB_STATE_NOT_MATCH;
     TRANS_LOG(WARN, "unexpected dup trx state", K(ret), KPC(this));
   } else if (!before_prepare_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid before_prepare version", K(ret), K(before_prepare_version),
-              K(before_replay), KPC(this));
+              K(after_redo_completed), KPC(this));
   } else if (mt_ctx_.get_trans_version().is_max() || !mt_ctx_.get_trans_version().is_valid()
              || mt_ctx_.get_trans_version() < before_prepare_version) {
     mt_ctx_.before_prepare(before_prepare_version);
@@ -7374,13 +7393,16 @@ int ObPartTransCtx::dup_table_before_preapre_(const share::SCN &before_prepare_v
 
   if (OB_SUCC(ret)) {
     TRANS_LOG(INFO, "set dup_table before prepare version successfully", K(ret),
-                  K(before_prepare_version), K(before_replay), KPC(this));
+              K(before_prepare_version), K(before_prepare_src), K(after_redo_completed),
+              K(mt_ctx_.get_trans_version()), KPC(this));
   }
 
   return ret;
 }
 
-int ObPartTransCtx::retry_dup_trx_before_prepare(const share::SCN &before_prepare_version)
+int ObPartTransCtx::retry_dup_trx_before_prepare(
+    const share::SCN &before_prepare_version,
+    const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src)
 {
   int ret = OB_SUCCESS;
 
@@ -7389,10 +7411,11 @@ int ObPartTransCtx::retry_dup_trx_before_prepare(const share::SCN &before_prepar
   if (!is_follower_()) {
     ret = OB_NOT_FOLLOWER;
     TRANS_LOG(WARN, "leader need not handle a before_prepare retry request", K(ret),
-              K(before_prepare_version), K(ls_id_), K(trans_id_));
-  } else if (OB_FAIL(dup_table_before_preapre_(before_prepare_version))) {
+              K(before_prepare_version), K(before_prepare_src), K(ls_id_), K(trans_id_));
+  } else if (OB_FAIL(dup_table_before_preapre_(
+                 before_prepare_version, false /*after_redo_completed*/, before_prepare_src))) {
     TRANS_LOG(WARN, "set dup table before_prepare_version failed", K(ret),
-              K(before_prepare_version), KPC(this));
+              K(before_prepare_version), K(before_prepare_src), KPC(this));
   }
 
   return ret;
