@@ -251,6 +251,29 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
   }
 }
 
+TEST_F(ObTestTx, create_savepoint_with_sanity_check_tx_abort)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  tx.flags_.PART_ABORTED_ = 1;
+  ObTxSEQ sp;
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, n1->create_implicit_savepoint(tx, tx_param, sp));
+
+}
+
+TEST_F(ObTestTx, rollback_savepoint_with_sanity_check_tx_abort)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, sp);
+  tx.flags_.PART_ABORTED_ = 1;
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
+}
+
 TEST_F(ObTestTx, switch_to_follower_gracefully)
 {
   int ret = OB_SUCCESS;
