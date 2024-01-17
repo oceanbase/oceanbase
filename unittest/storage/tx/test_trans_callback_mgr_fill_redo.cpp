@@ -136,9 +136,10 @@ public:
     if (t) {
       share::SCN scn;
       scn.convert_for_tx(1231231231);
-      callback_mgr_.set_parallel_logging(scn);
+      transaction::ObTxSEQ seq(1000, 0);
+      callback_mgr_.set_parallel_logging(scn, seq);
     } else {
-      callback_mgr_.set_parallel_logging(share::SCN::max_scn());
+      callback_mgr_.set_parallel_logging(share::SCN::max_scn(), transaction::ObTxSEQ::INVL());
     }
   }
   ObRedoLogSubmitHelper helper_;

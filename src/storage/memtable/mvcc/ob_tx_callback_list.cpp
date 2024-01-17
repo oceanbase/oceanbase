@@ -100,11 +100,21 @@ int ObTxCallbackList::append_callback(ObITransCallback *callback,
     TRANS_LOG(WARN, "before_append_cb failed", K(ret), KPC(callback));
   } else {
     const bool repos_lc = !for_replay && (log_cursor_ == &head_);
+    ObITransCallback *append_pos = NULL;
     if (!for_replay || parallel_replay || serial_final || !parallel_start_pos_) {
-      (void)get_tail()->append(callback);
+      append_pos = get_tail();
     } else {
-      parallel_start_pos_->get_prev()->append(callback);
+      append_pos = parallel_start_pos_->get_prev();
     }
+    // for replay, do sanity check: scn is incremental
+    if (for_replay
+        && append_pos != &head_  // the head with scn max
+        && append_pos->get_scn() > callback->get_scn()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "replay callback scn out of order", K(ret), KPC(callback), KPC(this));
+      ob_abort();
+    }
+    append_pos->append(callback);
     // start parallel replay, remember the position
     if (for_replay && parallel_replay && !serial_final && !parallel_start_pos_) {
       ATOMIC_STORE(&parallel_start_pos_, get_tail());

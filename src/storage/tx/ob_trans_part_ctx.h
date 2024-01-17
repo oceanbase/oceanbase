@@ -379,7 +379,8 @@ public:
                          const share::SCN &timestamp,
                          const int64_t &part_log_no,
                          const bool is_tx_log_queue,
-                         const bool serial_final);
+                         const bool serial_final,
+                         const ObTxSEQ &max_seq_no);
   int replay_rollback_to(const ObTxRollbackToLog &log,
                          const palf::LSN &offset,
                          const share::SCN &timestamp,
@@ -513,7 +514,8 @@ private:
                                 memtable::ObRedoLogSubmitHelper &helper,
                                 const logservice::ObReplayBarrierType &barrier);
   bool should_switch_to_parallel_logging_();
-  void switch_to_parallel_logging_(const share::SCN serial_final_scn);
+  void switch_to_parallel_logging_(const share::SCN serial_final_scn,
+                                   const ObTxSEQ max_seq_no);
   bool has_replay_serial_final_() const;
   void recovery_parallel_logging_();
   int check_can_submit_redo_();

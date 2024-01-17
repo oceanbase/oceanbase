@@ -100,8 +100,12 @@ SCN ObITransCallback::get_scn() const
 
 int ObITransCallback::before_append_cb(const bool is_replay)
 {
-  int ret = before_append(is_replay);
-  if (OB_SUCC(ret)) {
+  int ret = OB_SUCCESS;
+  if (is_replay && !scn_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "scn is invalid for replay", K(ret), KPC(this));
+  } else if (OB_FAIL(before_append(is_replay))) {
+  } else {
     need_submit_log_ = !is_replay;
   }
   return ret;
@@ -219,7 +223,9 @@ void ObTransCallbackMgr::reset()
   write_epoch_start_tid_ = 0;
   need_merge_ = false;
   for_replay_ = false;
+  has_branch_replayed_into_first_list_ = false;
   serial_final_scn_.set_max();
+  serial_final_seq_no_.reset();
   serial_sync_scn_.set_min();
   callback_main_list_append_count_ = 0;
   callback_slave_list_append_count_ = 0;
@@ -345,6 +351,39 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
   if (seq_no.support_branch()) {
     // NEW since version 4.3, select by branch
     int slot = seq_no.get_branch() % MAX_CALLBACK_LIST_COUNT;
+    if (slot > 0
+        && for_replay_
+        && is_serial_final_()
+        && OB_UNLIKELY(node->get_scn() <= serial_final_scn_)) {
+      // _NOTE_
+      // for log with scn before serial final and replayed after txn recovery from point after serial final
+      // it's replayed into first callback-list to keep the scn is in asc order for all callback list
+      // for example:
+      // serial final log scn = 100
+      // recovery point scn = 200
+      // log replaying with scn = 80
+      //
+      // Checksum calculation:
+      // this log has been accumulated, it will not be required in all calback-list
+      if (parallel_replay_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "parallel replay an serial log", K(ret), KPC(this));
+        ob_abort();
+      }
+      if (OB_UNLIKELY(!has_branch_replayed_into_first_list_)) {
+        // sanity check: the serial_final_seq_no must be set
+        // which will be used in replay `rollback branch savepoint` log
+        if (OB_UNLIKELY(!serial_final_seq_no_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "serial_final_seq_no is invalid", K(ret), KPC(this));
+          ob_abort();
+        }
+        ATOMIC_STORE(&has_branch_replayed_into_first_list_, true);
+        TRANS_LOG(INFO, "replay log before serial final when reach serial final",
+                  KPC(this), KPC(get_trans_ctx()), KPC(node));
+      }
+      slot = 0;
+    }
     if (slot == 0) {
       // no parallel and no branch requirement
       ret = callback_list_.append_callback(node, for_replay_, parallel_replay_, is_serial_final_());
@@ -420,6 +459,19 @@ int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
       } else if (callback_lists_) {
         ret = callback_lists_[slot - 1].remove_callbacks_for_rollback_to(to_seq_no, from_seq_no, replay_scn);
       } else { /*callback_lists_ is empty, no need do rollback */ }
+      // _NOTE_
+      // if branch level savepoint with `to_seq_no` before serial_final log, the branch maybe replayed
+      // into first callback-list when recovery with scn after serial final log (see ObTransCallbackMgr::append)
+      // hence, we need try rollback on it
+      if (OB_SUCC(ret)
+          && for_replay_
+          && slot > 0
+          && OB_UNLIKELY(has_branch_replayed_into_first_list_)
+          && to_seq_no.get_seq() <= serial_final_seq_no_.get_seq()) {
+        ret = callback_list_.remove_callbacks_for_rollback_to(to_seq_no, from_seq_no, replay_scn);
+        TRANS_LOG(INFO, "replay branch savepoint cross serial final",
+                  KPC(this), KPC(get_trans_ctx()), K(replay_scn), K(to_seq_no), K(from_seq_no));
+      }
     }
   } else { // before 4.3
     ret = callback_list_.remove_callbacks_for_rollback_to(to_seq_no, from_seq_no, replay_scn);
@@ -2169,9 +2221,11 @@ bool ObTransCallbackMgr::pending_log_size_too_large(const transaction::ObTxSEQ &
   }
 }
 
-void ObTransCallbackMgr::set_parallel_logging(const share::SCN serial_final_scn)
+void ObTransCallbackMgr::set_parallel_logging(const share::SCN serial_final_scn,
+                                              const transaction::ObTxSEQ serial_final_seq_no)
 {
   serial_final_scn_.atomic_set(serial_final_scn);
+  serial_final_seq_no_.atomic_store(serial_final_seq_no);
 }
 
 void ObTransCallbackMgr::update_serial_sync_scn_(const share::SCN scn)

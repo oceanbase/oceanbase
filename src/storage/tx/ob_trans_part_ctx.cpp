@@ -1906,7 +1906,7 @@ int ObPartTransCtx::serial_submit_redo_after_write_()
     ret = submitter.serial_submit(should_switch);
     if (should_switch && submitter.get_submitted_cnt() > 0) {
       const share::SCN serial_final_scn = submitter.get_submitted_scn();
-      switch_to_parallel_logging_(serial_final_scn);
+      switch_to_parallel_logging_(serial_final_scn, exec_info_.max_submitted_seq_no_);
       TRANS_LOG(INFO, "**switch to parallel logging**",
                 K_(ls_id), K_(trans_id),
                 K(serial_final_scn),
@@ -4760,7 +4760,8 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
                                        const SCN &timestamp,
                                        const int64_t &part_log_no,
                                        const bool is_tx_log_queue,
-                                       const bool serial_final)
+                                       const bool serial_final,
+                                       const ObTxSEQ &max_seq_no)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("replay_redo_in_ctx", 10 * 1000);
@@ -4805,7 +4806,7 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
         usleep(50_ms);
         ob_abort();
       } else if (!exec_info_.serial_final_scn_.is_valid()) {
-        switch_to_parallel_logging_(timestamp);
+        switch_to_parallel_logging_(timestamp, max_seq_no);
       }
     }
   }
@@ -9636,7 +9637,8 @@ inline bool ObPartTransCtx::is_support_parallel_replay_() const
   return cluster_version_accurate_ && cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
 }
 
-inline void ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_final_scn)
+inline void ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_final_scn,
+                                                        const ObTxSEQ max_seq_no)
 {
   // when start replaying serial final redo log or submitted serial final redo log
   // switch the Tx's logging mode to parallel logging
@@ -9651,13 +9653,19 @@ inline void ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_
   // if an rollback to savepoint before this point, which means
   // replay of this rollback-savepoint-log must pre-berrier to
   // wait serial replay parts finished
-  exec_info_.serial_final_seq_no_ = exec_info_.max_submitted_seq_no_;
-  mt_ctx_.set_parallel_logging(serial_final_scn);
+  if (OB_UNLIKELY(!max_seq_no.is_valid())) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "max seq_no of serial final log is invalid",
+                  K(serial_final_scn), K(max_seq_no), KPC(this));
+    print_trace_log_();
+    ob_abort();
+  }
+  exec_info_.serial_final_seq_no_ = max_seq_no;
+  mt_ctx_.set_parallel_logging(serial_final_scn, max_seq_no);
 }
 
 inline void ObPartTransCtx::recovery_parallel_logging_()
 {
-  mt_ctx_.set_parallel_logging(exec_info_.serial_final_scn_);
+  mt_ctx_.set_parallel_logging(exec_info_.serial_final_scn_, exec_info_.serial_final_seq_no_);
   if (exec_info_.max_applied_log_ts_ >= exec_info_.serial_final_scn_) {
     // the serial final log has been synced or replayed
     // notify callback_mgr serial part is finished
