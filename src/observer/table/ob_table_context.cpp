@@ -587,7 +587,8 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   if (OB_SUCC(ret)) {
     // add lob header when is lob storage
     if (is_lob_storage(obj.get_type()) && cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
-      if (OB_FAIL(convert_lob(ctx_allocator_, obj))) {
+      // use the processor's allocator to ensure the lifecycle of lob object
+      if (OB_FAIL(convert_lob(allocator_, obj))) {
         LOG_WARN("fail to convert lob", K(ret), K(obj));
       }
     }
