@@ -685,7 +685,7 @@ int ObMemtable::get(
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(row.init(*context.stmt_allocator_, request_cnt, trans_info_ptr))) {
+        } else if (OB_FAIL(row.init(*context.allocator_, request_cnt, trans_info_ptr))) {
           STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(param.need_trans_info()));
         }
       }
