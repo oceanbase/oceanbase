@@ -223,7 +223,8 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < row->get_count(); i++) {
       ObObj& value = row->get_cell(i);
-      if (result.is_ps_protocol() && !is_packed) {
+      if (result.is_ps_protocol() && !is_packed
+          && !(value.is_geometry() && lib::is_oracle_mode())) { // oracle gis will do cast in process_sql_udt_results
         if (value.get_type() != fields->at(i).type_.get_type()) {
           ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL,
             fields->at(i).type_.get_collation_type());
