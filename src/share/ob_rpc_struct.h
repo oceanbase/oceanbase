@@ -4151,6 +4151,63 @@ public:
   share::ObLSID ls_id_;
 };
 
+class ObAdminDRTaskType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum AdminDRTaskType
+  {
+    INVALID_TYPE = -1,
+    ADD_REPLICA = 0,
+    REMOVE_REPLICA = 1,
+    MAX_TYPE
+  };
+public:
+  ObAdminDRTaskType() : type_(INVALID_TYPE) {}
+  explicit ObAdminDRTaskType(AdminDRTaskType type) : type_(type) {}
+  ObAdminDRTaskType &operator=(const AdminDRTaskType type) { type_ = type; return *this; }
+  ObAdminDRTaskType &operator=(const ObAdminDRTaskType &other) { type_ = other.type_; return *this; }
+  bool operator==(const ObAdminDRTaskType &other) const { return other.type_ == type_; }
+  bool operator!=(const ObAdminDRTaskType &other) const { return other.type_ != type_; }
+  void reset() { type_ = INVALID_TYPE; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  void assign(const ObAdminDRTaskType &other) { type_ = other.type_; }
+  bool is_valid() const { return INVALID_TYPE < type_ && MAX_TYPE > type_; }
+  bool is_add_task() const { return ADD_REPLICA == type_; }
+  bool is_remove_task() const { return REMOVE_REPLICA == type_; }
+  const AdminDRTaskType &get_type() const { return type_; }
+  const char* get_type_str() const;
+  const char* get_comment() const;
+private:
+  AdminDRTaskType type_;
+};
+
+struct ObAdminCommandArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminCommandArg()
+    : admin_command_(),
+      task_type_(ObAdminDRTaskType::INVALID_TYPE) {}
+  ~ObAdminCommandArg() {}
+public:
+  int assign(const ObAdminCommandArg &other);
+  int init(const ObString &admin_command, const ObAdminDRTaskType &task_type);
+  bool is_valid() const { return !admin_command_.is_empty() && task_type_.is_valid(); }
+  void reset() { admin_command_.reset(); task_type_.reset(); }
+  const ObString get_admin_command_str() const { return admin_command_.str(); }
+  const ObAdminDRTaskType &get_task_type() const { return task_type_; }
+  const char* get_type_str() const { return task_type_.get_type_str(); }
+  const char* get_comment() const { return task_type_.get_comment(); }
+  bool is_remove_task() const { return task_type_.is_remove_task(); }
+  bool is_add_task() const { return task_type_.is_add_task(); }
+  TO_STRING_KV(K(admin_command_), K(task_type_));
+private:
+  common::ObFixedLengthString<OB_MAX_ADMIN_COMMAND_LENGTH + 1> admin_command_;
+  ObAdminDRTaskType task_type_;
+};
+
 #ifdef OB_BUILD_ARBITRATION
 // send to leader to add A-replica for log stream
 struct ObAddArbArg
