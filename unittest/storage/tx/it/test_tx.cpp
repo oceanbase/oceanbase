@@ -235,8 +235,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
     ASSERT_TRUE(sp.is_valid());
     ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 200));
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, OB_TRANSACTION_SET_VIOLATION));
-    ASSERT_EQ(ObTxDesc::State::IDLE, tx.state_);
-    ASSERT_EQ(0, tx.parts_.count());
+    ASSERT_EQ(ObTxDesc::State::IMPLICIT_ACTIVE, tx.state_);
     ASSERT_EQ(ObTxSEQ::INVL(), tx.active_scn_);
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
   }
@@ -246,8 +245,7 @@ TEST_F(ObTestTx, rollback_savepoint_with_need_retry_error)
     ASSERT_TRUE(sp.is_valid());
     ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 200));
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr, OB_TRY_LOCK_ROW_CONFLICT));
-    ASSERT_EQ(ObTxDesc::State::IDLE, tx.state_);
-    ASSERT_EQ(0, tx.parts_.count());
+    ASSERT_EQ(ObTxDesc::State::IMPLICIT_ACTIVE, tx.state_);
     ASSERT_EQ(ObTxSEQ::INVL(), tx.active_scn_);
     ASSERT_EQ(OB_SUCCESS, n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_ms(5), nullptr));
   }

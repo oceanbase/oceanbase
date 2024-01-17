@@ -676,6 +676,15 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       break;
     }
   }
+
+  if (ObTxDesc::State::IMPLICIT_ACTIVE == state_ && !active_scn_.is_valid()) {
+    /*
+     * it is a first stmt's retry, we should set active scn
+     * to enable recognizing it is first stmt
+     */
+    active_scn_ = get_tx_seq();
+  }
+
   if (!hit) {
     if (append) {
       a.last_touch_ts_ = exec_info_reap_ts_ + 1;
@@ -751,15 +760,8 @@ void ObTxDesc::implicit_start_tx_()
 {
   if (parts_.count() > 0 && state_ == ObTxDesc::State::IDLE) {
     state_ = ObTxDesc::State::IMPLICIT_ACTIVE;
-    if (expire_ts_ == INT64_MAX ) {
-      /*
-       * To calculate transaction's execution time
-       * and determine whether transaction has timeout
-       * just set active_ts and expire_ts on stmt's first execution
-       */
-      active_ts_ = ObClockGenerator::getClock();
-      expire_ts_ = active_ts_ + timeout_us_;
-    }
+    active_ts_ = ObClockGenerator::getClock();
+    expire_ts_ = active_ts_ + timeout_us_;
     active_scn_ = get_tx_seq();
     state_change_flags_.mark_all();
   }
