@@ -1060,14 +1060,13 @@ int ObExprOperator::aggregate_result_type_for_case(
     }
     nth = OB_INVALID_ID == nth ? 0 : nth;
     const ObExprResType &res_type = types[nth];
-    if (need_merge_type && lib::is_oracle_mode() && is_called_in_sql
+    if (need_merge_type && is_called_in_sql
         && ObTinyIntType == types[0].get_type()) {
       ret = OB_ERR_CALL_WRONG_ARG;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
     }
-    for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
-      if (need_merge_type && lib::is_oracle_mode() && is_called_in_sql
-          && ObTinyIntType == types[i].get_type()) {
+    for (int64_t i = 1; OB_SUCC(ret) && is_called_in_sql && i < param_num; ++i) {
+      if (need_merge_type && ObTinyIntType == types[i].get_type()) {
         ret = OB_ERR_CALL_WRONG_ARG;
         LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
       } else if (OB_FAIL(ObExprOperator::is_same_kind_type_for_case(res_type,
