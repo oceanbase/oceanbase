@@ -249,52 +249,74 @@ int ObDupTableLSHandler::init(bool is_dup_table)
     if (is_inited()) {
       ret = OB_INIT_TWICE;
     } else {
+      SpinWLockGuard init_w_guard(init_rw_lock_);
       // init by dup_tablet_scan_task_.
-      lease_mgr_ptr_ =
+
+      ObDupTableLogOperator *tmp_log_operator = static_cast<ObDupTableLogOperator *>(
+          share::mtl_malloc(sizeof(ObDupTableLogOperator), "DUP_LOG_OP"));
+
+      ObDupTableLSLeaseMgr *tmp_lease_mgr_ptr =
           static_cast<ObDupTableLSLeaseMgr *>(ob_malloc(sizeof(ObDupTableLSLeaseMgr), "DupTable"));
-      ts_sync_mgr_ptr_ = static_cast<ObDupTableLSTsSyncMgr *>(
+      ObDupTableLSTsSyncMgr *tmp_ts_sync_mgr_ptr = static_cast<ObDupTableLSTsSyncMgr *>(
           ob_malloc(sizeof(ObDupTableLSTsSyncMgr), "DupTable"));
-      tablets_mgr_ptr_ =
+      ObLSDupTabletsMgr *tmp_tablets_mgr_ptr =
           static_cast<ObLSDupTabletsMgr *>(ob_malloc(sizeof(ObLSDupTabletsMgr), "DupTable"));
 
-      if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
+      if (OB_ISNULL(tmp_log_operator) || OB_ISNULL(tmp_lease_mgr_ptr)
+          || OB_ISNULL(tmp_ts_sync_mgr_ptr) || OB_ISNULL(tmp_tablets_mgr_ptr)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         DUP_TABLE_LOG(WARN, "alloc memory in ObDupTableLSHandler::init failed", K(ret),
-                      KP(lease_mgr_ptr_), KP(ts_sync_mgr_ptr_), KP(tablets_mgr_ptr_));
+                      KP(tmp_log_operator), KP(lease_mgr_ptr_), KP(ts_sync_mgr_ptr_),
+                      KP(tablets_mgr_ptr_));
       } else {
-        new (lease_mgr_ptr_) ObDupTableLSLeaseMgr();
-        new (ts_sync_mgr_ptr_) ObDupTableLSTsSyncMgr();
-        new (tablets_mgr_ptr_) ObLSDupTabletsMgr();
+        new (tmp_lease_mgr_ptr) ObDupTableLSLeaseMgr();
+        new (tmp_ts_sync_mgr_ptr) ObDupTableLSTsSyncMgr();
+        new (tmp_tablets_mgr_ptr) ObLSDupTabletsMgr();
+        new (tmp_log_operator)
+            ObDupTableLogOperator(ls_id_, log_handler_, &dup_ls_ckpt_, tmp_lease_mgr_ptr,
+                                  tmp_tablets_mgr_ptr, &interface_stat_);
 
-        if (OB_FAIL(lease_mgr_ptr_->init(this))) {
+        if (OB_FAIL(tmp_lease_mgr_ptr->init(this))) {
           DUP_TABLE_LOG(WARN, "init lease_mgr failed", K(ret));
-        } else if (OB_FAIL(ts_sync_mgr_ptr_->init(this))) {
+        } else if (OB_FAIL(tmp_ts_sync_mgr_ptr->init(this))) {
           DUP_TABLE_LOG(WARN, "init ts_sync_mgr failed", K(ret));
-        } else if (OB_FAIL(tablets_mgr_ptr_->init(this))) {
+        } else if (OB_FAIL(tmp_tablets_mgr_ptr->init(this))) {
           DUP_TABLE_LOG(WARN, "init tablets_mgr failed", K(ret));
-        } else if (ls_state_helper_.is_leader() && OB_FAIL(leader_takeover_(true /*is_resume*/))) {
-          DUP_TABLE_LOG(WARN, "leader takeover in init failed", K(ret));
         } else {
-          ATOMIC_STORE(&is_inited_, true);
+          lease_mgr_ptr_ = tmp_lease_mgr_ptr;
+          ts_sync_mgr_ptr_ = tmp_ts_sync_mgr_ptr;
+          tablets_mgr_ptr_ = tmp_tablets_mgr_ptr;
+          log_operator_ = tmp_log_operator;
+          if (ls_state_helper_.is_leader()
+              && OB_FAIL(leader_takeover_(true /*is_resume*/, true /*is_initing*/))) {
+            DUP_TABLE_LOG(WARN, "leader takeover in init failed", K(ret));
+          } else {
+            is_inited_ = true;
+          }
         }
       }
 
       if (OB_FAIL(ret)) {
-        if (OB_NOT_NULL(lease_mgr_ptr_)) {
-          lease_mgr_ptr_->destroy();
-          ob_free(lease_mgr_ptr_);
-        }
-        if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-          ts_sync_mgr_ptr_->destroy();
-          ob_free(ts_sync_mgr_ptr_);
-        }
-        if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-          tablets_mgr_ptr_->destroy();
-          ob_free(tablets_mgr_ptr_);
-        }
         lease_mgr_ptr_ = nullptr;
         ts_sync_mgr_ptr_ = nullptr;
         tablets_mgr_ptr_ = nullptr;
+        log_operator_ = nullptr;
+        if (OB_NOT_NULL(tmp_lease_mgr_ptr)) {
+          tmp_lease_mgr_ptr->destroy();
+          ob_free(tmp_lease_mgr_ptr);
+        }
+        if (OB_NOT_NULL(tmp_ts_sync_mgr_ptr)) {
+          tmp_ts_sync_mgr_ptr->destroy();
+          ob_free(tmp_ts_sync_mgr_ptr);
+        }
+        if (OB_NOT_NULL(tmp_tablets_mgr_ptr)) {
+          tmp_tablets_mgr_ptr->destroy();
+          ob_free(tmp_tablets_mgr_ptr);
+        }
+        if (OB_NOT_NULL(tmp_log_operator)) {
+          tmp_log_operator->reset();
+          ob_free(tmp_log_operator);
+        }
       }
       DUP_TABLE_LOG(INFO, "ls handler init", K(ret), KPC(this));
     }
@@ -358,15 +380,20 @@ int ObDupTableLSHandler::offline()
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
     }
-  } else if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
-    ret = OB_EAGAIN;
-    DUP_TABLE_LOG(WARN, "wait log synced before offline", K(ret), KPC(this));
-  } else if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_FAIL(tablets_mgr_ptr_->offline())) {
-    DUP_TABLE_LOG(WARN, "dup tablets mgr offline failed", K(ret), KPC(this));
-  } else if (OB_NOT_NULL(lease_mgr_ptr_) && OB_FAIL(lease_mgr_ptr_->offline())) {
-    DUP_TABLE_LOG(WARN, "dup lease mgr offline failed", K(ret), KPC(this));
-  } else if (OB_NOT_NULL(ts_sync_mgr_ptr_) && OB_FAIL(ts_sync_mgr_ptr_->offline())) {
-    DUP_TABLE_LOG(WARN, "dup ts mgr offline failed", K(ret), KPC(this));
+  } else {
+    SpinRLockGuard r_init_guard(init_rw_lock_);
+    if (is_inited_) {
+      if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
+        ret = OB_EAGAIN;
+        DUP_TABLE_LOG(WARN, "wait log synced before offline", K(ret), KPC(this));
+      } else if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_FAIL(tablets_mgr_ptr_->offline())) {
+        DUP_TABLE_LOG(WARN, "dup tablets mgr offline failed", K(ret), KPC(this));
+      } else if (OB_NOT_NULL(lease_mgr_ptr_) && OB_FAIL(lease_mgr_ptr_->offline())) {
+        DUP_TABLE_LOG(WARN, "dup lease mgr offline failed", K(ret), KPC(this));
+      } else if (OB_NOT_NULL(ts_sync_mgr_ptr_) && OB_FAIL(ts_sync_mgr_ptr_->offline())) {
+        DUP_TABLE_LOG(WARN, "dup ts mgr offline failed", K(ret), KPC(this));
+      }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -409,9 +436,12 @@ int ObDupTableLSHandler::safe_to_destroy(bool &is_dup_table_handler_safe)
 {
   int ret = OB_SUCCESS;
   is_dup_table_handler_safe = false;
-  if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
-    ret = OB_EAGAIN;
-    DUP_TABLE_LOG(WARN, "wait log synced before destroy", K(ret), KPC(this));
+  //can not submit log after the offline
+  if (is_inited()) {
+    if (OB_NOT_NULL(log_operator_) && log_operator_->is_busy()) {
+      ret = OB_EAGAIN;
+      DUP_TABLE_LOG(WARN, "wait log synced before destroy", K(ret), KPC(this));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -435,6 +465,7 @@ void ObDupTableLSHandler::destroy() { reset(); }
 void ObDupTableLSHandler::reset()
 {
   // ATOMIC_STORE(&is_inited_, false);
+  SpinWLockGuard w_init_guard(init_rw_lock_);
   is_inited_ = false;
   ls_state_helper_.reset();
 
@@ -505,7 +536,8 @@ void ObDupTableLSHandler::reset()
 
 bool ObDupTableLSHandler::is_inited()
 {
-  return ATOMIC_LOAD(&is_inited_);
+  SpinRLockGuard r_init_guard(init_rw_lock_);
+  return is_inited_;
 }
 
 bool ObDupTableLSHandler::is_master() { return ls_state_helper_.is_leader_serving(); }
@@ -556,8 +588,9 @@ int ObDupTableLSHandler::ls_loop_handle()
           DUP_TABLE_LOG(WARN, "try confirm tablets failed", K(ret), K(min_lease_ts_info));
         } else {
           // submit lease log
-          if (OB_FAIL(prepare_log_operator_())) {
-            DUP_TABLE_LOG(WARN, "prepare log operator failed", K(ret));
+          if (OB_ISNULL(log_operator_)) {
+            ret = OB_INVALID_ARGUMENT;
+            DUP_TABLE_LOG(WARN, "invalid log operator ptr", K(ret), KP(log_operator_));
           } else if (OB_FAIL(log_operator_->submit_log_entry())) {
             DUP_TABLE_LOG(WARN, "submit dup table log entry failed", K(ret));
           }
@@ -926,7 +959,7 @@ int ObDupTableLSHandler::check_dup_tablet_in_redo(const ObTabletID &tablet_id,
   if (!tablet_id.is_valid() || !base_snapshot.is_valid() || !redo_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(tablet_id), K(base_snapshot), K(redo_scn));
-  } else if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
+  } else if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
     is_dup_tablet = false;
   } else if (!has_dup_tablet()) {
     is_dup_tablet = false;
@@ -951,7 +984,7 @@ int ObDupTableLSHandler::check_dup_tablet_readable(const ObTabletID &tablet_id,
   if (!tablet_id.is_valid() || !read_snapshot.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(tablet_id), K(read_snapshot), K(readable));
-  } else if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
+  } else if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(tablets_mgr_ptr_)) {
     // no dup tablet in ls
     readable = false;
   } else if (!ls_state_helper_.is_active_ls()) {
@@ -998,7 +1031,7 @@ bool ObDupTableLSHandler::is_dup_table_lease_valid()
   const bool is_election_leader = false;
 
   if (has_dup_tablet()) {
-    if (OB_ISNULL(lease_mgr_ptr_)) {
+    if (!is_inited() || OB_ISNULL(lease_mgr_ptr_)) {
       is_dup_lease_ls = false;
     } else if (ls_state_helper_.is_leader()) {
       is_dup_lease_ls = true;
@@ -1025,7 +1058,7 @@ int64_t ObDupTableLSHandler::get_dup_tablet_count()
 {
   int64_t dup_tablet_cnt = 0;
 
-  if (OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     dup_tablet_cnt = 0;
   } else {
     dup_tablet_cnt = tablets_mgr_ptr_->get_dup_tablet_count();
@@ -1037,7 +1070,7 @@ int64_t ObDupTableLSHandler::get_dup_tablet_count()
 bool ObDupTableLSHandler::has_dup_tablet()
 {
   bool has_dup = false;
-  if (OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     has_dup = false;
   } else {
     has_dup = tablets_mgr_ptr_->has_dup_tablet();
@@ -1053,7 +1086,7 @@ bool ObDupTableLSHandler::is_dup_tablet(const common::ObTabletID &tablet_id)
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "invalid argument", K(ret), K(tablet_id));
-  } else if (OB_ISNULL(tablets_mgr_ptr_)) {
+  } else if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     is_dup_tablet = false;
   } else if (OB_FAIL(tablets_mgr_ptr_->search_dup_tablet_for_read(tablet_id, is_dup_tablet))) {
     DUP_TABLE_LOG(WARN, "check dup tablet failed", K(ret), K(tablet_id), K(is_dup_tablet));
@@ -1068,7 +1101,7 @@ bool ObDupTableLSHandler::check_tablet_set_exist()
 {
   bool bool_ret = false;
 
-  if (OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     bool_ret = false;
   } else {
     int64_t readable_and_need_confirm_set_count =
@@ -1141,8 +1174,6 @@ int ObDupTableLSHandler::replay(const void *buffer,
   // cover lease list and tablets list
   if (!is_inited() && OB_FAIL(init(true))) {
     DUP_TABLE_LOG(WARN, "init dup_ls_handle in replay failed", K(ret));
-  } else if (OB_FAIL(prepare_log_operator_())) {
-    DUP_TABLE_LOG(WARN, "init dup_table log operator failed", K(ret));
   } else if (OB_FALSE_IT(log_operator_->set_logging_scn(ts_ns))) {
 
   } else if (OB_FAIL(
@@ -1187,6 +1218,8 @@ void ObDupTableLSHandler::switch_to_follower_forcedly()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
+  SpinRLockGuard r_init_guard(init_rw_lock_);
+
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
                                                     restore_state_container))) {
@@ -1210,6 +1243,8 @@ int ObDupTableLSHandler::switch_to_follower_gracefully()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+
+  SpinRLockGuard r_init_guard(init_rw_lock_);
 
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_REVOKE_SUCC,
@@ -1252,6 +1287,8 @@ int ObDupTableLSHandler::resume_leader()
 
   const bool is_resume = true;
 
+  SpinRLockGuard r_init_guard(init_rw_lock_);
+
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
                                                     restore_state_container))) {
@@ -1288,6 +1325,8 @@ int ObDupTableLSHandler::switch_to_leader()
 
   const bool is_resume = false;
 
+  SpinRLockGuard r_init_guard(init_rw_lock_);
+
   ObDupTableLSRoleStateContainer restore_state_container;
   if (OB_FAIL(ls_state_helper_.prepare_state_change(ObDupTableLSRoleState::LS_TAKEOVER_SUCC,
                                                     restore_state_container))) {
@@ -1295,7 +1334,7 @@ int ObDupTableLSHandler::switch_to_leader()
     if (OB_NO_NEED_UPDATE == ret) {
       ret = OB_SUCCESS;
     }
-  } else if (dup_ls_ckpt_.is_useful_meta() && !is_inited()) {
+  } else if (dup_ls_ckpt_.is_useful_meta() && !is_inited_) {
     ret = OB_LS_NEED_REVOKE;
     DUP_TABLE_LOG(WARN, "switch to leader failed  without ckpt recovery", K(ret), KPC(this));
   } else if (OB_FAIL(leader_takeover_(is_resume))) {
@@ -1326,34 +1365,37 @@ int ObDupTableLSHandler::leader_revoke_(const bool is_forcedly)
   int tmp_ret = OB_SUCCESS;
 
   bool is_logging = false;
-  if (OB_NOT_NULL(log_operator_)) {
-    log_operator_->rlock_for_log();
-    is_logging = log_operator_->check_is_busy_without_lock();
-  }
-  if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_TMP_FAIL(tablets_mgr_ptr_->leader_revoke(is_logging))) {
-    DUP_TABLE_LOG(WARN, "tablets_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
-    if (!is_forcedly) {
-      ret = tmp_ret;
-    }
-  }
-  if (OB_NOT_NULL(log_operator_)) {
-    log_operator_->unlock_for_log();
-  }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-    if (OB_TMP_FAIL(ts_sync_mgr_ptr_->leader_revoke())) {
-      DUP_TABLE_LOG(WARN, "ts_sync_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+  if (is_inited_) {
+    if (OB_NOT_NULL(log_operator_)) {
+      log_operator_->rlock_for_log();
+      is_logging = log_operator_->check_is_busy_without_lock();
+    }
+    if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_TMP_FAIL(tablets_mgr_ptr_->leader_revoke(is_logging))) {
+      DUP_TABLE_LOG(WARN, "tablets_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
       if (!is_forcedly) {
         ret = tmp_ret;
       }
     }
-  }
+    if (OB_NOT_NULL(log_operator_)) {
+      log_operator_->unlock_for_log();
+    }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(lease_mgr_ptr_)) {
-    if (OB_TMP_FAIL(lease_mgr_ptr_->leader_revoke())) {
-      DUP_TABLE_LOG(WARN, "lease_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
-      if (!is_forcedly) {
-        ret = tmp_ret;
+    if (OB_SUCC(ret) && OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+      if (OB_TMP_FAIL(ts_sync_mgr_ptr_->leader_revoke())) {
+        DUP_TABLE_LOG(WARN, "ts_sync_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+        if (!is_forcedly) {
+          ret = tmp_ret;
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(lease_mgr_ptr_)) {
+      if (OB_TMP_FAIL(lease_mgr_ptr_->leader_revoke())) {
+        DUP_TABLE_LOG(WARN, "lease_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
+        if (!is_forcedly) {
+          ret = tmp_ret;
+        }
       }
     }
   }
@@ -1362,23 +1404,25 @@ int ObDupTableLSHandler::leader_revoke_(const bool is_forcedly)
   return ret;
 }
 
-int ObDupTableLSHandler::leader_takeover_(const bool is_resume)
+int ObDupTableLSHandler::leader_takeover_(const bool is_resume, const bool is_initing)
 {
   int ret = OB_SUCCESS;
 
-  // clean ts info cache
-  if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-    ts_sync_mgr_ptr_->leader_takeover();
-  }
-  // extend lease_expired_time
-  if (OB_NOT_NULL(lease_mgr_ptr_)) {
-    lease_mgr_ptr_->leader_takeover(is_resume);
-  }
+  if (is_inited_ || is_initing) {
+    // clean ts info cache
+    if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+      ts_sync_mgr_ptr_->leader_takeover();
+    }
+    // extend lease_expired_time
+    if (OB_NOT_NULL(lease_mgr_ptr_)) {
+      lease_mgr_ptr_->leader_takeover(is_resume);
+    }
 
-  if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-    if (OB_FAIL(tablets_mgr_ptr_->leader_takeover(
-            is_resume, dup_ls_ckpt_.contain_all_readable_on_replica()))) {
-      DUP_TABLE_LOG(WARN, "clean unreadable tablet set failed", K(ret));
+    if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+      if (OB_FAIL(tablets_mgr_ptr_->leader_takeover(
+              is_resume, dup_ls_ckpt_.contain_all_readable_on_replica()))) {
+        DUP_TABLE_LOG(WARN, "clean unreadable tablet set failed", K(ret));
+      }
     }
   }
 
@@ -1566,7 +1610,7 @@ int ObDupTableLSHandler::get_lease_mgr_stat(ObDupLSLeaseMgrStatIterator &collect
 
   // collect all leader info
   if (ls_state_helper_.is_leader_serving()) {
-    if (OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
+    if (!is_inited() || OB_ISNULL(lease_mgr_ptr_) || OB_ISNULL(ts_sync_mgr_ptr_)) {
       ret = OB_NOT_INIT;
       DUP_TABLE_LOG(WARN, "not init", K(ret), KPC(lease_mgr_ptr_), KP(ts_sync_mgr_ptr_));
     } else if(OB_FAIL(lease_mgr_ptr_->get_lease_mgr_stat(collect_arr))) {
@@ -1585,7 +1629,7 @@ int ObDupTableLSHandler::get_ls_tablets_stat(ObDupLSTabletsStatIterator &collect
   int ret = OB_SUCCESS;
   const share::ObLSID ls_id = ls_id_;
 
-  if (OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "tablets_mgr not init", K(ret), KP(tablets_mgr_ptr_));
   } else if(OB_FAIL(tablets_mgr_ptr_->get_tablets_stat(collect_iter, ls_id_))) {
@@ -1600,7 +1644,7 @@ int ObDupTableLSHandler::get_ls_tablet_set_stat(ObDupLSTabletSetStatIterator &co
   int ret = OB_SUCCESS;
   const share::ObLSID ls_id = get_ls_id();
 
-  if (OB_ISNULL(tablets_mgr_ptr_)) {
+  if (!is_inited() || OB_ISNULL(tablets_mgr_ptr_)) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "not init", K(ret), KPC(tablets_mgr_ptr_));
   } else if (OB_FAIL(tablets_mgr_ptr_->get_tablet_set_stat(collect_iter, ls_id))) {
