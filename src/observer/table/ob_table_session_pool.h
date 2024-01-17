@@ -70,7 +70,7 @@ private:
   int create_session_pool_safe();
   int create_session_pool_unsafe();
 private:
-  static const int64_t ELIMINATE_SESSION_DELAY = 60 * 1000 * 1000; // 60s
+  static const int64_t ELIMINATE_SESSION_DELAY = 5 * 1000 * 1000; // 5s
   bool is_inited_;
   common::ObArenaAllocator allocator_;
   ObTableApiSessPool *pool_;
@@ -87,13 +87,15 @@ class ObTableApiSessPool final
 public:
   // key is ObTableApiCredential.hash_val_
   typedef common::hash::ObHashMap<uint64_t, ObTableApiSessNode*> CacheKeyNodeMap;
-  static const int64_t SESS_POOL_DEFAULT_BUCKET_NUM = 10; // 取决于客户端登录的用户数量
-  static const int64_t SESS_RETIRE_TIME = 300 * 1000000; // 超过300s未被访问的session会被标记淘汰
-  static const int64_t BACKCROUND_TASK_DELETE_SESS_NUM = 1000; // 后台任务每次删除淘汰的session node数量
+  static const int64_t SESS_POOL_DEFAULT_BUCKET_NUM = 10; // default user number
+  static const int64_t SESS_RETIRE_TIME = 300 * 1000 * 1000; // marked as retired more than 300 seconds are not accessed
+  static const int64_t BACKCROUND_TASK_DELETE_SESS_NUM = 2000; // number of eliminated session nodes in background task per time
+  static const int64_t SESS_UPDATE_TIME_INTERVAL = 5 * 1000 * 1000; // the update interval cannot exceed 5 seconds
 public:
   explicit ObTableApiSessPool()
       : allocator_("TbSessPool", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        is_inited_(false)
+        is_inited_(false),
+        last_update_ts_(0)
   {}
   ~ObTableApiSessPool() { destroy(); };
   TO_STRING_KV(K_(is_inited),
@@ -120,6 +122,7 @@ private:
   // 前台login时、后台淘汰时都会操作retired_nodes_，因此需要加锁
   common::ObDList<ObTableApiSessNode> retired_nodes_;
   ObSpinLock retired_nodes_lock_; // for lock retired_nodes_
+  int64_t last_update_ts_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessPool);
 };
