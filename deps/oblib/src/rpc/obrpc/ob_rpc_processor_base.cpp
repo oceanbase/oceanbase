@@ -580,7 +580,9 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
     req_ = NULL; //wait fail, invalid req_
     reuse();
     is_stream_end_ = true;
-    RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret), K(wait_timeout));
+    int pcode = m_get_pcode();
+    RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret),
+                   K(pcode), K(wait_timeout));
   } else if (OB_ISNULL(req)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "Req should not be NULL", K(ret));
