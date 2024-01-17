@@ -5394,7 +5394,8 @@ int ObLogPlan::get_repartition_keys(const EqualSets &equal_sets,
                                     const ObIArray<ObRawExpr*> &src_keys,
                                     const ObIArray<ObRawExpr*> &target_keys,
                                     const ObIArray<ObRawExpr*> &target_part_keys,
-                                    ObIArray<ObRawExpr *> &src_part_keys)
+                                    ObIArray<ObRawExpr *> &src_part_keys,
+                                    const bool ignore_no_match /* default false */ )
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(src_keys.count() != target_keys.count())) {
@@ -5430,7 +5431,7 @@ int ObLogPlan::get_repartition_keys(const EqualSets &equal_sets,
             }
           } else { /*do nothing*/ }
         }
-        if (OB_SUCC(ret) && !is_find) {
+        if (OB_SUCC(ret) && !is_find && !ignore_no_match) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("can not find part expr", K(target_part_keys.at(i)),
               K(src_keys), K(target_keys), K(ret));
