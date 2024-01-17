@@ -107,9 +107,8 @@ int ObIndexTreeRootCtx::init(common::ObIAllocator &allocator)
 */
 bool ObIndexTreeRootCtx::is_absolute_vaild(const bool is_cg) const
 {
-  // @wenqu: after adapting the offset, delete "//"
   return (!use_absolute_offset_&& absolute_offsets_ == nullptr) ||
-         // (use_absolute_offset_ && !is_cg && absolute_offsets_ != nullptr) ||
+         (use_absolute_offset_ && !is_cg && absolute_offsets_ != nullptr) ||
          (use_absolute_offset_ && is_cg && absolute_offsets_ == nullptr);
 }
 
@@ -813,9 +812,7 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
         } else if (use_absolute_offset && index_store_desc_.get_desc().is_cg()) { //ddl cg
           absolute_row_offset = macro_meta->val_.row_count_ + row_idx;
         } else if (use_absolute_offset && !index_store_desc_.get_desc().is_cg()) { //ddl co
-          absolute_row_offset = macro_meta->val_.row_count_ + row_idx;
-          // TODO:@wenqu: after adapting the offset, use the following code to replace the above code.
-          // absolute_row_offset = roots_[i]->absolute_offsets_->at(j);
+          absolute_row_offset = roots_[i]->absolute_offsets_->at(j);
         } else {
           absolute_row_offset = macro_meta->val_.row_count_ + row_idx;
         }
