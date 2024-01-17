@@ -2973,7 +2973,6 @@ int ObTenantTTLP::process()
     RS_LOG(WARN, "fail to launch ttl", KR(ret), K(req));
   }
   res.err_code_ = ret;
-  ret = OB_SUCCESS;
   return ret;
 }
 

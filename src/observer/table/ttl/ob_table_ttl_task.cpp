@@ -524,7 +524,11 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
   } else {
     bool is_expired = false;
     while(OB_SUCC(ret) && !is_expired) {
-      if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row))) {
+      int64_t cur_ts = ObTimeUtility::current_time();
+      if (cur_ts > iter_end_ts_ && hbase_new_cq_) {
+        ret = OB_ITER_END;
+        LOG_DEBUG("iter_end_ts reached, stop current iterator", KR(ret), K(cur_ts), K_(iter_end_ts));
+      } else if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));
         }
@@ -552,6 +556,8 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
           } else {
             cur_version_++;
           }
+          // NOTE: after ttl_cnt_ or cur_del_rows_ is incremented, the row must be return to delete iterator
+          // cuz we will check the affected_rows correctness after finish delete.
           if (max_version_ > 0 && cur_version_ > max_version_) {
             max_version_cnt_++;
             cur_del_rows_++;
@@ -575,9 +581,6 @@ int ObTableTTLDeleteRowIterator::get_next_row(ObNewRow*& row)
             is_last_row_ttl_ = true;
           }
         }
-      }
-      if (ObTimeUtility::current_time() > iter_end_ts_ && hbase_new_cq_) {
-        ret = OB_ITER_END;
       }
     }
   }

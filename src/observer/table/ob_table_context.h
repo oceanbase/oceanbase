@@ -184,6 +184,7 @@ public:
     is_skip_scan_ = false;
     is_client_set_put_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
+    is_full_table_scan_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -276,6 +277,7 @@ public:
   OB_INLINE const common::ObIArray<uint64_t>& get_query_col_ids() const { return query_col_ids_; }
   OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
   OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImage::FULL; }
+  OB_INLINE bool is_full_table_scan() const { return is_full_table_scan_; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE bool is_inc_or_append() const
@@ -522,6 +524,8 @@ private:
   // for put
   bool is_client_set_put_;
   int64_t binlog_row_image_type_;
+  // for audit
+  bool is_full_table_scan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

@@ -782,6 +782,7 @@ int ObTableCtx::generate_key_range(const ObIArray<ObNewRange> &scan_ranges)
   // check obj type in ranges
   for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i) { // foreach range
     const ObNewRange &range = scan_ranges.at(i);
+    is_full_table_scan_ = is_full_table_scan_ ? is_full_table_scan_ : range.is_whole_range();
     // check column type
     for (int64_t j = 0; OB_SUCCESS == ret && j < 2; ++j) {
       const ObRowkey *p_key = nullptr;
@@ -1621,7 +1622,7 @@ int ObTableCtx::init_dml_related_tid()
               found = true;
             }
           }
-          if (found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
+          if (OB_SUCC(ret) && found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
             LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
           }
         } else if (OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
