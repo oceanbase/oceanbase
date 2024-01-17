@@ -125,6 +125,9 @@ private:
  int check_member_list_and_learner_list_all_in_meta_table_(
                 const common::ObMemberList &member_list,
                 const common::GlobalLearnerList &learner_list);
+ int inner_check_member_list_and_learner_list_(
+                const common::ObMemberList &member_list,
+                const common::GlobalLearnerList &learner_list);
  int construct_paxos_replica_number_to_persist_(
                 const int64_t paxos_replica_num,
                 const int64_t arb_replica_num,
