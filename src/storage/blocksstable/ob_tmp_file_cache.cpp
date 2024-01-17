@@ -619,9 +619,7 @@ void ObTmpFileWaitTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(mgr_.exec_wait())) {
-    if (OB_EAGAIN != ret){
-      STORAGE_LOG(WARN, "fail to wait block", K(ret));
-    }
+    STORAGE_LOG(WARN, "fail to wait block", K(ret));
   }
 }
 
@@ -1442,11 +1440,14 @@ int ObTmpTenantMemBlockManager::exec_wait()
     common::ObSpLinkQueue::Link *node = NULL;
     SpinWLockGuard io_guard(io_lock_);
     const int64_t begin_us = ObTimeUtility::fast_current_time();
-    while (OB_SUCC(wait_info_queue_.pop(node)) &&
-           (ObTimeUtility::fast_current_time() - begin_us)/1000 < TASK_INTERVAL) {
+    while (OB_SUCC(ret) && (ObTimeUtility::fast_current_time() - begin_us)/1000 < TASK_INTERVAL) {
       IOWaitInfo *wait_info = NULL;
-      ++loop_nums;
-      if (OB_ISNULL(wait_info = static_cast<IOWaitInfo*>(node))) {
+      if (OB_FAIL(wait_info_queue_.pop(node))) {
+        if (OB_EAGAIN != ret) {
+          STORAGE_LOG(WARN, "fail to pop wait info from queue", K(ret));
+        }
+      } else if (FALSE_IT(++loop_nums)) {
+      } else if (OB_ISNULL(wait_info = static_cast<IOWaitInfo*>(node))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "unexpected error, wait info is nullptr", K(ret), KP(node));
       } else if (OB_ISNULL(wait_info->block_handle_)) {
@@ -1502,8 +1503,11 @@ int ObTmpTenantMemBlockManager::exec_wait()
         }
       }
     }
+    if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
+    }
   }
-  if (OB_SUCC(ret) || OB_EAGAIN == ret) {
+  if (OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(cond_.broadcast())) {
       STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(tmp_ret));
