@@ -45,6 +45,7 @@ int ObExprJsonPretty::calc_result_type1(ObExprResType &type,
   type.set_type(ObLongTextType);
   type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
   type.set_collation_level(CS_LEVEL_IMPLICIT);
+  type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType]);
 
   if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(type1, 1, N_JSON_PRETTY))) {
     LOG_WARN("wrong type for json doc.", K(ret), K(type1.get_type()));
