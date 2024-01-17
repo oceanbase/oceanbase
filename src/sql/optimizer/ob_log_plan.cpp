@@ -13351,8 +13351,8 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
                                                 skip_locked,
                                                 lock_rownum))) {
     LOG_WARN("failed to allocate delete as top", K(ret));
-  } else {
-    optimizer_context_.set_for_update();
+  } else if (!skip_locked) {
+    optimizer_context_.set_no_skip_for_update();
   }
   return ret;
 }
