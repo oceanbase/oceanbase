@@ -874,10 +874,10 @@ int ObCgroupCtrl::write_string_to_file_(const char *filename, const char *conten
   int64_t write_size = -1;
   if ((fd = ::open(filename, O_WRONLY)) < 0) {
     ret = OB_IO_ERROR;
-    LOG_WARN("open file error", K(filename), K(errno), KERRMSG, K(ret));
+    LOG_ERROR("open file error", K(filename), K(errno), KERRMSG, K(ret));
   } else if ((write_size = write(fd, content, static_cast<int32_t>(strlen(content)))) < 0) {
     ret = OB_IO_ERROR;
-    LOG_WARN("write file error",
+    LOG_ERROR("write file error",
         K(filename), K(content), K(ret), K(errno), KERRMSG);
   } else {
     // do nothing
