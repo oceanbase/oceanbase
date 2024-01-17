@@ -413,7 +413,7 @@ int ObAggregateProcessor::ObSigResultHolder::restore()
 
 void ObAggregateProcessor::HashBasedDistinctExtraResult::reuse()
 {
-  if (nullptr != hp_infras_) {
+  if (nullptr != hp_infras_ && hp_infras_mgr_->is_inited()) {
     hp_infras_mgr_->free_one_hp_infras(hp_infras_);
     hp_infras_ = nullptr;
   }
