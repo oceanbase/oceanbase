@@ -142,14 +142,15 @@ struct ObCheckpointDiagnoseParam
 
 struct ObCheckpointUnitDiagnoseInfo
 {
+  const static int64_t MAX_TIME = 253402271999999999;
   friend class ObTraceInfo;
   ObCheckpointUnitDiagnoseInfo()
     : start_scn_(),
       end_scn_(),
       rec_scn_(),
-      create_flush_dag_time_(0),
-      merge_finish_time_(0),
-      start_gc_time_(0) {}
+      create_flush_dag_time_(MAX_TIME),
+      merge_finish_time_(MAX_TIME),
+      start_gc_time_(MAX_TIME) {}
 
   share::SCN start_scn_;
   share::SCN end_scn_;
@@ -167,12 +168,12 @@ private:
 struct ObMemtableDiagnoseInfo : public ObCheckpointUnitDiagnoseInfo
 {
   ObMemtableDiagnoseInfo()
-    : frozen_finish_time_(0),
+    : frozen_finish_time_(MAX_TIME),
       memtable_occupy_size_(0),
-      merge_start_time_(0),
+      merge_start_time_(MAX_TIME),
       occupy_size_(0),
       concurrent_cnt_(0),
-      release_time_(0) {}
+      release_time_(MAX_TIME) {}
   int64_t frozen_finish_time_;
   int64_t memtable_occupy_size_;
   int64_t merge_start_time_;
@@ -538,6 +539,8 @@ int ObCheckpointDiagnoseMgr::add_diagnose_info(const ObCheckpointDiagnoseParam &
       TRANS_LOG(WARN, "trace_info is NULL", KR(ret), K(param));
     } else if (OB_FAIL(trace_info_ptr->add_diagnose_info<T>(param))) {
       TRANS_LOG(WARN, "failed to add diagnose_info", KR(ret), K(param));
+    } else {
+      TRANS_LOG(INFO, "add_diagnose_info", KR(ret), K(param));
     }
   }
   return ret;
