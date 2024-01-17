@@ -928,6 +928,13 @@ bool ObTxDesc::execute_commit_cb()
         executed = true;
         cb = commit_cb_;
         commit_cb_ = NULL;
+        if (0 <= cb_tid_) {
+#ifdef ENABLE_DEBUG_LOG
+          ob_abort();
+#endif
+          TRANS_LOG(WARN, "unexpected error happen, cb_tid_ should smaller than 0",
+                    KP(this), K(tx_id), KP(cb_tid_));
+        }
         ATOMIC_STORE_REL(&cb_tid_, GETTID());
         // NOTE: it is required add trace event before callback,
         // because txDesc may be released after callback called
@@ -937,7 +944,7 @@ bool ObTxDesc::execute_commit_cb()
                             OB_ID(thread_id), GETTID());
         commit_cb_lock_.unlock();
         cb->callback(commit_out_);
-        ATOMIC_STORE_REL(&cb_tid_, -1);
+        ATOMIC_STORE_REL(&cb_tid_, -GETTID());
       } else {
         commit_cb_lock_.unlock();
       }
