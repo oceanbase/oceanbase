@@ -205,28 +205,55 @@ int ObExprSTUnion::eval_st_union(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
         LOG_WARN("fail to create 3D empty collection", K(ret));
       }
     } else {
-      if (geo1->crs() == ObGeoCRS::Cartesian
-         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObCartesianGeometrycollection>(union_res, temp_allocator, srs))) {
-        // should not do simplify in symdifference functor, it may affect
-        // ObGeoFuncUtils::ob_geo_gc_union
-        LOG_WARN("fail to simplify result", K(ret));
-      }  else if (geo1->crs() == ObGeoCRS::Geographic
-         && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObGeographGeometrycollection>(union_res, temp_allocator, srs))) {
-        // should not do simplify in symdifference functor, it may affect
-        // ObGeoFuncUtils::ob_geo_gc_union
-        LOG_WARN("fail to simplify result", K(ret));
-      } else if (is_3d_geo1 && is_3d_geo2) {
-        // populate Z coordinates
-        ObGeoElevationVisitor visitor(temp_allocator, srs);
-        ObGeometry *union_res_bin = nullptr;
-        if (OB_FAIL(visitor.init(*geo1_3d, *geo2_3d))) {
-          LOG_WARN("fail to init elevation visitor", K(ret));
-        } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, union_res, union_res_bin, srs))) {
-          LOG_WARN("fail to do tree to bin", K(ret));
-        } else if (OB_FAIL(union_res_bin->do_visit(visitor))) {
-          LOG_WARN("fail to do elevation visitor", K(ret));
-        } else if (OB_FAIL(visitor.get_geometry_3D(union_res))) {
-          LOG_WARN("failed get geometry 3D", K(ret));
+      if ((!is_3d_geo1)) {
+        if (geo1->crs() == ObGeoCRS::Cartesian) {
+          if (OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObCartesianGeometrycollection>(
+                          union_res, temp_allocator, srs))) {
+            // should not do simplify in symdifference functor, it may affect
+            // ObGeoFuncUtils::ob_geo_gc_union
+            LOG_WARN("fail to remove_duplicate_multi_geo", K(ret));
+          } else if (OB_FAIL(ObGeoFuncUtils::simplify_geo_collection<ObCartesianGeometrycollection>(
+                                union_res, temp_allocator, srs))) {
+            LOG_WARN("fail to simplify_geo_collection", K(ret));
+          }
+        } else if (geo1->crs() == ObGeoCRS::Geographic) {
+          if (OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObGeographGeometrycollection>(
+                          union_res, temp_allocator, srs))) {
+            // should not do simplify in symdifference functor, it may affect
+            // ObGeoFuncUtils::ob_geo_gc_union
+            LOG_WARN("fail to remove_duplicate_multi_geo", K(ret));
+          } else if (OB_FAIL(ObGeoFuncUtils::simplify_geo_collection<ObGeographGeometrycollection>(
+                                union_res, temp_allocator, srs))) {
+            LOG_WARN("fail to simplify_geo_collection", K(ret));
+          }
+        }
+      } else {
+        // 3D
+        if (geo1->crs() == ObGeoCRS::Cartesian
+          && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObCartesianGeometrycollection>(
+                        union_res, temp_allocator, srs))) {
+          // should not do simplify in symdifference functor, it may affect
+          // ObGeoFuncUtils::ob_geo_gc_union
+          LOG_WARN("fail to simplify result", K(ret));
+        }  else if (geo1->crs() == ObGeoCRS::Geographic
+          && OB_FAIL(ObGeoFuncUtils::remove_duplicate_multi_geo<ObGeographGeometrycollection>(
+                        union_res, temp_allocator, srs))) {
+          // should not do simplify in symdifference functor, it may affect
+          // ObGeoFuncUtils::ob_geo_gc_union
+          LOG_WARN("fail to simplify result", K(ret));
+        } else {
+          // populate Z coordinates
+          ObGeoElevationVisitor visitor(temp_allocator, srs);
+          ObGeometry *union_res_bin = nullptr;
+          if (OB_FAIL(visitor.init(*geo1_3d, *geo2_3d))) {
+            LOG_WARN("fail to init elevation visitor", K(ret));
+          } else if (OB_FAIL(ObGeoTypeUtil::tree_to_bin(temp_allocator, union_res, union_res_bin, srs))) {
+            LOG_WARN("fail to do tree to bin", K(ret));
+          } else if (OB_FAIL(union_res_bin->do_visit(visitor))) {
+            LOG_WARN("fail to do elevation visitor", K(ret));
+          } else if (OB_FAIL(visitor.get_geometry_3D(union_res))) {
+            LOG_WARN("failed get geometry 3D", K(ret));
+          }
         }
       }
     }
