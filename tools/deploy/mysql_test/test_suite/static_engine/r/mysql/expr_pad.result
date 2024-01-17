@@ -6283,3 +6283,4 @@ select rpad('a', 8, '阿斯'), length(rpad('a', 8, '阿斯')) from dual;
 | a阿斯阿斯阿斯阿        |                             22 |
 +------------------------+--------------------------------+
 
+SET GLOBAL max_allowed_packet = 16777216;
