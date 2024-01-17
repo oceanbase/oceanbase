@@ -25,6 +25,8 @@ namespace oceanbase
 namespace storage
 {
 
+const ObLobCommon ObLobManager::ZERO_LOB = ObLobCommon();
+
 int ObLobManager::mtl_new(ObLobManager *&m) {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();

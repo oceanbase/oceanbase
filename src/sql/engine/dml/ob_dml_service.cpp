@@ -110,15 +110,11 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
                                                                   res_alloc,
                                                                   zero_obj))) {
           LOG_WARN("padding fixed string value failed", K(ret));
-        } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
-          LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
         } else if (OB_FAIL(row_datum.from_obj(zero_obj))) {
           LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
-        } else if (is_lob_storage(zero_obj.get_type()) &&
-                   OB_FAIL(ob_adjust_lob_datum(zero_obj, row.at(col_idx)->obj_meta_,
-                                               eval_ctx.exec_ctx_.get_allocator(),
-                                               row_datum))) {
-          LOG_WARN("adjust lob datum failed", K(ret), K(i), K(col_idx),
+        } else if (zero_obj.is_lob_storage() && !row.at(col_idx)->obj_meta_.has_lob_header()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("has lob header mark is wrong", K(ret), K(i), K(col_idx),
             K(zero_obj.get_meta()), K(row.at(col_idx)->obj_meta_));
         } else {
           //output warning msg
