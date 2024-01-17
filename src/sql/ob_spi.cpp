@@ -8686,7 +8686,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
   CK (OB_NOT_NULL(routine_info));
   CK (OB_NOT_NULL(dblink_proxy = GCTX.dblink_proxy_));
   OX (tenant_id = session->get_effective_tenant_id());
-  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type));
+  OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, routine_info->get_dblink_id(), *session, link_type, true));
   CK (OB_NOT_NULL(dblink_conn));
   if (DBLINK_DRV_OB == link_type) {
     OZ (ObPLDblinkUtil::print_dblink_call_stmt(allocator, *session, call_stmt, params, routine_info));
@@ -8721,15 +8721,6 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
   }
 
-  if (OB_NOT_NULL(dblink_proxy) && OB_NOT_NULL(dblink_conn)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(link_type, dblink_conn))) {
-      LOG_WARN("failed to relese connection", K(tmp_ret));
-    }
-    if (OB_SUCC(ret)) {
-      ret = tmp_ret;
-    }
-  }
   return ret;
 }
 
