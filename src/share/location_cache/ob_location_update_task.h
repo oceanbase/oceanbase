@@ -57,7 +57,6 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
-  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -65,7 +64,6 @@ public:
   virtual bool operator!=(const ObLSLocationUpdateTask &other) const;
   virtual bool compare_without_version(const ObLSLocationUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
-  virtual int assign_when_equal(const ObLSLocationUpdateTask &other);
 
   inline int64_t get_cluster_id() const { return cluster_id_; }
   inline int64_t get_tenant_id() const { return tenant_id_; }
@@ -106,7 +104,6 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return false; }
-  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -114,7 +111,6 @@ public:
   virtual bool operator!=(const ObTabletLSUpdateTask &other) const;
   virtual bool compare_without_version(const ObTabletLSUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
-  virtual int assign_when_equal(const ObTabletLSUpdateTask &other);
 
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline ObTabletID get_tablet_id() const { return tablet_id_; }
@@ -181,7 +177,6 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
-  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -189,7 +184,6 @@ public:
   virtual bool operator!=(const ObVTableLocUpdateTask &other) const;
   virtual bool compare_without_version(const ObVTableLocUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
-  virtual int assign_when_equal(const ObVTableLocUpdateTask &other);
 
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
@@ -229,7 +223,6 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }  // process 1 task each time
-  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -237,7 +230,6 @@ public:
   virtual bool operator!=(const ObTabletLocationBroadcastTask &other) const;
   virtual bool compare_without_version(const ObTabletLocationBroadcastTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
-  virtual int assign_when_equal(const ObTabletLocationBroadcastTask &other);
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline const ObTransferTaskID &get_task_id() const { return task_id_; }

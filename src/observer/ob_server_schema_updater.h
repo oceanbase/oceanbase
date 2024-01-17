@@ -77,13 +77,6 @@ public:
   uint64_t get_tenant_id() const { return schema_info_.get_tenant_id(); }
   uint64_t get_schema_version() const { return schema_info_.get_schema_version(); }
 
-  inline bool need_assign_when_equal() const { return false; }
-  inline int assign_when_equal(const ObServerSchemaTask &other)
-  {
-    UNUSED(other);
-    return common::OB_NOT_SUPPORTED;
-  }
-
   TO_STRING_KV(K_(type), K_(did_retry), K_(schema_info));
 
 private:
