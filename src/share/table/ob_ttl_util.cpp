@@ -1137,7 +1137,11 @@ int ObTTLUtil::get_tenant_table_ids(const uint64_t tenant_id, ObIArray<uint64_t>
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  if (!schema_service.is_tenant_full_schema(tenant_id)) {
+    ret = OB_EAGAIN;
+    LOG_INFO("tenant does not has a full schema already, maybe server is restart, need retry!");
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, table_id_array))) {
     LOG_WARN("fail to get table ids in tenant", KR(ret), K(tenant_id));
