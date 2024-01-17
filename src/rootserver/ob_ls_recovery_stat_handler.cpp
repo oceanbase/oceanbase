@@ -493,8 +493,13 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
       LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     }
   }
-  if (FAILEDx(try_reload_and_fix_config_version_(palf_stat_second.config_version_))) {
-    LOG_WARN("failed to try reload and fix config version", KR(ret), K(palf_stat_second));
+  if (is_strong_leader(palf_stat_second.role_)) {
+    //优先把正确的config_version更新到内部表和内存中
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(try_reload_and_fix_config_version_(palf_stat_second.config_version_))) {
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+      LOG_WARN("failed to try reload and fix config version", KR(tmp_ret), KR(ret), K(palf_stat_second));
+    }
   }
   return ret;
 }
@@ -547,10 +552,10 @@ int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
           K(proxy.get_results()));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < return_code_array.count(); ++i) {
-      if (OB_FAIL(return_code_array.at(i))) {
-        LOG_WARN("send rpc is failed", KR(ret), K(i), K(return_code_array));
+      if (OB_TMP_FAIL(return_code_array.at(i))) {
+        LOG_WARN("send rpc is failed", KR(tmp_ret), K(i), K(return_code_array));
       } else {
-        const auto *result = proxy.get_results().at(i);
+        const ObGetLSReplayedScnRes *result = proxy.get_results().at(i);
         if (OB_ISNULL(result)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("result is null", KR(ret), K(i), K(return_code_array));
