@@ -622,6 +622,7 @@ enum class RetireParentReason
   INVALID = 0,
   IS_FULL_MEMBER = 1,
   SELF_REGION_CHANGED = 2,
+  PARENT_CHILD_LOOP = 3,
 };
 
 inline const char *retire_parent_reason_2_str_(const RetireParentReason &reason) const
@@ -631,6 +632,7 @@ inline const char *retire_parent_reason_2_str_(const RetireParentReason &reason)
   {
     CHECK_REASON_STR(IS_FULL_MEMBER);
     CHECK_REASON_STR(SELF_REGION_CHANGED);
+    CHECK_REASON_STR(PARENT_CHILD_LOOP);
     default:
       return "Invalid";
   }
