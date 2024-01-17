@@ -6136,6 +6136,43 @@ int ObDDLService::lock_table(ObMySQLTransaction &trans,
   return ret;
 }
 
+int ObDDLService::lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchemaV2 &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t mview_id = table_schema.get_table_id();
+  observer::ObInnerSQLConnection *conn = nullptr;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_0_0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, mview is ");
+  } else if (OB_UNLIKELY(!table_schema.is_materialized_view())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(table_schema));
+  } else if (OB_ISNULL(conn = dynamic_cast<observer::ObInnerSQLConnection *>
+                       (trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn_ is NULL", KR(ret));
+  } else {
+    LOG_INFO("lock mview", KR(ret), K(mview_id), K(tenant_id), KPC(conn));
+    ObLockObjRequest lock_arg;
+    lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW;
+    lock_arg.obj_id_ = mview_id;
+    lock_arg.owner_id_ = ObTableLockOwnerID(0);
+    lock_arg.lock_mode_ = EXCLUSIVE;
+    lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
+    lock_arg.timeout_us_ = 0;
+    if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
+      LOG_WARN("fail to lock mview obj", KR(ret), K(tenant_id), K(lock_arg), KPC(conn));
+      ret = ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schema,
                                           ObMySQLTransaction &trans)
 {
@@ -6155,6 +6192,15 @@ int ObDDLService::lock_tables_of_database(const ObDatabaseSchema &database_schem
     LOG_WARN("fail to get table ids in database", K(tenant_id), K(database_id), K(ret));
   } else {
     const ObSimpleTableSchemaV2 *table_schema = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
+      table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema should not be null", K(ret));
+      } else if (table_schema->is_materialized_view() && OB_FAIL(lock_mview(trans, *table_schema))) {
+        LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); i++) {
       table_schema = table_schemas.at(i);
       if (OB_ISNULL(table_schema)) {
@@ -6195,6 +6241,21 @@ int ObDDLService::lock_tables_in_recyclebin(const ObDatabaseSchema &database_sch
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < recycle_objs.count(); ++i) {
+      const ObRecycleObject &recycle_obj = recycle_objs.at(i);
+      const ObSimpleTableSchemaV2* table_schema = NULL;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(recycle_obj.get_tenant_id(),
+          recycle_obj.get_table_id(), table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(recycle_obj));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table is not exist", K(ret), K(recycle_obj));
+        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(database_schema.get_database_name_str()),
+                       to_cstring(recycle_obj.get_object_name()));
+      } else if (table_schema->is_materialized_view() && OB_FAIL(lock_mview(trans, *table_schema))) {
+        LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < recycle_objs.count(); ++i) {
       const ObRecycleObject &recycle_obj = recycle_objs.at(i);
       const ObSimpleTableSchemaV2* table_schema = NULL;
@@ -20203,6 +20264,11 @@ int ObDDLService::check_table_schema_is_legal(const ObDatabaseSchema & database_
     LOG_WARN("truncate materialized view is not supported",
         KR(ret), K(table_name), K(table_id));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view is");
+  } else if (table_schema.mv_container_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("truncate materialized view container table is not supported",
+        KR(ret), K(table_name), K(table_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view container table is");
   } else {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("truncate table not exist", KR(ret), K(table_name), K(table_id), K(database_name));
@@ -20374,6 +20440,12 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate materialized view is not supported",
                  KR(ret), K(*orig_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view is");
+      } else if (orig_table_schema->mv_container_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("truncate materialized view container table is not supported",
+                 KR(ret), K(*orig_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate materialized view container table is");
       } else if (orig_table_schema->is_mlog_table()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate materialized view log is not supported", KR(ret));
@@ -22146,7 +22218,13 @@ int ObDDLService::purge_table(
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_shema is null", K(ret), K(database_id), K(arg.table_name_), K(object_name));
+    } else if (OB_UNLIKELY(table_schema->is_materialized_view() || table_schema->mv_container_table())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table type", KR(ret), K(arg), KPC(table_schema));
     }
+  } else if (OB_UNLIKELY(table_schema->is_materialized_view() || table_schema->mv_container_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table type", KR(ret), K(arg), KPC(table_schema));
   } else if (OB_FAIL(check_object_name_matches_db_name(tenant_id,
                                                        arg.table_name_,
                                                        database_id,
@@ -22610,15 +22688,18 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(ret));
         } else { /*maybe SYS_TABLE or VIRTUAL TABLE */ }
+      } else if (MATERIALIZED_VIEW == expected_table_type) {
+        if (!tmp_table_schema->is_materialized_view()) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("Table type not equal!", K(expected_table_type), K(table_item), K(ret));
+        }
       } else if (is_view) {
         if (SYSTEM_VIEW == tmp_table_schema->get_table_type()) {
           // let it go, for case compatible
         } else if (expected_table_type != tmp_table_schema->get_table_type()) {
           ret = OB_ERR_WRONG_OBJECT;
-          const char *view_type_str = (MATERIALIZED_VIEW == expected_table_type)?
-                                          "MATERIALIZED VIEW" : "VIEW";
           LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(table_item.database_name_),
-              to_cstring(table_item.table_name_), view_type_str);
+              to_cstring(table_item.table_name_), "VIEW");
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -22879,7 +22960,7 @@ int ObDDLService::collect_temporary_tables_in_session(const ObDropTableArg &cons
   return ret;
 }
 
-//same api for drop table, drop index, drop view
+//same api for drop table, drop index, drop view, drop materialized view
 //
 // mv rule:
 // If the deleted table has mv, you must first delete mv to delete this table
@@ -22970,7 +23051,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (OB_FAIL(lock_table(trans, *table_schema))) {
           LOG_WARN("fail to lock_table", KR(ret), KPC(table_schema));
         } else if (table_schema->is_materialized_view()) {
-          // lock mv container table
+          // lock mv and mv container table
           uint64_t container_table_id = table_schema->get_data_table_id();
           const ObTableSchema *container_table_schema = NULL;
           if (OB_FAIL(schema_guard.get_table_schema(
@@ -22980,6 +23061,8 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("container table schema should not be null",
                 KR(ret), K(tenant_id), K(container_table_id));
+          } else if (OB_FAIL(lock_mview(trans, *table_schema))) {
+            LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
           } else if (OB_FAIL(lock_table(trans, *container_table_schema))) {
             LOG_WARN("fail to lock_table", KR(ret), KPC(container_table_schema));
           }
@@ -23174,15 +23257,26 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           fail_for_fk_cons = true;
           ret = OB_SUCCESS;
         } else if (OB_TABLE_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
-          int tmp_ret = OB_SUCCESS;
-          ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = log_drop_warn_or_err_msg(table_item,
-                                                                drop_table_arg.if_exist_,
-                                                                err_table_list))) {
-            ret = tmp_ret;
-            LOG_WARN("log_drop_warn_or_err_msg failed", K(ret));
+          if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
+            if (!drop_table_arg.if_exist_) {
+              // OB_ERR_MVIEW_NOT_EXIST只能打印一个mview, 遇到第一个不存在的mview就报错退出循环
+              ret = OB_ERR_MVIEW_NOT_EXIST;
+              LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(table_item.database_name_), to_cstring(table_item.table_name_));
+            } else {
+              LOG_USER_NOTE(OB_ERR_MVIEW_NOT_EXIST, to_cstring(table_item.database_name_), to_cstring(table_item.table_name_));
+              ret = OB_SUCCESS;
+            }
           } else {
+            int tmp_ret = OB_SUCCESS;
             ret = OB_SUCCESS;
+            if (OB_SUCCESS != (tmp_ret = log_drop_warn_or_err_msg(table_item,
+                                                                  drop_table_arg.if_exist_,
+                                                                  err_table_list))) {
+              ret = tmp_ret;
+              LOG_WARN("log_drop_warn_or_err_msg failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+            }
           }
         }
       }
@@ -23196,7 +23290,6 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         switch(drop_table_arg.table_type_) {
           case TMP_TABLE:
           case USER_TABLE:
-          case MATERIALIZED_VIEW:
           case USER_VIEW: {
             if (fail_for_fk_cons) {
               ret = OB_ERR_TABLE_IS_REFERENCED;
@@ -23211,6 +23304,16 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           case USER_INDEX: {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("failed to drop index table", K(err_table_list), K(ret));
+            break;
+          }
+          case MATERIALIZED_VIEW: {
+            if (fail_for_fk_cons) {
+              ret = OB_ERR_TABLE_IS_REFERENCED;
+              LOG_WARN("Cannot drop table that is referenced by foreign key", K(ret));
+            } else {
+              ret = OB_ERR_MVIEW_NOT_EXIST;
+              LOG_WARN("failed to drop mview ", K(ret), K(drop_table_arg));
+            }
             break;
           }
           default: {
