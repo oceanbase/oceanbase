@@ -77,6 +77,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
+#include "logservice/ob_server_log_block_mgr.h"
 
 namespace oceanbase
 {
@@ -418,6 +419,7 @@ int ObRpcSetTenantConfigP::process()
 {
   LOG_INFO("process set tenant config", K(arg_));
   OTC_MGR.add_extra_config(arg_);
+  OTC_MGR.notify_tenant_config_changed(arg_.tenant_id_);
   return OB_SUCCESS;
 }
 
@@ -2886,6 +2888,61 @@ int ObCancelGatherStatsP::process()
   return ret;
 }
 
+int ObForceSetTenantLogDiskP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret));
+  } else if (OB_FAIL(GCTX.log_block_mgr_->force_update_tenant_log_disk(arg_.tenant_id_, arg_.log_disk_size_))) {
+    LOG_WARN("force_update_sys_tenant_log_disk failed", K(ret), "tenant_id", arg_.tenant_id_, "new_log_disk", arg_.log_disk_size_);
+  } else {
+    LOG_WARN("force_update_sys_tenant_log_disk success", K(ret), "tenant_id", arg_.tenant_id_, "new_log_disk", arg_.log_disk_size_);
+  }
+  return ret;
+}
 
+class ObDumpUnitInfoFunctor {
+public:
+  ObDumpUnitInfoFunctor(ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result) : result_(result) {}
+  int operator()()
+  {
+    int ret = OB_SUCCESS;
+    ObDumpServerUsageResult::ObUnitInfo info;
+    info.tenant_id_ = MTL_ID();
+    logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+    int64_t log_disk_size = 0, log_disk_in_use = 0;
+    if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log_service is nullptr", KP(log_service));
+    } else if (OB_FAIL(log_service->get_palf_stable_disk_usage(log_disk_in_use, log_disk_size))) {
+      LOG_WARN("get_palf_stable_disk_usage failed", KP(log_service));
+    } else {
+      info.log_disk_in_use_ = log_disk_in_use;
+      info.log_disk_size_ = log_disk_size;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(result_.push_back(info))) {
+      LOG_WARN("push_back failed", KR(ret), K(info));
+    }
+    return ret;
+  }
+private:
+  ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result_;
+};
+int ObForceDumpServerUsageP::process()
+{
+  int ret = OB_SUCCESS;
+  int64_t &log_disk_assigned = result_.server_info_.log_disk_assigned_;
+  int64_t &log_disk_capacity = result_.server_info_.log_disk_capacity_;
+  ObSArray<ObDumpServerUsageResult::ObUnitInfo> &result = result_.unit_info_;
+  ObDumpUnitInfoFunctor dump_unit_info(result);
+  if (OB_FAIL(GCTX.omt_->operate_in_each_tenant(dump_unit_info))) {
+    CLOG_LOG(WARN, "operate_in_each_tenant failed", KR(ret));
+  } else if (OB_FAIL(GCTX.log_block_mgr_->get_disk_usage(log_disk_assigned, log_disk_capacity))) {
+    CLOG_LOG(WARN, "get_disk_usage failed", KR(ret));
+  } else {}
+  return ret;
+}
 } // end of namespace observer
 } // end of namespace oceanbase
