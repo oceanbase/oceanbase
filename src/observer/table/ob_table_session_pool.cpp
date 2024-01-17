@@ -33,7 +33,7 @@ int ObTableApiSessPoolMgr::mtl_init(ObTableApiSessPoolMgr *&mgr)
 
 /*
   start tableapi retired session task
-  - 60 second interval
+  - 5 second interval
   - repeated
 */
 int ObTableApiSessPoolMgr::start()
@@ -45,7 +45,7 @@ int ObTableApiSessPoolMgr::start()
     LOG_WARN("table api session pool mgr isn't inited", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(),
                                  elimination_task_,
-                                 ELIMINATE_SESSION_DELAY/* 60s */,
+                                 ELIMINATE_SESSION_DELAY/* 5s */,
                                  true/* repeat */))) {
     LOG_WARN("failed to schedule tableapi retired session task", K(ret));
   } else {
@@ -377,7 +377,7 @@ int ObTableApiSessPool::move_node_to_retired_list(ObTableApiSessNode *node)
   1. remove session val in free_list.
   2. remove session node from retired_nodes_ when node is empty.
   3. free node memory.
-  4. delete 1000 session nodes per times
+  4. delete 2000 session nodes per times
 */
 int ObTableApiSessPool::evict_retired_sess()
 {
@@ -387,7 +387,7 @@ int ObTableApiSessPool::evict_retired_sess()
   ObLockGuard<ObSpinLock> guard(retired_nodes_lock_); // lock retired_nodes_
 
   DLIST_FOREACH_REMOVESAFE_X(node, retired_nodes_, delete_count < BACKCROUND_TASK_DELETE_SESS_NUM) {
-    if (cur_time - node->get_last_active_ts() < SESS_RETIRE_TIME) {
+    if (cur_time - node->get_last_active_ts() < SESS_UPDATE_TIME_INTERVAL) {
       // do nothing, this node maybe is from ObTableApiSessNodeReplaceOp, some threads maybe is using it.
       // we remove it next retire task.
     } else if (OB_FAIL(node->remove_unused_sess())) {
@@ -545,23 +545,31 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
 /*
   1. only call in login
   2. move old to retired list when node exist, create new node otherwise.
+  3. if the update interval is less than 5 seconds, ignore this update.
 */
 int ObTableApiSessPool::update_sess(ObTableApiCredential &credential)
 {
   int ret = OB_SUCCESS;
-
   ObTableApiSessNode *node = nullptr;
   const uint64_t key = credential.hash_val_;
+  int64_t cur_time = ObTimeUtility::current_time();
+
   if (OB_FAIL(get_sess_node(key, node))) {
     if (OB_HASH_NOT_EXIST == ret) { // not exist, create
       if (OB_FAIL(create_and_add_node_safe(credential))) {
         LOG_WARN("fail to create and add node", K(ret), K(credential));
+      } else {
+        ATOMIC_STORE(&last_update_ts_, cur_time);
       }
     } else {
       LOG_WARN("fail to get session node", K(ret), K(key));
     }
+  } else if (cur_time - last_update_ts_ < SESS_UPDATE_TIME_INTERVAL) {
+    // if the update interval is less than 5 seconds, ignore this update.
   } else if (OB_FAIL(replace_sess_node_safe(credential))) { // exist, create and replace old node
     LOG_WARN("fail to replace session node", K(ret), K(credential));
+  } else {
+    ATOMIC_STORE(&last_update_ts_, cur_time);
   }
 
   return ret;
