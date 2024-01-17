@@ -6999,6 +6999,9 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         OZ (ObSQLUtils::get_default_cast_mode(stmt::T_NONE, exec_ctx->get_my_session(), cast_mode));
       }
       // Step4: 获取结果并存储到变量
+      ObSEArray<std::pair<uint64_t, uint64_t>, OB_DEFAULT_SE_ARRAY_COUNT> package_vars_info;
+      lib::ObMemAttr attr(MTL_ID());
+      OX (package_vars_info.set_attr(attr));
       if (OB_SUCC(ret) && !is_bulk) { // [FETCH] INTO x, y, z OR [FETCH] INTO record
         /*
          * 若非多个variables，便是单个record。不可能是多个record或者record和variables混在一起。（详见oracle语法）
@@ -7083,6 +7086,15 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             OZ (store_into_result(ctx, cast_ctx, current_row, into_exprs, column_types, type_count,
                              into_count, exprs_not_null, pl_integer_ranges, return_types, return_type_count,
                              actual_column_count, row_desc, is_type_record));
+            for (int64_t i = 0; OB_SUCC(ret) && i < into_count; ++i) {
+              if (is_obj_access_expression(*into_exprs[i])) {
+                std::pair<uint64_t, uint64_t> package_var_info = std::pair<uint64_t, uint64_t>(OB_INVALID_ID, OB_INVALID_ID);
+                OZ (get_package_var_info_by_expr(into_exprs[i], package_var_info.first, package_var_info.second));
+                if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
+                  OZ (package_vars_info.push_back(package_var_info));
+                }
+              }
+            }
           }
         }
       }
@@ -7092,11 +7104,9 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
         ObObjParam result_address;
         ObArray<ObPLCollection*> bulk_tables;
         ObArray<ObCastCtx> cast_ctxs;
-        ObArray<std::pair<uint64_t, uint64_t>> package_vars_info;
         ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_BULK_INTO), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         OZ (bulk_tables.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         OZ (cast_ctxs.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
-        OZ (package_vars_info.reserve(OB_DEFAULT_SE_ARRAY_COUNT));
         for (int64_t i = 0; OB_SUCC(ret) && i < into_count; ++i) {
           ObPLCollection *table = NULL;
           std::pair<uint64_t, uint64_t> package_var_info = std::pair<uint64_t, uint64_t>(OB_INVALID_ID, OB_INVALID_ID);
@@ -7119,7 +7129,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           }
           OZ (get_package_var_info_by_expr(result_expr, package_var_info.first, package_var_info.second));
           if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
-            OX (package_vars_info.push_back(package_var_info));
+            OZ (package_vars_info.push_back(package_var_info));
           }
           // collection may modified by sql fetch, which can be reset and allocator will change, such like stmt a:=b in trigger
           // so allocator of collection can not be used by collect_cells.
@@ -7229,13 +7239,13 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           OZ (store_result(ctx, bulk_tables, row_count, type_count, tmp_result,
                           NULL == implicit_cursor ? false : implicit_cursor->get_in_forall(), is_type_record));
         }
-        // update package info
-        for (int64_t i = 0; OB_SUCC(ret) && i < package_vars_info.count(); i++) {
-          OZ (spi_update_package_change_info(ctx, package_vars_info.at(i).first, package_vars_info.at(i).second));
-        }
         if (!for_cursor && OB_NOT_NULL(implicit_cursor)) {
           OX (implicit_cursor->set_rowcount(row_count)); // 设置隐式游标
         }
+      }
+      // update package info
+      for (int64_t i = 0; OB_SUCC(ret) && i < package_vars_info.count(); i++) {
+        OZ (spi_update_package_change_info(ctx, package_vars_info.at(i).first, package_vars_info.at(i).second));
       }
 
       if (OB_SUCC(ret) && not_found) {
