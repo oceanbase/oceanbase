@@ -39,21 +39,8 @@ int ob_is_bypass_pcode(uint32_t pcode)
   int bret = 0;
   if (pcode >= OB_TABLE_API_LOGIN &&  pcode <= OB_TABLE_API_MOVE) { //table_api
     bret = 1;
-  }
-  #ifdef OB_BUILD_ARBITRATION
-    else if (OB_CREATE_ARB == pcode || OB_DELETE_ARB == pcode
-           || OB_LOG_FORCE_CLEAR_ARB_CLUSTER_INFO == pcode
-           || OB_ARB_CLUSTER_OP == pcode) { //arb
-    bret = 1;
-  }
-  #endif
-    else if (OB_SET_MEMBER_LIST == pcode || OB_ARB_GC_NOTIFY == pcode
-           || OB_SET_CONFIG == pcode) { //arb
-    bret = 1;
-  } else if (pcode >= OB_LOG_PUSH_REQ && pcode <= OB_LOG_BATCH_FETCH_RESP) { //arb
-    bret = 1;
   } else if (OB_LOG_REQ_START_LSN_BY_TS == pcode || OB_LS_FETCH_LOG2 == pcode
-            ||OB_LS_FETCH_MISSING_LOG == pcode) { //libcdc or standby cluster
+            || OB_LS_FETCH_MISSING_LOG == pcode) { //libcdc or standby cluster
     bret = 1;
   }
   return bret;
