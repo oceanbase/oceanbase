@@ -361,6 +361,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
         op->get_monitor_info().set_plan_depth(plan_depth_);
         op->get_monitor_info().set_tenant_id(GET_MY_SESSION(exec_ctx)->get_effective_tenant_id());
         op->get_monitor_info().open_time_ = oceanbase::common::ObClockGenerator::getClock();
+        op->get_monitor_info().set_rich_format(use_rich_format_);
       }
     }
 
