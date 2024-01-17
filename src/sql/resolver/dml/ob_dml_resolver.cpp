@@ -13173,7 +13173,10 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_OPTIMIZER_FEATURES_ENABLE: {
       CHECK_HINT_PARAM(hint_node, 1) {
         uint64_t version = 0;
-        if (OB_FAIL(ObClusterVersion::get_version(child0->str_value_, version))) {
+        ObString ver_str(child0->str_len_, child0->str_value_);
+        if (ver_str.empty()) {
+          global_hint.merge_opt_features_version_hint(LASTED_COMPAT_VERSION);
+        } else if (OB_FAIL(ObClusterVersion::get_version(ver_str, version))) {
           ret = OB_SUCCESS; // just ignore this invalid hint
           LOG_WARN("failed to get version in hint");
         } else {
