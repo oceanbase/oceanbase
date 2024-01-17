@@ -186,6 +186,8 @@ protected:
                                     const share::ObUnitInfoGetter::ObTenantConfig &expected_unit_config,
                                     share::ObUnitInfoGetter::ObTenantConfig &allowed_unit);
 
+private:
+  int update_tenant_freezer_config_();
 protected:
       static const int DEL_TRY_TIMES = 30;
       enum class ObTenantCreateStep {

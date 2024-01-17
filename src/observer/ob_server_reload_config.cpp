@@ -335,6 +335,13 @@ void ObServerReloadConfig::reload_tenant_scheduler_config_()
   }
 }
 
+int ObServerReloadConfig::ObReloadTenantFreezerConfOp::operator()()
+{
+  int ret = OB_SUCCESS;
+  MTL(ObTenantFreezer *)->reload_config();
+  return ret;
+}
+
 void ObServerReloadConfig::reload_tenant_freezer_config_()
 {
   int ret = OB_SUCCESS;
@@ -343,10 +350,7 @@ void ObServerReloadConfig::reload_tenant_freezer_config_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("omt should not be null", K(ret));
   } else {
-    auto f = [] () {
-      MTL(ObTenantFreezer *)->reload_config();
-      return OB_SUCCESS;
-    };
+    ObReloadTenantFreezerConfOp f;
     omt->operate_in_each_tenant(f);
   }
 }

@@ -1260,10 +1260,10 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
   } else {
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tenant_id))) {
-      if (OB_SUCCESS != (tmp_ret = update_palf_config())) {
+      if (OB_TMP_FAIL(update_palf_config())) {
         LOG_WARN("failed to update palf disk config", K(tmp_ret), K(tenant_id));
       }
-      if (OB_SUCCESS != (tmp_ret = update_tenant_dag_scheduler_config())) {
+      if (OB_TMP_FAIL(update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
       }
       if (OB_TMP_FAIL(update_tenant_ddl_config())) {
@@ -1271,6 +1271,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       }
       if (OB_TMP_FAIL(update_checkpoint_diagnose_config())) {
         LOG_WARN("failed to update tenant ddl config", K(tmp_ret), K(tenant_id));
+      }
+      if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
+        LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
     }
   }
@@ -1338,41 +1341,33 @@ int ObMultiTenant::update_checkpoint_diagnose_config()
   return ret;
 }
 
-int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
-                                                const int64_t tenant_min_mem,
-                                                const int64_t tenant_max_mem)
+int ObMultiTenant::update_tenant_freezer_config_()
 {
   int ret = OB_SUCCESS;
-  int64_t before_min_mem = 0;
-  int64_t before_max_mem = 0;
+  ObTenantFreezer *freezer = MTL(ObTenantFreezer*);
+  if (NULL == freezer) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant freezer should not be null", K(ret));
+  } else if (OB_FAIL(freezer->reload_config())) {
+    LOG_WARN("tenant freezer config update failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
+                                                   const int64_t tenant_min_mem,
+                                                   const int64_t tenant_max_mem)
+{
+  int ret = OB_SUCCESS;
 
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObTenantFreezer *freezer = nullptr;
-  if (OB_SUCC(ret)) {
-    if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
-      LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+  if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
   } else if (FALSE_IT(freezer = MTL(ObTenantFreezer *))) {
-  } else if (OB_FAIL(freezer->get_tenant_mem_limit(before_min_mem, before_max_mem))) {
-    if (OB_NOT_REGISTERED == ret) {//tenant mem limit has not been setted
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("get tenant memory fail", K(tenant_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (before_min_mem != tenant_min_mem
-        || before_max_mem != tenant_max_mem) {
-      LOG_INFO("tenant memory changed",
-               "before_min", before_min_mem,
-               "before_max", before_max_mem,
-               "after_min",  tenant_min_mem,
-               "after_max", tenant_max_mem);
-      freezer->set_tenant_mem_limit(tenant_min_mem, tenant_max_mem);
+  } else if (freezer->is_tenant_mem_changed(tenant_min_mem, tenant_max_mem)) {
+    if (OB_FAIL(freezer->set_tenant_mem_limit(tenant_min_mem, tenant_max_mem))) {
+      LOG_WARN("set tenant mem limit failed", K(ret));
     }
   }
   return ret;

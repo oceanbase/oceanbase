@@ -148,12 +148,6 @@ int ObTenantInfo::update_frozen_scn(int64_t frozen_scn)
   return ret;
 }
 
-int64_t ObTenantInfo::mem_memstore_left() const
-{
-  uint64_t memstore_hold = get_tenant_memory_hold(tenant_id_, ObCtxIds::MEMSTORE_CTX_ID);
-  return max(0, mem_memstore_limit_ - (int64_t)memstore_hold);
-}
-
 void ObTenantInfo::get_mem_limit(int64_t &lower_limit, int64_t &upper_limit) const
 {
   SpinRLockGuard guard(lock_);
@@ -169,17 +163,25 @@ void ObTenantInfo::update_mem_limit(const int64_t lower_limit,
   mem_upper_limit_ = upper_limit;
 }
 
-void ObTenantInfo::update_memstore_limit(const int64_t memstore_limit_percentage)
+void ObTenantInfo::update_memstore_limit(const int64_t tenant_memstore_limit_percentage)
 {
   SpinWLockGuard guard(lock_);
   int64_t tmp_var = mem_upper_limit_ / 100;
-  mem_memstore_limit_ = tmp_var * memstore_limit_percentage;
+  mem_memstore_limit_ = tmp_var * tenant_memstore_limit_percentage;
 }
 
 int64_t ObTenantInfo::get_memstore_limit() const
 {
   SpinRLockGuard guard(lock_);
   return mem_memstore_limit_;
+}
+
+bool ObTenantInfo::is_memstore_limit_changed(const int64_t curr_memstore_limit_percentage) const
+{
+  SpinRLockGuard guard(lock_);
+  const int64_t tmp_var = mem_upper_limit_ / 100;
+  const int64_t curr_mem_memstore_limit = tmp_var * curr_memstore_limit_percentage;
+  return (curr_mem_memstore_limit != mem_memstore_limit_);
 }
 
 void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const

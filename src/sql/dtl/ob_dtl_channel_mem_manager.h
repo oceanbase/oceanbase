@@ -72,6 +72,7 @@ private:
   int64_t get_used_memory_size();
   int64_t get_max_dtl_memory_size();
   int64_t get_max_tenant_memory_limit_size();
+  int get_memstore_limit_percentage_();
   void real_free(ObDtlLinkedBuffer *buf);
 private:
   uint64_t tenant_id_;
@@ -83,6 +84,7 @@ private:
 
   int64_t pre_alloc_cnt_;
   double max_mem_percent_;
+  int64_t memstore_limit_percent_;
 
   // some statistics
   int64_t alloc_cnt_;
@@ -105,7 +107,11 @@ OB_INLINE int64_t ObDtlChannelMemManager::get_max_dtl_memory_size()
 
 OB_INLINE int64_t ObDtlChannelMemManager::get_max_tenant_memory_limit_size()
 {
-  int64_t percent_execpt_memstore = 100 - GCONF.memstore_limit_percentage;
+  int ret = OB_SUCCESS;
+  if (0 == memstore_limit_percent_) {
+    get_memstore_limit_percentage_();
+  }
+  int64_t percent_execpt_memstore = 100 - memstore_limit_percent_;
   return lib::get_tenant_memory_limit(tenant_id_) * percent_execpt_memstore / 100;
 }
 
@@ -122,6 +128,7 @@ OB_INLINE bool ObDtlChannelMemManager::out_of_memory()
 
 OB_INLINE void ObDtlChannelMemManager::update_max_memory_percent()
 {
+  get_memstore_limit_percentage_();
   get_max_mem_percent();
 }
 

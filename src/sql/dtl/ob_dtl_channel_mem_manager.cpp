@@ -19,6 +19,7 @@
 #include "src/sql/dtl/ob_dtl_tenant_mem_manager.h"
 #include "share/ob_occam_time_guard.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -28,7 +29,7 @@ using namespace oceanbase::sql::dtl;
 
 ObDtlChannelMemManager::ObDtlChannelMemManager(uint64_t tenant_id, ObDtlTenantMemManager &tenant_mgr) :
   tenant_id_(tenant_id), size_per_buffer_(GCONF.dtl_buffer_size), seqno_(-1), allocator_(tenant_id), pre_alloc_cnt_(0),
-  max_mem_percent_(0), alloc_cnt_(0), free_cnt_(0), real_alloc_cnt_(0), real_free_cnt_(0), tenant_mgr_(tenant_mgr),
+  max_mem_percent_(0), memstore_limit_percent_(0), alloc_cnt_(0), free_cnt_(0), real_alloc_cnt_(0), real_free_cnt_(0), tenant_mgr_(tenant_mgr),
   mem_used_(0), last_update_memory_time_(-1)
 {}
 
@@ -61,6 +62,15 @@ int ObDtlChannelMemManager::get_max_mem_percent()
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to init tenant config", K(tenant_id_), K(ret));
+  }
+  return ret;
+}
+
+int ObDtlChannelMemManager::get_memstore_limit_percentage_()
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id_) {
+    memstore_limit_percent_ = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
   }
   return ret;
 }
@@ -107,10 +117,9 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
   if (nullptr != allocated_buf) {
   } else if (out_of_memory()) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    int64_t memstore_percent = GCONF.memstore_limit_percentage;
     LOG_WARN("the memory of dtl reach the maxinum memory limit", K(ret), K(get_used_memory_size()),
       K(get_max_tenant_memory_limit_size()), K(get_max_dtl_memory_size()),
-      K(max_mem_percent_), K(memstore_percent), K(allocated_buf), K(size));
+      K(max_mem_percent_), K_(memstore_limit_percent), K(allocated_buf), K(size));
   } else {
     const int64_t alloc_size = sizeof (ObDtlLinkedBuffer)
         + std::max(size, size_per_buffer_);
