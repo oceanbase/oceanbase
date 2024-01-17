@@ -163,17 +163,21 @@ int ObServerInfoInTable::build_server_status(share::ObServerStatus &server_statu
   int ret = OB_SUCCESS;
   const int64_t now = ::oceanbase::common::ObTimeUtility::current_time();
   server_status.reset();
+  int64_t build_version_len = build_version_.size();
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid server info", KR(ret), KPC(this));
   } else if (OB_FAIL(server_status.zone_.assign(zone_))) {
     LOG_WARN("fail to assign zone", KR(ret), K(zone_));
+  } else if (build_version_len >= OB_SERVER_VERSION_LENGTH) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("build_version is too long", KR(ret), K(build_version_len));
   } else {
     server_status.server_ = server_;
     server_status.id_ = server_id_;
     server_status.sql_port_ = sql_port_;
     server_status.with_rootserver_ = with_rootserver_;
-    strncpy(server_status.build_version_, build_version_.ptr(), OB_SERVER_VERSION_LENGTH);
+    strncpy(server_status.build_version_, build_version_.ptr(), build_version_len);
     server_status.stop_time_ = stop_time_;
     server_status.start_service_time_ = start_service_time_;
     server_status.last_offline_time_ = last_offline_time_;
@@ -975,6 +979,7 @@ int ObServerTableOperator::insert_dml_builder(
   char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   const char *display_status_str = NULL;
   dml.reset();
+  int64_t build_version_len = strlen(server_status.build_version_);
   if (OB_UNLIKELY(!server_status.is_valid()
       || !server_status.server_.ip_to_string(svr_ip, sizeof(svr_ip)))) {
     ret = OB_INVALID_ARGUMENT;
@@ -986,6 +991,9 @@ int ObServerTableOperator::insert_dml_builder(
   } else if (OB_ISNULL(display_status_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null display status string", KR(ret), KP(display_status_str));
+  } else if (OB_UNLIKELY(build_version_len >= OB_SERVER_VERSION_LENGTH)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("build_version is too long", KR(ret), K(build_version_len));
   } else {
     if (OB_FAIL(dml.add_pk_column(K(svr_ip)))
         || OB_FAIL(dml.add_pk_column("svr_port", server_status.server_.get_port()))

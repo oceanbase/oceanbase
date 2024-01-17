@@ -1529,14 +1529,15 @@ int ObService::check_server_for_adding_server(
         KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
   } else {
     bool server_empty = false;
+    char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
     if (OB_FAIL(check_server_empty(server_empty))) {
       LOG_WARN("check_server_empty failed", KR(ret));
+    } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", KR(ret));
     } else {
-      char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
       ObServerInfoInTable::ObBuildVersion build_version_string;
       ObZone zone;
       int64_t sql_port = GCONF.mysql_port;
-      get_package_and_svn(build_version, sizeof(build_version));
 
       if (OB_SUCC(ret) && server_empty) {
         uint64_t server_id = arg.get_server_id();
@@ -1634,8 +1635,9 @@ int ObService::get_build_version(share::ObServerInfoInTable::ObBuildVersion &bui
   int ret = OB_SUCCESS;
   char build_version_char_array[common::OB_SERVER_VERSION_LENGTH] = {0};
   build_version.reset();
-  get_package_and_svn(build_version_char_array, sizeof(build_version));
-  if (OB_FAIL(build_version.assign(build_version_char_array))) {
+  if (OB_FAIL(get_package_and_svn(build_version_char_array, sizeof(build_version_char_array)))) {
+    LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(build_version.assign(build_version_char_array))) {
     LOG_WARN("fail to assign build_version", KR(ret), K(build_version_char_array));
   }
   return ret;
