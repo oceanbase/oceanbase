@@ -1554,7 +1554,23 @@ struct NullAwareAntiJoinInfo {
 
     int init_filter_selectivity(ObCostTableScanInfo &est_cost_info);
 
-    int init_column_store_est_info(const uint64_t table_id, ObCostTableScanInfo &est_cost_info);
+    int init_column_store_est_info(const uint64_t table_id,
+                                   const uint64_t ref_id,
+                                   ObCostTableScanInfo &est_cost_info);
+
+    int init_column_store_est_info_with_filter(const uint64_t table_id,
+                                                    ObCostTableScanInfo &est_cost_info,
+                                                    const OptTableMetas& table_opt_meta,
+                                                    ObIArray<ObRawExpr*> &filters,
+                                                    ObIArray<ObCostColumnGroupInfo> &column_group_infos,
+                                                    ObSqlBitSet<> &used_column_ids,
+                                                    FilterCompare &filter_compare,
+                                                    const bool use_filter_sel);
+
+    int init_column_store_est_info_with_other_column(const uint64_t table_id,
+                                                    ObCostTableScanInfo &est_cost_info,
+                                                    const OptTableMetas& table_opt_meta,
+                                                    ObSqlBitSet<> &used_column_ids);
 
     int will_use_das(const uint64_t table_id,
                      const uint64_t ref_id,

@@ -1661,6 +1661,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->for_update_ = table_item->for_update_;
     ap->use_skip_scan_ = use_skip_scan;
     ap->use_column_store_ = use_column_store;
+    ap->est_cost_info_.use_column_store_ = use_column_store;
     ap->contain_das_op_ = ap->use_das_;
     if (OB_FAIL(init_sample_info_for_access_path(ap, table_id))) {
       LOG_WARN("failed to init sample info", K(ret));
@@ -1719,8 +1720,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         LOG_WARN("failed to assign expr constraints", K(ret));
       } else if (OB_FAIL(append(ap->expr_constraints_, helper.expr_constraints_))) {
         LOG_WARN("append expr constraints failed", K(ret));
-      } else if (use_column_store &&
-                 OB_FAIL(init_column_store_est_info(table_id, ap->est_cost_info_))) {
+      } else if (OB_FAIL(init_column_store_est_info(table_id, ref_id, ap->est_cost_info_))) {
         LOG_WARN("failed to init column store est cost info", K(ret));
       } else {
         access_path = ap;
@@ -1802,21 +1802,103 @@ int ObJoinOrder::init_filter_selectivity(ObCostTableScanInfo &est_cost_info)
   return ret;
 }
 
-int ObJoinOrder::init_column_store_est_info(const uint64_t table_id, ObCostTableScanInfo &est_cost_info)
+int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
+                                            const uint64_t ref_id,
+                                            ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
+  bool index_back_will_use_row_store = false;
+  bool index_back_will_use_column_store = false;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null plan", K(ret));
+  } else if (OB_FAIL(get_plan()->will_use_column_store(OB_INVALID_ID,
+                                                       ref_id,
+                                                       index_back_will_use_column_store,
+                                                       index_back_will_use_row_store))) {
+    LOG_WARN("failed to check will use column store", K(ret));
+  } else if (est_cost_info.use_column_store_ || !index_back_will_use_row_store) {
+    FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
+    std::sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
+    ObSqlBitSet<> used_column_ids;
+    est_cost_info.use_column_store_ = true;
+    est_cost_info.index_back_with_column_store_ = !index_back_will_use_row_store;
+    const OptTableMetas& table_opt_meta = get_plan()->get_basic_table_metas();
+    ObIArray<ObCostColumnGroupInfo> &index_scan_column_group_infos = est_cost_info.index_scan_column_group_infos_;
+    ObIArray<ObCostColumnGroupInfo> &index_back_column_group_infos = est_cost_info.index_meta_info_.is_index_back_ ?
+                                                          est_cost_info.index_back_column_group_infos_
+                                                          : est_cost_info.index_scan_column_group_infos_;
+    //add column group with prefix filters
+    if (OB_FAIL(init_column_store_est_info_with_filter(table_id,
+                                                        est_cost_info,
+                                                        table_opt_meta,
+                                                        est_cost_info.prefix_filters_,
+                                                        index_scan_column_group_infos,
+                                                        used_column_ids,
+                                                        filter_compare,
+                                                        false))) {
+      LOG_WARN("failed to init column store est info with filter", K(ret));
+    }
+    else if (OB_FAIL(init_column_store_est_info_with_filter(table_id,
+                                                            est_cost_info,
+                                                            table_opt_meta,
+                                                            est_cost_info.pushdown_prefix_filters_,
+                                                            index_scan_column_group_infos,
+                                                            used_column_ids,
+                                                            filter_compare,
+                                                            false))) {
+      LOG_WARN("failed to init column store est info with filter", K(ret));
+    }
+    //add column group with postfix filters
+    else if (OB_FAIL(init_column_store_est_info_with_filter(table_id,
+                                                            est_cost_info,
+                                                            table_opt_meta,
+                                                            est_cost_info.postfix_filters_,
+                                                            index_scan_column_group_infos,
+                                                            used_column_ids,
+                                                            filter_compare,
+                                                            true))) {
+      LOG_WARN("failed to init column store est info with filter", K(ret));
+    }
+    //add column group with index back filters
+    else if (OB_FAIL(init_column_store_est_info_with_filter(table_id,
+                                                            est_cost_info,
+                                                            table_opt_meta,
+                                                            est_cost_info.table_filters_,
+                                                            index_back_column_group_infos,
+                                                            used_column_ids,
+                                                            filter_compare,
+                                                            true))) {
+      LOG_WARN("failed to init column store est info with filter", K(ret));
+    }
+    //add other column group
+    else if (OB_FAIL(init_column_store_est_info_with_other_column(table_id,
+                                                                  est_cost_info,
+                                                                  table_opt_meta,
+                                                                  used_column_ids))) {
+      LOG_WARN("failed to init column store est info with other column", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
+                                                        ObCostTableScanInfo &est_cost_info,
+                                                        const OptTableMetas& table_opt_meta,
+                                                        ObIArray<ObRawExpr*> &filters,
+                                                        ObIArray<ObCostColumnGroupInfo> &column_group_infos,
+                                                        ObSqlBitSet<> &used_column_ids,
+                                                        FilterCompare &filter_compare,
+                                                        const bool use_filter_sel)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> filter_columns;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null plan", K(ret));
-  } else {
-  FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
-  std::sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
-  ObSEArray<ObRawExpr*, 4> filter_columns;
-  ObSqlBitSet<> used_column_ids;
-  est_cost_info.use_column_store_ = true;
-  const OptTableMetas& table_opt_meta = get_plan()->get_basic_table_metas();
-  for (int i = 0; OB_SUCC(ret) && i < est_cost_info.table_filters_.count(); ++i) {
-    ObRawExpr *filter = est_cost_info.table_filters_.at(i);
+  }
+  for (int i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    ObRawExpr *filter = filters.at(i);
     filter_columns.reuse();
     if (OB_FAIL(ObRawExprUtils::extract_column_exprs(filter,
                                                     filter_columns))) {
@@ -1837,6 +1919,8 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id, ObCostTable
                                     col_expr->get_column_id());
         if (used_column_ids.has_member(col_expr->get_column_id())) {
           //do nothing
+        } else if (OB_FAIL(used_column_ids.add_member(col_expr->get_column_id()))) {
+          LOG_WARN("failed to add memeber", K(ret));
         } else if (OB_ISNULL(col_opt_meta) || OB_ISNULL(col_item)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null column meta", K(ret));
@@ -1847,39 +1931,58 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id, ObCostTable
           cg_info.skip_rate_ = col_opt_meta->get_cg_skip_rate();
           if (OB_FAIL(cg_info.access_column_items_.push_back(*col_item))) {
             LOG_WARN("failed to push back filter", K(ret));
-          } else if (OB_FAIL(est_cost_info.column_group_infos_.push_back(cg_info))) {
+          } else if (OB_FAIL(column_group_infos.push_back(cg_info))) {
             LOG_WARN("failed to push back column group info", K(ret));
           }
         }
       }
     }
     //distribute filter
-    if (OB_SUCC(ret) && !filter_columns.empty()) {
-      ObRawExpr *expr = filter_columns.at(filter_columns.count()-1);
+    int max_pos = -1;
+    for (int j = 0; OB_SUCC(ret) && j < filter_columns.count(); ++j) {
+      ObRawExpr *expr = filter_columns.at(j);
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null expr", K(ret));
       } else if (expr->is_column_ref_expr()) {
         ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr*>(expr);
-        bool find = false;
-        for (int j = 0; OB_SUCC(ret) && !find && j < est_cost_info.column_group_infos_.count(); ++j) {
-          ObCostColumnGroupInfo &cg_info = est_cost_info.column_group_infos_.at(j);
+        int find_pos = -1;
+        for (int k = 0; OB_SUCC(ret) && find_pos < 0 && k < column_group_infos.count(); ++k) {
+          ObCostColumnGroupInfo &cg_info = column_group_infos.at(k);
           if (cg_info.column_id_ == col_expr->get_column_id()) {
-            find = true;
-            if (OB_FAIL(cg_info.filters_.push_back(filter))) {
-              LOG_WARN("failed to push back filter", K(ret));
-            } else {
-              cg_info.filter_sel_ *= filter_compare.get_selectivity(filter);
-            }
+            find_pos = k;
           }
         }
-        if (OB_SUCC(ret) && !find) {
+        if (OB_SUCC(ret) && find_pos < 0) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("can not find column group info for filter", K(ret));
+        } else if (find_pos > max_pos) {
+          max_pos = find_pos;
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (max_pos < 0 || max_pos >= column_group_infos.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("can not find column group info for filter", K(ret));
+    } else if (OB_FAIL(column_group_infos.at(max_pos).filters_.push_back(filter))) {
+      LOG_WARN("failed to push back filter", K(ret));
+    } else if (use_filter_sel) {
+      column_group_infos.at(max_pos).filter_sel_ *= filter_compare.get_selectivity(filter);
+    }
   }
+  return ret;
+}
+
+int ObJoinOrder::init_column_store_est_info_with_other_column(const uint64_t table_id,
+                                                              ObCostTableScanInfo &est_cost_info,
+                                                              const OptTableMetas& table_opt_meta,
+                                                              ObSqlBitSet<> &used_column_ids)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObCostColumnGroupInfo> &column_group_infos = est_cost_info.index_meta_info_.is_index_back_ ?
+                                          est_cost_info.index_back_column_group_infos_
+                                          : est_cost_info.index_scan_column_group_infos_;
   for (int i = 0; OB_SUCC(ret) && i < est_cost_info.access_column_items_.count(); ++i) {
     uint64_t column_id = est_cost_info.access_column_items_.at(i).column_id_;
     const OptColumnMeta* col_opt_meta = table_opt_meta.get_column_meta_by_table_id(
@@ -1903,11 +2006,10 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id, ObCostTable
       cg_info.column_id_ = column_id;
       if (OB_FAIL(cg_info.access_column_items_.push_back(est_cost_info.access_column_items_.at(i)))) {
         LOG_WARN("failed to push back filter", K(ret));
-      } else if (OB_FAIL(est_cost_info.column_group_infos_.push_back(cg_info))) {
+      } else if (OB_FAIL(column_group_infos.push_back(cg_info))) {
         LOG_WARN("failed to push back column group info", K(ret));
       }
     }
-  }
   }
   return ret;
 }

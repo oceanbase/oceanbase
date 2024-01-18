@@ -7697,11 +7697,11 @@ int ObSelectLogPlan::adjust_est_cost_info_for_column_store_plan(ObLogTableScan *
   } else if (OB_FAIL(table_scan->get_est_cost_info()->access_columns_.assign(used_column_ids))) {
     LOG_WARN("failed to assign column ids", K(ret));
   }
-  for (int64_t i = table_scan->get_est_cost_info()->column_group_infos_.count()-1; OB_SUCC(ret) && i >= 0; --i) {
-    ObCostColumnGroupInfo &info = table_scan->get_est_cost_info()->column_group_infos_.at(i);
+  for (int64_t i = table_scan->get_est_cost_info()->index_scan_column_group_infos_.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+    ObCostColumnGroupInfo &info = table_scan->get_est_cost_info()->index_scan_column_group_infos_.at(i);
     if (ObOptimizerUtil::find_item(used_column_ids, info.column_id_)) {
       //do nothing
-    } else if (OB_FAIL(table_scan->get_est_cost_info()->column_group_infos_.remove(i))) {
+    } else if (OB_FAIL(table_scan->get_est_cost_info()->index_scan_column_group_infos_.remove(i))) {
       LOG_WARN("failed to remove column group info", K(ret));
     }
   }
