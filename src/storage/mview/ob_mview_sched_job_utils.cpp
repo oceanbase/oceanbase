@@ -14,6 +14,7 @@
 
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 #include "storage/ob_common_id_utils.h"
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
@@ -53,7 +54,7 @@ int ObMViewSchedJobUtils::generate_job_id(
     if (OB_FAIL(ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
       LOG_WARN("failed to gen unique id by rpc", KR(ret), K(tenant_id));
     } else {
-      job_id = raw_id.id() + ObMViewSchedJobUtils::JOB_ID_OFFSET;
+      job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
     }
   }
   return ret;

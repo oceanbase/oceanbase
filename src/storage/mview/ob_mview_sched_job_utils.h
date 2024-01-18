@@ -101,9 +101,6 @@ public:
                                             const ParseNode &node,
                                             common::ObIAllocator &allocator,
                                             int64_t &timestamp);
-
-public:
-  static constexpr int64_t JOB_ID_OFFSET = 1000000L;
 };
 } // namespace storage
 } // namespace oceanbase
