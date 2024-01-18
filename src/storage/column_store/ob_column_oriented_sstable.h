@@ -189,7 +189,7 @@ protected:
   ObCOSSTableBaseType base_type_;
   bool is_empty_co_; // no need to create cg sstable when co sstable is empty
   bool valid_for_cs_reading_;
-  common::ObArenaAllocator tmp_allocator_; // TODO(@cangwu) remove this allocator later
+  common::ObArenaAllocator tmp_allocator_; // TODO(@jiahua.cjh) remove this allocator later
   DISALLOW_COPY_AND_ASSIGN(ObCOSSTableV2);
 };
 

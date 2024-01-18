@@ -12255,7 +12255,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'zhouxinlan.zxl',
+    owner = 'yunshan.tys',
     table_name = '__all_virtual_tablet_pointer_status',
     table_id   = '12317',
     table_type = 'VIRTUAL_TABLE',
@@ -12282,7 +12282,7 @@ def_table_schema(
 )
 
 def_table_schema(
-    owner = 'zhouxinlan.zxl',
+    owner = 'yunshan.tys',
     table_name = '__all_virtual_storage_meta_memory_status',
     table_id   = '12318',
     table_type = 'VIRTUAL_TABLE',
@@ -13343,7 +13343,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica']))
 
 def_table_schema(
-  owner = 'zhouxinlan.zxl',
+  owner = 'yunshan.tys',
   table_name = '__all_virtual_tablet_buffer_info',
   table_id = '12405',
   table_type = 'VIRTUAL_TABLE',

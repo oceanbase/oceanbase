@@ -814,7 +814,7 @@ bool ObBlockManager::GetOldestHoldBlockFunctor::operator()(
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
     } else if (OB_HASH_NOT_EXIST == ret) {
-      // TODO zhouxinlan.zxl : add new solutions to find leaked macro blocks
+      // TODO yunshan.tys : add new solutions to find leaked macro blocks
       if (0 != value.ref_cnt_ // not wash tablet block
           && (!oldest_hold_block_info_.macro_id_.is_valid()
               || value.access_time_ < oldest_hold_block_info_.last_access_time_)) {
