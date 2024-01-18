@@ -2144,9 +2144,6 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
       // Why use is_task_end_ rather than commit_scn_.
       // sqc may switch to follower, and the commit_scn will not be set.
       LOG_INFO("had already closed", K(ret));
-    } else if (get_commit_scn(tablet_handle.get_obj()->get_tablet_meta()).is_valid_and_not_min()) {
-      commit_scn = get_commit_scn(tablet_handle.get_obj()->get_tablet_meta());
-      FLOG_INFO("already committed", K(ret), K(commit_scn), "tablet_meta", tablet_handle.get_obj()->get_tablet_meta());
     } else if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_))) {
       LOG_WARN("init redo writer failed", K(ret), K(ls_id_), K(tablet_id_));
     } else {
@@ -2155,7 +2152,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
       if (OB_FAIL(direct_load_mgr_handle.set_obj(this))) {
         LOG_WARN("set direct load mgr handle failed", K(ret));
       } else if (OB_FAIL(redo_writer.write_commit_log(true, table_key_,
-          start_scn, direct_load_mgr_handle, commit_scn, is_remote_write, lock_tid))) {
+          start_scn, direct_load_mgr_handle, tablet_handle, commit_scn, is_remote_write, lock_tid))) {
         LOG_WARN("fail write ddl commit log", K(ret), K(table_key_), K(sqc_build_ctx_));
       }
     }

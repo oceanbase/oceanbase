@@ -2344,16 +2344,17 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       ObTabletHandle tablet_handle;
       if (OB_FAIL(data_tablet_mgr->wrlock(ObTabletDirectLoadMgr::TRY_LOCK_TIMEOUT, lock_tid))) {
         LOG_WARN("failed to wrlock", K(ret), K(arg_));
+      } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("get tablet failed", K(ret), K(table_key));
       } else if (OB_FAIL(sstable_redo_writer.write_commit_log(false,
                                                               table_key,
                                                               arg_.start_scn_,
                                                               direct_load_mgr_handle,
+                                                              tablet_handle,
                                                               commit_scn,
                                                               is_remote_write,
                                                               lock_tid))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-        LOG_WARN("get tablet failed", K(ret), K(table_key));
       } else if (OB_FAIL(data_tablet_mgr->commit(*tablet_handle.get_obj(),
                                                  arg_.start_scn_,
                                                  commit_scn,
