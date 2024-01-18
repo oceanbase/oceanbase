@@ -2238,7 +2238,7 @@ int ObMultiVersionSchemaService::add_schema(
       }
     }
     int64_t end_time = ObTimeUtility::current_time();
-    LOG_INFO("finish add schema", KR(ret), K(tenant_id), K(new_schema_version), "cost_ts", start_time - end_time);
+    LOG_INFO("finish add schema", KR(ret), K(tenant_id), K(new_schema_version), "cost_ts", end_time - start_time);
   }
   return ret;
 }
@@ -3366,6 +3366,7 @@ int ObMultiVersionSchemaService::try_eliminate_schema_mgr()
   // 2. try gc exist tenant's schema mgr
   // - another allocator (only for refresh)
   // - schema_mgr for fallback
+  // - current allocator (not latest)
   if (FAILEDx(try_gc_existed_tenant_schema_mgr())) {
     LOG_WARN("fail to gc existed tenant schema mgr", K(ret));
   }
@@ -3733,13 +3734,23 @@ int ObMultiVersionSchemaService::try_gc_current_allocator(
   } else {
     int64_t start_time = ObTimeUtility::current_time();
     ObArray<void *> current_ptrs;
+    int64_t refreshed_schema_version = OB_INVALID_VERSION;
+    int64_t latest_schema_version = OB_INVALID_VERSION;
     int64_t local_version = OB_INVALID_VERSION;
     lib::ObMutexGuard guard(schema_refresh_mutex_);
 
+    ObSchemaMgr *latest_schema_mgr = NULL;
     if (OB_FAIL(mem_mgr->get_current_ptrs(current_ptrs))) {
       LOG_WARN("fail to get another ptrs", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, local_version))) {
+    } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("fail to get local refreshed schema version", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(tenant_id, latest_schema_mgr))) {
+      LOG_WARN("fail to get schema mgr for cache", KR(ret), K(ret));
+    } else if (OB_ISNULL(latest_schema_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema_mgr is null", KR(ret), K(tenant_id));
+    } else if (FALSE_IT(latest_schema_version = latest_schema_mgr->get_schema_version())) {
+    } else if (FALSE_IT(local_version = min(refreshed_schema_version, latest_schema_version))) {
     } else if (!ObSchemaService::is_formal_version(local_version)) {
       LOG_TRACE("ignore to free current allocator when refreshed version is not formal", K(tenant_id), K(local_version));
     } else {
@@ -3757,11 +3768,13 @@ int ObMultiVersionSchemaService::try_gc_current_allocator(
           if (eli_schema_version >= local_version
               || (recycle_interval > ObClockGenerator::getClock() - eli_timestamp)) {
             LOG_TRACE("no need to gc current allocator's schema mgr", K(tenant_id), K(eli_timestamp),
-                      K(eli_schema_version), K(local_version), K(recycle_interval));
+                      K(eli_schema_version), K(local_version), K(refreshed_schema_version),
+                      K(latest_schema_version), K(recycle_interval));
           } else {
             //gc only those that have been put in the slot for more than recycle_interval
             LOG_INFO("try to gc current allocator's schema mgr which is in slot",
                      K(tenant_id), K(eli_schema_version), K(local_version),
+                     K(refreshed_schema_version), K(latest_schema_version),
                      K(eli_timestamp), K(recycle_interval));
             if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {
               if (OB_EAGAIN == ret) {
@@ -3796,6 +3809,7 @@ bool ObMultiVersionSchemaService::compare_schema_mgr_info_(
 // try to gc current and another allocators' schema mgr, it can reduce the number of schema mgr in the foreground
 // 1.reserve_mgr_count can let us reserve the number of total schema mgr
 // 2.we can turn this off by set _schema_memory_recycle_interval to zero
+ERRSIM_POINT_DEF(ERRSIM_GC_ALLOCATOR_WHEN_REFRESH_SCHEMA);
 int ObMultiVersionSchemaService::try_gc_allocator_when_add_schema_(
     const uint64_t tenant_id,
     ObSchemaMemMgr *&mem_mgr,
@@ -3803,10 +3817,13 @@ int ObMultiVersionSchemaService::try_gc_allocator_when_add_schema_(
 {
   int ret = OB_SUCCESS;
   ObArray<void *> all_ptrs;
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  int64_t latest_schema_version = OB_INVALID_VERSION;
   int64_t local_version = OB_INVALID_VERSION;
   int64_t reserve_version = OB_INVALID_VERSION;
   int64_t start_time = ObTimeUtility::current_time();
   const int64_t reserve_mgr_count = RESERVE_SCHEMA_MGR_CNT;
+  ObSchemaMgr *latest_schema_mgr = NULL;
   if (OB_ISNULL(mem_mgr) || OB_ISNULL(schema_mgr_cache)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("mem_mgr or schema_mgr_cahe is null",
@@ -3814,12 +3831,22 @@ int ObMultiVersionSchemaService::try_gc_allocator_when_add_schema_(
   } else if (0 > reserve_mgr_count) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("reserve_mgr_count is less than zero", KR(ret));
+  } else if (OB_UNLIKELY(ERRSIM_GC_ALLOCATOR_WHEN_REFRESH_SCHEMA)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("inject error when ERRSIM_GC_ALLOCATOR_WHEN_REFRESH_SCHEMA is set", KR(ret));
   } else if (0 == GCONF._schema_memory_recycle_interval) {
     // ignore
   } else if (OB_FAIL(mem_mgr->get_all_ptrs(all_ptrs))) {
     LOG_WARN("fail to get another ptrs", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, local_version))) {
+  } else if (OB_FAIL(get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
     LOG_WARN("fail to get local refreshed schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_mgr_for_cache_map_.get_refactored(tenant_id, latest_schema_mgr))) {
+    LOG_WARN("fail to get schema mgr for cache", KR(ret), K(ret));
+  } else if (OB_ISNULL(latest_schema_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_mgr is null", KR(ret), K(tenant_id));
+  } else if (FALSE_IT(latest_schema_version = latest_schema_mgr->get_schema_version())) {
+  } else if (FALSE_IT(local_version = min(refreshed_schema_version, latest_schema_version))) {
   } else if (!ObSchemaService::is_formal_version(local_version)) {
     LOG_TRACE("ignore to free current allocator when refreshed version is not formal", K(tenant_id), K(local_version));
   } else {
@@ -3864,10 +3891,12 @@ int ObMultiVersionSchemaService::try_gc_allocator_when_add_schema_(
         if (eli_schema_version >= local_version
             || eli_schema_version >= reserve_version) {
           LOG_TRACE("no need to gc allocator's schema mgr", K(tenant_id),
-                    K(eli_schema_version), K(local_version), K(reserve_version));
+                    K(eli_schema_version), K(local_version), K(refreshed_schema_version),
+                    K(latest_schema_version), K(reserve_version));
         } else {
           LOG_INFO("try to gc allocator's schema mgr which schema version is less than reserve_version",
-                    K(tenant_id), K(eli_schema_version), K(local_version), K(reserve_version));
+                   K(tenant_id), K(eli_schema_version), K(local_version), K(refreshed_schema_version),
+                   K(latest_schema_version), K(reserve_version));
           if (OB_FAIL(schema_mgr_cache->try_eliminate_schema_mgr(eli_schema_mgr))) {
             if (OB_EAGAIN == ret) {
               // schema mgr in use, just ignore
