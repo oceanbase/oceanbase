@@ -155,7 +155,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       last_update_tz_time_(0),
       is_client_sessid_support_(false),
       use_rich_vector_format_(false),
-      last_refresh_schema_version_(OB_INVALID_VERSION)
+      last_refresh_schema_version_(OB_INVALID_VERSION),
+      force_rich_vector_format_(ForceRichFormatStatus::Disable)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -443,6 +444,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
   use_rich_vector_format_ = true;
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   sess_bt_buff_pos_ = 0;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
@@ -4686,6 +4688,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     }
   }
   release_to_pool_ = OB_SUCC(ret);
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   }();
   return ret;
 }

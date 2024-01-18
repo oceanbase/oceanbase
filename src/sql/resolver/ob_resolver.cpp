@@ -1248,6 +1248,21 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         params_.query_ctx_->is_contain_select_for_update_ = is_contain_select_for_update;
         params_.query_ctx_->has_dml_write_stmt_ = dml_stmt->is_dml_write_stmt();
       }
+
+      if (OB_SUCC(ret)) {
+        bool has_rich_format_hint = false;
+        bool enable_rich_format = false;
+        ObOptParamHint &opt_hint = params_.query_ctx_->query_hint_.global_hint_.opt_params_;
+        if (OB_FAIL(opt_hint.check_and_get_bool_opt_param(ObOptParamHint::ENABLE_RICH_VECTOR_FORMAT,
+                                                          has_rich_format_hint,
+                                                          enable_rich_format))) {
+          LOG_WARN("check and get bool opt param failed", K(ret));
+        } else if (has_rich_format_hint) {
+          params_.session_info_->set_force_rich_format(
+            enable_rich_format ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON :
+                                 ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       stmt::StmtType stmt_type = stmt->get_stmt_type();

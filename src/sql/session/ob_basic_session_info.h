@@ -388,6 +388,13 @@ public:
     transaction::ObXATransID xid_;
   };
 
+  enum class ForceRichFormatStatus
+  {
+    Disable = 0,
+    FORCE_ON,
+    FORCE_OFF
+  };
+
 public:
   ObBasicSessionInfo(const uint64_t tenant_id);
   virtual ~ObBasicSessionInfo();
@@ -479,9 +486,32 @@ public:
   {
     use_rich_vector_format_ = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
                               && sys_vars_cache_.get_enable_rich_vector_format();
+    force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   }
   bool use_rich_format() const {
+    if (force_rich_vector_format_ != ForceRichFormatStatus::Disable) {
+      return force_rich_vector_format_ == ForceRichFormatStatus::FORCE_ON;
+    } else {
+      return use_rich_vector_format_;
+    }
+  }
+
+  bool initial_use_rich_format() const {
     return use_rich_vector_format_;
+  }
+
+  ObBasicSessionInfo::ForceRichFormatStatus get_force_rich_format_status() const
+  {
+    return force_rich_vector_format_;
+  }
+
+  void set_force_rich_format(ObBasicSessionInfo::ForceRichFormatStatus status)
+  {
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
+      force_rich_vector_format_ = status;
+    } else {
+      force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+    }
   }
   //getters
   const common::ObString get_tenant_name() const;
@@ -2297,6 +2327,11 @@ private:
   bool is_client_sessid_support_; //client session id support flag
   bool use_rich_vector_format_;
   int64_t last_refresh_schema_version_;
+  // rich format specified hint, e.g. `select /*+opt_param('enable_rich_vector_format', 'true')*/ * from t`
+  // force_rich_vector_format_ == FORCE_ON => use_rich_format() returns true
+  // force_rich_vector_format_ == FORCE_OFF => use_rich_format() returns false
+  // otherwise use_rich_format() returns use_rich_vector_format_
+  ForceRichFormatStatus force_rich_vector_format_;
 };
 
 
