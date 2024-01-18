@@ -632,12 +632,12 @@ int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
   if (OB_FAIL(schema_guard.get_udt_info(tenant_id, type_id, udt_info))) {
     OB_LOG(WARN, "get user type fail.", K(type_id), K(ret));
   } else if (NULL == udt_info) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "udt info is null.", K(type_id), K(ret));
   } else if (OB_FAIL(udt_info->transform_to_pl_type(allocator, user_type))) {
     OB_LOG(WARN, "faild to transform to pl type", K(ret));
   } else if (NULL == user_type) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     OB_LOG(WARN, "user type is null.", K(type_id), K(ret));
   } else {
     if (user_type->is_record_type()) {
