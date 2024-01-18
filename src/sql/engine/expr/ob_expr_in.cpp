@@ -747,13 +747,13 @@ int ObExprInOrNotIn::cg_expr_with_row(ObExprCGCtx &expr_cg_ctx,
           if (is_reverse_cmp_func) {
             // hash table use self as left, so here right param is left for cmp func
             func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
-              left_precs.at(i), rigth_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
+              right_types.at(i), left_types.at(i), right_scales.at(i), left_scales.at(i),
+              rigth_precs.at(i), left_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
               has_lob_headers.at(i));
           } else {
             func_ptr = ObExprCmpFuncsHelper::get_datum_expr_cmp_func(
-              right_types.at(i), left_types.at(i), right_scales.at(i), left_scales.at(i),
-              rigth_precs.at(i), left_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
+              left_types.at(i), right_types.at(i), left_scales.at(i), right_scales.at(i),
+              left_precs.at(i), rigth_precs.at(i), lib::is_oracle_mode(), left_cs_arr.at(i),
               has_lob_headers.at(i));
           }
           func_buf[i] = (void *)func_ptr;
