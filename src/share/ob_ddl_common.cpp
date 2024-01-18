@@ -1750,6 +1750,9 @@ int ObDDLUtil::check_schema_version_refreshed(
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_refreshed_schema_version(
       tenant_id, refreshed_schema_version))) {
     LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id), K(refreshed_schema_version));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SCHEMA_EAGAIN;
+    }
   } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < target_schema_version) {
     ret = OB_SCHEMA_EAGAIN;
     if (REACH_TIME_INTERVAL(1000L * 1000L)) {
