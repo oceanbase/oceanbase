@@ -740,6 +740,7 @@ class EventTable
 
       EN_ENABLE_SET_TRACE_CONTROL_INFO = 2100,
       EN_CHEN = 2101,
+      EN_UNIQ_TASK_QUEUE_GET_GROUP_FAIL = 2106,
 
       // WR && ASH
       EN_CLOSE_ASH = 2201,

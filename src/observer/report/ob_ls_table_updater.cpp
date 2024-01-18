@@ -109,13 +109,6 @@ bool ObLSTableUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObLSTableUpdateTask::assign_when_equal(
-    const ObLSTableUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 ObLSTableUpdateQueueSet::ObLSTableUpdateQueueSet(
     ObLSTableUpdater *updater)
     : inited_(false),
