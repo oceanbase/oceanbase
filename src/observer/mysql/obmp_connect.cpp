@@ -357,6 +357,7 @@ int ObMPConnect::process()
       session->set_sql_request_level(conn->sql_req_level_);
       // set session var sync info.
       session->set_session_var_sync(conn->proxy_cap_flags_.is_session_var_sync_support());
+      session->set_session_sync_support(conn->proxy_cap_flags_.is_session_sync_support());
       session->get_control_info().support_show_trace_ = conn->proxy_cap_flags_.is_flt_show_trace_support();
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
