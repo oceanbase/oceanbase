@@ -390,6 +390,7 @@ private:
   // use enable_lob_locator_v2_ to avoid locator type sudden change while table scan is running
   bool enable_lob_locator_v2_;
   bool is_spatial_index_;
+  bool is_fts_index_;
 };
 } //namespace schema
 } //namespace share
