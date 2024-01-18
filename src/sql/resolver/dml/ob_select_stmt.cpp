@@ -773,6 +773,18 @@ bool ObSelectStmt::has_for_update() const
   return bret;
 }
 
+bool ObSelectStmt::is_skip_locked() const
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < table_items_.count(); ++i) {
+    const TableItem *table_item = table_items_.at(i);
+    if (table_item != NULL && table_item->skip_locked_) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
 int ObSelectStmt::clear_sharable_expr_reference()
 {
   int ret = OB_SUCCESS;

@@ -511,6 +511,7 @@ public:
   }
   int add_having_expr(ObRawExpr *expr) { return having_exprs_.push_back(expr); }
   bool has_for_update() const;
+  bool is_skip_locked() const;
   common::ObIArray<ObColumnRefRawExpr*> &get_for_update_columns() { return for_update_columns_; }
   const common::ObIArray<ObColumnRefRawExpr *> &get_for_update_columns() const { return for_update_columns_; }
   bool contain_ab_param() const { return contain_ab_param_; }
