@@ -436,7 +436,7 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
     OB_LOG(WARN, "oss client init twice", K(ret));
   } else if (OB_ISNULL(storage_info.ptr()) || storage_info.length() >= OB_MAX_URI_LENGTH) {
     ret = OB_INVALID_ARGUMENT;
-    OB_LOG(WARN, "uri is too long", K(ret), K(storage_info), K(storage_info.length()));
+    OB_LOG(WARN, "uri is too long", K(ret), K(storage_info.length()));
   } else {
     // host=xxxx&access_id=xxx&access_key=xxx
     char tmp[OB_MAX_URI_LENGTH];
@@ -464,24 +464,24 @@ int ObOssAccount::parse_oss_arg(const common::ObString &storage_info)
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_oss_field(token + strlen(ACCESS_KEY), oss_key_, sizeof(oss_key_)))) {
-          OB_LOG(WARN, "failed to set oss_key_", K(ret), KCSTRING(token));
+          OB_LOG(WARN, "failed to set oss_key_", K(ret));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (OB_FAIL(set_delete_mode(token + strlen(DELETE_MODE)))) {
           OB_LOG(WARN, "failed to set delete mode", K(ret), K(token)); 
         }
       } else {
-        OB_LOG(DEBUG, "unkown oss info", K(*token), K(storage_info));
+        OB_LOG(DEBUG, "unkown oss info", K(*token), KP(storage_info.ptr()));
       }
     }
 
     if (strlen(oss_domain_) == 0 || strlen(oss_id_) == 0 || strlen(oss_key_) == 0) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "failed to parse oss info",
-          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_), KCSTRING(oss_key_), K(storage_info));
+          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_));
     } else {
       STORAGE_LOG(DEBUG, "success to parse oss info",
-          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_), KCSTRING(oss_key_), K(storage_info));
+          K(ret), KCSTRING(oss_domain_), KCSTRING(oss_id_));
     }
   }
   return ret;
@@ -498,7 +498,7 @@ int ObOssAccount::set_oss_field(const char *info, char *field, const int64_t len
     const int64_t info_len = strlen(info);
     if (info_len >= length) {
       ret = OB_INVALID_ARGUMENT;
-      OB_LOG(WARN, "info is too long ", K(ret), KCSTRING(info), K(length));
+      OB_LOG(WARN, "info is too long ", K(ret), K(info_len), K(length));
     } else {
       MEMCPY(field, info, info_len);
       field[info_len] = '\0';

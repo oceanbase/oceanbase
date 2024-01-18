@@ -42,7 +42,7 @@ int ObAdminIOAdapterBenchmarkExecutor::execute(int argc, char *argv[])
   if (OB_FAIL(parse_cmd_(argc, argv))) {
     OB_LOG(WARN, "failed to parse cmd", K(ret), K(argc), K(argv));
   } else if (OB_FAIL(run_all_tests_())) {
-    OB_LOG(WARN, "failed to pass all tests", K(ret), K_(base_path), K_(storage_info_str));
+    OB_LOG(WARN, "failed to pass all tests", K(ret), K_(base_path));
   }
   return ret;
 }
@@ -85,7 +85,7 @@ int ObAdminIOAdapterBenchmarkExecutor::parse_cmd_(int argc, char *argv[])
       }
       case 's': {
          if (OB_FAIL(databuff_printf(storage_info_str_, sizeof(storage_info_str_), "%s", optarg))) {
-          OB_LOG(WARN, "failed to copy storage info str", K(ret), K((char *)optarg));
+          OB_LOG(WARN, "failed to copy storage info str", K(ret));
         }
         break;
       }
@@ -240,7 +240,7 @@ int ObAdminIOAdapterBenchmarkExecutor::run_all_tests_()
 
   if (FALSE_IT(init_random_content())) {
   } else if (OB_FAIL(storage_info.set(base_path_, storage_info_str_))) {
-    OB_LOG(WARN, "failed to set storage info", K(ret), K_(base_path), K_(storage_info_str));
+    OB_LOG(WARN, "failed to set storage info", K(ret), K_(base_path));
   } else if (OB_FAIL(runner.init(base_path_, &storage_info, config_))) {
     OB_LOG(WARN, "fail to init ObBackupIoAdapterBenchmarkRunner",
         K(ret), K_(base_path), K(storage_info), K_(config));

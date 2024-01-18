@@ -57,7 +57,7 @@ void ObObjectDevice::destroy()
 ObObjectDevice::~ObObjectDevice()
 {
   destroy();
-  OB_LOG(INFO, "destory the device!", KCSTRING(storage_info_str_));
+  OB_LOG(INFO, "destory the device!", KP(storage_info_str_));
 }
 
 /*the app logical use call ObBackupIoAdapter::get_and_init_device*/
@@ -83,7 +83,7 @@ int ObObjectDevice::start(const ObIODOpts &opts)
     if (OB_SUCCESS != ret) {
       //mem resource will be free with device destroy
     } else if (OB_FAIL(util_.open(&storage_info_))) {
-      OB_LOG(WARN, "fail to open the util!", K(ret), KCSTRING(opts.opts_[0].value_.value_str));
+      OB_LOG(WARN, "fail to open the util!", K(ret), KP(opts.opts_[0].value_.value_str));
     } else if (OB_FAIL(fd_mng_.init())) {
       OB_LOG(WARN, "fail to init fd manager!", K(ret));
     } else {
