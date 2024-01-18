@@ -552,75 +552,6 @@ DEF_COMMAND(TRANS, kill_part_trans_ctx, 1,
   return OB_NOT_SUPPORTED;
 }
 
-// ls_remove_member
-// @params [in]  tenant_id, which tenant to modify
-// @params [in]  ls_id, which log stream to modify
-// @params [in]  svr_ip, the server ip want to delete
-// @params [in]  svr_port, the server port want to delete
-// @params [in]  orig_paxos_number, paxos replica number before this deletion
-// @params [in]  new_paxos_number, paxos replica number after this deletion
-// ATTENTION:
-//    Please make sure let log stream's leader to execute this command
-//    For permanant offline, orig_paxos_number should equals to new_paxos_number
-DEF_COMMAND(TRANS, ls_remove_member, 1, "tenant_id ls_id svr_ip svr_port orig_paxos_number new_paxos_number # ls_remove_member")
-{
-  int ret = OB_SUCCESS;
-  string arg_str;
-  ObLSDropPaxosReplicaArg arg;
-  int64_t tenant_id_to_set = OB_INVALID_TENANT_ID;
-  int64_t ls_id_to_set = 0;
-  int64_t orig_paxos_replica_number = 0;
-  int64_t new_paxos_replica_number = 0;
-  int32_t port = 0;
-  char ip[30];
-
-  if (cmd_ == action_name_) {
-    ret = OB_INVALID_ARGUMENT;
-    ADMIN_WARN("should provide tenant_id, ls_id ,member to remove, previous and new paxos replica number");
-  } else {
-    arg_str = cmd_.substr(action_name_.length() + 1);
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (6 != sscanf(arg_str.c_str(), "%ld %ld %s %d %ld %ld", &tenant_id_to_set, &ls_id_to_set,
-                         ip, &port, &orig_paxos_replica_number, &new_paxos_replica_number)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid arg", K(ret), K(arg_str.c_str()), K(cmd_.c_str()),
-               K(tenant_id_to_set), K(ls_id_to_set),
-               K(port), K(orig_paxos_replica_number), K(new_paxos_replica_number));
-  } else {
-    common::ObAddr server_to_remove(common::ObAddr::VER::IPV4, ip, port);
-    common::ObReplicaMember remove_member(server_to_remove, 1);
-    share::ObTaskId task_id;
-    share::ObLSID ls_id(ls_id_to_set);
-    task_id.init(server_to_remove);
-    if (OB_ISNULL(client_)
-        || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_to_set
-                      || !ls_id.is_valid_with_tenant(tenant_id_to_set)
-                      || !server_to_remove.is_valid()
-                      || 1 < orig_paxos_replica_number - new_paxos_replica_number
-                      || 0 > orig_paxos_replica_number - new_paxos_replica_number)) {
-      ret = OB_INVALID_ARGUMENT;
-      COMMON_LOG(WARN, "invalid argument", K(ret), K(tenant_id_to_set), K(ls_id),
-                 K(remove_member), K(task_id), K(orig_paxos_replica_number),
-                 K(new_paxos_replica_number), K(port), K(ip), KP(client_));
-    } else if (OB_FAIL(arg.init(
-                 task_id,
-                 tenant_id_to_set,
-                 ls_id,
-                 remove_member,
-                 orig_paxos_replica_number,
-                 new_paxos_replica_number))) {
-      COMMON_LOG(WARN, "init arg failed", K(ret), K(task_id), K(tenant_id_to_set), K(ls_id),
-                 K(remove_member), K(orig_paxos_replica_number), K(new_paxos_replica_number));
-    } else if (OB_FAIL(client_->ls_remove_paxos_replica(arg))) {
-      COMMON_LOG(ERROR, "send req fail", K(ret));
-    }
-  }
-  COMMON_LOG(INFO, "ls_remove_member", K(arg));
-  return ret;
-}
-
 // remove_lock
 // @params [in]  tenant_id, which tenant to modify
 // @params [in]  ls_id, which log stream to modify
@@ -785,6 +716,81 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     }
   }
   COMMON_LOG(INFO, "update_lock", K(arg));
+  return ret;
+}
+
+
+// remove_ls_replica
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  server, the server address of the replica to remove
+// @params [in]  replica_type, what type of replica to remove
+// @params [in]  orig_paxos_number, paxos replica number before this deletion
+// @params [in]  new_paxos_number, paxos replica number after this deletion
+// @params [in]  leader, leader replica's address
+// ATTENTION:
+//    Please make sure tenant_id and ls_id are specified.
+//    Other parameters are optional, if not specified, it will be automatically caculated
+DEF_COMMAND(TRANS, remove_ls_replica, 1, "tenant_id=xxx,ls_id=xxx[server=xxx,replica_type=xxx,orig_paxos_replica_number=xxx,new_paxos_replica_number=xxx,leader=xxx] # remove_ls_replica")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminCommandArg arg;
+  const ObAdminDRTaskType task_type(ObAdminDRTaskType::REMOVE_REPLICA);
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id at least");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid client", K(ret));
+  } else if (OB_FAIL(arg.init(arg_str.c_str(), task_type))) {
+    COMMON_LOG(WARN, "fail to construct admin command arg", K(ret), K(arg_str.c_str()), K(task_type));
+  } else if (OB_FAIL(client_->ob_exec_drtask_obadmin_command(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret), K(arg));
+  }
+  COMMON_LOG(INFO, "remove_ls_replica", K(arg));
+  return ret;
+}
+
+// add_ls_replica
+// @params [in]  tenant_id, which tenant to modify
+// @params [in]  ls_id, which log stream to modify
+// @params [in]  server, the server address of the replica to add
+// @params [in]  replica_type, what type of replica to add
+// @params [in]  data_source, data source replica server
+// @params [in]  orig_paxos_number, paxos replica number before this deletion
+// @params [in]  new_paxos_number, paxos replica number after this deletion
+// ATTENTION:
+//    Please make sure tenant_id, ls_id are specified.
+//    Other parameters are optional, if not specified, it will be automatically caculated
+DEF_COMMAND(TRANS, add_ls_replica, 1, "tenant_id=xxx,ls_id=xxx[,replica_type=xxx,server=xxx,data_source=xxx,orig_paxos_replica_number=xxx,new_paxos_replica_number=xxx] # add_ls_replica")
+{
+  int ret = OB_SUCCESS;
+  string arg_str;
+  ObAdminCommandArg arg;
+  const ObAdminDRTaskType task_type(ObAdminDRTaskType::ADD_REPLICA);
+  if (cmd_ == action_name_) {
+    ret = OB_INVALID_ARGUMENT;
+    ADMIN_WARN("should provide tenant_id, ls_id at least");
+  } else {
+    arg_str = cmd_.substr(action_name_.length() + 1);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(client_)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid client", K(ret));
+  } else if (OB_FAIL(arg.init(arg_str.c_str(), task_type))) {
+    COMMON_LOG(WARN, "fail to construct admin command arg", K(ret), K(arg_str.c_str()), K(task_type));
+  } else if (OB_FAIL(client_->ob_exec_drtask_obadmin_command(arg))) {
+    COMMON_LOG(ERROR, "send req fail", K(ret), K(arg));
+  }
+  COMMON_LOG(INFO, "add_ls_replica", K(arg));
   return ret;
 }
 

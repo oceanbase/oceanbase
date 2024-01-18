@@ -4033,6 +4033,84 @@ int ObDRTaskExistArg::init(
   return ret;
 }
 
+static const char* ob_admin_drtask_type_strs[] = {
+  "ADD REPLICA",
+  "REMOVE REPLICA"
+};
+
+static const char* ob_admin_drtask_comment_strs[] = {
+  "add ls replica trigger by ob_admin",
+  "remove ls replica trigger by ob_admin"
+};
+
+OB_SERIALIZE_MEMBER(ObAdminDRTaskType, type_);
+const char* ObAdminDRTaskType::get_type_str() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(ob_admin_drtask_type_strs) == (int64_t)MAX_TYPE,
+                "ob_admin_drtask_type_strs string array size mismatch enum AdminDRTaskType count");
+  const char *str = NULL;
+  if (type_ > INVALID_TYPE && type_ < MAX_TYPE) {
+    str = ob_admin_drtask_type_strs[static_cast<int64_t>(type_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid AdminDRTaskType", K_(type));
+  }
+  return str;
+}
+
+const char* ObAdminDRTaskType::get_comment() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(ob_admin_drtask_comment_strs) == (int64_t)MAX_TYPE,
+                "ob_admin_drtask_comment_strs string array size mismatch enum AdminDRTaskType count");
+  const char *str = NULL;
+  if (type_ > INVALID_TYPE && type_ < MAX_TYPE) {
+    str = ob_admin_drtask_comment_strs[static_cast<int64_t>(type_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid AdminDRTaskType", K_(type));
+  }
+  return str;
+}
+
+int64_t ObAdminDRTaskType::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), "type", get_type_str());
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObAdminCommandArg, admin_command_, task_type_);
+int ObAdminCommandArg::assign(const ObAdminCommandArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    //pass
+  } else if (OB_FAIL(admin_command_.assign(other.get_admin_command_str()))) {
+    LOG_WARN("fail to assign obadmin command string", KR(ret), K(other));
+  } else {
+    task_type_ = other.get_task_type();
+  }
+  return ret;
+}
+
+int ObAdminCommandArg::init(const ObString &admin_command, const ObAdminDRTaskType &task_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(admin_command.length() > OB_MAX_ADMIN_COMMAND_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "admin command, length oversize");
+  } else if (OB_UNLIKELY(admin_command.empty()) || OB_UNLIKELY(!task_type.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command), K(task_type));
+  } else if (OB_FAIL(admin_command_.assign(admin_command))) {
+    LOG_WARN("fali to assign admin command", KR(ret), K(admin_command));
+  } else {
+    task_type_ = task_type;
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_ARBITRATION
 OB_SERIALIZE_MEMBER(ObAddArbArg,
                     tenant_id_,

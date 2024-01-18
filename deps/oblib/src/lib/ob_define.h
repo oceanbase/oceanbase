@@ -1416,6 +1416,7 @@ OB_INLINE bool is_dblink_type_id(uint64_t type_id)
 const char* const OB_PRIMARY_INDEX_NAME = "PRIMARY";
 
 const int64_t OB_MAX_CONFIG_URL_LENGTH = 512;
+const int64_t OB_MAX_ADMIN_COMMAND_LENGTH = 1000;
 const int64_t OB_MAX_ARBITRATION_SERVICE_NAME_LENGTH = 256;
 const int64_t OB_MAX_ARBITRATION_SERVICE_LENGTH = 512;
 
