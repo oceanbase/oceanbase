@@ -610,6 +610,12 @@ int ObGCHandler::replay(const void *buffer,
             " than ls_max_decided_scn", K(tenant_readable_scn), K(ls_max_decided_scn), K(ls_id));
           }
         }
+        if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
+          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+            CLOG_LOG(WARN, "failed to check max_decided_scn ", K(ls_id), K(gc_log));
+          }
+          ret = OB_EAGAIN;
+        }
       }
     }
 
