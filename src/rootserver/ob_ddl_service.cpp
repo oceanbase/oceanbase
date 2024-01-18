@@ -11267,6 +11267,14 @@ const char* ObDDLService::ddl_type_str(const ObDDLType ddl_type)
     str = "create materialized view log";
   } else if (DDL_DROP_MLOG == ddl_type) {
     str = "drop materialized view log";
+  } else if (DDL_AUTO_SPLIT_BY_RANGE == ddl_type) {
+    str = "auto split by range";
+  } else if (DDL_AUTO_SPLIT_NON_RANGE == ddl_type) {
+    str = "auto split by non range";
+  } else if (DDL_MANUAL_SPLIT_BY_RANGE == ddl_type) {
+    str = "manual split by range";
+  } else if (DDL_MANUAL_SPLIT_NON_RANGE == ddl_type) {
+    str = "manual split non range";
   }
 
   return str;

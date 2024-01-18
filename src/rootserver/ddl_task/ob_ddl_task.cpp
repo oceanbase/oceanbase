@@ -802,6 +802,18 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_DROP_MLOG:
       ddl_type_str = "drop materialized view log";
       break;
+    case DDL_AUTO_SPLIT_BY_RANGE:
+      ddl_type_str = "auto split by range";
+      break;
+    case DDL_AUTO_SPLIT_NON_RANGE:
+      ddl_type_str = "auto split non range";
+      break;
+    case DDL_MANUAL_SPLIT_BY_RANGE:
+      ddl_type_str = "manual split by range";
+      break;
+    case DDL_MANUAL_SPLIT_NON_RANGE:
+      ddl_type_str = "manual split non range";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
