@@ -189,7 +189,7 @@ int ObCosEnv::init()
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     cos_warn_log("[COS]cannot init cos env more than once, ret=%d\n", ret);
-  } else if(COSE_OK != (cos_ret = cos_http_io_initialize(NULL, 0))) {
+  } else if (COSE_OK != (cos_ret = cos_http_io_initialize(NULL, 0))) {
     ret = OB_COS_ERROR;
     cos_warn_log("[COS]fail to init cos env, cos_ret=%d, ret=%d\n", cos_ret, ret);
   } else {
@@ -349,8 +349,8 @@ int ObCosWrapper::put(
       cos_warn_log("[COS]fail to pack buf, ret=%d\n", ret);
     } else {
       cos_list_add_tail(&content->node, &buffer);
-      if(NULL == (cos_ret = cos_put_object_from_buffer(ctx->options, &bucket, &object, &buffer, NULL, &resp_headers))
-         || !cos_status_is_ok(cos_ret)) {
+      if (NULL == (cos_ret = cos_put_object_from_buffer(ctx->options, &bucket, &object, &buffer, NULL, &resp_headers))
+          || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]failed to put one object to cos, ret=%d\n", ret);
         log_status(cos_ret);
@@ -407,8 +407,8 @@ int ObCosWrapper::append(
       cos_warn_log("[COS]fail to pack buf, ret=%d\n", ret);
     } else {
       cos_list_add_tail(&content->node, &buffer);
-      if(NULL == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object,
-         offset, &buffer, NULL, &resp_headers)) || !cos_status_is_ok(cos_ret)) {
+      if (NULL == (cos_ret = cos_append_object_from_buffer(ctx->options, &bucket, &object,
+          offset, &buffer, NULL, &resp_headers)) || !cos_status_is_ok(cos_ret)) {
         convert_io_error(cos_ret, ret);
         cos_warn_log("[COS]failed to append object from buffer to cos, ret=%d\n", ret);
         log_status(cos_ret);
@@ -457,9 +457,10 @@ int ObCosWrapper::head_object_meta(
     const char COS_OBJECT_TYPE[] = "x-cos-object-type";
 
     if (NULL == (headers = cos_table_make(ctx->mem_pool, 0))) {
-
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to make cos headers, ret=%d\n", ret);
     } else if (NULL == (cos_ret = cos_head_object(ctx->options, &bucket, &object, headers, &resp_headers))
-        || !cos_status_is_ok(cos_ret)) {
+               || !cos_status_is_ok(cos_ret)) {
       if (NULL != cos_ret && COS_OBJECT_NOT_EXIST == cos_ret->code) {
         is_exist = false;
       } else {
@@ -673,7 +674,10 @@ int ObCosWrapper::del_objects_in_dir(
           cos_list_for_each_entry(cos_list_object_content_t, content, &params->object_list, node) {
             // Check if the prefix of returned object key match the dir_name
             size_t dir_name_str_len = strlen(dir_name.data_);
-            if (0 != memcmp(content->key.data, dir_name.data_, dir_name_str_len)) {
+            if (NULL == content->key.data) {
+              ret = OB_COS_ERROR;
+              cos_warn_log("[COS]returned object key data is null, dir=%s, ret=%d\n", dir_name.data_, ret);
+            } else if (0 != memcmp(content->key.data, dir_name.data_, dir_name_str_len)) {
               ret = OB_COS_ERROR;
               cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, ret=%d\n", dir_name.data_, content->key.data, ret);
             } else if (NULL == (to_delete_object = cos_create_cos_object_key(ctx->mem_pool))) {
@@ -859,6 +863,11 @@ int ObCosWrapper::pread(
             cos_warn_log("[COS]unexpected error, too much data returned, ret=%d, range_size=%s, buf_pos=%ld, size=%ld, req_id=%s.\n", ret, range_size, buf_pos, size, cos_ret->req_id);
             log_status(cos_ret);
             break;
+          } else if (NULL == content->pos) {
+            ret = OB_COS_ERROR;
+            cos_warn_log("[COS]unexpected error, data pos is null, ret=%d, range_size=%s, buf_pos=%ld, size=%ld, req_id=%s.\n", ret, range_size, buf_pos, size, cos_ret->req_id);
+            log_status(cos_ret);
+            break;
           } else {
             // copy to buf
             memcpy(buf + buf_pos, content->pos, (size_t)size);
@@ -926,6 +935,11 @@ int ObCosWrapper::get_object(
           cos_warn_log("[COS]unexpected error, too much data returned, ret=%d, buf_pos=%ld, size=%ld, buf_size=%ld, req_id=%s.\n", ret, buf_pos, size, buf_size, cos_ret->req_id);
           log_status(cos_ret);
           break;
+        } else if (NULL == content->pos) {
+          ret = OB_COS_ERROR;
+          cos_warn_log("[COS]unexpected error, data pos is null, ret=%d, buf_pos=%ld, size=%ld, buf_size=%ld, req_id=%s.\n", ret, buf_pos, size, buf_size, cos_ret->req_id);
+          log_status(cos_ret);
+          break;
         } else {
           // copy to buf
           memcpy(buf + buf_pos, content->pos, (size_t)size);
@@ -983,17 +997,20 @@ int ObCosWrapper::is_object_tagging(
         char key_str[MAX_TAGGING_STR_LEN];
         char value_str[MAX_TAGGING_STR_LEN];
 
-        int key_n = snprintf(key_str, MAX_TAGGING_STR_LEN, "%.*s", tag->key.len, tag->key.data);
-        int val_n = snprintf(value_str, MAX_TAGGING_STR_LEN, "%.*s", tag->key.len, tag->value.data);
-        if (0 >= key_n || MAX_TAGGING_STR_LEN <= key_n) {
-          ret = OB_SIZE_OVERFLOW;
-          cos_warn_log("[COS]fail to format tag, key_n=%d, ret=%d\n", key_n, ret);
-        } else if (0 >= val_n || MAX_TAGGING_STR_LEN <= val_n) {
-          ret = OB_SIZE_OVERFLOW;
-          cos_warn_log("[COS]fail to format tag, val_n=%d, ret=%d\n", val_n, ret);
-        } else if (0 == strcmp("delete_mode", key_str) && 0 == strcmp("tagging", value_str)) {
-          is_tagging = true;
+        if ((NULL != tag->key.data) && (NULL != tag->value.data)) {
+          int key_n = snprintf(key_str, MAX_TAGGING_STR_LEN, "%.*s", tag->key.len, tag->key.data);
+          int val_n = snprintf(value_str, MAX_TAGGING_STR_LEN, "%.*s", tag->key.len, tag->value.data);
+          if (0 >= key_n || MAX_TAGGING_STR_LEN <= key_n) {
+            ret = OB_SIZE_OVERFLOW;
+            cos_warn_log("[COS]fail to format tag, key_n=%d, ret=%d\n", key_n, ret);
+          } else if (0 >= val_n || MAX_TAGGING_STR_LEN <= val_n) {
+            ret = OB_SIZE_OVERFLOW;
+            cos_warn_log("[COS]fail to format tag, val_n=%d, ret=%d\n", val_n, ret);
+          } else if (0 == strcmp("delete_mode", key_str) && 0 == strcmp("tagging", value_str)) {
+            is_tagging = true;
+          }
         }
+
         if (OB_SUCCESS != ret) {
           break;
         }
@@ -1077,7 +1094,10 @@ int ObCosWrapper::list_objects(
           cos_list_for_each_entry(cos_list_object_content_t, content, &params->object_list, node) {
             // check if the prefix of returned object key match the dir_name
             size_t dir_name_str_len = strlen(dir_name.data_);
-            if (0 != memcmp(content->key.data, dir_name.data_, dir_name_str_len)) {
+            if (NULL == content->key.data || 0 == content->key.len) {
+              ret = OB_COS_ERROR;
+              cos_warn_log("[COS]returned object key is invalid, dir=%s, requestid=%s, ret=%d\n", dir_name.data_, request_id, ret);
+            } else if (0 != memcmp(content->key.data, dir_name.data_, dir_name_str_len)) {
               ret = OB_COS_ERROR;
               cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n", dir_name.data_, content->key.data, request_id, ret);
             } else if (NULL == content->size.data || 0 == content->size.len) {
@@ -1151,6 +1171,9 @@ int ObCosWrapper::list_directories(
     // next_marker end with '\0', its size must be > 0
     ret = OB_INVALID_ARGUMENT;
     cos_warn_log("[COS]next_marker is null, ret=%d\n", ret);
+  } else if (delimiter.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    cos_warn_log("[COS]delimiter is null, ret=%d\n", ret);
   } else if (NULL == handle_directory_name_f) {
     ret = OB_INVALID_ARGUMENT;
     cos_warn_log("[COS]handle_directory_name_f is null, ret=%d\n", ret);
@@ -1190,22 +1213,28 @@ int ObCosWrapper::list_directories(
           cos_list_for_each_entry(cos_list_object_common_prefix_t, common_prefix, &params->common_prefix_list, node) {
             // check if the prefix of returned object key match the dir_name
             const size_t dir_name_str_len = strlen(dir_name.data_);
-            const size_t prefix_str_len = strlen(common_prefix->prefix.data);
-            if (prefix_str_len < dir_name_str_len) {
+
+            if (NULL == common_prefix->prefix.data) {
               ret = OB_COS_ERROR;
-              cos_warn_log("[COS]prefix str len should not smaller than dir name str len. prefix str len : %lu, "
-                  "dir name str len : %lu, ret = %d \n", prefix_str_len, dir_name_str_len, ret);
-            } else if (0 != memcmp(common_prefix->prefix.data, dir_name.data_, dir_name_str_len)) {
-              ret = OB_COS_ERROR;
-              cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n", dir_name.data_, common_prefix->prefix.data, request_id, ret);
+              cos_warn_log("[COS]returned object prefix is invalid, dir=%s, requestid=%s, ret=%d\n", dir_name.data_, request_id, ret);
             } else {
-              // Callback to handle the object name, it is a absolute path.
-              const int64_t object_size = common_prefix->prefix.len - dir_name_str_len; //include '/'
-              CosListObjPara::CosListType type = CosListObjPara::CosListType::COS_LIST_CB_ARG;
-              ret = handle_directory_name_f(arg, type, common_prefix->prefix.data + dir_name_str_len, object_size);
-              if (OB_SUCCESS != ret) {
-                // Something wrong happened when handle object name
-                cos_warn_log("[COS]handle object name failed, ret=%d, object=%s, requestid=%s\n", ret, common_prefix->prefix.data, request_id);
+              const size_t prefix_str_len = strlen(common_prefix->prefix.data);
+              if (prefix_str_len < dir_name_str_len) {
+                ret = OB_COS_ERROR;
+                cos_warn_log("[COS]prefix str len should not smaller than dir name str len. prefix str len : %lu, "
+                    "dir name str len : %lu, ret = %d \n", prefix_str_len, dir_name_str_len, ret);
+              } else if (0 != memcmp(common_prefix->prefix.data, dir_name.data_, dir_name_str_len)) {
+                ret = OB_COS_ERROR;
+                cos_warn_log("[COS]returned object prefix not match, dir=%s, object=%s, requestid=%s, ret=%d\n", dir_name.data_, common_prefix->prefix.data, request_id, ret);
+              } else {
+                // Callback to handle the object name, it is a absolute path.
+                const int64_t object_size = common_prefix->prefix.len - dir_name_str_len; //include '/'
+                CosListObjPara::CosListType type = CosListObjPara::CosListType::COS_LIST_CB_ARG;
+                ret = handle_directory_name_f(arg, type, common_prefix->prefix.data + dir_name_str_len, object_size);
+                if (OB_SUCCESS != ret) {
+                  // Something wrong happened when handle object name
+                  cos_warn_log("[COS]handle object name failed, ret=%d, object=%s, requestid=%s\n", ret, common_prefix->prefix.data, request_id);
+                }
               }
             }
 
