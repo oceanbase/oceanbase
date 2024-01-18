@@ -1114,6 +1114,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTransactionId::eval_transaction_id,                           /* 671 */
   NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 672 */
   NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 673 */
+  NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 674 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1246,6 +1247,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 126 */
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
+  NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1359,7 +1361,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprExtract::calc_extract_mysql_vector,                     /* 107 */
   ObExprRegexpReplace::eval_regexp_replace_vector,              /* 108 */
   ObExprInOrNotIn::eval_vector_in_without_row_fallback,         /* 109 */
-  ObExprInOrNotIn::eval_vector_in_without_row                   /* 110 */
+  ObExprInOrNotIn::eval_vector_in_without_row,                  /* 110 */
+  NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
