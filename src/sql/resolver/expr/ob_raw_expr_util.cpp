@@ -1079,6 +1079,14 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
     CK (OB_NOT_NULL(iparam));
     OX (mode = static_cast<pl::ObPLRoutineParamMode>(iparam->get_mode()));
     if (OB_SUCC(ret)) {
+#ifdef OB_BUILD_ORACLE_PL
+      if (iparam->is_nocopy_param()
+          && pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode
+          && OB_NOT_NULL(udf_raw_expr->get_param_expr(i))
+          && pl::ObPlJsonUtil::is_pl_jsontype(udf_raw_expr->get_param_expr(i)->get_udt_id())) {
+        OZ (udf_raw_expr->add_param_desc(ObUDFParamDesc()));
+      } else
+#endif
       if (pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode
           || pl::ObPLRoutineParamMode::PL_PARAM_INOUT == mode) {
         ObRawExpr* iexpr = udf_raw_expr->get_param_expr(i);

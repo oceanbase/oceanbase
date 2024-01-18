@@ -27,7 +27,8 @@ namespace pl
 class ObPlJsonUtil {
   enum {
     JSN_PL_ELEMENT_TYPE_ID = 300023,
-    JSN_PL_OBJECT_TYPE_ID = 300024
+    JSN_PL_OBJECT_TYPE_ID = 300024,
+    JSN_PL_ARRAY_TYPE_ID = 300025,
   };
 
 public:
@@ -61,13 +62,14 @@ public:
   static int check_on_error(ObObj &obj, int& err_val);
   static bool proc_on_error(common::ObObj &result, int error_behavior, int &ret);
   static bool is_pl_jsontype(int64_t id) {
-    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID);
+    return (id == JSN_PL_ELEMENT_TYPE_ID || id == JSN_PL_OBJECT_TYPE_ID || id == JSN_PL_ARRAY_TYPE_ID);
   }
 
   static bool is_hex(const uint8_t input);
   static bool is_hex_string(const ObString& hex_str);
   static bool is_pl_json_element_type(int64_t id) { return (id == JSN_PL_ELEMENT_TYPE_ID); }
   static bool is_pl_json_object_type(int64_t id) { return (id == JSN_PL_OBJECT_TYPE_ID); }
+  static bool is_pl_json_array_type(int64_t id) { return (id == JSN_PL_ARRAY_TYPE_ID); }
 
   static int get_lob_inner(ObIAllocator& allocator, const ObString& val_str, ObPlJsonUtil::PL_JSN_STRING_TYPE type, ObIJsonBase*& j_base);
 };

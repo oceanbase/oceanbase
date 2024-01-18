@@ -1433,7 +1433,8 @@ public:
   ObPLJsonBaseType()
     : ObPLOpaque(ObPLOpaqueType::PL_JSON_TYPE),
       data_(NULL),
-      behavior_(0)
+      behavior_(0),
+      is_shallow_copy_(0)
       {}
 
   virtual ~ObPLJsonBaseType()
@@ -1448,12 +1449,15 @@ public:
   void set_err_behavior(int behavior) { behavior_ = behavior; }
   int get_err_behavior() { return behavior_ ; }
   ObJsonNode* get_data() { return data_; }
+  bool need_shallow_copy() { return is_shallow_copy_ > 0; }
+  void set_shallow_copy(int value) { is_shallow_copy_ = value; }
 
-  TO_STRING_KV(KPC(data_), K_(behavior));
+  TO_STRING_KV(KPC(data_), K_(behavior), K_(is_shallow_copy));
 
 private:
   ObJsonNode *data_;
   int behavior_;
+  int is_shallow_copy_;
 };
 
 #endif
