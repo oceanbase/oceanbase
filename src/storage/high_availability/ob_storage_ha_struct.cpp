@@ -547,10 +547,17 @@ int ObMigrationStatusHelper::check_ls_with_transfer_task_(
   SCN max_decided_scn(SCN::base_scn());
   ObLSService *ls_service = NULL;
   ObLSHandle dest_ls_handle;
+  bool is_tenant_deleted = false;
 
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mysql proxy should not be NULL", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(ObStorageHAUtils::check_tenant_will_be_deleted(is_tenant_deleted))) {
+    LOG_WARN("failed to check tenant deleted", K(ret), K(ls));
+  } else if (is_tenant_deleted) {
+    need_check_allow_gc = true;
+    need_wait_dest_ls_replay = false;
+    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant_id), K(src_ls_id));
   } else if (OB_FAIL(ObTransferTaskOperator::get_by_src_ls(
       *sql_proxy, tenant_id, src_ls_id, task, share::OBCG_STORAGE))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(src_ls_id));

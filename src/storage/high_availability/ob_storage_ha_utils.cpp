@@ -417,6 +417,27 @@ int ObStorageHAUtils::check_ls_is_leader(
   return ret;
 }
 
+int ObStorageHAUtils::check_tenant_will_be_deleted(
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  is_deleted = false;
+
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
+  ObUnitInfoGetter::ObUnitStatus unit_status;
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (FALSE_IT(unit_status = tenant->get_unit_status())) {
+  } else if (ObUnitInfoGetter::is_unit_will_be_deleted_in_observer(unit_status)) {
+    is_deleted = true;
+    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant->id()), K(unit_status));
+  }
+  return ret;
+}
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;
