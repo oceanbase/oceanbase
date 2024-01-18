@@ -3745,7 +3745,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 }
                 OX (spi_cursor->row_store_.finish_add_row())
                 OX (cursor->open(spi_cursor));
-                if (OB_FAIL(ret)) {
+                if (OB_FAIL(ret) && OB_NOT_NULL(spi_cursor)) {
                   spi_cursor->~ObSPICursor();
                 }
               }
