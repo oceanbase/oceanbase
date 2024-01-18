@@ -210,7 +210,6 @@ int ObTxDataTable::offline()
   } else {
     is_started_ = false;
     disable_upper_trans_calculation();
-    calc_upper_trans_version_cache_.reset();
   }
   return ret;
 }
@@ -845,13 +844,14 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
 
   if (OB_FAIL(ret)) {
   } else if (skip_calc) {
-  } else if (0 == calc_upper_trans_version_cache_.commit_versions_.array_.count()) {
-    STORAGE_LOG(ERROR, "Unexpected empty array.", K(calc_upper_trans_version_cache_));
   } else {
     TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
-    if (!calc_upper_trans_version_cache_.commit_versions_.is_valid()) {
+    if (0 == calc_upper_trans_version_cache_.commit_versions_.array_.count()) {
+      ret = OB_EAGAIN;
+      STORAGE_LOG(WARN, "empty commit versions. may be a concurrent transfer.", K(calc_upper_trans_version_cache_));
+    } else if (!calc_upper_trans_version_cache_.commit_versions_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "invalid cache for upper trans version calculation", KR(ret));
+      STORAGE_LOG(WARN, "invalid cache for upper trans version calculation. ", KR(ret));
     } else if (OB_FAIL(calc_upper_trans_scn_(sstable_end_scn, upper_trans_version))) {
       STORAGE_LOG(WARN, "calc upper trans version failed", KR(ret), "ls_id", get_ls_id());
     } else {
@@ -1317,14 +1317,22 @@ int ObTxDataTable::get_start_tx_scn(SCN &start_tx_scn)
 void ObTxDataTable::disable_upper_trans_calculation()
 {
   ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
-  calc_upper_trans_version_cache_.reset();
-  SpinWLockGuard lock_guard(calc_upper_info_.lock_);
-  calc_upper_info_.reset();
+  {
+    TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
+  {
+    SpinWLockGuard lock_guard(calc_upper_info_.lock_);
+    calc_upper_info_.reset();
+  }
 }
 
 void ObTxDataTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
 {
-  calc_upper_trans_version_cache_.reset();
+  {
+    TCRLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
   if (latest_transfer_scn_.is_valid()) {
     latest_transfer_scn_ = SCN::max(latest_transfer_scn, latest_transfer_scn_);
   } else {
