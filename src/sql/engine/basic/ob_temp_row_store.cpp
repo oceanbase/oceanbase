@@ -453,14 +453,17 @@ int ObTempRowStore::init(const ObExprPtrIArray &exprs,
                          const int64_t mem_limit,
                          bool enable_dump,
                          uint32_t row_extra_size,
-                         const bool reorder_fixed_expr /*true*/)
+                         const bool reorder_fixed_expr /*true*/,
+                         const bool enable_trunc /*false*/,
+                         const common::ObCompressorType compressor_type /*NONE_COMPRESSOR*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
   col_cnt_ = exprs.count();
   max_batch_size_ = max_batch_size;
   ObTempBlockStore::set_inner_allocator_attr(mem_attr);
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_));
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_,
+                            compressor_type, enable_trunc));
   OZ(row_meta_.init(exprs, row_extra_size, reorder_fixed_expr));
   inited_ = true;
   return ret;
@@ -470,7 +473,9 @@ int ObTempRowStore::init(const RowMeta &row_meta,
                          const int64_t max_batch_size,
                          const lib::ObMemAttr &mem_attr,
                          const int64_t mem_limit,
-                         bool enable_dump)
+                         bool enable_dump,
+                         const bool enable_trunc /*false*/,
+                         const common::ObCompressorType compressor_type /*NONE_COMPRESSOR*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
@@ -478,7 +483,8 @@ int ObTempRowStore::init(const RowMeta &row_meta,
   max_batch_size_ = max_batch_size;
   CK (!row_meta.fixed_expr_reordered())
   row_meta_ = row_meta;
-  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_));
+  OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_, mem_attr_.label_,
+                            compressor_type, enable_trunc));
   inited_ = true;
   return ret;
 }
