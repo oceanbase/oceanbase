@@ -346,7 +346,7 @@ public:
       ObTableAccessContext &access_ctx,
       const void *query_range) override final;
   void inc_cur_micro_data_fetch_idx();
-  int prefetch();
+  virtual int prefetch();
   OB_INLINE ObSSTableReadHandle &current_read_handle()
   { return read_handles_[cur_range_fetch_idx_ % max_range_prefetching_cnt_]; }
   OB_INLINE ObMicroBlockDataHandle &current_micro_handle()
@@ -424,7 +424,7 @@ protected:
   }
   void reset_tree_handles();
   virtual int init_tree_handles(const int64_t count);
-  virtual int get_prefetch_depth(int64_t &depth);
+  int get_prefetch_depth(int64_t &depth);
 
   static const int32_t DEFAULT_SCAN_RANGE_PREFETCH_CNT = 4;
   static const int32_t DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT = DATA_PREFETCH_DEPTH;
