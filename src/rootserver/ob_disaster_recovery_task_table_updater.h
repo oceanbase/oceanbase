@@ -92,8 +92,6 @@ public:
   // unused functions
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
-  virtual bool need_assign_when_equal() const { return false; }
-  virtual int assign_when_equal(const ObDRTaskTableUpdateTask &other);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(task_type), K_(task_id),
                K_(task_key), K_(ret_code), K_(need_clear_server_data_in_limit),
