@@ -21,6 +21,7 @@ static int pktc_sk_check_connect(pktc_sk_t* s) {
     err = EIO;
   } else {
     s->conn_ok = 1;
+    s->sk_diag_info.local_addr = get_local_addr(s->fd);
     rk_info("sock connect OK: %p %s", s, T2S(sock_fd, s->fd));
 	  //send handshake by ussl back-ground thread
     /*
@@ -67,9 +68,11 @@ static void pktc_sk_destroy(pktc_sf_t* sf, pktc_sk_t* s) {
 static pktc_sk_t* pktc_sk_new(pktc_sf_t* sf) {
   pktc_sk_t* s = (pktc_sk_t*)pktc_sk_alloc(sizeof(*s));
   if (s) {
+    memset(s, 0, sizeof(*s));
     s->fty = (sf_t*)sf;
     s->ep_fd = -1;
     s->handle_event = (handle_event_t)pktc_sk_handle_event;
+    s->sk_diag_info.establish_time = rk_get_us();
     pktc_sk_init(sf, s);
   }
   rk_info("sk_new: s=%p", s);
