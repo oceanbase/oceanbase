@@ -48,7 +48,6 @@ bool ObTXStartTransferOutInfo::is_valid() const
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
       && !tablet_list_.empty()
-      && data_end_scn_.is_valid()
       && transfer_epoch_ > 0;
 }
 
