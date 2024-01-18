@@ -1173,7 +1173,6 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.plan_hash_value_ = get_signature();
     stat_.gen_time_ = ObTimeUtility::current_time();
     stat_.schema_version_ = get_tenant_schema_version();
-    stat_.last_active_time_ = stat_.gen_time_;
     stat_.hit_count_ = 0;
     stat_.mem_used_ = get_mem_size();
     stat_.slow_count_ = 0;
@@ -1270,6 +1269,11 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         pos += 1;
         stat_.plan_tmp_tbl_name_str_len_ = static_cast<int32_t>(pos);
       }
+    }
+    if (OB_SUCC(ret)) {
+      // Update last_active_time_ last, because last_active_time_ is used to
+      // indicate whether the cache stat has been updated.
+      stat_.last_active_time_ = stat_.gen_time_;
     }
   }
   return ret;
