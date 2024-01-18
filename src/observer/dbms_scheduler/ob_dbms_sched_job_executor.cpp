@@ -25,6 +25,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
+#include "share/stat/ob_dbms_stats_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -116,6 +117,11 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
     job_info.get_tenant_id(), job_info.get_lowner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
+  if (OB_SUCC(ret) &&
+      user_infos.count() > 1 &&
+      ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
+    OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
+  }
   OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
   CK (OB_NOT_NULL(user_info = user_infos.at(0)));
   CK (OB_NOT_NULL(user_info));

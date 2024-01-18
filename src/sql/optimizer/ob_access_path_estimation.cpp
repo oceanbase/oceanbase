@@ -210,6 +210,7 @@ int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &c
   bool specify_ds = false;
   bool has_invalid_ds_filters = false;
   const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
+  int64_t max_ds_timeout = -1;
   if (OB_FAIL(ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(
       ctx.get_session_info(),
       log_plan.get_log_plan_hint().get_dynamic_sampling_hint(table_meta.get_table_id()),
@@ -218,8 +219,9 @@ int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &c
       sample_block_cnt,
       specify_ds))) {
     LOG_WARN("failed to get valid dynamic sampling level", K(ret));
-  } else if (ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING == ds_level ||
-             ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ctx) <= 0) {
+  } else if (OB_FAIL(ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ctx, max_ds_timeout))) {
+    LOG_WARN("failed to get dynamic sampling max timeout", K(ret));
+  } else if (ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING == ds_level || max_ds_timeout <= 0) {
     valid_methods &= ~EST_DS_METHODS;
   } else if (ObDynamicSamplingUtils::check_is_failed_ds_table(table_meta.get_ref_table_id(),
                                                               table_meta.get_all_used_parts(),

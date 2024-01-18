@@ -14340,20 +14340,26 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
     }
   } else {
     if (NULL != (group_by = dynamic_cast<ObLogGroupBy *>(op))) {
-      if (group_by->get_rollup_exprs().empty() && group_by->get_group_by_exprs().count() == 1) {
-        ObRawExpr* group_by_expr = group_by->get_group_by_exprs().at(0);
-        if (OB_ISNULL(group_by_expr) || OB_ISNULL(stat_partition_id_expr_) || OB_ISNULL(stat_table_scan_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(group_by_expr), K(stat_partition_id_expr_), K(stat_table_scan_));
-        } else if (T_FUN_SYS_CALC_PARTITION_ID != group_by_expr->get_expr_type()) {
-          // do nothing
-        } else if (OB_FAIL(stat_gather_replacer_.add_replace_expr(group_by_expr,
-                                                                  stat_partition_id_expr_))) {
-          LOG_WARN("failed to push back replaced expr", K(ret));
-        } else if (group_by_expr->get_partition_id_calc_type() == CALC_IGNORE_SUB_PART) {
-          stat_table_scan_->set_tablet_id_type(1);
-        } else {
-          stat_table_scan_->set_tablet_id_type(2);
+      if (group_by->get_rollup_exprs().empty() && group_by->get_group_by_exprs().count() > 0) {
+        //bug:
+        bool found_it = false;//expected only one T_FUN_SYS_CALC_PARTITION_ID in gather stats.
+        for (int64_t i = 0; OB_SUCC(ret) && !found_it && i < group_by->get_group_by_exprs().count(); ++i) {
+          ObRawExpr* group_by_expr = group_by->get_group_by_exprs().at(i);
+          if (OB_ISNULL(group_by_expr) || OB_ISNULL(stat_partition_id_expr_) || OB_ISNULL(stat_table_scan_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(group_by_expr), K(stat_partition_id_expr_), K(stat_table_scan_));
+          } else if (T_FUN_SYS_CALC_PARTITION_ID != group_by_expr->get_expr_type()) {
+            // do nothing
+          } else if (OB_FAIL(stat_gather_replacer_.add_replace_expr(group_by_expr,
+                                                                    stat_partition_id_expr_))) {
+            LOG_WARN("failed to push back replaced expr", K(ret));
+          } else if (group_by_expr->get_partition_id_calc_type() == CALC_IGNORE_SUB_PART) {
+            stat_table_scan_->set_tablet_id_type(1);
+            found_it = true;
+          } else {
+            stat_table_scan_->set_tablet_id_type(2);
+            found_it = true;
+          }
         }
       }
     }
