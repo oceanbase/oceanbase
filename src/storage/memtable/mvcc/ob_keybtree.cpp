@@ -1535,15 +1535,21 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
       for (int64_t iter_node_count = 0; OB_SUCC(ret) && iter_node_count < btree_node_cnt_in_this_range;
            iter_node_count++) {
         if (OB_FAIL(iter_->next_on_level(level, key, val))) {
-          OB_LOG(WARN,
-                 "iterate btree node on level failed",
-                 KR(ret),
-                 K(level),
-                 K(iter_node_count),
-                 K(btree_node_cnt_in_this_range),
-                 K(remaining_btree_node_count),
-                 K(range_count),
-                 K(range_idx));
+          if (OB_ITER_END == ret) {
+            // It is not atomic between find_split_range_level and split_range,
+            // so split_range need retry if iterate end on the specific level
+            ret = OB_EAGAIN;
+          } else {
+            OB_LOG(WARN,
+                   "iterate btree node on level failed",
+                   KR(ret),
+                   K(level),
+                   K(iter_node_count),
+                   K(btree_node_cnt_in_this_range),
+                   K(remaining_btree_node_count),
+                   K(range_count),
+                   K(range_idx));
+          }
         }
       }
 
@@ -1561,8 +1567,10 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
       }
     }
 
-    if (range_idx < range_count) {
-      ret = OB_ERR_UNEXPECTED;
+    if (OB_EAGAIN == ret) {
+      // do nothing
+    } else if (OB_FAIL(ret) || range_idx < range_count) {
+      ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
       OB_LOG(WARN,
              "btree split range: can not get enough sub range",
              K(btree_node_count),

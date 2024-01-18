@@ -511,41 +511,49 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "range count should be greater than 1 if you try to split range", KR(ret), K(range_count));
   } else {
-    // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
-    ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD/2> key_array;
-    if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
-        OB_ENTRY_NOT_EXIST != ret) {
-      TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
-    } else if (OB_ENTRY_NOT_EXIST == ret) {
-      TRANS_LOG(WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(range_count));
-    } else if (btree_node_count < range_count) {
-      ret = OB_ENTRY_NOT_EXIST;
-      TRANS_LOG(WARN, "branch fan out less than range count", K(btree_node_count), K(range_count));
-    } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
-      TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
-    } else if (NULL == iter) {
-      ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(iter->get_read_handle().split_range(top_level, btree_node_count, range_count, key_array))) {
-      TRANS_LOG(WARN,
-                "split range fail",
-                K(ret),
-                K(*start_key),
-                K(*end_key),
-                K(range_count),
-                K(top_level),
-                K(btree_node_count),
-                K(range_count));
-    } else if (OB_FAIL(convert_keys_to_store_ranges_(start_key, end_key, range_count, key_array, range_array))) {
-      TRANS_LOG(WARN, "convert keys to store ranges failed", KR(ret), K(range_count), K(key_array));
-    } else {
-      // split range succeed
-    }
+    bool need_retry = false;
+    do {
+      // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
+      ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD / 2> key_array;
+      if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
+          OB_ENTRY_NOT_EXIST != ret) {
+        TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        TRANS_LOG(
+            WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(range_count));
+      } else if (btree_node_count < range_count) {
+        ret = OB_ENTRY_NOT_EXIST;
+        TRANS_LOG(WARN, "branch fan out less than range count", K(btree_node_count), K(range_count));
+      } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
+        TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
+      } else if (NULL == iter) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(iter->get_read_handle().split_range(top_level, btree_node_count, range_count, key_array))) {
+        TRANS_LOG(WARN,
+                  "split range fail",
+                  K(ret),
+                  K(*start_key),
+                  K(*end_key),
+                  K(range_count),
+                  K(top_level),
+                  K(btree_node_count),
+                  K(range_count));
+        if (OB_EAGAIN == ret) {
+          need_retry = true;
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_FAIL(convert_keys_to_store_ranges_(start_key, end_key, range_count, key_array, range_array))) {
+        TRANS_LOG(WARN, "convert keys to store ranges failed", KR(ret), K(range_count), K(key_array));
+      } else {
+        // split range succeed
+      }
 
-    if (OB_NOT_NULL(iter)) {
-      iter->reset();
-      raw_iter_alloc_.free(iter);
-      iter = NULL;
-    }
+      if (OB_NOT_NULL(iter)) {
+        iter->reset();
+        raw_iter_alloc_.free(iter);
+        iter = NULL;
+      }
+    } while (need_retry);
   }
   return ret;
 }
