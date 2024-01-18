@@ -957,6 +957,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->sql_str_off_ = @1.first_column;
   @$.first_column = @1.first_column;
   @$.last_column = @1.last_column;
+  $$->is_forbid_parameter_ = $1->is_forbid_parameter_;
 }
 | charset_introducer STRING_VALUE
 {
@@ -966,6 +967,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
   $$->sql_str_off_ = $2->sql_str_off_;
+  $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
 }
 | charset_introducer HEX_STRING_VALUE
 {
@@ -976,6 +978,7 @@ STRING_VALUE %prec LOWER_THAN_COMP
   $$->raw_text_ = $2->raw_text_;
   $$->text_len_ = $2->text_len_;
   $$->sql_str_off_ = $2->sql_str_off_;
+  $$->is_forbid_parameter_ = $2->is_forbid_parameter_;
 }
 | STRING_VALUE string_val_list %prec LOWER_THAN_COMP
 {
@@ -1095,7 +1098,6 @@ literal
 {
   $$ = $1;
   $$->sql_str_off_ = $1->sql_str_off_;
-  CHECK_MYSQL_COMMENT(result, $$);
 }
 | SYSTEM_VARIABLE { $$ = $1; }
 | QUESTIONMARK { $$ = $1; }

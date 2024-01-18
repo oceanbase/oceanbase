@@ -62,7 +62,7 @@ int parse_init(ParseResult *p)
   static __thread char error_msg[MAX_ERROR_MSG] = {'\0'};
   p->error_msg_ = error_msg;
   if (OB_UNLIKELY(NULL == p || NULL == p->malloc_pool_)) {
-    ret = -1;
+    ret = OB_PARSER_ERR_UNEXPECTED;
     if (NULL != p) {
       (void)snprintf(p->error_msg_, MAX_ERROR_MSG, "malloc_pool_ must be set");
     }
@@ -108,6 +108,15 @@ int parse_init(ParseResult *p)
 #ifdef OB_BUILD_ORACLE_PARSER
     }
 #endif
+#define	ENOMEM		12	/* Out of memory */
+    //refine parser error code to OB error code
+    if (0 == ret) {
+      ret = OB_PARSER_SUCCESS;
+    } else if (ENOMEM == ret) {
+      ret = OB_PARSER_ERR_NO_MEMORY;
+    } else {
+      ret = OB_PARSER_ERR_PARSE_SQL;
+    }
   }
   return ret;
 }

@@ -2696,16 +2696,26 @@ int ObFastParserMysql::parse_next_token()
       }
       case '-': {
         // need to deal with sql_comment or negative sign
-        int64_t space_len = 0;
         ch = raw_sql_.scan();
-        if ('-' == ch && IS_MULTI_SPACE(raw_sql_.cur_pos_ + 1, space_len)) {
-          // "--"{space}+{non_newline}*
+        if ('-' == ch &&
+            raw_sql_.cur_pos_ + 1 < raw_sql_.raw_sql_len_ &&
+            (raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == ' ' ||
+             raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\t')) {
+          // "--"[ \t]+{non_newline}*
           cur_token_type_ = IGNORE_TOKEN;
           // skip the second '-' and space
-          raw_sql_.scan(1 + space_len);
+          raw_sql_.scan(1);
           while (!raw_sql_.is_search_end() && is_non_newline(ch)) {
             ch = raw_sql_.scan();
           }
+        } else if ('-' == ch &&
+                   raw_sql_.cur_pos_ + 1 < raw_sql_.raw_sql_len_ &&
+                   (raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\n' ||
+                    raw_sql_.raw_sql_[raw_sql_.cur_pos_ + 1] == '\r')) {
+          // "--"[\n\r]
+          cur_token_type_ = IGNORE_TOKEN;
+          //skip the second '-' and ('\n' or \r)
+          raw_sql_.scan(1);
         } else {
           OZ (process_negative());
         }

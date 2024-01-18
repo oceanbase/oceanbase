@@ -132,6 +132,7 @@ NULL {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_NULL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   if (IS_FAST_PARAMETERIZE) {
@@ -149,6 +150,7 @@ NULL {
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(node, p->malloc_pool_, T_INT, 0);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   int err_no = 0;
   COPY_NUM_STRING(p, node);
   // we treated '-  12' as a const node, that is to say node->str_value_ = '-  12'
@@ -202,6 +204,7 @@ NULL {
   malloc_new_node(node, p->malloc_pool_, T_DOUBLE, 0);
   check_value(yylval);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_NUM_STRING(p, node);
   node->raw_text_ = node->str_value_;
   node->text_len_ = node->str_len_;
@@ -221,6 +224,7 @@ NULL {
   malloc_new_node(node, p->malloc_pool_, T_NUMBER/* should be T_NUMBER,*/, 0);
   check_value(yylval);
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_NUM_STRING(p, node);
   node->raw_text_ = node->str_value_;
   node->text_len_ = node->str_len_;
@@ -237,6 +241,7 @@ TRUE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->value_ = 1;
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
@@ -262,6 +267,7 @@ FALSE {
   check_value(yylval);
   ParseResult *p = (ParseResult *)yyextra;
   malloc_new_node(yylval->node, p->malloc_pool_, T_BOOL, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->value_ = 0;
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
@@ -295,6 +301,7 @@ FALSE {
   }
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_NCHAR, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
 
   yylval->node->str_len_ = 0;
   if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
@@ -309,6 +316,7 @@ FALSE {
   p->start_col_ = yylloc->first_column;
   check_value(yylval);
   malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   yylval->node->str_len_ = 0;
   p->last_escape_check_pos_ = 0;
   yylval->node->str_value_ = NULL;
@@ -409,6 +417,7 @@ FALSE {
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node->children_[0]);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
     check_malloc((*yylval->node->children_)->str_value_);
@@ -456,6 +465,7 @@ FALSE {
       check_malloc(*tmp_literal);
     }
     malloc_new_node(yylval->node, p->malloc_pool_, T_VARCHAR, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node);
     yylval->node->str_len_ = 0;
     p->last_escape_check_pos_ = 0;
     if (IS_FAST_PARAMETERIZE && !IS_NEED_PARAMETERIZE) {
@@ -550,6 +560,7 @@ FALSE {
     }
 
     malloc_new_node(yylval->node->children_[0], p->malloc_pool_, T_CONCAT_STRING, 0);
+    CHECK_MYSQL_COMMENT(p, yylval->node->children_[0]);
     (*yylval->node->children_)->str_value_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1,
                                             p->malloc_pool_);
     check_malloc((*yylval->node->children_)->str_value_);
@@ -727,6 +738,7 @@ X'([0-9A-F])*'|0X([0-9A-F])+ {
     node->str_len_ = 0;
   }
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   yylval->node->is_copy_raw_text_ = 1;
@@ -770,6 +782,7 @@ B'([01])*'|0B([01])+ {
     node->str_len_ = 0;
   }
   yylval->node = node;
+  CHECK_MYSQL_COMMENT(p, yylval->node);
   COPY_STRING(p->input_sql_ + yylloc->first_column - 1, yyleng, yylval->node->raw_text_);
   yylval->node->text_len_ = yyleng;
   yylval->node->is_copy_raw_text_ = 1;
