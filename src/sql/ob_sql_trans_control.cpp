@@ -181,6 +181,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
     session->get_tx_desc() = NULL;
   }
   OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
+  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   NG_TRACE_EXT(start_trans, OB_ID(ret), ret,
                OB_ID(trans_id), tx_id.get_id(),
                OB_ID(timeout), tx_param.timeout_us_,
@@ -235,6 +236,7 @@ int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is
     CK (OB_NOT_NULL(callback = &session->get_end_trans_cb()));
   }
   OZ (end_trans(exec_ctx, is_rollback, true, callback));
+  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   FLT_SET_TAG(trans_id, txn_id.get_id());
   if (hint.length()) {
     LOG_INFO("explicit end trans with hint",
@@ -566,6 +568,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     ar_snapshot.scn_ = snapshot.core_.scn_.cast_to_int();
     (void)snapshot.format_source_for_display(audit_record.snapshot_source_, sizeof(audit_record.snapshot_source_));
     ar_snapshot.source_ = audit_record.snapshot_source_;
+    audit_record.seq_num_ = ObSequence::get_max_seq_no();
   }
   if (OB_SUCC(ret) && !session->has_start_stmt()) {
     OZ (session->set_start_stmt());
@@ -828,6 +831,9 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  if (user_create) {
+    OX(session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
+  }
   return ret;
 }
 
@@ -948,6 +954,9 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
+  if (0 == session->get_raw_audit_record().seq_num_) {
+    OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
+  }
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {

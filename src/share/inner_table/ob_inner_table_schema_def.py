@@ -8162,7 +8162,8 @@ def_table_schema(
     ('pl_trace_id', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ('plsql_exec_time', 'int'),
     ('network_wait_time', 'uint', 'true'),
-    ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true')
+    ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
+    ('seq_num', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',

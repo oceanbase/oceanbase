@@ -857,6 +857,7 @@ pl_trace_id	varchar(128)	YES		NULL
 plsql_exec_time	bigint(20)	NO		NULL	
 network_wait_time	bigint(20) unsigned	YES		NULL	
 stmt_type	varchar(128)	YES		NULL	
+seq_num	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sql_audit;
 IF(count(*) >= 0, 1, 0)
 1
