@@ -4445,6 +4445,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               is_client_sessid_support_,
               use_rich_vector_format_);
   }();
+  OB_UNIS_ENCODE(ObString(sql_id_));
   return ret;
 }
 
@@ -4690,6 +4691,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   release_to_pool_ = OB_SUCC(ret);
   force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   }();
+  ObString sql_id;
+  OB_UNIS_DECODE(sql_id);
   return ret;
 }
 
@@ -4963,6 +4966,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               exec_min_cluster_version_,
               is_client_sessid_support_,
               use_rich_vector_format_);
+  OB_UNIS_ADD_LEN(ObString(sql_id_));
   return len;
 }
 
