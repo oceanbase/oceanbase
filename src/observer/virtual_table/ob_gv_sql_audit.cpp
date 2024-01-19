@@ -1052,7 +1052,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_null();
         } break;
         case PLSQL_EXEC_TIME: {
-          cells[cell_idx].set_null();
+          cells[cell_idx].set_int(0);
         } break;
         case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_null();
