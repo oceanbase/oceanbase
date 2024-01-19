@@ -307,9 +307,8 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomPolygon, ObWkbGeo
     ObIAllocator *allocator = context.get_allocator();
     uint32_t srid = srs != NULL ? srs->get_srid() : 0;
     const ObWkbGeomPolygon *geo1 = reinterpret_cast<const ObWkbGeomPolygon *>(g1->val());
-    ObCartesianMultipolygon res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *cart_multi_poly, res_geo1);
-    result = res_geo1.is_empty();
+    boost::geometry::correct(*const_cast<ObWkbGeomPolygon *>(geo1));
+    result = boost::geometry::covered_by(*geo1, *cart_multi_poly);
   }
   return ret;
 } OB_GEO_FUNC_END;
@@ -397,8 +396,8 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeomMultiPolygon, ObW
     uint32_t srid = srs != NULL ? srs->get_srid() : 0;
     const ObWkbGeomMultiPolygon *geo1 = reinterpret_cast<const ObWkbGeomMultiPolygon *>(g1->val());
     ObCartesianMultipolygon res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *cart_multi_poly, res_geo1);
-    result = res_geo1.is_empty();
+    boost::geometry::correct(*const_cast<ObWkbGeomMultiPolygon *>(geo1));
+    result = boost::geometry::covered_by(*geo1, *cart_multi_poly);
   }
   return ret;
 } OB_GEO_FUNC_END;
@@ -834,9 +833,9 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogPolygon, ObWkbGeo
     boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogPolygon *geo1 = reinterpret_cast<const ObWkbGeogPolygon *>(g1->val());
-    ObGeographMultipolygon res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *multi_poly, res_geo1, line_strategy);
-    result = res_geo1.is_empty();
+    boost::geometry::strategy::area::geographic<> area_strategy(geog_sphere);
+    boost::geometry::correct(*const_cast<ObWkbGeogPolygon *>(geo1), area_strategy);
+    result = boost::geometry::covered_by(*geo1, *multi_poly);
   }
   return ret;
 } OB_GEO_FUNC_END;
@@ -929,9 +928,9 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncCoveredByImpl, ObWkbGeogMultiPolygon, ObW
     boost::geometry::srs::spheroid<double> geog_sphere(srs->semi_major_axis(), srs->semi_minor_axis());
     ObLlLaAaStrategy line_strategy(geog_sphere);
     const ObWkbGeogMultiPolygon *geo1 = reinterpret_cast<const ObWkbGeogMultiPolygon *>(g1->val());
-    ObGeographMultipolygon res_geo1(srid, *allocator);
-    boost::geometry::difference(*geo1, *multi_poly, res_geo1, line_strategy);
-    result = res_geo1.is_empty();
+    boost::geometry::strategy::area::geographic<> area_strategy(geog_sphere);
+    boost::geometry::correct(*const_cast<ObWkbGeogMultiPolygon *>(geo1), area_strategy);
+    result = boost::geometry::covered_by(*geo1, *multi_poly);
   }
   return ret;
 } OB_GEO_FUNC_END;
