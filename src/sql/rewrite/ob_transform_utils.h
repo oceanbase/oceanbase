@@ -1820,6 +1820,8 @@ public:
                                    const ObIArray<ObRawExpr *> &group_exprs,
                                    bool &bret);
 
+  static int check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
+
   static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
