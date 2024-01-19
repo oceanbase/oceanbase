@@ -463,7 +463,7 @@ int ObMySQLConnectionPool::acquire(const uint64_t tenant_id, ObMySQLConnection *
   }
 
   if (OB_ISNULL(connection)) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED: ret;
     LOG_WARN("failed to acquire connection",
              K(this), K(tenant_id), K(server_count), K(busy_conn_count_), K(ret));
     obsys::ObRLockGuard lock(get_lock_);

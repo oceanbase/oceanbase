@@ -51,7 +51,7 @@ namespace rootserver
   from the source primary tenant into USER ERROR,
   facilitating the troubleshooting of cross-tenant connection issues.
 */
-#define SOURCE_TENANT_CHECK_USER_ERROR_FOR_SWITCHOVER_TO_PRIMARY                                                                                                      \
+#define SOURCE_TENANT_CHECK_USER_ERROR_FOR_SWITCHOVER_TO_PRIMARY                                                                          \
   int tmp_ret = OB_SUCCESS;                                                                                                               \
   ObSqlString str;                                                                                                                        \
   switch (ret) {                                                                                                                          \
@@ -73,7 +73,11 @@ namespace rootserver
         ret = OB_OP_NOT_ALLOW;                                                                                                            \
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, str.ptr());                                                                                       \
       }                                                                                                                                   \
-      break;                                                                                                                              \
+      break;                                                                                                                               \
+    case -ER_ACCOUNT_HAS_BEEN_LOCKED:                                                                                                      \
+      ret = OB_OP_NOT_ALLOW;                                                                                                              \
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant's user account is locked, switchover to primary is");                                                       \
+      break;                                                                                                                     \
     case OB_ERR_TENANT_IS_LOCKED:                                                                                                         \
       ret = OB_OP_NOT_ALLOW;                                                                                                              \
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "primary tenant is locked, switchover to primary is");                                                       \
@@ -1527,11 +1531,15 @@ int ObTenantRoleTransitionService::check_sync_to_latest_do_while_(
   if (logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)) {
   } else if (THIS_WORKER.is_timeout() || !is_synced) {
     // return NOT_ALLOW instead of timeout
+    if (OB_SUCC(ret)) {
+      ret = OB_TIMEOUT; // to print in err_msg
+    }
     ObSqlString err_msg;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(err_msg.assign_fmt("wait tenant sync to latest failed(original error code: %d), switchover to primary is", ret))) {
       LOG_WARN("fail to assign error msg", KR(ret), KR(tmp_ret));
     } else {
+      // convert OB_TIMEOUT or other failure code to OB_OP_NOT_ALLOW
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("has not sync to latest, can not swithover to primary", KR(ret), K(only_check_sys_ls));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg.ptr());

@@ -842,7 +842,7 @@ bool ObLogRestoreHandler::restore_to_end() const
   RLockGuard guard(lock_);
   return restore_to_end_unlock_();
 }
-
+ERRSIM_POINT_DEF(ERRSIM_LS_STATE_NOT_MATCH);
 int ObLogRestoreHandler::check_restore_to_newest_from_service_(
     const share::ObRestoreSourceServiceAttr &service_attr,
     const share::SCN &end_scn,
@@ -890,7 +890,10 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
       CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
     }
   }
-
+   if (OB_UNLIKELY(ERRSIM_LS_STATE_NOT_MATCH)) {
+    ret = OB_SUCC(ret) ? OB_SOURCE_LS_STATE_NOT_MATCH : ret;
+    CLOG_LOG(WARN, "ERRSIM_LS_STATE_NOT_MATCH is on", KR(ret));
+   }
   // if connect to source tenant denied, rewrite ret_code
   if (-ER_ACCESS_DENIED_ERROR == ret) {
     ret = OB_PASSWORD_WRONG;

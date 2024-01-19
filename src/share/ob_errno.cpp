@@ -22659,11 +22659,11 @@ static const _error _error_OB_SOURCE_LS_STATE_NOT_MATCH = {
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "log restore source ls state not match, switchover to primary not allowed",
-      .str_user_error        = "log restore source ls state not match, switchover to primary not allowed",
+      .str_error             = "log restore source LS state not match, switchover to primary is not allowed",
+      .str_user_error        = "log restore source LS state not match, switchover to primary is not allowed",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9089, log restore source ls state not match, switchover to primary not allowed",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9089, log restore source ls state not match, switchover to primary not allowed"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -9089, log restore source LS state not match, switchover to primary is not allowed",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -9089, log restore source LS state not match, switchover to primary is not allowed"
 };
 static const _error _error_OB_ESI_SESSION_NOT_EXIST = {
       .error_name            = "OB_ESI_SESSION_NOT_EXIST",
