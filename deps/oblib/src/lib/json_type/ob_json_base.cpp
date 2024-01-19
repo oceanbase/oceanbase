@@ -5809,6 +5809,24 @@ int ObIJsonBase::to_bit(uint64_t &value) const
       break;
     }
 
+    case ObJsonNodeType::J_OBJECT:
+    case ObJsonNodeType::J_ARRAY: {
+      ObArenaAllocator allocator;
+      ObStringBuffer buffer(&allocator);
+      if (OB_FAIL(print(buffer, false))) {
+        LOG_WARN("bit len too long", K(buffer.length()));
+      } else if (buffer.length() > 8) {
+        ret = OB_ERR_DATA_TOO_LONG;
+        LOG_WARN("bit len too long", K(buffer.length()));
+      } else {
+        ObString str = buffer.string();
+        if (OB_FAIL(ObJsonBaseUtil::string_to_bit(str, bit))) {
+          LOG_WARN("fail to cast string to bit", K(ret), K(str));
+        }
+      }
+      break;
+    }
+
     case ObJsonNodeType::J_BOOLEAN: {
       bit = get_boolean();
       break;

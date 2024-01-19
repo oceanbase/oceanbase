@@ -2529,6 +2529,24 @@ CAST_FUNC_NAME(int, lob)
   return ret;
 }
 
+CAST_FUNC_NAME(null, json)
+{
+  int ret = OB_SUCCESS;                                                              \
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+  ObString raw_bin;
+  ObJsonNull j_null;
+  ObIJsonBase *j_base = &j_null;
+
+  if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    LOG_WARN("fail to get null json binary", K(ret));
+  } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
+    LOG_WARN("fail to fill json bin lob locator", K(ret));
+  }
+
+  return ret;
+}
+
 CAST_FUNC_NAME(int, json)
 {
   EVAL_ARG_FOR_CAST_TO_JSON()
@@ -10266,7 +10284,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_eval_arg,/*interval*/
     cast_eval_arg,/*rowid*/
     cast_eval_arg,/*lob*/
-    cast_eval_arg,/*json*/
+    cast_eval_arg,    /*json*/
     cast_not_support,/*geometry*/
     cast_to_udt_not_support,/*udt*/
     cast_not_expected,/*decimalint*/
@@ -11896,7 +11914,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_not_expected,/*lob*/
-    cast_eval_arg,/*json*/
+    cast_eval_arg,    /*json*/
     cast_eval_arg,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint, place_holder*/

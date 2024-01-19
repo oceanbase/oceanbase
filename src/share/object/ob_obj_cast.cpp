@@ -32,6 +32,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
@@ -1499,6 +1500,28 @@ static int string_text(const ObObjType expect_type, ObObjCastParams &params,
 }
 
 CAST_TO_TEXT_METHOD(int, ObIntTC);
+
+static int null_json(const ObObjType expect_type, ObObjCastParams &params,
+                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+
+  ObJsonNull j_null;
+  ObIJsonBase *j_base = &j_null;
+  ObString raw_bin;
+  if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
+  } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
+    LOG_WARN("fail to fill json bin lob locator", K(ret));
+  } else {
+    ObLength res_length = -1;
+    res_length = out.get_val_len();
+    SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_STRING, DEFAULT_SCALE_FOR_TEXT, res_length);
+  }
+
+  return ret;
+}
+
 
 static int int_json(const ObObjType expect_type, ObObjCastParams &params,
                     const ObObj &in, ObObj &out, const ObCastMode cast_mode)
@@ -9653,7 +9676,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*interval*/
     cast_not_expected,/*rowid*/
     cast_identity,/*lob*/
-    cast_identity,/*json*/
+    null_json,    /*json*/
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_not_expected,/*decimalint*/
@@ -13670,7 +13693,7 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
-const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
+const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null
 
 int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
@@ -13737,7 +13760,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("urowid with default value not supported");
   } else if (expect_type == ObJsonType) {
-    zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
+    zero_obj.set_json_value(expect_type, reinterpret_cast<const char *>(&OB_JSON_ZERO), ObJsonZeroVal::OB_JSON_ZERO_VAL_LENGTH);
+    zero_obj.set_has_lob_header();
   } else if (ob_is_user_defined_sql_type(expect_type)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("default value of udt, should be it's default constructor");

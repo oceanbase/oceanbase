@@ -83,6 +83,7 @@ int ObExprJsonMergePreserve::eval_json_merge_preserve(const ObExpr &expr, ObEval
   }
 
   for (int32 i = 0; OB_SUCC(ret) && i < expr.arg_cnt_ && !has_null; i++) {
+    ObIJsonBase *j_res = NULL;
     if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, i, j_patch_node, has_null))) {
       LOG_WARN("get_json_doc failed", K(ret));
     } else if (has_null) {
@@ -91,9 +92,14 @@ int ObExprJsonMergePreserve::eval_json_merge_preserve(const ObExpr &expr, ObEval
       if (i == 0) {
         j_base = j_patch_node;
       } else {
-        ObIJsonBase *j_res = NULL;
-        if (OB_FAIL(j_base->merge_tree(&temp_allocator, j_patch_node, j_res))) {
+        if (OB_ISNULL(j_base)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param not expected, j_base is null.", K(ret));
+        } else if (OB_FAIL(j_base->merge_tree(&temp_allocator, j_patch_node, j_res))) {
           LOG_WARN("error, merge tree failed", K(ret), K(i));
+        } else if (OB_ISNULL(j_res)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("param not expected, j_res is null.", K(ret));
         } else {
           j_base = j_res;
         }

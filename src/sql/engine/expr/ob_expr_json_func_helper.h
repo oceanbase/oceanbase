@@ -507,6 +507,17 @@ protected:
   int64_t query_timeout_ts_;
 };
 
+struct ObJsonZeroVal
+{
+  static const int32_t OB_JSON_ZERO_VAL_LENGTH = sizeof(ObLobCommon) + 2;
+  ObJsonZeroVal() : header_(), json_bin_() {
+    json_bin_[0] = '\0';
+    json_bin_[1] = '\0';
+  }
+  ObLobCommon header_;
+  char json_bin_[4];
+};
+
 } // sql
 } // oceanbase
 #endif // OCEANBASE_SQL_OB_EXPR_JSON_FUNC_HELPER_H_

@@ -1185,7 +1185,10 @@ void ObJsonExprHelper::set_type_for_value(ObExprResType* types_stack, uint32_t i
   ObObjType in_type = types_stack[index].get_type();
   if (in_type == ObNullType) {
   } else if (ob_is_string_type(in_type)) {
-    if (types_stack[index].get_charset_type() != CHARSET_UTF8MB4) {
+    if (in_type == ObVarcharType && types_stack[index].get_collation_type() == CS_TYPE_BINARY) {
+      types_stack[index].set_calc_type(ObHexStringType);
+      types_stack[index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    } else if (types_stack[index].get_charset_type() != CHARSET_UTF8MB4) {
       types_stack[index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
   } else if  (in_type == ObJsonType) {

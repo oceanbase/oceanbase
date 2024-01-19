@@ -112,7 +112,7 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
           LOG_WARN("padding fixed string value failed", K(ret));
         } else if (OB_FAIL(row_datum.from_obj(zero_obj))) {
           LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
-        } else if (zero_obj.is_lob_storage() && !row.at(col_idx)->obj_meta_.has_lob_header()) {
+        } else if (zero_obj.is_lob_storage() && zero_obj.has_lob_header() != row.at(col_idx)->obj_meta_.has_lob_header()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("has lob header mark is wrong", K(ret), K(i), K(col_idx),
             K(zero_obj.get_meta()), K(row.at(col_idx)->obj_meta_));
