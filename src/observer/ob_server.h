@@ -182,6 +182,21 @@ public:
     bool is_inited_;
   };
 
+  class ObRefreshIOCalibrationTimeTask: public common::ObTimerTask
+  {
+  public:
+    ObRefreshIOCalibrationTimeTask();
+    virtual ~ObRefreshIOCalibrationTimeTask() {}
+    int init(ObServer *observer, int tg_id);
+    void destroy();
+    virtual void runTimerTask() override;
+  private:
+    const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L;//10s
+    ObServer *obs_;
+    int tg_id_;
+    bool is_inited_;
+  };
+
   class ObRefreshTime {
   public:
     explicit ObRefreshTime(ObServer *obs): obs_(obs){}
@@ -285,6 +300,7 @@ private:
   int get_network_speed_from_config_file(int64_t &network_speed);
   int refresh_network_speed();
   int refresh_cpu_frequency();
+  int refresh_io_calibration();
   int clean_up_invalid_tables();
   int clean_up_invalid_tables_by_tenant(const uint64_t tenant_id);
   int init_ctas_clean_up_task(); //Regularly clean up the residuals related to querying and building tables and temporary tables
@@ -294,6 +310,7 @@ private:
   int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
   int init_refresh_cpu_frequency();
+  int init_refresh_io_calibration();
   int set_running_mode();
   void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
@@ -436,6 +453,7 @@ private:
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   ObRefreshCpuFreqTimeTask refresh_cpu_frequency_task_;
+  ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
 
