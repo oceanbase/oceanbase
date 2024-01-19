@@ -75,6 +75,7 @@ dtl_buffer_size
 dump_data_dictionary_to_log_interval
 enable_async_syslog
 enable_cgroup
+enable_dblink
 enable_ddl
 enable_early_lock_release
 enable_kv_ttl

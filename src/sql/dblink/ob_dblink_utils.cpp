@@ -38,6 +38,11 @@ bool get_dblink_reuse_connection_cfg()
   return tenant_config.is_valid() ? tenant_config->_enable_dblink_reuse_connection : true;
 }
 
+bool get_enable_dblink_cfg()
+{
+  return GCONF.enable_dblink;
+}
+
 uint64_t ObDblinkService::get_current_tenant_id()
 {
   return MTL_ID();
