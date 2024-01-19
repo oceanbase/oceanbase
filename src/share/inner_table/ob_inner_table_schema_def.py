@@ -14204,7 +14204,12 @@ def_table_schema(
                  CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
                  CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                  i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
-                 t.comment                                                     AS COMMENT,
+                 CASE i.index_status
+                 WHEN 2 THEN 'VALID'
+                 WHEN 3 THEN 'CHECKING'
+                 WHEN 4 THEN 'INELEGIBLE'
+                 WHEN 5 THEN 'ERROR'
+                 ELSE 'UNUSABLE' END                                                  AS COMMENT,
                  i.comment                                                     AS INDEX_COMMENT,
                  CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
                  d_col2.cur_default_value_v2                                     AS EXPRESSION
@@ -14250,7 +14255,7 @@ def_table_schema(
                   ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
-                  t.comment        AS COMMENT,
+                  'VALID'          AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
                   'YES'            AS IS_VISIBLE,
                   NULL             AS EXPRESSION
@@ -14278,7 +14283,12 @@ def_table_schema(
               CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
               CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
-              t.comment                                                     AS COMMENT,
+              CASE i.index_status
+              WHEN 2 THEN 'VALID'
+              WHEN 3 THEN 'CHECKING'
+              WHEN 4 THEN 'INELEGIBLE'
+              WHEN 5 THEN 'ERROR'
+              ELSE 'UNUSABLE' END                                           AS COMMENT,
               i.comment                                                     AS INDEX_COMMENT,
               CASE WHEN (i.index_attributes_set & 1) THEN 'NO' ELSE 'YES' END AS IS_VISIBLE,
               d_col2.cur_default_value_v2                                   AS EXPRESSION
@@ -14321,7 +14331,7 @@ def_table_schema(
                   ''                AS NULLABLE,
                   CASE WHEN t.index_using_type = 0 THEN 'BTREE' ELSE (
                     CASE WHEN t.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END) END AS INDEX_TYPE,
-                  t.comment        AS COMMENT,
+                  'VALID'          AS COMMENT,
                   t.comment        AS INDEX_COMMENT,
                   'YES'            AS IS_VISIBLE,
                   NULL             AS EXPRESSION
