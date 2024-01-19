@@ -258,6 +258,8 @@ private:
                          common::sqlclient::ObISQLConnection *dblink_conn,
                          ObDBLinkClient *&dblink_client);
 private:
+  static const int MIN_TX_REF_COUNT = 3;
+private:
   bool is_inited_;
   ObXACtxMgr *xa_ctx_mgr_;
   common::ObLatch lock_;
