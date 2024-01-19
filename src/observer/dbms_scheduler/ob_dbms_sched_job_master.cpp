@@ -28,6 +28,7 @@
 #include "share/ob_all_server_tracer.h"
 #include "observer/ob_server_struct.h"
 #include "rootserver/ob_root_service.h"
+#include "storage/mview/ob_mview_sched_job_utils.h"
 
 #define TO_TS(second) (1000000L * second)
 
@@ -40,6 +41,7 @@ using namespace share::schema;
 using namespace rootserver;
 using namespace obutil;
 using namespace obrpc;
+using namespace storage;
 
 namespace dbms_scheduler
 {
@@ -252,7 +254,19 @@ int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
   int64_t next_date = 0;
   const int64_t now = ObTimeUtility::current_time();
-  if (job_info.get_interval_ts() == 0) {
+  if (job_info.is_date_expression_job_class()
+      && !job_info.get_interval().empty()
+      && (0 != job_info.get_interval().case_compare("null"))) {
+    int64_t next_date_ts = 0;
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObMViewSchedJobUtils::calc_date_expression(job_info, next_date_ts))) {
+      LOG_WARN("failed to calc date expression", KR(ret), K(job_info));
+      // error code is ignored
+      next_date = 64060560000000000; // 4000-01-01
+    } else {
+      next_date = next_date_ts;
+    }
+  } else if (job_info.get_interval_ts() == 0) {
     next_date = 64060560000000000;
   } else {
     int64_t N = (now - job_info.get_start_date()) / job_info.get_interval_ts();
