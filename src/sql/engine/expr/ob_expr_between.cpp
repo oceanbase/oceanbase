@@ -229,8 +229,6 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
   } else {
     DatumCmpFunc cmp_func_1 = NULL;  // left <= val
     DatumCmpFunc cmp_func_2 = NULL;  // val <= right
-    RowCmpFunc vec_cmp_func_1 = NULL;  // left <= val
-    RowCmpFunc vec_cmp_func_2 = NULL;  // val <= right
     const ObDatumMeta &val_meta = rt_expr.args_[0]->datum_meta_;
     const ObDatumMeta &left_meta = rt_expr.args_[1]->datum_meta_;
     const ObDatumMeta &right_meta = rt_expr.args_[2]->datum_meta_;
@@ -260,32 +258,49 @@ int ObExprBetween::cg_expr(ObExprCGCtx &expr_cg_ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get_datum_expr_cmp_func failed", K(ret), K(val_meta), K(right_meta),
                 K(is_oracle_mode()), K(rt_expr));
-    } else if (OB_ISNULL(vec_cmp_func_1 = VectorCmpExprFuncsHelper::get_row_cmp_func(
-                                                left_meta, val_meta))) {
-      ret = OB_ERR_UNEXPECTED;
-      VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
-      VecValueTypeClass left_tc = get_vec_value_tc(left_meta.type_, left_meta.scale_, left_meta.precision_);
-      LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(left) is null.",
-                K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(left_tc), K(rt_expr));
-    } else if (OB_ISNULL(vec_cmp_func_2 = VectorCmpExprFuncsHelper::get_row_cmp_func(
-                                                val_meta, right_meta))) {
-      ret = OB_ERR_UNEXPECTED;
-      VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
-      VecValueTypeClass right_tc = get_vec_value_tc(right_meta.type_, right_meta.scale_, right_meta.precision_);
-      LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(right) is null.",
-                K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(right_tc), K(rt_expr));
-    } else if (OB_ISNULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(
-                         expr_cg_ctx.allocator_->alloc(sizeof(DatumCmpFunc) * 2 + sizeof(RowCmpFunc) * 2)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc memory for inner_functions_ failed", K(ret));
     } else {
-      rt_expr.inner_func_cnt_ = 4;
-      rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func_1);
-      rt_expr.inner_functions_[1] = reinterpret_cast<void*>(cmp_func_2);
-      rt_expr.inner_functions_[2] = reinterpret_cast<void*>(vec_cmp_func_1);
-      rt_expr.inner_functions_[3] = reinterpret_cast<void*>(vec_cmp_func_2);
       rt_expr.eval_func_ = calc_between_expr;
-      rt_expr.eval_vector_func_ = eval_between_vector;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (expr_cg_ctx.session_->use_rich_format()) {
+      RowCmpFunc vec_cmp_func_1 = NULL;  // left <= val
+      RowCmpFunc vec_cmp_func_2 = NULL;  // val <= right
+      if (OB_ISNULL(vec_cmp_func_1 = VectorCmpExprFuncsHelper::get_row_cmp_func(
+                                                  left_meta, val_meta))) {
+        ret = OB_ERR_UNEXPECTED;
+        VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
+        VecValueTypeClass left_tc = get_vec_value_tc(left_meta.type_, left_meta.scale_, left_meta.precision_);
+        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(left) is null.",
+                  K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(left_tc), K(rt_expr));
+      } else if (OB_ISNULL(vec_cmp_func_2 = VectorCmpExprFuncsHelper::get_row_cmp_func(
+                                                  val_meta, right_meta))) {
+        ret = OB_ERR_UNEXPECTED;
+        VecValueTypeClass value_tc = get_vec_value_tc(val_meta.type_, val_meta.scale_, val_meta.precision_);
+        VecValueTypeClass right_tc = get_vec_value_tc(right_meta.type_, right_meta.scale_, right_meta.precision_);
+        LOG_WARN("The result of get_eval_vector_between_expr_cmp_func(right) is null.",
+                  K(ret), K(left_meta), K(val_meta), K(right_meta), K(value_tc), K(right_tc), K(rt_expr));
+      } else if (OB_ISNULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(
+                          expr_cg_ctx.allocator_->alloc(sizeof(DatumCmpFunc) * 2 + sizeof(RowCmpFunc) * 2)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for inner_functions_ failed", K(ret));
+      } else {
+        rt_expr.inner_func_cnt_ = 4;
+        rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func_1);
+        rt_expr.inner_functions_[1] = reinterpret_cast<void*>(cmp_func_2);
+        rt_expr.inner_functions_[2] = reinterpret_cast<void*>(vec_cmp_func_1);
+        rt_expr.inner_functions_[3] = reinterpret_cast<void*>(vec_cmp_func_2);
+        rt_expr.eval_vector_func_ = eval_between_vector;
+      }
+    } else {  // not use_rich_format
+      if (OB_ISNULL(rt_expr.inner_functions_ = reinterpret_cast<void**>(
+                          expr_cg_ctx.allocator_->alloc(sizeof(DatumCmpFunc) * 2)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory for inner_functions_ failed", K(ret));
+      } else {
+        rt_expr.inner_func_cnt_ = 2;
+        rt_expr.inner_functions_[0] = reinterpret_cast<void*>(cmp_func_1);
+        rt_expr.inner_functions_[1] = reinterpret_cast<void*>(cmp_func_2);
+      }
     }
   }
   return ret;
