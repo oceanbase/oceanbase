@@ -59,7 +59,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual void set_iter_end() override { is_iter_finish_ = true; }
@@ -117,7 +118,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reuse() override;
   virtual void reset() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLSStableAllRangeIterator", K(is_iter_start_), K(is_iter_finish_),
@@ -165,7 +167,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reuse() override;
   INHERIT_TO_STRING_KV("base iterator:", ObIndexBlockRowIterator, "format:", "ObDDLMergeEmptyIterator");
 };
@@ -203,7 +206,8 @@ public:
   virtual int get_index_row_count(const ObDatumRange &range,
                                   const bool is_left_border,
                                   const bool is_right_border,
-                                  int64_t &index_row_count) override;
+                                  int64_t &index_row_count,
+                                  int64_t &data_row_count) override;
   virtual void reset() override;
   virtual void reuse() override;
   virtual int switch_context(ObStorageDatumUtils *datum_utils) override;

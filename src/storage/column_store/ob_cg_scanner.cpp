@@ -29,7 +29,7 @@ int ObCGScanner::init(
     ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
-
+  int64_t data_row_cnt = 0;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGScanner has been inited", K(ret));
@@ -45,10 +45,12 @@ int ObCGScanner::init(
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
   } else if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
     LOG_WARN("fail to init prefetcher, ", K(ret));
+  } else if (OB_FAIL(table_wrapper_.get_merge_row_cnt(iter_param, data_row_cnt))) {
+    LOG_WARN("fail to get merge row cnt", K(ret), K(iter_param), K(sstable_row_cnt_), K(table_wrapper_));
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    sstable_row_cnt_ = sstable_->get_merged_row_count();
+    sstable_row_cnt_ = data_row_cnt;
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
   }
 
@@ -82,17 +84,20 @@ int ObCGScanner::switch_context(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
   } else {
+    int64_t data_row_cnt = 0;
     if (!prefetcher_.is_valid()) {
       if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
         LOG_WARN("fail to init prefetcher, ", K(ret));
       }
     } else if (OB_FAIL(prefetcher_.switch_context(get_type(), *sstable_, iter_param, access_ctx))) {
       LOG_WARN("Fail to switch context for prefetcher", K(ret));
+    } else if (OB_FAIL(table_wrapper_.get_merge_row_cnt(iter_param, data_row_cnt))) {
+      LOG_WARN("fail to get merge row cnt", K(ret), K(iter_param), K(data_row_cnt), K(table_wrapper_));
     }
     if (OB_SUCC(ret)) {
       iter_param_ = &iter_param;
       access_ctx_ = &access_ctx;
-      sstable_row_cnt_ = sstable_->get_merged_row_count();
+      sstable_row_cnt_ = data_row_cnt;
       is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
     }
   }

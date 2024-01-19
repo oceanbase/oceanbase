@@ -443,7 +443,8 @@ bool ObDDLIndexBlockRowIterator::end_of_block() const
 int ObDDLIndexBlockRowIterator::get_index_row_count(const ObDatumRange &range,
                                                     const bool is_left_border,
                                                     const bool is_right_border,
-                                                    int64_t &index_row_count)
+                                                    int64_t &index_row_count,
+                                                    int64_t &data_row_count)
 {
   int ret = OB_SUCCESS;
   index_row_count = 0;
@@ -702,7 +703,8 @@ bool ObDDLSStableAllRangeIterator::end_of_block() const
 int ObDDLSStableAllRangeIterator::get_index_row_count(const ObDatumRange &range,
                                                       const bool is_left_border,
                                                       const bool is_right_border,
-                                                      int64_t &index_row_count)
+                                                      int64_t &index_row_count,
+                                                      int64_t &data_row_count)
 {
   // only single ddl_merge_sstable_without kv can come here, so just return real row_cnt in sstable
   // todo @qilu: refine this, ddl_merge_sstable use RAW or TRANSFORM format iter
@@ -824,7 +826,8 @@ bool ObDDLMergeEmptyIterator::end_of_block() const
 int ObDDLMergeEmptyIterator::get_index_row_count(const ObDatumRange &range,
                                                  const bool is_left_border,
                                                  const bool is_right_border,
-                                                 int64_t &index_row_count)
+                                                 int64_t &index_row_count,
+                                                 int64_t &data_row_count)
 {
   index_row_count = 0;
   return OB_SUCCESS;
@@ -2079,10 +2082,12 @@ bool ObDDLMergeBlockRowIterator::end_of_block() const
 int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
                                                     const bool is_left_border,
                                                     const bool is_right_border,
-                                                    int64_t &index_row_count)
+                                                    int64_t &index_row_count,
+                                                    int64_t &data_row_count)
 {
   int ret = OB_SUCCESS;
   index_row_count = 0;
+  data_row_count = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Iter not opened yet", K(ret), KPC(this));
@@ -2090,10 +2095,11 @@ int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguement", K(ret), K(range));
   } else if (is_single_sstable_) {
+    data_row_count = INT64_MAX;
     if (OB_UNLIKELY(iters_.count() != 1) || OB_ISNULL(iters_.at(0))  || OB_UNLIKELY(!iters_.at(0)->is_inited())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid iters count or iter is nll", K(ret), K(iters_));
-    } else if (OB_FAIL(iters_.at(0)->get_index_row_count(range, is_left_border, is_right_border, index_row_count))) {
+    } else if (OB_FAIL(iters_.at(0)->get_index_row_count(range, is_left_border, is_right_border, index_row_count, data_row_count))) {
       LOG_WARN("fail to check blockscan", K(ret), KPC(iters_.at(0)), K(range));
     }
   } else {
@@ -2135,11 +2141,12 @@ int ObDDLMergeBlockRowIterator::get_index_row_count(const ObDatumRange &range,
           LOG_WARN("Unexpected null index block row header/endkey", K(ret), KPC(tmp_merge_iter), KP(idx_row_header), KP(endkey));
         } else {
           ++index_row_count;
+          data_row_count += idx_row_header->get_row_count();
         }
       }
       if (OB_ITER_END == ret) {
         ret = OB_SUCCESS;
-        LOG_INFO("get merge idx row cnt success", K(index_row_count));
+        LOG_INFO("get merge idx row cnt success", K(index_row_count), K(data_row_count));
       }
     }
 

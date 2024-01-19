@@ -248,8 +248,9 @@ int ObDefaultCGScanner::init(
     STORAGE_LOG(WARN, "Failed to init_datum_infos_and_default_row", K(ret), K(iter_param), K(access_ctx));
   } else if (OB_FAIL(init_cg_agg_cells(iter_param, access_ctx))) {
     STORAGE_LOG(WARN, "failed to init cg_add_cells", K(ret), K(iter_param), K(access_ctx));
+  } else if (OB_FAIL(wrapper.get_merge_row_cnt(iter_param, total_row_count_))) {
+    STORAGE_LOG(WARN, "fail to get merge row cnt", K(ret), K(iter_param), K(total_row_count_), K(wrapper));
   } else {
-    total_row_count_ = wrapper.get_sstable()->get_row_count();
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
     filter_ = nullptr;
@@ -366,8 +367,9 @@ int ObDefaultCGScanner::switch_context(
                         !wrapper.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "unexpected argument", K(ret), K(wrapper), K(iter_param), K(access_ctx));
+  } else if (OB_FAIL(wrapper.get_merge_row_cnt(iter_param, total_row_count_))) {
+    STORAGE_LOG(WARN, "fail to get ddl merge row cnt", K(ret), K(iter_param), K(total_row_count_), K(wrapper));
   } else {
-    total_row_count_ = wrapper.get_sstable()->get_row_count();
     query_range_valid_row_count_ = 0;
     iter_param_ = &iter_param;
     stmt_allocator_ = access_ctx.stmt_allocator_;
