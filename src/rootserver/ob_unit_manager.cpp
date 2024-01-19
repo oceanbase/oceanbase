@@ -1571,7 +1571,7 @@ int ObUnitManager::register_shrink_tenant_pool_unit_num_rs_job(
 void ObUnitManager::print_user_error_(const uint64_t tenant_id)
 {
   const int64_t ERR_MSG_LEN = 256;
-  char err_msg[ERR_MSG_LEN];
+  char err_msg[ERR_MSG_LEN] = {'\0'};
   int ret = OB_SUCCESS;
   int64_t pos = 0;
   if (OB_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
@@ -6206,7 +6206,7 @@ int ObUnitManager::alter_pool_unit_config(share::ObResourcePool  *pool,
       config->unit_resource(),
       alter_config->unit_resource()))) {
     LOG_WARN("check_expand_config failed", KR(ret), KPC(pool), KPC(config), KPC(alter_config));
-  } else if (OB_FAIL(check_shrink_resource_(*pool, config->unit_resource(),
+  } else if (OB_FAIL(check_shrink_resource_(pools, config->unit_resource(),
       alter_config->unit_resource()))) {
     LOG_WARN("check_shrink_resource_ failed", KPC(pool), KPC(config), KPC(alter_config), KR(ret));
   } else if (OB_FAIL(change_pool_config(pool, config, alter_config))) {
@@ -7662,6 +7662,7 @@ int ObUnitManager::check_full_resource_pool_memory_condition(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_USE_DUMMY_SERVER);
 int ObUnitManager::check_expand_resource_(
     const char *module,
     const common::ObIArray<share::ObResourcePool  *> &pools,
@@ -7682,6 +7683,10 @@ int ObUnitManager::check_expand_resource_(
   } else if (!old_resource.is_valid() || !new_resource.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid old_resource or invalid new_resource", K(old_resource), K(new_resource), K(ret));
+  } else if (!new_resource.has_expanded_resource_than(old_resource)) {
+    // skip, no need to check
+    LOG_INFO("new unit_resource has no expanded resource, skip check_expand_resource",
+             KR(ret), K(old_resource), K(new_resource));
   } else if (OB_FAIL(server_ref_count_map.create(
       SERVER_REF_COUNT_MAP_BUCKET_NUM, ObModIds::OB_HASH_BUCKET_SERVER_REF_COUNT_MAP))) {
     LOG_WARN("pool_unit_map_ create failed",
@@ -7704,6 +7709,20 @@ int ObUnitManager::check_expand_resource_(
           to_cstring(server), iter->second, to_cstring(expand_resource));
       if (OB_FAIL(SVR_TRACER.get_server_info(server, server_info))) {
         LOG_WARN("fail to get server_info", KR(ret), K(server));
+      } else if (OB_UNLIKELY(!server_info.is_active())) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("server is inactive, cannot check_expand_resource", KR(ret), K(server), K(server_info));
+        const int64_t ERR_MSG_LEN = 256;
+        char err_msg[ERR_MSG_LEN] = {'\0'};
+        int tmp_ret = OB_SUCCESS;
+        int64_t pos = 0;
+        if (OB_TMP_FAIL(databuff_printf(err_msg, ERR_MSG_LEN, pos,
+              "Server %s is inactive, expanding resource",
+              to_cstring(OB_SUCCESS != ERRSIM_USE_DUMMY_SERVER ? ObAddr() : server)))) {
+          LOG_WARN("format err_msg failed", KR(tmp_ret), KR(ret));
+        } else {
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
+        }
       } else if (OB_FAIL(check_expand_resource_(server_info, expand_resource, can_expand, err_index))) {
         LOG_WARN("check expand resource failed", KR(ret), K(server_info));
       } else if (!can_expand) {
@@ -7773,22 +7792,19 @@ int ObUnitManager::check_shrink_resource_(const ObIArray<share::ObResourcePool *
   } else if (!resource.is_valid() || !new_resource.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid resource or invalid new_resource", K(resource), K(new_resource), K(ret));
+  } else if (!new_resource.has_shrunk_resource_than(resource)) {
+    // skip, no need to check
+    LOG_INFO("new unit_resource has no shrunk resource, skip check_shrink_resource",
+             KR(ret), K(resource), K(new_resource));
   } else {
-    if (new_resource.max_cpu() < resource.max_cpu()) {
-      // cpu don't need check
-    }
-
-    if (new_resource.memory_size() < resource.memory_size()
-        || new_resource.log_disk_size() < resource.log_disk_size()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
-        const share::ObResourcePool *pool = pools.at(i);
-        if (OB_UNLIKELY(NULL == pool)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("pool ptr is null", K(ret));
-        } else if (OB_FAIL(check_shrink_resource_(*pool, resource, new_resource))) {
-          LOG_WARN("fail to check shrink resource", KR(ret));
-        } else {} // no more to do
-      }
+    for (int64_t i = 0; OB_SUCC(ret) && i < pools.count(); ++i) {
+      const share::ObResourcePool *pool = pools.at(i);
+      if (OB_UNLIKELY(NULL == pool)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("pool ptr is null", K(ret));
+      } else if (OB_FAIL(check_shrink_resource_(*pool, resource, new_resource))) {
+        LOG_WARN("fail to check shrink resource", KR(ret));
+      } else {} // no more to do
     }
   }
   return ret;
@@ -8468,7 +8484,6 @@ int ObUnitManager::check_tenant_on_server(const uint64_t tenant_id,
   return ret;
 }
 
-ERRSIM_POINT_DEF(ERRSIM_USE_DUMMY_SERVER);
 int ObUnitManager::admin_migrate_unit(
     const uint64_t unit_id,
     const ObAddr &dst,
