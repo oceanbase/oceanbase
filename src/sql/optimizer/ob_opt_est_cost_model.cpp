@@ -1647,7 +1647,7 @@ int ObOptEstCostModel::cost_table_scan_one_batch_inner(double row_count,
     if (range_count > 1 && est_cost_info.at_most_one_range_) {
       range_count = 1;
     }
-    range_cost = est_cost_info.ranges_.count() * cost_params_.RANGE_COST;
+    range_cost = range_count * cost_params_.RANGE_COST;
     double cpu_cost = row_count * cost_params_.CPU_TUPLE_COST
                       + range_cost + qual_cost;
     // 从memtable读取数据的代价，待提供
