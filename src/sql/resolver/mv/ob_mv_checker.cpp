@@ -74,6 +74,11 @@ int ObMVChecker::check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool
     append_fast_refreshable_note("set query not support");
   }
 
+  if (OB_SUCC(ret) && (stmt.has_subquery())) {
+    is_valid = false;
+    append_fast_refreshable_note("subquery not support");
+  }
+
   if (OB_SUCC(ret) && (stmt.has_order_by() || stmt.has_limit())) {
     is_valid = false;
     append_fast_refreshable_note("order by and limit not support");
