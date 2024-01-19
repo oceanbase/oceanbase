@@ -460,6 +460,13 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_COUNT, "multi append execute count", Ob
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_TIME, "multi append execute time", ObStatClassIds::TABLEAPI, 191204, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_ROW, "multi append rows", ObStatClassIds::TABLEAPI, 191205, true, true, true)
 
+// -- table put 1913xx
+STAT_EVENT_ADD_DEF(TABLEAPI_PUT_COUNT, "single put execute count", ObStatClassIds::TABLEAPI, 191301, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_PUT_TIME, "single put execute time", ObStatClassIds::TABLEAPI, 191302, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatClassIds::TABLEAPI, 191303, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
+
 // sys_time_model related (20xxxx)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_TIME, "DB time", ObStatClassIds::SYS, 200001, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_CPU, "DB CPU", ObStatClassIds::SYS, 200002, false, true, true)
