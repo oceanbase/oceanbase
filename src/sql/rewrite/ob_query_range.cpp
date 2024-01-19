@@ -3601,7 +3601,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
     common::ObGeoRelationType op_type;
     if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-    } else if (l_expr->has_flag(IS_COLUMN) && r_expr->has_flag(IS_COLUMN)) {
+    } else if (l_expr->has_flag(CNT_COLUMN) && r_expr->has_flag(CNT_COLUMN)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
