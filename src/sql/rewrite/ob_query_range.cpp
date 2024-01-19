@@ -1989,15 +1989,22 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       bool is_bound_modified = false;
       const ObRawExpr *l_expr = l_row->get_param_expr(i);
       const ObRawExpr *r_expr = r_row->get_param_expr(i);
-      if (OB_FAIL(check_null_param_compare_in_row(l_expr,
-                                                  r_expr,
-                                                  tmp_key_part))) {
+      ObItemType real_cmp_type = i < num - 1 ? c_type : cmp_type;
+      bool use_ori_cmp_type = false;
+      if ((i < num - 1 && (T_OP_LT == cmp_type || T_OP_GT == cmp_type)) &&
+            OB_FAIL(check_inner_row_cmp_type(l_row->get_param_expr(i + 1),
+                                             r_row->get_param_expr(i + 1),
+                                             use_ori_cmp_type))) {
+        LOG_WARN("fail to check can use ori cmp type", K(ret));
+      } else if (OB_FAIL(check_null_param_compare_in_row(l_expr,
+                                                         r_expr,
+                                                         tmp_key_part))) {
         LOG_WARN("failed to check null param compare in row", K(ret));
       } else if (tmp_key_part == NULL &&
                  OB_FAIL(get_basic_query_range(l_expr,
                                                r_expr,
                                                NULL,
-                                               i < num - 1 ? c_type : cmp_type,
+                                               use_ori_cmp_type ? cmp_type : real_cmp_type,
                                                res_type,
                                                tmp_key_part,
                                                dtc_params,
@@ -3920,6 +3927,35 @@ int ObQueryRange::check_null_param_compare_in_row(const ObRawExpr *l_expr,
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     }
   } else {/*do nothing*/}
+  return ret;
+}
+
+int ObQueryRange::check_inner_row_cmp_type(const ObRawExpr *l_expr,
+                                           const ObRawExpr *r_expr,
+                                           bool &use_ori_cmp_type)
+{
+  int ret = OB_SUCCESS;
+  use_ori_cmp_type = false;
+  if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), KP(l_expr), KP(r_expr));
+  } else if ((l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr()) ||
+              (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN))) {
+    const ObRawExpr *const_expr = l_expr->is_const_expr() ? l_expr : r_expr;
+    if (const_expr->has_flag(CNT_DYNAMIC_PARAM)) {
+      // do nothing
+    } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == const_expr->get_expr_type()) {
+      ObObj const_val;
+      bool is_valid = false;
+      if (OB_FAIL(get_calculable_expr_val(const_expr, const_val, is_valid))) {
+        LOG_WARN("failed to get calculable expr val", K(ret));
+      } else if (is_valid && (const_val.is_min_value() || const_val.is_max_value())) {
+        // if const val is min/max value, it means the previous expr value range is expanding,
+        // use origin cmp type to calc row range.
+        use_ori_cmp_type = true;
+      }
+    }
+  }
   return ret;
 }
 

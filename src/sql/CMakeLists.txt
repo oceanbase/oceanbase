@@ -692,6 +692,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/vector_cast/vector_cast.cpp
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
+  engine/expr/ob_expr_inner_row_cmp_val.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

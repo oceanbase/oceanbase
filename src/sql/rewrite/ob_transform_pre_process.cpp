@@ -5322,6 +5322,12 @@ int ObTransformPreProcess::transform_expr(ObRawExprFactory &expr_factory,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(replace_inner_row_cmp_val_recursively(expr_factory, session,
+                                                      expr, trans_happened))) {
+      LOG_WARN("replace inner row cmp value failed", K(ret), K(expr));
+    }
+  }
   return ret;
 }
 
@@ -6056,6 +6062,199 @@ int ObTransformPreProcess::replace_align_date4cmp_recursively(ObRawExprFactory &
     if (OB_FAIL(check_and_transform_align_date4cmp(
                 expr_factory, root_expr, root_expr->get_expr_type()))) {
       LOG_WARN("failed to check and transform", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::replace_inner_row_cmp_val_recursively(ObRawExprFactory &expr_factory,
+                                                                 const ObSQLSessionInfo &session,
+                                                                 ObRawExpr *&root_expr,
+                                                                 bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null param expr.", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < root_expr->get_param_count(); i++) {
+    if (OB_ISNULL(root_expr->get_param_expr(i))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null param expr", K(ret));
+    } else if (OB_FAIL(SMART_CALL(replace_inner_row_cmp_val_recursively(expr_factory,
+                                                                       session,
+                                                                       root_expr->get_param_expr(i),
+                                                                       trans_happened)))) {
+      LOG_WARN("failed to replace row cmp val recursively", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (T_OP_LT == root_expr->get_expr_type() || T_OP_GT == root_expr->get_expr_type()) {
+    // For row comparisons that are T_OP_LT/ or T_OP_GT expressions, need to check whether the
+    // range may be expanded. If so, change it to the corresponding inner expression.
+    int row_dim = -1;
+    if (OB_FAIL(ObRelationalExprOperator::is_row_cmp(*root_expr, row_dim))) {
+      LOG_WARN("failed to get row dimension", K(ret));
+    } else if (row_dim > 0) {
+      if (OB_FAIL(check_and_transform_inner_row_cmp_val(
+                expr_factory, session, root_expr, trans_happened))) {
+        LOG_WARN("failed to check and transform", K(ret));
+      }
+    }
+  } else if (T_OP_SQ_LT == root_expr->get_expr_type() || T_OP_SQ_GT == root_expr->get_expr_type()) {
+    // We also need to handle the comparison of subqueries, only focus on the op_row part of
+    // the subquery comparison.
+    if (OB_UNLIKELY(2 != root_expr->get_param_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param count", K(ret), K(root_expr->get_param_count()));
+    } else if ((T_OP_ROW == root_expr->get_param_expr(0)->get_expr_type() &&
+                root_expr->get_param_expr(0)->get_expr_type() > 1) ||
+               (T_OP_ROW == root_expr->get_param_expr(1)->get_expr_type() &&
+                root_expr->get_param_expr(1)->get_expr_type() > 1)) {
+      if (OB_FAIL(check_and_transform_inner_row_cmp_val(
+                expr_factory, session, root_expr, trans_happened))) {
+        LOG_WARN("failed to check and transform", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::check_and_transform_inner_row_cmp_val(ObRawExprFactory &expr_factory,
+                                                                 const ObSQLSessionInfo &session,
+                                                                 ObRawExpr *&row_cmp_expr,
+                                                                 bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *left = NULL;
+  ObRawExpr *right = NULL;
+  bool row_cmp_trans_happened = false;
+  const ObItemType op_type = row_cmp_expr->get_expr_type();
+  if (OB_UNLIKELY(2 != row_cmp_expr->get_param_count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid param cnt", K(ret), K(row_cmp_expr->get_param_count()));
+  } else if (OB_ISNULL(left = row_cmp_expr->get_param_expr(0)) ||
+             OB_ISNULL(right = row_cmp_expr->get_param_expr(1))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null params", K(ret), KP(left), KP(right));
+  } else if (T_OP_LT != op_type && T_OP_GT != op_type &&
+             T_OP_SQ_LT != op_type && T_OP_SQ_GT != op_type) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid op type", K(ret), K(op_type));
+  } else if (T_OP_ROW != left->get_expr_type() && T_OP_ROW != right->get_expr_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid types params", K(ret), K(left->get_expr_type()), K(right->get_expr_type()));
+  } else if (T_OP_ROW == left->get_expr_type() &&
+             OB_FAIL(transform_inner_op_row_cmp_for_decimal_int<true>(expr_factory,
+                                                                      session,
+                                                                      row_cmp_expr,
+                                                                      left,
+                                                                      row_cmp_trans_happened))) {
+    LOG_INFO("fail to transfrom left op row cmp", K(ret), K(op_type));
+  } else if (T_OP_ROW == right->get_expr_type() &&
+            OB_FAIL(transform_inner_op_row_cmp_for_decimal_int<false>(expr_factory,
+                                                                       session,
+                                                                       row_cmp_expr,
+                                                                       right,
+                                                                       row_cmp_trans_happened))) {
+    LOG_INFO("fail to transfrom left op row cmp", K(ret), K(op_type));
+  } else if (row_cmp_trans_happened) {
+    ObOpRawExpr *op_raw_expr = dynamic_cast<ObOpRawExpr *>(row_cmp_expr);
+    if (OB_ISNULL(op_raw_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid null op_raw_expr", K(ret));
+    } else if (OB_FALSE_IT(op_raw_expr->get_param_expr(0) = left)) {
+    } else if (OB_FALSE_IT(op_raw_expr->get_param_expr(1) = right)) {
+    } else if (OB_FAIL(op_raw_expr->formalize(&session))) {
+      LOG_WARN("formalize expr failed", K(ret));
+    } else {
+      trans_happened = row_cmp_trans_happened;
+      LOG_DEBUG("After Transform", K(*op_raw_expr));
+    }
+  }
+  return ret;
+}
+
+template<bool IS_LEFT>
+int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session,
+    ObRawExpr *&row_cmp_expr,
+    ObRawExpr *&row_expr,
+    bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  // The inner expression will return the result based on whether param 1 and param 2 are equal.
+  // If they are not equal, it means that the original range has been enlarged. At this time,
+  // an error code needs to be returned. The rules are as follows:
+  // if the input expr is on the left and it is greater than the value of the column,
+  // OB_ERR_MIN_VALUE should be returned at this time, otherwise it is the opposite.
+  const ObItemType op_type = row_cmp_expr->get_expr_type();
+  const bool is_err_min_val =
+    (IS_LEFT && (op_type == T_OP_GT || op_type == T_OP_SQ_GT)) ||  // (cast_expr, cast_expr) > (c1, c2)
+      (!IS_LEFT && (op_type == T_OP_LT || op_type == T_OP_SQ_LT)); // (c1, c2) < (cast_expr, cast_expr)
+  const int error_ret = is_err_min_val ? -OB_ERR_MIN_VALUE : -OB_ERR_MAX_VALUE;
+  // save the error code in the extra field of the expression to pass information
+  const uint64_t extra = static_cast<uint64_t>(error_ret);
+  const int64_t row_count = row_expr->get_param_count();
+  ObSEArray<ObRawExpr *, 4> new_params;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_count - 1; ++i) {
+    ObRawExpr *param_expr = row_expr->get_param_expr(i);
+    ObRawExpr *next_expr = row_expr->get_param_expr(i + 1);
+    ObRawExpr *new_expr = next_expr;
+    const ObExprResType &res_type = param_expr->get_result_type();
+    if (OB_ISNULL(param_expr) || OB_ISNULL(next_expr)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null params", K(ret), KP(param_expr), KP(next_expr));
+    } else if (param_expr->get_expr_type() == T_FUN_SYS_CAST &&
+        ob_is_decimal_int_tc(res_type.get_type()) &&
+        CM_IS_CONST_TO_DECIMAL_INT(res_type.get_cast_mode())) {
+      // try to transform cast expr
+      ObRawExpr *input_expr = param_expr->get_param_expr(0);
+      ObSysFunRawExpr *inner_row_cmp_expr = NULL;
+      if (OB_ISNULL(input_expr)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid null params", K(ret), KP(input_expr));
+      } else if (ob_is_int_uint_tc(input_expr->get_result_type().get_type()) ||
+                 ob_is_temporal_type(input_expr->get_result_type().get_type()) ||
+                 ob_is_bit_tc(input_expr->get_result_type().get_type())) {
+        // ignore this type as input, because it has no decimals there is no loss of precision
+      } else if (ob_is_number_or_decimal_int_tc(input_expr->get_result_type().get_type()) &&
+                 input_expr->get_result_type().get_scale() != SCALE_UNKNOWN_YET &&
+                 input_expr->get_result_type().get_scale() <= res_type.get_scale()) {
+        // there are more decimal places, no precision loss, no conversion required
+      } else if (OB_FAIL(ObRawExprUtils::build_inner_row_cmp_expr(expr_factory,
+                                                                  &session,
+                                                                  param_expr,
+                                                                  input_expr,
+                                                                  next_expr,
+                                                                  error_ret,
+                                                                  inner_row_cmp_expr))) {
+        LOG_WARN("fail to build inner row cmp expr", K(ret));
+      } else {
+        new_expr = inner_row_cmp_expr;
+        trans_happened = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      // The first parameter does not need to be converted
+      if (i == 0 && OB_FAIL(new_params.push_back(param_expr))) {
+        LOG_WARN("fail to push back first param expr", K(ret));
+      } else if (OB_FAIL(new_params.push_back(new_expr))) {
+        LOG_WARN("fail to push back new expr", K(ret));
+      }
+    }
+  }
+  // replace all params expr to new param exprs
+  if (OB_FAIL(ret)) {
+  } else if (new_params.count() != row_count) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected row count", K(ret), K(new_params.count()), K(row_count));
+  } else {
+    // This vector may have multiple values, such as (C1, C2, C3, ..., C). After conversion,
+    // it is (C1, inner(c2), inner(c3), ..., inner(c))
+    for (int64_t i = 0; OB_SUCC(ret) && trans_happened && i < row_count; ++i) {
+      row_expr->get_param_expr(i) = new_params.at(i);
     }
   }
   return ret;

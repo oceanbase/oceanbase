@@ -7710,6 +7710,8 @@ int ObRawExprUtils::create_real_cast_expr(ObRawExprFactory &expr_factory,
       }
       if (OB_FAIL(func_expr->add_param_expr(dst_expr))) {
         LOG_WARN("add dest type expr failed", K(ret));
+      } else {
+        func_expr->set_result_type(dst_type);
       }
       LOG_DEBUG("create_cast_expr debug", K(ret), K(*src_expr), K(dst_type),
                                           K(*func_expr), K(lbt()), K(func_expr));
@@ -8489,6 +8491,40 @@ int ObRawExprUtils::build_pack_expr(ObRawExprFactory &expr_factory,
         pack_expr = out_expr;
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
+                                             const ObSQLSessionInfo *session_info,
+                                             ObRawExpr *cast_expr,
+                                             ObRawExpr *input_expr,
+                                             ObRawExpr *next_expr,
+                                             const uint64_t ret_code,
+                                             ObSysFunRawExpr *&new_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info) || OB_ISNULL(cast_expr) ||
+        OB_ISNULL(input_expr) || OB_ISNULL(next_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected null", K(ret), K(session_info), K(cast_expr), K(input_expr),
+                                    K(next_expr));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_INNER_ROW_CMP_VALUE, new_expr))) {
+    LOG_WARN("create inner row cmp value expr failed", K(ret));
+  } else if (OB_ISNULL(new_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner row cmp value expr is null", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(cast_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(input_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(next_expr))) {
+    LOG_WARN("fail to add param expr", K(ret));
+  } else if (OB_FAIL(new_expr->formalize(session_info))) {
+    LOG_WARN("fail to formalize expr", K(*new_expr), K(ret));
+  } else {
+    new_expr->set_func_name("INTERNAL_FUNCTION");
+    new_expr->set_extra(ret_code);
   }
   return ret;
 }

@@ -6210,6 +6210,10 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
   if (OB_ISNULL(ori_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (ori_expr->get_expr_type() == T_FUN_SYS_INNER_ROW_CMP_VALUE) {
+    if (OB_FAIL(get_expr_without_lossless_cast(ori_expr->get_param_expr(2), expr))) {
+      LOG_WARN("failed to check is lossless column cast", K(ret));
+    }
   } else if (OB_FAIL(is_lossless_column_cast(ori_expr, is_lossless))) {
     LOG_WARN("failed to check is lossless column cast", K(ret));
   } else if (is_lossless) {
