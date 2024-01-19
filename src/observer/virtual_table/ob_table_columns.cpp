@@ -466,6 +466,59 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
         } else if (column_schema.is_stored_generated_column()) {
           extra_val = ObString::make_string("STORED GENERATED");
         } else {/*do nothing*/}
+
+        if (OB_SUCC(ret) && column_schema.get_skip_index_attr().has_skip_index()) {
+          const int64_t max_skip_index_print_size = sizeof(" SKIP_INDEX(MIN_MAX, SUM)");
+          const int64_t extra_print_buf_size = extra_val.length() + max_skip_index_print_size;
+          char *buf = nullptr;
+          int64_t pos = 0;
+          if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(extra_print_buf_size)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory for extra print buf", K(ret));
+          } else {
+            if (!extra_val.empty()) {
+              MEMCPY(buf, extra_val.ptr(), extra_val.length());
+              pos += extra_val.length();
+              if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, " "))) {
+                LOG_WARN("failed to print buf", K(ret));
+              }
+            }
+
+            bool first_skip_idx_attr_printed = false;
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "SKIP_INDEX("))) {
+                LOG_WARN("failed to print buf", K(ret));
+              }
+            }
+
+            if (OB_SUCC(ret) && column_schema.get_skip_index_attr().has_min_max()) {
+              if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "MIN_MAX"))) {
+                LOG_WARN("failed to print buf", K(ret));
+              } else {
+                first_skip_idx_attr_printed = true;
+              }
+            }
+
+            if (OB_SUCC(ret) && column_schema.get_skip_index_attr().has_sum()) {
+              if (first_skip_idx_attr_printed && OB_FAIL(databuff_printf(buf, buf_len, pos, ", "))) {
+                LOG_WARN("fail to print buf", K(ret));
+              } else if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, "SUM"))) {
+                LOG_WARN("failed to print buf", K(ret));
+              } else {
+                first_skip_idx_attr_printed = true;
+              }
+            }
+
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(databuff_printf(buf, extra_print_buf_size, pos, ")"))) {
+                LOG_WARN("failed to print buf", K(ret));
+              } else {
+                extra_val = ObString(pos, buf);
+              }
+            }
+          }
+        }
+
         cur_row_.cells_[cell_idx].set_varchar(extra_val);
         cur_row_.cells_[cell_idx].set_collation_type(
             ObCharset::get_default_collation(ObCharset::get_default_charset()));
