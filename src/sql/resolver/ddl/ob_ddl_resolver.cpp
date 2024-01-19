@@ -9257,7 +9257,8 @@ int ObDDLResolver::resolve_partition_node(ObPartitionedStmt *stmt,
       partnum = table_schema.get_all_part_num();
     }
     if (partnum > (lib::is_oracle_mode()
-        ? common::OB_MAX_PARTITION_NUM_ORACLE : common::OB_MAX_PARTITION_NUM_MYSQL)) {
+        ? common::OB_MAX_PARTITION_NUM_ORACLE :
+          ObResolverUtils::get_mysql_max_partition_num(table_schema.get_tenant_id()))) {
       ret = common::OB_TOO_MANY_PARTITIONS_ERROR;
     }
   }
@@ -9572,7 +9573,8 @@ int ObDDLResolver::resolve_partition_hash_or_key(
       LOG_USER_ERROR(OB_NO_PARTS_ERROR);
     } else if (!common::is_virtual_table(table_id_) &&
                partition_num > (lib::is_oracle_mode()
-                  ? common::OB_MAX_PARTITION_NUM_ORACLE : common::OB_MAX_PARTITION_NUM_MYSQL)) {
+                  ? common::OB_MAX_PARTITION_NUM_ORACLE
+                  : sql::ObResolverUtils::get_mysql_max_partition_num(table_schema.get_tenant_id()))) {
       ret = common::OB_TOO_MANY_PARTITIONS_ERROR;
     } else if (is_subpartition) {
       if (NULL != node->children_[HASH_PARTITION_LIST_NODE]) {

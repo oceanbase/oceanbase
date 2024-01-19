@@ -787,6 +787,8 @@ public:
       const uint64_t tenant_id,
       const obrpc::ObAlterTableArg &arg,
       const share::schema::ObTableSchema &table_schema);
+
+  static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,
