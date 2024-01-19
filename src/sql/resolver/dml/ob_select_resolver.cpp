@@ -2572,11 +2572,11 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     // else we should set the skip_join_dup parameter to true. 
     if (OB_FAIL(is_need_check_col_dup(select_item.expr_, need_check_col_dup))) {
       LOG_WARN("failed to check if need to check col duplicate", K(ret));
-    } else if (FALSE_IT(is_skip = is_skip ? is_skip : !need_check_col_dup)) {
-    } else if (!is_skip && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
-                                                              select_item.alias_name_,
-                                                              is_exists, // the return value of is_exists is unused.
-                                                              !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
+    } else if ((!is_skip || need_check_col_dup)
+      && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
+                                                               select_item.alias_name_,
+                                                               is_exists, // the return value of is_exists is unused.
+                                                               !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
       LOG_WARN("failed to check column exists", K(ret));
     } else if (OB_FAIL(resolve_generated_table_column_item(table_item,
                                                            select_item.alias_name_,
