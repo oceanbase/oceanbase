@@ -5750,6 +5750,7 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree, ObPLSql &
           static_sql.set_for_update(prepare_result.for_update_);
           static_sql.set_hidden_rowid(prepare_result.has_hidden_rowid_);
           static_sql.set_link_table(prepare_result.has_link_table_);
+          static_sql.set_skip_locked(prepare_result.is_skip_locked_);
         }
       }
 
@@ -7676,7 +7677,8 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
                                                              formal_params,
                                                              ObPLCursor::DEFINED,
                                                              prepare_result.has_dup_column_name_,
-                                                             index))) {
+                                                             index,
+                                                             prepare_result.is_skip_locked_))) {
         LOG_WARN("failed to add cursor to symbol table",
                  K(cursor_name),
                  K(sql_node->str_value_),
