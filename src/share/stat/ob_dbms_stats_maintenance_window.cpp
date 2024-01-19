@@ -399,13 +399,20 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
       ObObj time_obj;
       ObObj src_obj;
       int64_t current_time = ObTimeUtility::current_time();
-      ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
+      ObArenaAllocator calc_buf("DbmsStatsWindow");
       ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
       cast_ctx.dtc_params_ = session->get_dtc_params();
       int64_t specify_time = -1;
-      int32_t offset = 0;
+      int32_t offset_sec = 0;
       src_obj.set_string(ObVarcharType, val_name);
-      if (lib::is_oracle_mode()) {
+      const ObTimeZoneInfo* tz_info = get_timezone_info(session);
+      if (NULL != tz_info) {
+        if (OB_FAIL(tz_info->get_timezone_offset(ObTimeUtility::current_time(), offset_sec))) {
+          LOG_WARN("failed to get timezone offset", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (lib::is_oracle_mode()) {
         if (OB_FAIL(ObObjCaster::to_type(ObTimestampTZType, cast_ctx, src_obj, time_obj))) {
           LOG_WARN("failed to ObTimestampTZType type", K(ret));
         } else {
@@ -415,21 +422,13 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
         if (OB_FAIL(ObObjCaster::to_type(ObDateTimeType, cast_ctx, src_obj, time_obj))) {
           LOG_WARN("failed to ObTimestampType type", K(ret));
         } else {
-          specify_time = time_obj.get_datetime();
-          const ObTimeZoneInfo* tz_info = get_timezone_info(session);
-          if (NULL != tz_info) {
-            if (OB_FAIL(tz_info->get_timezone_offset(USEC_TO_SEC(specify_time), offset))) {
-              LOG_WARN("failed to get offset between utc and local", K(ret));
-            } else {
-              specify_time -= SEC_TO_USEC(offset);
-            }
-          }
+          specify_time = time_obj.get_datetime() - SEC_TO_USEC(offset_sec);
         }
       }
       if (OB_SUCC(ret)) {
         bool is_valid = false;
-        if (OB_FAIL(check_date_validate(job_name, specify_time + SEC_TO_USEC(offset),
-                                        current_time + SEC_TO_USEC(offset), is_valid))) {
+        if (OB_FAIL(check_date_validate(job_name, specify_time + SEC_TO_USEC(offset_sec),
+                                        current_time + SEC_TO_USEC(offset_sec), is_valid))) {
           LOG_WARN("failed to check date valid", K(ret));
         } else if (!is_valid) {
           ret = OB_ERR_DBMS_STATS_PL;
@@ -551,6 +550,8 @@ int ObDbmsStatsMaintenanceWindow::check_date_validate(const ObString &job_name,
     LOG_WARN("get unexpected error", K(ret), K(specify_time));
   } else if (current_time > specify_time) {
     is_valid = false;
+  } else if (0 == job_name.case_compare(opt_stats_history_manager)) {
+    is_valid = true;
   } else if (OB_FAIL(ObTimeConverter::usec_to_ob_time(specify_time, ob_time))) {
     LOG_WARN("failed to usec to ob time", K(ret), K(specify_time));
   } else if (OB_UNLIKELY(ob_time.parts_[DT_WDAY] < 1 ||
