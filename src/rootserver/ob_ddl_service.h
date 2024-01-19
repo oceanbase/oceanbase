@@ -1935,6 +1935,7 @@ private:
       ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
+      const bool need_sync_schema_version,
       bool &is_add_lob);
   int lock_tables_of_database(const share::schema::ObDatabaseSchema &database_schema,
                               ObMySQLTransaction &trans);

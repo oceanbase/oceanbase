@@ -9036,7 +9036,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
     bool is_add_lob = false;
     if (OB_SUCC(ret) && !is_origin_table_has_lob_column) {
       if (OB_FAIL(create_aux_lob_table_if_need(
-          new_table_schema, schema_guard, ddl_operator, trans, is_add_lob))) {
+          new_table_schema, schema_guard, ddl_operator, trans,
+          false/*need_sync_schema_version*/, is_add_lob))) {
         LOG_WARN("fail to create_aux_lob_table_if_need", K(ret), K(new_table_schema));
       }
     }
@@ -9054,12 +9055,13 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
                                                ObSchemaGetterGuard &schema_guard,
                                                ObDDLOperator &ddl_operator,
                                                common::ObMySQLTransaction &trans,
+                                               const bool need_sync_schema_version,
                                                bool &is_add_lob)
 {
   int ret = OB_SUCCESS;
+  is_add_lob = false;
   ObArray<ObTableSchema> aux_table_schemas;
   const uint64_t tenant_id = data_table_schema.get_tenant_id();
-  bool need_sync_schema_version = false;
   SCN frozen_scn;
 
   if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
@@ -9098,7 +9100,8 @@ int ObDDLService::create_aux_lob_table_if_need(ObTableSchema &data_table_schema,
     ObSEArray<const ObTableSchema*, 2> schemas;
     for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_schemas.count(); i++) {
       share::schema::ObTableSchema &table_schema = aux_table_schemas.at(i);
-      if (OB_FAIL(ddl_operator.create_table(table_schema, trans, NULL, need_sync_schema_version))) {
+      if (OB_FAIL(ddl_operator.create_table(table_schema, trans, NULL,
+        need_sync_schema_version && (i == aux_table_schemas.count() - 1)))) {
         LOG_WARN("failed to create table schema", K(ret));
       } else if (OB_FAIL(schemas.push_back(&table_schema))) {
         LOG_WARN("failed to push_back table schema", K(ret), K(table_schema));
@@ -11985,10 +11988,8 @@ int ObDDLService::add_not_null_column_to_table_schema(
                       ddl_operator,
                       trans))) {
       LOG_WARN("alter table constraints failed", K(ret));
-    } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema,
-                                                           trans,
-                                                           OB_DDL_ALTER_TABLE,
-                                                           &alter_table_arg.ddl_stmt_str_))) {
+    } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema, trans,
+        OB_DDL_ALTER_TABLE, &alter_table_arg.ddl_stmt_str_))) {
       LOG_WARN("failed to update data table schema attribute", K(ret));
     }
   }
@@ -12100,6 +12101,16 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
                                                                 ddl_operator,
                                                                 trans))) {
             LOG_WARN("failed to add column to table schema", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            // add lob.
+            if (!origin_table_schema->has_lob_column() && new_table_schema.has_lob_column()) {
+              bool is_add_lob = false;
+              if (OB_FAIL(create_aux_lob_table_if_need(new_table_schema, schema_guard, ddl_operator, trans,
+                true/*need_sync_table_schema_version*/, is_add_lob))) {
+                LOG_WARN("fail to create_aux_lob_table_if_need", K(ret), K(new_table_schema));
+              }
+            }
           }
         }
         if (trans.is_started()) {
