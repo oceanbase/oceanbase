@@ -26,6 +26,8 @@ public:
       : allocator_(allocator),
         interior_point_(nullptr),
         min_dist_(DBL_MAX),
+        interior_endpoint_(nullptr),
+        min_endpoint_dist_(DBL_MAX),
         srid_(0),
         exist_centroid_(true),
         centroid_pt_(nullptr),
@@ -118,6 +120,7 @@ public:
 private:
   int init(ObGeometry *geo);
   int assign_interior_point(double x, double y);
+  int assign_interior_endpoint(double x, double y);
   template<typename PointType>
   double calculate_euclidean_distance(ObCartesianPoint &p1, PointType &p2);
   int calculate_interior_y(ObIWkbGeomPolygon *geo, double &interior_y);
@@ -130,6 +133,8 @@ private:
   ObIAllocator *allocator_;
   ObCartesianPoint *interior_point_;
   double min_dist_;  // for point/multipoint/line/multiline
+  ObCartesianPoint *interior_endpoint_;
+  double min_endpoint_dist_;  // for line/multiline
   uint32_t srid_;
   bool exist_centroid_;
   ObCartesianPoint *centroid_pt_;
