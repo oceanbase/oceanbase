@@ -342,14 +342,17 @@ int ObCOSSTableRowScanner::init_project_iter(
         LOG_WARN("Failed to cg scan", K(ret));
       } else {
         project_iter_ = cg_scanner;
+        if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+          static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(nullptr == rows_filter_);
+        }
       }
     } else if (OB_ISNULL(project_iter_ = OB_NEWx(ObCGTileScanner, context.stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(project_iter_)->init(iter_params, false, context, co_sstable))) {
+    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(project_iter_)->init(iter_params, false, nullptr == rows_filter_, context, co_sstable))) {
       LOG_WARN("Fail to init cg tile scanner", K(ret), K(iter_params));
     }
-  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, false, co_sstable, context, iter_params,
+  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, false, nullptr == rows_filter_, co_sstable, context, iter_params,
       column_group_cnt_ != co_sstable->get_cs_meta().get_column_group_count(), project_iter_))) {
     LOG_WARN("Fail to switch context for cg iter", K(ret));
   }
@@ -388,10 +391,10 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
     } else if (OB_ISNULL(getter_project_iter_ = OB_NEWx(ObCGTileScanner, context.stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc cg tile scanner", K(ret));
-    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(getter_project_iter_)->init(iter_params, true, context, co_sstable))) {
+    } else if (OB_FAIL(static_cast<ObCGTileScanner*>(getter_project_iter_)->init(iter_params, true, false, context, co_sstable))) {
       LOG_WARN("Failed to init cg tile scanner", K(ret), K(iter_params));
     }
-  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, true, co_sstable, context, iter_params,
+  } else if (OB_FAIL(ObCOSSTableRowsFilter::switch_context_for_cg_iter(true, true, false, co_sstable, context, iter_params,
       column_group_cnt_ != co_sstable->get_cs_meta().get_column_group_count(), getter_project_iter_))) {
     LOG_WARN("Failed to switch context for cg iter", K(ret));
   }

@@ -23,6 +23,7 @@ class ObCGPrefetcher : public ObIndexTreeMultiPassPrefetcher<>
 public:
   ObCGPrefetcher() :
       is_reverse_scan_(false),
+      is_project_without_filter_(false),
       cg_iter_type_(-1),
       query_index_range_(),
       query_range_(),
@@ -69,7 +70,9 @@ public:
   }
   void recycle_block_data();
   void set_cg_agg_cells(ObCGAggCells &cg_agg_cells) { cg_agg_cells_ = &cg_agg_cells; }
+  void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }
   INHERIT_TO_STRING_KV("ObCGPrefetcher", ObIndexTreeMultiPassPrefetcher,
+                       K_(is_reverse_scan), K_(is_project_without_filter),
                        K_(query_index_range), K_(query_range), K_(cg_iter_type),
                        K_(micro_data_prewarm_idx), K_(cur_micro_data_read_idx), KP_(filter_bitmap),
                        KP_(cg_agg_cells), KP_(sstable_index_filter));
@@ -103,6 +106,7 @@ private:
 
 private:
   bool is_reverse_scan_;
+  bool is_project_without_filter_;
   int16_t cg_iter_type_;
   ObStorageDatum datums_[2];
   ObCSRange query_index_range_;
