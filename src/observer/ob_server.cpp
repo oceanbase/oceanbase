@@ -197,6 +197,7 @@ ObServer::ObServer()
     refresh_active_time_task_(),
     refresh_network_speed_task_(),
     refresh_cpu_frequency_task_(),
+    refresh_io_calibration_task_(),
     schema_status_proxy_(sql_proxy_),
     is_log_dir_empty_(false),
     conn_res_mgr_(),
@@ -437,6 +438,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init refresh network speed task failed", KR(ret));
     } else if (OB_FAIL(init_refresh_cpu_frequency())) {
       LOG_ERROR("init refresh cpu frequency failed", KR(ret));
+    } else if (OB_FAIL(init_refresh_io_calibration())) {
+      LOG_ERROR("init refresh io calibration failed", KR(ret));
     } else if (OB_FAIL(ObOptStatManager::get_instance().init(
                          &sql_proxy_, &config_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
@@ -3334,6 +3337,62 @@ int ObServer::refresh_network_speed()
   return ret;
 }
 
+ObServer::ObRefreshIOCalibrationTimeTask::ObRefreshIOCalibrationTimeTask()
+: obs_(nullptr), tg_id_(-1), is_inited_(false)
+{}
+
+int ObServer::ObRefreshIOCalibrationTimeTask::init(ObServer *obs, int tg_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has already been inited", KR(ret));
+  } else if (OB_ISNULL(obs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask init with null ptr", KR(ret), K(obs));
+  } else {
+    obs_ = obs;
+    tg_id_ = tg_id;
+    is_inited_ = true;
+    if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, REFRESH_INTERVAL, true /*schedule repeatly*/))) {
+      LOG_ERROR("fail to schedule task ObRefreshIOCalibrationTimeTask", KR(ret));
+    }
+  }
+  return ret;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::destroy()
+{
+  is_inited_ = false;
+  tg_id_ = -1;
+  obs_ = nullptr;
+}
+
+void ObServer::ObRefreshIOCalibrationTimeTask::runTimerTask()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask has not been inited", KR(ret));
+  } else if (OB_ISNULL(obs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRefreshIOCalibrationTimeTask task got null ptr", KR(ret));
+  } else if (OB_FAIL(obs_->refresh_io_calibration())) {
+    LOG_WARN("ObRefreshIOCalibrationTimeTask task failed", KR(ret));
+  } else {
+    TG_CANCEL(tg_id_, *this);
+  }
+}
+
+int ObServer::refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIOCalibration::get_instance().read_from_table())) {
+    LOG_WARN("fail to refresh io calibration from table", KR(ret));
+  }
+  return ret;
+}
+
 int ObServer::init_refresh_active_time_task()
 {
   int ret = OB_SUCCESS;
@@ -3384,6 +3443,15 @@ int ObServer::init_refresh_cpu_frequency()
   int ret = OB_SUCCESS;
   if (OB_FAIL(refresh_cpu_frequency_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
     LOG_ERROR("fail to init refresh cpu frequency task", KR(ret));
+  }
+  return ret;
+}
+
+int ObServer::init_refresh_io_calibration()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(refresh_io_calibration_task_.init(this, lib::TGDefIDs::ServerGTimer))) {
+    LOG_ERROR("fail to init refresh io calibration task", KR(ret));
   }
   return ret;
 }
