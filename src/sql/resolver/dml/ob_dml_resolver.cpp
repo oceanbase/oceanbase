@@ -14032,17 +14032,23 @@ int ObDMLResolver::compute_values_table_row_count(ObValuesTableDef &table_def)
   int64_t expr_count = table_def.access_exprs_.count();
   if (OB_UNLIKELY(table_def.column_cnt_ == 0 || expr_count == 0) ||
       OB_ISNULL(expr1 = table_def.access_exprs_.at(0)) ||
-      OB_ISNULL(expr2 = table_def.access_exprs_.at(expr_count - 1))) {
+      OB_ISNULL(expr2 = table_def.access_exprs_.at(expr_count - 1)) ||
+      OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected NULL ptr", K(ret), KP(expr1), KP(expr2));
   } else if (T_QUESTIONMARK == expr1->get_expr_type() && expr1->is_static_scalar_const_expr() &&
              T_QUESTIONMARK == expr2->get_expr_type() && expr2->is_static_scalar_const_expr()) {
     ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(expr1);
     int64_t param_idx = param_expr->get_value().get_unknown();
+    bool is_ps_prepare = session_info_->is_varparams_sql_prepare();
     if (OB_ISNULL(params_.param_list_) ||
         OB_UNLIKELY(param_idx < 0 || param_idx >= params_.param_list_->count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+      if (is_ps_prepare) {
+        LOG_TRACE("ps prepare param_store is empty");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+      }
     } else if (params_.param_list_->at(param_idx).is_ext_sql_array()) {
       if (OB_FAIL(params_.param_list_->at(param_idx).get_real_param_count(row_cnt))) {
         LOG_WARN("failed to get real param count", K(ret));
@@ -14097,8 +14103,16 @@ int ObDMLResolver::estimate_values_table_stats(ObValuesTableDef &table_def)
   const int64_t llc_bitmap_size = ObOptColumnStat::NUM_LLC_BUCKET;
   ObArenaAllocator alloc("ValuesTableStat");
   const ParamStore *param_store = params_.param_list_;
+  bool is_ps_prepare = false;
+  bool has_ps_param = false;
   table_def.column_ndvs_.reset();
   table_def.column_nnvs_.reset();
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpect param", K(ret));
+  } else {
+    is_ps_prepare = session_info_->is_varparams_sql_prepare();
+  }
   for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < table_def.column_cnt_; col_idx++) {
     double ndv = table_def.row_cnt_;
     double num_null = 0.0;
@@ -14120,8 +14134,13 @@ int ObDMLResolver::estimate_values_table_stats(ObValuesTableDef &table_def)
           int64_t param_idx = param_expr->get_value().get_unknown();
           if (OB_ISNULL(param_store) ||
               OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+            if (is_ps_prepare) {
+              has_ps_param = true;
+              LOG_TRACE("ps prepare param_store is empty");
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+            }
           } else if (param_store->at(param_idx).is_ext_sql_array()) {
             const ObSqlArrayObj *array_obj =
                       reinterpret_cast<const ObSqlArrayObj*>(param_store->at(param_idx).get_ext());
@@ -14142,8 +14161,13 @@ int ObDMLResolver::estimate_values_table_stats(ObValuesTableDef &table_def)
         for (int64_t i = 0; OB_SUCC(ret) && i < table_def.row_cnt_ && i < compute_ndv_thredhold; i++) {
           int64_t param_idx = table_def.start_param_idx_ + i * table_def.column_cnt_ + col_idx;
           if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+            if (is_ps_prepare) {
+              has_ps_param = true;
+              LOG_TRACE("ps prepare param_store is empty");
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
+            }
           } else if (OB_FAIL(add_obj_to_llc_bitmap(param_store->at(param_idx), llc_bitmap, num_null))) {
             LOG_WARN("failed to add obj to bitmap", K(ret));
           }
@@ -14156,7 +14180,7 @@ int ObDMLResolver::estimate_values_table_stats(ObValuesTableDef &table_def)
           }
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && !has_ps_param) {
         ndv = MIN(ObGlobalNdvEval::get_ndv_from_llc(llc_bitmap), ndv);
         ndv = table_def.row_cnt_ <= compute_ndv_thredhold ? ndv :
                   ObOptSelectivity::scale_distinct(table_def.row_cnt_, compute_ndv_thredhold, ndv);
