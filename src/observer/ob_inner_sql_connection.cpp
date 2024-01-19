@@ -1789,6 +1789,7 @@ int ObInnerSQLConnection::nonblock_get_leader(
   } else if (OB_FAIL(set_timeout(abs_timeout_us))) {
     LOG_WARN("set timeout failed", K(ret));
   } else {
+    int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
     int64_t tmp_abs_timeout_us = 0;
     const int64_t retry_interval_us = 200 * 1000; // 200ms
@@ -1797,19 +1798,16 @@ int ObInnerSQLConnection::nonblock_get_leader(
       if (THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
         LOG_WARN("already timeout", K(ret), K(THIS_WORKER.get_timeout_ts()));
-      } else if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(
-                         tenant_id, is_tenant_dropped))) {
+      } else if (OB_TMP_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(tenant_id,
+                                                                             is_tenant_dropped))) {
         LOG_WARN("user tenant has been dropped", KR(ret), K(tenant_id));
       } else if (is_tenant_dropped) {
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("user tenant has been dropped", KR(ret), K(tenant_id));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
-                         cluster_id,
-                         tenant_id,
-                         ls_id,
-                         leader,
-                         tmp_abs_timeout_us,
-                         retry_interval_us))) {
+                  cluster_id, tenant_id, ls_id, leader, tmp_abs_timeout_us, retry_interval_us))) {
         LOG_WARN("get leader with retry until timeout failed",  KR(ret), K(tenant_id), K(ls_id),
             K(leader), K(cluster_id), K(tmp_abs_timeout_us), K(retry_interval_us));
       } else if (OB_UNLIKELY(!leader.is_valid())) {
