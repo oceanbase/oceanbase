@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include <random>
+#include <chrono>
+
 #include "ob_table_scan_op.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_spliter.h"
@@ -2071,6 +2074,14 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
 int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_ENABLE_RANDOM_TSC) OB_SUCCESS;
+  bool enable_random_output = (tmp_ret != OB_SUCCESS);
+
+  int64_t rand_row_cnt = max_row_cnt;
+  int64_t rand_append_bits = 0;
+  if (enable_random_output && max_row_cnt > 1) {
+    gen_rand_size_and_skip_bits(max_row_cnt, rand_row_cnt, rand_append_bits);
+  }
   if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
     int64_t count = 0;
     if (OB_ISNULL(global_index_lookup_op_)) {
@@ -2079,17 +2090,22 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       global_index_lookup_op_->get_brs().size_ = brs_.size_ ;
       global_index_lookup_op_->get_brs().end_ = brs_.end_;
-      if (OB_FAIL(global_index_lookup_op_->get_next_rows(count, max_row_cnt))) {
-        LOG_WARN("failed to get next rows",K(ret), K(max_row_cnt));
+      if (OB_FAIL(global_index_lookup_op_->get_next_rows(count, rand_row_cnt))) {
+        LOG_WARN("failed to get next rows",K(ret), K(rand_row_cnt));
       } else {
         brs_.size_ = global_index_lookup_op_->get_brs().size_;
         brs_.end_ = global_index_lookup_op_->get_brs().end_;
       }
     }
   } else {
-    if (OB_FAIL(inner_get_next_batch_for_tsc(max_row_cnt))) {
+    if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
       LOG_WARN("failed to get next row",K(ret));
     }
+  }
+
+  if (OB_SUCC(ret) && enable_random_output && !brs_.end_
+      && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
+    adjust_rand_output_brs(rand_append_bits);
   }
   return ret;
 }
@@ -3094,12 +3110,38 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &m
   return ret;
 }
 
-ObGlobalIndexLookupOpImpl::ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op)
-  : ObIndexLookupOpImpl(GLOBAL_INDEX, 10000 /*default_batch_row_count*/),
-    table_scan_op_(table_scan_op),
-    das_ref_(table_scan_op_->get_eval_ctx(), table_scan_op_->get_exec_ctx()),
-    lookup_result_(),
-    lookup_memctx_()
+void ObTableScanOp::gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size,
+                                                int64_t &skip_bits)
+{
+  rand_size = batch_size;
+  skip_bits = 0;
+  if (batch_size > 1) {
+    std::default_random_engine rd;
+    rd.seed(std::random_device()());
+    std::uniform_int_distribution<int64_t> irand(0, batch_size/2);
+    skip_bits = irand(rd);
+    if (skip_bits <= 0) {
+      skip_bits = 1;
+    }
+    rand_size = batch_size - skip_bits;
+    LOG_TRACE("random batch size", K(rand_size), K(skip_bits));
+  }
+}
+
+void ObTableScanOp::adjust_rand_output_brs(const int64_t rand_append_bits)
+{
+  LOG_TRACE("random output", K(brs_.size_), K(rand_append_bits));
+  int64_t output_size = brs_.size_ + rand_append_bits;
+  brs_.skip_->set_all(brs_.size_, output_size);
+  brs_.size_ = output_size;
+  brs_.all_rows_active_ = false;
+}
+
+ObGlobalIndexLookupOpImpl::ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op) :
+  ObIndexLookupOpImpl(GLOBAL_INDEX, 10000 /*default_batch_row_count*/),
+  table_scan_op_(table_scan_op),
+  das_ref_(table_scan_op_->get_eval_ctx(), table_scan_op_->get_exec_ctx()), lookup_result_(),
+  lookup_memctx_()
 {
 }
 

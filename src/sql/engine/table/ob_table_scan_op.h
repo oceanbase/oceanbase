@@ -596,6 +596,10 @@ private:
   int inner_get_next_row_for_tsc();
   int inner_get_next_batch_for_tsc(const int64_t max_row_cnt);
   int inner_rescan_for_tsc();
+
+  void gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size, int64_t &skip_bits);
+
+  void adjust_rand_output_brs(const int64_t rand_skip_bits);
 protected:
   ObDASRef das_ref_;
   DASOpResultIter scan_result_;
