@@ -1829,6 +1829,10 @@ DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout")
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 DEFINE_ERROR(OB_CLOG_DISK_HANG, -6325, -1, "HY000", "ob clog disk hang");
+DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_TWICE, -6326, -1, "HY000", "table lock has been splitted before, can not be splitted again")
+DEFINE_ERROR(OB_TABLE_LOCK_IS_SPLITTING, -6327, -1, "HY000", "table lock is being splitted, can not be splitted again")
+DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_FAIL, -6328, -1, "HY000", "table lock splitting failed")
+DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need retry under sequence number reorder")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
