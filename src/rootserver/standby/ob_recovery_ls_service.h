@@ -87,6 +87,10 @@ public:
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
+ int process_thread0_(const ObAllTenantInfo &tenant_info);
+ int process_thread1_(const ObAllTenantInfo &tenant_info,
+                      share::SCN &start_scn,
+                      palf::PalfBufferIterator &iterator);
  //get log iterator by start_scn
  //interface for thread0
  int init_palf_handle_guard_(palf::PalfHandleGuard &palf_handle_guard);
