@@ -414,7 +414,7 @@ int ObStorageHADagUtils::check_self_is_valid_member(
     bool &is_valid_member)
 {
   int ret = OB_SUCCESS;
-  is_valid_member = false;
+  is_valid_member = true;
   const uint64_t tenant_id = MTL_ID();
   share::ObLocationService *location_service = nullptr;
   const bool force_renew = true;
