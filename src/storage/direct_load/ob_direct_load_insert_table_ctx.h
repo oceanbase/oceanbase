@@ -88,8 +88,8 @@ struct ObDirectLoadInsertTabletWriteCtx
 
 class ObDirectLoadInsertTabletContext
 {
-  static const int64_t PK_CACHE_SIZE = 1000000;
-  static const int64_t WRITE_BATCH_SIZE = 100000;
+  static const int64_t PK_CACHE_SIZE = 5000000;
+  static const int64_t WRITE_BATCH_SIZE = 5000000;
 public:
   ObDirectLoadInsertTabletContext();
   ~ObDirectLoadInsertTabletContext();
