@@ -1470,6 +1470,19 @@ int ObTenantCheckpointSlogHandler::parse(
         }
         break;
       }
+
+      case ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET: {
+        ObEmptyShellTabletLog slog_entry;
+        snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "empty shell tablet slog: ");
+        if (OB_FAIL(slog_entry.deserialize_id(buf, len, pos))) {
+          LOG_WARN("failed to deserialize empty shell tablet_id_", K(ret));
+        } else if (0 > fprintf(stream, "%s\n%s\n", slog_name, to_cstring(slog_entry))) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("Fail to print slog to file.", K(ret));
+        }
+        break;
+      }
+
       case ObRedoLogSubType::OB_REDO_LOG_UPDATE_DUP_TABLE_LS: {
         ObDupTableCkptLog slog_entry;
         snprintf(slog_name, ObStorageLogReplayer::MAX_SLOG_NAME_LEN, "update dup table ls meta slog: ");
