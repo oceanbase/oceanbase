@@ -6109,7 +6109,9 @@ int ObJsonBaseFactory::transform(ObIAllocator *allocator, ObIJsonBase *src,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect json type",K(src_type), K(expect_type));
   }
-
+  if (OB_SUCC(ret) && OB_NOT_NULL(out)) {
+    out->set_allocator(allocator);
+  }
   return ret;
 }
 

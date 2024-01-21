@@ -1066,6 +1066,8 @@ int cast_to_date(common::ObIAllocator *allocator,
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
+  } else if (j_base->json_type() == ObJsonNodeType::J_NULL) {
+    res.set_null();
   } else if (CAST_FAIL(j_base->to_date(val))) {
     is_type_mismatch = 1;
     LOG_WARN("wrapper to date failed.", K(ret), K(*j_base));
