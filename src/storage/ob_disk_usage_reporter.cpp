@@ -185,30 +185,25 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
   int64_t data_size = 0;
   int64_t sstable_size = 0;
 
-  if ((data_size = ATOMIC_LOAD(&sstable_data_size_)) >= 0) {
-    STORAGE_LOG(INFO, "skip count sstable data size", K(data_size));
-  } else {
-    data_size = 0;
-    while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
-      if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
-      } else if (tablet_handle.get_obj()->is_empty_shell()) {
-        // skip empty shell
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
-        STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
-      } else {
-        data_size += sstable_size;
-      }
-      sstable_size = 0;
-      tablet_handle.reset();
-      iter_allocator.reuse();
+  data_size = 0;
+  while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
+    if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
+    } else if (tablet_handle.get_obj()->is_empty_shell()) {
+      // skip empty shell
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
+      STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
+    } else {
+      data_size += sstable_size;
     }
-    if (OB_ITER_END == ret || OB_SUCCESS == ret) {
-      ret = OB_SUCCESS;
-      data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
-      ATOMIC_SET(&sstable_data_size_, data_size);
-    }
+    sstable_size = 0;
+    tablet_handle.reset();
+    iter_allocator.reuse();
+  }
+  if (OB_ITER_END == ret || OB_SUCCESS == ret) {
+    ret = OB_SUCCESS;
+    data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
   }
 
   if (OB_SUCC(ret)) {
