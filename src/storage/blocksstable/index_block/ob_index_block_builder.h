@@ -304,9 +304,10 @@ private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
   int64_t calc_basic_micro_block_data_offset(const uint64_t column_cnt);
-
 protected:
   static const int64_t ROOT_BLOCK_SIZE_LIMIT = 16 << 10; // 16KB
+  static const int64_t MIN_INDEX_MICRO_BLOCK_ROW_CNT = 10;
+  static const int64_t MAX_LEVEL_LIMIT = 20;
 
   bool is_inited_;
   bool is_closed_;
@@ -321,6 +322,7 @@ protected:
   ObIMicroBlockWriter *micro_writer_;
   ObMacroBlockWriter *macro_writer_;
   ObIndexBlockCachePreWarmer index_block_pre_warmer_;
+  ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
   int64_t row_offset_;
   ObIndexBlockAggregator index_block_aggregator_;
 private:

@@ -107,7 +107,7 @@ struct ObMicroCompressionInfo{
 public:
   ObMicroBlockAdaptiveSplitter();
   ~ObMicroBlockAdaptiveSplitter();
-  int init(const int64_t macro_store_size, const bool is_use_adaptive);
+  int init(const int64_t macro_store_size, const int64_t min_micro_row_count, const bool is_use_adaptive);
   void reset();
   int check_need_split(const int64_t micro_size,
                        const int64_t micro_row_count,
@@ -122,6 +122,7 @@ private:
 
 private:
   int64_t macro_store_size_;
+  int64_t min_micro_row_count_;
   bool is_use_adaptive_;
   ObMicroCompressionInfo compression_infos_[DEFAULT_MICRO_ROW_COUNT + 1]; //compression_infos_[0] for total compression info
 };
@@ -163,6 +164,7 @@ public:
                                 ObIAllocator &allocator,
                                 ObIMicroBlockWriter *&micro_writer,
                                 const int64_t verify_level = MICRO_BLOCK_MERGE_VERIFY_LEVEL::ENCODING_AND_COMPRESSION);
+  inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
 
 protected:
   virtual int build_micro_block();
@@ -170,7 +172,6 @@ protected:
   virtual bool is_keep_freespace() const {return false; }
   inline bool is_dirty() const { return macro_blocks_[current_index_].is_dirty() || 0 != micro_writer_->get_row_count(); }
   inline int64_t get_curr_micro_writer_row_count() const { return micro_writer_->get_row_count(); }
-  inline int64_t get_macro_data_size() const { return macro_blocks_[current_index_].get_data_size() + micro_writer_->get_block_size(); }
 
 private:
   int append_row(const ObDatumRow &row, const int64_t split_size);
