@@ -98,6 +98,8 @@ public:
       const ObMigrationStatus &status,
       bool &in_final_state);
   static bool check_is_running_migration(const ObMigrationStatus &cur_status);
+  static bool can_gc_ls_without_check_dependency(
+      const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,
