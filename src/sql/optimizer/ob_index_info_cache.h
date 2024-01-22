@@ -151,7 +151,9 @@ public:
     range_info_(),
     ordering_info_(),
     interesting_order_info_(OrderingFlag::NOT_MATCH),
-    interesting_order_prefix_count_(0) {
+    interesting_order_prefix_count_(0),
+    partition_info_(NULL),
+    sharding_info_(NULL) {
   }
   virtual ~IndexInfoEntry() {}
   QueryRangeInfo &get_range_info() { return range_info_; }
@@ -179,6 +181,10 @@ public:
   void set_is_index_global(const bool is_index_global) { is_index_global_ = is_index_global; }
   bool is_index_geo() const { return is_geo_index_; }
   void set_is_index_geo(const bool is_index_geo) { is_geo_index_ = is_index_geo; }
+  void set_partition_info(ObTablePartitionInfo *partition_info) { partition_info_ = partition_info; }
+  ObTablePartitionInfo *get_partition_info() const { return partition_info_; }
+  void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
+  ObShardingInfo *get_sharding_info() const { return sharding_info_; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
                K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
@@ -194,6 +200,8 @@ private:
   // 索引序在stmt中使用到的最大前缀数
   // idx1(a,b,c), idx2(a,b),  对于order by a,b 两个索引使用到的最大前缀都是2
   int64_t interesting_order_prefix_count_;
+  ObTablePartitionInfo *partition_info_;
+  ObShardingInfo *sharding_info_;
   DISALLOW_COPY_AND_ASSIGN(IndexInfoEntry);
 };
 

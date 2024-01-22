@@ -1340,6 +1340,7 @@ struct NullAwareAntiJoinInfo {
       output_row_size_(-1.0),
       anti_or_semi_match_sel_(1.0),
       table_partition_info_(NULL),
+      sharding_info_(NULL),
       table_meta_info_(common::OB_INVALID_ID),
       join_info_(NULL),
       used_conflict_detectors_(),
@@ -1568,7 +1569,8 @@ struct NullAwareAntiJoinInfo {
     int create_access_paths(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             PathHelper &helper,
-                            ObIArray<AccessPath *> &access_paths);
+                            ObIArray<AccessPath *> &access_paths,
+                            ObIndexInfoCache &index_info_cache);
 
     int create_one_access_path(const uint64_t table_id,
                                const uint64_t ref_id,
@@ -1789,13 +1791,23 @@ struct NullAwareAntiJoinInfo {
     int generate_values_table_paths();
     int generate_temp_table_paths();
 
-    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
+    int compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &access_paths, ObIndexInfoCache &index_info_cache);
 
-    int compute_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+    int set_sharding_info_for_base_path(ObIArray<AccessPath *> &access_paths,
+                                            ObIndexInfoCache &index_info_cache,
                                             const int64_t cur_idx);
-    int get_sharding_info_from_available_access_paths(ObIArray<AccessPath *> &access_paths,
-                                                      const int64_t cur_idx,
+    int compute_sharding_info_with_part_info(ObTableLocationType location_type,
+                                            ObTablePartitionInfo* table_partition_info,
+                                            ObShardingInfo *&sharding_info);
+    int get_sharding_info_from_available_access_paths(const uint64_t table_id,
+                                                      const uint64_t ref_table_id,
+                                                      const uint64_t index_id,
+                                                      bool is_global_index,
                                                       ObShardingInfo *&sharding_info) const;
+    int get_table_partition_info_from_available_access_paths(const uint64_t table_id,
+                                                            const uint64_t ref_table_id,
+                                                            const uint64_t index_id,
+                                                            ObTablePartitionInfo *&table_part_info);
     int compute_base_table_path_plan_type(AccessPath *access_path);
     int compute_base_table_path_ordering(AccessPath *access_path);
     int compute_parallel_and_server_info_for_base_paths(ObIArray<AccessPath *> &access_paths);
@@ -2193,8 +2205,8 @@ struct NullAwareAntiJoinInfo {
                               ObCostTableScanInfo &est_cost_info,
                               bool use_skip_scan);
 
-    int compute_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
-                                         ObIArray<ObTablePartitionInfo*> &tbl_part_infos);
+    int set_table_location_for_paths(ObIArray<AccessPath *> &access_paths,
+                                     ObIndexInfoCache &index_info_cache);
 
     int compute_table_location(const uint64_t table_id,
                                const uint64_t ref_id,
@@ -2537,6 +2549,12 @@ struct NullAwareAntiJoinInfo {
     int extract_valid_range_expr_for_oracle_agent_table(const common::ObIArray<ObRawExpr *> &filters,
                                                         common::ObIArray<ObRawExpr *> &new_filters);
     bool virtual_table_index_can_range_scan(uint64_t table_id);
+    int compute_table_location_for_index_info_entry(const uint64_t table_id,
+                                                    const uint64_t ref_table_id,
+                                                    IndexInfoEntry *index_info_entry);
+    int compute_sharding_info_for_index_info_entry(const uint64_t table_id,
+                                                   const uint64_t base_table_id,
+                                                   IndexInfoEntry *index_info_entry);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:
@@ -2550,6 +2568,7 @@ struct NullAwareAntiJoinInfo {
     double output_row_size_;
     double anti_or_semi_match_sel_; //for anti/semi join
     ObTablePartitionInfo *table_partition_info_; // only for base table
+    ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
     JoinInfo* join_info_; //记录连接信息
     common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器

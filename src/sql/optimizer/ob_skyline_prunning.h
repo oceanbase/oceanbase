@@ -17,6 +17,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/container/ob_array.h"
+#include "sql/optimizer/ob_sharding_info.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,7 @@ public:
     INDEX_BACK = 0,
     INTERESTING_ORDER,
     QUERY_RANGE,
+    SHARDING_INFO,
     MAX_DIM //max dimension
   };
   enum CompareStat {
@@ -164,6 +166,19 @@ private:
   bool contain_always_false_;
 };
 
+class ObShardingInfoDim: public ObSkylineDim
+{
+public:
+  ObShardingInfoDim() : ObSkylineDim(SHARDING_INFO),
+    sharding_info_(NULL)
+  {}
+  virtual ~ObShardingInfoDim() {}
+  void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
+  virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
+private:
+  ObShardingInfo *sharding_info_;
+};
+
 struct KeyPrefixComp
 {
   KeyPrefixComp() : status_(ObSkylineDim::UNCOMPARABLE) {}
@@ -221,6 +236,7 @@ public:
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,
                           common::ObIAllocator &allocator,
                           bool contain_always_false);
+  int add_sharding_info_dim(ObShardingInfo *sharding_info, ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }
   void set_can_prunning(const bool can) { can_prunning_ = can; }
   TO_STRING_KV(K_(index_id), K_(dim_count),
