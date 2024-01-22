@@ -885,6 +885,7 @@ private:
   int build_and_post_ask_state_msg_(const share::SCN &snapshot,
                                     const share::ObLSID &ori_ls_id, const ObAddr &ori_addr);
   int check_ls_state_(const SCN &snapshot, const ObLSID &ls_id, const ObStandbyCheckInfo &check_info);
+  int process_errsim_for_standby_read_(int err_code, int ret_code);
   int get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snapshot_version);
   int submit_redo_log_for_freeze_(bool &try_submit, const uint32_t freeze_clock);
   void print_first_mvcc_callback_();
