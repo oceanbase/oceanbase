@@ -169,9 +169,11 @@ public:
     write_flag_ = write_flag;
   }
 
-  void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard)
+  void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard,
+                              storage::ObLSHandle &src_ls_handle)
   {
     tx_table_guards_.src_tx_table_guard_ = tx_table_guard;
+    tx_table_guards_.src_ls_handle_ = src_ls_handle;
   }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
