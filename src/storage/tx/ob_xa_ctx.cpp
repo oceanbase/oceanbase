@@ -2930,6 +2930,7 @@ int ObXACtx::wait_xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
   if (OB_SUCC(ret) || OB_ERR_READ_ONLY_TRANSACTION == ret) {
     xa_trans_state_ = ObXATransState::PREPARED;
+    MTL(ObXAService*)->get_xa_cache().insert_prepare_cache_item(xid, ObXATransState::PREPARED);
   }
 
   if (OB_LIKELY(!is_exiting_)) {
@@ -2958,8 +2959,10 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, false))) {
-    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
-        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+    if (is_rollback && ObXATransState::ROLLBACKING == xa_trans_state_) {
+      ret = OB_SUCCESS;
+    } else if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+                 || (!is_rollback && OB_TRANS_COMMITED == ret))) {
       TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
     }
   } else {

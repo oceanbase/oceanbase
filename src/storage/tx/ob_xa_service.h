@@ -45,6 +45,49 @@ class ObTransService;
 class ObXATransID;
 class ObStmtParam;
 
+struct ObXACacheItem {
+public:
+  static const int64_t XA_CACHE_ITEM_EXPIRE_TIME = 2000000; // 2s
+  ObXACacheItem(): state_(ObXATransState::UNKNOWN), create_timestamp_(0) {}
+  ~ObXACacheItem() { reset(); }
+  void reset()
+  {
+    state_ = ObXATransState::UNKNOWN;
+    create_timestamp_ = 0;
+    xid_.reset();
+  }
+
+  bool is_valid_to_query(ObXATransID xid)
+  {
+    return this->xid_.all_equal_to(xid);
+  }
+
+  bool is_valid_to_set()
+  {
+    return 0 == this->create_timestamp_ ||
+           this->create_timestamp_ + XA_CACHE_ITEM_EXPIRE_TIME < ObTimeUtility::current_time();
+  }
+
+public:
+  ObSpinLock lock_;
+  ObXATransID xid_;
+  int64_t state_;
+  int64_t create_timestamp_;
+  TO_STRING_KV(K(xid_), K(state_), K(create_timestamp_));
+};
+
+class ObXACache {
+public:
+  static const uint64_t XA_PREPARE_CACHE_COUNT = 8000;
+  int query_prepare_cache_item(const ObXATransID &xid, int64_t &state);
+  void insert_prepare_cache_item(const ObXATransID &xid, int64_t state);
+  void clean_prepare_cache_item(const ObXATransID &xid);
+private:
+  void clean_prepare_cache_item_(ObXACacheItem &item);
+private:
+  ObXACacheItem xa_prepare_cache_[XA_PREPARE_CACHE_COUNT];
+};
+
 class ObXAService
 {
 public:
@@ -279,6 +322,7 @@ private:
 public:
   int xa_scheduler_hb_req();
   int gc_invalid_xa_record(const uint64_t tenant_id);
+  ObXACache &get_xa_cache() { return xa_cache_; }
 private:
   ObXACtxMgr xa_ctx_mgr_;
   obrpc::ObXARpcProxy xa_proxy_;
@@ -289,6 +333,7 @@ private:
   bool is_running_;
   bool is_inited_;
   ObXAStatistics xa_statistics_;
+  ObXACache xa_cache_;
 };
 
 }//transaction
