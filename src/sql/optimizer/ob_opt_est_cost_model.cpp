@@ -89,7 +89,7 @@ int ObCostTableScanInfo::assign(const ObCostTableScanInfo &est_cost_info)
     can_use_batch_nlj_ = est_cost_info.can_use_batch_nlj_;
     table_metas_ = est_cost_info.table_metas_;
     sel_ctx_ = est_cost_info.sel_ctx_;
-    row_est_method_ = est_cost_info.row_est_method_;
+    est_method_ = est_cost_info.est_method_;
     prefix_filter_sel_ = est_cost_info.prefix_filter_sel_;
     pushdown_prefix_filter_sel_ = est_cost_info.pushdown_prefix_filter_sel_;
     postfix_filter_sel_ = est_cost_info.postfix_filter_sel_;

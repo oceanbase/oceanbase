@@ -112,10 +112,10 @@ Query Plan
 ===========================================================
 |ID|OPERATOR                   |NAME|EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |NESTED-LOOP JOIN CARTESIAN |    |3       |3           |
+|0 |NESTED-LOOP JOIN CARTESIAN |    |0       |3           |
 |1 |├─TABLE FULL SCAN          |b   |3       |3           |
-|2 |└─MATERIAL                 |    |1       |3           |
-|3 |  └─TABLE RANGE SCAN       |a   |1       |3           |
+|2 |└─MATERIAL                 |    |0       |3           |
+|3 |  └─TABLE RANGE SCAN       |a   |0       |3           |
 ===========================================================
 Outputs & filters:
 -------------------------------------

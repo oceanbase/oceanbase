@@ -1774,6 +1774,7 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     ObSEArray<ObRawExpr *, 8> child_remain_filters;
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
+    ObSelectLogPlan *nonrecursive_plan = NULL;
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
       child_rename_filters.reuse();
@@ -1800,10 +1801,13 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
         LOG_WARN("get remain filters failed", K(ret));
       } else if (OB_FAIL(generate_child_plan_for_set(child_stmt, child_plan,
                                                      child_rename_filters, i,
-                                                     select_stmt->is_set_distinct()))) {
+                                                     select_stmt->is_set_distinct(),
+                                                     nonrecursive_plan))) {
         LOG_WARN("failed to generate left subquery plan", K(ret));
       } else if (OB_FAIL(child_plans.push_back(child_plan))) {
         LOG_WARN("failed to push back", K(ret));
+      } else if (0 == i && select_stmt->is_recursive_union()) {
+        nonrecursive_plan = child_plan;
       }
     }
   }
@@ -3973,7 +3977,18 @@ int ObSelectLogPlan::allocate_distinct_set_as_top(ObLogicalOperator *left_child,
     set_op->assign_set_op(select_stmt->get_set_op());
     set_op->set_algo_type(set_method);
     set_op->set_distributed_algo(dist_set_method);
-    if (OB_FAIL(set_op->compute_property())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < set_op->get_num_of_child(); i ++) {
+      const OptTableMeta *table_meta = get_update_table_metas().get_table_meta_by_table_id(i);
+      double child_ndv = 0;
+      if (OB_NOT_NULL(table_meta)) {
+        child_ndv = table_meta->get_distinct_rows();
+      }
+      if (OB_FAIL(set_op->add_child_ndv(child_ndv))) {
+        LOG_WARN("failed to add child ndv", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(set_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
       top = set_op;
@@ -4646,7 +4661,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                  ObSelectLogPlan *&sub_plan,
                                                  ObIArray<ObRawExpr*> &pushdown_filters,
                                                  const uint64_t child_offset,
-                                                 const bool is_set_distinct)
+                                                 const bool is_set_distinct,
+                                                 ObSelectLogPlan *nonrecursive_plan)
 {
   int ret = OB_SUCCESS;
   sub_plan = NULL;
@@ -4660,7 +4676,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
                                                                          *sub_stmt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("Failed to create logical plan", K(sub_plan), K(ret));
-  } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct))) {
+  } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
+             FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))) {
     // do nothing
   } else if (OB_FAIL(sub_plan->add_pushdown_filters(pushdown_filters))) {
     LOG_WARN("failed to add pushdown filters", K(ret));

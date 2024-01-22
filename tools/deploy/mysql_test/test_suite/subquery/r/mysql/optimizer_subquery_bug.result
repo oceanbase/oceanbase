@@ -1067,7 +1067,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR                   |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |SUBPLAN FILTER             |      |0       |9           |
+|0 |SUBPLAN FILTER             |      |1       |9           |
 |1 |├─TABLE FULL SCAN          |table1|1       |3           |
 |2 |└─SUBPLAN FILTER           |      |1       |7           |
 |3 |  ├─SCALAR GROUP BY        |      |1       |5           |

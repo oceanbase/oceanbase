@@ -118,6 +118,8 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   int get_used_pq_set_hint(const ObPQSetHint *&used_hint);
   int construct_pq_set_hint(ObPQSetHint &hint);
+  int set_child_ndv(ObIArray<double> &ndv) { return child_ndv_.assign(ndv); }
+  int add_child_ndv(double ndv) { return child_ndv_.push_back(ndv); }
 private:
   bool is_distinct_;
   bool is_recursive_union_;
@@ -130,6 +132,7 @@ private:
   //for cte search clause
   common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true>  search_ordering_;
   common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true>  cycle_items_;
+  common::ObSEArray<double, 4, common::ModulePageAllocator, true>  child_ndv_;
 };
 
 } // end of namespace sql

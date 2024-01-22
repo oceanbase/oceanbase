@@ -85,6 +85,8 @@ class ObExchangeInfo;
 class ObDmlTableInfo;
 struct IndexDMLInfo;
 class ValuesTablePath;
+class ObSelectLogPlan;
+class ObThreeStageAggrInfo;
 
 struct FunctionTableDependInfo {
   TO_STRING_KV(
@@ -459,6 +461,8 @@ public:
                                          ObExchangeInfo &right_exch_info);
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
+  void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
+  ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
 public:
 
   struct All_Candidate_Plans
@@ -545,7 +549,13 @@ public:
                  K_(force_use_merge),
                  K_(is_scalar_group_by),
                  K_(distinct_exprs),
-                 K_(pushdown_groupby_columns));
+                 K_(pushdown_groupby_columns),
+                 K_(group_ndv),
+                 K_(group_distinct_ndv),
+                 K_(distinct_params),
+                 K_(distinct_aggr_batch),
+                 K_(distinct_aggr_items),
+                 K_(non_distinct_aggr_items));
   };
 
   /**
@@ -758,6 +768,8 @@ public:
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
 
+  int calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper);
+
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
 
@@ -919,7 +931,8 @@ public:
                                const bool is_push_down = false,
                                const bool is_partition_gi = false,
                                const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP,
-                               bool force_use_scalar = false);
+                               bool force_use_scalar = false,
+                               const ObThreeStageAggrInfo *three_stage_info = NULL);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 
@@ -1948,6 +1961,8 @@ private:
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4,
                     common::ModulePageAllocator, true > onetime_replaced_exprs_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
+
+  ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

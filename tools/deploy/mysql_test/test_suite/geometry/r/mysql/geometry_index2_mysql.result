@@ -249,6 +249,7 @@ Optimization Info:
       pruned_index_name:[idx]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -297,6 +298,7 @@ Optimization Info:
       pruned_index_name:[idx]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -352,6 +354,7 @@ Optimization Info:
       unstable_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -404,6 +407,7 @@ Optimization Info:
       pruned_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -456,6 +460,7 @@ Optimization Info:
       unstable_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -508,6 +513,7 @@ Optimization Info:
       pruned_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:

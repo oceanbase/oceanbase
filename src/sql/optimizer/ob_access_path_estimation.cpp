@@ -21,6 +21,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "rootserver/ob_root_service.h"
+#include "sql/optimizer/ob_sel_estimator.h"
 namespace oceanbase {
 using namespace share::schema;
 using namespace share;
@@ -31,98 +32,363 @@ int ObAccessPathEstimation::estimate_rowcount(ObOptimizerContext &ctx,
                                               common::ObIArray<AccessPath *> &paths,
                                               const bool is_inner_path,
                                               const ObIArray<ObRawExpr*> &filter_exprs,
-                                              bool &is_use_ds)
+                                              ObBaseTableEstMethod &method)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<AccessPath*, 1> no_ds_paths;
-  is_use_ds = false;
-  if (OB_FAIL(process_dynamic_sampling_estimation(ctx, paths, is_inner_path, filter_exprs, no_ds_paths))) {
-    LOG_WARN("failed to process dynamic sampling estimation", K(ret));
-  } else if (no_ds_paths.empty()) {
-    is_use_ds = true;
-  } else if (OB_FAIL(process_common_estimate_rowcount(ctx, no_ds_paths))) {
-    LOG_WARN("failed to process common estimate rowcount", K(ret));
-  } else {/*do nothing*/}
-  return ret;
-}
+  ObBaseTableEstMethod valid_methods = 0;
+  method = EST_INVALID;
 
-/// It is possible for us to find a better way to combine differnt kinds of cardinality
-/// estimation methods. e.g. if a table is found to be uniformally distributed over partitions,
-/// we can do a storage estimation on one of these parts, and then deduce the total row count.
-int ObAccessPathEstimation::process_common_estimate_rowcount(ObOptimizerContext &ctx,
-                                                             common::ObIArray<AccessPath *> &paths)
-{
-  int ret = OB_SUCCESS;
-  ObArray<AccessPath *> tmp;
-
-  // wo do statistics estimation for all paths,
-  // the storage estimation is an advanced tech, which introduces more accurate results
-  // but it has serveral limitations, hence we check its usage here
-  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-    bool use_storage_stat = false;
-    bool use_default_vt = false;
-    if (ctx.use_default_stat()) {
-      if (OB_FAIL(process_table_default_estimation(paths.at(i)))) {
-        LOG_WARN("failed to process process vtable default estimation", K(ret));
-      }
-    } else if (OB_FAIL(choose_best_estimation_method(paths.at(i),
-                                                     *(paths.at(i)->est_cost_info_.table_meta_info_),
-                                                     use_storage_stat,
-                                                     use_default_vt))) {
-      LOG_WARN("failed to choose best estimation method", K(ret));
-    } else if (use_default_vt) {
-      if (OB_FAIL(process_vtable_default_estimation(paths.at(i)))) {
-        LOG_WARN("failed to process process vtable default estimation", K(ret));
-      }
-    } else if (EXTERNAL_TABLE == paths.at(i)->est_cost_info_.table_meta_info_->table_type_) {
-      if (OB_FAIL(process_external_table_estimation(paths.at(i)))) {
-        LOG_WARN("failed to process external table estimation", K(ret));
-      }
-    } else if (OB_FAIL(process_statistics_estimation(paths.at(i)))) {
-      LOG_WARN("failed to process statistics estimation", K(ret));
-    } else if (!use_storage_stat) {
-      // do nothing
-    } else if (OB_FAIL(tmp.push_back(paths.at(i)))) {
-      LOG_WARN("failed to push back path", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !tmp.empty()) {
-    if (OB_FAIL(process_storage_estimation(ctx, tmp))) {
-      LOG_WARN("failed to process storage estimation", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObAccessPathEstimation::choose_best_estimation_method(const AccessPath *path,
-                                                          const ObTableMetaInfo &meta,
-                                                          bool &use_storage_stat,
-                                                          bool &use_default_vt)
-{
-  int ret = OB_SUCCESS;
-  use_storage_stat = false;
-  use_default_vt = false;
-  if (OB_ISNULL(path)) {
+  if (OB_UNLIKELY(paths.empty())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("access path is invalid", K(ret), K(path));
-  } else if (is_virtual_table(path->ref_table_id_) &&
-             !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
-    use_default_vt = !meta.has_opt_stat_;
-  } else if (OB_FAIL(check_path_can_use_stroage_estimate(path, use_storage_stat))) {
-    LOG_WARN("failed to check path can use stroage estimate", K(ret));
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(get_valid_est_methods(ctx, paths, filter_exprs, is_inner_path, valid_methods))) {
+    LOG_WARN("failed to get valid est methods", K(ret));
+  } else if (OB_FAIL(choose_best_est_method(ctx, paths, filter_exprs, valid_methods, method))) {
+    LOG_WARN("failed to choose one est method", K(ret), K(valid_methods));
+  } else if (OB_FAIL(do_estimate_rowcount(ctx, paths, is_inner_path, filter_exprs, method))) {
+    LOG_WARN("failed to do estimate rowcount", K(ret), K(method), K(valid_methods));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); i ++) {
+    if (OB_ISNULL(paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
+    } else {
+      paths.at(i)->est_cost_info_.est_method_ = method;
+    }
   }
   return ret;
 }
 
-int ObAccessPathEstimation::check_path_can_use_stroage_estimate(const AccessPath *path, bool &can_use)
+int ObAccessPathEstimation::do_estimate_rowcount(ObOptimizerContext &ctx,
+                                                 common::ObIArray<AccessPath*> &paths,
+                                                 const bool is_inner_path,
+                                                 const ObIArray<ObRawExpr*> &filter_exprs,
+                                                 ObBaseTableEstMethod &method)
+{
+  int ret = OB_SUCCESS;
+  bool is_success = true;
+  LOG_TRACE("Try to do estimate rowcount", K(method), K(is_inner_path));
+
+  if (OB_UNLIKELY(EST_INVALID == method) ||
+      OB_UNLIKELY((method & EST_DS_FULL) && (method & EST_DS_BASIC)) ||
+      OB_UNLIKELY((method & EST_DEFAULT) && (method & EST_STAT))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected est method", K(ret), K(method));
+  }
+
+  if (OB_SUCC(ret) && (method & (EST_DS_BASIC | EST_DS_FULL))) {
+    bool only_ds_basic_stat = (method & EST_DS_BASIC);
+    if (OB_FAIL(process_dynamic_sampling_estimation(
+        ctx, paths, is_inner_path, filter_exprs, only_ds_basic_stat, is_success))) {
+      LOG_WARN("failed to process statistics estimation", K(ret));
+    } else if (!is_success) {
+      method &= ~EST_DS_BASIC;
+      method &= ~EST_DS_FULL;
+      method |= EST_DEFAULT;
+    }
+  }
+
+  if (OB_SUCC(ret) && (method & EST_DEFAULT)) {
+    if (OB_FAIL(process_table_default_estimation(ctx, paths))) {
+      LOG_WARN("failed to process table default estimation", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && (method & EST_STAT)) {
+    if (OB_FAIL(process_statistics_estimation(paths))) {
+      LOG_WARN("failed to process statistics estimation", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && (method & EST_STORAGE)) {
+    if (OB_FAIL(process_storage_estimation(ctx, paths, is_success))) {
+      LOG_WARN("failed to process storage estimation", K(ret));
+    } else if (!is_success) {
+      // The failure of storage estimation will not affect the result of statistics estimation
+      method &= ~EST_STORAGE;
+    }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::get_valid_est_methods(ObOptimizerContext &ctx,
+                                                  common::ObIArray<AccessPath*> &paths,
+                                                  const ObIArray<ObRawExpr*> &filter_exprs,
+                                                  bool is_inner_path,
+                                                  ObBaseTableEstMethod &valid_methods)
+{
+  int ret = OB_SUCCESS;
+  valid_methods = EST_DEFAULT | EST_STAT | EST_STORAGE | EST_DS_BASIC | EST_DS_FULL;
+  const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
+  ObBaseTableEstMethod hint_specify_methods = 0;
+  const ObLogPlan* log_plan = NULL;
+  const OptTableMeta *table_meta = NULL;
+  if (OB_UNLIKELY(paths.empty()) ||
+      OB_ISNULL(paths.at(0)->parent_) ||
+      OB_ISNULL(log_plan = paths.at(0)->parent_->get_plan()) ||
+      OB_ISNULL(log_plan->get_stmt()) ||
+      FALSE_IT(table_meta = log_plan->get_basic_table_metas().get_table_meta_by_table_id(paths.at(0)->table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(log_plan));
+  } else if (ctx.use_default_stat()) {
+    valid_methods = EST_DEFAULT;
+  } else {
+    // some basic check
+    share::schema::ObTableType table_type = paths.at(0)->est_cost_info_.table_meta_info_->table_type_;
+    uint64_t ref_table_id = paths.at(0)->ref_table_id_;
+    if (is_inner_path) {
+      valid_methods &= ~EST_STORAGE;
+      valid_methods &= ~EST_DS_FULL;
+    }
+    if (!log_plan->get_stmt()->is_select_stmt()) {
+      valid_methods &= ~EST_DS_METHODS;
+    }
+    if (OB_ISNULL(table_meta) ||
+        OB_UNLIKELY(OB_INVALID_ID == ref_table_id)) {
+      valid_methods &= ~EST_STAT;
+      valid_methods &= ~EST_DS_METHODS;
+    } else if (!table_meta->use_opt_stat()) {
+      valid_methods &= ~EST_STAT;
+    } else if (table_meta->is_stat_locked()) {
+      valid_methods &= ~EST_STORAGE;
+    }
+    if (table_type == EXTERNAL_TABLE) {
+      // TODO [EXTERNAL TABLE]
+      valid_methods &= ~EST_STORAGE;
+      valid_methods &= ~EST_DS_METHODS;
+    }
+    if (is_virtual_table(ref_table_id)) {
+      if (!ObDynamicSamplingUtils::is_ds_virtual_table(ref_table_id)) {
+        valid_methods &= ~EST_DS_METHODS;
+      }
+      if (!share::is_oracle_mapping_real_virtual_table(ref_table_id)) {
+        valid_methods &= ~EST_STORAGE;
+      }
+    }
+  }
+
+  // check use storage estimation
+  bool use_storage_est = (valid_methods | EST_STORAGE);
+  for (int64_t i = 0; OB_SUCC(ret) && use_storage_est && i < paths.count(); i ++) {
+    AccessPath *path = paths.at(i);
+    const ObTablePartitionInfo *part_info = NULL;
+    if (OB_FAIL(check_path_can_use_storage_estimation(path, use_storage_est, ctx))) {
+      LOG_WARN("failed to check use storage est", K(ret), KPC(path));
+    }
+  }
+  if (OB_SUCC(ret) && !use_storage_est) {
+    valid_methods &= ~EST_STORAGE;
+  }
+
+  // check dynamic sampling
+  if (OB_SUCC(ret) && (valid_methods & EST_DS_METHODS) &&
+      OB_FAIL(check_can_use_dynamic_sampling(
+          ctx, *log_plan, *table_meta, filter_exprs, valid_methods, hint_specify_methods))) {
+    LOG_WARN("failed to check dynamic sampling", K(ret));
+  }
+
+  // if there are any valid hint_specify_method, use it.
+  if (OB_SUCC(ret)) {
+    if (valid_methods & hint_specify_methods) {
+      valid_methods &= hint_specify_methods;
+    }
+  }
+
+  return ret;
+}
+
+int ObAccessPathEstimation::check_can_use_dynamic_sampling(ObOptimizerContext &ctx,
+                                                           const ObLogPlan &log_plan,
+                                                           const OptTableMeta &table_meta,
+                                                           const ObIArray<ObRawExpr*> &filter_exprs,
+                                                           ObBaseTableEstMethod &valid_methods,
+                                                           ObBaseTableEstMethod &specify_methods)
+{
+  int ret = OB_SUCCESS;
+  int64_t ds_level = ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING;
+  int64_t sample_block_cnt = 0;
+  bool specify_ds = false;
+  bool has_invalid_ds_filters = false;
+  int64_t max_ds_timeout = 0;
+  const ObBaseTableEstMethod EST_DS_METHODS =  EST_DS_BASIC | EST_DS_FULL;
+  if (OB_FAIL(ObDynamicSamplingUtils::get_valid_dynamic_sampling_level(
+      ctx.get_session_info(),
+      log_plan.get_log_plan_hint().get_dynamic_sampling_hint(table_meta.get_table_id()),
+      ctx.get_global_hint().get_dynamic_sampling(),
+      ds_level,
+      sample_block_cnt,
+      specify_ds))) {
+    LOG_WARN("failed to get valid dynamic sampling level", K(ret));
+  } else if (OB_FAIL(ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ctx, max_ds_timeout))) {
+    LOG_WARN("failed to get dynamic sampling max timeout", K(ret));
+  } else if (ObDynamicSamplingLevel::NO_DYNAMIC_SAMPLING == ds_level ||
+             max_ds_timeout <= 0) {
+    valid_methods &= ~EST_DS_METHODS;
+  } else if (ObDynamicSamplingUtils::check_is_failed_ds_table(table_meta.get_ref_table_id(),
+                                                              table_meta.get_all_used_parts(),
+                                                              ctx.get_failed_ds_tab_list())) {
+    valid_methods &= ~EST_DS_METHODS;
+    LOG_TRACE("get failed ds table, not use dynamic sampling", K(table_meta), K(ctx.get_failed_ds_tab_list()));
+  } else if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_use_filters(filter_exprs, has_invalid_ds_filters))) {
+    LOG_WARN("failed to check ds can use filters", K(ret));
+  } else if (has_invalid_ds_filters) {
+    valid_methods &= ~EST_DS_FULL;
+  } else {
+    valid_methods &= ~EST_DS_BASIC;
+  }
+  if (OB_SUCC(ret) && specify_ds) {
+    specify_methods |= EST_DS_METHODS;
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
+                                                   common::ObIArray<AccessPath*> &paths,
+                                                   const ObIArray<ObRawExpr*> &filter_exprs,
+                                                   const ObBaseTableEstMethod &valid_methods,
+                                                   ObBaseTableEstMethod& method)
+{
+  int ret = OB_SUCCESS;
+ /**
+  * There are seven est methods:
+  * 1. EST_DS_FULL: Dynamic sampling collects basic statistics and the final rowcount.
+  * 2. EST_DS_STORAGE: Dynamic sampling collects basic statistics and deduces the final rowcount with storage layer estimation.
+  * 3. EST_DS_BASIC: Dynamic sampling collects basic statistics to deduce the final rowcount.
+  * 4. EST_STORAGE_STAT: Use the storage layer and collected statistics to estimate rows.
+  * 5. EST_STORAGE_DEFAULT: Use the storage layer and default statistics to estimate rows.
+  * 6. EST_STAT: Use collected statistics to estimate rows.
+  * 7. EST_DEFAULT: Use default statistics to estimate rows.
+  *
+  * We prioritize them based on three different scenarios:
+  * 1. Normal scene: STORAGE > STAT > DYNAMIC SAMPLING > DEFAULT
+  * 2. Simple scene (DYNAMIC SAMPLING is not helpful for final rowcount): lower the priority of dynamic sampling because of its high cost.
+  * 3. Complex scene (with complex predicates): higher the priority of dynamic sampling because it is more accurate.
+ */
+
+  static const int64_t priority_cnt = 7;
+  static const ObBaseTableEstMethod EST_STORAGE_DEFAULT = EST_STORAGE | EST_DEFAULT;
+  static const ObBaseTableEstMethod EST_STORAGE_STAT = EST_STORAGE | EST_STAT;
+  static const ObBaseTableEstMethod EST_DS_STORAGE = EST_DS_BASIC | EST_STORAGE;
+  static const ObBaseTableEstMethod complex_est_priority[priority_cnt] =
+      {EST_DS_FULL, EST_STORAGE_STAT, EST_STAT, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
+  static const ObBaseTableEstMethod simple_est_priority[priority_cnt]  =
+      {EST_STORAGE_STAT, EST_STAT, EST_STORAGE_DEFAULT, EST_DEFAULT, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC};
+  static const ObBaseTableEstMethod default_est_priority[priority_cnt] =
+      {EST_STORAGE_STAT, EST_STAT, EST_DS_FULL, EST_DS_STORAGE, EST_DS_BASIC, EST_STORAGE_DEFAULT, EST_DEFAULT};
+  method = EST_INVALID;
+  bool is_simple_scene = false;
+  bool is_complex_scene = false;
+  bool can_use_ds = valid_methods & (EST_DS_FULL | EST_DS_BASIC);
+  bool can_use_storage = valid_methods & EST_STORAGE;
+
+  // check is simple scene
+  bool is_table_get = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !is_table_get && i < paths.count(); ++i) {
+    if (OB_ISNULL(paths.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
+    } else if (paths.at(i)->pre_query_range_ != NULL &&
+               OB_FAIL(paths.at(i)->pre_query_range_->is_get(is_table_get))) {
+      LOG_WARN("check query range is table get", K(ret));
+    }
+  }
+  is_simple_scene = is_table_get;
+  if (OB_SUCC(ret) && !is_simple_scene && can_use_ds) {
+    ObLogPlan *log_plan = paths.at(0)->parent_->get_plan();
+    ObSEArray<ObRawExpr*, 16> ds_col_exprs;
+    if (!(valid_methods & EST_STORAGE)) {
+      // path which can not use storage estimation is not simple
+    } else if (OB_FAIL(get_need_dynamic_sampling_columns(paths.at(0)->parent_->get_plan(),
+                                                         paths.at(0)->table_id_,
+                                                         filter_exprs, true, true,
+                                                         ds_col_exprs))) {
+      LOG_WARN("failed to get need dynamic sampling columns", K(ret));
+    } else if (!ds_col_exprs.empty()) {
+      // path which contains no ds_col_exprs is not simple
+    } else {
+      is_simple_scene = true;
+    }
+  }
+
+  // check is complex scene
+  if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && (valid_methods | EST_DS_FULL)) {
+    ObArenaAllocator tmp_alloc("ObOptSel");
+    ObSelEstimatorFactory factory(tmp_alloc);
+    const OptSelectivityCtx* sel_ctx = NULL;
+    if (OB_UNLIKELY(paths.empty()) ||
+        OB_ISNULL(paths.at(0)) ||
+        OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpeted param", K(paths));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !is_complex_scene && i < filter_exprs.count(); ++i) {
+      const ObRawExpr *filter = filter_exprs.at(i);
+      ObSelEstimator *estimator = NULL;
+      if (OB_FAIL(factory.create_estimator(*sel_ctx, filter, estimator))) {
+        LOG_WARN("failed to create estimator", KPC(filter));
+      } else if (estimator->tend_to_use_ds()) {
+        is_complex_scene = true;
+        // path which contains complex filters is complex
+        LOG_PRINT_EXPR(TRACE, "Try to use dynamic sampling because of complex filter:", filter);
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (is_simple_scene) {
+    method = choose_one_est_method(valid_methods, simple_est_priority, priority_cnt);
+  } else if (is_complex_scene) {
+    method = choose_one_est_method(valid_methods, complex_est_priority, priority_cnt);
+  } else {
+    method = choose_one_est_method(valid_methods, default_est_priority, priority_cnt);
+  }
+
+  LOG_TRACE("choose a best est method", K(valid_methods), K(is_simple_scene), K(is_complex_scene), K(method));
+  return ret;
+}
+
+int ObAccessPathEstimation::is_storage_estimation_enabled(const ObLogPlan* log_plan,
+                                                           ObOptimizerContext &ctx,
+                                                           uint64_t table_id,
+                                                           uint64_t ref_table_id,
+                                                           bool &can_use)
+{
+  int ret = OB_SUCCESS;
+  can_use = ctx.is_storage_estimation_enabled();
+  const OptTableMeta *table_meta = NULL;
+  bool has_hint = false;
+  bool is_hint_enabled = false;
+  if (OB_ISNULL(log_plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(log_plan));
+  } else if (is_virtual_table(ref_table_id) &&
+             !share::is_oracle_mapping_real_virtual_table(ref_table_id)) {
+    //virtual table
+    can_use = false;
+  } else if (OB_ISNULL(table_meta = log_plan->get_basic_table_metas().get_table_meta_by_table_id(table_id)) ||
+             OB_UNLIKELY(OB_INVALID_ID == table_meta->get_ref_table_id())) {
+    //not basic table
+  } else if (OB_FAIL(log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
+             ObOptParamHint::_ENABLE_STORAGE_CARDINALITY_ESTIMATION, is_hint_enabled, has_hint))) {
+    LOG_WARN("failed to check has opt param", K(ret));
+  } else if (has_hint) {
+    can_use = is_hint_enabled;
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::check_path_can_use_storage_estimation(const AccessPath *path,
+                                                                  bool &can_use,
+                                                                  ObOptimizerContext &ctx)
 {
   int ret = OB_SUCCESS;
   can_use = false;
   if (OB_ISNULL(path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access path is invalid", K(ret), K(path));
-  } else if (is_virtual_table(path->ref_table_id_) &&
-             !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
+  } else if (OB_FAIL(is_storage_estimation_enabled(path->parent_->get_plan(), ctx ,path->table_id_, path->ref_table_id_, can_use))) {
+    LOG_WARN("fail to do check_path_can_use_storage_estimation ", K(ret), K(path));
+  } else if (!can_use) {
     can_use = false;
   } else {
     const ObTablePartitionInfo *part_info = NULL;
@@ -141,11 +407,11 @@ int ObAccessPathEstimation::check_path_can_use_stroage_estimate(const AccessPath
       }
     }
   }
-  LOG_TRACE("check_path_can_use_stroage_estimate", K(can_use));
+  LOG_TRACE("check_path_can_use_storage_estimation", K(can_use));
   return ret;
 }
 
-int ObAccessPathEstimation::process_external_table_estimation(AccessPath *path)
+int ObAccessPathEstimation::process_external_table_default_estimation(AccessPath *path)
 {
   //TODO [ExternalTable] need refine
   int ret = OB_SUCCESS;
@@ -156,17 +422,11 @@ int ObAccessPathEstimation::process_external_table_estimation(AccessPath *path)
   } else {
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
     est_cost_info.batch_type_ = ObSimpleBatch::T_SCAN;
-    if (est_cost_info.table_meta_info_->has_opt_stat_) {
-      if (OB_FAIL(process_statistics_estimation(path))) {
-        LOG_WARN("failed to process statistics estimation", K(ret));
-      }
-    } else {
-      output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
-      path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
-      path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
-      path->est_cost_info_.index_back_row_count_ = 0;
-      path->est_cost_info_.output_row_count_ = output_row_count;
-    }
+    output_row_count = static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
+    path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
+    path->est_cost_info_.index_back_row_count_ = 0;
+    path->est_cost_info_.output_row_count_ = output_row_count;
   }
   return ret;
 }
@@ -198,7 +458,42 @@ int ObAccessPathEstimation::process_vtable_default_estimation(AccessPath *path)
   return ret;
 }
 
-int ObAccessPathEstimation::process_table_default_estimation(AccessPath *path)
+int ObAccessPathEstimation::process_table_default_estimation(ObOptimizerContext &ctx, ObIArray<AccessPath *> &paths)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+    AccessPath *path = paths.at(i);
+    if (OB_ISNULL(path)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(paths));
+    } else if (ctx.use_default_stat()) {
+      if (OB_FAIL(process_table_force_default_estimation(path))) {
+        LOG_WARN("failed to process process vtable default estimation", K(ret));
+      } else if (i == 0 && OB_FAIL(update_table_stat_info_by_default(path))) {
+        LOG_WARN("failed to update table stat by default", K(ret));
+      }
+    } else if (is_virtual_table(path->ref_table_id_) &&
+              !share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
+      if (OB_FAIL(process_vtable_default_estimation(path))) {
+        LOG_WARN("failed to process vtable default estimation", K(ret));
+      } else if (i == 0 && OB_FAIL(update_table_stat_info_by_default(path))) {
+        LOG_WARN("failed to update table stat by default", K(ret));
+      }
+    } else if (EXTERNAL_TABLE == path->est_cost_info_.table_meta_info_->table_type_) {
+      if (OB_FAIL(process_external_table_default_estimation(path))) {
+        LOG_WARN("failed to process external table default estimation", K(ret));
+      } else if (i == 0 && OB_FAIL(update_table_stat_info_by_default(path))) {
+        LOG_WARN("failed to update table stat by default", K(ret));
+      }
+    } else if (OB_FAIL(process_statistics_estimation(path))) {
+      // use default opt table meta inited in ObJoinOrder::init_est_sel_info_for_access_path
+      LOG_WARN("failed to process statistics estimation", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAccessPathEstimation::process_table_force_default_estimation(AccessPath *path)
 {
   int ret = OB_SUCCESS;
   double output_row_count = ObOptStatManager::get_default_table_row_count();
@@ -211,7 +506,6 @@ int ObAccessPathEstimation::process_table_default_estimation(AccessPath *path)
     LOG_WARN("failed to reset skip scan info", K(ret));
   } else {
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
-    est_cost_info.row_est_method_ = DEFAULT_STAT;
     path->est_cost_info_.logical_query_range_row_count_ = output_row_count;
     path->est_cost_info_.phy_query_range_row_count_ = output_row_count;
     path->est_cost_info_.index_back_row_count_ = 0;
@@ -236,7 +530,8 @@ int ObAccessPathEstimation::process_table_default_estimation(AccessPath *path)
 }
 
 int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
-                                                       ObIArray<AccessPath *> &paths)
+                                                       ObIArray<AccessPath *> &paths,
+                                                       bool &is_success)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena("CardEstimation");
@@ -359,7 +654,6 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
   if (!need_fallback) {
     for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
       const ObBatchEstTasks *task = tasks.at(i);
-      RowCountEstMethod est_method = RowCountEstMethod::STORAGE_STAT;
       for (int64_t j = 0; OB_SUCC(ret) && j < task->paths_.count(); ++j) {
         const obrpc::ObEstPartResElement &res = task->res_.index_param_res_.at(j);
         AccessPath *path = task->paths_.at(j);
@@ -368,8 +662,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
         } else if (OB_FAIL(estimate_prefix_range_rowcount(res,
                                                           path->est_cost_info_))) {
           LOG_WARN("failed to estimate prefix range rowcount", K(ret));
-        } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_,
-                                                     est_method))) {
+        } else if (OB_FAIL(fill_cost_table_scan_info(path->est_cost_info_))) {
           LOG_WARN("failed to fill cost table scan info", K(ret));
         }
       }
@@ -383,6 +676,7 @@ int ObAccessPathEstimation::process_storage_estimation(ObOptimizerContext &ctx,
       tasks.at(i) = NULL;
     }
   }
+  is_success = !need_fallback;
   return ret;
 }
 
@@ -479,15 +773,13 @@ int ObAccessPathEstimation::estimate_prefix_range_rowcount(
   return ret;
 }
 
-int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info,
-                                                      const RowCountEstMethod est_method)
+int ObAccessPathEstimation::fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info)
 {
   int ret = OB_SUCCESS;
   double &output_row_count = est_cost_info.output_row_count_;
   double &logical_row_count = est_cost_info.logical_query_range_row_count_;
   double &physical_row_count = est_cost_info.phy_query_range_row_count_;
   double &index_back_row_count = est_cost_info.index_back_row_count_;
-  est_cost_info.row_est_method_ = est_method;
 
   // we have exact query ranges on a unique index,
   // each range is expected to have at most one row
@@ -673,11 +965,18 @@ int ObAccessPathEstimation::process_statistics_estimation(AccessPath *path)
               K(est_cost_info.pushdown_prefix_filter_sel_),
               K(est_cost_info.ss_postfix_range_filters_sel_));
 
-    RowCountEstMethod est_method = table_meta_info->has_opt_stat_ ? RowCountEstMethod::BASIC_STAT
-                                                                : RowCountEstMethod::DEFAULT_STAT;
+    OZ (fill_cost_table_scan_info(est_cost_info));
+  }
+  return ret;
+}
 
-    OZ (fill_cost_table_scan_info(est_cost_info,
-                                  est_method));
+int ObAccessPathEstimation::process_statistics_estimation(ObIArray<AccessPath *> &paths)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+    if (OB_FAIL(process_statistics_estimation(paths.at(i)))) {
+      LOG_WARN("failed to process table default estimation", K(ret));
+    }
   }
   return ret;
 }
@@ -1347,13 +1646,14 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                 ObIArray<AccessPath *> &paths,
                                                                 const bool is_inner_path,
                                                                 const ObIArray<ObRawExpr*> &filter_exprs,
-                                                                common::ObIArray<AccessPath *> &no_ds_paths)
+                                                                bool only_ds_basic_stat,
+                                                                bool &is_success)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("begin process dynamic sampling estimation", K(paths), K(is_inner_path));
   ObDSTableParam ds_table_param;
   ObSEArray<ObDSResultItem, 4> ds_result_items;
-  bool only_ds_basic_stat = false;
+  is_success = true;
   const ObLogPlan* log_plan = NULL;
   const OptTableMeta *table_meta = NULL;
   common::ObSEArray<AccessPath*, 4> ds_paths;
@@ -1362,25 +1662,20 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
   if (paths.empty()) {
     //do nothing
   } else if (OB_ISNULL(paths.at(0)->parent_) ||
-             OB_ISNULL(log_plan = paths.at(0)->parent_->get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(log_plan));
-  } else if (OB_ISNULL(table_meta = log_plan->get_basic_table_metas().get_table_meta_by_table_id(paths.at(0)->table_id_)) ||
+             OB_ISNULL(log_plan = paths.at(0)->parent_->get_plan()) ||
+             OB_ISNULL(table_meta = log_plan->get_basic_table_metas().get_table_meta_by_table_id(paths.at(0)->table_id_)) ||
              OB_UNLIKELY(OB_INVALID_ID == table_meta->get_ref_table_id())) {
-    //not basic table doesn't dynamic sampling, do nothing
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(log_plan), KPC(table_meta));
   } else if (OB_FAIL(ObDynamicSamplingUtils::get_ds_table_param(ctx, log_plan, table_meta,
-                                                                false, ds_table_param, specify_ds))) {
+                                                                ds_table_param, specify_ds))) {
     LOG_WARN("failed to get ds table param", K(ret), K(ds_table_param));
   } else if (!ds_table_param.is_valid()) {
-    if (OB_FAIL(no_ds_paths.assign(paths))) {
-      LOG_WARN("failed to assign", K(ret));
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid ds table param", K(ret), K(ds_table_param));
   } else if (OB_FAIL(add_ds_result_items(paths, filter_exprs, specify_ds,
-                                         ds_result_items, only_ds_basic_stat,
-                                         ds_paths, no_ds_paths))) {
+                                         ds_result_items, only_ds_basic_stat))) {
     LOG_WARN("failed to init ds result items", K(ret));
-  } else if (!only_ds_basic_stat && ds_paths.empty()) {
-    //do nothing
   } else {
     OPT_TRACE("begin to process table dynamic sampling estimation");
     ObArenaAllocator allocator("ObOpTableDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
@@ -1396,8 +1691,8 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                      table_meta->get_all_used_parts(),
                                                                      ctx.get_failed_ds_tab_list()))) {
           LOG_WARN("failed to add failed ds table list", K(ret));
-        } else if (OB_FAIL(no_ds_paths.assign(paths))) {
-          LOG_WARN("failed to assign", K(ret));
+        } else {
+          is_success = false;
         }
       } else {
         LOG_WARN("failed to dynamic sampling", K(ret), K(start_time), K(ds_table_param));
@@ -1408,12 +1703,13 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                                                   no_ds_data))) {
       LOG_WARN("failed to update table stat info by dynamic sampling", K(ret));
     } else if (only_ds_basic_stat || no_ds_data) {
-      if (OB_FAIL(no_ds_paths.assign(paths))) {
-        LOG_WARN("failed to assign", K(ret));
-      } else {/*do nothing*/}
+      if (OB_FAIL(process_statistics_estimation(paths))) {
+        LOG_WARN("failed to process statistics estimation", K(ret));
+      }
     } else if (OB_FAIL(estimate_path_rowcount_by_dynamic_sampling(ds_table_param.table_id_, paths,
                                                                   is_inner_path, ds_result_items))) {
       LOG_WARN("failed to estimate path rowcount by dynamic sampling", K(ret));
+      LOG_TRACE("finish dynamic sampling", K(only_ds_basic_stat), K(no_ds_data), K(is_success));
     }
     OPT_TRACE("end to process table dynamic sampling estimation");
     OPT_TRACE_TITLE("DYNAMIC SAMPLE RESULT");
@@ -1427,56 +1723,30 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
                                                 const ObIArray<ObRawExpr*> &filter_exprs,
                                                 const bool specify_ds,
                                                 ObIArray<ObDSResultItem> &ds_result_items,
-                                                bool &only_ds_basic_stat,
-                                                common::ObIArray<AccessPath *> &ds_paths,
-                                                common::ObIArray<AccessPath *> &no_ds_paths)
+                                                bool only_ds_basic_stat)
 {
   int ret = OB_SUCCESS;
-  only_ds_basic_stat = false;
   bool all_path_is_get = false;
-  if (OB_UNLIKELY(paths.empty())) {
+  if (OB_UNLIKELY(paths.empty()) ||
+      OB_ISNULL(paths.at(0)) ||
+      OB_ISNULL(paths.at(0)->parent_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(paths));
-  } else if (OB_FAIL(get_valid_ds_path(paths, specify_ds, ds_paths, no_ds_paths, all_path_is_get))) {
-    LOG_WARN("failed to get valid ds path", K(ret));
-  } else if (ds_paths.empty()) {//check need dynamic basic stats for join
+  } else if (only_ds_basic_stat) {// some filters invalid, only dynamic basic stats
     ObDSResultItem basic_item(ObDSResultItemType::OB_DS_BASIC_STAT, paths.at(0)->ref_table_id_);
-    if (all_path_is_get) {//if all path is table get, no dynamic sampling
-      //do nothing
-    } else if (OB_UNLIKELY(no_ds_paths.empty())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(paths), K(ds_paths));
-    } else if (OB_FAIL(get_need_dynamic_sampling_columns(no_ds_paths.at(0)->parent_->get_plan(),
-                                                         no_ds_paths.at(0)->table_id_,
-                                                         filter_exprs, true, true,
-                                                         basic_item.exprs_))) {
-      LOG_WARN("failed to get need dynamic sampling columns", K(ret));
-    } else if (basic_item.exprs_.empty()) {
-      //do nothing
-    } else if (OB_FAIL(ds_result_items.push_back(basic_item))) {
-      LOG_WARN("failed to push back", K(ret));
-    } else {
-      only_ds_basic_stat = true;
-    }
-  } else if (OB_FAIL(ObDynamicSamplingUtils::check_ds_can_use_filters(filter_exprs, only_ds_basic_stat))) {
-    LOG_WARN("failed to check ds can use filters", K(ret));
-  } else if (only_ds_basic_stat) {//filters invalid, only can dynamic basic stats
-    ObDSResultItem basic_item(ObDSResultItemType::OB_DS_BASIC_STAT, ds_paths.at(0)->ref_table_id_);
-    if (OB_FAIL(get_need_dynamic_sampling_columns(ds_paths.at(0)->parent_->get_plan(),
-                                                  ds_paths.at(0)->table_id_,
+    if (OB_FAIL(get_need_dynamic_sampling_columns(paths.at(0)->parent_->get_plan(),
+                                                  paths.at(0)->table_id_,
                                                   filter_exprs, false, false,
                                                   basic_item.exprs_))) {
       LOG_WARN("failed to get need dynamic sampling columns", K(ret));
     } else if (OB_FAIL(ds_result_items.push_back(basic_item))) {
       LOG_WARN("failed to push back", K(ret));
-    } else if (OB_FAIL(append(no_ds_paths, ds_paths))) {
-      LOG_WARN("failed to append", K(ret));
     } else {/*do nothing*/}
   } else {
     //1.init ds basic stat item
-    ObDSResultItem basic_item(ObDSResultItemType::OB_DS_BASIC_STAT, ds_paths.at(0)->ref_table_id_);
-    if (OB_FAIL(get_need_dynamic_sampling_columns(ds_paths.at(0)->parent_->get_plan(),
-                                                  ds_paths.at(0)->table_id_,
+    ObDSResultItem basic_item(ObDSResultItemType::OB_DS_BASIC_STAT, paths.at(0)->ref_table_id_);
+    if (OB_FAIL(get_need_dynamic_sampling_columns(paths.at(0)->parent_->get_plan(),
+                                                  paths.at(0)->table_id_,
                                                   filter_exprs, true, false,
                                                   basic_item.exprs_))) {
       LOG_WARN("failed to get need dynamic sampling columns", K(ret));
@@ -1491,15 +1761,15 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
         LOG_WARN("failed to push back", K(ret));
       } else {
         //3.init query range item
-        for (int64_t i = 0; OB_SUCC(ret) && i < ds_paths.count(); ++i) {
-          if (OB_ISNULL(ds_paths.at(i))) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
+          if (OB_ISNULL(paths.at(i))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret), K(ds_paths.at(i)));
-          } else if (ds_paths.at(i)->est_cost_info_.prefix_filters_.empty()) {
+            LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
+          } else if (paths.at(i)->est_cost_info_.prefix_filters_.empty()) {
             //do nothing
           } else {
-            ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT, ds_paths.at(i)->index_id_);
-            if (OB_FAIL(tmp_item.exprs_.assign(ds_paths.at(i)->est_cost_info_.prefix_filters_))) {
+            ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT, paths.at(i)->index_id_);
+            if (OB_FAIL(tmp_item.exprs_.assign(paths.at(i)->est_cost_info_.prefix_filters_))) {
               LOG_WARN("failed to assign", K(ret));
             } else if (OB_FAIL(ds_result_items.push_back(tmp_item))) {
               LOG_WARN("failed to push back", K(ret));
@@ -1510,54 +1780,7 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
     }
   }
   LOG_TRACE("succeed to add_ds result items", K(paths), K(all_path_is_get), K(filter_exprs),
-                                              K(ds_result_items), K(only_ds_basic_stat), K(ds_paths),
-                                              K(no_ds_paths));
-  return ret;
-}
-
-int ObAccessPathEstimation::get_valid_ds_path(ObIArray<AccessPath *> &paths,
-                                              const bool specify_ds,
-                                              common::ObIArray<AccessPath *> &ds_paths,
-                                              common::ObIArray<AccessPath *> &no_ds_paths,
-                                              bool &all_path_is_get)
-{
-  int ret = OB_SUCCESS;
-  all_path_is_get = true;
-  if (specify_ds) {
-    if (OB_FAIL(ds_paths.assign(paths))) {
-      LOG_WARN("failed to assign", K(ret));
-    } else {/*do nothing*/}
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < paths.count(); ++i) {
-      if (OB_ISNULL(paths.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
-      } else {
-        bool can_use = false;
-        bool is_get = false;
-        if (paths.at(i)->pre_query_range_ != NULL && OB_FAIL(paths.at(i)->pre_query_range_->is_get(is_get))) {
-          LOG_WARN("check query range is table get", K(ret));
-        } else if (is_get) {//table get no need dynamic sampling
-          if (OB_FAIL(no_ds_paths.push_back(paths.at(i)))) {
-            LOG_WARN("faile to push back", K(ret));
-          }
-        } else if (OB_FAIL(check_path_can_use_stroage_estimate(paths.at(i), can_use))) {
-          LOG_WARN("failed to check path can use stroage estimate", K(ret));
-        } else if (can_use &&
-                   paths.at(i)->est_cost_info_.pushdown_prefix_filters_.empty()) {
-          if (OB_FAIL(no_ds_paths.push_back(paths.at(i)))) {//use the stroage estimate directly.
-            LOG_WARN("faile to push back", K(ret));
-          } else {
-            all_path_is_get = false;
-          }
-        } else if (OB_FAIL(ds_paths.push_back(paths.at(i)))) {
-          LOG_WARN("faile to push back", K(ret));
-        } else {
-          all_path_is_get = false;
-        }
-      }
-    }
-  }
+                                              K(ds_result_items), K(only_ds_basic_stat));
   return ret;
 }
 
@@ -1666,6 +1889,25 @@ int ObAccessPathEstimation::update_table_stat_info_by_dynamic_sampling(AccessPat
   return ret;
 }
 
+int ObAccessPathEstimation::update_table_stat_info_by_default(AccessPath *path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(path)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KPC(path));
+  } else if (path->get_output_row_count() > 0) {
+    OptTableMetas &table_metas = path->parent_->get_plan()->get_basic_table_metas();
+    OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(path->table_id_);
+    if (OB_NOT_NULL(table_meta)) {
+      table_meta->set_rows(path->get_output_row_count());
+      for (int64_t i = 0; i < table_meta->get_column_metas().count(); ++i) {
+        table_meta->get_column_metas().at(i).set_default_meta(path->get_output_row_count());
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uint64_t table_id,
                                                                        ObIArray<AccessPath *> &paths,
                                                                        const bool is_inner_path,
@@ -1732,7 +1974,6 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
           }
         }
         if (OB_SUCC(ret)) {
-          est_cost_info.row_est_method_ = RowCountEstMethod::DYNAMIC_SAMPLING_STAT;
           // block sampling
           double block_sample_ratio = est_cost_info.sample_info_.is_block_sample() ?
                 0.01 * est_cost_info.sample_info_.percent_ : 1.0;
