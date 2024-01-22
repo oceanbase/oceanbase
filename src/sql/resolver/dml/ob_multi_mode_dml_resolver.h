@@ -93,7 +93,7 @@ public:
                                             ObJtDmlCtx& jt_dml_ctx,
                                             int32_t parent);
   static int json_table_resolve_str_const(const ParseNode &parse_tree, ObString& path_str,
-                                          ObDMLResolver* dml_resolver);
+                                          ObDMLResolver* dml_resolver, MulModeTableType table_type);
   // json dot notation:
   static int json_pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun,
                                         ObJsonBuffer& sql_str, ObDMLResolver* dml_resolver);

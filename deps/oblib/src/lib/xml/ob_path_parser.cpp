@@ -1299,31 +1299,38 @@ int ObPathParser::parse_subpath(ObString& subpath, ObPathNode*& node, bool is_fi
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("should not be null", K(ret));
   } else {
-    ObPathParser* subpath_parser =
-    static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
-    if (OB_ISNULL(subpath_parser)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
-    } else {
-      subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
-      if (is_filter) {
-        if (subpath_parser->is_function_path()) {
-          if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+    uint64_t not_null_idx = 0;
+    ObXPathUtil::skip_whitespace(subpath, not_null_idx);
+    if (not_null_idx < subpath.length()) {
+      ObPathParser* subpath_parser =
+      static_cast<ObPathParser*> (allocator_->alloc(sizeof(ObPathParser)));
+      if (OB_ISNULL(subpath_parser)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate row buffer failed at location_node", K(ret), K(index_), K(expression_));
+      } else {
+        subpath_parser = new (subpath_parser) ObPathParser(ctx_, parser_type_, subpath, default_ns_, pass_var_);
+        if (is_filter) {
+          if (subpath_parser->is_function_path()) {
+            if (OB_FAIL(subpath_parser->parse_func_node(patharg_type))) {
+              bad_index_ = subpath_parser->bad_index_;
+              LOG_WARN("fail to parse function.", K(ret), K(index_));
+            } // is function
+          } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
             bad_index_ = subpath_parser->bad_index_;
-            LOG_WARN("fail to parse function.", K(ret), K(index_));
-          } // is function
-        } else if (OB_FAIL(subpath_parser->parse_location_path(patharg_type))) {
+            LOG_WARN("fail to parse", K(ret));
+          }
+        } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
           bad_index_ = subpath_parser->bad_index_;
           LOG_WARN("fail to parse", K(ret));
         }
-      } else if (OB_FAIL(subpath_parser->parse_path(IN_FUNCTION))) {
-        bad_index_ = subpath_parser->bad_index_;
-        LOG_WARN("fail to parse", K(ret));
+        if (OB_FAIL(ret)) {
+        } else if (OB_NOT_NULL(subpath_parser->get_root())) {
+          node = subpath_parser->get_root();
+        }
       }
-      if (OB_FAIL(ret)) {
-      } else if (OB_NOT_NULL(subpath_parser->get_root())) {
-        node = subpath_parser->get_root();
-      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subpath should not be null", K(ret));
     }
   }
   return ret;
@@ -1335,6 +1342,9 @@ int ObPathParser::get_xpath_subpath(ObPathNode*& node, bool is_filter, ObPathArg
   ObString subpath;
   if (OB_FAIL(get_subpath_str(is_filter, subpath))) {
     LOG_WARN("fail to get subpath str", K(ret));
+  } else if (subpath.length() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("subpath should not be null", K(ret));
   } else if (OB_FAIL(parse_subpath(subpath, node, is_filter, patharg_type))) {
     if (patharg_type != NOT_SUBPATH) ret = OB_ERR_PARSER_SYNTAX; // subpath parsing failed
     LOG_WARN("fail to parse subpath", K(ret));

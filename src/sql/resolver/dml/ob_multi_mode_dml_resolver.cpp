@@ -196,7 +196,7 @@ int ObMultiModeDMLResolver::multimode_table_resolve_item(const ParseNode &parse_
       ObString path_str;
       if (path_node->type_ == T_NULL) {
         path_str = ObString("$");
-      } else if (OB_FAIL(json_table_resolve_str_const(*path_node, path_str, dml_resolver))) {
+      } else if (OB_FAIL(json_table_resolve_str_const(*path_node, path_str, dml_resolver, table_def->table_type_))) {
         LOG_WARN("fail to resolve json path", K(ret));
       }
       if (OB_SUCC(ret)
@@ -410,11 +410,11 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_name_and_path(const P
   } else if (path_node->type_ != T_NULL
               && (path_node->str_len_ > 0 && OB_NOT_NULL(path_node->str_value_))) {
     if ((path_node->type_ == T_CHAR || path_node->type_ == T_VARCHAR)
-          && OB_FAIL(json_table_resolve_str_const(*path_node, col_def->col_base_info_.path_, dml_resolver))) {
+          && OB_FAIL(json_table_resolve_str_const(*path_node, col_def->col_base_info_.path_, dml_resolver, table_type))) {
       LOG_WARN("fail to resolve path const", K(ret));
     } else if (lib::is_mysql_mode()) {
       (const_cast<ParseNode *>(path_node))->type_ = T_CHAR;
-      if (OB_FAIL(json_table_resolve_str_const(*path_node, col_def->col_base_info_.path_, dml_resolver))) {
+      if (OB_FAIL(json_table_resolve_str_const(*path_node, col_def->col_base_info_.path_, dml_resolver, table_type))) {
         LOG_WARN("fail to resolve path const in mysql", K(ret));
       }
     } else if (((table_type == OB_ORA_JSON_TABLE_TYPE && *path_node->str_value_ != '$' && path_node->value_ != 1))
@@ -1298,7 +1298,8 @@ int ObMultiModeDMLResolver::json_table_resolve_nested_column(const ParseNode &pa
 
 int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_tree,
                                                          ObString& path_str,
-                                                         ObDMLResolver* dml_resolver)
+                                                         ObDMLResolver* dml_resolver,
+                                                         MulModeTableType table_type)
 {
   INIT_SUCC(ret);
   if (OB_ISNULL(dml_resolver)) {
@@ -1342,6 +1343,17 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
                                                     session_info->get_sql_mode(),
                                                     nullptr != dml_resolver->params_.secondary_namespace_))) {
       LOG_WARN("failed to resolve const", K(ret));
+    } else if (val.get_string().length() == 0) {
+      if (table_type == MulModeTableType::OB_ORA_JSON_TABLE_TYPE) {
+        ret = OB_ERR_INVALID_JSON_PATH;
+        LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
+      } else if (table_type == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
+        ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+        LOG_USER_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to resolve json column as name node is null", K(ret));
+      }
     } else if (OB_ISNULL(buf = static_cast<char*>(dml_resolver->allocator_->alloc(val.get_string().length())))) { // deep copy str value
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory", K(ret), K(buf));
