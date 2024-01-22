@@ -4428,6 +4428,20 @@ int ObQueryRange::set_partial_row_border(
       } else if (OB_ISNULL(new_key_part) || OB_UNLIKELY(!new_key_part->is_normal_key())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("new_key_part is null.");
+      } else if (((ObQueryRange::OB_FROM_LEFT == start_border_type || ObQueryRange::OB_FROM_LEFT == end_border_type) && l_cur->is_in_key()) ||
+                 ((ObQueryRange::OB_FROM_RIGHT == start_border_type || ObQueryRange::OB_FROM_RIGHT == end_border_type) && r_cur->is_in_key())) {
+        if (start_border_type != end_border_type) {
+          // in key must from one side
+          b_flag = true;
+        } else if (ObQueryRange::OB_FROM_LEFT == start_border_type) {
+          if (OB_FAIL(new_key_part->deep_node_copy(*l_cur))) {
+            LOG_WARN("Copy key part node failed", K(ret));
+          }
+        } else {
+          if (OB_FAIL(new_key_part->deep_node_copy(*r_cur))) {
+            LOG_WARN("Copy key part node failed", K(ret));
+          }
+        }
       } else {
         new_key_part->normal_keypart_->always_true_ = false;
         if (ObQueryRange::OB_FROM_LEFT == start_border_type && l_cur) {
