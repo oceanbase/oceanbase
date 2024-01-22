@@ -192,6 +192,8 @@ public:
                      ObIArray<ObTxCtxMoveArg> &args);
   int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
                  const ObIArray<ObTxCtxMoveArg> &arg);
+  int start_request_for_transfer();
+  int end_request_for_transfer();
 public:
   transaction::ObTransService *get_trans_service() { return trans_service_; }
 

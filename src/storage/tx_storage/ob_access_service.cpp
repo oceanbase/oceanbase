@@ -414,6 +414,8 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     } else if (!user_data.transfer_scn_.is_valid() || !src_tx_table_guard.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("transfer_scn or source ls tx_table_guard is invalid", K(ret), K(src_tx_table_guard), K(user_data));
+    } else if (OB_FAIL(src_ls->get_tx_svr()->start_request_for_transfer())) {
+      LOG_WARN("start request for transfer failed", KR(ret), K(user_data));
     } else {
       ObStoreCtx &ctx = ctx_guard.get_store_ctx();
       ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard);
