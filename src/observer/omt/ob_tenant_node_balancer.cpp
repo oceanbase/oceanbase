@@ -205,7 +205,7 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
       LOG_WARN("divide meta tenant failed", KR(ret), K(unit), K(basic_tenant_unit));
-    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, create_tenant_timeout_ts))) {
+    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, false /*check_data_version*/, create_tenant_timeout_ts))) {
       LOG_WARN("failed to create new tenant", KR(ret), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     } else {
       ret = OB_SUCCESS;
@@ -233,7 +233,7 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
 #endif
     // create meta tenant
     if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
-      if (OB_FAIL(check_new_tenant(meta_tenant_unit, create_tenant_timeout_ts))) {
+      if (OB_FAIL(check_new_tenant(meta_tenant_unit, false /*check_data_version*/, create_tenant_timeout_ts))) {
         LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
       } else {
         ret = OB_SUCCESS;
@@ -350,20 +350,25 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
 int ObTenantNodeBalancer::check_new_tenants(TenantUnits &units)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
 
   DEBUG_SYNC(CHECK_NEW_TENANT);
 
+  const bool check_data_version = true;
   // check all units of tenants.
   for (TenantUnits::iterator it = units.begin(); it != units.end(); it++) {
-    if (OB_FAIL(check_new_tenant(*it))) {
-      LOG_WARN("failed to check new tenant", K(ret));
+    if (OB_TMP_FAIL(check_new_tenant(*it, check_data_version))) {
+      LOG_WARN("failed to check new tenant", KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-
   return ret;
 }
 
-int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us)
+int ObTenantNodeBalancer::check_new_tenant(
+    const ObUnitInfoGetter::ObTenantConfig &unit,
+    const bool check_data_version,
+    const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
 
@@ -378,7 +383,16 @@ int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfi
       ret = OB_SUCCESS;
       ObTenantMeta tenant_meta;
       ObTenantSuperBlock super_block(tenant_id, false /*is_hidden*/);  // empty super block
-      if (OB_FAIL(tenant_meta.build(unit, super_block))) {
+      const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
+      uint64_t data_version = 0;
+      if (should_check_data_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_EAGAIN;
+          LOG_WARN("data_version not refreshed yet, create tenant later", KR(ret), K(tenant_id));
+        } else {
+          LOG_WARN("fail to get data_version", KR(ret), K(tenant_id));
+        }
+      } else if (OB_FAIL(tenant_meta.build(unit, super_block))) {
         LOG_WARN("fail to build tenant meta", K(ret));
       } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
         LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
@@ -577,10 +591,16 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_new_tenants(units))) {
       LOG_WARN("check and add new tenant fail", K(ret));
-    } else if (FALSE_IT(omt_->set_synced())) {
-    } else if (OB_FAIL(check_del_tenants(local_units, units))) {
+      ret = OB_SUCCESS; // just don't affect the following process in run1().
+    } else {
+      omt_->set_synced();
+    }
+
+    if (OB_FAIL(check_del_tenants(local_units, units))) { // overwrite ret
       LOG_WARN("check delete tenant fail", K(ret));
-    } else if (OB_FAIL(refresh_hidden_sys_memory())) {
+    }
+
+    if (OB_FAIL(refresh_hidden_sys_memory())) { // overwrite ret
       LOG_WARN("refresh hidden sys memory failed", K(ret));
     }
   }
