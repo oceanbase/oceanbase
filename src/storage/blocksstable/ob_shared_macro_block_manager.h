@@ -169,8 +169,14 @@ private:
       ObSSTable &new_sstable) const;
   int parse_merge_type(const ObSSTable &sstable, ObMergeType &merge_type) const;
   int try_switch_macro_block();
-  int check_write_complete(const MacroBlockId &macro_id, const int64_t macro_size);
-  int do_write_block(const ObMacroBlockWriteInfo &write_info, ObBlockInfo &block_info);
+  static int check_write_complete(
+    const MacroBlockId &macro_id,
+    const int64_t offset,
+    const int64_t size);
+  static int do_write_block(
+      const MacroBlockId& macro_id,
+      const ObMacroBlockWriteInfo &write_info,
+      ObBlockInfo &block_info);
   DISALLOW_COPY_AND_ASSIGN(ObSharedMacroBlockMgr);
 
 private:
