@@ -934,8 +934,8 @@ int ObRangeGenerator::get_result_value(const int64_t val_idx,
         } else if (OB_FAIL(urowid_data.get_pk_vals(pk_vals))) {
           LOG_WARN("failed to get pk values", K(ret));
         } else if (OB_UNLIKELY((pk_cnt = urowid_data.get_real_pk_count(pk_vals)) < expr_info.rowid_idx_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected expr info", K(pk_cnt), K(expr_info.rowid_idx_));
+          ret = OB_INVALID_ROWID;
+          LOG_WARN("get inconsistent rowid", K(pk_cnt), K(expr_info.rowid_idx_));
         } else {
           value = pk_vals.at(expr_info.rowid_idx_ - 1);
         }
