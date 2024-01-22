@@ -1248,13 +1248,12 @@ int ObMediumCompactionScheduleFunc::schedule_tablet_medium_merge(
     if (OB_FAIL(ret) || !schedule_flag) {
     } else {
       const int64_t major_frozen_snapshot = 0 == input_major_snapshot ? MTL(ObTenantTabletScheduler *)->get_frozen_version() : input_major_snapshot;
-      ObMediumCompactionInfo::ObCompactionType compaction_type = ObMediumCompactionInfo::COMPACTION_TYPE_MAX;
       int64_t schedule_scn = 0;
       if (OB_FAIL(read_medium_info_from_list(*medium_list, last_major_snapshot,
-          major_frozen_snapshot, compaction_type, schedule_scn))) {
+          major_frozen_snapshot, schedule_scn))) {
         LOG_WARN("failed to read medium info from list", K(ret), K(ls_id), K(tablet_id), KPC(medium_list), K(last_major_snapshot));
       } else if (schedule_scn > 0
-              && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, compaction_type, tablet_need_freeze_flag, create_dag_flag))) {
+              && OB_FAIL(check_need_merge_and_schedule(ls, tablet, schedule_scn, tablet_need_freeze_flag, create_dag_flag))) {
         LOG_WARN("failed to check medium merge", K(ret), K(ls_id), K(tablet_id), K(schedule_scn));
       }
     }
@@ -1267,7 +1266,6 @@ int ObMediumCompactionScheduleFunc::read_medium_info_from_list(
   const ObMediumCompactionInfoList &medium_list,
   const int64_t last_major_snapshot,
   const int64_t major_frozen_snapshot,
-  ObMediumCompactionInfo::ObCompactionType &compaction_type,
   int64_t &schedule_scn)
 {
   int ret = OB_SUCCESS;
@@ -1278,7 +1276,6 @@ int ObMediumCompactionScheduleFunc::read_medium_info_from_list(
       if (info->is_medium_compaction()
           || info->medium_snapshot_ <= major_frozen_snapshot) {
         schedule_scn = info->medium_snapshot_;
-        compaction_type = (ObMediumCompactionInfo::ObCompactionType)info->compaction_type_;
       }
       break; // found one unfinish medium info, loop end
     }
@@ -1308,7 +1305,6 @@ int ObMediumCompactionScheduleFunc::check_need_merge_and_schedule(
     ObLS &ls,
     ObTablet &tablet,
     const int64_t schedule_scn,
-    const ObMediumCompactionInfo::ObCompactionType compaction_type,
     bool &tablet_need_freeze_flag,
     bool &create_dag_flag)
 {

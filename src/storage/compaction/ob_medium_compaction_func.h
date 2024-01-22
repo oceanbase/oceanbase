@@ -55,7 +55,6 @@ public:
       const ObMediumCompactionInfoList &medium_list,
       const int64_t major_frozen_snapshot,
       const int64_t last_major_snapshot,
-      ObMediumCompactionInfo::ObCompactionType &compaction_type,
       int64_t &schedule_scn);
   static int is_election_leader(const share::ObLSID &ls_id, bool &ls_election_leader);
   static int get_max_sync_medium_scn(
@@ -141,7 +140,6 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const int64_t schedule_scn,
-      const ObMediumCompactionInfo::ObCompactionType compaction_type,
       bool &tablet_need_freeze_flag,
       bool &create_dag_flag);
   int schedule_next_medium_primary_cluster(
