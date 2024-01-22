@@ -1324,7 +1324,7 @@ public:
   virtual int compute_property();
 
   int check_property_valid() const;
-  int compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise);
+  int compute_normal_multi_child_parallel_and_server_info();
   int set_parallel_and_server_info_for_match_all();
   int get_limit_offset_value(ObRawExpr *percent_expr,
                              ObRawExpr *limit_expr,
