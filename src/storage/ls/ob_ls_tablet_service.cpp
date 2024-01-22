@@ -1728,6 +1728,7 @@ int ObLSTabletService::replay_create_tablet(
   int ret = OB_SUCCESS;
   bool b_exist = false;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObTransService *tx_svr = MTL(ObTransService*);
   ObFreezer *freezer = ls_->get_freezer();
   const ObLSID &ls_id = ls_->get_ls_id();
   if (IS_NOT_INIT) {
@@ -1790,6 +1791,8 @@ int ObLSTabletService::replay_create_tablet(
       LOG_WARN("start ddl if need failed", K(ret));
     } else if (OB_FAIL(tablet->inc_macro_ref_cnt())) {
       LOG_WARN("fail to increase macro blocks' ref cnt for meta and data", K(ret));
+    } else if (OB_FAIL(tx_svr->create_tablet(key.tablet_id_, key.ls_id_))) {
+      LOG_WARN("fail to create tablet cache", K(ret), K(key), K(tablet_hdl));
     }
 
     if (OB_SUCC(ret)) {
