@@ -53,7 +53,7 @@ private:
       int64_t &snapshot_version,
       uint64_t &data_format_version,
       ObMySQLProxy &sql_proxy);
-  static int heart_beat_clear(const int64_t task_id);
+  static int heart_beat_clear(const int64_t task_id, const uint64_t tenant_id);
   static int check_need_stop(const uint64_t tenant_id);
 };
 
