@@ -1826,7 +1826,7 @@ def_table_schema(
 )
 
 # 216: __all_tenant_plan_baseline # abandoned in 4.0
-# 217: __all_tenant_plan_baseline_history abandoned in 4.0
+# 217: __all_tenant_plan_baseline_history # abandoned in 4.0
 
 # 218: __all_ddl_helper # abandoned in 4.0
 
@@ -3430,8 +3430,6 @@ def_table_schema(
       ('spare1', 'int', 'true')
   ],
 )
-
-# the table id from 337 to 341 have been used for new backup validation system table,
 
 # __all_ls_meta_table
 def_table_schema(
@@ -5921,12 +5919,12 @@ def_table_schema(
     ('ls_group_id', 'int', 'false'),
   ],
 )
-# 460 : __all_tenant_snapshots
+# 460 : __all_tenant_snapshot
 # 461 : __all_tenant_snapshot_ls
-# 462 : __all_tenant_snapshot_ls_meta_table
+# 462 : __all_tenant_snapshot_ls_replica
 
-# 463 : __all_mlogs
-# 464 : __all_mviews
+# 463 : __all_mlog
+# 464 : __all_mview
 # 465 : __all_mview_refresh_stats_sys_defaults
 # 466 : __all_mview_refresh_stats_params
 # 467 : __all_mview_refresh_run_stats
@@ -7930,7 +7928,7 @@ def_table_schema(
                      'index_using_type' : 'USING_BTREE'}},
 )
 
-## 11033:__all_virtual_partition_sstable_image_info # abandoned in 4.0
+# 11033: __all_virtual_partition_sstable_image_info # abandoned in 4.0
 
 def_table_schema(**gen_iterate_core_inner_table_def(11035, '__all_virtual_core_all_table', 'VIRTUAL_TABLE', all_table_def))
 
@@ -8196,33 +8194,8 @@ def_table_schema(
     vtable_route_policy = 'distributed',
 )
 
-#table_id = 11051 unused
-#def_table_schema(
-#  owner = 'xiaoyi.xy',
-#  table_name     = '__all_virtual_sql_monitor',
-#  table_id       = '11052',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns     = [],
-#  rowkey_columns = [
-#      ('tenant_id', 'int'),
-#      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-#      ('svr_port', 'int'),
-#      ('request_id', 'int'),
-#      ('job_id', 'int'),
-#      ('task_id', 'int'),
-#      ],
-#
-#    normal_columns = [
-#      ('plan_id', 'int'),
-#      ('scheduler_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-#      ('scheduler_port', 'int'),
-#      ('monitor_info', 'varchar:OB_MAX_MONITOR_INFO_LENGTH'),
-#      ('extend_info', 'varchar:OB_MAX_MONITOR_INFO_LENGTH'),
-#      ('sql_exec_start', 'timestamp'),
-#   ],
-#    partition_columns = ['svr_ip', 'svr_port'],
-#    vtable_route_policy = 'distributed',
-#)
+# 11051: abandoned
+# 11052: __all_virtual_sql_monitor # abandoned in 4.0
 
 def_table_schema(
   owner = 'xiaoyi.xy',
@@ -8272,35 +8245,7 @@ def_table_schema(
   ],
 )
 
-#def_table_schema(
-#  owner = 'xiaoyi.xy',
-#  table_name     = '__all_virtual_sql_plan_statistics',
-#  table_id       = '11055',
-#  table_type = 'VIRTUAL_TABLE',
-#  gm_columns     = [],
-#  rowkey_columns = [
-#      ('tenant_id', 'int'),
-#      ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
-#      ('svr_port', 'int'),
-#      ('plan_id', 'int'),
-#      ('operation_id', 'int'),
-#      ],
-#
-#    normal_columns = [
-#      ('executions', 'int'),
-#      ('output_rows', 'int'),
-#      ('input_rows', 'int'),
-#      ('rescan_times', 'int'),
-#      ('buffer_gets', 'int'),
-#      ('disk_reads', 'int'),
-#      ('disk_writes', 'int'),
-#      ('elapsed_time', 'int'),
-#      ('extend_info1', 'varchar:OB_MAX_MONITOR_INFO_LENGTH'),
-#      ('extend_info2', 'varchar:OB_MAX_MONITOR_INFO_LENGTH'),
-#   ],
-#    partition_columns = ['svr_ip', 'svr_port'],
-#    vtable_route_policy = 'distributed',
-#)
+# 11055: __all_virtual_sql_plan_statistics # abandoned in 4.0
 
 def_table_schema(
   owner = 'jiahua.cjh',
@@ -9301,9 +9246,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# table_id = 11117: used for __all_virtual_tablet_stat on column_store branch
-# table_id = 11118: used for __all_virtual_ddl_sim_point on enhance_ddl_quality branch
-# table_id = 11119: used for __all_virtual_ddl_sim_point_stat on enhance_ddl_quality branch
+# 11117: __all_virtual_tablet_stat
 
 def_table_schema(
   owner = 'jianyun.sjy',
@@ -10188,7 +10131,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-## table_id 12125 was used by a discarded table, do not reuse again
+# 12125: abandoned
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12126',
@@ -10793,7 +10736,7 @@ def_table_schema(
   ],
 )
 
-# 12197 is INFORMATION_SCHEMA.FILES, which is moved to 21157
+# 12197: abandoned # INFORMATION_SCHEMA.FILES, which is moved to 21157
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12198',
@@ -11342,8 +11285,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_tenant_scheduler_program_argument',
   keywords = all_def_keywords['__all_tenant_scheduler_program_argument']))
 
-# 12267 __all_virtual_backup_validation_task_v2
-# 12268 __all_virtual_pg_backup_validation_task_v2
+# 12267: __all_virtual_backup_validation_task_v2
+# 12268: __all_virtual_pg_backup_validation_task_v2
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12269',
@@ -11359,8 +11302,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_global_context_value',
   keywords = all_def_keywords['__all_global_context_value']))
 
-# 12272 __all_virtual_external_storage_session
-# 12273 __all_virtual_external_storage_info
+# 12272: __all_virtual_external_storage_session
+# 12273: __all_virtual_external_storage_info
 
 def_table_schema(
     owner = 'fenggu.yh',
@@ -11395,7 +11338,7 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
-# 12275 __all_virtual_tablet_transfer_info
+# 12275: __all_virtual_tablet_transfer_info
 
 def_table_schema(
     owner = 'wanhong.wwh',
@@ -13116,9 +13059,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__tenant_parameter']))
 
-# 12402: __all_virtual_tenant_snapshots
+# 12402: __all_virtual_tenant_snapshot
 # 12403: __all_virtual_tenant_snapshot_ls
-# 12404: __all_virtual_tenant_snapshot_ls_meta_table
+# 12404: __all_virtual_tenant_snapshot_ls_replica
 
 def_table_schema(
   owner = 'yunshan.tys',
@@ -13143,8 +13086,8 @@ def_table_schema(
   ]
 )
 
-# 12406: __all_virtual_mlogs
-# 12407: __all_virtual_mviews
+# 12406: __all_virtual_mlog
+# 12407: __all_virtual_mview
 # 12408: __all_virtual_mview_refresh_stats_sys_defaults
 # 12409: __all_virtual_mview_refresh_stats_params
 # 12410: __all_virtual_mview_refresh_run_stats
@@ -13282,7 +13225,7 @@ def_table_schema(
 
 # 12430: __all_virtual_column_group_mapping
 # 12431: __all_virtual_column_group_history
-# 12432: __all_virtual_column_gorup_mapping_history
+# 12432: __all_virtual_column_group_mapping_history
 
 def_table_schema(
   owner = 'zhixing.yh',
@@ -13599,7 +13542,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 ################################################################################
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15010', all_def_keywords['__all_virtual_plan_stat'])))
-#def_table_schema(**gen_oracle_mapping_virtual_table_def('15011', all_def_keywords['__all_virtual_sql_plan_statistics']))
+# 15011: __all_virtual_sql_plan_statistics
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15012', all_def_keywords['__all_virtual_plan_cache_plan_explain'])))
 def_table_schema(**gen_agent_virtual_table_def('15023', all_def_keywords['__tenant_virtual_outline']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15026', all_def_keywords['__all_virtual_privilege'])))
@@ -13949,12 +13892,11 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_sys_agent_virtual_table_def('15383', all_def_keywords['__all_resource_pool'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15384', all_def_keywords['__all_virtual_px_p2p_datahub'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15385', all_def_keywords['__all_virtual_timestamp_service'])))
-# 15386: __all_virtual_column_group
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15387', all_def_keywords['__all_virtual_ls_log_restore_status'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15388', all_def_keywords['__all_virtual_tenant_parameter'])))
 
-# 15389: __all_mlogs
-# 15390: __all_mviews
+# 15389: __all_mlog
+# 15390: __all_mview
 # 15391: __all_mview_refresh_stats_sys_defaults
 # 15392: __all_mview_refresh_stats_params
 # 15393: __all_mview_refresh_run_stats
@@ -13990,7 +13932,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
-# 15417: __all_virtual_column_group_mapping
+# 15417: abandoned
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15418', all_def_keywords['__all_virtual_cgroup_config'])))
 
@@ -15667,113 +15609,10 @@ WHERE
 
 )
 
-# 4.0 not support @xiaoyi.xy
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'gv$sql',
-#    table_id       = '21032',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """SELECT tenant_id AS CON_ID,
-#        svr_ip AS SVR_IP,
-#        svr_port AS SVR_PORT,
-#        plan_id AS PLAN_ID,
-#        sql_id AS SQL_ID,
-#        type AS TYPE,
-#        statement AS SQL_TEXT,
-#        plan_hash AS PLAN_HASH_VALUE,
-#        first_load_time AS FIRST_LOAD_TIME,
-#        last_active_time AS LAST_ACTIVE_TIME,
-#        avg_exe_usec AS AVG_EXE_USEC,
-#        slowest_exe_time AS SLOWEST_EXE_TIME,
-#        slowest_exe_usec as SLOWEST_EXE_USEC,
-#        slow_count as SLOW_COUNT,
-#        hit_count as HIT_COUNT,
-#        plan_size as PLAN_SIZE,
-#        executions as EXECUTIONS,
-#        disk_reads as DISK_READS,
-#        direct_writes as DIRECT_WRITES,
-#        buffer_gets as BUFFER_GETS,
-#        application_wait_time as APPLICATION_WAIT_TIME,
-#        concurrency_wait_time as CONCURRENCY_WAIT_TIME,
-#        user_io_wait_time as USER_IO_WAIT_TIME,
-#        rows_processed as ROWS_PROCESSED,
-#        elapsed_time as ELAPSED_TIME,
-#        cpu_time as CPU_TIME
-#        FROM oceanbase.__all_virtual_plan_stat
-#        WHERE is_serving_tenant(svr_ip, svr_port, effective_tenant_id()) and (tenant_id = effective_tenant_id() or effective_tenant_id() = 1)
-#""".replace("\n", " "),
-#
-#
-#    normal_columns = [
-#    ],
-#)
-
-# 4.0 not supported
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'v$sql',
-#    table_id       = '21033',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """SELECT * FROM oceanbase.gv$sql
-#        WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
-#""".replace("\n", " "),
-#
-#
-#    normal_columns = [
-#    ],
-#)
-
-
-# gv$sql_monitor/v$sql_monitor is not compatible with oracle.
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'GV$SQL_MONITOR',
-#    table_id       = '21034',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """
-# SELECT tenant_id as CON_ID,
-#        request_id as SQL_EXEC_ID,
-#        job_id as JOB_ID,
-#        task_id as TASK_ID,
-#        svr_ip as SVR_IP,
-#        svr_port as SVR_PORT,
-#        sql_exec_start as SQL_EXEC_START,
-#        plan_id as PLAN_ID,
-#        scheduler_ip as SCHEDULER_IP,
-#        scheduler_port as SCHEDULER_PORT,
-#        monitor_info as MONITOR_INFO,
-#        extend_info as EXTEND_INFO
-# FROM oceanbase.__all_virtual_sql_monitor
-#""".replace("\n", " "),
-#
-#    normal_columns = [
-#    ],
-#)
-#def_table_schema(
-#    owner = 'xiaoyi.xy',
-#    table_name     = 'V$SQL_MONITOR',
-#    table_id       = '21035',
-#    table_type = 'SYSTEM_VIEW',
-#    gm_columns = [],
-#    in_tenant_space = True,
-#    rowkey_columns = [],
-#    view_definition = """
-#    SELECT * FROM OCEANBASE.GV$SQL_MONITOR
-#    WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
-#""".replace("\n", " "),
-#
-#    normal_columns = [
-#    ],
-#)
+# 21032: GV$SQL # abandoned in 4.0
+# 21033: V$SQL # abandoned in 4.0
+# 21034: GV$SQL_MONITOR # abandoned in 4.0
+# 21035: V$SQL_MONITOR # abandoned in 4.0
 
 def_table_schema(
     owner = 'xiaochu.yh',
@@ -16248,47 +16087,11 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# TODO: wenqu delete it
-# def_table_schema(
-#   owner = 'jianyun.sjy',
-#   table_name      = 'gv$partition_audit',
-#   table_id        = '21073',
-#   table_type      = 'SYSTEM_VIEW',
-#   rowkey_columns  = [],
-#   normal_columns  = [],
-#   gm_columns      = [],
-#   in_tenant_space = True,
-#   view_definition = """
-#     SELECT *
-#     FROM oceanbase.__all_virtual_partition_audit
-#     WHERE effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
-# """.replace("\n", " ")
-# )
-
-# TODO: wenqu delete it
-# def_table_schema(
-#   owner = 'jianyun.sjy',
-#   table_name      = 'v$partition_audit',
-#   table_id        = '21074',
-#   table_type      = 'SYSTEM_VIEW',
-#   rowkey_columns  = [],
-#   normal_columns  = [],
-#   gm_columns      = [],
-#   in_tenant_space = True,
-#   view_definition = """
-#     SELECT *
-#     FROM oceanbase.gv$partition_audit
-#     WHERE svr_ip = host_ip() AND svr_port = rpc_port()
-# """.replace("\n", " ")
-# )
-
-
+# 21073: gv$partition_audit # abandoned in 4.0
+# 21074: v$partition_audit # abandoned in 4.0
 # 21075: V$OB_CLUSTER # abandoned in 4.0
-
 # 21076: v$ob_standby_status # abandoned in 4.0
-
 # 21077: v$ob_cluster_stats # abandoned in 4.0
-
 # 21078: V$OB_CLUSTER_EVENT_HISTORY # abandoned in 4.0
 
 def_table_schema(
@@ -16904,114 +16707,9 @@ AND
 """.replace("\n", " ")
 )
 
-# 4.0 not support
-#def_table_schema(
-#  owner = 'lixia.yq',
-#  table_name      = 'CDB_CKPT_HISTORY',
-#  table_id        = '21114',
-#  table_type      = 'SYSTEM_VIEW',
-#  rowkey_columns  = [],
-#  normal_columns  = [],
-#  gm_columns      = [],
-#  in_tenant_space = False,
-#  view_definition = """
-#  SELECT
-#    A.SVR_IP AS SVR_IP,
-#    A.SVR_PORT AS SVR_PORT,
-#    A.VALUE1 AS TENANT_ID,
-#    A.VALUE2 AS CHECKPOINT_SNAPSHOT,
-#    A.VALUE3 AS CHECKPOINT_TYPE,
-#    A.VALUE4 AS CHECKPOINT_CLUSTER_VERSION,
-#    A.GMT_CREATE AS START_TIME,
-#    B.GMT_CREATE AS FINISH_TIME
-#  FROM
-#    (SELECT
-#       SVR_IP,
-#       SVR_PORT,
-#       EVENT,
-#       VALUE1,
-#       VALUE2,
-#       VALUE3,
-#       VALUE4,
-#       GMT_CREATE
-#     FROM
-#       OCEANBASE.__ALL_SERVER_EVENT_HISTORY
-#     WHERE
-#       (EVENT = 'minor merge start' OR EVENT = 'write checkpoint start')
-#       AND (EFFECTIVE_TENANT_ID() = 1 OR VALUE1 = EFFECTIVE_TENANT_ID())) A
-#    LEFT JOIN
-#    (SELECT
-#       SVR_IP,
-#       SVR_PORT,
-#       EVENT,
-#       VALUE1,
-#       VALUE2,
-#       GMT_CREATE
-#     FROM
-#       OCEANBASE.__ALL_SERVER_EVENT_HISTORY
-#     WHERE
-#       (EVENT = 'minor merge finish' OR EVENT = 'write checkpoint finish')
-#       AND (EFFECTIVE_TENANT_ID() = 1 OR VALUE1 = EFFECTIVE_TENANT_ID())) B
-#    ON
-#      A.SVR_IP = B.SVR_IP AND A.SVR_PORT = B.SVR_PORT AND A.VALUE1 = B.VALUE1 AND A.VALUE2 = B.VALUE2 AND ((A.EVENT = 'minor merge start' AND B.EVENT = 'minor merge finish') OR (A.EVENT = 'write checkpoint start' AND B.EVENT = 'write checkpoint finish'))
-#  ORDER BY
-#    SVR_IP, SVR_PORT, TENANT_ID, CHECKPOINT_SNAPSHOT
-#""".replace("\n", " ")
-#)
-
-# 4.0 not supported
-#def_table_schema(
-# owner = 'shanyan.g',
-# table_name      = 'gv$ob_trans_table_status',
-# table_id        = '21115',
-# table_type      = 'SYSTEM_VIEW',
-# rowkey_columns  = [],
-# normal_columns  = [],
-# gm_columns      = [],
-# in_tenant_space = True,
-# view_definition = """
-#SELECT
-#  SVR_IP,
-#  SVR_PORT,
-#  TENANT_ID,
-#  TABLE_ID,
-#  PARTITION_ID,
-#  END_LOG_ID,
-#  TRANS_CNT
-#FROM
-#  oceanbase.__all_virtual_trans_table_status
-#WHERE
-#  effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
-#""".replace("\n", " ")
-#)
-#
-# 4.0 not supported
-#def_table_schema(
-# owner = 'shanyan.g',
-# table_name      = 'v$ob_trans_table_status',
-# table_id        = '21116',
-# table_type      = 'SYSTEM_VIEW',
-# rowkey_columns  = [],
-# normal_columns  = [],
-# gm_columns      = [],
-# in_tenant_space = True,
-# view_definition = """
-#SELECT
-#  TABLE_ID,
-#  PARTITION_ID,
-#  END_LOG_ID,
-#  TRANS_CNT
-#FROM
-#  oceanbase.__all_virtual_trans_table_status
-#WHERE
-#  SVR_IP=HOST_IP()
-#AND
-#  SVR_PORT=RPC_PORT()
-#AND
-#  effective_tenant_id() = 1 OR tenant_id = effective_tenant_id()
-#""".replace("\n", " ")
-#)
-
+# 21114: CDB_CKPT_HISTORY # abandoned in 4.0
+# 21115: gv$ob_trans_table_status # abandoned in 4.0
+# 21116: v$ob_trans_table_status # abandoned in 4.0
 
 def_table_schema(
     owner = 'xiaochu.yh',
@@ -17082,28 +16780,7 @@ def_table_schema(
 # 21123: CDB_OB_BACKUP_VALIDATION_JOB_HISTORY # abandoned in 4.0
 # 21124: CDB_OB_TENANT_BACKUP_VALIDATION_TASK # abandoned in 4.0
 # 21125: CDB_OB_BACKUP_VALIDATION_TASK_HISTORY # abandoned in 4.0
-
-
-#FIXME: This view will be supported later
-#def_table_schema(
-#  owner = 'jingyan.kfy',
-#  table_name      = 'v$restore_point',
-#  table_id        = '21126',
-#  table_type      = 'SYSTEM_VIEW',
-#  rowkey_columns  = [],
-#  normal_columns  = [],
-#  gm_columns      = [],
-#  in_tenant_space = True,
-#  view_definition = """
-#    SELECT
-#      TENANT_ID,
-#      SNAPSHOT_SCN as SNAPSHOT,
-#      GMT_CREATE as TIME,
-#      EXTRA_INFO as NAME FROM oceanbase.__all_acquired_snapshot
-#      WHERE snapshot_type = 3 and (effective_tenant_id() = 1 OR tenant_id = effective_tenant_id())
-#  """.replace("\n", " ")
-#)
-
+# 21126: v$restore_point # abandoned in 4.0
 # 21127: CDB_OB_BACKUP_SET_OBSOLETE # abandoned in 4.0
 # 21128: CDB_OB_BACKUP_BACKUPSET_JOB # abandoned in 4.0
 # 21129: CDB_OB_BACKUP_BACKUPSET_JOB_HISTORY # abandoned in 4.0
@@ -17347,9 +17024,7 @@ def_table_schema(
 # 21139: CDB_OB_BACKUP_BACKUPPIECE_JOB_HISTORY # abandoned in 4.0
 # 21140: CDB_OB_BACKUP_BACKUPPIECE_TASK # abandoned in 4.0
 # 21141: CDB_OB_BACKUP_BACKUPPIECE_TASK_HISTORY # abandoned in 4.0
-
 # 21142: v$ob_all_clusters # abandoned in 4.0
-
 # 21143: CDB_OB_BACKUP_ARCHIVELOG # abandoned in 4.0
 # 21144: CDB_OB_BACKUP_BACKUP_ARCHIVELOG # abandoned in 4.0
 
@@ -17731,7 +17406,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21156 CDB_OB_LOG_ARCHIVE_LS_SUMMARY
+# 21156: CDB_OB_LOG_ARCHIVE_LS_SUMMARY
 
 def_table_schema(
   owner = 'xiaochu.yh',
@@ -22166,7 +21841,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21216 UNUSED
+# 21216: abandoned
 
 def_table_schema(
   owner = 'fenggu.yh',
@@ -22822,8 +22497,8 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-# reserve 21243 for GV$OB_IO_QUOTA
-# reserve 21244 for V$OB_IO_QUOTA
+# 21243: GV$OB_IO_QUOTA
+# 21244: V$OB_IO_QUOTA
 
 
 # 4.0 backup clean view
@@ -24748,7 +24423,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21286 : DBA_OB_ARCHIVE_MODE
+# 21286: DBA_OB_ARCHIVE_MODE
 
 def_table_schema(
   owner = 'wangxiaohui.wxh',
@@ -25093,7 +24768,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21292 : CDB_OB_ARCHIVE_MODE
+# 21292: CDB_OB_ARCHIVE_MODE
 
 def_table_schema(
   owner = 'wangxiaohui.wxh',
@@ -52248,26 +51923,7 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# def_table_schema(
-#     owner = 'jingyan.kfy',
-#     table_name     = 'V$RESTORE_POINT',
-#     name_postfix = '_ORA',
-#     database_id     = 'OB_ORA_SYS_DATABASE_ID',
-#     table_id       = '28069',
-#     table_type = 'SYSTEM_VIEW',
-#     gm_columns = [],
-#     in_tenant_space = True,
-#     rowkey_columns = [],
-#     normal_columns = [],
-#     view_definition = """SELECT
-#           TENANT_ID,
-#           SNAPSHOT_SCN as SNAPSHOT,
-#           GMT_CREATE as TIME,
-#           EXTRA_INFO as NAME
-#         FROM SYS.ALL_VIRTUAL_ACQUIRED_SNAPSHOT_AGENT
-#         WHERE snapshot_type = 3 and (tenant_id = effective_tenant_id() or effective_tenant_id() = 1)
-# """.replace("\n", " "),
-# )
+# 28069: V$RESTORE_POINT # abandoned in 4.0
 
 def_table_schema(
     owner = 'xiaochu.yh',
@@ -53804,7 +53460,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-## table_id 28095 was used by a discarded table, do not reuse again
+# 28095: abandoned
 
 def_table_schema(
   owner = 'linlin.xll',
@@ -56745,7 +56401,6 @@ WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
 )
 
-# 28202: DBA_OB_FORMAT_OUTLINES
 def_table_schema(
   owner           = 'yuchen.wyc',
   table_name      = 'GV$OB_SQLSTAT',
@@ -57874,7 +57529,7 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
 
-# 101089 : placeholder for unique index of __all_tenant_snapshots
+# 101089: __all_tenant_snapshot
 
 def_sys_index_table(
   index_name = 'idx_dbms_lock_allocated_lockhandle',
