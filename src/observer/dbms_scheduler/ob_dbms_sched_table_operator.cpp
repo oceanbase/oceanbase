@@ -104,6 +104,7 @@ int ObDBMSSchedTableOperator::seperate_job_id_from_name(ObString &job_name, int6
 {
   int ret = OB_SUCCESS;
   const char* prefix = "JOB$_";
+  job_id = 0;
   if (job_name.prefix_match(prefix)) {
     char nptr[JOB_NAME_MAX_SIZE];
     char *endptr = NULL;
@@ -272,7 +273,10 @@ int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, int64_t a
       SMART_VAR(ObMySQLProxy::MySQLResult, result) {
         if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
           LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
-        } else if (OB_NOT_NULL(result.get_result())) {
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id));
+        } else {
           if (OB_SUCCESS == (ret = result.get_result()->next())) {
             int64_t int_value = 0;
             if (OB_FAIL(result.get_result()->get_int(static_cast<const int64_t>(0), int_value))) {
@@ -397,12 +401,21 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_info(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_id));
+      } else {
         if (OB_SUCCESS == (ret = result.get_result()->next())) {
           OZ (extract_info(*(result.get_result()), tenant_id, is_oracle_tenant, allocator, job_info));
-          if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-            LOG_ERROR("got more than one row for dbms sched job!", K(ret), K(tenant_id), K(job_id));
-            ret = OB_ERR_UNEXPECTED;
+          if (OB_SUCC(ret)) {
+            int tmp_ret = result.get_result()->next();
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("got more than one row for dbms sched job!", K(ret), K(tenant_id), K(job_id));
+            } else if (tmp_ret != OB_ITER_END) {
+              ret = tmp_ret;
+              LOG_ERROR("got next row for dbms sched job failed", K(ret), K(tenant_id), K(job_id));
+            }
           }
         } else if (OB_ITER_END == ret) {
           LOG_WARN("job not exists, may delete alreay!", K(ret), K(tenant_id), K(job_id));
@@ -434,7 +447,10 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_infos_in_tenant(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id));
+      } else {
         do {
           if (OB_FAIL(result.get_result()->next())) {
             LOG_INFO("failed to get result", K(ret));
@@ -489,12 +505,21 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_class_info(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_class_name));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id), K(job_class_name));
+      } else {
         if (OB_SUCCESS == (ret = result.get_result()->next())) {
           OZ (extract_job_class_info(*(result.get_result()), tenant_id, is_oracle_tenant, allocator, job_class_info));
-          if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-            LOG_ERROR("got more than one row for dbms sched job class!", K(ret), K(tenant_id), K(job_class_name));
-            ret = OB_ERR_UNEXPECTED;
+          if (OB_SUCC(ret)) {
+            int tmp_ret = result.get_result()->next();
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("got more than one row for dbms sched job class!", K(ret), K(tenant_id), K(job_class_name));
+            } else if (tmp_ret != OB_ITER_END) {
+              ret = tmp_ret;
+              LOG_ERROR("got next row for dbms sched job class failed", K(ret), K(tenant_id), K(job_class_name));
+            }
           }
         } else if (OB_ITER_END == ret) {
           LOG_INFO("job_class_name not exists, may delete alreay!", K(ret), K(tenant_id), K(job_class_name));

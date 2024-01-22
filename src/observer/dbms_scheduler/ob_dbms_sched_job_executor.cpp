@@ -174,13 +174,22 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
         SMART_VAR(ObMySQLProxy::MySQLResult, result) {
           if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
             LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_info.get_program_name().ptr()), K(job_info.get_job_name().ptr()));
-          } else if (OB_NOT_NULL(result.get_result())) {
+          } else if (OB_ISNULL(result.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+          } else {
             if (OB_SUCCESS == (ret = result.get_result()->next())) {
               EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "program_action", program_action);
               EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "number_of_argument", number_of_argument, uint64_t);
-              if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-                LOG_ERROR("got more than one row for dbms sched program!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                ret = OB_ERR_UNEXPECTED;
+              if (OB_SUCC(ret)) {
+                int tmp_ret = result.get_result()->next();
+                if (OB_SUCCESS == tmp_ret) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_ERROR("got more than one row for dbms sched program!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                } else if (tmp_ret != OB_ITER_END) {
+                  ret = tmp_ret;
+                  LOG_WARN("got next row for dbms sched program failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                }
               }
             } else if (OB_ITER_END == ret) {
               LOG_INFO("program not exists, may delete alreay!", K(ret), K(tenant_id), K(job_info.get_program_name().ptr()), K(job_info.get_program_name().ptr()));
@@ -206,12 +215,21 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
             SMART_VAR(ObMySQLProxy::MySQLResult, result) {
               if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
                 LOG_WARN("execute query failed", K(ret), K(sql), K(result.get_result()), K(tenant_id), K(job_info.get_job_name().ptr()));
-              } else if (OB_NOT_NULL(result.get_result())) {
+              } else if (OB_ISNULL(result.get_result())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()));
+              } else {
                 if (OB_SUCCESS == (ret = result.get_result()->next())) {
                   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(result.get_result()), "default_value", argument_value);
-                  if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-                    LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                    ret = OB_ERR_UNEXPECTED;
+                  if (OB_SUCC(ret)) {
+                    int tmp_ret = result.get_result()->next();
+                    if (OB_SUCCESS == tmp_ret) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                    } else if (tmp_ret != OB_ITER_END) {
+                      ret = tmp_ret;
+                      LOG_WARN("got next row for argument failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                    }
                   }
                 } else if (OB_ITER_END == ret) {
                   LOG_INFO("job argument not exists, use default");
@@ -225,12 +243,21 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
                   SMART_VAR(ObMySQLProxy::MySQLResult, tmp_result) {
                     if (OB_FAIL(sql_proxy_->read(tmp_result, tenant_id, sql.ptr()))) {
                       LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_info.get_job_name().ptr()));
-                    } else if (OB_NOT_NULL(tmp_result.get_result())) {
+                    } else if (OB_ISNULL(tmp_result.get_result())) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()));
+                    } else {
                       if (OB_SUCCESS == (ret = tmp_result.get_result()->next())) {
                         EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*(tmp_result.get_result()), "default_value", argument_value);
-                        if (OB_SUCC(ret) && (tmp_result.get_result()->next()) != OB_ITER_END) {
-                          LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
-                          ret = OB_ERR_UNEXPECTED;
+                        if (OB_SUCC(ret)) {
+                          int tmp_ret = tmp_result.get_result()->next();
+                          if (OB_SUCCESS == tmp_ret) {
+                            ret = OB_ERR_UNEXPECTED;
+                            LOG_ERROR("got more than one row for argument!", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                          } else if (tmp_ret != OB_ITER_END) {
+                            ret = tmp_ret;
+                            LOG_WARN("got next row for argument failed", K(ret), K(tenant_id), K(job_info.get_job_name().ptr()), K(job_info.get_program_name().ptr()));
+                          }
                         }
                       } else if (OB_ITER_END == ret) {
                         LOG_ERROR("program default argument not exists", K(sql.ptr()), K(job_info.get_program_name().ptr()));
