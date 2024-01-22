@@ -1523,6 +1523,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       table_flags_ = src_schema.table_flags_;
       name_generated_type_ = src_schema.name_generated_type_;
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
+      auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       mlog_tid_ = src_schema.mlog_tid_;
@@ -3337,6 +3338,7 @@ void ObTableSchema::reset()
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  auto_increment_cache_size_ = 0;
 
   is_column_store_supported_ = false;
   max_used_column_group_id_ = COLUMN_GROUP_START_ID;
@@ -6365,7 +6367,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(max_used_column_group_id),
     K_(column_group_cnt),
     "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
-    K_(mlog_tid));
+    K_(mlog_tid),
+    K_(auto_increment_cache_size));
   J_OBJ_END();
 
   return pos;
@@ -6645,6 +6648,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   }();
 
   OB_UNIS_ENCODE(mlog_tid_);
+  OB_UNIS_ENCODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -7073,6 +7077,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }();
 
   OB_UNIS_DECODE(mlog_tid_);
+  OB_UNIS_DECODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -7222,6 +7227,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(is_column_store_supported_);
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
+  OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   return len;
 }
 

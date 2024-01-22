@@ -1125,6 +1125,8 @@ public:
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
   void set_lob_inrow_threshold(const int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold;}
+  inline void set_auto_increment_cache_size(const int64_t auto_increment_cache_size)
+  { auto_increment_cache_size_ = auto_increment_cache_size; }
 //get methods
   bool is_valid() const;
 
@@ -1215,6 +1217,7 @@ public:
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
+  inline int64_t get_auto_increment_cache_size() const { return auto_increment_cache_size_; }
   bool has_check_constraint() const;
   inline bool has_constraint() const { return cst_cnt_ > 0; }
   bool is_column_in_check_constraint(const uint64_t col_id) const;
@@ -1802,6 +1805,7 @@ protected:
 
   ObNameGeneratedType name_generated_type_;
   int64_t lob_inrow_threshold_;
+  int64_t auto_increment_cache_size_;
 
   // column group
   bool is_column_store_supported_;

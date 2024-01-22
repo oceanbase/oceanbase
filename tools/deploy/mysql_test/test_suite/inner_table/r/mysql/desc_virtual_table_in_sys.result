@@ -947,6 +947,7 @@ name_generated_type	bigint(20)	NO		0
 lob_inrow_threshold	bigint(20)	NO		4096	
 max_used_column_group_id	bigint(20)	NO		1000	
 column_store	bigint(20)	NO		0	
+auto_increment_cache_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2666,6 +2667,7 @@ name_generated_type	bigint(20)	NO		0
 lob_inrow_threshold	bigint(20)	NO		4096	
 max_used_column_group_id	bigint(20)	NO		1000	
 column_store	bigint(20)	NO		0	
+auto_increment_cache_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2755,6 +2757,7 @@ name_generated_type	bigint(20)	YES		0
 lob_inrow_threshold	bigint(20)	YES		4096	
 max_used_column_group_id	bigint(20)	YES		1000	
 column_store	bigint(20)	YES		0	
+auto_increment_cache_size	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
