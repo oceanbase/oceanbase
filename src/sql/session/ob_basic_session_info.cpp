@@ -151,7 +151,9 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       thread_id_(0),
       is_password_expired_(false),
       process_query_time_(0),
-      last_update_tz_time_(0)
+      last_update_tz_time_(0),
+      is_client_sessid_support_(false),
+      use_rich_vector_format_(false)
 {
   thread_data_.reset();
   MEMSET(sys_vars_, 0, sizeof(sys_vars_));
@@ -4441,8 +4443,11 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_);
+              exec_min_cluster_version_,
+              is_client_sessid_support_,
+              use_rich_vector_format_);
   }();
+  OB_UNIS_ENCODE(ObString(sql_id_));
   return ret;
 }
 
@@ -4641,6 +4646,10 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   } else {
     exec_min_cluster_version_ = CLUSTER_VERSION_4_0_0_0;
   }
+  if (OB_SUCC(ret) && pos < data_len) {
+    LST_DO_CODE(OB_UNIS_DECODE, is_client_sessid_support_);
+  }
+  LST_DO_CODE(OB_UNIS_DECODE, use_rich_vector_format_);
   // deep copy string.
   if (OB_SUCC(ret)) {
     if (OB_FAIL(name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -4683,6 +4692,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   }
   release_to_pool_ = OB_SUCC(ret);
   }();
+  ObString sql_id;
+  OB_UNIS_DECODE(sql_id);
   return ret;
 }
 
@@ -4953,7 +4964,10 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               flt_vars_.last_flt_trace_id_,
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_);
+              exec_min_cluster_version_,
+              is_client_sessid_support_,
+              use_rich_vector_format_);
+  OB_UNIS_ADD_LEN(ObString(sql_id_));
   return len;
 }
 
