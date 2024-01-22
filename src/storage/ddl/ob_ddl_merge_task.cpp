@@ -695,7 +695,7 @@ int ObTabletDDLUtil::update_ddl_table_store(
   return ret;
 }
 
-int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, ObIArray<ObSSTable *> &target_sstables)
+int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, ObIArray<ObSSTable *> &target_sstables, ObIArray<ObStorageMetaHandle> &meta_handles)
 {
   int ret = OB_SUCCESS;
   ddl_sstable_iter.resume();
@@ -735,6 +735,9 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
         // skip
       } else if (OB_FAIL(target_sstables.push_back(cg_sstable))) {
         LOG_WARN("push back cg sstable failed", K(ret));
+      } else if (cg_sstable_wrapper.get_meta_handle().is_valid()
+          && OB_FAIL(meta_handles.push_back(cg_sstable_wrapper.get_meta_handle()))) {
+        LOG_WARN("push back meta handle failed", K(ret));
       }
     }
   }
@@ -1021,9 +1024,10 @@ int compact_co_ddl_sstable(
   } else {
     const int64_t base_cg_idx = ddl_param.table_key_.get_column_group_id();
     ObArray<ObSSTable *> base_sstables;
+    ObArray<ObStorageMetaHandle> meta_handles; // hold loaded cg sstable
     ObTabletDDLParam cg_ddl_param = ddl_param;
     bool need_fill_cg_sstables = true;
-    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables))) {
+    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables, meta_handles))) {
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
     } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
@@ -1040,13 +1044,14 @@ int compact_co_ddl_sstable(
       for (int64_t i = 0; OB_SUCC(ret) && i < storage_schema->get_column_group_count(); ++i) {
         const int64_t cur_cg_idx = i;
         ObArray<ObSSTable *> cur_cg_sstables;
+        meta_handles.reset();
         ObTableHandleV2 target_table_handle;
         cg_ddl_param.table_key_.table_type_ = ObITable::TableType::DDL_MERGE_CO_SSTABLE == ddl_param.table_key_.table_type_
           ? ObITable::TableType::DDL_MERGE_CG_SSTABLE : ObITable::TableType::NORMAL_COLUMN_GROUP_SSTABLE;
         cg_ddl_param.table_key_.column_group_idx_ = cur_cg_idx;
         if (cur_cg_idx == base_cg_idx) {
           // do nothing
-        } else if (OB_FAIL(get_sstables(ddl_sstable_iter, cur_cg_idx, cur_cg_sstables))) {
+        } else if (OB_FAIL(get_sstables(ddl_sstable_iter, cur_cg_idx, cur_cg_sstables, meta_handles))) {
           LOG_WARN("get current cg sstables failed", K(ret));
         } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, cur_cg_idx, cur_cg_sstables))) {
           LOG_WARN("get current cg sstables failed", K(ret));
@@ -1087,7 +1092,8 @@ int compact_ro_ddl_sstable(
   } else {
     const int64_t base_cg_idx = -1; // negative value means row store
     ObArray<ObSSTable *> base_sstables;
-    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables))) {
+    ObArray<ObStorageMetaHandle> meta_handles; // hold loaded cg sstable, dummy here
+    if (OB_FAIL(get_sstables(ddl_sstable_iter, base_cg_idx, base_sstables, meta_handles))) {
       LOG_WARN("get base sstable from ddl sstables failed", K(ret), K(ddl_sstable_iter), K(base_cg_idx));
     } else if (OB_FAIL(get_sstables(frozen_ddl_kvs, base_cg_idx, base_sstables))) {
       LOG_WARN("get base sstable from ddl kv array failed", K(ret), K(frozen_ddl_kvs), K(base_cg_idx));
