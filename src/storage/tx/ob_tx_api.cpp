@@ -126,7 +126,7 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
  * - for tx which is a shadow copy of original tx (started on another server)
  *   release just free its memory used
  */
-int ObTransService::release_tx(ObTxDesc &tx)
+int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
 {
   /*
    * for compatible with cross tenant session usage
@@ -141,6 +141,9 @@ int ObTransService::release_tx(ObTxDesc &tx)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
+  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),

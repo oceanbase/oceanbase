@@ -100,10 +100,11 @@ int submit_commit_tx(ObTxDesc &tx,
  * this is the end of lifecycle of a transaction
  *
  * @tx:         the target transaction's descriptor
+ * @is_from_xa: whether xa ctx calls this interface
  *
  * Return: OB_SUCCESS - OK
  */
-int release_tx(ObTxDesc &tx);
+int release_tx(ObTxDesc &tx, const bool is_from_xa = false);
 
 /**
  * reuse_tx - reuse transaction descriptor
