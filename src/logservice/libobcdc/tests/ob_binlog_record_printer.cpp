@@ -556,7 +556,8 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   constexpr int64_t string_print_md5_threshold = 4L << 10;
   const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
     (is_string && col_data_length >= string_print_md5_threshold);
-  bool is_json_diff = br->isJsonDiffColVal(cname);
+
+  bool is_diff = (index < new_cols_count) && new_cols[index].m_diff_val;
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);
@@ -565,8 +566,14 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_signed:%s", column_index, is_signed);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_encoding:%s", column_index, encoding);
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_is_not_null:%s", column_index, is_not_null);
-  if (is_json_diff) {
-    ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_json_diff:true", column_index);
+  if (is_diff) {
+    if (is_json) {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] is_json_diff:true", column_index);
+    } else {
+      ROW_PRINTF(ptr, size, pos, ri, "[C%ld] unkonwn_diff", column_index);
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unkonwn_diff", K(ret), K(index), K(column_index), K(ctype));
+    }
   }
   if (enable_print_detail) {
     if (is_hidden_row_key_column) {

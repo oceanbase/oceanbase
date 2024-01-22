@@ -63,7 +63,7 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
   (void)memset(is_null_lob_old_columns_, 0, sizeof(is_null_lob_old_columns_));
-  (void)memset(is_json_diff_, 0, sizeof(is_json_diff_));
+  (void)memset(is_diff_, 0, sizeof(is_diff_));
 }
 
 int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_old_column)
@@ -80,7 +80,7 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
     (void)memset(is_null_lob_old_columns_, 0, column_num * sizeof(is_null_lob_old_columns_[0]));
-    (void)memset(is_json_diff_, 0, column_num * sizeof(is_json_diff_[0]));
+    (void)memset(is_diff_, 0, column_num * sizeof(is_diff_[0]));
   }
 
   return OB_SUCCESS;
@@ -1304,7 +1304,7 @@ int ObLogFormatter::fill_normal_cols_(
               if (lob_data_get_ctx->is_ext_info_log()) {
                 if (cv->is_json()) {
                   rv->new_columns_[usr_column_idx] = new_col_str;
-                  rv->is_json_diff_[usr_column_idx] = true;
+                  rv->is_diff_[usr_column_idx] = true;
                 } else {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
@@ -1324,7 +1324,7 @@ int ObLogFormatter::fill_normal_cols_(
               }
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(new_col_str->ptr(), new_col_str->length()),
-                  "buf_len", new_col_str->length(), KPC(lob_data_get_ctx), "is_json_diff", rv->is_json_diff_[usr_column_idx]);
+                  "buf_len", new_col_str->length(), KPC(lob_data_get_ctx), "is_diff", rv->is_diff_[usr_column_idx]);
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->new_columns_[usr_column_idx] = nullptr;
@@ -1856,9 +1856,9 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
               "column_num", row_value->column_num_);
-        } else if (row_value->is_json_diff_[i]) {
-          br_data->putNewJsonDiff(str_val->ptr(), str_val->length());
-          LOG_DEBUG("putNewJsonDiff", K(i), KPC(str_val));
+        } else if (row_value->is_diff_[i]) {
+          br_data->putNewDiff(str_val->ptr(), str_val->length());
+          LOG_DEBUG("putNewDiff", K(i), KPC(str_val));
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
