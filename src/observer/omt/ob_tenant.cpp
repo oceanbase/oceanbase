@@ -892,6 +892,7 @@ void ObTenant::mark_tenant_is_removed()
   tenant_meta_.unit_.is_removed_ = true;
 }
 
+ERRSIM_POINT_DEF(CREATE_MTL_MODULE_FAIL)
 // 初始化租户各子模块，保证初始化同步执行，因为依赖线程局部变量和栈上变量
 int ObTenant::create_tenant_module()
 {
@@ -905,6 +906,10 @@ int ObTenant::create_tenant_module()
 
   if (OB_FAIL(ObTenantBase::create_mtl_module())) {
     LOG_ERROR("create mtl module failed", K(tenant_id), K(ret));
+  } else if (CREATE_MTL_MODULE_FAIL) {
+    ret = CREATE_MTL_MODULE_FAIL;
+    LOG_ERROR("create_tenant_module failed because of tracepoint CREATE_MTL_MODULE_FAIL",
+              K(tenant_id), K(ret));
   } else if (FALSE_IT(ObTenantEnv::set_tenant(this))) {
     // 上面通过ObTenantSwitchGuard中会创建一个新的TenantBase线程局部变量，而不是存TenantBase的指针，
     // 目的是通过MTL()访问时减少一次内存跳转，但是设置的时mtl模块的指针还是nullptr, 所以在mtl创建完成时
