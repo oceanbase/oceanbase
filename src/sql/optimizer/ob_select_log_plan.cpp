@@ -2410,14 +2410,14 @@ int ObSelectLogPlan::check_sharding_inherit_from_access_all(ObLogicalOperator* o
       is_inherit_from_access_all = true;
     }
   }
-  if (OB_SUCC(ret) &&
-      !is_inherit_from_access_all &&
-      op->get_inherit_sharding_index() != -1) {
-    int64_t idx = op->get_inherit_sharding_index();
-    if (idx < 0 || idx >= op->get_num_of_child()) {
+  for (int64_t i = 0; OB_SUCC(ret) && !is_inherit_from_access_all && i < op->get_num_of_child(); ++i) {
+    ObLogicalOperator *child = op->get_child(i);
+    if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect inherit sharding index", K(ret));
-    } else if (OB_FAIL(SMART_CALL(check_sharding_inherit_from_access_all(op->get_child(idx),
+      LOG_WARN("unexpect null child", K(ret), K(i));
+    } else if (LOG_EXCHANGE == child->get_type()) {
+      //do nothing
+    } else if (OB_FAIL(SMART_CALL(check_sharding_inherit_from_access_all(child,
                                                                          is_inherit_from_access_all)))) {
       LOG_WARN("failed to check sharding inherit from bc2host", K(ret));
     }
