@@ -816,7 +816,9 @@ int ObTransformDBlink::check_is_link_table(TableItem *table,
     is_link_table = true;
     dblink_id = table->dblink_id_;
     is_reverse_link = table->is_reverse_link_;
-  } else if (table->is_generated_table() || table->is_temp_table()) {
+  } else if (table->is_temp_table()) {
+    is_link_table = false;
+  } else if (table->is_generated_table()) {
     if (OB_ISNULL(table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ref query", K(ret));

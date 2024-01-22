@@ -9286,11 +9286,18 @@ int ObTransformPreProcess::expand_correlated_cte(ObDMLStmt *stmt, bool& trans_ha
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); i ++) {
     bool is_correlated = false;
+    bool can_expand = true;
     ObSEArray<ObSelectStmt *, 4> dummy;
     if (OB_FAIL(check_is_correlated_cte(temp_table_infos.at(i).temp_table_query_, dummy, is_correlated))) {
       LOG_WARN("failed to check is correlated cte", K(ret));
     } else if (!is_correlated) {
       //do nothing
+    } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(temp_table_infos.at(i).temp_table_query_, can_expand))) {
+      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (!can_expand) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Correlated CTE Not Supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Correlated CTE");
     } else if (OB_FAIL(ObTransformUtils::expand_temp_table(ctx_, temp_table_infos.at(i)))) {
       LOG_WARN("failed to extend temp table", K(ret));
     } else {
