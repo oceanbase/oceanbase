@@ -984,7 +984,6 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
             LOG_WARN("failed to delete index stats", K(ret));
           } else {
             tmp_alloc.reset();
-            LOG_TRACE("Succeed to delete table stats", K(stat_param));
           }
         }
       }
@@ -1460,7 +1459,6 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
             LOG_WARN("failed to export table index stats", K(ret));
           } else {
             tmp_alloc.reset();
-            LOG_TRACE("succeed to export table stats", K(stat_param));
           }
         }
       }
@@ -1832,7 +1830,6 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
             LOG_WARN("failed to import table index stats", K(ret));
           } else {
             tmp_alloc.reset();
-            LOG_TRACE("succeed to import table stats", K(stat_param));
           }
         }
       }
@@ -2533,7 +2530,6 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
         LOG_WARN("failed to update stat cache", K(ret));
       } else {
         tmp_alloc.reset();
-        LOG_TRACE("Succeed to restore table stats", K(stat_param), K(specify_time));
       }
     }
   }
