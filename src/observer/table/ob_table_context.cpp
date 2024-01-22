@@ -516,15 +516,12 @@ int ObTableCtx::convert_lob(ObIAllocator &allocator, ObObj &obj)
 {
   int ret = OB_SUCCESS;
 
-  ObString full_data;
   if (obj.is_persist_lob()) {
     // do nothing
-  } else if (obj.has_lob_header()) {
+  } else if (obj.has_lob_header()) { // we add lob header in write_datum
     ret = OB_ERR_UNEXPECTED;
-    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should have lob header");
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "lob object should not have lob header");
     LOG_WARN("object should not have lob header", K(ret), K(obj));
-  } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(obj, allocator))) { // add lob header
-    LOG_WARN("fail to add lob header to obj", K(ret), K(obj));
   }
 
   return ret;
