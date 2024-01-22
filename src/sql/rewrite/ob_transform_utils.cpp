@@ -3230,6 +3230,80 @@ int ObTransformUtils::get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
   return ret;
 }
 
+// 获取用于抽取query range的column item, 取出stmt中的index column item, 直到第一个不在stmt中的为止
+// 例如：select min(c3) from t1 where c1 = 1 and c3 > 1, index i1(c1,c2,c3), 返回c1而不是c1,c3
+int ObTransformUtils::get_range_column_items_by_ids(const ObDMLStmt *stmt,
+                                                    uint64_t table_id,
+                                                    const ObIArray<uint64_t> &column_ids,
+                                                    ObIArray<ColumnItem> &column_items)
+{
+  int ret = OB_SUCCESS;
+  ColumnItem *column = NULL;
+  bool get_column_item = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && get_column_item && i < column_ids.count(); i++) {
+    column = stmt->get_column_item_by_id(table_id, column_ids.at(i));
+    if (NULL != column) {
+      ret = column_items.push_back(*column);
+    } else {
+      get_column_item = false;
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
+                                                      uint64_t table_id,
+                                                      const ObIArray<uint64_t> &index_cols,
+                                                      const ObIArray<ObRawExpr *> &predicate_exprs,
+                                                      ObTransformerCtx *ctx,
+                                                      bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ColumnItem> range_columns;
+  ObRawExpr *condition_expr = NULL;
+  ObArenaAllocator alloc(ObMemAttr(MTL_ID(), "RewriteMinMax"));
+  void *tmp_ptr = NULL;
+  ObQueryRange *query_range = NULL;
+  const ParamStore *params = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
+      || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
+  } else {
+    const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(ctx->session_info_);
+    params = &ctx->exec_ctx_->get_physical_plan_ctx()->get_param_store();
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(tmp_ptr = alloc.alloc(sizeof(ObQueryRange)))
+               || OB_ISNULL(query_range = new(tmp_ptr)ObQueryRange(alloc))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for query range", K(ret));
+    } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
+                                                     table_id,
+                                                     index_cols,
+                                                     range_columns))) {
+      LOG_WARN("failed to get index column items by index cols", K(ret));
+    } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
+                                                                    predicate_exprs,
+                                                                    dtc_params,
+                                                                    ctx->exec_ctx_,
+                                                                    NULL,
+                                                                    params))) {
+      LOG_WARN("failed to extract query range", K(ret));
+    } else if (query_range->get_range_exprs().count() != predicate_exprs.count()) {
+      is_match = false;
+    }
+    if (OB_NOT_NULL(query_range)) {
+      query_range->~ObQueryRange();
+      query_range = NULL;
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
                                      const ObDMLStmt *stmt,
                                      const ObColumnRefRawExpr *col_expr,
@@ -3237,19 +3311,19 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
                                      EqualSets *equal_sets,
                                      ObIArray<ObRawExpr*> *const_exprs,
                                      ObIArray<ObColumnRefRawExpr*> *col_exprs,
-                                     const bool need_match_col_exprs)
+                                     const bool need_match_col_exprs,
+                                     const bool need_check_query_range,
+                                     ObTransformerCtx *ctx)
 {
   int ret = OB_SUCCESS;
   uint64_t table_ref_id = OB_INVALID_ID;
   const TableItem *table_item = NULL;
   ObSEArray<uint64_t, 8> index_ids;
   is_match = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(col_expr)
-      || OB_ISNULL(schema_guard)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(col_expr) || OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(col_expr), K(schema_guard));
-  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(
-                         col_expr->get_table_id()))) {
+  } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(col_expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get_table_item", K(ret), K(table_item));
   } else if (!table_item->is_basic_table()) {
@@ -3259,6 +3333,19 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
   } else {
     ObSEArray<uint64_t, 8> index_cols;
     const ObTableSchema *index_schema = NULL;
+    ObSEArray<ObRawExpr *, 4> predicate_exprs;
+    ObRawExpr *condition_expr = NULL;
+    if (need_check_query_range) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_condition_size(); i++) {
+        if (OB_ISNULL(condition_expr = const_cast<ObRawExpr*>(stmt->get_condition_expr(i)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("condition expr is null", K(ret));
+        } else if (!condition_expr->is_const_expr()
+                  && OB_FAIL(predicate_exprs.push_back(condition_expr))) {
+          LOG_WARN("failed to push back condition expr", K(ret));
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < index_ids.count(); ++i) {
       index_cols.reuse();
       if (OB_FAIL(schema_guard->get_table_schema(index_ids.at(i), table_item, index_schema))) {
@@ -3283,6 +3370,14 @@ int ObTransformUtils::is_match_index(ObSqlSchemaGuard *schema_guard,
                                         col_exprs,
                                         need_match_col_exprs))) {
         LOG_WARN("failed to check is column match index", K(ret));
+      } else if (is_match && need_check_query_range
+                 && OB_FAIL(check_index_extract_query_range(stmt,
+                                                            col_expr->get_table_id(),
+                                                            index_cols,
+                                                            predicate_exprs,
+                                                            ctx,
+                                                            is_match))) {
+        LOG_WARN("failed to check if index can extract query range", K(ret));
       }
     }
   }
@@ -7274,7 +7369,7 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
       LOG_WARN("table is null", K(ret), K(table));
     } else if (OB_FAIL(stmt->remove_from_item(table->table_id_, &remove_happened))) {
       LOG_WARN("failed to remove from item", K(ret));
-    } else if (OB_FAIL(view_stmt->add_from_item(from_tables.at(i)->table_id_, is_joined_table))) {
+    } else if (OB_FAIL(view_stmt->add_from_item(table->table_id_, is_joined_table))) {
       LOG_WARN("failed to add from item", K(ret));
     } else if (is_joined_table) {
       if (OB_FAIL(append(basic_table_ids, static_cast<JoinedTable *>(table)->single_table_ids_))) {

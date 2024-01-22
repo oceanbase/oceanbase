@@ -592,6 +592,18 @@ public:
                                 const TableItem *table_item,
                                 ObIArray<uint64_t> &index_ids);
 
+  static int get_range_column_items_by_ids(const ObDMLStmt *stmt,
+                                           uint64_t table_id,
+                                           const ObIArray<uint64_t> &column_ids,
+                                           ObIArray<ColumnItem> &column_items);
+
+  static int check_index_extract_query_range(const ObDMLStmt *stmt,
+                                             uint64_t table_id,
+                                             const ObIArray<uint64_t> &index_cols,
+                                             const ObIArray<ObRawExpr *> &predicate_exprs,
+                                             ObTransformerCtx *ctx,
+                                             bool &is_match);
+
   static int is_match_index(ObSqlSchemaGuard *schema_guard,
                             const ObDMLStmt *stmt,
                             const ObColumnRefRawExpr *col_expr,
@@ -599,7 +611,9 @@ public:
                             EqualSets *equal_sets = NULL,
                             ObIArray<ObRawExpr*> *const_exprs = NULL,
                             ObIArray<ObColumnRefRawExpr*> *col_exprs = NULL,
-                            const bool need_match_col_exprs = false);
+                            const bool need_match_col_exprs = false,
+                            const bool need_check_query_range = false,
+                            ObTransformerCtx *ctx = NULL);
 
   static int is_match_index(const ObDMLStmt *stmt,
                             const ObIArray<uint64_t> &index_cols,

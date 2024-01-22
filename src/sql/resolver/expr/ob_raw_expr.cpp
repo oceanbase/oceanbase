@@ -1609,6 +1609,8 @@ int ObColumnRefRawExpr::assign(const ObRawExpr &other)
       is_unique_key_column_ = tmp.is_unique_key_column_;
       is_mul_key_column_ = tmp.is_mul_key_column_;
       is_strict_json_column_ = tmp.is_strict_json_column_;
+      srs_id_ = tmp.srs_id_;
+      udt_set_id_ = tmp.udt_set_id_;
     }
   }
   return ret;

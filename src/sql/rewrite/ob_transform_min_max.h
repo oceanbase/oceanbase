@@ -65,39 +65,45 @@ public:
                                  bool &trans_happened) override;
   static int check_transform_validity(ObTransformerCtx &ctx,
                                       ObSelectStmt *stmt,
-                                      ObAggFunRawExpr *&aggr_expr,
                                       bool &is_valid);
 
 private:
-  int do_transform(ObSelectStmt *select_stmt, ObAggFunRawExpr *aggr_expr);
+  int do_transform(ObSelectStmt *select_stmt);
+
+  int do_single_minmax_transform(ObSelectStmt *select_stmt);
+
+  int do_multi_minmax_transform(ObSelectStmt *select_stmt);
+
+  int deep_copy_subquery_for_aggr(const ObSelectStmt &copied_stmt,
+                                  ObRawExpr *aggr_param,
+                                  ObItemType aggr_type,
+                                  ObSelectStmt *&child_stmt);
 
   static int is_valid_index_column(ObTransformerCtx &ctx,
                                    const ObSelectStmt *stmt,
                                    const ObRawExpr *expr,
-                                   bool &is_expected_index);
+                                   EqualSets *equal_sets,
+                                   ObIArray<ObRawExpr*> *const_exprs,
+                                   bool &is_valid);
 
-  static int is_valid_having(const ObSelectStmt *stmt,
-                             const ObAggFunRawExpr *column_aggr_expr,
-                             bool &is_expected);
+  int set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_param);
 
-  static int is_valid_aggr_expr(const ObSelectStmt &stmt,
-                                const ObRawExpr *expr,
-                                const ObAggFunRawExpr *aggr_expr,
-                                bool &is_valid);
+  int set_child_order_item(ObSelectStmt *stmt, ObRawExpr *aggr_param, ObItemType aggr_type);
 
-  static int find_unexpected_having_expr(const ObAggFunRawExpr *aggr_expr,
-                                  const ObRawExpr *cur_expr,
-                                  bool &is_unexpected);
+  static int is_valid_aggr_items(ObTransformerCtx &ctx, const ObSelectStmt &stmt, bool &is_valid);
 
-  int set_child_condition(ObSelectStmt *stmt, ObRawExpr *aggr_expr);
+  static int is_valid_select_list(const ObSelectStmt &stmt, bool &is_valid);
 
-  int set_child_order_item(ObSelectStmt *stmt, ObRawExpr *aggr_expr);
+  static int is_valid_select_expr(const ObRawExpr *expr, bool &is_valid);
 
-  /**
-   * @brief: check whether there is any valid select_item
-   * request stmt has only one valid aggr expr, and select_items are exprs combainded const expr or that aggr_expr
-   */
-  static int is_valid_select_list(const ObSelectStmt &stmt, const ObAggFunRawExpr *aggr_expr, bool &is_valid);
+  static int is_valid_having_list(const ObSelectStmt &stmt, bool &is_valid);
+
+  static int is_valid_having_expr(const ObRawExpr *expr, bool &is_valid);
+
+  static int is_valid_order_list(const ObSelectStmt &stmt, bool &is_valid);
+
+  static int is_valid_order_expr(const ObRawExpr *expr, bool &is_valid);
+
   DISALLOW_COPY_AND_ASSIGN(ObTransformMinMax);
 };
 

@@ -286,10 +286,9 @@ int ObTransformTempTable::check_stmt_can_materialize(ObSelectStmt *stmt, bool is
       }
     } else {
       // Currently, we will not push `limit` in stmt into cte
-      ObAggFunRawExpr *dummy = NULL;
       bool can_use_fast_min_max = false;
       STOP_OPT_TRACE;
-      if (ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max)) {
+      if (OB_FAIL(ObTransformMinMax::check_transform_validity(*ctx_, stmt, can_use_fast_min_max))) {
         LOG_WARN("failed to check fast min max", K(ret));
       }
       RESUME_OPT_TRACE;
