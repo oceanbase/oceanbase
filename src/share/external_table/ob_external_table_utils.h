@@ -87,8 +87,7 @@ class ObExternalTableUtils {
     int64_t sqc_count);
 
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
-                                    common::ObIArray<common::ObAddr> &locations,
-                                    common::ObIArray<share::ObExternalFileInfo> &res);
+                                       common::ObIArray<common::ObAddr> &locations);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);

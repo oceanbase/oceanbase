@@ -160,18 +160,17 @@ int ObPXServerAddrUtil::get_external_table_loc(
     //   ret = OB_NOT_SUPPORTED;
     //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
     //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
-    ObArray<ObExternalFileInfo> tmp_ext_file_urls;
     if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
                                     pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to extract external file fiter", K(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(
                             tenant_id, ref_table_id, is_external_files_on_disk,
-                            ctx.get_allocator(), tmp_ext_file_urls, ranges.empty() ? NULL : &ranges))) {
+                            ctx.get_allocator(), ext_file_urls, ranges.empty() ? NULL : &ranges))) {
       LOG_WARN("fail to get external files", K(ret));
-    } else if (OB_FAIL(ObExternalTableUtils::filter_files_in_locations(tmp_ext_file_urls,
-                                                                       all_locations,
-                                                                       ext_file_urls))) {
+    } else if (is_external_files_on_disk
+              && OB_FAIL(ObExternalTableUtils::filter_files_in_locations(ext_file_urls,
+                                                                       all_locations))) {
       //For recovered cluster, the file addr may not in the cluster. Then igore it.
       LOG_WARN("filter files in location failed", K(ret));
     }
