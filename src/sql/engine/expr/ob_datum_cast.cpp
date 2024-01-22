@@ -10219,7 +10219,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    text_otimestamp,/*otimestamp*/
+    cast_inconsistent_types,/*otimestamp*/
     text_raw,/*raw*/
     text_interval,/*interval*/
     text_rowid,/*rowid*/
@@ -10443,7 +10443,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*bit*/
     cast_not_expected,/*enumset*/
     cast_not_expected,/*enumset_inner*/
-    lob_otimestamp,/*otimestamp*/
+    cast_inconsistent_types,/*otimestamp*/
     lob_raw,/*raw*/
     lob_interval,/*interval*/
     lob_rowid,/*rowid*/
