@@ -413,6 +413,8 @@ const char *const OB_STR_SRC_TENANT_NAME = "src_tenant_name";
 const char *const OB_STR_AUX_TENANT_NAME = "aux_tenant_name";
 const char *const OB_STR_TARGET_TENANT_NAME = "target_tenant_name";
 const char *const OB_STR_TARGET_TENANT_ID = "target_tenant_id";
+const char *const OB_STR_TABLE_LIST = "table_list";
+const char *const OB_STR_TABLE_LIST_META_INFO = "table_list_meta_info";
 
 enum ObBackupFileType
 {
@@ -454,6 +456,8 @@ enum ObBackupFileType
   BACKUP_TENANT_ARCHIVE_PIECE_INFOS = 35,
   BACKUP_DELETED_TABLET_INFO = 36,
   BACKUP_TABLET_METAS_INFO = 37,
+  BACKUP_TABLE_LIST_FILE = 38,
+  BACKUP_TABLE_LIST_META_FILE = 39,
   // type <=255 is write header struct to disk directly
   // type > 255 is use serialization to disk
   BACKUP_MAX_DIRECT_WRITE_TYPE = 255,
@@ -1725,6 +1729,46 @@ int backup_time_to_strftime(const int64_t &ts_s, char *buf, const int64_t buf_le
 int backup_scn_to_time_tag(const SCN &scn, char *buf, const int64_t buf_len, int64_t &pos);
 
 inline uint64_t trans_scn_to_second(const SCN &scn) { return scn.convert_to_ts() / 1000 / 1000; }
+
+struct ObBackupTableListItem final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupTableListItem();
+  ~ObBackupTableListItem() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObBackupTableListItem &o);
+  bool operator==(const ObBackupTableListItem &o) const;
+  bool operator!=(const ObBackupTableListItem &o) const { return !(operator ==(o)); }
+  bool operator>(const ObBackupTableListItem &o) const;
+  bool operator>=(const ObBackupTableListItem &o) const { return operator > (o) || operator == (o); }
+  bool operator<(const ObBackupTableListItem &o) const { return !(operator >= (o)); }
+  bool operator<=(const ObBackupTableListItem &o) const { return !(operator > (o)); }
+
+  TO_STRING_KV(K_(database_name), K_(table_name));
+  common::ObFixedLengthString<OB_MAX_DATABASE_NAME_LENGTH + 1> database_name_;
+  common::ObFixedLengthString<OB_MAX_TABLE_NAME_LENGTH + 1> table_name_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTableListItem);
+};
+
+struct ObBackupPartialTableListMeta final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupPartialTableListMeta();
+  ~ObBackupPartialTableListMeta() = default;
+  bool is_valid() const;
+  void reset();
+  int assign(const ObBackupPartialTableListMeta &other);
+
+  TO_STRING_KV(K_(start_key), K_(end_key));
+  ObBackupTableListItem start_key_;
+  ObBackupTableListItem end_key_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupPartialTableListMeta);
+};
 }//share
 }//oceanbase
 

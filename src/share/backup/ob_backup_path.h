@@ -56,7 +56,12 @@ public:
   int join_tenant_macro_range_index_file(const share::ObBackupDataType &type, const int64_t retry_id);
   int join_tenant_meta_index_file(const share::ObBackupDataType &type, const int64_t retry_id, const bool is_sec_meta);
   int join_checkpoint_info_file(const common::ObString &path, const uint64_t checkpoint, const ObBackupFileSuffix &type);
-  static int parse_checkpoint(const common::ObString &entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint);
+  int join_table_list_dir();
+  int join_table_list_part_file(const share::SCN &scn, const int64_t part_no);
+  int join_table_list_meta_info_file(const share::SCN &scn);
+  static int parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint);
+  static int parse_partial_table_list_file_name(const char *entry_d_name, const share::SCN &scn, int64_t &part_no);
+  static int parse_table_list_meta_file_name(const char *entry_d_name, share::SCN &scn);
   int add_backup_suffix(const ObBackupFileSuffix &type);
 
   const char *get_ptr() const { return path_; }
@@ -266,6 +271,17 @@ struct ObBackupPathUtil
       const int64_t incarnation, const int64_t round, const int64_t piece_id, const share::ObLSID &ls_id,
       share::ObBackupPath &backup_path);
 
+  // file:///obbackup/backup_set_1_full/infos/table_list/
+  static int get_table_list_dir_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path);
+  static int get_table_list_dir_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path);
+  // file:///obbackup/backup_set_1_full/infos/table_list/table_list_meta_info.[scn].obbak
+  static int get_table_list_meta_path(const share::ObBackupDest &backup_set_dest,
+      const share::SCN &scn, share::ObBackupPath &path);
+  // file:///obbackup/backup_set_1_full/infos/table_list/table_list.[scn].[part_no].obbak
+  static int get_table_list_part_file_path(const share::ObBackupDest &backup_set_dest,
+      const share::SCN &scn, const int64_t part_no, share::ObBackupPath &path);
   static int construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
   static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
@@ -297,5 +313,3 @@ struct ObBackupPathUtilV_4_1
 }//share
 }//oceanbase
 #endif /* SRC_SHARE_BACKUP_OB_BACKUP_INFO_H_ */
-
-

@@ -36,6 +36,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "observer/ob_inner_sql_connection.h"
 #include "share/backup/ob_backup_server_mgr.h"
+#include "rootserver/backup/ob_backup_table_list_mgr.h"
 
 using namespace oceanbase;
 using namespace omt;
@@ -1078,7 +1079,12 @@ int ObBackupSetTaskMgr::backup_data_finish_(
   int ret = OB_SUCCESS;
   share::ObBackupStatus next_status;
   SCN end_scn = SCN::min_scn();
-  if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
+  if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, false/*end scn*/, end_scn))) {
+    LOG_WARN("[DATA_BACKUP]failed to get end ts", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (ObBackupStatus::Status::BACKUP_DATA_MAJOR == set_task_attr_.status_.status_
+             && OB_FAIL(write_table_list_(end_scn))) {
+    LOG_WARN("[DATA_BACKUP] fail to write table list", K(ret), "tenant_id", job_attr_->tenant_id_);
+  } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
   } else if (OB_FAIL(ObBackupLSTaskOperator::delete_build_index_task(trans_, build_index_attr))) {
     LOG_WARN("[DATA_BACKUP]failed to delete build index task", K(ret));
@@ -1088,10 +1094,7 @@ int ObBackupSetTaskMgr::backup_data_finish_(
   } else if (OB_FAIL(convert_task_type_(ls_tasks))) {
     LOG_WARN("[DATA_BACKUP]failed to update task type to PLUS_ARCHIVE_LOG", K(ret), K(ls_tasks));
   }
-
-  if (FAILEDx(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, false/*end scn*/, end_scn))) {
-    LOG_WARN("[DATA_BACKUP]failed to get end ts", K(ret), "tenant_id", job_attr_->tenant_id_);
-  } else if (OB_FAIL(advance_status_(trans_, next_status, OB_SUCCESS, end_scn))) {
+  if (FAILEDx(advance_status_(trans_, next_status, OB_SUCCESS, end_scn))) {
     LOG_WARN("[DATA_BACKUP]failed to update set task status to COMPLETEING", K(ret), K(set_task_attr_));
   }
   if (trans_.is_started()) {
@@ -1932,6 +1935,35 @@ int ObBackupSetTaskMgr::write_log_format_file_()
     LOG_WARN("failed to write format file", K(ret), K(format_desc));
   } else {
     LOG_INFO("write log format file succeed", K(format_desc));
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::write_table_list_(const share::SCN &end_scn)
+{
+  int ret = OB_SUCCESS;
+  ObBackupTableListMgr table_list_mgr;
+  ObBackupDest backup_tenant_dest;
+  ObBackupDest backup_set_dest;
+  share::ObBackupSetDesc desc;
+  desc.backup_set_id_ = job_attr_->backup_set_id_;
+  desc.backup_type_ = job_attr_->backup_type_;
+
+  if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, job_attr_->tenant_id_,
+      set_task_attr_.backup_path_, backup_tenant_dest))) {
+    LOG_WARN("fail to get backup dest", K(ret), K_(job_attr));
+  } else if (OB_FAIL(ObBackupPathUtil::construct_backup_set_dest(backup_tenant_dest, desc, backup_set_dest))) {
+    LOG_WARN("fail to construct backup set dest", K(ret), K(backup_tenant_dest), K(desc));
+  } else if (OB_FAIL(table_list_mgr.init(job_attr_->tenant_id_, end_scn, backup_set_dest, *backup_service_, *sql_proxy_))) {
+    LOG_WARN("fail to init table_list_mgr", KPC(job_attr_));
+  } else if (OB_FAIL(table_list_mgr.backup_table_list())) {
+    LOG_WARN("fail to backup table list", K(ret),  KPC(job_attr_));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[DATA_BACKUP]fail to write table list", K(ret), K(end_scn));
+  } else if (OB_FAIL(backup_service_->check_leader())) {
+    LOG_WARN("[DATA_BACKUP]failed to check leader", K(ret));
   }
   return ret;
 }

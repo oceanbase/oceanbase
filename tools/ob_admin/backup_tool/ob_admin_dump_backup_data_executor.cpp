@@ -16,6 +16,7 @@
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "../dumpsst/ob_admin_dumpsst_print_helper.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "rootserver/backup/ob_backup_table_list_mgr.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -27,6 +28,7 @@ using namespace oceanbase::share;
 using namespace oceanbase::common;
 using namespace oceanbase::backup;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::rootserver;
 #define HELP_FMT "\t%-30s%-12s\n"
 
 namespace oceanbase {
@@ -554,12 +556,19 @@ int ObAdminDumpBackupDataExecutor::execute(int argc, char *argv[])
     if (OB_FAIL(dump_tenant_archive_path_())) {
       STORAGE_LOG(WARN, "fail to dump tenant archive path");
     }
-  } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
-    STORAGE_LOG(WARN, "failed to check exist", K(ret), K_(backup_path), K_(storage_info));
-  } else if (OB_FAIL(get_backup_file_type_())) {
-    STORAGE_LOG(WARN, "failed to get backup file type", K(ret), K_(backup_path), K_(storage_info));
-  } else if (OB_FAIL(do_execute_())) {
-    STORAGE_LOG(WARN, "failed to do execute", K(ret), K_(backup_path), K_(storage_info));
+  } else {
+    bool is_table_list_dir = false;
+    if (OB_FAIL(check_is_table_list_dir_(is_table_list_dir))) {
+    STORAGE_LOG(WARN, "fail to check is table list dir", K(ret));
+    } else if (is_table_list_dir && OB_FAIL(handle_print_table_list_())) {
+      STORAGE_LOG(WARN, "fail to handle print table list", K(ret), K_(backup_path));
+    } else if (OB_FAIL(check_file_exist_(backup_path_, storage_info_))) {
+      STORAGE_LOG(WARN, "failed to check exist", K(ret), K_(backup_path), K_(storage_info));
+    } else if (OB_FAIL(get_backup_file_type_())) {
+      STORAGE_LOG(WARN, "failed to get backup file type", K(ret), K_(backup_path), K_(storage_info));
+    } else if (OB_FAIL(do_execute_())) {
+      STORAGE_LOG(WARN, "failed to do execute", K(ret), K_(backup_path), K_(storage_info));
+    }
   }
   return ret;
 }
@@ -2345,7 +2354,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
     ARRAY_FOREACH_X(backup_set_infos, i , cnt, OB_SUCC(ret)) {
       const share::ObBackupSetFileDesc &backup_set_desc = backup_set_infos.at(i);
       int64_t pos = 0;
-      char buf[OB_MAX_CHAR_LEN] = { 0 };
+      char buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
       char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
       char min_restore_scn_str_buf[OB_MAX_TIME_STR_LENGTH] = { 0 };
       if (OB_FAIL(ObTimeConverter::scn_to_str(backup_set_desc.min_restore_scn_.get_val_for_inner_table_field(),
@@ -2852,6 +2861,218 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_archive_path_()
     PrintHelper::print_end_line();
   }
 
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::handle_print_table_list_()
+{
+  int ret = OB_SUCCESS;
+  uint64_t scn_val = 0;
+  if (OB_FAIL(get_max_table_list_scn(scn_val))) {
+    STORAGE_LOG(WARN, "fail to get max table list scn", K(ret));
+  } else if (scn_val > 0) {
+    if (OB_UNLIKELY(offset_ == 0 && length_ == 0)) {
+      if (OB_FAIL(print_table_list_meta_info_(scn_val))) {
+        STORAGE_LOG(WARN, "fail to print table list items", K(ret));
+      }
+    } else if (OB_FAIL(print_table_list_items_(scn_val))) {
+      STORAGE_LOG(WARN, "fail to print table list items", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::check_is_table_list_dir_(bool &is_table_list_dir) {
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  is_table_list_dir = false;
+
+  if (OB_FAIL(check_dir_exist_(backup_path_, storage_info_, is_exist))) {
+    STORAGE_LOG(WARN, "fail to check dir exist", K(ret), K_(backup_path));
+  } else if (!is_exist) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "dir does not exist", K(ret), K_(backup_path));
+  } else {
+    char tmp[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+    char *token = NULL;
+    char *saveptr = NULL;
+    const char *delimeter = "/";
+    int64_t info_len = strlen(backup_path_);
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(tmp, OB_MAX_BACKUP_PATH_LENGTH, pos, "%s", backup_path_))) {
+      STORAGE_LOG(WARN, "fail to databuff printf", K(ret), K_(backup_path));
+    } else {
+      token = strtok_r(tmp, delimeter, &saveptr);
+      while (token != NULL) {
+        char *next_token = strtok_r(NULL, delimeter, &saveptr);
+        if (next_token == NULL) {
+          break;
+        }
+        token = next_token;
+      }
+      if (OB_ISNULL(token)) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "invalid argument", K(ret), K_(backup_path));
+      } else if (0 == strcmp(OB_STR_TABLE_LIST, token)) {
+        is_table_list_dir = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::get_max_table_list_scn(uint64_t &scn_val)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupStorageInfo storage_info;
+  ObBackupIoAdapter util;
+  share::SCN scn = share::SCN::min_scn();
+  ObGetMaxTableListSCNOp max_scn_op(scn);
+
+  if (OB_FAIL(path.init(ObString(backup_path_)))) {
+    STORAGE_LOG(WARN, "fail to init backup path", K(ret), K_(backup_path));
+  } else if (OB_FAIL(storage_info.set(backup_path_, storage_info_))) {
+    STORAGE_LOG(WARN, "failed to set storage info", K(ret), K_(backup_path), K_(storage_info));
+  } else if (OB_FAIL(util.list_files(path.get_obstr(), &storage_info, max_scn_op))) {
+    STORAGE_LOG(WARN, "fail to list files", K(ret), K_(backup_path));
+  } else {
+    scn_val = scn.get_val_for_inner_table_field();
+    STORAGE_LOG(INFO, "get max table list scn", K(scn_val));
+  }
+
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_table_list_meta_info_(const uint64_t scn_val)
+{
+  int ret = OB_SUCCESS;
+  ObBackupTableListMetaInfoDesc desc;
+
+  if (OB_FAIL(read_table_list_meta_info_(scn_val, desc))) {
+    STORAGE_LOG(WARN, "fail to read table list meta info", K(ret));
+  } else if (OB_FAIL(dump_table_list_meta_info_(desc))) {
+    STORAGE_LOG(WARN, "fail to dump tenant locality info", K(ret), K(desc));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::read_table_list_meta_info_(const uint64_t scn_val, ObBackupTableListMetaInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  share::SCN scn;
+
+  if (OB_FAIL(full_path.init(ObString(backup_path_)))) {
+    STORAGE_LOG(WARN, "fail to init backup path", K(ret), K_(backup_path));
+  } else if (OB_FAIL(scn.convert_for_inner_table_field(scn_val))) {
+    STORAGE_LOG(WARN, "fail to convert scn", K(ret), K(scn_val));
+  } else if (OB_FAIL(full_path.join_table_list_meta_info_file(scn))) {
+    STORAGE_LOG(WARN, "fail to join table list meta info file", K(ret), K(scn));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(full_path.get_obstr(), ObString(storage_info_), desc))) {
+    STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_table_list_items_(const uint64_t scn_val)
+{
+  int ret = OB_SUCCESS;
+  ObBackupTableListMetaInfoDesc meta_desc;
+
+  if (OB_FAIL(read_table_list_meta_info_(scn_val, meta_desc))) {
+    STORAGE_LOG(WARN, "fail to read table list meta info", K(ret));
+  } else if (!meta_desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "backup table list meta info is not valid", K(ret), K(meta_desc));
+  } else {
+    PrintHelper::print_dump_title("table list");
+    if (offset_ >= meta_desc.count_) {
+      STORAGE_LOG(INFO, "input offset is larger than total count", K_(offset), "total_count", meta_desc.count_);
+    } else {
+      int64_t print_order = 0;
+      int64_t start_part_no = offset_ / meta_desc.batch_size_ + 1; // part_no starts from 1
+      int64_t end_part_no = (offset_ + length_) < meta_desc.count_ ?
+                        (offset_ + length_ - 1) / meta_desc.batch_size_ + 1 : (meta_desc.count_ - 1) / meta_desc.batch_size_ + 1;
+      int64_t start_part_no_key = offset_ % meta_desc.batch_size_; // key starts from 0
+      int64_t end_part_no_key = (offset_ + length_) < meta_desc.count_ ?
+                            (offset_ + length_ - 1) % meta_desc.batch_size_ : (meta_desc.count_ - 1) % meta_desc.batch_size_;
+      ObBackupPartialTableListDesc desc;
+
+      for(int64_t part_no = start_part_no; OB_SUCC(ret) && part_no <= end_part_no; part_no++) {
+        int64_t start_key = part_no == start_part_no ? start_part_no_key : 0;
+        int64_t end_key = part_no  == end_part_no ? end_part_no_key : meta_desc.batch_size_ - 1;
+        if (OB_FAIL(read_table_list_part_file_(scn_val, part_no, desc))) {
+          STORAGE_LOG(WARN, "fail to read table list file", K(ret), K(scn_val), K(part_no));
+        } else {
+          for (; start_key <= end_key; start_key++) {
+            if (OB_FAIL(print_table_list_item_(desc, start_key, ++print_order))) {
+              STORAGE_LOG(WARN, "fail to print table list item", K(ret), K(desc), K(start_key));
+            }
+          }
+        }
+      }
+    }
+  }
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_table_list_item_(const ObBackupPartialTableListDesc &partial_desc,
+                                                          const int64_t partial_offset, const int64_t print_order)
+{
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_TEXT_LENGTH] = { 0 };
+  ObString escape_str;
+  char order_buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
+  ObArenaAllocator allocator(ObModIds::BACKUP);
+
+  if (!partial_desc.is_valid() || partial_offset >= partial_desc.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(partial_desc), K(partial_offset));
+  } else if (OB_FAIL(databuff_printf(order_buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", print_order))) {
+    STORAGE_LOG(WARN, "fail to databuff print", K(ret), K(print_order));
+  } else if (OB_FALSE_IT(partial_desc.items_.at(partial_offset).to_string(buf, OB_MAX_TEXT_LENGTH))) {
+  } else if (OB_FAIL((sql::ObSQLUtils::generate_new_name_with_escape_character(
+                   allocator,
+                   buf,
+                   escape_str,
+                   true)))) {
+    STORAGE_LOG(WARN, "fail to generate new name with escape character", K(ret), K(buf));
+  } else {
+    PrintHelper::print_dump_line(order_buf, buf);
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::read_table_list_part_file_(const uint64_t scn_val, const int64_t part_no, ObBackupPartialTableListDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  share::SCN scn;
+
+  if (part_no <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(part_no));
+  } else if (OB_FAIL(scn.convert_for_inner_table_field(scn_val))) {
+    STORAGE_LOG(WARN, "fail to convert scn", K(ret), K(scn_val));
+  } else if (OB_FAIL(full_path.init(ObString(backup_path_)))) {
+    STORAGE_LOG(WARN, "fail to init backup path", K(ret), K_(backup_path));
+  } else if (OB_FAIL(full_path.join_table_list_part_file(scn, part_no))) {
+    STORAGE_LOG(WARN, "fail to join table list file", K(ret), K(scn_val), K(part_no));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_backup_info_file(full_path.get_obstr(), ObString(storage_info_), desc))) {
+    STORAGE_LOG(WARN, "fail to read locality info", K(ret), K(backup_path_), K(storage_info_));
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_table_list_meta_info_(ObBackupTableListMetaInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("table list");
+  PrintHelper::print_dump_line("count", desc.count_);
+  PrintHelper::print_dump_line("batch_size", desc.batch_size_);
+  PrintHelper::print_end_line();
   return ret;
 }
 

@@ -2788,7 +2788,6 @@ const char *backup_set_file_info_status_strs[] = {
     "FAILED",
 };
 
-
 ObBackupRegion::ObBackupRegion()
   : region_(),
     priority_(-1)
@@ -4437,6 +4436,87 @@ int ObRestoreLogPieceBriefInfo::assign(const ObRestoreLogPieceBriefInfo &that)
     piece_id_ = that.piece_id_;
     start_scn_ = that.start_scn_;
     checkpoint_scn_ = that.checkpoint_scn_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupTableListItem,
+                    database_name_,
+                    table_name_);
+
+ObBackupTableListItem::ObBackupTableListItem()
+  : database_name_(),
+    table_name_()
+{
+}
+
+bool ObBackupTableListItem::is_valid() const
+{
+  return !database_name_.is_empty() && !table_name_.is_empty();
+}
+
+void ObBackupTableListItem::reset()
+{
+   database_name_.reset();
+   table_name_.reset();
+}
+
+int ObBackupTableListItem::assign(const ObBackupTableListItem &o)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(database_name_.assign(o.database_name_))) {
+    LOG_WARN("fail to assign database name", K(ret), K(o.database_name_));
+  } else if (OB_FAIL(table_name_.assign(o.table_name_))) {
+    LOG_WARN("fail to assign table name", K(ret), K(o.table_name_));
+  }
+  return ret;
+}
+
+bool ObBackupTableListItem::operator==(const ObBackupTableListItem &o) const
+{
+  return database_name_ == o.database_name_ && table_name_ == o.table_name_;
+}
+
+bool ObBackupTableListItem::operator>(const ObBackupTableListItem &o) const
+{
+  bool b_ret = false;
+  if (database_name_ > o.database_name_) {
+    b_ret = true;
+  } else if (database_name_ == o.database_name_
+            && table_name_ > o.table_name_) {
+    b_ret = true;
+  }
+  return b_ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBackupPartialTableListMeta,
+                    start_key_,
+                    end_key_);
+
+ObBackupPartialTableListMeta::ObBackupPartialTableListMeta()
+  : start_key_(),
+    end_key_()
+{
+}
+
+bool ObBackupPartialTableListMeta::is_valid() const
+{
+  return start_key_.is_valid() && end_key_.is_valid() && end_key_ >= start_key_;
+}
+
+void ObBackupPartialTableListMeta::reset()
+{
+  start_key_.reset();
+  end_key_.reset();
+}
+
+int ObBackupPartialTableListMeta::assign(const ObBackupPartialTableListMeta &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(start_key_.assign(other.start_key_))) {
+    LOG_WARN("fail to assign start key", K(ret), K(other.start_key_));
+  } else if (OB_FAIL(end_key_.assign(other.end_key_))) {
+    LOG_WARN("fail to assign end key", K(ret), K(other.end_key_));
   }
   return ret;
 }

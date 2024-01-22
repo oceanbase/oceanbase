@@ -180,7 +180,19 @@ private:
   int dump_backup_format_file_(const share::ObBackupFormatDesc &format_file);
   int dump_check_exist_result_(const char *data_path, const char *storage_info_str, const bool is_exist);
   int print_tablet_autoinc_seq_(const share::ObTabletAutoincSeq &autoinc_seq);
-  
+  int handle_print_table_list_();
+  int get_max_table_list_scn(uint64_t &scn_val);
+  /* check if the last dir name of backup_path_ is 'table_list' or not
+   e.g. '/data_backup/backup_set_1_full/table_list' returns true */
+  int check_is_table_list_dir_(bool &is_table_list_dir);
+  int print_table_list_meta_info_(const uint64_t scn_val);
+  int read_table_list_meta_info_(const uint64_t scn_val, ObBackupTableListMetaInfoDesc &desc);
+  int dump_table_list_meta_info_(ObBackupTableListMetaInfoDesc &desc);
+  int print_table_list_items_(const uint64_t scn_val);
+  int print_table_list_item_(const ObBackupPartialTableListDesc &partial_desc,
+                             const int64_t partial_offset, const int64_t print_order);
+  int print_table_set_is_exist_(const uint64_t scn_val);
+  int read_table_list_part_file_(const uint64_t scn_val, const int64_t part_no, ObBackupPartialTableListDesc &desc);
 private:
   int get_tenant_backup_set_infos_path_(const share::ObBackupSetDesc &backup_set_dir_name, 
       share::ObBackupPath &target_path);
