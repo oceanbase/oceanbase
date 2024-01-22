@@ -117,7 +117,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
       } else {
         refresh_time = ObTimeUtility::current_time();
         if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-            ctx, tenant_id, res.schema_version_))) {
+            ctx, my_session, tenant_id, res.schema_version_))) {
           LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
         }
         ddl_task_time = ObTimeUtility::current_time();

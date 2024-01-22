@@ -94,7 +94,7 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           if (OB_FAIL(ctx.set_timeout(consensus_timeout))) {
             LOG_WARN("fail to set timeout ctx", KR(ret));
           } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-                      ctx, tenant_id, error_message.consensus_schema_version_))) {
+                      ctx, session, tenant_id, error_message.consensus_schema_version_))) {
             LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K_(error_message.consensus_schema_version));
           } else {
             int64_t refresh_time = ObTimeUtility::current_time() - start_time;
