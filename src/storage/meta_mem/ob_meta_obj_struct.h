@@ -170,8 +170,8 @@ protected:
   T *obj_;
   ObITenantMetaObjPool *obj_pool_;
   common::ObIAllocator *allocator_;
-  ObTenantMetaMemMgr *t3m_;
   int64_t hold_start_time_;
+  ObTenantMetaMemMgr *t3m_;
 };
 
 class ObIStorageMetaObj
@@ -206,6 +206,7 @@ ObMetaObjGuard<T>::ObMetaObjGuard()
   : obj_(nullptr),
     obj_pool_(nullptr),
     allocator_(nullptr),
+    hold_start_time_(INT64_MAX),
     t3m_(nullptr)
 {
 }
