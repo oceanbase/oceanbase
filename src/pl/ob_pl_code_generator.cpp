@@ -1063,7 +1063,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
       LOG_WARN("failed to craete block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("cursor_forloop_check_success"), generator_.get_func(), cursor_forloop_check_success))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), cursor_forloop_begin, cursor_forloop_end))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), cursor_forloop_fetch, cursor_forloop_end))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(cursor_forloop_begin))) {
       LOG_WARN("failed to create_br", K(ret));
@@ -6703,12 +6703,14 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
           ObPLCodeGenerator::LoopStack::LoopInfo &loop_info = get_loops()[i]; \
           LOG_DEBUG("loop info", K(i), K(loop_info.level_), K(control.get_level())); \
           if (loop_info.level_ <= control.get_level() && loop_info.level_ >= label_info->level_) { \
-            if (OB_NOT_NULL(loop_info.cursor_) && OB_FAIL(generate_close(*loop_info.cursor_, \
-                                                                         loop_info.cursor_->get_cursor()->get_package_id(), \
-                                                                         loop_info.cursor_->get_cursor()->get_routine_id(), \
-                                                                         loop_info.cursor_->get_index(), \
-                                                                         false, \
-                                                                         false))) { \
+            if (OB_NOT_NULL(loop_info.cursor_) \
+                && loop_info.level_ != label_info->level_ \
+                && OB_FAIL(generate_close(*loop_info.cursor_, \
+                                          loop_info.cursor_->get_cursor()->get_package_id(), \
+                                          loop_info.cursor_->get_cursor()->get_routine_id(), \
+                                          loop_info.cursor_->get_index(), \
+                                          false, \
+                                          false))) { \
               LOG_WARN("failed to generate close for loop cursor", K(ret)); \
             } else if (OB_FAIL(helper_.stack_restore(loop_info.loop_))) { \
               LOG_WARN("failed to stack_restore", K(ret)); \
