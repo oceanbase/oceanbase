@@ -6856,6 +6856,9 @@ all_tenant_snapshot_ls_replica_history_def = dict(
 def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 #
 # 508 : __all_ls_replica_task_history
+# 509 : __all_ls_compaction_status
+# 510 : __all_tablet_compaction_status
+# 511 : __all_tablet_checksum_error_info
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -13635,6 +13638,9 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12467: __all_virtual_ls_replica_task_history
 # 12468: __all_virtual_session_ps_info
 # 12469: __all_virtual_tracepoint_info
+# 12470: __all_virtual_ls_compaction_status
+# 12471: __all_virtual_tablet_compaction_status
+# 12472: __all_virtual_tablet_checksum_error_info
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位

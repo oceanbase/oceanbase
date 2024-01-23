@@ -95,13 +95,15 @@ public:
     : unmerged_tablet_cnt_(0),
       merged_tablet_cnt_(0),
       total_table_cnt_(0),
-      table_cnt_()
+      table_cnt_(),
+      merge_finish_(false)
   {
     MEMSET(table_cnt_, 0, sizeof(int64_t) * RECORD_TABLE_TYPE_CNT);
   }
   ~ObMergeProgress() {}
   void reset()
   {
+    merge_finish_ = false;
     unmerged_tablet_cnt_ = 0;
     merged_tablet_cnt_ = 0;
     total_table_cnt_ = 0;
@@ -109,7 +111,7 @@ public:
   }
   bool is_merge_finished() const
   {
-    return total_table_cnt_ > 0
+    return total_table_cnt_ > 0 && merge_finish_
     && (total_table_cnt_ == get_finish_verified_table_cnt());
   }
   bool exist_uncompacted_table() const
@@ -118,8 +120,8 @@ public:
   }
   bool is_merge_abnomal() const
   {
-    return total_table_cnt_ > 0
-    && (total_table_cnt_ < get_finish_verified_table_cnt());
+    return total_table_cnt_ > 0 && merge_finish_
+    && (total_table_cnt_ != get_finish_verified_table_cnt());
   }
   bool only_remain_special_table_to_verified() const
   {
@@ -138,6 +140,7 @@ public:
   void deal_with_special_tablet()
   {
     ++table_cnt_[ObTableCompactionInfo::VERIFIED];
+    merge_finish_ = true;
   }
   void clear_before_each_loop()
   {
@@ -160,6 +163,7 @@ public:
   int64_t merged_tablet_cnt_;
   int64_t total_table_cnt_;
   int64_t table_cnt_[RECORD_TABLE_TYPE_CNT];
+  bool merge_finish_;
 };
 
 struct ObUnfinishTableIds
