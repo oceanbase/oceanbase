@@ -87,6 +87,10 @@ public:
   int get_tx_ctx(const transaction::ObTransID &tx_id,
                  const bool for_replay,
                  transaction::ObPartTransCtx *&ctx) const;
+  int get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                              const bool for_replay,
+                              transaction::ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout) const;
   int get_tx_scheduler(const transaction::ObTransID &tx_id,
                        ObAddr &scheduler) const;
   int revert_tx_ctx(transaction::ObTransCtx *ctx) const;
