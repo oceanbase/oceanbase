@@ -131,9 +131,10 @@ int ObINodeWithChild::add_parent_node(ObINodeWithChild &parent)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
-  inc_indegree();
   if (OB_FAIL(parent_.push_back(&parent))) {
     COMMON_LOG(WARN, "failed to add parent", K(ret), K(parent));
+  } else {
+    inc_indegree();
   }
   return ret;
 }
