@@ -2102,6 +2102,7 @@ public:
     INTERVAL_TO_RANGE,
     RENAME_PARTITION,
     RENAME_SUB_PARTITION,
+    AUTO_SPLIT_PARTITION,
     NO_OPERATION = 1000
   };
   enum AlterConstraintType
