@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: xiaochu.yh
+# owner: zhouhaiyu.zhy
 # owner group: sql2
 # 测试 dml 查询部分打开px
 # tags: dml, px, optimizer
