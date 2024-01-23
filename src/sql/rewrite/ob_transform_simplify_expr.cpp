@@ -3570,7 +3570,6 @@ int ObTransformSimplifyExpr::check_convert_then_exprs_validity(ObRawExpr *parent
   bool is_case_at_left = false;
   ObSEArray<ObRawExpr*, 4> enum_exprs; // includes then_exprs and default_expr
   ObSEArray<ObRawExpr*, 4> uncalc_exprs;
-  bool is_hit_branch = false;
   ObRawExpr* candi_when_filter = NULL;
   ObRawExpr* candi_then_filter = NULL;
 
@@ -3626,6 +3625,13 @@ int ObTransformSimplifyExpr::check_convert_then_exprs_validity(ObRawExpr *parent
       if (OB_ISNULL(enum_expr = enum_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret), K(enum_expr));
+        // 一般情况下，每个分支的目标表达式即使类型不完全相同也至少是可比较的。NULL 比较特殊，这里做特殊适配
+      } else if (enum_expr->is_const_expr() && enum_expr->get_result_type().is_null() &&
+                 OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*(ctx_->expr_factory_),
+                                                                        case_expr,
+                                                                        enum_expr,
+                                                                        ctx_->session_info_))) {
+        LOG_WARN("failed to add cast above null", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*(ctx_->expr_factory_),
                                                               ctx_->session_info_,
                                                               parent_expr->get_expr_type(),
