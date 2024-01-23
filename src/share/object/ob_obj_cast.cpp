@@ -34,6 +34,8 @@
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "src/storage/lob/ob_lob_manager.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
@@ -14350,7 +14352,7 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
-const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
+const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null
 
 int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
@@ -14358,10 +14360,15 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
   ObObjCastParams params; //构造一个空的cast_param对象，适配SET_RES_XXX宏定义
   ObCastMode cast_mode = CM_WARN_ON_FAIL;
   params.warning_ = 1; //将warning code设置为1，避免SET_RES_XXX宏将其当做真实的warning处理
-  if (ob_is_string_tc(expect_type) || ob_is_text_tc(expect_type)) {
+  if (ob_is_string_tc(expect_type)) {
     zero_obj.set_string(expect_type, "");
   } else if (ob_is_text_tc(expect_type)) {
-    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
+    if (ob_is_large_text(expect_type)) {
+      zero_obj.set_lob_value(expect_type, reinterpret_cast<const char *>(&ObLobManager::ZERO_LOB), sizeof(ObLobCommon));
+      zero_obj.set_has_lob_header();
+    } else { // tinytext
+      zero_obj.set_string(expect_type, "");
+    }
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);
@@ -14412,7 +14419,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType exp
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("urowid with default value not supported");
   } else if (expect_type == ObJsonType) {
-    zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
+    zero_obj.set_json_value(expect_type, reinterpret_cast<const char *>(&OB_JSON_ZERO), ObJsonZeroVal::OB_JSON_ZERO_VAL_LENGTH);
+    zero_obj.set_has_lob_header();
   } else if (expect_type == ObDecimalIntType) {
     zero_obj.set_decimal_int(0, 0, nullptr);
   } else if (ob_is_user_defined_sql_type(expect_type)) {
