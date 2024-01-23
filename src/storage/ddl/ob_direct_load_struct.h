@@ -287,7 +287,7 @@ public:
   inline int64_t get_lob_slice_id() { return lob_slice_id_; }
   inline share::ObTabletCacheInterval &get_lob_id_cache() { return lob_id_cache_; }
 private:
-  static const int64_t AUTO_INC_CACHE_SIZE = 100000; // 10w.
+  static const int64_t AUTO_INC_CACHE_SIZE = 5000000; // 500w.
   ObArenaAllocator lob_allocator_;
   sql::ObPxMultiPartSSTableInsertOp *op_;
   share::ObLSID ls_id_;
@@ -398,19 +398,29 @@ public:
 class ObChunkSliceStore : public ObTabletSliceStore
 {
 public:
-  ObChunkSliceStore() : is_inited_(false), arena_allocator_(nullptr), rowkey_column_count_(0) {}
-  virtual ~ObChunkSliceStore() {}
-  int init(const int64_t rowkey_column_count, ObArenaAllocator &allocator,
-           const ObIArray<ObColumnSchemaItem> &col_schema,
-           common::ObCompressorType compress_type = NONE_COMPRESSOR);
+  ObChunkSliceStore() : is_inited_(false), target_store_idx_(-1), row_cnt_(0), arena_allocator_(nullptr), cg_schemas_(), datum_stores_(), rowkey_column_count_(0)
+  {
+    cg_schemas_.set_attr(ObMemAttr(MTL_ID(), "ChunkSlicStoreC"));
+    datum_stores_.set_attr(ObMemAttr(MTL_ID(), "ChunkSlicStoreD"));
+  }
+  virtual ~ObChunkSliceStore() { reset(); }
+  int init(const int64_t rowkey_column_count, ObTabletHandle &tablet_handle, ObArenaAllocator &allocator,
+           const ObIArray<ObColumnSchemaItem> &col_schema, const int64_t dir_id);
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int close() override;
-  virtual int64_t get_row_count() const { return datum_store_.get_row_cnt(); }
-  TO_STRING_KV(K(is_inited_), KP(arena_allocator_), K(datum_store_), K(endkey_), K(rowkey_column_count_));
+  void reset();
+  virtual int64_t get_row_count() const { return row_cnt_; }
+  TO_STRING_KV(K(is_inited_), K(target_store_idx_), K(row_cnt_), KP(arena_allocator_), K(datum_stores_), K(endkey_), K(rowkey_column_count_), K(cg_schemas_));
+private:
+  int prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator, const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id);
+  int64_t calc_chunk_limit(const ObStorageColumnGroupSchema &cg_schema);
 public:
   bool is_inited_;
+  int64_t target_store_idx_;
+  int64_t row_cnt_;
   ObArenaAllocator *arena_allocator_;
-  sql::ObCompactStore datum_store_;
+  ObArray<ObStorageColumnGroupSchema> cg_schemas_;
+  ObArray<sql::ObCompactStore *> datum_stores_;
   blocksstable::ObDatumRowkey endkey_;
   int64_t rowkey_column_count_;
 };
@@ -460,10 +470,12 @@ public:
       const share::SCN &start_scn,
       const uint64_t table_id,
       const ObTabletID &curr_tablet_id,
+      ObTabletHandle &tablet_handle,
       ObIStoreRowIterator *row_iter,
       const ObTableSchemaItem &schema_item,
       const ObDirectLoadType &direct_load_type,
       const ObArray<ObColumnSchemaItem> &column_items,
+      const int64_t dir_id,
       int64_t &affected_rows,
       ObInsertMonitor *insert_monitor = NULL);
   int fill_lob_sstable_slice(
@@ -516,7 +528,8 @@ private:
   int prepare_slice_store_if_need(
       const int64_t schema_rowkey_column_num,
       const bool is_slice_store,
-      const ObCompressorType compress_type,
+      const int64_t dir_id,
+      ObTabletHandle &tablet_handle,
       const share::SCN &start_scn);
   int report_unique_key_dumplicated(
       const int ret_code,

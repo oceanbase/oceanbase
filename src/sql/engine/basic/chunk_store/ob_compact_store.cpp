@@ -72,7 +72,7 @@ int ObCompactStore::inner_get_next_row(const ObChunkDatumStore::StoredRow *&sr)
         ret = OB_ITER_END;
       } else if (OB_FAIL(block_reader_.get_block(cur_blk_id_, tmp_blk))) {
         if (ret != OB_ITER_END) {
-          LOG_WARN("fail to get block", K(ret));
+          LOG_WARN("fail to get block", K(ret), K(cur_blk_id_));
         }
       } else {
         start_iter_ = true;
@@ -83,12 +83,12 @@ int ObCompactStore::inner_get_next_row(const ObChunkDatumStore::StoredRow *&sr)
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(reader_->get_row(sr))) {
       if (ret != OB_ITER_END) {
-        LOG_WARN("fail to get row", K(ret));
+        LOG_WARN("fail to get row", K(ret), K(cur_blk_id_));
       } else if (cur_blk_id_ >= get_block_id_cnt()) {
         ret = OB_ITER_END;
       } else if (OB_FAIL(block_reader_.get_block(cur_blk_id_, tmp_blk))) {
         if (ret != OB_ITER_END) {
-          LOG_WARN("fail to get block", K(ret));
+          LOG_WARN("fail to get block", K(ret), K(cur_blk_id_));
         }
       } else {
         reader_->reuse();
@@ -258,12 +258,12 @@ int ObCompactStore::add_row(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &
   return ret;
 }
 
-int ObCompactStore::add_row(const blocksstable::ObStorageDatum *storage_datums, const int64_t cnt,
+int ObCompactStore::add_row(const blocksstable::ObDatumRow &datum_row, const ObStorageColumnGroupSchema &cg_schema,
                             const int64_t extra_size, ObChunkDatumStore::StoredRow **stored_row)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
-    if (OB_FAIL(writer_->add_row(storage_datums, cnt, extra_size, stored_row))) {
+    if (OB_FAIL(writer_->add_row(datum_row.storage_datums_, cg_schema, extra_size, stored_row))) {
       LOG_WARN("fail to add row", K(ret));
     } else {
       row_cnt_++;

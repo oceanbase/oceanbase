@@ -1102,7 +1102,7 @@ void ObTabletDirectLoadBuildCtx::reset_slice_ctx_on_demand()
 ObTabletDirectLoadMgr::ObTabletDirectLoadMgr()
   : is_inited_(false), is_schema_item_ready_(false), ls_id_(), tablet_id_(), table_key_(), data_format_version_(0),
     lock_(), ref_cnt_(0), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), sqc_build_ctx_(),
-    column_items_(), lob_column_idxs_(), lob_col_types_(), tablet_handle_(), schema_item_()
+    column_items_(), lob_column_idxs_(), lob_col_types_(), tablet_handle_(), schema_item_(), dir_id_(0)
 {
   column_items_.set_attr(ObMemAttr(MTL_ID(), "DL_schema"));
   lob_column_idxs_.set_attr(ObMemAttr(MTL_ID(), "DL_schema"));
@@ -1172,6 +1172,8 @@ int ObTabletDirectLoadMgr::update(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(sqc_build_ctx_.build_param_.assign(build_param))) {
       LOG_WARN("assign build param failed", K(ret));
+    } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.alloc_dir(dir_id_))) {
+      LOG_WARN("alloc dir id failed", K(ret));
     } else {
       ls_id_ = build_param.common_param_.ls_id_;
       tablet_id_ = build_param.common_param_.tablet_id_;
@@ -1361,7 +1363,7 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), K(slice_info), K(is_schema_item_ready_));
     } else if (OB_FAIL(slice_writer->fill_sstable_slice(start_scn, sqc_build_ctx_.build_param_.runtime_only_param_.table_id_, tablet_id_,
-        iter, schema_item_, direct_load_type_, column_items_, affected_rows, insert_monitor))) {
+        tablet_handle_, iter, schema_item_, direct_load_type_, column_items_, dir_id_, affected_rows, insert_monitor))) {
       LOG_WARN("fill sstable slice failed", K(ret), KPC(this));
     }
   }
