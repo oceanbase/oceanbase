@@ -18,7 +18,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h" // resolve select clause
 #include "sql/resolver/dml/ob_dml_stmt.h" // PartExprItem
 #include "sql/ob_sql_context.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_create_table_resolver.h"
 #include "lib/json/ob_json_print_utils.h"  // for SJ

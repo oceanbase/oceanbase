@@ -40,7 +40,7 @@
 #include "sql/parser/ob_parser.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
 
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"

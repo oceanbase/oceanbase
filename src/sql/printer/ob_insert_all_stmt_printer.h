@@ -15,7 +15,7 @@
 
 #include "ob_dml_stmt_printer.h"
 #include "sql/resolver/dml/ob_insert_all_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 
 namespace oceanbase
 {

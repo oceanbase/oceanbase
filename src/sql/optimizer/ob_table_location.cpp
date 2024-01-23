@@ -32,7 +32,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"

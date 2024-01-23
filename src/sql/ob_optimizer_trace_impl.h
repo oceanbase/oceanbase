@@ -17,7 +17,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "common/storage/ob_io_device.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "common/ob_smart_call.h"
 #include "lib/container/ob_array.h"
 #include <type_traits>

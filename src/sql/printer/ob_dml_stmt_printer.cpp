@@ -11,8 +11,8 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/ob_dml_stmt_printer.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_dml_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/ob_sql_context.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "common/ob_smart_call.h"

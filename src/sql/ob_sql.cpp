@@ -72,7 +72,7 @@
 #include "observer/omt/ob_th_worker.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/code_generator/ob_code_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"

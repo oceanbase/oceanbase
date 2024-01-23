@@ -53,7 +53,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "share/system_variable/ob_system_variable.h"
 #include "share/system_variable/ob_system_variable_factory.h"
 #include "share/resource_manager/ob_resource_plan_info.h"
