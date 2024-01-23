@@ -2711,6 +2711,16 @@ int LogConfigMgr::check_parent_health()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
+    {
+      SpinLockGuard parent_guard(parent_lock_);
+      SpinLockGuard child_guard(child_lock_);
+      // break learner loop
+      if (parent_.is_valid() &&
+          children_.contains(parent_) &&
+          OB_FAIL(retire_parent_())) {
+        PALF_LOG(WARN, "retire_parent_ failed", KR(ret), K_(palf_id), K_(self));
+      }
+    }
     SpinLockGuard guard(parent_lock_);
     const int64_t curr_time_us = common::ObTimeUtility::current_time();
     const bool is_registering_timeout = (is_registering_() && curr_time_us - last_submit_register_req_time_us_ > PALF_CHILD_RESEND_REGISTER_INTERVAL_US);
