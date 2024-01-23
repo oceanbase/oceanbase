@@ -512,7 +512,6 @@ int ObMacroBlockWriter::open(
     } else if (OB_FAIL(init_pre_agg_util(data_store_desc))) {
       STORAGE_LOG(WARN, "Failed to init pre aggregate utilities", K(ret));
     } else {
-      //TODO  use 4.1.0.0 for version judgment
       const bool is_use_adaptive = !data_store_desc_->is_major_merge_type()
        || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_1_0_0;
       if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.get_macro_store_size(), 0/*min_micro_row_count*/, is_use_adaptive))) {
