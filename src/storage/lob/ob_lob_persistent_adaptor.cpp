@@ -936,7 +936,7 @@ int ObPersistentLobApator::build_common_scan_param(
                           false, // index_back
                           false, // query_stat
                           ObQueryFlag::MysqlMode, // sql_mode
-                          false // read_latest
+                          param.read_latest_ // read_latest
                         );
   query_flag.disable_cache();
   query_flag.scan_order_ = param.scan_backward_ ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
@@ -961,6 +961,9 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.limit_param_.offset_ = 0;
     // sessions
     scan_param.snapshot_ = param.snapshot_;
+    if(param.read_latest_) {
+      scan_param.tx_id_ = param.snapshot_.core_.tx_id_;
+    }
     scan_param.sql_mode_ = param.sql_mode_;
     // common set
     scan_param.allocator_ = param.allocator_;
