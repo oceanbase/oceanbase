@@ -288,7 +288,14 @@ int ObTempBlockStore::append_block_payload(const char *buf, const int64_t size, 
     MEMCPY(blk_->payload_, buf, size);
     block_id_cnt_ = blk_->end();
     blk_->get_buffer()->fast_advance(size);
-    LOG_DEBUG("append block payload", K(*this), K(*blk_));
+    LOG_DEBUG("append block payload", K(*this), K(*blk_), K(mem_used_), K(mem_hold_));
+  }
+  // dump data if mem used > 16MB
+  const int64_t dump_threshold = 1 << 24;
+  if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
+    if (OB_FAIL(dump(false /* reuse */, true /* all_dump */))) {
+      LOG_WARN("dump failed", K(ret));
+    }
   }
   return ret;
 }
