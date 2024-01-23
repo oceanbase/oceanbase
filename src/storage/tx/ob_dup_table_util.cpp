@@ -850,7 +850,7 @@ int ObDupTableLSHandler::check_redo_sync_completed(const ObTransID &tx_id,
 
       DUP_TABLE_LOG(INFO, "redo sync finish with lease valid follower", K(ret), K(ls_id_), K(tx_id),
                     K(redo_completed_scn), K(redo_sync_finish), K(total_max_read_version),
-                    K(lease_addrs));
+                    K(lease_addrs.count()), K(lease_addrs));
     }
   }
 

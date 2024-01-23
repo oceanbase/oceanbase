@@ -6881,6 +6881,9 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
       ret = OB_EAGAIN;
       TRANS_LOG(INFO, "redo sync will retry", K(ret), K(redo_sync_finish), K(tmp_max_read_version),
                 K(dup_table_follower_max_read_version_), KPC(this));
+      if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+        TRANS_LOG(WARN, "set 2pc trans timer for dup table failed", K(ret), K(tmp_ret), KPC(this));
+      }
     }
   }
 
