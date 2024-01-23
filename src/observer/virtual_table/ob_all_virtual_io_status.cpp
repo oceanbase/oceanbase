@@ -450,8 +450,8 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
             item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
             item.size_ = sys_avg_size.at(i).at(j);
             item.real_iops_ = sys_avg_iops.at(i).at(j);
-            item.min_iops_ = INT64_MAX;
-            item.max_iops_ = INT64_MAX;
+            item.min_iops_ = 0;
+            item.max_iops_ = 0;
             if (OB_FAIL(quota_infos_.push_back(item))) {
               LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
             }
