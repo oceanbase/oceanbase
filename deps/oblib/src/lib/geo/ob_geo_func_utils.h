@@ -503,8 +503,8 @@ int ObGeoFuncUtils::remove_duplicate_multi_geo(ObGeometry *&geo, common::ObIAllo
       for (int32_t i = 0; i < sp_geo.size() && OB_SUCC(ret); i++) {
         bool in_res_geo = false;
         for (int32_t j = 0; j < res_geo->size() && OB_SUCC(ret) && !in_res_geo; j++) {
-          if ((sp_geo[i].template get<0>() == sp_geo[j].template get<0>())
-              && (sp_geo[i].template get<1>() == sp_geo[j].template get<1>())) {
+          if ((sp_geo[i].template get<0>() == (*res_geo)[j].template get<0>())
+              && (sp_geo[i].template get<1>() == (*res_geo)[j].template get<1>())) {
             in_res_geo = true;
           }
         }
