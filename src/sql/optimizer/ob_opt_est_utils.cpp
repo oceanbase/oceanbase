@@ -401,7 +401,7 @@ double ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj)
         scalar = static_cast<double>(obj->get_utinyint());
         break;
     case ObUSmallIntType:               // uint16
-        scalar = static_cast<double>(obj->get_smallint());
+        scalar = static_cast<double>(obj->get_usmallint());
         break;
     case ObUMediumIntType:              // uint24
         scalar = static_cast<double>(obj->get_umediumint());
