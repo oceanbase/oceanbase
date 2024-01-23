@@ -1033,6 +1033,11 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
         }
       }
 
+      if (OB_SUCC(ret))
+      {
+        new_version = std::max(new_version + 1, ObTimeUtility::current_time());
+      }
+
       if (OB_FAIL(ret)) {
       } else if (item->want_to_set_tenant_config_) {
         // tenant config
@@ -1101,6 +1106,19 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
                 } else if (is_zero_row(affected_rows) || affected_rows > 2) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("unexpected affected rows", K(tenant_id), K(affected_rows), KR(ret));
+                } else {
+                  // set config_version to config_version_map and trigger parameter update
+                  if (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id) {
+                  } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, new_version))) {
+                    LOG_WARN("failed to set tenant config version",
+                        K(tenant_id), KR(ret), "item", *item);
+                  } else if(GCTX.omt_->has_tenant(tenant_id) &&
+                      OB_FAIL(OTC_MGR.got_version(tenant_id, new_version))) {
+                    LOG_WARN("failed to got version", K(tenant_id), KR(ret), "item", *item);
+                  } else {
+                    LOG_INFO("got new tenant config version",
+                        K(new_version), K(tenant_id), "item", *item);
+                  }
                 }
               }
             }
@@ -1153,36 +1171,22 @@ int ObAdminSetConfig::update_config(obrpc::ObAdminSetConfigArg &arg, int64_t new
             } else if (is_zero_row(affected_rows) || affected_rows > 2) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected affected rows", K(affected_rows), KR(ret));
-            }
+            } else {
+              // set config_version to __all_zone and trigger parameter update
+              if (OB_FAIL(ctx_.zone_mgr_->update_config_version(new_version))) {
+                LOG_WARN("set new config version failed", KR(ret), K(new_version));
+              } else if (OB_FAIL(ctx_.config_mgr_->got_version(new_version))) {
+                LOG_WARN("config mgr got version failed", KR(ret), K(new_version));
+              } else {
+                LOG_INFO("got new sys config version", K(new_version), "item", *item);
+              }
+            } // else trigger update
           } // else
         } // else
       } // else sys config
     } // FOREACH_X
   }
 
-  if (OB_SUCC(ret)) {
-    FOREACH_X(item, arg.items_, OB_SUCCESS == ret) {
-      if (item->want_to_set_tenant_config_) {
-        for (uint64_t tenant_id : item->tenant_ids_) {
-          if (ObAdminSetConfig::OB_PARAMETER_SEED_ID == tenant_id) {
-          } else if (OB_FAIL(OTC_MGR.set_tenant_config_version(tenant_id, new_version))) {
-            LOG_WARN("failed to set tenant config version", K(tenant_id), KR(ret));
-          } else if(GCTX.omt_->has_tenant(tenant_id) && OB_FAIL(OTC_MGR.got_version(tenant_id, new_version))) {
-            LOG_WARN("failed to got version", K(tenant_id), KR(ret));
-          }
-          if (OB_FAIL(ret)) {
-            break;
-          }
-        } // for
-      } else {
-        if (OB_FAIL(ctx_.zone_mgr_->update_config_version(new_version))) {
-          LOG_WARN("set new config version failed", KR(ret), K(new_version));
-        } else if (OB_FAIL(ctx_.config_mgr_->got_version(new_version))) {
-          LOG_WARN("config mgr got version failed", KR(ret), K(new_version));
-        }
-      }
-    } // FOREACH_X
-  } // if
   return ret;
 }
 
@@ -1202,11 +1206,9 @@ int ObAdminSetConfig::execute(obrpc::ObAdminSetConfigArg &arg)
   } else if (OB_FAIL(ctx_.zone_mgr_->get_config_version(config_version))) {
     LOG_WARN("get_config_version failed", KR(ret));
   } else {
-    const int64_t now = ObTimeUtility::current_time();
-    const int64_t new_version = std::max(config_version + 1, now);
     if (OB_FAIL(ctx_.root_service_->set_config_pre_hook(arg))) {
       LOG_WARN("fail to process pre hook", K(arg), KR(ret));
-    } else if (OB_FAIL(update_config(arg, new_version))) {
+    } else if (OB_FAIL(update_config(arg, config_version))) {
       LOG_WARN("update config failed", KR(ret), K(arg));
     } else if (OB_ISNULL(ctx_.root_service_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1214,7 +1216,7 @@ int ObAdminSetConfig::execute(obrpc::ObAdminSetConfigArg &arg)
     } else if (OB_FAIL(ctx_.root_service_->set_config_post_hook(arg))) {
       LOG_WARN("fail to set config callback", KR(ret));
     } else {
-      LOG_INFO("get new config version", K(new_version), K(arg));
+      LOG_INFO("set config succ", K(arg));
     }
   }
   return ret;
