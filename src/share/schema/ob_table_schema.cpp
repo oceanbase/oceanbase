@@ -1507,6 +1507,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       table_flags_ = src_schema.table_flags_;
       name_generated_type_ = src_schema.name_generated_type_;
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
+      auto_increment_cache_size_ = src_schema.auto_increment_cache_size_;
+      is_column_store_supported_ = src_schema.is_column_store_supported_;
+      max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3248,6 +3252,11 @@ void ObTableSchema::reset()
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  auto_increment_cache_size_ = 0;
+
+  is_column_store_supported_ = false;
+  max_used_column_group_id_ = COLUMN_GROUP_START_ID;
+  mlog_tid_ = OB_INVALID_ID;
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6000,7 +6009,11 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(aux_lob_meta_tid),
     K_(aux_lob_piece_tid),
     K_(name_generated_type),
-    K_(lob_inrow_threshold));
+    K_(lob_inrow_threshold),
+    K_(is_column_store_supported),
+    K_(max_used_column_group_id),
+    K_(mlog_tid),
+    K_(auto_increment_cache_size));
   J_OBJ_END();
 
   return pos;
@@ -6270,6 +6283,20 @@ OB_DEF_SERIALIZE(ObTableSchema)
                 name_generated_type_);
   }
   OB_UNIS_ENCODE(lob_inrow_threshold_);
+
+  // serialize column group
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialize_column_groups(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize column groups", K(ret));
+    } else {
+      LST_DO_CODE(OB_UNIS_ENCODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+
+  OB_UNIS_ENCODE(mlog_tid_);
+  OB_UNIS_ENCODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -6353,6 +6380,40 @@ int ObTableSchema::deserialize_constraints(const char *buf, const int64_t data_l
         SHARE_SCHEMA_LOG(WARN, "Fail to add cst", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::serialize_column_groups(
+    char *buf,
+    const int64_t data_len,
+    int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  // 42x does not support column storage tables, so column_group_cnt is set to 0
+  int64_t column_group_cnt = 0;
+  if (OB_FAIL(serialization::encode_vi64(buf, data_len, pos, column_group_cnt))) {
+    LOG_WARN("fail to encode column group cnt", KR(ret), K(column_group_cnt));
+  }
+  return ret;
+}
+
+int ObTableSchema::deserialize_column_groups(
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_column_group_cnt = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0) || OB_UNLIKELY(pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf should not be null", KR(ret), K(buf), K(data_len), K(pos));
+  } else if (pos == data_len) {
+    //do nothing
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &tmp_column_group_cnt))) {
+    LOG_WARN("fail to decode column group count", KR(ret));
+  } else {
+    // 42x does not support column storage tables, tmp_column_group_cnt is unused
   }
   return ret;
 }
@@ -6641,6 +6702,19 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }
 
   OB_UNIS_DECODE(lob_inrow_threshold_);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_column_groups(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize column_groups", KR(ret), K(data_len), K(pos));
+    } else {
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  is_column_store_supported_,
+                  max_used_column_group_id_);
+    }
+  }
+
+  OB_UNIS_DECODE(mlog_tid_);
+  OB_UNIS_DECODE(auto_increment_cache_size_);
   return ret;
 }
 
@@ -6782,6 +6856,14 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(kv_attributes_);
   OB_UNIS_ADD_LEN(name_generated_type_);
   OB_UNIS_ADD_LEN(lob_inrow_threshold_);
+
+  // get column group size
+  int64_t column_group_cnt = 0; // 42x does not support column storage tables
+  len += serialization::encoded_length_vi64(column_group_cnt);
+  OB_UNIS_ADD_LEN(is_column_store_supported_);
+  OB_UNIS_ADD_LEN(max_used_column_group_id_);
+  OB_UNIS_ADD_LEN(mlog_tid_);
+  OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   return len;
 }
 

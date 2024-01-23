@@ -1982,6 +1982,7 @@ public:
        TTL_DEFINITION,
        KV_ATTRIBUTES,
        LOB_INROW_THRESHOLD,
+       INCREMENT_CACHE_SIZE,
        MAX_OPTION = 1000
   };
   enum AlterPartitionType
