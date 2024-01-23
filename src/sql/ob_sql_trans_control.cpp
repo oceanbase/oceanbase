@@ -208,6 +208,14 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
 #endif
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   CK (OB_NOT_NULL(session));
+  if (OB_SUCCESS != ret) {
+    // do nothing
+  } else if (session->associated_xa()) {
+    // NOTE that not support dblink trans in this interface
+    // PLEASE handle implicit cases for dblink trans instead of this interface
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
+  }
   int64_t tx_id = 0;
   OX (tx_id = session->get_tx_id().get_id());
   CHECK_TX_FREE_ROUTE(exec_ctx, session);
