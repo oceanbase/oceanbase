@@ -613,6 +613,9 @@ int ObExternTabletMetaReader::get_next(storage::ObMigrationTabletParam &tablet_m
     LOG_WARN("tablet meta reader not init", K(ret));
   } else if (end_() && OB_FAIL(read_next_batch_())) {
     LOG_WARN("failed to update inner array", K(ret));
+  } else if (end_()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet_meta_array_ is empty", K(ret));
   } else if (OB_FAIL(tablet_meta.assign(tablet_meta_array_.at(cur_tablet_idx_)))) {
     LOG_WARN("failed to assign tablet meta", K(ret), K(cur_tablet_idx_), K(tablet_meta_array_));
   } else if (OB_FALSE_IT(cur_tablet_idx_++)) {
@@ -651,7 +654,7 @@ int ObExternTabletMetaReader::read_next_range_tablet_metas_()
   int ret = OB_SUCCESS;
   share::ObBackupPath path;
   char *buf = nullptr;
-  const int64_t DEFAULT_BUF_LEN = 2 * 1024 * 1024; // 2M
+  const int64_t DEFAULT_BUF_LEN = 2 * MAX_BACKUP_TABLET_META_SERIALIZE_SIZE;
   const int64_t buf_len = tablet_info_trailer_array_.at(cur_trailer_idx_).length_ - cur_buf_offset_ < DEFAULT_BUF_LEN ?
                           (tablet_info_trailer_array_.at(cur_trailer_idx_).length_ - cur_buf_offset_) : DEFAULT_BUF_LEN;
   int64_t cur_total_len = 0;
@@ -686,7 +689,7 @@ int ObExternTabletMetaReader::read_next_range_tablet_metas_()
         LOG_WARN("common_header is not valid", K(ret), K(path), K(buffer_reader));
       } else if (common_header->data_zlength_ > buffer_reader.remain()) {
         cur_total_len = buffer_reader.pos() - sizeof(ObBackupCommonHeader);
-        LOG_INFO("buf not enough, wait later", K(cur_total_len), K(buffer_reader));
+        LOG_INFO("buf not enough, wait later", K(cur_total_len), K(buffer_reader), KPC(common_header));
         break;
       } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
         LOG_WARN("failed to check data checksum", K(ret), K(*common_header), K(path), K(buffer_reader));
@@ -702,6 +705,9 @@ int ObExternTabletMetaReader::read_next_range_tablet_metas_()
     }
 
     if (OB_FAIL(ret)) {
+    } else if (cur_tablet_meta_array.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet meta is too large", K(ret));
     } else {
       tablet_meta_array_.reset();
       if (OB_FAIL(tablet_meta_array_.assign(cur_tablet_meta_array))) {
