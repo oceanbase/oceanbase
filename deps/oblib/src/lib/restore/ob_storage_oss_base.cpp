@@ -725,7 +725,7 @@ int ObStorageOssMultiPartWriter::open(const ObString &uri, common::ObObjectStora
     } else if (NULL == (aos_ret = oss_init_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
                                                            headers, &resp_headers))
               || !aos_status_is_ok(aos_ret)) {
-      ret = OB_OSS_ERROR;
+      convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "oss init multipart upload error", K(uri), K(ret));
       print_oss_info(resp_headers, aos_ret, ret);
     } else {
@@ -863,7 +863,7 @@ int ObStorageOssMultiPartWriter::write_single_part()
                                                             &upload_id_, partnum_, &buffer, nullptr,
                                                             headers, nullptr, &resp_headers, nullptr))
           || !aos_status_is_ok(aos_ret)) {
-        ret = OB_OSS_ERROR;
+        convert_io_error(aos_ret, ret);
         OB_LOG(WARN, "fail to upload one part from buffer",
             K_(base_buf_pos), K_(bucket), K_(object), K(ret));
         print_oss_info(resp_headers, aos_ret, ret);
@@ -1021,7 +1021,7 @@ int ObStorageOssMultiPartWriter::cleanup()
 
     if (OB_ISNULL(aos_ret = oss_abort_multipart_upload(oss_option_, &bucket, &object,
         &upload_id_, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
-      ret = OB_OSS_ERROR;
+      convert_io_error(aos_ret, ret);
       OB_LOG(WARN, "Abort the multipart error", K(bucket_), K(object_), K(ret));
     }
   }
@@ -2119,7 +2119,7 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
           aos_list_add_tail(&content->node, &buffer);
           aos_ret = oss_append_object_from_buffer(oss_option_, &bucket, &object, position, &buffer,
               headers2, &resp_headers);
-          if (0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
+          if (OB_NOT_NULL(aos_ret) && 0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
             file_length_ += size;
           } else {
             print_oss_info(resp_headers, aos_ret, ret);
