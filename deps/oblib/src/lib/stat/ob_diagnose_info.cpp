@@ -606,6 +606,27 @@ int ObDiagnoseSessionInfo::notify_wait_end(
       } else {
         ObActiveSessionGuard::get_stat().total_idle_wait_time_ += cur_wait_time;
       }
+
+      switch (OB_WAIT_EVENTS[event_desc->event_no_].wait_class_) {
+        case ObWaitClassIds::CONCURRENCY:{
+          EVENT_ADD(ObStatEventIds::CCWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::USER_IO:{
+          EVENT_ADD(ObStatEventIds::USER_IO_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::APPLICATION:{
+          EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        case ObWaitClassIds::SCHEDULER:{
+          EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
+          break;
+        }
+        default:
+          break;
+      }
       ObActiveSessionGuard::get_stat().fixup_last_stat(*event_desc);
     }
   }

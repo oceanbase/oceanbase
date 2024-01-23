@@ -486,10 +486,10 @@ STAT_EVENT_ADD_DEF(ASH_SCHEDULAR_ELAPSE_TIME, "ash schedular elapse time", ObSta
 STAT_EVENT_ADD_DEF(ASH_SCHEDULAR_CPU_TIME, "ash schedular cpu time", ObStatClassIds::WR, 210011, false, true, true)
 
 // sqlstat relat (2200xx)
-STAT_EVENT_ADD_DEF(CCWAIT_TIME, "concurrency wait total time", ObStatClassIds::SYS, 220001, false, true, true)
-STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds::SYS, 220002, false, true, true)
-STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, false, true, true)
-
+STAT_EVENT_ADD_DEF(CCWAIT_TIME, "concurrency wait total time", ObStatClassIds::SYS, 220001, true, true, true)
+STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds::SYS, 220002, true, true, true)
+STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, true, true, true)
+STAT_EVENT_ADD_DEF(SCHEDULE_WAIT_TIME, "schedule wait total time", ObStatClassIds::SYS, 220004, true, true, true)
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 

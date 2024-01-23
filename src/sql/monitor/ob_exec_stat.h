@@ -32,6 +32,7 @@ EVENT_INFO(BLOCKSCAN_BLOCK_CNT, blockscan_block_cnt)
 EVENT_INFO(BLOCKSCAN_ROW_CNT, blockscan_row_cnt)
 EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
+EVENT_INFO(SCHEDULE_TIME, schedule_time)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -100,6 +101,10 @@ struct ObExecRecord
       blockscan_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::BLOCKSCAN_ROW_CNT);              \
       pushdown_storage_filter_row_cnt_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT); \
       fuse_row_cache_hit_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT);             \
+      user_io_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                   \
+      application_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                     \
+      concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
+      schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
     } \
   } while(0);
 
@@ -129,6 +134,7 @@ struct ObExecRecord
     UPDATE_EVENT(user_io_time);
     UPDATE_EVENT(concurrency_time);
     UPDATE_EVENT(application_time);
+    UPDATE_EVENT(schedule_time);
     UPDATE_EVENT(memstore_read_row_count);
     UPDATE_EVENT(ssstore_read_row_count);
     UPDATE_EVENT(data_block_read_cnt);
