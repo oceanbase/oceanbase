@@ -579,7 +579,8 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
       }
     }
   }
-  if (OB_SUCC(ret) && ob_is_text_tc(type) && !res.is_null() &&
+  if (OB_FAIL(ret)) {
+  } else if (ob_is_text_tc(type) && !res.is_null() &&
       has_lob_header && !has_set_to_lob_locator) {
     ObString data = res.get_string();
     ObTextStringResult result_buffer(type, has_lob_header, &res_alloc);
@@ -591,6 +592,18 @@ int ObExprBaseLRpad::calc_mysql_inner(const LRpadType pad_type,
     } else {
       ObString output;
       result_buffer.get_result_buffer(output);
+      res.set_string(output);
+    }
+  } else if (ob_is_text_tc(expr.args_[0]->datum_meta_.type_) && ob_is_string_tc(type)
+      && ! has_set_to_lob_locator && ! res.is_null()) {
+    // in mysql mode, input is lob, but output is varchar
+    // if lob is outrow, may cause return data that's allocated from tmp allocator
+    ObString data = res.get_string();
+    ObString output;
+    if (data.empty()) { // skip empty string
+    } else if (OB_FAIL(ob_write_string(res_alloc, data, output))) {
+      LOG_WARN("ob_write_string fail", K(ret));
+    } else {
       res.set_string(output);
     }
   }
