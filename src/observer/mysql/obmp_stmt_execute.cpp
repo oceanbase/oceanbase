@@ -1923,8 +1923,8 @@ int ObMPStmtExecute::process()
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
 
-    {
-      // whether the previous error was reported, a cleanup is to be done here
+    if (RETRY_TYPE_NONE == retry_ctrl_.get_retry_type()) {
+      // if no retry would be performed any more, clear the piece cache
       ObPieceCache *piece_cache = nullptr;
       int upper_scope_ret = ret;
       ret = OB_SUCCESS;
