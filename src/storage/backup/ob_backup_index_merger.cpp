@@ -551,7 +551,15 @@ ObIBackupIndexMerger::ObIBackupIndexMerger()
 {}
 
 ObIBackupIndexMerger::~ObIBackupIndexMerger()
-{}
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
+    ObBackupIoAdapter util;
+    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+      LOG_WARN("fail to close device and fd", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  }
+}
 
 int ObIBackupIndexMerger::get_all_retries_(const int64_t task_id, const uint64_t tenant_id,
     const share::ObBackupDataType &backup_data_type, const share::ObLSID &ls_id, common::ObISQLClient &sql_client,
@@ -753,6 +761,8 @@ void ObBackupMacroBlockIndexMerger::reset()
 int ObBackupMacroBlockIndexMerger::merge_index()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
   ObIBackupMacroBlockIndexFuser *fuser = NULL;
   MERGE_ITER_ARRAY unfinished_iters;
   MERGE_ITER_ARRAY min_iters;
@@ -807,6 +817,13 @@ int ObBackupMacroBlockIndexMerger::merge_index()
   }
   if (OB_NOT_NULL(fuser)) {
     ObLSBackupFactory::free(fuser);
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
   }
   return ret;
 }
@@ -1264,6 +1281,8 @@ void ObBackupMetaIndexMerger::reset()
 int ObBackupMetaIndexMerger::merge_index()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
   MERGE_ITER_ARRAY unfinished_iters;
   MERGE_ITER_ARRAY min_iters;
   if (IS_NOT_INIT) {
@@ -1309,6 +1328,13 @@ int ObBackupMetaIndexMerger::merge_index()
         LOG_WARN("failed to flush index tree", K(ret));
       }
     }
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
+    ret = COVER_SUCC(tmp_ret);
+    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+  } else {
+    dev_handle_ = NULL;
+    io_fd_.reset();
   }
   return ret;
 }
