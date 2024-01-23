@@ -32,11 +32,11 @@ int ObDecodeResourcePool::free(T *item)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = common::OB_NOT_INIT;
-    STORAGE_LOG(WARN, "decode resource pool is not inited", K(ret));
+    STORAGE_LOG(ERROR, "decode resource pool is not inited", K(ret));
   } else if (NULL != item) {
     ObSmallObjPool<T> &obj_pool = get_pool<T>();
     if(OB_FAIL(obj_pool.free(item))) {
-      STORAGE_LOG(WARN, "decode resource pool failed to free", K(ret));
+      STORAGE_LOG(ERROR, "decode resource pool failed to free", K(ret), KP(item));
     } else {
       item = NULL;
     }
@@ -46,16 +46,22 @@ int ObDecodeResourcePool::free(T *item)
 ////////////////////////// decoder pool ///////////////////////////////////////
 
 template <typename T>
-inline void ObDecoderPool::free_decoders(ObDecodeResourcePool &decode_res_pool,
+inline int ObDecoderPool::free_decoders(ObDecodeResourcePool &decode_res_pool,
                                               const ObColumnHeader::Type &type)
 {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int16_t &free_cnt_ = free_cnts_[type];
   while (free_cnt_ > 0) {
     T* d = static_cast<T *>(pools_[type][free_cnt_ - 1]);
-    decode_res_pool.free<T>(d);
+    if (OB_TMP_FAIL(decode_res_pool.free<T>(d))) {
+      ret = tmp_ret;
+      STORAGE_LOG(ERROR, "decode resource pool failed to free", K(tmp_ret), K(type), KP(d));
+    }
     pools_[type][free_cnt_ - 1] = NULL;
     --free_cnt_;
   }
+  return ret;
 }
 
 template<typename T>
@@ -88,8 +94,9 @@ inline int ObDecoderPool::alloc_miss_cache(T *&item)
 
 
 template<typename T>
-inline void ObDecoderPool::free(T *item)
+inline int ObDecoderPool::free(T *item)
 {
+  int ret = OB_SUCCESS;
   if (NULL != item) {
     const ObColumnHeader::Type &type = T::type_;
     if (not_reach_limit(type)) {
@@ -100,14 +107,16 @@ inline void ObDecoderPool::free(T *item)
       ObDecodeResourcePool *decode_res_pool = MTL(ObDecodeResourcePool*);
       if (OB_ISNULL(decode_res_pool)) {
         int ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "NULL tenant decode resource pool", K(ret));
+        STORAGE_LOG(ERROR, "NULL tenant decode resource pool", K(ret));
+      } else if (FALSE_IT(item->reuse())) {
+      } else if (OB_FAIL(decode_res_pool->free(item))) {
+        STORAGE_LOG(ERROR, "decode resource pool failed to free", K(ret), K(type), KP(item));
       } else {
-        item->reuse();
-        decode_res_pool->free(item);
         item = NULL;
       }
     }
   }
+  return ret;
 }
 
 inline bool ObDecoderPool::has_decoder(const ObColumnHeader::Type &type) const
@@ -134,16 +143,22 @@ inline void ObDecoderPool::push_decoder(const ObColumnHeader::Type &type,
 ////////////////////////// cs decoder pool ///////////////////////////////////////
 
 template <typename T>
-inline void ObCSDecoderPool::free_decoders(ObDecodeResourcePool &decode_res_pool,
+inline int ObCSDecoderPool::free_decoders(ObDecodeResourcePool &decode_res_pool,
                                               const ObCSColumnHeader::Type &type)
 {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int16_t &free_cnt_ = free_cnts_[type];
   while (free_cnt_ > 0) {
     T* d = static_cast<T *>(pools_[type][free_cnt_ - 1]);
-    decode_res_pool.free<T>(d);
+    if (OB_TMP_FAIL(decode_res_pool.free<T>(d))) {
+      ret = tmp_ret;
+      STORAGE_LOG(ERROR, "decode resource pool failed to free", K(ret), K(type), KP(d));
+    }
     pools_[type][free_cnt_ - 1] = NULL;
     --free_cnt_;
   }
+  return ret;
 }
 
 template<typename T>
@@ -177,8 +192,9 @@ int ObCSDecoderPool::alloc_miss_cache(T *&item)
 
 
 template<typename T>
-inline void ObCSDecoderPool::free(T *item)
+inline int ObCSDecoderPool::free(T *item)
 {
+  int ret = OB_SUCCESS;
   if (NULL != item) {
     const ObCSColumnHeader::Type type = T::type_;
     if (not_reach_limit(type)) {
@@ -189,14 +205,16 @@ inline void ObCSDecoderPool::free(T *item)
       ObDecodeResourcePool *decode_res_pool = MTL(ObDecodeResourcePool*);
       if (OB_ISNULL(decode_res_pool)) {
         int ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "NULL tenant decode resource pool", K(ret));
+        STORAGE_LOG(ERROR, "NULL tenant decode resource pool", K(ret));
+      } else if (FALSE_IT(item->reuse())) {
+      } else if (OB_FAIL(decode_res_pool->free(item))) {
+        STORAGE_LOG(ERROR, "decode resource pool failed to free", K(ret), K(type), KP(item));
       } else {
-        item->reuse();
-        decode_res_pool->free(item);
         item = NULL;
       }
     }
   }
+  return ret;
 }
 
 inline bool ObCSDecoderPool::has_decoder(const ObCSColumnHeader::Type &type) const

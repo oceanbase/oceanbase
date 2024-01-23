@@ -89,7 +89,7 @@ private:
 template <class Decoder>
 static int acquire_local_decoder(ObCSDecoderPool &local_decoder_pool, const ObIColumnCSDecoder *&decoder);
 template <class Decoder>
-static void release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder);
+static int release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder);
 
 class ObICSEncodeBlockReader
 {
@@ -104,7 +104,7 @@ protected:
   int do_init(const ObMicroBlockData &block_data, const int64_t request_cnt);
   int init_decoders();
   int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, ObColumnCSDecoder &dest);
-  void free_decoders();
+  int free_decoders();
   int acquire(int64_t store_idx, const ObIColumnCSDecoder *&decoder);
 
 protected:
@@ -277,7 +277,7 @@ private:
   int do_init(const ObMicroBlockData &block_data);
   int init_decoders();
   int add_decoder(const int64_t store_idx, const ObObjMeta &obj_meta, ObColumnCSDecoder &dest);
-  void free_decoders();
+  int free_decoders();
   int get_stream_data_buf(const int64_t stream_idx, const char *&buf);
   int decode_cells(
     const uint64_t row_id, const int64_t col_begin, const int64_t col_end, ObStorageDatum *datums);

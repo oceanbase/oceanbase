@@ -82,12 +82,12 @@ void ObCSDecoderCtxArray::reset()
     ObDecodeResourcePool *decode_res_pool = MTL(ObDecodeResourcePool*);
     if (OB_ISNULL(decode_res_pool)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("NULL tenant decode resource pool", K(ret));
+      LOG_ERROR("NULL tenant decode resource pool", K(ret));
     } else {
       FOREACH(it, ctx_blocks_) {
         ObColumnCSDecoderCtxBlock *ctx_block = *it;
         if (OB_FAIL(decode_res_pool->free(ctx_block))) {
-          LOG_WARN("failed to free cs decoder ctx block", K(ret));
+          LOG_WARN("failed to free cs decoder ctx block", K(ret), KP(ctx_block));
         }
       }
       ctx_blocks_.reset();
@@ -118,16 +118,27 @@ int ObCSDecoderCtxArray::get_ctx_array(ObColumnCSDecoderCtx **&ctxs, int64_t siz
       if (OB_FAIL(decode_res_pool->alloc(ctx_block))) {
         LOG_WARN("alloc cs decoder ctx block failed", K(ret), K(i), K(need_block_count));
       } else if (OB_FAIL(ctx_blocks_.push_back(ctx_block))) {
-        LOG_WARN("cs ctx block array push back failed", K(ret));
+        LOG_WARN("cs ctx block array push back failed", K(ret), KP(ctx_block));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < ObColumnCSDecoderCtxBlock::CS_CTX_NUMS; ++j) {
           if (OB_FAIL(ctxs_.push_back(&ctx_block->ctxs_[j]))) {
-            LOG_WARN("cs ctx array push back failed", K(ret));
+            LOG_WARN("cs ctx array push back failed", K(ret), K(j));
           }
         }
       }
     }
-    if (OB_SUCC(ret)) {
+
+    if (OB_FAIL(ret)) {
+      if (NULL != ctx_block) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(decode_res_pool->free(ctx_block))) {
+          LOG_ERROR("failed to free decoder cs ctx block", K(tmp_ret), KP(ctx_block));
+        } else {
+          ctx_block = NULL;
+        }
+      }
+      reset();
+    } else {
       ctxs = &ctxs_.at(0);
     }
   } else {
@@ -216,7 +227,7 @@ int ObColumnCSDecoder::quick_compare(const ObStorageDatum &left,
 /////////////////////// acquire decoder from local ///////////////////////
 typedef int (*local_decode_acquire_func)(ObCSDecoderPool &local_decoder_pool,
                                    const ObIColumnCSDecoder *&decoder);
-typedef void(*local_decode_release_func)(ObCSDecoderPool &local_decoder_pool,
+typedef int(*local_decode_release_func)(ObCSDecoderPool &local_decoder_pool,
                                    ObIColumnCSDecoder *decoder);
 
 static local_decode_acquire_func acquire_local_funcs_[ObCSColumnHeader::MAX_TYPE] = {
@@ -252,15 +263,20 @@ int acquire_local_decoder(ObCSDecoderPool &local_decoder_pool, const ObIColumnCS
 }
 
 template <class Decoder>
-void release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder)
+int release_local_decoder(ObCSDecoderPool &local_decoder_pool, ObIColumnCSDecoder *decoder)
 {
+  int ret = OB_SUCCESS;
+  Decoder *d = nullptr;
   if (nullptr == decoder) {
     //do nothing
+  } else if (FALSE_IT(d = static_cast<Decoder *>(decoder))) {
+  } else if (OB_FAIL(local_decoder_pool.free<Decoder>(d))) {
+    LOG_ERROR("failed to free cs decoder", K(ret), "type", decoder->get_type(), KP(d));
   } else {
-    Decoder* d = static_cast<Decoder *>(decoder);
-    local_decoder_pool.free<Decoder>(d);
+    d = nullptr;
     decoder = nullptr;
   }
+  return ret;
 }
 
 //////////////////////////ObIEncodeBlockGetReader/////////////////////////
@@ -280,7 +296,7 @@ ObICSEncodeBlockReader::ObICSEncodeBlockReader()
 
 ObICSEncodeBlockReader::~ObICSEncodeBlockReader()
 {
-  free_decoders();
+  (void)free_decoders();
   ctx_array_.reset();
   if (NULL != local_decoder_pool_) {
     local_decoder_pool_->reset();
@@ -290,7 +306,7 @@ ObICSEncodeBlockReader::~ObICSEncodeBlockReader()
 
 void ObICSEncodeBlockReader::reuse()
 {
-  free_decoders();
+  (void)free_decoders();
   cached_decocer_ = nullptr;
   request_cnt_ = 0;
   decoders_ = nullptr;
@@ -305,7 +321,7 @@ void ObICSEncodeBlockReader::reuse()
 
 void ObICSEncodeBlockReader::reset()
 {
-  free_decoders();
+  (void)free_decoders();
   cached_decocer_ = NULL;
   request_cnt_ = 0;
   decoders_ = nullptr;
@@ -324,16 +340,23 @@ void ObICSEncodeBlockReader::reset()
   buf_allocator_.reset();
 }
 
-void ObICSEncodeBlockReader::free_decoders()
+int ObICSEncodeBlockReader::free_decoders()
 {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (nullptr != need_release_decoders_) {
     for (int64_t i = 0; i < need_release_decoder_cnt_; ++i) {
-      release_local_funcs_[need_release_decoders_[i]->get_type()]
-          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i]));
+      if (OB_TMP_FAIL(release_local_funcs_[need_release_decoders_[i]->get_type()]
+          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i])))) {
+        ret = tmp_ret;
+        LOG_ERROR("failed to free cs decoder", K(tmp_ret), K(i), K(need_release_decoder_cnt_),
+            "type", need_release_decoders_[i]->get_type(), KP(need_release_decoders_[i]));
+      }
     }
     need_release_decoders_ = nullptr;
   }
   need_release_decoder_cnt_ = 0;
+  return ret;
 }
 
 int ObICSEncodeBlockReader::prepare(const uint64_t tenant_id, const int64_t column_cnt)
@@ -805,19 +828,26 @@ int ObMicroBlockCSDecoder::acquire(const int64_t store_idx, const ObIColumnCSDec
   return ret;
 }
 
-void ObMicroBlockCSDecoder::free_decoders()
+int ObMicroBlockCSDecoder::free_decoders()
 {
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   for (int64_t i = 0; i < need_release_decoder_cnt_; ++i) {
-    release_local_funcs_[need_release_decoders_[i]->get_type()]
-        (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i]));
+    if (OB_TMP_FAIL(release_local_funcs_[need_release_decoders_[i]->get_type()]
+        (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(need_release_decoders_[i])))) {
+      ret = tmp_ret;
+      LOG_ERROR("failed to free cs decoder", K(tmp_ret), K(i), K(need_release_decoder_cnt_),
+          "type", need_release_decoders_[i]->get_type(), KP(need_release_decoders_[i]));
+    }
   }
   need_release_decoders_.clear();
   need_release_decoder_cnt_ = 0;
+  return ret;
 }
 
 void ObMicroBlockCSDecoder::inner_reset()
 {
-  free_decoders();
+  (void)free_decoders();
   cached_decoder_ = nullptr;
   ctxs_ = NULL;
   column_count_ = 0;
@@ -883,7 +913,10 @@ int ObMicroBlockCSDecoder::init_decoders()
     }
 
     if (OB_FAIL(ret)) {
-      free_decoders();
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(free_decoders())) {
+        LOG_ERROR("fail to free cs decoders", K(tmp_ret));
+      }
     }
   }
 
