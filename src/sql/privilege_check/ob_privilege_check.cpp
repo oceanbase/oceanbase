@@ -2786,7 +2786,7 @@ int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
   need_only_obj_check = false;
   pkg_spec_id = OB_INVALID_ID;
   const uint64_t tenant_id = pl::get_tenant_id_by_object_id(pkg_id);
-  if (OB_NOT_NULL(schema_guard) && OB_INVALID_ID != pkg_id) {
+  if (OB_NOT_NULL(schema_guard) && OB_INVALID_ID != pkg_id && COMPATIBLE_ORACLE_MODE == compatible_mode) {
     const ObSimplePackageSchema *pkg_schema = NULL;
     if (OB_FAIL(schema_guard->get_simple_package_info(tenant_id, pkg_id, pkg_schema))) {
       LOG_WARN("failed to get pkg schema", K(ret), K(tenant_id), K(pkg_id));
