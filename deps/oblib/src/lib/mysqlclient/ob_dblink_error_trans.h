@@ -16,6 +16,7 @@
 #include "lib/ob_errno.h"
 
 extern bool get_dblink_reuse_connection_cfg();
+extern bool get_enable_dblink_cfg();
 
 namespace oceanbase
 {
