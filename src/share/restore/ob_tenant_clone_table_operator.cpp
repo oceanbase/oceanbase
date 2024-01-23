@@ -868,7 +868,8 @@ int ObTenantCloneTableOperator::insert_clone_job_history(const ObCloneJob &job)
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObDMLSqlSplicer dml;
-  ObSqlString sql;
+  ObSqlString select_sql;
+  ObSqlString insert_sql;
   int64_t start_time = 0;
   int64_t finished_time = 0;
   int ret_code = OB_SUCCESS;
@@ -880,19 +881,19 @@ int ObTenantCloneTableOperator::insert_clone_job_history(const ObCloneJob &job)
   } else if (OB_UNLIKELY(!job.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(job));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT clone_start_time, clone_finished_time, ret_code, error_msg "
+  } else if (OB_FAIL(select_sql.assign_fmt("SELECT clone_start_time, clone_finished_time, ret_code, error_msg "
                                     "FROM %s WHERE tenant_id = %lu AND job_id = %ld",
                                     OB_ALL_CLONE_JOB_TNAME,
                                     job.get_tenant_id(), job.get_job_id()))) {
-    LOG_WARN("assign sql failed", KR(ret));
+    LOG_WARN("assign select_sql failed", KR(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(job.get_tenant_id()), sql.ptr()))) {
-        LOG_WARN("failed to execute sql", KR(ret), K(sql), K(job));
+      if (OB_FAIL(proxy_->read(res, gen_meta_tenant_id(job.get_tenant_id()), select_sql.ptr()))) {
+        LOG_WARN("failed to execute select_sql", KR(ret), K(select_sql), K(job));
       } else if (NULL == (result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get sql result", KR(ret));
+        LOG_WARN("failed to get select_sql result", KR(ret));
       } else if (OB_FAIL(result->next())) {
         LOG_WARN("next failed", KR(ret));
       } else {
@@ -904,25 +905,27 @@ int ObTenantCloneTableOperator::insert_clone_job_history(const ObCloneJob &job)
                                                        false /*skip_column_error*/,
                                                        "" /*default_value*/);
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(build_insert_dml_(job, dml))) {
+        LOG_WARN("fail to build insert dml", KR(ret), K(job));
+      } else if (OB_FAIL(dml.add_time_column("clone_start_time", start_time))) {
+        LOG_WARN("add column failed", KR(ret));
+      } else if (OB_FAIL(dml.add_time_column("clone_finished_time", finished_time))) {
+        LOG_WARN("add column failed", KR(ret));
+      } else if (!err_msg.empty() && OB_FAIL(dml.add_column("error_msg", ObHexEscapeSqlStr(err_msg)))) {
+        LOG_WARN("add column failed", KR(ret));
+      } else if (OB_FAIL(dml.add_column("ret_code", ret_code))) {
+        LOG_WARN("add column failed", KR(ret));
+      } else if (OB_FAIL(dml.splice_insert_sql(OB_ALL_CLONE_JOB_HISTORY_TNAME, insert_sql))) {
+        LOG_WARN("splice insert_sql failed", KR(ret));
+      }
     }
-    sql.reset();
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(build_insert_dml_(job, dml))) {
-    LOG_WARN("fail to build insert dml", KR(ret), K(job));
-  } else if (OB_FAIL(dml.add_time_column("clone_start_time", start_time))) {
-    LOG_WARN("add column failed", KR(ret));
-  } else if (OB_FAIL(dml.add_time_column("clone_finished_time", finished_time))) {
-    LOG_WARN("add column failed", KR(ret));
-  } else if (!err_msg.empty() && OB_FAIL(dml.add_column("error_msg", ObHexEscapeSqlStr(err_msg)))) {
-    LOG_WARN("add column failed", KR(ret));
-  } else if (OB_FAIL(dml.add_column("ret_code", ret_code))) {
-    LOG_WARN("add column failed", KR(ret));
-  } else if (OB_FAIL(dml.splice_insert_sql(OB_ALL_CLONE_JOB_HISTORY_TNAME, sql))) {
-    LOG_WARN("splice insert sql failed", KR(ret));
-  } else if (OB_FAIL(proxy_->write(gen_meta_tenant_id(tenant_id_), sql.ptr(), affected_rows))) {
-    LOG_WARN("exec sql failed", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(sql));
+  } else if (OB_FAIL(proxy_->write(gen_meta_tenant_id(tenant_id_), insert_sql.ptr(), affected_rows))) {
+    LOG_WARN("exec insert_sql failed", KR(ret), K(gen_meta_tenant_id(tenant_id_)), K(insert_sql));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
