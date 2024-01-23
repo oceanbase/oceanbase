@@ -2486,6 +2486,7 @@ int ObTabletMigrationTask::generate_tablet_finish_migration_task_(
   int ret = OB_SUCCESS;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
   ObLS *ls = nullptr;
+  const int64_t task_gen_time = ObTimeUtility::current_time();
   if (OB_NOT_NULL(tablet_finish_migration_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet finish migration task must not be null", K(ret), KPC(tablet_finish_migration_task));
@@ -2494,7 +2495,7 @@ int ObTabletMigrationTask::generate_tablet_finish_migration_task_(
     LOG_WARN("failed to alloc tablet finish task", K(ret), KPC(ctx_));
   } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(tablet_finish_migration_task->init(*copy_tablet_ctx_, *ls))) {
+  } else if (OB_FAIL(tablet_finish_migration_task->init(task_gen_time, copy_table_key_array_.count(), *copy_tablet_ctx_, *ls))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
     LOG_INFO("generate tablet migration finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
@@ -2966,6 +2967,8 @@ int ObTabletMigrationTask::check_tablet_replica_validity_(const common::ObTablet
 ObTabletFinishMigrationTask::ObTabletFinishMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
+    task_gen_time_(0),
+    copy_table_count_(0),
     copy_tablet_ctx_(nullptr),
     ls_(nullptr)
 {
@@ -2975,7 +2978,9 @@ ObTabletFinishMigrationTask::~ObTabletFinishMigrationTask()
 {
 }
 
-int ObTabletFinishMigrationTask::init(ObCopyTabletCtx &ctx, ObLS &ls)
+int ObTabletFinishMigrationTask::init(
+    const int64_t task_gen_time, const int64_t copy_table_count,
+    ObCopyTabletCtx &ctx, ObLS &ls)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -2986,6 +2991,8 @@ int ObTabletFinishMigrationTask::init(ObCopyTabletCtx &ctx, ObLS &ls)
     LOG_WARN("invalid argument", K(ctx));
   } else {
     ha_dag_net_ctx_ = static_cast<ObStorageHADag *>(this->get_dag())->get_ha_dag_net_ctx();
+    task_gen_time_ = task_gen_time;
+    copy_table_count_ = copy_table_count;
     copy_tablet_ctx_ = &ctx;
     ls_ = &ls;
     is_inited_ = true;
@@ -3041,7 +3048,9 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
       SERVER_EVENT_ADD("storage_ha", "tablet_finish_migration_task",
           "tenant_id", MTL_ID(),
           "ls_id", ls_->get_ls_id().id(),
-          "tablet_id", copy_tablet_ctx_->tablet_id_,
+          "tablet_id", copy_tablet_ctx_->tablet_id_.id(),
+          "sstable_count", copy_table_count_,
+          "cost_time_us", ObTimeUtility::current_time() - task_gen_time_,
           "expected_status", expected_status);
       }
   } else {
@@ -3066,7 +3075,9 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
       SERVER_EVENT_ADD("storage_ha", "tablet_finish_migration_task",
           "tenant_id", MTL_ID(),
           "ls_id", ls_->get_ls_id().id(),
-          "tablet_id", copy_tablet_ctx_->tablet_id_,
+          "tablet_id", copy_tablet_ctx_->tablet_id_.id(),
+          "sstable_count", copy_table_count_,
+          "cost_time_us", ObTimeUtility::current_time() - task_gen_time_,
           "data_status", data_status);
     }
   }
