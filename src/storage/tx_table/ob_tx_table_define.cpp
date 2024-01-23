@@ -161,6 +161,10 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
   if (OB_SUCC(ret) && buf_len > pos) { // has remains, continue to deserialize new members
     if (OB_FAIL(serialization::decode_vi64(buf, buf_len, pos, &cluster_version_))) {
       TRANS_LOG(WARN, "dencode cluster_version fail", K(buf_len), K(pos), K(ret));
+    } else if (cluster_version_ && cluster_version_ < CLUSTER_VERSION_4_2_0_0) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "cluster version malformed", K(cluster_version_), KPC(this));
+      ob_abort();
     }
   }
 

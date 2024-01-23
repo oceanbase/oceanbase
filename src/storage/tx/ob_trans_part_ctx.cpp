@@ -6333,7 +6333,11 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
     info.cluster_id_ = cluster_id_;
-    info.cluster_version_ = cluster_version_;
+    if (cluster_version_accurate_) {
+      info.cluster_version_ = cluster_version_;
+    } else {
+      info.cluster_version_ = 0;
+    }
     if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
       TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));
     } else {

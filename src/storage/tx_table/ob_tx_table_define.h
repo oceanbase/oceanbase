@@ -97,7 +97,8 @@ public:
     table_lock_info_.reset();
   }
   void destroy() { reset(); }
-  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard), K_(exec_info), K_(cluster_version));
+  TO_STRING_KV(K_(tx_id), K_(ls_id), K_(cluster_id), K_(tx_data_guard),
+               K_(exec_info), K_(table_lock_info), K_(cluster_version));
   transaction::ObTransID tx_id_;
   share::ObLSID ls_id_;
   int64_t cluster_id_;
