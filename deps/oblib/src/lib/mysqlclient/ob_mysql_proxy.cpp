@@ -441,7 +441,10 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
 {
   int ret = OB_SUCCESS;
   ObISQLConnectionPool *dblink_pool = NULL;
-  if (!is_inited()) {
+  if (!get_enable_dblink_cfg()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("dblink is disabled", K(ret));
+  } else if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("mysql proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(param_ctx.link_type_, dblink_pool))) {

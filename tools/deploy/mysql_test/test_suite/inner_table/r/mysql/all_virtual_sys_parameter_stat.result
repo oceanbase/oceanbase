@@ -79,6 +79,7 @@ dump_data_dictionary_to_log_interval
 enable_async_syslog
 enable_cgroup
 enable_crazy_medium_compaction
+enable_dblink
 enable_ddl
 enable_early_lock_release
 enable_kv_ttl
