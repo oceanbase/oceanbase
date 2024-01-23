@@ -786,6 +786,7 @@ int ObMigrationStatusHelper::trans_rebuild_fail_status(
     const ObMigrationStatus &cur_status,
     const bool is_in_member_list,
     const bool is_ls_deleted,
+    const bool is_tenant_dropping_or_dropped,
     ObMigrationStatus &fail_status)
 {
   int ret = OB_SUCCESS;
@@ -794,7 +795,7 @@ int ObMigrationStatusHelper::trans_rebuild_fail_status(
   if (OB_MIGRATION_STATUS_REBUILD != cur_status && OB_MIGRATION_STATUS_REBUILD_WAIT != cur_status) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(cur_status));
-  } else if (!is_in_member_list || is_ls_deleted) {
+  } else if (is_tenant_dropping_or_dropped || !is_in_member_list || is_ls_deleted) {
     fail_status = OB_MIGRATION_STATUS_REBUILD_FAIL;
   } else {
     fail_status = OB_MIGRATION_STATUS_REBUILD;
