@@ -318,7 +318,7 @@ private:
       const int64_t max_cg_idx,
       ObCOMergeBatchExeDag *&dag,
       const bool add_scheduler_flag = true);
-  int choose_merge_batch_size(ObCOTabletMergeCtx &co_ctx);
+  int choose_merge_batch_size(const int64_t column_group_cnt);
   int inner_schedule_finish_dag(ObIDag *parent_dag = nullptr);
   void try_update_merge_batch_size(const int64_t column_group_cnt);
   int inner_create_and_schedule_dags(ObIDag *parent_dag = nullptr);
