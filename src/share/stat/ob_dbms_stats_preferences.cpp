@@ -328,7 +328,7 @@ int ObDbmsStatsPreferences::get_sys_default_stat_options(ObExecContext &ctx,
   } else if (OB_FAIL(get_no_acquired_prefs(stat_prefs, no_acquired_prefs))) {
     LOG_WARN("failed to get no acquired prefs", K(ret));
   } else if (no_acquired_prefs.empty()) {//have got all expected sys prefs from user prefs sys table
-    LOG_TRACE("succeed to get sys default stat options", K(stat_prefs), K(param));
+    LOG_TRACE("succeed to get sys default stat options", K(param));
   } else {//try get sys prefs from global prefs sys table
     raw_sql.reset();
     sname_list.reset();
@@ -631,7 +631,7 @@ int ObDbmsStatsPreferences::do_get_sys_perfs(ObExecContext &ctx,
           LOG_WARN("failed to get result", K(ret));
         } else {
           ret = OB_SUCCESS;
-          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(need_acquired_prefs));
+          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(param));
         }
       }
       int tmp_ret = OB_SUCCESS;

@@ -151,6 +151,10 @@ int ObAnalyzeTableInfo::fill_table_stat_param(ObExecContext &ctx, common::ObTabl
     if (param.part_stat_param_.need_modify_ && param.subpart_stat_param_.need_modify_) {
       param.part_stat_param_.can_use_approx_ = true;
     }
+    bool no_estimate_block = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
+    if (no_estimate_block) {
+      param.need_estimate_block_ = false;
+    }
   }
 
   LOG_TRACE("link bug", K(param));
