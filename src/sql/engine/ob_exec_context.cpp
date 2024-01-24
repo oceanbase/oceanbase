@@ -647,6 +647,15 @@ void ObExecContext::try_reset_convert_charset_allocator()
   }
 }
 
+int64_t ObExecContext::get_convert_charset_allocator_usage()
+{
+  int64_t usage = 0;
+  if (OB_NOT_NULL(convert_allocator_)) {
+    usage = convert_allocator_->arena_hold();
+  }
+  return usage;
+}
+
 int ObExecContext::get_udf_ctx_mgr(ObUdfCtxMgr *&udf_ctx_mgr)
 {
   int ret = OB_SUCCESS;

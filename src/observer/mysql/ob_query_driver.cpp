@@ -283,7 +283,8 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
       }
       if (OB_SUCC(ret)) {
         ++row_num;
-        if (0 == row_num % RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS) {
+        if (0 == row_num % RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS ||
+            result.get_exec_context().get_convert_charset_allocator_usage() >= RESET_CONVERT_CHARSET_ALLOCATOR_THRESHOLD) {
           (void) result.get_exec_context().try_reset_convert_charset_allocator();
         }
       }

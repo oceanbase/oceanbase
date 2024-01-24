@@ -161,6 +161,7 @@ public:
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
   void try_reset_convert_charset_allocator();
+  int64_t get_convert_charset_allocator_usage();
 
   void destroy_eval_allocator();
 

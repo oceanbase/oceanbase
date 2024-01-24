@@ -41,6 +41,7 @@ class ObQueryDriver
 {
 public:
   static const int64_t RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS = 32;
+  static const int64_t RESET_CONVERT_CHARSET_ALLOCATOR_THRESHOLD = 8 * 1024L * 1024L; // 8M
 public:
   ObQueryDriver(const ObGlobalContext &gctx,
                 const sql::ObSqlCtx &ctx,
