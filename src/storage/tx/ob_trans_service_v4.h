@@ -341,7 +341,7 @@ int update_user_savepoint_(ObTxDesc &tx, const ObTxSavePointList &savepoints);
 private:
 ObTxCtxMgr tx_ctx_mgr_;
 void invalid_registered_snapshot_(ObTxDesc &tx);
-void registered_snapshot_clear_part_(ObTxDesc &tx);
+void process_registered_snapshot_on_commit_(ObTxDesc &tx);
 int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const share::ObLSID &ls,
                               const int64_t verify_epoch,
