@@ -97,9 +97,9 @@ protected:
     return ret;
   }
 
-  inline bool is_overflow(uint64_t size)
+  inline bool is_overflow(int64_t size)
   {
-    return size > get_remain();
+    return size > get_remain() - static_cast<int64_t>(sizeof(ObTempBlockStore::Block));
   }
 
   inline const char *get_last_row() { return last_row_pos_; }
