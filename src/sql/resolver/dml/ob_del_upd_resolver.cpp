@@ -86,7 +86,8 @@ ObDelUpdResolver::ObDelUpdResolver(ObResolverParams &params)
     insert_column_ids_(),
     is_column_specify_(false),
     is_oracle_tmp_table_(false),
-    oracle_tmp_table_type_(0)
+    oracle_tmp_table_type_(0),
+    is_resolve_insert_update_(false)
 {
   // TODO Auto-generated constructor stub
 }

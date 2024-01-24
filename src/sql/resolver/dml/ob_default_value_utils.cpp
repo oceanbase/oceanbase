@@ -30,9 +30,11 @@ int ObDefaultValueUtils::generate_insert_value(const ColumnItem *column,
 {
   int ret = OB_SUCCESS;
   ObDMLDefaultOp op = OB_INVALID_DEFAULT_OP;
-  if (OB_ISNULL(column)) {
+  if (OB_ISNULL(column) || OB_ISNULL(params_) ||
+      OB_ISNULL(params_->expr_factory_) ||
+      OB_ISNULL(params_->session_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(column));
+    LOG_WARN("invalid argument", K(column), K(params_), K(params_->expr_factory_), K(params_->session_info_));
   } else if (OB_FAIL(get_default_type_for_insert(column, op))) {
     LOG_WARN("fail to check column default value", K(column), K(ret));
   } else if (has_instead_of_trigger
@@ -61,6 +63,17 @@ int ObDefaultValueUtils::generate_insert_value(const ColumnItem *column,
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("default_value_op is INVALID", K(op), K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && expr->is_const_expr() &&
+      !ob_is_enum_or_set_type(expr->get_data_type())) {
+    ObRawExpr* remove_const_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(*params_->expr_factory_,
+                                                        *params_->session_info_,
+                                                        expr, remove_const_expr))) {
+      LOG_WARN("fail to build remove_const expr",K(ret), K(expr), K(remove_const_expr));
+    } else {
+      expr = remove_const_expr;
     }
   }
   return ret;
