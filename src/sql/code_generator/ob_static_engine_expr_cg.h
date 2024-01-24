@@ -40,6 +40,7 @@ class ObPhysicalPlan;
 class ObDMLStmt;
 class ObRawExprUniqueSet;
 class ObSQLSessionInfo;
+class ObRawExprFactory;
 
 class ObExprCGCtx
 {
@@ -461,7 +462,7 @@ private:
   bool use_rich_format() const;
 
 private:
-  int generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs);
+  int generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs, ObRawExprFactory &factory);
   bool is_dynamic_eval_qm(const ObRawExpr &raw_expr) const;
 private:
   // disallow copy

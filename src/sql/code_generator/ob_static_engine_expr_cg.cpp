@@ -59,11 +59,12 @@ int ObStaticEngineExprCG::generate(const ObRawExprUniqueSet &all_raw_exprs,
 {
   int ret = OB_SUCCESS;
   ObRawExprUniqueSet flattened_raw_exprs(true);
+  ObRawExprFactory expr_factory(allocator_);
   if (all_raw_exprs.count() <= 0) {
     // do nothing
   } else if (OB_FAIL(flattened_raw_exprs.flatten_and_add_raw_exprs(all_raw_exprs))) {
     LOG_WARN("failed to flatten raw exprs", K(ret));
-  } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs))) {
+  } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs, expr_factory))) {
     LOG_WARN("generate extra question marks failed", K(ret));
   } else if (OB_FAIL(divide_probably_local_exprs(
                      const_cast<ObIArray<ObRawExpr *> &>(flattened_raw_exprs.get_expr_array())))) {
@@ -83,9 +84,10 @@ int ObStaticEngineExprCG::generate(ObRawExpr *expr,
                                    ObExprFrameInfo &expr_info)
 {
   int ret = OB_SUCCESS;
+  ObRawExprFactory expr_factory(allocator_);
   if (OB_FAIL(flattened_raw_exprs.flatten_temp_expr(expr))) {
     LOG_WARN("failed to flatten raw exprs", K(ret));
-  } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs))) {
+  } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs, expr_factory))) {
     LOG_WARN("generate extra questionmarks failed", K(ret));
   } else if (OB_FAIL(construct_exprs(flattened_raw_exprs.get_expr_array(),
                                      expr_info.rt_exprs_))) {
@@ -2010,7 +2012,8 @@ int ObStaticEngineExprCG::compute_max_batch_size(const ObRawExpr *raw_expr)
 //               |- questionmark(:0)
 //          |- questionmark
 //               |- questionmark(:1)
-int ObStaticEngineExprCG::generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs)
+int ObStaticEngineExprCG::generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs,
+                                                       ObRawExprFactory &expr_factory)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(param_cnt_ <= 0)) {
@@ -2021,7 +2024,6 @@ int ObStaticEngineExprCG::generate_extra_questionmarks(ObRawExprUniqueSet &flatt
     for (int i = 0; i < param_cnt_; i++) {
       gen_questionmarks_.at(i) = nullptr;
     }
-    ObRawExprFactory expr_factory(allocator_);
     const ObIArray<ObRawExpr *> &all_exprs = flattened_raw_exprs.get_expr_array();
     for (int i = 0; OB_SUCC(ret) && i < all_exprs.count(); i++) {
       if (OB_ISNULL(all_exprs.at(i))) {
