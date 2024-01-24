@@ -527,9 +527,9 @@ void ObTransferMoveTxCtx::on_abort(const share::SCN &abort_scn)
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
     CollectTxCtxInfo &collect_tx_info = collect_tx_info_;
-    if (!collect_tx_info.is_valid() || !op_scn_.is_valid()) {
+    if (!collect_tx_info.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("TRANSFER collect_tx_info is invalid", KR(ret), K(collect_tx_info), K(op_scn_));
+      LOG_WARN("TRANSFER collect_tx_info is invalid", KR(ret), K(collect_tx_info), K(op_scn_), K(abort_scn));
     } else if (OB_FAIL(MTL(ObLSService*)->get_ls(collect_tx_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       LOG_WARN("get ls failed", KR(ret), K(collect_tx_info));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
