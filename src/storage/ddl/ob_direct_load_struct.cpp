@@ -1111,7 +1111,7 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
         if (OB_FAIL(cur_writer->init(storage_schema, cg_idx, tablet_direct_load_mgr_, start_seq_, row_offset_, start_scn))) {
           LOG_WARN("init co ddl writer failed", K(ret), KPC(cur_writer), K(cg_idx), KPC(this));
         } else {
-          sql::ObCompactStore * cur_datum_store = chunk_slice_store->datum_stores_.at(cg_idx);
+          sql::ObCompactStore *cur_datum_store = chunk_slice_store->datum_stores_.at(cg_idx);
           const ObChunkDatumStore::StoredRow *stored_row = nullptr;
           bool has_next = false;
           while (OB_SUCC(ret) && OB_SUCC(cur_datum_store->has_next(has_next)) && has_next) {
@@ -1139,6 +1139,9 @@ int ObDirectLoadSliceWriter::fill_column_group(const ObStorageSchema *storage_sc
             // 3. close writers
             if (OB_FAIL(cur_writer->close())) {
               LOG_WARN("close co ddl writer failed", K(ret));
+            } else {
+              // 4. reset datum store (if fail, datum store will free when ~ObDirectLoadSliceWriter())
+              cur_datum_store->reset();
             }
           }
         }
