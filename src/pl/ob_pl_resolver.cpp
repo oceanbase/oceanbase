@@ -13794,7 +13794,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
           && OB_FAIL(resolve_composite_access(access_ident, access_idxs, ns, func))) {
         LOG_WARN("failed to access composite access", K(ret), K(access_ident), K(access_idxs));
       }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) && OB_ERR_NOT_FUNC_NAME != ret) {
         LOG_INFO("failed to resolve routine",
           K(ret), K(database_name), K(package_name), K(routine_name), K(routine_type), K(access_ident), K(access_idxs));
         ret = OB_ERR_FUNCTION_UNKNOWN;
@@ -14437,6 +14437,19 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                                      access_ident.access_name_,
                                      pl_data_type,
                                      var_index);
+      if (ObPLExternalNS::PKG_VAR == type
+           && cnt > 0) {
+        if (ObObjAccessIdx::IS_PKG_NS == access_idxs.at(cnt - 1).access_type_
+            && access_ident.has_brackets_
+            && access_ident.params_.count() == 0) {
+          ObSqlString object_name;
+          ObString empty_str;
+          construct_name(empty_str, access_idxs.at(cnt - 1).var_name_, access_ident.access_name_, object_name);
+          ret = OB_ERR_NOT_FUNC_NAME;
+          LOG_USER_ERROR(OB_ERR_NOT_FUNC_NAME, object_name.string().length(), object_name.string().ptr());
+        }
+
+      }
       OZ (build_access_idx_sys_func(parent_id, access_idx));
       OZ (access_idxs.push_back(access_idx), K(access_idx));
       if (OB_FAIL(ret)) {

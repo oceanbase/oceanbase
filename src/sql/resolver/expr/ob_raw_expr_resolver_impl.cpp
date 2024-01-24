@@ -2313,6 +2313,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
 
       AccessNameType name_type = UNKNOWN;
+      access_ident.has_brackets_ = (1 == left_node.int16_values_[0]);
       if (!q_name.is_unknown()) {
         if (0 == access_ident.access_name_.case_compare("NEXT")
             || 0 == access_ident.access_name_.case_compare("PRIOR")
