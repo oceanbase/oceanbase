@@ -148,9 +148,10 @@ int ObTransService::release_tx(ObTxDesc &tx, const bool is_from_xa)
     MTL_SWITCH(tx.tenant_id_) {
       return MTL(ObTransService*)->release_tx(tx);
     }
-  } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
+  // FIXME: open check later
+  // } else if (NULL != tx.get_xa_ctx() && !is_from_xa) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   TRANS_LOG(ERROR, "unexpected case", K(ret), K(is_from_xa), K(tx));
   } else {
     ObTransTraceLog &tlog = tx.get_tlog();
     REC_TRANS_TRACE_EXT(&tlog, release, OB_Y(ret),
