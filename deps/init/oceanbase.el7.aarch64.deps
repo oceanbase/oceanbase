@@ -8,6 +8,7 @@ os=7
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/7/aarch64/
 
+
 [deps]
 devdeps-gtest-1.8.0-132022101316.el7.aarch64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el7.aarch64.rpm
@@ -41,6 +42,7 @@ obdevtools-llvm-11.0.1-312022092921.el7.aarch64.rpm
 [tools-deps]
 devdeps-oblogmsg-1.0-52022113019.el7.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el7.aarch64.rpm
+obshell-4.2.2.0-102024011512.el7.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-1.6.0-41.el7.aarch64.rpm target=community

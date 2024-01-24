@@ -286,6 +286,10 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
+tools/rpm/systemd/profile/oceanbase-service.sh
+tools/rpm/systemd/profile/post_install.sh
+tools/rpm/systemd/profile/pre_uninstall.sh
+tools/rpm/systemd/profile/post_uninstall.sh
 
 ############# unittest #############
 unittest/**/test_*

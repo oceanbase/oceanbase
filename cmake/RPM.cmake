@@ -44,17 +44,45 @@ set(CPACK_RPM_PACKAGE_DESCRIPTION "OceanBase is a distributed relational databas
 set(CPACK_RPM_PACKAGE_LICENSE "Mulan PubL v2.")
 set(CPACK_RPM_DEFAULT_USER "admin")
 set(CPACK_RPM_DEFAULT_GROUP "admin")
+if (OB_BUILD_OPENSOURCE)
+set(DEBUG_INSTALL_POST "mv $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell %{_builddir}/obshell; %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir}; mv %{_builddir}/obshell $RPM_BUILD_ROOT/../server/home/admin/oceanbase/bin/obshell; %{nil}")
+else()
+set(DEBUG_INSTALL_POST "%{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}")
+endif()
 set(CPACK_RPM_SPEC_MORE_DEFINE
   "%global _missing_build_ids_terminate_build 0
 %global _find_debuginfo_opts -g
 %define __strip ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-strip
 %undefine __brp_mangle_shebangs
 %global __requires_exclude ^\(/bin/bash\|/usr/bin/\.*\)$
-%define __debug_install_post %{_rpmconfigdir}/find-debuginfo.sh %{?_find_debuginfo_opts} %{_builddir}/%{?buildsubdir};%{nil}
+%define __debug_install_post ${DEBUG_INSTALL_POST}
 %if \\\"%name\\\" != \\\"oceanbase-ce-sql-parser\\\" && \\\"%name\\\" != \\\"oceanbase-sql-parser\\\"
 %debug_package
 %endif
 ")
+
+if (OB_BUILD_OPENSOURCE)
+  set(CPACK_RPM_PACKAGE_REQUIRES "jq, systemd")
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh
+                @ONLY)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_POST_INSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_PRE_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh)
+endif()
 
 ## TIPS
 #
@@ -68,6 +96,7 @@ install(PROGRAMS
   tools/import_time_zone_info.py
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/src/observer/observer
+  deps/3rd/home/admin/oceanbase/bin/obshell
   DESTINATION bin
   COMPONENT server)
 else()
@@ -99,6 +128,19 @@ install(
   DIRECTORY src/share/inner_table/sys_package/
   DESTINATION admin
   COMPONENT server)
+
+if (OB_BUILD_OPENSOURCE)
+install(FILES
+  tools/rpm/systemd/profile/oceanbase.cnf
+  tools/rpm/systemd/profile/oceanbase-pre.json
+  tools/rpm/systemd/profile/oceanbase.service
+  tools/rpm/systemd/profile/oceanbase-service.sh
+  tools/rpm/systemd/profile/post_install.sh
+  tools/rpm/systemd/profile/post_uninstall.sh
+  tools/rpm/systemd/profile/pre_uninstall.sh
+  DESTINATION profile
+  COMPONENT server)
+endif()
 
 ## oceanbase-cdc
 if (NOT OB_SO_CACHE AND OB_BUILD_CDC)
