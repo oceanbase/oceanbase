@@ -17,7 +17,7 @@
 #include "lib/profile/ob_trace_id.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/checksum/ob_crc64.h"
-#include "lib/compress/ob_compressor_pool.h"
+#include "lib/compress/ob_compressor.h"
 #include "rpc/obrpc/ob_rpc_time.h"
 #include "rpc/ob_packet.h"
 #include "common/errsim_module/ob_errsim_module_type.h"

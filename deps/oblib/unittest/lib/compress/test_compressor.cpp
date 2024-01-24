@@ -199,6 +199,7 @@ void TestCompressorStress::run1()
 class ObCompressorTest : public testing::Test
 {
 public:
+  ObCompressorTest() : zstd_compressor(alloc) {}
   static void SetUpTestCase()
   {
     memset(const_cast<char *>(compress_buffer), '\0', 100);
@@ -215,6 +216,7 @@ public:
   static char decompress_buffer[1000];
   static int64_t buffer_size;
   static int64_t dst_data_size;
+  ObMalloc alloc;
   ObNoneCompressor none_compressor;
   ObLZ4Compressor lz4_compressor;
   ObSnappyCompressor snappy_compressor;
@@ -383,7 +385,8 @@ TEST(ObCompressorStress, compress_stable)
   int ret = OB_SUCCESS;
   const int64_t sleep_sec = 1;
   TestCompressorStress cmp_stress;
-  ObZstdCompressor zstd_compressor;
+  ObMalloc alloc;
+  ObZstdCompressor zstd_compressor(alloc);
 
   ret = cmp_stress.init(30000, 100000, &zstd_compressor);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -555,85 +558,6 @@ public:
   int64_t alloc_count_;
   int64_t free_count_;
 };
-
-void test_zstd_family(ObCompressor &compressor)
-{
-  MyAlloc alloc;
-  ASSERT_EQ(alloc.alloc_count_, 0);
-  ASSERT_EQ(alloc.free_count_, alloc.alloc_count_);
-  int64_t src_len = 2L<<20;
-  char *src_buf = (char*)ob_malloc(src_len, "test");
-  for (int i = 0; i < src_len; i++) {
-     src_buf[i] = static_cast<char> ('a' + ObRandom::rand(0, 25));;
-  }
-  char *cmp_buf = (char*)ob_malloc(src_len, "test");
-  memcpy(cmp_buf, src_buf, src_len);
-  int64_t max_overflow_size = 0;
-  int ret = compressor.get_max_overflow_size(src_len, max_overflow_size);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  int64_t dst_buf_len = src_len + max_overflow_size;
-  char *dst_buf = (char*)ob_malloc(dst_buf_len, "test");
-  int64_t dst_actual_len = 0;
-  ret = compressor.compress(src_buf, src_len, dst_buf, dst_buf_len, dst_actual_len, &alloc);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  int64_t alloc_count_bak = alloc.alloc_count_;
-  ASSERT_NE(alloc.alloc_count_, 0);
-  ASSERT_EQ(alloc.free_count_, alloc.alloc_count_);
-  memset(src_buf, 0, src_len);
-  int64_t src_actual_len = 0;
-  ret = compressor.decompress(dst_buf, dst_actual_len, src_buf, src_len, src_actual_len, &alloc);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(src_actual_len, src_len);
-  ASSERT_EQ(0, memcmp(cmp_buf, src_buf, src_len));
-  ASSERT_GT(alloc.alloc_count_, alloc_count_bak);
-  ASSERT_EQ(alloc.free_count_, alloc.alloc_count_);
-  alloc_count_bak = alloc.alloc_count_;
-
-  // decompress without allocator
-  memset(src_buf, 0, src_len);
-  src_actual_len = 0;
-  ret = compressor.decompress(dst_buf, dst_actual_len, src_buf, src_len, src_actual_len);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(src_actual_len, src_len);
-  ASSERT_EQ(0, memcmp(cmp_buf, src_buf, src_len));
-  ASSERT_EQ(alloc.alloc_count_, alloc_count_bak);
-  ASSERT_EQ(alloc.free_count_, alloc.alloc_count_);
-}
-
-TEST_F(ObCompressorTest, test_zstd_custom_alloc)
-{
-  {
-    oceanbase::zstd::ObZstdCompressor compressor;
-    test_zstd_family(compressor);
-  }
-  {
-    oceanbase::zstd_1_3_8::ObZstdCompressor_1_3_8 compressor;
-    test_zstd_family(compressor);
-  }
-  {
-    oceanbase::common::ObLZ4Compressor lz4_compressor;
-    ObCompressor &compressor = lz4_compressor;
-    MyAlloc alloc;
-    ASSERT_EQ(alloc.alloc_count_, 0);
-    ASSERT_EQ(alloc.free_count_, alloc.alloc_count_);
-    int64_t src_len = 2L<<20;
-    char *src_buf = (char*)ob_malloc(src_len, "test");
-    int64_t max_overflow_size = 0;
-    int ret = compressor.get_max_overflow_size(src_len, max_overflow_size);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    int64_t dst_buf_len = src_len + max_overflow_size;
-    char *dst_buf = (char*)ob_malloc(dst_buf_len, "test");
-    int64_t dst_actual_len = 0;
-    ret = compressor.compress(src_buf, src_len, dst_buf, dst_buf_len, dst_actual_len, &alloc);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_EQ(alloc.alloc_count_, 0);
-    int64_t src_actual_len = 0;
-    ret = compressor.decompress(dst_buf, dst_actual_len, src_buf, src_len, src_actual_len, &alloc);
-    ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_EQ(alloc.alloc_count_, 0);
-    ASSERT_EQ(src_actual_len, src_len);
-  }
-}
 
 }
 }

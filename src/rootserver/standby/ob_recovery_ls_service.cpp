@@ -1570,7 +1570,7 @@ int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64
       && NULL == (decompress_buf = static_cast<char *>(mtl_malloc(decompress_buf_len, attr)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory");
-  } else if (OB_FAIL(logservice::decompress(NULL, in_buf, in_buf_len, decompress_buf,
+  } else if (OB_FAIL(logservice::decompress(in_buf, in_buf_len, decompress_buf,
                                             decompress_buf_len, decompressed_len))) {
     LOG_WARN("failed to decompress");
   } else {/*do nothing*/}
@@ -1579,5 +1579,3 @@ int ObRecoveryLSService::decompress_log_payload_(const char *in_buf, const int64
 #endif
 }//end of namespace rootserver
 }//end of namespace oceanbase
-
-

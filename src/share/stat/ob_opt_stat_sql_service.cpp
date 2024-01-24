@@ -1123,7 +1123,7 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
       } else if (OB_LIKELY(obj_type.is_double())) {
         EXTRACT_DOUBLE_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);
       } else {
-        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);  
+        EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, avg_row_size, stat, int64_t);
       }
     }
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, macro_block_num, stat, int64_t);
@@ -1409,9 +1409,6 @@ int ObOptStatSqlService::get_compressed_llc_bitmap(ObIAllocator &allocator,
       comp_buf = const_cast<char*>(bitmap_buf);
       comp_size = bitmap_size;
     }
-    if (compressor != nullptr) {
-      compressor->reset_mem();
-    }
   }
   return ret;
 }
@@ -1453,8 +1450,6 @@ int ObOptStatSqlService::get_decompressed_llc_bitmap(ObIAllocator &allocator,
     LOG_WARN("decompress bitmap buffer failed.",
                KP(comp_buf), K(comp_size), KP(bitmap_buf),
                K(max_bitmap_size), K(bitmap_size), K(ret));
-  } else {
-    compressor->reset_mem();
   }
   return ret;
 }

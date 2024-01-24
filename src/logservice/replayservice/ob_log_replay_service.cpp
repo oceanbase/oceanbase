@@ -1424,8 +1424,7 @@ int ObLogReplayService::transform_replay_task_(ObLogReplayTask *replay_task,
     int64_t original_log_size = 0;
     const int64_t base_header_len = replay_task->base_header_len_;
     const int64_t decompress_log_size = replay_task->decompressed_log_size_;
-    if (OB_FAIL(logservice::decompress(allocator_->get_replay_decompression_allocator(),
-                                       static_cast<const char *>(replay_task->read_log_buf_) + base_header_len,
+    if (OB_FAIL(logservice::decompress(static_cast<const char *>(replay_task->read_log_buf_) + base_header_len,
                                        replay_task->read_log_size_ - base_header_len,
                                        static_cast<char *>(decompression_buf) + base_header_len,
                                        decompress_log_size, original_log_size))) {

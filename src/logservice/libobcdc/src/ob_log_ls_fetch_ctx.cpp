@@ -1266,8 +1266,7 @@ int LSFetchCtx::decompress_log_(const char *buf, const int64_t buf_len, int64_t 
                                   (fetcher->alloc_decompression_buf(decompressed_len))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate decompression_buf", K(tls_id_));
-  } else if (OB_FAIL(logservice::decompress(fetcher->get_decompression_allocator(),
-                                            buf + pos, buf_len - pos, decompression_buf,
+  } else if (OB_FAIL(logservice::decompress(buf + pos, buf_len - pos, decompression_buf,
                                             decompressed_len, final_decompressed_len))) {
     LOG_ERROR("failed to decompress", K(com_header), K(tls_id_));
   } else if (OB_UNLIKELY(decompressed_len != final_decompressed_len)) {

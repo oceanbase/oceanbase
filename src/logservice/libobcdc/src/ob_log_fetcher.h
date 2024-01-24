@@ -104,7 +104,6 @@ public:
       bool &is_exceeded,
       int64_t &cur_progress) = 0;
   virtual void *alloc_decompression_buf(int64_t size)  = 0;
-  virtual common::ObIAllocator *get_decompression_allocator() = 0;
   virtual void free_decompression_buf(void *buf)  = 0;
 };
 
@@ -187,8 +186,6 @@ public:
       bool &is_exceeded,
       int64_t &cur_progress);
   void *alloc_decompression_buf(int64_t size);
-
-  virtual common::ObIAllocator *get_decompression_allocator() {return &decompression_alloc_;}
   void free_decompression_buf(void *buf);
 
 private:

@@ -742,7 +742,7 @@ int ObAdminParserLogEntry::prepare_log_buf_(ObLogBaseHeader &header)
     int64_t decompressed_len = 0;
     const int64_t header_len = pos_;
     int64_t local_pos = 0;
-    if (OB_FAIL(logservice::decompress(NULL, buf_ + pos_, buf_len_ - pos_, str_arg_.decompress_buf_ + header_len,
+    if (OB_FAIL(logservice::decompress(buf_ + pos_, buf_len_ - pos_, str_arg_.decompress_buf_ + header_len,
                                        str_arg_.decompress_buf_len_- header_len, decompressed_len))) {
       LOG_ERROR("failed to decompress", K(header), K(entry_));
     } else if (OB_FAIL(header.serialize(str_arg_.decompress_buf_, header_len, local_pos))){

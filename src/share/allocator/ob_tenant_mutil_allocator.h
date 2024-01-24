@@ -79,8 +79,6 @@ public:
   virtual void free_append_compression_buf(void *ptr) = 0;
   virtual void *alloc_replay_decompression_buf(const int64_t size) = 0;
   virtual void free_replay_decompression_buf(void *ptr) = 0;
-  virtual ObIAllocator *get_append_compression_allocator() = 0;
-  virtual ObIAllocator *get_replay_decompression_allocator() = 0;
   TO_STRING_KV(K_(flying_log_task), K_(flying_meta_task));
 
 
@@ -156,9 +154,6 @@ public:
   //alloc buf from replay_log_task_alloc
   void *alloc_replay_decompression_buf(const int64_t size);
   void free_replay_decompression_buf(void *ptr);
-  ObIAllocator *get_append_compression_allocator() {return &clog_compression_buf_alloc_;}
-  ObIAllocator *get_replay_decompression_allocator() {return &replay_log_task_alloc_;}
-
 private:
   uint64_t tenant_id_ CACHE_ALIGNED;
   int64_t total_limit_;

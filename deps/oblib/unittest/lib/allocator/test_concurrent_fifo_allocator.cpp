@@ -62,6 +62,7 @@ TEST(TestConcurrentFIFOAllocator, single_thread)
     allocator.free(ptr_buffer[i]);
     ptr_buffer[i] = NULL;
   }
+  ASSERT_EQ(allocator.allocated(), 0);
   allocator.destroy();
 }
 
@@ -87,6 +88,7 @@ TEST(TestConcurrentFIFOAllocator, single_thread2)
       ptr_buffer[i] = NULL;
     }
   }
+  ASSERT_EQ(allocator.allocated(), 0);
   allocator.destroy();
 }
 
@@ -129,6 +131,7 @@ TEST(TestConcurrentFIFOAllocator, multipe_threads_direct_alloc)
     ASSERT_EQ(0, pthread_join(work_thread[i], NULL));
   }
   ASSERT_EQ(0, pthread_barrier_destroy(&barrier1));
+  ASSERT_EQ(allocator1.allocated(), 0);
   allocator1.destroy();
 }
 

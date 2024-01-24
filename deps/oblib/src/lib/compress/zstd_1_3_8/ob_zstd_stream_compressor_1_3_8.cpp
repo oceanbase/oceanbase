@@ -21,47 +21,6 @@ using namespace oceanbase;
 using namespace common;
 using namespace zstd_1_3_8;
 
-static void *ob_zstd_stream_malloc(void *opaque, size_t size)
-{
-  void *buf = NULL;
-  if (NULL != opaque) {
-    ObZstdStreamCtxAllocator *allocator = reinterpret_cast<ObZstdStreamCtxAllocator*> (opaque);
-    buf = allocator->alloc(size);
-  }
-  return buf;
-}
-
-static void ob_zstd_stream_free(void *opaque, void *address)
-{
-  if (NULL != opaque) {
-    ObZstdStreamCtxAllocator *allocator = reinterpret_cast<ObZstdStreamCtxAllocator*> (opaque);
-    allocator->free(address);
-  }
-}
-
-/**
- * ------------------------------ObZstdStreamCtxAllocator---------------------
- */
-ObZstdStreamCtxAllocator::ObZstdStreamCtxAllocator()
-  : allocator_(ObModIds::OB_STREAM_COMPRESSOR, OB_SERVER_TENANT_ID)
-{
-
-}
-
-ObZstdStreamCtxAllocator::~ObZstdStreamCtxAllocator()
-{
-}
-
-void* ObZstdStreamCtxAllocator::alloc(size_t size)
-{
-  return allocator_.alloc(size);
-}
-
-void ObZstdStreamCtxAllocator::free(void *addr)
-{
-  allocator_.free(addr);
-}
-
 /**
  * ------------------------------ObZstdStreamCompressor---------------------
  */
@@ -81,8 +40,7 @@ int ObZstdStreamCompressor_1_3_8::create_compress_ctx(void *&ctx)
   int ret = OB_SUCCESS;
   ctx = NULL;
 
-  ObZstdStreamCtxAllocator &zstd_allocator = ObZstdStreamCtxAllocator::get_thread_local_instance();
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, &zstd_allocator};
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &allocator_};
   if (OB_FAIL(ObZstdWrapper::create_cctx(zstd_mem, ctx))) {
     LIB_LOG(WARN, "failed to create cctx", K(ret));
   }
@@ -148,8 +106,7 @@ int ObZstdStreamCompressor_1_3_8::stream_compress(void *ctx, const char *src, co
 int ObZstdStreamCompressor_1_3_8::create_decompress_ctx(void *&ctx)
 {
   int ret = OB_SUCCESS;
-  ObZstdStreamCtxAllocator &zstd_allocator = ObZstdStreamCtxAllocator::get_thread_local_instance();
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_stream_malloc, ob_zstd_stream_free, &zstd_allocator};
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &allocator_};
   ctx = NULL;
 
   if (OB_FAIL(ObZstdWrapper::create_dctx(zstd_mem, ctx))) {
