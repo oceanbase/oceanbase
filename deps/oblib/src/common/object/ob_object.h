@@ -876,10 +876,11 @@ struct ObMemLobLocationInfo
 
 struct ObMemLobRetryInfo
 {
-  ObMemLobRetryInfo() : is_select_leader_(true), read_latest_(false), addr_(), timeout_(0) {}
-  TO_STRING_KV(K_(is_select_leader), K_(read_latest), K_(addr), K_(timeout));
-  bool is_select_leader_;
-  bool read_latest_;
+  ObMemLobRetryInfo() : is_select_leader_(true), read_latest_(false), reserved_(0), addr_(), timeout_(0) {}
+  TO_STRING_KV(K_(is_select_leader), K_(read_latest), K_(reserved), K_(addr), K_(timeout));
+  int64_t is_select_leader_ : 1;
+  int64_t read_latest_ : 1;
+  int64_t reserved_ : 62;
   ObAddr addr_;
   uint64_t timeout_;
 };
