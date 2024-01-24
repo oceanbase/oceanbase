@@ -50,7 +50,8 @@ namespace libobcdc
 ObLogDDLProcessor::ObLogDDLProcessor() :
     is_inited_(false),
     schema_getter_(NULL),
-    skip_reversed_schema_version_(false)
+    skip_reversed_schema_version_(false),
+    enable_white_black_list_(false)
 {}
 
 ObLogDDLProcessor::~ObLogDDLProcessor()
@@ -60,7 +61,8 @@ ObLogDDLProcessor::~ObLogDDLProcessor()
 
 int ObLogDDLProcessor::init(
     IObLogSchemaGetter *schema_getter,
-    const bool skip_reversed_schema_version)
+    const bool skip_reversed_schema_version,
+    const bool enable_white_black_list)
 {
   int ret = OB_SUCCESS;
 
@@ -72,6 +74,7 @@ int ObLogDDLProcessor::init(
     LOG_ERROR("invalid argument", KR(ret), K(schema_getter));
   } else {
     skip_reversed_schema_version_ = skip_reversed_schema_version;
+    enable_white_black_list_ = enable_white_black_list;
     is_inited_ = true;
   }
 
@@ -83,6 +86,7 @@ void ObLogDDLProcessor::destroy()
   is_inited_ = false;
   schema_getter_ = NULL;
   skip_reversed_schema_version_ = false;
+  enable_white_black_list_ = false;
 }
 
 int ObLogDDLProcessor::handle_ddl_trans(
@@ -355,8 +359,8 @@ int ObLogDDLProcessor::handle_tenant_ddl_task_(
         mark_stmt_binlog_record_invalid_(*ddl_stmt);
       } else {
         // statements are not filtered, processing DDL statements
-        if (need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task, *ddl_stmt, old_schema_version,
-            new_schema_version, stop_flag))) {
+        if (enable_white_black_list_ && need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task,
+            *ddl_stmt, old_schema_version, new_schema_version, stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_ddl_stmt_update_tic_ fail", KR(ret), K(tenant), K(task), K(ddl_stmt),
                 K(old_schema_version), K(new_schema_version));

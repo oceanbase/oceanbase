@@ -956,7 +956,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit, enable_sort_by_seq_no, *trans_stat_mgr_);
 
-  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison);
+  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison,
+      TCONF.enable_white_black_list);
 
   INIT(sequencer_, ObLogSequencer, TCONF.sequencer_thread_num, CDC_CFG_MGR.get_sequencer_queue_length(),
       *trans_ctx_mgr_, *trans_stat_mgr_, *committer_, *trans_redo_dispatcher_, *trans_msg_sorter_, *err_handler);

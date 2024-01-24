@@ -53,7 +53,8 @@ public:
 public:
   int init(
       IObLogSchemaGetter *schema_getter,
-      const bool skip_reversed_schema_version);
+      const bool skip_reversed_schema_version,
+      const bool enable_white_black_list);
   void destroy();
   int handle_ddl_trans(
       PartTransTask &task,
@@ -326,6 +327,7 @@ private:
   bool                is_inited_;
   IObLogSchemaGetter  *schema_getter_;
   bool                skip_reversed_schema_version_;
+  bool                enable_white_black_list_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDDLProcessor);
