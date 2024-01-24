@@ -2738,7 +2738,10 @@ int ObSchemaPrinter::print_view_definiton(
     const uint64_t table_id,
     char *buf,
     const int64_t &buf_len,
-    int64_t &pos) const
+    int64_t &pos,
+    const ObTimeZoneInfo *tz_info,
+    bool agent_mode,
+    ObSQLMode sql_mode) const
 {
   int ret = OB_SUCCESS;
 
@@ -2758,6 +2761,25 @@ int ObSchemaPrinter::print_view_definiton(
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     } else if (OB_FAIL(print_identifier(buf, buf_len, pos, table_schema->get_table_name(), is_oracle_mode))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
+    } else if (table_schema->is_materialized_view()) {
+      const ObTableSchema *container_table_schema = nullptr;
+
+      if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_schema->get_data_table_id(), container_table_schema))) {
+        LOG_WARN("fail to get container_table_schema", KR(ret));
+      } else if (NULL == container_table_schema) {
+        ret = OB_TABLE_NOT_EXIST;
+        SHARE_SCHEMA_LOG(WARN, "Unknow container table", K(ret), K(table_schema->get_data_table_id()));
+      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print space", K(ret));
+      } else if (OB_FAIL(print_table_definition_table_options(*container_table_schema, buf, buf_len, pos, false, agent_mode, sql_mode))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print table options", K(ret), K(*container_table_schema));
+      } else if (OB_FAIL(print_table_definition_partition_options(*container_table_schema, buf, buf_len, pos, agent_mode, tz_info))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print partition options", K(ret), K(*container_table_schema));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // pass
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " AS "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     } else if (OB_FAIL(print_view_define_str(buf, buf_len, pos, is_oracle_mode,
