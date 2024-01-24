@@ -110,7 +110,7 @@ public:
   DEF_INT(storager_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "storager queue length");
   DEF_INT(reader_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "reader thread number");
   DEF_INT(reader_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "reader queue length");
-  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0, ]", "user_binlog_record queue length");
+  DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "user_binlog_record queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
   DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "11", "[1,]", "resource collector thread number");
