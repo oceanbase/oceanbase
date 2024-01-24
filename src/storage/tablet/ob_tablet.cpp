@@ -4926,9 +4926,9 @@ int ObTablet::get_kept_snapshot_info(
     // snapshot info should smaller than snapshot on tablet
     snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_ON_TABLET, get_snapshot_version());
 
-    const int64_t current_time = common::ObTimeUtility::fast_current_time() * 1000; // needs ns here.
-    if (current_time - snapshot_info.snapshot_ > 120 * 60 * 1000 * 1000L /*2 hour*/) {
-      if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000L /*10s*/)) {
+    const int64_t current_time = common::ObTimeUtility::fast_current_time();
+    if (current_time - (snapshot_info.snapshot_ / 1000 /*use microsecond here*/) > 2_hour) {
+      if (REACH_TENANT_TIME_INTERVAL(10_s)) {
         LOG_INFO("tablet multi version start not advance for a long time", K(ret),
           "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
           K(snapshot_info), K(old_min_reserved_snapshot), K(min_medium_snapshot),
