@@ -171,7 +171,7 @@ private:
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk = true);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
   int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
