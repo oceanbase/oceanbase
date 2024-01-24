@@ -647,7 +647,6 @@ int ObUserDefinedType::text_protocol_prefix_info_for_each_item(share::schema::Ob
   if (type.is_collection_type() || type.is_record_type()) {
     const ObUserDefinedType *user_type = NULL;
     const ObUDTTypeInfo *udt_info = NULL;
-    ObArenaAllocator local_allocator;
     const uint64_t tenant_id = get_tenant_id_by_object_id(type.get_user_type_id());
     const_cast<ObPLDataType&>(type).set_charset(get_charset());
 
@@ -752,26 +751,31 @@ int ObUserDefinedType::text_protocol_base_type_convert(const ObPLDataType &type,
   if (OB_FAIL(ObMySQLUtil::get_length(start, orign_str_length, inc_len))) {
     LOG_WARN("get length fail.", K(ret));
   } else {
-    ObArenaAllocator alloc;
-    char* tmp_buf = static_cast<char*>(alloc.alloc(orign_str_length));
-    MEMCPY(tmp_buf, buf + pos + inc_len, orign_str_length);
-    if (type.is_obj_type() && (OB_NOT_NULL(type.get_data_type()))
-          && (type.get_data_type()->get_meta_type().is_string_or_lob_locator_type())) {
-      // need do convert first
-      if (OB_FAIL(observer::ObQueryDriver::convert_string_charset(ObString(orign_str_length, tmp_buf),
-                                                        type.get_data_type()->get_collation_type(),
-                                                        get_charset(),
-                                                        buf + pos,
-                                                        len - pos,
-                                                        convert_length))) {
-        LOG_WARN("convert string charset failed", K(ret));
-      } else {
-        pos += convert_length;
-      }
+    ObArenaAllocator alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_TEXT_PROTOCOL_CONVERT), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    char* tmp_buf = NULL;
+    if (OB_ISNULL(tmp_buf = static_cast<char*>(alloc.alloc(orign_str_length)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("memory allocate failed", K(ret));
     } else {
-      // only remove length info in buf when type is not nchar/nvarchar
-      MEMCPY(buf + pos, tmp_buf, orign_str_length);
-      pos += orign_str_length;
+      MEMCPY(tmp_buf, buf + pos + inc_len, orign_str_length);
+      if (type.is_obj_type() && (OB_NOT_NULL(type.get_data_type()))
+            && (type.get_data_type()->get_meta_type().is_string_or_lob_locator_type())) {
+        // need do convert first
+        if (OB_FAIL(observer::ObQueryDriver::convert_string_charset(ObString(orign_str_length, tmp_buf),
+                                                          type.get_data_type()->get_collation_type(),
+                                                          get_charset(),
+                                                          buf + pos,
+                                                          len - pos,
+                                                          convert_length))) {
+          LOG_WARN("convert string charset failed", K(ret));
+        } else {
+          pos += convert_length;
+        }
+      } else {
+        // only remove length info in buf when type is not nchar/nvarchar
+        MEMCPY(buf + pos, tmp_buf, orign_str_length);
+        pos += orign_str_length;
+      }
     }
   }
   return ret;
