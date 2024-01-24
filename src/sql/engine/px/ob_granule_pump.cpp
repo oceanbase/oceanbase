@@ -663,10 +663,10 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
   can_randomize = (need_start_ddl || need_start_pdml)
                   && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_)
                         || ObGranuleUtil::desc_order(args.gi_attri_flag_)
-                        || ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)));
+                        || ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)));
   LOG_DEBUG("scan order is ", K(ObGranuleUtil::asc_order(args.gi_attri_flag_)),
             K(ObGranuleUtil::desc_order(args.gi_attri_flag_)),
-            K(ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)), K(can_randomize),
+            K(ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)), K(can_randomize),
             K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
