@@ -586,9 +586,7 @@ int64_t ObMallocAllocator::sync_wash(uint64_t tenant_id, uint64_t from_ctx_id, i
        i++) {
     int64_t ctx_id = (from_ctx_id + i) % ObCtxIds::MAX_CTX_ID;
     auto allocator = get_tenant_ctx_allocator(tenant_id, ctx_id);
-    if (NULL == allocator) {
-      // do-nothing
-    } else {
+    if (NULL != allocator && !(CTX_ATTR(ctx_id).disable_sync_wash_)) {
       washed_size += allocator->sync_wash(wash_size - washed_size);
     }
   }
