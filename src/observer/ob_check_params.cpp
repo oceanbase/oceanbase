@@ -21,41 +21,23 @@ namespace observer
 int CheckAllParams::check_all_params(bool strict_check = true)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCC(ret) && OB_FAIL(check_vm_max_map_count(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check vm.max_map_count failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_max_map_count(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_vm_min_free_kbytes(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check vm.min_free_kbytes failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_min_free_kbytes(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_vm_overcommit_memory(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check vm.overcommit_memory failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_vm_overcommit_memory(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_fs_file_max(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check fs.file_max failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_fs_file_max(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_open_files(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit.open_files failed, please run 'ulimit -n' to confirm the current limit and find a way to set it to the proper value");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_open_files(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_max_user_processes(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit.max_user_processes failed, please run 'ulimit -u' to confirm the current limit and find a way to set it to the proper value");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_max_user_processes(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_core_file_size(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit.core_file_size failed, please run 'ulimit -c' to confirm the current limit and find a way to set it to the proper value");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_core_file_size(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_stack_size(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check ulimit_stack_size failed, please run 'ulimit -s' to confirm the current limit and find a way to set it to the proper value");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_ulimit_stack_size(strict_check))) {}
 
-  if (OB_SUCC(ret) && OB_FAIL(check_current_clocksource(strict_check))) {
-    LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:check current_clocksource failed");
-  }
+  if (OB_SUCC(ret) && OB_FAIL(check_current_clocksource(strict_check))) {}
   return ret;
 }
 
@@ -309,13 +291,13 @@ int CheckAllParams::check_current_clocksource(bool strict_check)
       if (clocksource[strlen(clocksource) - 1] == '\n') {
         clocksource[strlen(clocksource) - 1] = '\0';
       }
-      if (strcmp(clocksource, "tsc") == 0) {
-        LOG_INFO("[check OS params]:current_clocksource is [tsc]", K(clocksource), K(ret));
+      if (strcmp(clocksource, "tsc") == 0 || strcmp(clocksource, "kvm-clock") == 0 || strcmp(clocksource, "arch_sys_counter") == 0) {
+        LOG_INFO("[check OS params]:current_clocksource is in proper range", K(clocksource), K(ret));
       } else if (strict_check) {
         ret = OB_IMPROPER_OS_PARAM;
-        LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:current_clocksource is not [tsc]", K(clocksource));
+        LOG_DBA_ERROR(OB_IMPROPER_OS_PARAM, "msg", "[check OS params]:current_clocksource is not [tsc], [kvm-clock], [arch_sys_counter]", K(clocksource),  K(ret));
       } else {
-        LOG_WARN("[check OS params]:current_clocksource is not [tsc]", K(clocksource), K(ret));
+        LOG_WARN("[check OS params]:current_clocksource is not [tsc], [kvm-clock], [arch_sys_counter]", K(clocksource), K(ret));
       }
     }
   } else {
