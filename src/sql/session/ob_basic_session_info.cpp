@@ -4694,6 +4694,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   }();
   ObString sql_id;
   OB_UNIS_DECODE(sql_id);
+  if (OB_SUCC(ret)) {
+    set_cur_sql_id(sql_id.ptr());
+  }
   return ret;
 }
 

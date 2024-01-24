@@ -69,6 +69,16 @@ public:
   void set_max_sql_no(int64_t max_sql_no) { max_sql_no_ = max_sql_no; }
   const common::ObIArray<ObNewRange> &get_ranges() const { return ranges_; }
   int assign_ranges(const ObIArray<ObNewRange> &ranges);
+  const ObString get_sql_string() const { return ObString(sql_string_); }
+  void set_sql_string(const ObString &sql_string)
+  {
+    if (0 == sql_string.length()) {
+      sql_string_[0] = '\0';
+    } else {
+      STRNCPY(sql_string_, sql_string.ptr(), common::OB_TINY_SQL_LENGTH);
+      sql_string_[common::OB_TINY_SQL_LENGTH] = '\0';
+    }
+  }
   TO_STRING_KV(N_OB_TASK_ID, ob_task_id_,
                K_(runner_svr),
                K_(ctrl_svr),

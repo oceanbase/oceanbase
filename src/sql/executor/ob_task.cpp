@@ -157,6 +157,9 @@ OB_DEF_DESERIALIZE(ObTask)
   LST_DO_CODE(OB_UNIS_DECODE, max_sql_no_);
   ObString sql_string;
   OB_UNIS_DECODE(sql_string);
+  if(OB_SUCC(ret)) {
+    set_sql_string(sql_string);
+  }
   return ret;
 }
 

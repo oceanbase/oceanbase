@@ -192,8 +192,6 @@ public:
   common::ObString cur_sql_;
   // in nested px situation, it is the current px coordinator's thread id
   int64_t qc_tid_;
-  // no need to deserialize
-  static constexpr int64_t LIMIT_LENGTH = 100;
   TO_STRING_KV(K_(cur_sql), K_(qc_tid));
 };
 

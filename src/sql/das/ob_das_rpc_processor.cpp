@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_DAS
+#include "lib/signal/ob_signal_struct.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_utils.h"
@@ -93,6 +94,7 @@ int ObDASBaseAccessP<pcode>::process()
   LOG_DEBUG("DAS base access remote process", K_(RpcProcessor::arg));
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASTaskResp &task_resp = RpcProcessor::result_;
+  SQL_INFO_GUARD(ObString("DAS REMOTE PROCESS"), task.get_remote_info()->sql_id_);
   const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task.get_task_ops();
   common::ObSEArray<ObIDASTaskResult*, 2> &task_results = task_resp.get_op_results();
   ObDASTaskFactory *das_factory = ObDASBaseAccessP<pcode>::get_das_factory();

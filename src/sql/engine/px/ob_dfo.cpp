@@ -103,8 +103,8 @@ int ObQCMonitoringInfo::init(const ObExecContext &exec_ctx) {
   if (OB_NOT_NULL(exec_ctx.get_my_session())) {
     cur_sql_ = exec_ctx.get_my_session()->get_current_query_string();
   }
-  if (cur_sql_.length() > ObQCMonitoringInfo::LIMIT_LENGTH) {
-    cur_sql_.assign(cur_sql_.ptr(), ObQCMonitoringInfo::LIMIT_LENGTH);
+  if (cur_sql_.length() > OB_TINY_SQL_LENGTH) {
+    cur_sql_.assign(cur_sql_.ptr(), OB_TINY_SQL_LENGTH);
   }
   return ret;
 }

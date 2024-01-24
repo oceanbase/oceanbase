@@ -209,19 +209,24 @@ void coredump_cb(int sig, siginfo_t *si, void *context)
                                      crash_info, ip, bp, sig, si->si_code, si->si_addr, rlimit_core,
                                      ts, GETTID(), tname, uval[0], uval[1], uval[2], uval[3],
                                      (NULL == extra_info) ? NULL : to_cstring(*extra_info), bt);
-    const auto &si_guard = ObSqlInfoGuard::get_cur_guard();
-    char sql[] = "SQL=";
+    ObSqlInfo sql_info = ObSqlInfoGuard::get_tl_sql_info();
+    char sql_id[] = "SQL_ID=";
+    char sql_string[] = ", SQL_STRING=";
     char end[] = "\n";
-    struct iovec iov[4];
+    struct iovec iov[6];
     memset(iov, 0, sizeof(iov));
     iov[0].iov_base = print_buf;
     iov[0].iov_len = print_len;
-    iov[1].iov_base = sql;
-    iov[1].iov_len = strlen(sql);
-    iov[2].iov_base = NULL != si_guard ? si_guard->sql_.ptr() : NULL;
-    iov[2].iov_len = NULL != si_guard ? si_guard->sql_.length() : 0;
-    iov[3].iov_base = end;
-    iov[3].iov_len = strlen(end);
+    iov[1].iov_base = sql_id;
+    iov[1].iov_len = strlen(sql_id);
+    iov[2].iov_base = sql_info.sql_id_.ptr();
+    iov[2].iov_len = sql_info.sql_id_.length();
+    iov[3].iov_base = sql_string;
+    iov[3].iov_len = strlen(sql_string);
+    iov[4].iov_base = sql_info.sql_string_.ptr();
+    iov[4].iov_len = sql_info.sql_string_.length();
+    iov[5].iov_base = end;
+    iov[5].iov_len = strlen(end);
     writev(STDERR_FILENO, iov, sizeof(iov) / sizeof(iov[0]));
     if (OB_SUCC(ret)) {
       int status = 0;

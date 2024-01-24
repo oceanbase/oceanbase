@@ -16,6 +16,7 @@
 #include "ob_px_task_process.h"
 #include "ob_px_admission.h"
 #include "ob_px_sqc_handler.h"
+#include "lib/signal/ob_signal_struct.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
@@ -169,6 +170,7 @@ int ObInitSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     LOG_WARN("session is NULL", K(ret));
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler.get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_current_trace_id(ObCurTraceId::get_trace_id());
@@ -466,6 +468,7 @@ int ObInitFastSqcP::startup_normal_sqc(ObPxSqcHandler &sqc_handler)
     LOG_WARN("session is NULL", K(ret));
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler.get_sqc_init_arg();
+    SQL_INFO_GUARD(arg.sqc_.get_monitoring_info().cur_sql_, session->get_cur_sql_id());
     ObWorkerSessionGuard worker_session_guard(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->set_peer_addr(arg.sqc_.get_qc_addr());
