@@ -2105,7 +2105,13 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 
   if (OB_SUCC(ret) && enable_random_output && !brs_.end_
       && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
-    adjust_rand_output_brs(rand_append_bits);
+    if (OB_UNLIKELY(brs_.size_ > max_row_cnt || rand_append_bits + brs_.size_ > max_row_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected tsc output rows", K(brs_), K(rand_append_bits), K(max_row_cnt),
+                K(rand_row_cnt));
+    } else {
+      adjust_rand_output_brs(rand_append_bits);
+    }
   }
   return ret;
 }
