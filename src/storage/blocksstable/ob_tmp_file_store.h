@@ -218,7 +218,7 @@ class ObTmpTenantMacroBlockManager final
 public:
   ObTmpTenantMacroBlockManager();
   ~ObTmpTenantMacroBlockManager();
-  int init(common::ObIAllocator &allocator);
+  int init(const uint64_t tenant_id, common::ObIAllocator &allocator);
   void destroy();
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
   int free_macro_block(const int64_t block_id);
