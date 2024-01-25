@@ -368,7 +368,8 @@ public:
                                                   uint64_t index_id,
                                                   const ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int64_t get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx);
+  static int get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
+                                              int64_t &max_ds_timeout);
 
   static int add_failed_ds_table_list(const uint64_t table_id,
                                       const common::ObIArray<int64_t> &used_part_id,

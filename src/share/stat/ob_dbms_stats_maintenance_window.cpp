@@ -567,6 +567,31 @@ int ObDbmsStatsMaintenanceWindow::check_date_validate(const ObString &job_name,
   return ret;
 }
 
+int ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(ObIArray<const ObUserInfo *> &user_infos)
+{
+  int ret = OB_SUCCESS;
+  if (user_infos.count() > 1) {
+    //bug:
+    //resver the minimum user id to execute
+    const ObUserInfo *minimum_user_info = user_infos.at(0);
+    for (int64_t i = 1; OB_SUCC(ret) && i < user_infos.count(); ++i) {
+      if (OB_ISNULL(minimum_user_info) || OB_ISNULL(user_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(minimum_user_info), K(user_infos.at(i)));
+      } else if (minimum_user_info->get_user_id() > user_infos.at(i)->get_user_id()) {
+        minimum_user_info = user_infos.at(i);
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret)) {
+      user_infos.reset();
+      if (OB_FAIL(user_infos.push_back(minimum_user_info))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 } // namespace common
 } // namespace oceanbase
 

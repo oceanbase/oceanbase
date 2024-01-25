@@ -1309,12 +1309,13 @@ int ObDynamicSamplingUtils::get_ds_table_param(ObOptimizerContext &ctx,
                                            table_meta->get_ref_table_id(),
                                            ds_table_param.degree_))) {
       LOG_WARN("failed to get ds table degree", K(ret));
+    } else if (OB_FAIL(get_dynamic_sampling_max_timeout(ctx, ds_table_param.max_ds_timeout_))) {
+      LOG_WARN("failed to get dynamic sampling max timeout", K(ret));
     } else {
       ds_table_param.tenant_id_ = ctx.get_session_info()->get_effective_tenant_id();
       ds_table_param.table_id_ = table_meta->get_ref_table_id();
       ds_table_param.ds_level_ = ds_level;
       ds_table_param.sample_block_cnt_ = sample_block_cnt;
-      ds_table_param.max_ds_timeout_ = get_dynamic_sampling_max_timeout(ctx);
       ds_table_param.is_virtual_table_ = is_virtual_table(table_meta->get_ref_table_id()) &&
                                     !share::is_oracle_mapping_real_virtual_table(table_meta->get_ref_table_id());
       ds_table_param.db_name_ = table_item->database_name_;
@@ -1518,18 +1519,24 @@ const ObDSResultItem *ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemT
   return item;
 }
 
-int64_t ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx)
+int ObDynamicSamplingUtils::get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
+                                                             int64_t &max_ds_timeout)
 {
-  int64_t max_ds_timeout = THIS_WORKER.get_timeout_remain();
-  max_ds_timeout = max_ds_timeout / 10;//default ds time can't exceed 10% of current sql remain timeout
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
-  if (tenant_config.is_valid()) {
-    int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
-    if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
-      max_ds_timeout = ds_maximum_time;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("failed to check status", K(ret));
+  } else {
+    max_ds_timeout = THIS_WORKER.get_timeout_remain();
+    max_ds_timeout = max_ds_timeout / 10;//default ds time can't exceed 10% of current sql remain timeout
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_session_info()->get_effective_tenant_id()));
+    if (tenant_config.is_valid()) {
+      int64_t ds_maximum_time = tenant_config->_optimizer_ads_time_limit * 1000000;
+      if (max_ds_timeout > ds_maximum_time) {//can't exceed the max ds timeout for single table
+        max_ds_timeout = ds_maximum_time;
+      }
     }
   }
-  return max_ds_timeout;
+  return ret;
 }
 
 int ObDynamicSamplingUtils::add_failed_ds_table_list(const uint64_t table_id,

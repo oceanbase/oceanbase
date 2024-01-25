@@ -31,7 +31,6 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/ob_server_struct.h"
 
-
 namespace oceanbase
 {
 
