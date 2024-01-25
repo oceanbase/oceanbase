@@ -2138,6 +2138,7 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
         LOG_INFO("failed to resolve external symbol", K(q_name), K(ret));
         if (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret) {
           ret = OB_SUCCESS;
+          ob_reset_tsi_warning_buffer();
         }
       } else if (OB_ISNULL(var)) {
         ret = OB_ERR_UNEXPECTED;
