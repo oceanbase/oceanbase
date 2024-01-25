@@ -13,9 +13,23 @@ OceanBase中代码文件名都以`ob_`开头。但也有一些陈旧的例外文
   
 函数名和变量都采用`_`分割的小写命名法。成员变量还会增加 `_` 作为后缀。
 
+# 编码风格
+OceanBase 使用一些比较朴素的编码风格，尽量使代码易读、清晰，比如运算符括号等增加必要的空格、代码不要太长、函数不要太长、增加必要的注释、合理的命名等。由于编码风格细节较多，新上手开发者参考当前代码中的编码风格来写代码即可，这也是第一次参加其它项目工程的建议，我们应该尽量保持与原风格统一。
+
+对于你不太确定的做法，也无须担心，可以与我们讨论，或者提交代码后，我们会有人来给出建议或者共同编码。
+
 # 函数编程习惯
 ## 禁止使用STL容器
 由于OceanBase支持多租户资源隔离，为了方便控制内存，OceanBase禁止使用STL、boost等容器。同时，OceanBase提供了自己实现的容器，比如 `ObSEArray` 等，更多OceanBase容器相关的介绍请参考[OceanBase 容器介绍](./container.md)。
+
+## 谨慎使用C++新标准
+OceanBase 并不鼓励使用C++新标准的一些语法，比如 auto、智能指针、move语义、range-based loops、lambda 等。OceanBase 认为这些会带来很多负面效果，比如 
+- auto使用不当会引发严重的性能问题，而它仅仅是带来了语法上的遍历；
+- 智能指针并不能解决对象内存使用问题，而且使用不当也会带来性能问题；
+- move 的使用极为复杂，不能保证所有人理解正确的前提下会带来隐藏极深的BUG。
+
+当然OceanBase没有排斥所有的新标准，比如鼓励使用override、final、constexpr等。如果你不确定是否可以使用某个语法，可以在[《OceanBase C++编程规范》](./coding_standard.md)中进行搜索确认。
+
 ## 单入口单出口
 强制要求所有函数在末尾返回，禁止中途调用return、goto、exit等全局跳转指令。这一条也是所有首次接触OceanBase代码的人最迷惑的地方。
 为了实现这一要求，代码中会出现很多 `if/else if` ，并且在 `for` 循环中存在 `OB_SUCC(ret)` 等多个不那么直观的条件判断。同时为了减少嵌套，会使用宏 `FALSE_IT` 执行某些语句。比如
@@ -92,6 +106,24 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
   return ret;
 }
 ```
+
+## 内存管理
+内存管理是C/C++程序中非常头疼的问题，OceanBase 为内存管理做了大量的工作，包括高效的内存分配、内存问题检测、租户内存隔离等。OceanBase 为此提供了一套内存管理的机制，也禁止在程序中直接使用C/C++原生内存分配接口，比如malloc、new等。
+最简单的，OceanBase 提供了 ob_malloc/ob_free接口来申请释放内存：
+```cpp
+void *ptr = ob_malloc(100, ObModIds::OB_COMMON_ARRAY);
+ 
+// do something
+ 
+if (NULL != ptr) {
+  // 释放资源
+  ob_free(ptr, ObModIds::OB_COMMON_ARRAY);
+  ptr = NULL;  // free之后立即将指针置空
+}
+```
+
+OceanBase 要求在释放内存后必须立即将指针赋值为空。
+更多关于内存管理的介绍，请参考 [OceanBase 内存管理](./memory.md)。
 
 # 一些约定函数接口
 ## init/destroy
