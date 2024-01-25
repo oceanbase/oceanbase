@@ -592,7 +592,7 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
     } else if (osg_info != NULL &&
                OB_FAIL(allocate_optimizer_stats_gathering_as_top(candi_plan.plan_tree_,
                                                                  *osg_info,
-                                                                 !insert_sharding->is_local()))) {
+                                                                 !is_multi_part_dml && insert_sharding->is_remote()))) {
       LOG_WARN("failed to allocate sequence as top", K(ret));
     } else if (candi_plan.plan_tree_->is_sharding() &&
                (is_multi_part_dml || insert_sharding->is_local()) &&

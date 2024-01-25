@@ -1171,7 +1171,7 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
   } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
     LOG_WARN("failed to allocate exchange as top", K(ret));
   } else if (osg_info != NULL &&
-             OB_FAIL(allocate_optimizer_stats_gathering_as_top(top, *osg_info, true))) {
+             OB_FAIL(allocate_optimizer_stats_gathering_as_top(top, *osg_info))) {
     LOG_WARN("failed to allocate optimizer stats gathering");
   } else if (OB_FAIL(allocate_pdml_insert_as_top(top,
                                                  is_index_maintenance,
@@ -1187,7 +1187,7 @@ int ObDelUpdLogPlan::create_pdml_insert_plan(ObLogicalOperator *&top,
 
 int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                                OSGShareInfo &info,
-                                                               bool is_insert_sharding)
+                                                               bool is_basic_insert_remote)
 {
   int ret = OB_SUCCESS;
   ObLogOptimizerStatsGathering *osg = NULL;
@@ -1200,7 +1200,7 @@ int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     LOG_WARN("failed to allocate sequence operator", K(ret));
   } else {
     OSG_TYPE type = old_top->need_osg_merge() ? OSG_TYPE::MERGE_OSG :
-                    (old_top->is_sharding() || is_insert_sharding) ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
+                    (old_top->is_sharding() || is_basic_insert_remote) ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
     osg->set_child(ObLogicalOperator::first_child, old_top);
     osg->set_osg_type(type);
     osg->set_table_id(info.table_id_);
