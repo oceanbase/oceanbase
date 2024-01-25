@@ -98,15 +98,16 @@ int ElectionProposer::init(const int64_t restart_counter)
   #undef PRINT_WRAPPER
 }
 
-int ElectionProposer::set_member_list(const MemberList &new_member_list)
+int ElectionProposer::can_set_memberlist(const palf::LogConfigVersion &new_config_version) const
 {
-  ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER K(*this), K(new_member_list)
+  #define PRINT_WRAPPER K(*this), K(new_config_version)
   int ret = OB_SUCCESS;
-  // 检查旧的成员组的信息是否一致
   const MemberList &current_member_list = memberlist_with_states_.get_member_list();
-  if (current_member_list.is_valid()) {
-    if (new_member_list.get_membership_version() < current_member_list.get_membership_version()) {
+  if (false == new_config_version.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_SET_MEMBER(ERROR, "invalid config_version");
+  } else if (current_member_list.is_valid()) {
+    if (new_config_version < current_member_list.get_membership_version()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_SET_MEMBER(ERROR, "new memberlsit's membership version is not greater than current");
     } else if (check_leader()) {
@@ -116,7 +117,19 @@ int ElectionProposer::set_member_list(const MemberList &new_member_list)
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ElectionProposer::set_member_list(const MemberList &new_member_list)
+{
+  ELECT_TIME_GUARD(500_ms);
+  #define PRINT_WRAPPER K(*this), K(new_member_list)
+  int ret = OB_SUCCESS;
+  // 检查旧的成员组的信息是否一致
+  if (OB_FAIL(can_set_memberlist(new_member_list.get_membership_version()))) {
+    LOG_SET_MEMBER(WARN, "can_set_memberlist failed");
+  } else {
     MemberList old_list = memberlist_with_states_.get_member_list();
     if (CLICK_FAIL(memberlist_with_states_.set_member_list(new_member_list))) {
       LOG_SET_MEMBER(WARN, "set new member list failed");

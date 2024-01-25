@@ -799,6 +799,51 @@ TEST_F(TestObSimpleLogClusterArbService, test_1f1a_create_palf_group)
   PALF_LOG(INFO, "end test_2f1a_degrade_upgrade", K(id));
 }
 
+// 1. 2F1A
+// 2. lock_memberlist(just renew barrier)
+// 3. submit and commit logs
+// 4. kill leader
+// 5. check committed_end_lsn
+TEST_F(TestObSimpleLogClusterArbService, test_lock_memberlist_opt)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_lock_memberlist_opt");
+  int ret = OB_SUCCESS;
+	const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  PALF_LOG(INFO, "begin test_repeat_lock_memberlist", K(id));
+	int64_t leader_idx = 0, arb_replica_idx = 0;
+  PalfHandleImplGuard leader;
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_0_0;
+	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
+  const int64_t CONFIG_CHANGE_TIMEOUT = 10 * 1000 * 1000L; // 10s
+  const int64_t another_f_idx = (leader_idx+1)%3;
+
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), leader.palf_handle_impl_->get_end_lsn());
+
+  // 2. renew_barrier
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.renew_config_change_barrier());
+
+  // 3. submit and commit logs
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), leader.palf_handle_impl_->get_end_lsn());
+
+  // 4. kill leader
+  block_all_net(leader_idx);
+
+  // 5. check committed_end_lsn
+  int64_t new_leader_idx = -1;
+  PalfHandleImplGuard new_leader;
+  EXPECT_EQ(OB_SUCCESS, get_leader(id, new_leader, new_leader_idx));
+  EXPECT_UNTIL_EQ(leader.palf_handle_impl_->get_max_lsn(), leader.palf_handle_impl_->get_end_lsn());
+  EXPECT_EQ(max_lsn, leader.palf_handle_impl_->get_end_lsn());
+  unblock_all_net(leader_idx);
+
+  leader.reset();
+  new_leader.reset();
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test_lock_memberlist_opt", K(id));
+}
 } // end unittest
 } // end oceanbase
 
