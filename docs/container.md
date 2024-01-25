@@ -1,269 +1,279 @@
-# 介绍
+# Introduction
 
-C++ STL提供了很多很方便的容器，比如vector、map、unordered_map等，由于OceanBase编程风格与内存控制等原因，在OceanBase中禁止使用STL的容器。OceanBase 提供了一些容器实现，包括数组、链表、HashMap等，本篇文档会对这些容器做一些介绍。
+C++ STL provides many convenient containers, such as vector, map, unordered_map, etc. Due to OceanBase programming style and memory control, the use of STL containers is prohibited in OceanBase. OceanBase provides some container implementations, including arrays, linked lists, HashMap, etc. This document will introduce some of these containers.
 
-> 本篇文档假设你对C++ STL 容器已经有了一定的理解。
+> This document assumes that you already have a certain understanding of C++ STL containers.
 
-> pair不属于容器，因此可以使用。
+> pair does not belong to the container, so it can be used in OceanBase.
 
-> 由于历史遗留原因，OceanBase中包含了一些不再建议使用但是没有删除的容器代码。
+> Due to historical reasons, OceanBase contains some container code that is no longer recommended but has not been deleted.
 
-# 字符串
-OceanBase 提供的字符串类是 ObString。代码参考 ob_string.h。
+# String
+The string class provided by OceanBase is ObString. Code reference ob_string.h.
 
-在介绍ObString的接口之前，先介绍一下ObSring的内存管理方式，这样会更加容易理解ObString的接口设计。
+Before introducing ObString's interface, let's first look at ObSring's memory management method, which will make it easier to understand ObString's interface design.
 
-与STL string最大的区别有两个：
-1. ObString 不管理内存，内存由外部传入，内存buffer的生命周期也由外部控制；
-2. ObString 并不以 '\0' 结尾。
+There are two biggest differences from STL string:
+1. ObString does not manage memory, memory is transferred from the outside, and the life cycle of the memory buffer is also controlled externally;
+2. ObString does not end with '\0'.
 
-这也是使用 ObString 时需要重点关注的点。
+This is also an important point to pay attention to when using ObString.
 
-ObString 的内存由外部传入，内部保存三个成员变量：
+The memory of ObString is passed in from the outside, and three member variables are stored internally:
 ```cpp
-  char *ptr_;  /// 内存指针
-  obstr_size_t buffer_size_;  /// 内存buffer长度
-  obstr_size_t data_length_;  /// 有效数据长度
+   char *ptr_;                /// memory pointer
+   obstr_size_t buffer_size_; /// Memory buffer length
+   obstr_size_t data_length_; /// Valid data length
 ```
 
-> ObString 中都使用 obstr_size_t 表示长度，其类型是 int32_t
+> obstr_size_t is used in ObString to represent the length, and its type is int32_t
 
-参考 ObString 当前内存维护模式与字符串常用的接口，ObString 常用的接口如下：
+Refer to the current memory maintenance mode of ObString and the commonly used interfaces for strings. The commonly used interfaces of ObString are as follows:
 
 ```cpp
 /**
- * 构造函数
- * 
- * 构造字符串的buffer数据和有效数据长度
- * 
- * 还有一些衍生的构造函数，比如省略buffer长度（buffer长度与数据长度一致）
- */
+  * Constructor
+  *
+  * Construct the buffer data and effective data length of the string
+  *
+  * There are also some derived constructors, such as omitting the buffer length 
+  * (the buffer length is consistent with the data length)
+  */
 ObString(const obstr_size_t size, const obstr_size_t length, char *ptr);
 
 /**
- * 是否空字符串
+ * an empty string?
  */
 bool empty() const;
 
 /**
- * 重新赋值一个新的buffer/字符串
+ * Reassign a new buffer/string
  */
 void assign_buffer(char *buffer, const obstr_size_t size);
 
 /**
- * 有效数据的长度，或者称为字符串的长度
+ * The length of the valid data, or the length of the string
  */
 obstr_size_t length() const;
 
 /**
- * 内存buffer的长度
+ * The length of the memory buffer
  */
 obstr_size_t size() const;
 
 /**
- * 获取指针
+ * Data pointer
  */
 const char *ptr() const;
 
 /**
- * 不区分大小写进行比较
+ * Case insensitively comparison
  *
- * @NOTE: 虽然ObString没有说明是以'\0'结尾，但是这里实现时使用strncasecmp，所以使用此函数时要留意
+ * @NOTE: Although ObString does not specify that it ends with '\0', 
+ * strncasecmp is used in the implementation here, so please pay attention 
+ * when using this function.
  */
 int case_compare(const ObString &obstr) const;
 int case_compare(const char *str) const;
 
 /**
- * 区分大小写比较
+ * Case-sensitive comparison
  *
- * @NOTE: 与case_compare相比较来说，这里没有使用strncmp，而是使用memcmp来比较的buffer长度
+ * @NOTE: Compared with case_compare, strncmp is not used here, 
+ * but memcmp is used to compare the buffer length.
  */
 int compare(const ObString &obstr) const;
 int32_t compare(const char *str) const;
 ```
 
-ObString 还有一些其它的接口，需要时浏览下 ob_string.h 代码即可。
+ObString also has some other interfaces, just browse the ob_string.h code if needed.
 
-# 数组
+# Array
 
-OceanBase的数组接口设计与STL vector类似，只是更加符合OceanBase的风格。比如接口会有一个int返回值表示执行成功或失败。OceanBase 提供了多个不同实现的数组，不过它们提供的接口是类似的。
+OceanBase's array interface design is similar to STL vector, but it is more in line with OceanBase's style. For example, the interface will have an int return value indicating success or failure of execution. OceanBase provides multiple arrays with different implementations, but the interfaces they provide are similar.
 
-常用的数组实现类都继承了同一个接口 `ObIArray`。我们先看一下接口定义，然后再分别介绍不同的数组实现之间的差别。
+Commonly used array implementation classes all inherit the same interface `ObIArray`. Let's take a look at the interface definition first, and then introduce the differences between different array implementations.
 
 ## ObIArray
 
-数组的接口类中并没有指定内存分配器。
+There is no memory allocator specified in the interface class of the array.
 
 ```cpp
 /**
- * 默认空构造函数
+ * The default constructor
  */
 ObIArray();
 
 /**
- * 直接接受指定数组
+ * Accept the specified array
  *
- * 接口类不会接管data相关的内存，内存处理需要看具体的实现类。
+ * The interface class will not take over data-related memory. 
+ * Memory processing depends on the specific implementation class.
  */
 ObIArray(T *data, const int64_t count);
 
 /**
- * 类似 vector::push_back，在最后添加一个元素
- * @return 成功返回OB_SUCCESS
+ * Similar to vector::push_back, adds an element at the end
+ * @return Return OB_SUCCESS when successfully
  */
 int push_back(const T &obj);
 
 /**
- * 移除最后一个元素
- * @note 很可能不会调用析构函数，需要看具体的实现类
+ * Remove the last element
+ * @NOTE It is very likely that the destructor will not be called. 
+ * You need to look at the specific implementation class.
  */
 void pop_back();
 
 /**
- * 移除最后一个元素，并将最后一个元素复制到obj
- * @return 成功返回OB_SUCCESS
+ * Remove the last element and copy the last element to obj
+ * @return Return OB_SUCCESS when successfully
  */
 int pop_back(T &obj);
 
 /**
- * 移除指定位置的元素
+ * Remove element at specified position
  */
 int remove(int64_t idx);
 
 /**
- * 获取指定位置的元素
- * @return 成功返回OB_SUCCESS。如果指定位置不存在，会返回失败
+ * Get the element at the specified position
+ * @return OB_SUCCESS is returned successfully. 
+ * If the specified location does not exist, a failure will be returned.
  */
 int at(int64_t idx, T &obj);
 
 /**
- * 重置数组。类似vector::clear
+ * Reset the array. Similar to vector::clear
  */
 void reset();
 
 /**
- * 重用数组。具体看实现
+ * Reuse arrays. Depends on the implementation
  */
 void reuse();
 
 /**
- * 销毁此数组，作用与调用析构函数相同
+ * Destroy this array, which has the same effect as calling the destructor
  */
 void destroy();
 
 /**
- * 预留指定大小的内存空间。不会做对象初始化
+ * Reserve a specified amount of memory space. Does not do object initialization
  */
 int reserve(int64_t capacity);
 
 /**
- * 预留指定大小的内存空间，通常实现类会执行对象的构造函数
+ * Reserve a specified size of memory space, usually the implementation 
+ * class will execute the object's constructor
  */
 int prepare_allocate(int64_t capacity);
 
 /**
- * 从另一个数组复制并销毁当前数据
+ * Copy and destroy current data from another array
  */
 int assign(const ObIArray &other);
 ```
 
 ## ObArray
-ObArray 自己管理内存，在声明ObArray模板类时，需要指定分配器，或者使用默认分配器 `ModulePageAllocator`。由于OceanBase要求所有的动作都要判断返回值，因此ObArray的 `operator=` 等不带返回值的函数，不建议使用。
+ObArray manages memory by itself. When declaring the ObArray template class, you need to specify an allocator, or use the default allocator `ModulePageAllocator`. Since OceanBase requires all actions to determine the return value, it is not recommended to use ObArray's `operator=` and other functions without return values.
 
-ObArray的很多行为表现与STL vector类似，每次内存扩展时表现也类似，会扩展两倍当前数据大小，但最多 `block_size_` 大小。一个 `block_size_` 默认值是 `OB_MALLOC_NORMAL_BLOCK_SIZE` （可以认为是8K）。
+Many behaviors of ObArray are similar to STL vectors. Each time the memory is expanded, the behavior is similar. It will expand twice the current data size, but up to `block_size_` size. A `block_size_` default value is `OB_MALLOC_NORMAL_BLOCK_SIZE` (think of it as 8K).
 
-代码参考 ob_array.h。
+Code reference ob_array.h.
 
 ## ObSEArray
-与ObArray类似，扩展时也会按照两倍大小，不超过`block_size_`。
+Similar to ObArray, it will be doubled in size when expanded, not exceeding `block_size_`.
 
-与ObArray不同的是，ObSEArray多了一个模板参数 `LOCAL_ARRAY_SIZE`，不需要额外的内存分配即可容纳一定量的元素。因此OBSEArray可能可以直接使用栈内存而不是堆内存：
+Different from ObArray, ObSEArray has an additional template parameter `LOCAL_ARRAY_SIZE`, which can accommodate a certain amount of elements without additional memory allocation. Therefore OBSEArray may be able to directly use stack memory instead of heap memory:
 
 ```cpp
 char local_data_buf_[LOCAL_ARRAY_SIZE * sizeof(T)];
 ```
-如果后续空间不足，需要扩充，那 `local_data_buf_` 将不再存放有效数据而是另外申请内存。所以要综合考虑，给出一个合理的`LOCAL_ARRAY_SIZE`才能让ObSEArray效率比较高。
+If there is insufficient subsequent space and needs to be expanded, `local_data_buf_` will no longer store valid data but will apply for additional memory. Therefore, we must consider it comprehensively and give a reasonable `LOCAL_ARRAY_SIZE` to make ObSEArray more efficient.
 
-参考代码 `ob_se_array.h`。
+Reference code `ob_se_array.h`.
 
 ## ObFixedArray
-顾名思义，就是一个固定大小的数组。一旦容量大小确定下来就不能再变了。代码参考 `ob_fixed_array.h`。
+As the name suggests, it is a fixed-size array. Once the capacity size is determined, it cannot be changed. Code reference `ob_fixed_array.h`.
 
 ## ObVector
-ObVector 不属于 ObIArray的子类，其表现和接口设计与ObIArray很类似，所以使用 ObIArray的子类即可。如果有兴趣，请阅读源码 `ob_vector.h` 和 它的实现文件 `ob_vector.ipp`。
+ObVector does not belong to the subclass of ObIArray. Its performance and interface design are very similar to ObIArray, so you can use the subclass of ObIArray. If you are interested, please read the source code `ob_vector.h` and its implementation file `ob_vector.ipp`.
 
-# 链表
-链表不像数组，没有统一的接口。不过这里的接口设计与STL中也是很相近的。最常用的链表有两个，一个是 ObList，另一个是 ObDList。
+# List
+Unlike arrays, linked lists do not have a unified interface. However, the interface design here is also very similar to that in STL. There are two most commonly used linked lists, one is ObList and the other is ObDList.
 
 ## ObList
 
-ObList 是一个普通的循环双链表，代码参考`ob_list.h`。在构造时，需要传入内存分配器。常用的接口如下。
+ObList is an ordinary circular double linked list, refer to `ob_list.h` for the code. During construction, the memory allocator needs to be passed in. Commonly used interfaces are as follows.
+
 ```cpp
 /**
- * 声明
- * @param T 元素类型
- * @param Allocator 内存分配器
- */
+  * Class statement
+  * @param T element type
+  * @param Allocator memory allocator
+  */
 template <class T, class Allocator = ObMalloc>
 class ObList;
 
 /**
- * 构造函数。必须传入内存分配器
+ * Constructor. You must pass a memory allocator
  */
 ObList(Allocator &allocator);
 
 /**
- * 在链表结尾插入指定元素
+ * Insert the specified element at the end of the linked list
  */
 int push_back(const value_type &value);
 
 /**
- * 在链表开头插入指定元素
+ * Insert the specified element at the beginning of the linked list
  */
 int push_front(const value_type &value);
 
 /**
- * 释放最后一个元素
- * @note 并没有执行元素的析构函数
+ * Release the last element
+ * @note The destructor of the element is not executed
  */
 int pop_back();
 
 /**
- * 两个pop_front函数都是把第一个元素删掉，区别是一个会复制对象一个不会
+ * Both pop_front functions delete the first element. 
+ * The difference is that one will copy the object and the other will not.
  */
 int pop_front(value_type &value);
 int pop_front();
 
 /**
- * 在指定位置插入指定元素
+ * Inserts the specified element at the specified position
  */
 int insert(iterator iter, const value_type &value);
 
 /**
- * 删除指定位置的元素
- * @return 返回删除成功或失败
- */
+  * Delete the element at the specified position
+  * @return Returns deletion success or failure
+  */
 int erase(iterator iter);
 
 /**
- * 删除第一个与value值相同的元素
- * @return 没有找到元素也会返回成功
- */
+  * Delete the first element with the same value as value
+  * @return Success will be returned even if the element is not found
+  */
 int erase(const value_type &value);
 
 /**
- * 获取第一个元素
+ * Get the first element
  */
 T &get_first();
 const T &get_first() const;
 
 /**
- * 获取最后一个元素
+ * Get the last element
  */
 T &get_last();
 
 /**
- * 与STL类似，ObList支持iterator相关的接口
+ * Similar to STL, ObList supports iterator-related interfaces
  */
 iterator begin();
 const_iterator begin();
@@ -271,92 +281,98 @@ iterator end();
 const_iterator end() const;
 
 /**
- * 删除所有的元素
+ * Delete all elements
  */
 void clear();
 
 /**
- * 判断是否空链表
+ * Determine whether the linked list is empty
  */
 bool empty() const;
 
 /**
- * 元素个数
+ * Number of elements
  */
 int64_t size() const;
 ```
 
 ## ObDList
 
-> 代码参考 `ob_dlist.h`。
+> Code reference `ob_dlist.h`.
 
-ObDList 也是一个双链表，与ObList不同的是，它的元素内存布局与内存管理方式不一样。ObList 由用户传入对象，ObList 内部申请内存复制对象，构造链表节点的前后指针。而 ObDList 由用户直接传入包含前后节点指针的对象。由于ObDList的这个特性，会导致它与使用STL list的方法不同。
+ObDList is also a double linked list. Unlike ObList, its element memory layout and memory management method are different. The ObList object is passed in by the user. ObList internally applies for a memory copy object and constructs the front and rear pointers of the linked list nodes. ObDList is an object containing the previous and next node pointers directly passed in by the user. Due to this feature of ObDList, it will be different from the method of using STL list.
 
-ObDList 不管理内存也完全不需要管理内存，它的模板参数没有内存分配器，只有一个 `DLinkNode`，`DLinkNode` 需要包含你需要的元素对象、前后节点指针和并实现一些通用的操作（有辅助实现基类），ObDList 的声明和一些接口如下：
+ObDList does not manage memory and does not need to manage memory at all. Its template parameters do not have a memory allocator, only one `DLinkNode`. `DLinkNode` needs to contain the element objects you need, front and rear node pointers and implement some common operations (with assistance Implement base class), the declaration and some interfaces of ObDList are as follows:
+
 ```cpp
 template <typename DLinkNode>
 class ObDList;
 
-/// 把当前链表上的元素都移动到list上去
+/// Move all elements on the current linked list to list
 int move(ObDList &list);
 
-/// 获取头节点（不是第一个元素）
+/// Get the head node (not the first element)
 DLinkNode *get_header();
 const DLinkNode *get_header() const;
 
-/// 获取最后一个元素
+/// Get the last element
 DLinkNode *get_last();
 
-/// 获取第一个元素
+/// Get the first element
 const DLinkNode *get_first() const;
 const DLinkNode *get_first_const() const;
 
-/// 在尾巴上添加一个节点
+/// Add a node to the tail
 bool add_last(DLinkNode *e);
 
-/// 在头上添加一个节点
+/// Add a node to the head
 bool add_first(DLinkNode *e);
 
-/// 在指定位置添加节点
+/// Add node at specified location
 bool add_before(const DLinkNode *pos, DLinkNode *e);
 
-/// 指定节点移动到最前面
+/// Move the specified node to the front
 bool move_to_first(DLinkNode *e);
-/// 指定节点移动到最后
+/// Move the specified node to the end
 bool move_to_last(DLinkNode *e);
 
-/// 删除最后一个节点
+/// Delete the last node
 DLinkNode *remove_last();
-/// 删除最前面一个节点
+/// Delete the first node
 DLinkNode *remove_first();
 
-/// 在链表开头插入另一个链表
+/// Delete specified element
+DLinkNode *remove(DLinkNode *e);
+
+/// Clear linked list
+void clear();
+
+/// Insert another linked list at the beginning of the linked list
 void push_range(ObDList<DLinkNode> &range);
 
-/// 从开头删除指定个数的元素，删除的元素放到了range中
+/// Delete the specified number of elements from the beginning 
+/// and place the deleted elements in the range
 void pop_range(int32_t num, ObDList<DLinkNode> &range);
 
-/// 是否空链表
+/// Whether the linked list is empty
 bool is_empty() const
-/// 元素个数
+/// Number of elements
 int32_t get_size() const
-/// 删除指定元素
-DLinkNode *remove(DLinkNode *e);
-/// 清空链表
-void clear();
 ```
 
-OceanBase 提供了辅助 `DLinkNode` 实现 `ObDLinkNode` 和 `ObDLinkDerived`，只需要使用任一复制类即可轻松地使用 ObDList。
+OceanBase provides auxiliary `DLinkNode` implementations `ObDLinkNode` and `ObDLinkDerived`, making it easy to use ObDList simply by using either replication class.
 
-在介绍这两个辅助类之前，先简单看一下一个基础的辅助接口实现 `ObDLinkBase`，它是上面两个辅助类的基类。它包含了 ObDList 需要的前后节点指针与一些基本的节点操作，两个辅助类都是通过继承基类来实现，而且只是使用方法不同而已。
+Before introducing these two auxiliary classes, let's take a brief look at a basic auxiliary interface implementation `ObDLinkBase`, which is the base class of the above two auxiliary classes. It contains the front and rear node pointers required by ObDList and some basic node operations. Both auxiliary classes are implemented by inheriting the base class, and only use different methods.
 
-第一个辅助类 ObDLinkNode，声明如下：
+The first auxiliary class, ObDLinkNode, is declared as follows:
+
 ```cpp
 template<typename T>
 struct ObDLinkNode: public ObDLinkBase<ObDLinkNode<T> >
 ```
 
-给定自己的真实链表元素类型即可，缺点是获取到链表元素时，需要使用 `ObDLinkNode::get_data` 来获取自己的对象，比如
+Just give your own real linked list element type. The disadvantage is that when getting the linked list elements, you need to use `ObDLinkNode::get_data` to get your own object, such as
+
 ```cpp
 class MyObj;
 ObDList<ObDLinkNode<MyObj>> alist;
@@ -369,13 +385,15 @@ MyObj &myobj = nodep->get_data();
 // do something with myobj
 ```
 
-第二个辅助类 ObDLinkDerived，比ObDLinkNode使用更简单一些，它的声明是这样的：
+The second auxiliary class, ObDLinkDerived, is simpler to use than ObDLinkNode. Its declaration is as follows:
+
 ```cpp
 template<typename T>
 struct ObDLinkDerived: public ObDLinkBase<T>, T
 ```
 
-注意看，它直接继承了模板类T本身，也就是不需要再像ObDLinkNode一样通过 get_data获取真实对象，直接可以使用T的方法，复制上面的示例：
+Note that it directly inherits the template class T itself, that is, there is no need to obtain the real object through get_data like ObDLinkNode. You can directly use the method of T and copy the above example:
+
 ```cpp
 class MyObj;
 ObDList<ObDLinkDerived<MyObj>> alist;
@@ -389,33 +407,33 @@ ObDLinkDerived<MyObj> *nodep = alist.get_first();
 // do something with myobj or directly with nodep
 ```
 
-由于 ObDList 不管理节点内存，那么使用时就需要特别小心，注意管理好各个元素的生命周期，在执行清理动作之前，比如`clear`、`reset`，一定要把内存先释放掉。ObDList的接口声明非常清晰，只是与STL::list命名习惯不同，可以直接参考代码 `ob_dlist.h` 的接口声明使用即可，不再罗列。
+Since ObDList does not manage the memory of nodes, you need to be careful when using it particularly. Pay attention to managing the life cycle of each element. Before performing cleanup actions, such as `clear` and `reset`, the memory must be released first. The interface declaration of ObDList is very clear, but it is different from the naming convention of STL::list. You can directly refer to the interface declaration in the code `ob_dlist.h` and use it without listing it.
 
 # Map
-Map 是一个常用的数据结构，它的插入和查询的效率都非常高。通常情况下，Map有两种实现方法，一种是平衡查找树，典型的是红黑树，常见的编译器使用这种方式实现，一种是散列表，STL中是unordered_map。
+Map is a commonly used data structure, and its insertion and query efficiency are very high. Normally, there are two implementation methods for Map. One is a balanced search tree, typically a red-black tree. Common compilers use this method to implement it. The other is a hash table, which is unordered_map in STL.
 
-OceanBase中实现了非常多的Map，其中包括平衡查找树实现 ObRbTree 和适用于不同场景的hash map，比如 ObHashMap、ObLinkHashMap和ObLinearHashMap。
+There are many Maps implemented in OceanBase, including the balanced search tree implementation ObRbTree and hash maps suitable for different scenarios, such as ObHashMap, ObLinkHashMap and ObLinearHashMap.
 
-> OceanBase 实现了很多种hash map，但是推荐使用这里介绍的几个，除非你对其它实现理解特别清晰。
+> OceanBase implements many types of hash maps, but it is recommended to use the few introduced here unless you have a clear understanding of other implementations.
 
 ## ObHashMap
-ObHashMap 的实现在 ob_hashmap.h 中，为了方便理解 ObHashMap 的实现，我会对照STL::unordered_map来介绍。
+The implementation of ObHashMap is in ob_hashmap.h. In order to facilitate the understanding of the implementation of ObHashMap, I will introduce it with reference to STL::unordered_map.
 
-### ObHashMap 介绍
-在STL中，unordered_map的声明如下：
+### ObHashMap Introduction
+In STL, unordered_map is declared as follows:
 ```cpp
 template<
-    class Key,  /// 键类型
-    class T,    /// 值类型
-    class Hash = std::hash<Key>,          /// 根据Key计算hash值
-    class KeyEqual = std::equal_to<Key>,  /// 判断Key是否相等
-    class Allocator = std::allocator<std::pair<const Key, T>> /// 内存分配器
+    class Key,
+    class T,
+    class Hash = std::hash<Key>,          /// Calculate hash value of Key
+    class KeyEqual = std::equal_to<Key>,  /// Determine whether Key is equal
+    class Allocator = std::allocator<std::pair<const Key, T>> /// memory allocator
 > class unordered_map;
 ```
 
-模板参数中 Key 是我们的键值，T 就是我们值的类型，Hash 是根据键值计算hash值的类或函数，KeyEqual 是判断两个键值是否相等的方法，Allocator 是一个分配器，分配的对象是键和值组成在一起的pair。
+Key in the template parameters is our key, T is the type of our value, Hash is a class or function that calculates the hash value based on the key, KeyEqual is a method to determine whether two key values are equal, and Allocator is an allocator. An object is a pair of keys and values.
 
-OceanBase 中的声明是类似的：
+The declaration in OceanBase is similar:
 
 ```cpp
 template <class _key_type,
@@ -430,22 +448,26 @@ template <class _key_type,
 class ObHashMap;
 ```
 
-其中 `_key_type`、`_value_type`、`_hashfunc`、`_equal`，与STL::unordered_map的声明参数含义是一样的。这里多了一些参数：
+Among them, `_key_type`, `_value_type`, `_hashfunc`, `_equal` have the same meaning as the declared parameters of STL::unordered_map. There are some more parameters here:
 
-- `_defendmode`: OceanBase 提供了有限条件的线程安全hashmap实现，可以使用默认值，当前先忽略，稍后会介绍；
-- `_allocer`与`_bucket_allocer`：STL::unordered_map只需要一个分配器，而这里要求提供两个分配器。hashmap中，通常会有一个数组作为桶(bucket)数组，元素进行hash后，找到对应桶，然后将元素”挂载“在对应的桶上。`_bucket_allocer` 就是桶数组的分配器，而`_allocer` 是元素的分配器，也就是建值对的分配器；
-- EXTEND_RATIO：如果EXTEND_RATIO是1，就不会进行扩展。
+- `_defendmode`: OceanBase provides a thread-safe hashmap implementation with limited conditions. You can use the default value and ignore it for now, which will be introduced later;
+- `_allocer` and `_bucket_allocer`: STL::unordered_map requires only one allocator, but here requires two allocators. In a hashmap, there is usually an array as a bucket array. After the elements are hashed, the corresponding bucket is found, and then the element is "mounted" on the corresponding bucket. `_bucket_allocer` is the allocator of the bucket array, and `_allocer` is the allocator of elements, that is, the allocator of key value pairs;
+- EXTEND_RATIO: If EXTEND_RATIO is 1, no expansion will occur. Otherwise, the hash map is not thread-safe.
 
-### ObHashMap 接口介绍
+### ObHashMap Interface Introduction
 ```cpp
 /**
- * ObHashMap的构造函数并不做什么事情。必须调用 create 才会进行真正的初始化。
- * create 函数的参数主要是 桶的个数 (bucket_num)和内存分配器的参数。
- * 合理的给出桶的个数，可以让hashmap运行的更加高效又不至于浪费太多内存。
- * 
- * 通过下面几个接口可以看到，可以提供两个内存分配器，一个是bucket数组的分配器，
- * 一个是元素节点的分配器
- */
+  * The constructor of ObHashMap does nothing. 
+  * You must call create for actual initialization.
+  * The parameters of the create function are mainly the number of buckets 
+  * (bucket_num) and the parameters of the memory allocator.
+  * Providing a reasonable number of buckets can make hashmap run more efficiently
+  * without wasting too much memory.
+  *
+  * As you can see from the following interfaces, two memory allocators can be 
+  * provided, one is the allocator of the bucket array,
+  * and the other is the allocator of element nodes.
+  */
 int create(int64_t bucket_num, 
            const ObMemAttr &bucket_attr,
            const ObMemAttr &node_attr);
@@ -463,30 +485,33 @@ int create(int64_t bucket_num,
            _allocer *allocer, 
            _bucket_allocer *bucket_allocer);
 
-/// 直接销毁当前对象
+/// Destroy the current object directly
 int destroy();
 
-/// 这两个函数都会删除所有的元素
+/// Both functions will delete all elements
 int clear();
 int reuse();
 
 /**
- * 获取指定键值的元素值
- * 虽然也提供了get函数，但是建议使用当前函数。
- * @param timeout_us：获取元素的超时时间。超时的实现原理后面会介绍
- * @return 找到了返回成功
- */
+  * Get the element value of the specified key value
+  * Although the get function is also provided, it is recommended to use the current
+  * function.
+  * @param timeout_us: Timeout for getting elements. The implementation principle
+  * of timeout will be introduced later.
+  * @return found and returned successfully
+  */
 int get_refactored(const _key_type &key, _value_type &value, const int64_t timeout_us = 0) const;
 
 /**
- * 设置某个键值的值
- * @param key: 建
- * @param value: 值
- * @param flag：0表示已经存在不会覆盖，否则会覆盖掉原先的值
- * @param broadcast：是否唤醒等待获取当前键的线程
- * @param overwrite_key：没使用
- * @param callback：插入或更新成功后，可以使用callback对值做一些额外操作
- */
+  * Set the value of a certain key value
+  * @param flag: 0 means it already exists and will not be overwritten, 
+  *              otherwise the original value will be overwritten.
+  * @param broadcast: whether to wake up the thread waiting to obtain the 
+  *                   current key
+  * @param overwrite_key: not used. Please refer to flag
+  * @param callback: After the insertion or update is successful, you can 
+  * use callback to perform some additional operations on the value.
+  */
 template <typename _callback = void>
 int set_refactored(const _key_type &key, 
                    const _value_type &value,
@@ -496,65 +521,71 @@ int set_refactored(const _key_type &key,
                    _callback *callback = nullptr);
                  
 /**
- * 遍历所有元素
- * @note
- * 1. 不能在遍历的过程中做删除元素、插入等动作。
- *    因为遍历的过程中会加一些锁，而插入、删除等动作也会加锁，所以可能会产生锁冲突；
- * 2. callback 动作尽量小，因为它是在锁范围内工作的
- */
+  * Traverse all elements
+  * @note
+  * 1. You cannot delete elements, insert, etc. during the traversal process.
+  * Because some locks will be added during the traversal process, and locks 
+  * will also be added for insertion, deletion and other actions, lock 
+  * conflicts may occur;
+  * 2. The callback action should be as small as possible because it works 
+  * within the lock scope.
+  */
 template<class _callback>
 int foreach_refactored(_callback &callback) const;
 
 /**
- * 删除指定键值。如果value指针不是空，会返回对应元素
- * @return 元素不存在会返回OB_HASH_NOT_EXIST
- */
+  * Delete the specified key value. 
+  * If the value pointer is not null, the corresponding element will be returned
+  * @return If the element does not exist, OB_HASH_NOT_EXIST will be returned
+  */
 int erase_refactored(const _key_type &key, _value_type *value = NULL);
 
 /**
- * 不存在就插入，否则调用callback来更新
+ * Insert if it does not exist, otherwise call callback to update
  */
 template <class _callback>
 int set_or_update(const _key_type &key, const _value_type &value,
                   _callback &callback);
 
 /**
- * 删除指定键值并满足特定条件的元素
+ * Delete elements with specified key values and meeting specific conditions
  */
 template<class _pred>
 int erase_if(const _key_type &key, _pred &pred, bool &is_erased, _value_type *value = NULL);
 
 /**
- * 不需要复制元素，直接以callback的方式访问指定键值的元素
- * @note callback 是在写锁保护下执行
+ * There is no need to copy elements, directly access the elements with 
+ * specified key values through callback.
+ * @note callback executed under write lock protection
  */
 template <class _callback>
 int atomic_refactored(const _key_type &key, _callback &callback);
 
 /**
- * 不需要将元素值复制出来，直接拿到元素通过callback来访问
- * @note callback是在读锁保护下执行的
+ * There is no need to copy the element value, just get the element directly 
+ * and access it through callback.
+ * @note callback executed under write lock protection
  */
 template <class _callback>
 int read_atomic(const _key_type &key, _callback &callback);
 ```
 
-### ObHashMap的实现
-熟悉STL unordered_map实现原理的同学肯定能猜到ObHashMap的实现原理。ObHashMap的实现也是一个线性表，作为桶数组，再利用拉链表的方法解决键hash冲突。但是这里还有一些细节，希望能够帮助大家了解它的实现，而更高效地利用ObHashMap。
+### Implementation of ObHashMap
+Persons who are familiar with the implementation principle of STL unordered_map can definitely guess the implementation principle of ObHashMap. The implementation of ObHashMap is also a linear table, as a bucket array, and then uses the zipper table method to solve key hash conflicts. But here are some details, hoping to help everyone understand its implementation and use ObHashMap more efficiently.
 
-ObHashMap 底层依赖 ObHashTable，代码参考 `ob_hashtable.h`，ObHashMap 是在ObHashTable上封装了一下 Key Value 的语义而已。
+ObHashMap relies on ObHashTable at the bottom. For the code, refer to `ob_hashtable.h`. ObHashMap just encapsulates the semantics of Key Value on ObHashTable.
 
-**有条件的线程安全**
+**Conditional thread safe**
 
-如果模板参数`_defendmode` 选择有效的锁模式，而 ObHashTable 的每个桶都有一个读写锁，那么ObHashTable就会提供有条件的线程安全。在访问桶上的元素时，都会加对应的锁，包括带有 `callback` 的接口也是，所以`callback`中的动作应该尽量轻量而且不应该再访问ObHashTable的其它元素防止死锁。
+If the template parameter `_defendmode` selects a valid lock mode, and ObHashTable has a read-write lock for each bucket, then ObHashTable will provide conditional thread safety. When accessing elements on the bucket, corresponding locks will be added, including interfaces with `callback`, so the actions in `callback` should be as light as possible and other elements of ObHashTable should not be accessed to prevent deadlock.
 
-ObHashMap 在扩容时不是线程安全的。如果提供的模板参数 EXTEND_RATIO 不是1，在需要的时候就会扩容，并且这对用户是透明的。
+ObHashMap is not thread-safe when scaling. If the provided template parameter EXTEND_RATIO is not 1, the capacity will be expanded when needed, and this is transparent to the user.
 
-ObHashMap `_defendmode` 的默认值就是一个有效的线程安全保护模式 `LatchReadWriteDefendMode`。
+The default value of ObHashMap `_defendmode` is an effective thread-safe protection mode `LatchReadWriteDefendMode`.
 
 **_defendmode**
 
-_defendmode 定义了不同的桶加锁方式，在 `ob_hashutils.h` 中提供了6中模式：
+_defendmode defines different bucket locking methods, and 6 modes are provided in `ob_hashutils.h`:
 
 1. LatchReadWriteDefendMode
 2. ReadWriteDefendMode
@@ -563,42 +594,47 @@ _defendmode 定义了不同的桶加锁方式，在 `ob_hashutils.h` 中提供�
 5. MultiWriteDefendMode
 6. NoPthreadDefendMode
 
-其中前5种都能提供线程安全保护，只是使用的锁模式不同。在不同的业务场景、不同的线程读写并发，选择合理的模式，可以提高效率和稳定性。而第6种模式 `NoPthreadDefendMode`，则不提供任何保护。
+The first five of them can provide thread safety protection, but they use different lock modes. In different business scenarios and different thread read and write concurrency, choosing a reasonable mode can improve efficiency and stability. The sixth mode, `NoPthreadDefendMode`, does not provide any protection.
 
-**get超时等待**
+**get timeout waiting**
 
-如果在获取某个元素时指定的元素不存在，可以设置一个等待时间。ObHashTable将会在对应的桶上插入一个 `fake` 元素，然后等待。在另一个线程插入对应元素时，会唤醒等待线程，不过需要插入元素线程明确指定需要唤醒，即 set_refactor 的 broatcast 值设置为非0。
+If the specified element does not exist when getting an element, you can set a waiting time. ObHashTable will insert a `fake` element into the corresponding bucket and wait. When another thread inserts the corresponding element, the waiting thread will be awakened. However, the thread inserting the element needs to explicitly specify that it needs to be awakened, that is, the broadcast value of set_refactor is set to non-zero.
 
 ## ObHashSet
-与 ObHashMap类似，ObHashSet是基于ObHashTable封装了一个只有key没有value的实现，请参考代码ob_hashset.h，不再赘述。
+Similar to ObHashMap, ObHashSet is based on ObHashTable and encapsulates an implementation with only keys and no values. Please refer to the code ob_hashset.h for details.
 
 ## ObLinkHashMap
-ObLinkHashMap 是一个读写性能兼顾、线程安全（包括扩容）的无锁hash map，使用拉链式方法解决 hash 冲突。
-下面列举一下这个类的特点：
+ObLinkHashMap is a lock-free hash map that takes into account both read and write performance and is thread-safe (including expansion). It uses the zipper method to resolve hash conflicts.
 
-- 读写性能兼顾；
-- 基于无锁方案实现线程安全；
-- 引入retire station，节点会延迟释放，因此建议 Key 尽量小；
-- 存在一定的内存浪费；
-- 扩缩容时采用批量搬迁方式完成；
-- 有热点key时，get性能由于引用计数问题不佳；
-- bucket 过多扩容时，初始化Array较慢。
+Here are the characteristics of this class:
 
-> 关于 retire station，请参考论文 [Reclaiming Memory for Lock-Free Data Structures:There has to be a Better Way](https://www.cs.utoronto.ca/%7Etabrown/debra/fullpaper.pdf)。
+- Taking into account both reading and writing performance;
+- Implement thread safety based on lock-free solution;
+- Introducing the retirement station, the node will be delayed in release, so it is recommended that the Key be as small as possible;
+- There is a certain amount of memory waste;
+- When expanding or shrinking capacity, batch relocation is used;
+- When there is a hotspot key, the get performance is poor due to reference counting issues;
+- When the bucket is expanded too much, initializing Array will be slower.
 
-下面列一些常用的接口以及使用时的注意事项。
+> Regarding retire station, please refer to the paper [Reclaiming Memory for Lock-Free Data Structures:There has to be a Better Way](https://www.cs.utoronto.ca/%7Etabrown/debra/fullpaper.pdf)。
+
+Below are some commonly used interfaces and precautions when using them.
 
 ```cpp
 /**
- * ObLinkHashMap的声明
- * 模板参数：
- * @param Key 键值类型
- * @param Value 值的类型，需要继承自 LinkHashValue（参考 ob_link_hashmap_deps.h）
- * @param AllocHandle 分配释放值和节点的类 （参考 ob_link_hashmap_deps.h）
- * @param RefHandle 引用计数的函数。如果你没有深入理解它的原理，不要修改
- * @param SHRINK_THRESHOLD 当前节点的个数太多或者太少时就会扩缩容，尽量让当前节点保持在
- *        比例[1/SHRINK_THRESHOLD, 1]之间（非精准控制）
- */
+  *Declaration of ObLinkHashMap
+  * Template parameters:
+  * @param Key Key type
+  * @param Value The type of value, which needs to be inherited from 
+  * LinkHashValue (refer to ob_link_hashmap_deps.h)
+  * @param AllocHandle Class to allocate release values and nodes 
+  * (refer to ob_link_hashmap_deps.h)
+  * @param RefHandle Reference counting function. Don't modify it if you 
+  * don't deeply understand its principles.
+  * @param SHRINK_THRESHOLD When the number of current nodes is too many or too 
+  * few, it will expand or shrink. Try to keep the current nodes at
+  * Between the ratio [1/SHRINK_THRESHOLD, 1] (non-precise control)
+  */
 template<typename Key,
          typename Value,
          typename AllocHandle=AllocHandle<Key, Value>,
@@ -607,49 +643,52 @@ template<typename Key,
 class ObLinkHashMap;
 
 
-/// 当前元素的个数
+/// Number of elements
 int64_t size() const;
 
 /**
- * 插入一个元素
- * @note 如果返回成功，需要执行 hash.revert(value)
+ * Insert an element
+ * @noteIf it returns successfully, you need to execute hash.revert(value)
  */
 int insert_and_get(const Key &key, Value* value);
 
-/// 删除指定元素
+/// Delete specified element
 int del(const Key &key);
 
 /**
- * 获取指定元素
- * @note 如果返回成功，需要执行 revert
- */
+  * Get the specified element
+  * @note If the return is successful, revert needs to be executed
+  */
 int get(const Key &key, Value*& value);
 
-/// 释放指定元素的引入计数。可以跨线程释放
+/// Releases the introduction count of the specified element. 
+/// Can be released across threads
 void revert(Value* value);
 
 /**
- * 判断是否存在指定元素
- * @return OB_ENTRY_EXIST 存在
+ * Determine whether the specified element exists
+ * @return OB_ENTRY_EXIST indicating exists
  */
 int contains_key(const Key &key);
 
 /**
- * 遍历所有元素
- * @param fn : bool fn(Key &key, Value *value); 其中bool返回值表示是否还要继续遍历
- */
+  * Traverse all elements
+  * @param fn: bool fn(Key &key, Value *value); The bool return value 
+  * indicates whether to continue traversing
+  */
 template <typename Function> int for_each(Function &fn);
 
 /**
- * 删除满足条件的元素
- * @param fn bool fn(Key &key, Value *value); 其中bool返回值表示是否需要删除
- */
+  * Delete elements that meet the conditions
+  * @param fn bool fn(Key &key, Value *value); The bool return value 
+  * indicates whether it needs to be deleted
+  */
 template <typename Function> int remove_if(Function &fn);
 ```
 
 ## ObRbTree
-ObRbTree 是一个红黑树实现，支持插入、删除、查找等基本操作，非线程安全。由于ObRbTree 在OceanBase中并没有使用，因此不再介绍，有兴趣的请阅读源码 `ob_rbtree.h`。
+ObRbTree is a red-black tree implementation that supports basic operations such as insertion, deletion, and search, and is not thread-safe. Since ObRbTree is not used in OceanBase, it will not be introduced again. If you are interested, please read the source code `ob_rbtree.h`.
 
 
-# 其它
-OceanBase 还有很多基础容器的实现，比如一些队列（ObFixedQueue、ObLightyQueue、ObLinkQueue）、bitmap(ObBitmap)、tuple(ObTuple)等。如果常见的容器不能满足你的需求，可以在 `deps/oblib/src/lib` 目录下找到更多。
+# Others
+OceanBase also has many basic container implementations, such as some queues (ObFixedQueue, ObLightyQueue, ObLinkQueue), bitmap (ObBitmap), tuple (ObTuple), etc. If the common containers don't meet your needs, you can find more in the `deps/oblib/src/lib` directory.
