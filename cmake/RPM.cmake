@@ -114,6 +114,8 @@ endif()
 
 install(FILES
   src/sql/fill_help_tables-ob.sql
+  src/share/parameter/default_parameter.json
+  src/share/system_variable/default_system_variable.json
   tools/timezone_V1.log
   tools/default_srs_data_mysql.sql
   tools/upgrade/upgrade_pre.py
