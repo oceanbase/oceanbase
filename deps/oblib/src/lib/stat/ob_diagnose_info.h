@@ -127,8 +127,17 @@ public:
       const uint64_t p3 = 0,
       const bool is_atomic = false);
   int notify_wait_end(ObDiagnoseTenantInfo *tenant_info, const bool is_atomic, const bool is_idle);
-  int set_max_wait(ObWaitEventDesc *max_wait);
-  int set_total_wait(ObWaitEventStat *total_wait);
+  int set_max_wait(ObWaitEventDesc *max_wait)
+  {
+    max_wait_ = max_wait;
+    return OB_SUCCESS;
+  }
+
+  int set_total_wait(ObWaitEventStat *total_wait)
+  {
+    total_wait_ = total_wait;
+    return OB_SUCCESS;
+  }
   ObWaitEventDesc &get_curr_wait();
   int inc_stat(const int16_t stat_no);
   int update_stat(const int16_t stat_no, const int64_t delta);
@@ -299,6 +308,7 @@ private:
   ObDiagnoseSessionInfo *di_;
   //Do you need statistics
   bool need_record_;
+  ObWaitEventDesc *max_wait_;
 };
 
 class ObTotalWaitGuard
@@ -311,6 +321,7 @@ private:
   ObDiagnoseSessionInfo *di_;
   //Do you need statistics
   bool need_record_;
+  ObWaitEventStat *total_wait_;
 };
 
 } /* namespace common */

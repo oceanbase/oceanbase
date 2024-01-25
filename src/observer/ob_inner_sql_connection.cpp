@@ -2308,7 +2308,9 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
       prev_session_id_(0),
       prev_stat_(nullptr),
       need_record_(true),
-      prev_is_bkgd_active_(true)
+      prev_is_bkgd_active_(true),
+      prev_max_wait_(nullptr),
+      prev_total_wait_(nullptr)
 {
   if (is_inner_session_ && OB_NOT_NULL(inner_session) &&
       ObInnerSQLConnection::INNER_SQL_SESS_ID != inner_session->get_sessid() &&
@@ -2337,6 +2339,8 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
         prev_tenant_id_ = di_buffer_->get_tenant_id();
         if (NULL != (di_buffer_->get_curr_session())) {
           prev_session_id_ = di_buffer_->get_curr_session()->session_id_;
+          prev_max_wait_ = di_buffer_->get_curr_session()->base_value_.get_max_wait();
+          prev_total_wait_ = di_buffer_->get_curr_session()->base_value_.get_total_wait();
         }
         if (0 < inner_session->get_sessid()) {
           di_buffer_->switch_both(inner_session->get_priv_tenant_id(), inner_session->get_sessid(), false/*is_multi_thread_plan*/);
@@ -2360,6 +2364,17 @@ ObInnerSqlWaitGuard::~ObInnerSqlWaitGuard()
         di_buffer_->switch_session(prev_session_id_);
       } else {
         di_buffer_->reset_session();
+      }
+      if (OB_NOT_NULL(di_buffer_->get_curr_session())) {
+        if (OB_UNLIKELY(di_buffer_->get_curr_session()->base_value_.get_max_wait() || di_buffer_->get_curr_session()->base_value_.get_total_wait())) {
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "new session stat is corrupted", "max_wait",
+              di_buffer_->get_curr_session()->base_value_.get_max_wait(), "total_wait",
+              di_buffer_->get_curr_session()->base_value_.get_total_wait(), K(di_buffer_),
+              K(di_buffer_->get_curr_session()->session_id_));
+        } else {
+          di_buffer_->get_curr_session()->base_value_.set_max_wait(prev_max_wait_);
+          di_buffer_->get_curr_session()->base_value_.set_total_wait(prev_total_wait_);
+        }
       }
     }
 
