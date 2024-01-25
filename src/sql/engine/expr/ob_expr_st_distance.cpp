@@ -46,48 +46,29 @@ int ObExprSTDistance::calc_result_typeN(ObExprResType& type,
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
-  int unexpected_types = 0;
-  int null_types = 0;
 
   for (int64_t i = 0; i < 2; i++) {
     if (types_stack[i].get_type() == ObNullType) {
-      null_types++;
     } else if (!ob_is_geometry(types_stack[i].get_type())
         && !ob_is_string_type(types_stack[i].get_type())
         && ObDoubleType != types_stack[i].get_type()) { // first 2 params are geometries
-      unexpected_types++;
-      LOG_WARN("invalid type", K(types_stack[i].get_type()));
-    } else if (ob_is_string_type(types_stack[i].get_type())) {
-      // ToDo: fix later, not checking range
-      // String now can be check in parse_geometry
-      // types_stack[i].set_calc_type(ObGeometryType);
-      // types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
-      // types_stack[i].set_calc_collation_level(CS_LEVEL_IMPLICIT);
+      types_stack[i].set_calc_type(ObVarcharType);
+      types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
     }
   }
-
   const int unit_param_index = 2;
   if (param_num == 3) {
-    if (types_stack[unit_param_index].get_type() == ObNullType) {
-      null_types++;
-    } else if (!(ob_is_string_type(types_stack[unit_param_index].get_type()))) {
-      unexpected_types++;
-      LOG_WARN("invalid option param type", K(types_stack[unit_param_index].get_type()));
+    ObObjType param_type = types_stack[unit_param_index].get_type();
+    if (ob_is_string_type(param_type)) {
+      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_BINARY);
     } else {
-      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+      types_stack[unit_param_index].set_calc_type(ObVarcharType);
+      types_stack[unit_param_index].set_calc_collation_type(CS_TYPE_BINARY);
     }
-  }
-  // an invalid type and a null type will return null
-  // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
-    LOG_WARN("invalid type", K(ret));
   }
   if (OB_SUCC(ret)) {
     type.set_double();
   }
-
   return ret;
 }
 
@@ -110,7 +91,7 @@ int ObExprSTDistance::eval_st_distance(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (input_type1 == ObDoubleType || input_type2 == ObDoubleType) {
     // bugfix 53283098, should allow double type in calc_result_type2
     ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISTANCE);
     LOG_WARN("invalid type", K(ret), K(input_type1), K(input_type2));
   }  else {
     bool is_geo1_empty = false;

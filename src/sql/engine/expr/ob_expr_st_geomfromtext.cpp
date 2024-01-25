@@ -64,8 +64,8 @@ int ObExprSTGeomFromText::calc_result_typeN(ObExprResType& type,
         if (ob_is_null(types_stack[i].get_type())) {
         } else if (!ob_is_string_type(types_stack[i].get_type())
                    || ObCharset::is_cs_nonascii(types_stack[i].get_collation_type())) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_name());
+          types_stack[i].set_calc_type(common::ObVarcharType);
+          types_stack[i].set_calc_collation_type(CS_TYPE_BINARY);
         }
       }
       // srid

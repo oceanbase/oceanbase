@@ -41,33 +41,19 @@ int ObExprPrivSTEquals::calc_result_type2(ObExprResType &type, ObExprResType &ty
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
-  int unexpected_types = 0;
-  int null_types = 0;
-
   if (type1.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(type1.get_type()) && !ob_is_string_type(type1.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(type1.get_type()));
+    type1.set_calc_type(ObVarcharType);
+    type1.set_calc_collation_type(CS_TYPE_BINARY);
   }
   if (type2.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(type2.get_type()) && !ob_is_string_type(type2.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(type2.get_type()));
+    type2.set_calc_type(ObVarcharType);
+    type2.set_calc_collation_type(CS_TYPE_BINARY);
   }
-  // an invalid type and a nullptr type will return nullptr
-  // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_EQUALS);
-    LOG_WARN("invalid type", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    type.set_int();
-    type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
-    type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  }
+  type.set_int();
+  type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+  type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
   return ret;
 }
 

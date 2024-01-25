@@ -36,11 +36,9 @@ int ObExprSTLength::calc_result_typeN(ObExprResType &type, ObExprResType *types_
   UNUSED(type_ctx);
   INIT_SUCC(ret);
   ObObjType geo_tp = types_stack[0].get_type();
-  if (!ob_is_geometry(geo_tp) && !ob_is_string_type(geo_tp) && !ob_is_null(geo_tp)
-      && ObDoubleType != geo_tp) {
-    ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_LENGTH);
-    LOG_WARN("invalid type", K(ret), K(geo_tp));
+  if (!ob_is_geometry(geo_tp) && !ob_is_string_type(geo_tp) && !ob_is_null(geo_tp)) {
+    types_stack[0].set_calc_type(ObVarcharType);
+    types_stack[0].set_calc_collation_type(CS_TYPE_BINARY);
   } else if (param_num == 2) {
     ObObjType unit_tp = types_stack[1].get_type();
     if (ob_is_string_type(unit_tp) || ob_is_null(unit_tp)) {

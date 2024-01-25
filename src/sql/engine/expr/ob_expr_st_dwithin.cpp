@@ -46,37 +46,22 @@ int ObExprPrivSTDWithin::calc_result_type3(ObExprResType &type,
 {
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
-  int unexpected_types = 0;
-  int null_types = 0;
-
   if (input1.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(input1.get_type()) && !ob_is_string_type(input1.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(input1.get_type()));
+    input1.set_calc_type(ObVarcharType);
+    input1.set_calc_collation_type(CS_TYPE_BINARY);
   }
   if (input2.get_type() == ObNullType) {
-    null_types++;
   } else if (!ob_is_geometry(input2.get_type()) && !ob_is_string_type(input2.get_type())) {
-    unexpected_types++;
-    LOG_WARN("invalid type", K(input2.get_type()));
+    input2.set_calc_type(ObVarcharType);
+    input2.set_calc_collation_type(CS_TYPE_BINARY);
   }
-  // an invalid type and a null type will return null
-  // an invalid type and a valid type return error
-  if (null_types == 0 && unexpected_types > 0) {
-      ret = OB_ERR_GIS_INVALID_DATA;
-      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
-      LOG_WARN("invalid type", K(ret));
+  if (!ob_is_double_type(input3.get_type())) {
+    input3.set_calc_type(ObDoubleType);
   }
-
-  if (OB_SUCC(ret)) {
-    if (!ob_is_double_type(input3.get_type())) {
-      input3.set_calc_type(ObDoubleType);
-    }
-    type.set_int32();
-    type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
-    type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
-  }
+  type.set_int32();
+  type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].scale_);
+  type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObIntType].precision_);
 
   return ret;
 }
@@ -114,6 +99,9 @@ int ObExprPrivSTDWithin::eval_st_dwithin_common(ObEvalCtx &ctx,
     }
   } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
     LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
+    if (ret == OB_ERR_GIS_INVALID_DATA) {
+      LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_DWITHIN);
+    }
   } else if (srid1 != srid2) {
     ret = OB_ERR_GIS_DIFFERENT_SRIDS;
     LOG_WARN("srid not the same", K(srid1), K(srid2), K(ret));
