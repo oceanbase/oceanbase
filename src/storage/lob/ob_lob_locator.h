@@ -89,6 +89,7 @@ private:
   ObString rowkey_str_; // for default values
   bool enable_locator_v2_;
   bool is_inited_;
+  ObQueryFlag scan_flag_;
 };
 
 } // namespace storage

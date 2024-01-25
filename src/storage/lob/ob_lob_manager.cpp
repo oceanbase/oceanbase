@@ -3687,10 +3687,16 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
       if (OB_SUCC(ret) && lob.is_persist_lob() && !lob.has_inrow_data()) {
         ObMemLobTxInfo *tx_info = nullptr;
         ObMemLobLocationInfo *location_info = nullptr;
+        ObMemLobRetryInfo *retry_info = nullptr;
+        ObMemLobExternHeader *extern_header = NULL;
         if (OB_FAIL(lob.get_tx_info(tx_info))) {
           LOG_WARN("failed to get tx info", K(ret), K(lob));
         } else if (OB_FAIL(lob.get_location_info(location_info))) {
           LOG_WARN("failed to get location info", K(ret), K(lob));
+        } else if (OB_FAIL(lob.get_extern_header(extern_header))) {
+          LOG_WARN("failed to get extern header", K(ret), K(lob));
+        } else if (extern_header->flags_.has_retry_info_ && OB_FAIL(lob.get_retry_info(retry_info))) {
+          LOG_WARN("failed to get retry info", K(ret), K(lob));
         } else {
           auto snapshot_tx_seq = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
           if (OB_ISNULL(param.tx_desc_) ||
@@ -3702,6 +3708,7 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
             param.snapshot_.valid_ = true;
             param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
             param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
+            param.read_latest_ = retry_info->read_latest_;
           } else {
             // When param for write, param.tx_desc_ should not be null
             // If tx indfo from lob locator is old, produce new read snapshot directly

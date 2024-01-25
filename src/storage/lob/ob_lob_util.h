@@ -51,7 +51,8 @@ struct ObLobStorageParam
 
 struct ObLobAccessParam {
   ObLobAccessParam()
-    : tx_desc_(nullptr), snapshot_(), tx_id_(), sql_mode_(SMO_DEFAULT), allocator_(nullptr),
+    : tx_desc_(nullptr), snapshot_(), tx_id_(), read_latest_(0),
+      sql_mode_(SMO_DEFAULT), allocator_(nullptr),
       dml_base_param_(nullptr), column_ids_(),
       meta_table_schema_(nullptr), piece_table_schema_(nullptr),
       main_tablet_param_(nullptr), meta_tablet_param_(nullptr), piece_tablet_param_(nullptr),
@@ -89,12 +90,14 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(lob_piece_tablet_id),
     KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
-    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(enable_query_cache));
+    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest),
+    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(enable_query_cache));
 
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
   transaction::ObTxReadSnapshot snapshot_; // for read
-  transaction::ObTransID tx_id_;           // used when read-latest
+  transaction::ObTransID tx_id_; // used when read-latest
+  bool read_latest_;
   ObSQLMode sql_mode_;
   bool is_total_quantity_log_;
   ObIAllocator *allocator_;
