@@ -4323,7 +4323,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
 
   if (OB_SUCC(ret)) {
     //租户级别的read only检查
-    if ((session->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_) || pc_ctx.is_begin_commit_stmt()) {
+    if (session->is_inner() || pc_ctx.is_begin_commit_stmt()) {
       // FIXME:
       // schema拆分后，为了避免建租户时获取不到租户read only属性导致建租户失败，对于inner sql
       // 暂时跳过read only检查。实际上，对于tenant space系统表，不应该检查read only属性。
