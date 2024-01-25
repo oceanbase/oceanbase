@@ -566,7 +566,9 @@ int ObCOSSTableRowScanner::filter_rows(BlockScanState &blockscan_state)
   if (iter_param_->has_lob_column_out()) {
     access_ctx_->reuse_lob_locator_helper();
   }
-  if (nullptr != group_by_cell_) {
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("query interrupt", K(ret));
+  } else if (nullptr != group_by_cell_) {
     ret = filter_group_by_rows();
   } else if (nullptr != access_ctx_->limit_param_) {
     ret = filter_rows_with_limit(blockscan_state);
