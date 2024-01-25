@@ -278,6 +278,9 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
+      const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
+      int64_t MAX_ABORT_WAIT_TIMEOUT = 60 * 1000 * 1000; //60s
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + MAX_ABORT_WAIT_TIMEOUT);
       if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
         if (OB_CANCELED == ret) {
           ret = OB_SUCCESS;
@@ -286,6 +289,7 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
           LOG_WARN("wait ddl finish failed", K(ret), K(arg.tenant_id_), K(arg.task_id_));
         }
       }
+      THIS_WORKER.set_timeout_ts(origin_timeout_ts);
     }
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(heart_beat_clear(arg.task_id_, tenant_id))) {
