@@ -75,8 +75,9 @@ public:
     if (0 == sql_string.length()) {
       sql_string_[0] = '\0';
     } else {
-      STRNCPY(sql_string_, sql_string.ptr(), common::OB_TINY_SQL_LENGTH);
-      sql_string_[common::OB_TINY_SQL_LENGTH] = '\0';
+      int64_t str_size = min(sql_string.length(), common::OB_TINY_SQL_LENGTH);
+      STRNCPY(sql_string_, sql_string.ptr(), str_size);
+      sql_string_[str_size] = '\0';
     }
   }
   TO_STRING_KV(N_OB_TASK_ID, ob_task_id_,
