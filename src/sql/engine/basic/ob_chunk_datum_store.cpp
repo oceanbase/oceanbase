@@ -1582,7 +1582,6 @@ int ObChunkDatumStore::add_block(Block* block, bool need_swizzling, bool *added)
 int ObChunkDatumStore::append_block(char *buf, int size,  bool need_swizzling)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id_, label_, ctx_id_);
   Block *src_block = reinterpret_cast<Block*>(buf);
   int64_t block_data_size = size;
   Block *new_block = nullptr;
@@ -1607,10 +1606,17 @@ int ObChunkDatumStore::append_block(char *buf, int size,  bool need_swizzling)
     } else if (OB_FAIL(add_block(new_block, need_swizzling, &added))) {
       LOG_WARN("fail to add block", K(ret));
     } else {
-      LOG_TRACE("trace append block", K(src_block->rows_), K(size));
+      LOG_TRACE("trace append block", K(src_block->rows_), K(size), K(mem_used_), K(mem_hold_));
     }
     if (OB_FAIL(ret) && !added) {
       free_blk_mem(new_block, block_buffer->mem_size());
+    }
+  }
+  // dump data if mem used > 16MB
+  const int64_t dump_threshold = 1 << 24;
+  if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
+    if (OB_FAIL(dump(false /* reuse */, true /* all_dump */))) {
+      LOG_WARN("dump failed", K(ret));
     }
   }
   return ret;
@@ -1620,7 +1626,6 @@ int ObChunkDatumStore::append_block(char *buf, int size,  bool need_swizzling)
 int ObChunkDatumStore::append_block_payload(char *payload, int size, int rows, bool need_swizzling)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id_, label_, ctx_id_);
   int64_t block_data_size = size + sizeof(Block);
   Block *new_block = nullptr;
   bool added = false;
@@ -1644,10 +1649,19 @@ int ObChunkDatumStore::append_block_payload(char *payload, int size, int rows, b
     } else if (OB_FAIL(add_block(new_block, need_swizzling, &added))) {
       LOG_WARN("fail to add block", K(ret));
     } else {
-      LOG_TRACE("trace append block", K(rows), K(size));
+      LOG_TRACE("trace append block", K(rows), K(size), K(mem_used_), K(mem_hold_));
     }
     if (OB_FAIL(ret) && !added) {
       free_blk_mem(new_block, block_buffer->mem_size());
+    }
+  }
+  // dump data if mem used > 1MB
+  // This function is called when use px_batch_rescan, which may write a lot of dtl interm results,
+  // so the threshold is smaller.
+  const int64_t dump_threshold = 1 << 20;
+  if (OB_SUCC(ret) && mem_used_ > dump_threshold) {
+    if (OB_FAIL(dump(false /* reuse */, true /* all_dump */))) {
+      LOG_WARN("dump failed", K(ret));
     }
   }
   return ret;
@@ -2555,11 +2569,12 @@ int ObChunkDatumStore::Iterator::alloc_block(Block *&blk, const int64_t size)
 {
   int ret = OB_SUCCESS;
   try_free_cached_blocks();
-  if (size == default_block_size_ && NULL != ifree_list_.get_first()) {
+  int64_t actual_size = store_->min_blk_size(size);
+  if (actual_size == default_block_size_ && NULL != ifree_list_.get_first()) {
     blk = ifree_list_.remove_first();
-    ObChunkDatumStore::init_block_buffer(blk, size, blk);
-  } else if (OB_FAIL(store_->alloc_block_buffer(blk, size, true))) {
-    LOG_WARN("alloc block buffer failed", K(ret), K(size));
+    ObChunkDatumStore::init_block_buffer(blk, actual_size, blk);
+  } else if (OB_FAIL(store_->alloc_block_buffer(blk, actual_size, true))) {
+    LOG_WARN("alloc block buffer failed", K(ret), K(actual_size));
   }
   return ret;
 }
