@@ -365,6 +365,7 @@ struct ObResolverParams
        enable_res_map_(false),
        need_check_col_dup_(true),
        is_specified_col_name_(false),
+       is_in_sys_view_(false),
        star_expansion_infos_(),
        is_resolve_lateral_derived_table_(false),
        package_guard_(NULL)
