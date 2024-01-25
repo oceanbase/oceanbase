@@ -316,6 +316,7 @@ private:
               ObLobAccessParam& param_right,
               int64_t& result);
 
+  void transform_lob_id(uint64_t src, uint64_t &dst);
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
