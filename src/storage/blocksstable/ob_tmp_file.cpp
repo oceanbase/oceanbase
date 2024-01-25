@@ -119,11 +119,13 @@ int ObTmpFileIOHandle::prepare_write(
     uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  const int64_t bkt_cnt = 17;
+  lib::ObMemAttr bkt_mem_attr(tenant_id, "TmpBlkIDBkt");
   if (OB_ISNULL(write_buf)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP_(buf));
-  } else if (OB_FAIL(write_block_ids_.create(17))) {
-    STORAGE_LOG(WARN, "create write block id set failed", K(ret), KP_(buf));
+  } else if (OB_FAIL(write_block_ids_.create(bkt_cnt, bkt_mem_attr))) {
+    STORAGE_LOG(WARN, "create write block id set failed", K(ret), K(bkt_cnt));
   } else {
     buf_ = write_buf;
     size_ = write_size;
