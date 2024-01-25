@@ -923,6 +923,8 @@ int ObTablet::init_with_update_medium_info(
     LOG_WARN("failed to update start scn", K(ret), KPC(old_table_store));
   } else if (OB_FAIL(mds_data_.init_with_update_medium_info(allocator, old_mds_data))) {
     LOG_WARN("failed to init mds data", K(ret), K(old_mds_data));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (FALSE_IT(set_mem_addr())) {
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));

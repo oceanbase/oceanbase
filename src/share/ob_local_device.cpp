@@ -64,8 +64,12 @@ int ObLocalIOEvents::get_ith_ret_code(const int64_t i) const
 
 int ObLocalIOEvents::get_ith_ret_bytes(const int64_t i) const
 {
-  const int64_t res = static_cast<int64_t>(io_events_[i].res);
-  return (nullptr != io_events_ && i < complete_io_cnt_ && res >= 0) ? static_cast<int32_t>(res) : 0;
+  int ret_val = 0;
+  if (nullptr != io_events_ && i < complete_io_cnt_) {
+    const int64_t res = static_cast<int64_t>(io_events_[i].res);
+    ret_val = res >= 0 ? static_cast<int32_t>(res) : 0;
+  }
+  return ret_val;
 }
 
 void *ObLocalIOEvents::get_ith_data(const int64_t i) const
