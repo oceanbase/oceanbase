@@ -28,12 +28,6 @@ class ObLSID;
 namespace storage
 {
 struct ObLSCkptMember;
-enum class MetaRecordMode
-{
-  ADD_LS = 0,
-  DELETE_LS = 1,
-  INVALID_MODE
-};
 
 enum class ObTenantStorageMetaType
 {
