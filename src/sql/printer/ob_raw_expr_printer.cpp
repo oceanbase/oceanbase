@@ -11,9 +11,9 @@
  */
 
 #define USING_LOG_PREFIX SQL
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "lib/oblog/ob_log_module.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/string/ob_sql_string.h"

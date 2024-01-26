@@ -31,7 +31,7 @@
 #include "sql/code_generator/ob_column_index_provider.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/ob_end_trans_callback.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "lib/timezone/ob_oracle_format_models.h"
 #include "observer/ob_server.h"
 #include "sql/rewrite/ob_transform_pre_process.h"

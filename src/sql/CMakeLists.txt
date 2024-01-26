@@ -9,16 +9,10 @@ ob_set_subtarget(ob_sql code_generator
 )
 
 ob_set_subtarget(ob_sql common
-  ob_delete_stmt_printer.cpp
-  ob_dml_stmt_printer.cpp
   ob_end_trans_callback.cpp
   ob_end_trans_cb_packet_param.cpp
-  ob_insert_all_stmt_printer.cpp
-  ob_insert_stmt_printer.cpp
-  ob_merge_stmt_printer.cpp
   ob_phy_table_location.cpp
   ob_result_set.cpp
-  ob_select_stmt_printer.cpp
   ob_spi.cpp
   ob_sql.cpp
   ob_sql_context.cpp
@@ -28,7 +22,6 @@ ob_set_subtarget(ob_sql common
   ob_sql_temp_table.cpp
   ob_sql_trans_control.cpp
   ob_sql_utils.cpp
-  ob_update_stmt_printer.cpp
   ob_optimizer_trace_impl.cpp
 )
 
@@ -963,6 +956,17 @@ ob_set_subtarget(ob_sql plan_cache
   plan_cache/ob_values_table_compression.cpp
 )
 
+ob_set_subtarget(ob_sql printer
+  printer/ob_delete_stmt_printer.cpp
+  printer/ob_dml_stmt_printer.cpp
+  printer/ob_insert_all_stmt_printer.cpp
+  printer/ob_insert_stmt_printer.cpp
+  printer/ob_merge_stmt_printer.cpp
+  printer/ob_raw_expr_printer.cpp
+  printer/ob_select_stmt_printer.cpp
+  printer/ob_update_stmt_printer.cpp
+)
+
 ob_set_subtarget(ob_sql resolver
   resolver/ob_resolver.cpp
   resolver/ob_resolver_utils.cpp
@@ -1167,7 +1171,6 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_part_expr_checker.cpp
   resolver/expr/ob_raw_expr_part_func_checker.cpp
   resolver/expr/ob_raw_expr_print_visitor.cpp
-  resolver/expr/ob_raw_expr_printer.cpp
   resolver/expr/ob_raw_expr_replacer.cpp
   resolver/expr/ob_raw_expr_resolver_impl.cpp
   resolver/expr/ob_raw_expr_util.cpp

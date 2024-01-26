@@ -26,7 +26,7 @@
 #include "lib/container/ob_bit_set.h"
 #include "lib/utility/ob_utility.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/optimizer/ob_table_location.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/ob_des_exec_context.h"

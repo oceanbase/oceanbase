@@ -54,7 +54,7 @@
 #include "sql/resolver/ob_stmt_type.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "share/ob_all_server_tracer.h"
 #include "ob_zone_manager.h"
 #include "rootserver/ob_schema2ddl_sql.h"

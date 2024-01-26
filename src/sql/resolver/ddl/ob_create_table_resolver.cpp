@@ -33,7 +33,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
-#include "sql/ob_select_stmt_printer.h"
+#include "sql/printer/ob_select_stmt_printer.h"
 #include "observer/ob_server.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"

@@ -15,7 +15,7 @@
 
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase

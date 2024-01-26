@@ -20,7 +20,7 @@
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "common/sql_mode/ob_sql_mode.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/ob_resolver.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "lib/json/ob_json.h"

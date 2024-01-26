@@ -50,7 +50,7 @@
 #include "ob_log_json_table.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "ob_log_err_log.h"
 #include "ob_log_temp_table_transformation.h"
 #include "ob_log_expr_values.h"
