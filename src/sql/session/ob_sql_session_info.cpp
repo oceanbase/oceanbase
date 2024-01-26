@@ -1880,6 +1880,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
 
     if (OB_FAIL(get_database_id(audit_record_.db_id_))) {
       LOG_WARN("fail to get database id", K(ret));
+    } else if (audit_record_.db_id_ == OB_INVALID_ID) {
+      audit_record_.db_id_ = OB_MOCK_DEFAULT_DATABASE_ID;
     }
   } else if (EXECUTE_REMOTE == mode || EXECUTE_DIST == mode) {
     audit_record_.tenant_name_ = NULL;
