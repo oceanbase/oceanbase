@@ -17,6 +17,7 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 using namespace oceanbase;
 using namespace common;
 using namespace sql;
@@ -196,6 +197,39 @@ int ObP2PDatahubMsgBase::preset_not_match(IntegerFixedVec *res_vec, const EvalBo
   int ret = OB_SUCCESS;
   uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
   MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
+  return ret;
+}
+
+int ObP2PDatahubMsgBase::fill_empty_query_range(const ObPxQueryRangeInfo &query_range_info,
+                             common::ObIAllocator &allocator, ObNewRange &query_range)
+{
+  int ret = OB_SUCCESS;
+  query_range.table_id_ = query_range_info.table_id_;
+
+  ObObj *start = NULL;
+  ObObj *end = NULL;
+  int64_t range_column_cnt = query_range_info.range_column_cnt_;
+  if (OB_ISNULL(start = static_cast<ObObj *>(
+                    allocator.alloc(sizeof(ObObj) * range_column_cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory for start_obj failed", K(ret));
+  } else if (OB_ISNULL(end = static_cast<ObObj *>(
+                           allocator.alloc(sizeof(ObObj) * range_column_cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory for end_obj failed", K(ret));
+  } else {
+    // fill all coloumns with (max, min)
+    for (int64_t i = 0; i < range_column_cnt; ++i) {
+      new (start + i) ObObj();
+      new (end + i) ObObj();
+      (start + i)->set_max_value();
+      (end + i)->set_min_value();
+    }
+    ObRowkey start_key(start, range_column_cnt);
+    ObRowkey end_key(end, range_column_cnt);
+    query_range.start_key_ = start_key;
+    query_range.end_key_ = end_key;
+  }
   return ret;
 }
 

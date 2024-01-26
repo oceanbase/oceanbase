@@ -4950,6 +4950,7 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
     const JoinFilterInfo &info)
 {
   int ret = OB_SUCCESS;
+  int64_t op_id = -1;
   bool can_extract_query_range = false;
   ObSEArray<int64_t, 4> prefix_col_idxs;
 
@@ -4969,6 +4970,7 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
       LOG_WARN("scan_node type dismatch", K(ret), K(scan_node->get_type()));
     } else {
       ObLogTableScan *table_scan = static_cast<ObLogTableScan *>(scan_node);
+      op_id = table_scan->get_op_id();
       ObLogJoinFilter *join_filter_create = static_cast<ObLogJoinFilter *>(join_filter_create_op);
       int64_t range_column_cnt = table_scan->get_range_columns().count();
       join_filter_create->set_probe_table_id(info.ref_table_id_);
@@ -5001,7 +5003,8 @@ int ObLogicalOperator::try_prepare_rf_query_range_info(
       }
     }
   }
-  LOG_TRACE("check runtime filter can extract query range", K(ret), K(can_extract_query_range), K(prefix_col_idxs));
+  LOG_TRACE("check runtime filter can extract query range", K(ret), K(op_id),
+            K(can_extract_query_range), K(prefix_col_idxs));
   return ret;
 }
 

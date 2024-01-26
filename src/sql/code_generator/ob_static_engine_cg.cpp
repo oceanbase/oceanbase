@@ -3374,12 +3374,10 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       }
 
       bool enable_extract_query_range = true;
-#ifdef ERRSIM
       int tmp_ret = OB_E(EventTable::EN_PX_DISABLE_RUNTIME_FILTER_EXTRACT_QUERY_RANGE) OB_SUCCESS;
       if (OB_SUCCESS != tmp_ret) {
         enable_extract_query_range = false;
       }
-#endif
       if (OB_FAIL(ret)) {
       } else if (enable_extract_query_range
                  && OB_FAIL(spec.px_query_range_info_.init(
@@ -3387,6 +3385,8 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
                         op.get_rf_prefix_col_idxs(), prefix_col_obj_metas))) {
         LOG_WARN("failed to init px_query_range_info_ in join filter spec");
       }
+      LOG_TRACE("cg runtime filter extract query range", K(enable_extract_query_range),
+                K(op.get_op_id()), K(op.get_rf_prefix_col_idxs()));
     }
   }
   return ret;

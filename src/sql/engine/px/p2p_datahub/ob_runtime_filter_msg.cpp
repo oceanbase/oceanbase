@@ -1289,9 +1289,11 @@ int ObRFRangeFilterMsg::prepare_query_range()
     is_query_range_ready_ = false;
   } else if (is_empty_) {
     // make empty range
-    query_range_.table_id_ = query_range_info_.table_id_;
-    query_range_.set_false_range();
-    is_query_range_ready_ = true;
+    if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range_))) {
+      LOG_WARN("faild to fill_empty_query_range");
+    } else {
+      is_query_range_ready_ = true;
+    }
   } else {
     // only extract the first column
     int64_t prefix_col_idx = query_range_info_.prefix_col_idxs_.at(0);
@@ -1309,11 +1311,11 @@ int ObRFRangeFilterMsg::prepare_query_range()
     if (OB_ISNULL(start = static_cast<ObObj *>(
                       query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory for start_obj failed", K(ret));
+      LOG_WARN("alloc memory for start_obj failed", K(ret));
     } else if (OB_ISNULL(end = static_cast<ObObj *>(
                              query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc memory for end_obj failed", K(ret));
+      LOG_WARN("alloc memory for end_obj failed", K(ret));
     } else {
       new(start) ObObj();
       new(end) ObObj();
@@ -1336,7 +1338,7 @@ int ObRFRangeFilterMsg::prepare_query_range()
       is_query_range_ready_ = true;
     }
   }
-  LOG_TRACE("range filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_));
+  LOG_TRACE("range filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_), K(query_range_info_), K(is_empty_));
   return ret;
 }
 
@@ -2129,9 +2131,9 @@ int ObRFInFilterMsg::prepare_query_ranges()
   } else if (is_empty_) {
     // make empty range
     ObNewRange query_range;
-    query_range.table_id_ = query_range_info_.table_id_;
-    query_range.set_false_range();
-    if (OB_FAIL(query_range_.push_back(query_range))) {
+    if (OB_FAIL(fill_empty_query_range(query_range_info_, query_range_allocator_, query_range))) {
+      LOG_WARN("faild to fill_empty_query_range");
+    } else if (OB_FAIL(query_range_.push_back(query_range))) {
       LOG_WARN("failed to push back query_range");
     } else {
       is_query_range_ready_ = true;
@@ -2149,7 +2151,7 @@ int ObRFInFilterMsg::prepare_query_ranges()
     // we need to deduplicate to avoid duplicate range
     ret = process_query_ranges_with_deduplicate();
   }
-  LOG_TRACE("in filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_));
+  LOG_TRACE("in filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_), K(query_range_info_), K(is_empty_));
   return ret;
 }
 
@@ -2305,11 +2307,11 @@ int ObRFInFilterMsg::generate_one_range(int row_idx)
   if (OB_ISNULL(start = static_cast<ObObj *>(
                     query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for start_obj failed", K(ret));
+    LOG_WARN("alloc memory for start_obj failed", K(ret));
   } else if (OB_ISNULL(end = static_cast<ObObj *>(
                            query_range_allocator_.alloc(sizeof(ObObj) * range_column_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc memory for end_obj failed", K(ret));
+    LOG_WARN("alloc memory for end_obj failed", K(ret));
   }
   for (int64_t j = 0; j < prefix_col_idxs.count() && OB_SUCC(ret); ++j) {
     int64_t col_idx = prefix_col_idxs.at(j);
