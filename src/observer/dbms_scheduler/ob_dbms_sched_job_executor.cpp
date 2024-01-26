@@ -204,18 +204,14 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
           LOG_ERROR("number_of_argument not exist or not right", K(ret), K(number_of_argument));
         }
       }
-      if (job_info.is_oracle_tenant_) {
-        ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(sql_proxy_)));
-        CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(oracle_proxy.get_pool())));
+      if (OB_SUCC(ret)) {
         OZ (ObDBMSSchedJobUtils::init_env(job_info, *session_info));
+        CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
         OZ (pool->acquire_spi_conn(session_info, conn));
         OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
         if (OB_NOT_NULL(conn)) {
           sql_proxy_->close(conn, ret);
         }
-      } else {//mysql mode need use mysql proxy
-        OZ (ObDBMSSchedJobUtils::init_env(job_info, *session_info));
-        OZ (sql_proxy_->write(tenant_id, what.string().ptr(), affected_rows));
       }
     }
   }
