@@ -146,6 +146,23 @@ private:
     GI_GET_NEXT_GRANULE_TASK,
     GI_END,
   };
+  class RescanTasksInfo
+  {
+  public:
+    RescanTasksInfo() : use_opt_(false) {}
+    void reset() {
+      rescan_tasks_pos_.reset();
+      rescan_tasks_map_.clear();
+    }
+    int insert_rescan_task(int64_t pos, const ObGranuleTaskInfo &info);
+    // use opt means partition_pruning is enabled and pos of task of each tablet is recorded in rescan_tasks_map_.
+    bool use_opt_;
+    common::ObSEArray<int64_t, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_pos_;
+    // key is tablet_id, value is
+    // 1.non-pw: pos. call ObGITaskSet::get_task_at_pos(pos) to get ObGranuleTaskInfo.
+    // 2.pw: rescan_task_idx_. pwj_rescan_task_infos_[rescan_task_idx_] to get ObGranuleTaskInfo.
+    hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> rescan_tasks_map_;
+  };
 public:
   ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   ~ObGranuleIteratorOp() {}
@@ -170,6 +187,8 @@ private:
   // 非full partition wise获得task的方式
   // TODO: jiangting.lk 重构下函数名字
   int try_fetch_task(ObGranuleTaskInfo &info);
+  int get_next_task_pos(int64_t &pos, const ObGITaskSet *&taskset);
+  int pw_get_next_task_pos(const common::ObIArray<int64_t> &op_ids);
   /**
    * @brief
    * full partition wise的模式下，通过op ids获得对应的task infos
@@ -217,6 +236,7 @@ private:
   int wait_runtime_ready(bool &partition_pruning);
   int do_join_filter_partition_pruning(int64_t tablet_id, bool &partition_pruning);
   int try_build_tablet2part_id_map();
+  int init_rescan_tasks_info();
   //---end----
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t,
@@ -232,7 +252,7 @@ private:
   bool all_task_fetched_;
   bool is_rescan_;
   const ObGITaskSet *rescan_taskset_ = NULL;
-  common::ObSEArray<int64_t, OB_MIN_PARALLEL_TASK_COUNT * 2> rescan_tasks_;
+  RescanTasksInfo rescan_tasks_info_;
   int64_t rescan_task_idx_;
   // full pwj场景下, 在执行过程中缓存住了自己的任务队列.
   // 供GI rescan使用

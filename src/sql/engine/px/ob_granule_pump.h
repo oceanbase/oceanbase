@@ -144,6 +144,8 @@ public:
   ObGITaskSet() : gi_task_set_(), cur_pos_(0) {}
   TO_STRING_KV(K(gi_task_set_), K(cur_pos_));
   int get_task_at_pos(ObGranuleTaskInfo &info, const int64_t &pos) const;
+  int get_task_tablet_id_at_pos(const int64_t &pos, uint64_t &tablet_id) const;
+
   int get_next_gi_task_pos(int64_t &pos);
   int get_next_gi_task(ObGranuleTaskInfo &info);
   int assign(const ObGITaskSet &other);
