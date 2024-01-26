@@ -429,6 +429,10 @@ int ObLogMinerFileManager::generate_data_file_header_(
       break;
     }
 
+    case RecordFileFormat::JSON: {
+      //do nothing
+      break;
+    }
 
     // TODO: support other type
     default: {
@@ -480,12 +484,16 @@ int ObLogMinerFileManager::append_file_(const ObString &uri,
   if (OB_FAIL(utils.open_with_access_type(device_handle, fd, output_dest_.get_storage_info(),
       uri, common::OB_STORAGE_ACCESS_RANDOMWRITER))) {
     LOG_ERROR("failed to open device", K(uri), K(output_dest_), K(uri));
-  } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
-    LOG_ERROR("failed to write data into file", K(uri), K(output_dest_),
-        K(data_len), K(write_size));
-  } else if (write_size != data_len) {
-    ret = OB_IO_ERROR;
-    LOG_WARN("write length not equal to data length", K(write_size), K(data_len));
+  } else {
+    if(data_len != 0) {
+      if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
+        LOG_ERROR("failed to write data into file", K(uri), K(output_dest_),
+            K(data_len), K(write_size));
+      } else if (write_size != data_len) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("write length not equal to data length", K(write_size), K(data_len));
+      }
+    }
   }
 
   if (nullptr != device_handle && fd.is_valid()) {
