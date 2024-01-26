@@ -222,8 +222,14 @@ int ObXACtx::wait_xa_start_complete()
 
 int ObXACtx::kill()
 {
+  int ret = OB_SUCCESS;
+  ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
+  set_terminated_();
+  (void)unregister_timeout_task_();
+  try_exit_();
   REC_TRACE_EXT(tlog_, kill, OB_ID(ctx_ref), get_uref());
-  return OB_NOT_SUPPORTED;
+  TRANS_LOG(INFO, "xa ctx kill", K_(xid), K_(trans_id));
+  return ret;
 }
 
 int ObXACtx::check_terminated_() const
@@ -408,6 +414,8 @@ int ObXACtx::unregister_timeout_task_()
     // rewrite ret
     if (OB_TIMER_TASK_HAS_NOT_SCHEDULED == ret) {
       ret = OB_SUCCESS;
+    } else {
+      TRANS_LOG(WARN, "fail to unregister timeout task", K(ret), K_(trans_id), K_(xid));
     }
   } else {
     //just dec ctx ref
