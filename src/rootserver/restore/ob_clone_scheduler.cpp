@@ -885,7 +885,7 @@ int ObCloneScheduler::clone_init_ls(const share::ObCloneJob &job)
     const uint64_t exec_tenant_id = get_private_table_exec_tenant_id(user_tenant_id);
     START_TRANSACTION(sql_proxy_, exec_tenant_id)
     LOG_INFO("start to create ls and set sync scn", K(sync_scn), K(ls_attr_array), K(source_tenant_id));
-    if (OB_FAIL(ls_recovery.update_sys_ls_sync_scn(user_tenant_id, trans, sync_scn))) {
+    if (FAILEDx(ls_recovery.update_sys_ls_sync_scn(user_tenant_id, trans, sync_scn))) {
       LOG_WARN("failed to update sync ls sync scn", KR(ret), K(sync_scn));
     }
     END_TRANSACTION(trans)
