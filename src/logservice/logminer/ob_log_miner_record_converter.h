@@ -61,6 +61,39 @@ private:
 
 };
 
+
+class ObLogMinerRecordJsonConverter: public ILogMinerRecordConverter
+{
+public:
+  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer);
+  virtual int set_timezone(const char *timezone);
+public:
+  ObLogMinerRecordJsonConverter();
+  ~ObLogMinerRecordJsonConverter() {}
+private:
+  // TENANT_ID,TRANS_ID,PRIMARY_KEY,ROW_UNIQUE_ID,SEQ_NO,TENANT_NAME,USER_NAME,TABLE_NAME,OPERATION,
+  // OPERATION_CODE,COMMIT_SCN,COMMIT_TIMESTAMP,SQL_REDO,SQL_UNDO,ORG_CLUSTER_ID
+  #define MINER_SCHEMA_DEF(field, id, args...) \
+    field = id,
+  enum class ColType {
+    #include "ob_log_miner_analyze_schema.h"
+  };
+  #undef MINER_SCHEMA_DEF
+
+  const static ColType COL_ORDER[];
+
+  static const char *DELIMITER;
+  int write_keys_(const KeyArray &key_arr, common::ObStringBuffer &buffer);
+  int write_signed_number_(const int64_t num, common::ObStringBuffer &buffer);
+  int write_unsigned_number_(const uint64_t num, common::ObStringBuffer &buffer);
+  int write_string_no_escape_(const ObString &str, common::ObStringBuffer &buffer);
+  int write_string_escape_(const ObString &str, common::ObStringBuffer &buffer);
+  int write_json_key_(const ObString &str, common::ObStringBuffer &buffer);
+
+  ObTimeZoneInfo tz_info_;
+
+};
+
 }
 }
 
