@@ -85,7 +85,8 @@ int ObExternalDataAccessDriver::get_file_size(const ObString &url, int64_t &file
     int temp_ret = device_handle_->stat(to_cstring(url), statbuf);
     if (OB_SUCCESS != temp_ret) {
       file_size = -1;
-      if (OB_BACKUP_FILE_NOT_EXIST == temp_ret) {
+      if (OB_BACKUP_FILE_NOT_EXIST == temp_ret
+          || OB_IO_ERROR == temp_ret) {
         file_size = -1;
       } else {
         ret = temp_ret;
@@ -148,7 +149,18 @@ int ObExternalDataAccessDriver::get_file_list(const ObString &path,
     }
     LOG_DEBUG("show oss files", K(file_urls), K(file_dirs));
   } else if (get_storage_type() == OB_STORAGE_FILE) {
-    OZ (file_dirs.push_back(path));
+    ObSEArray<ObString, 4> file_dirs;
+    bool is_dir = false;
+    ObString path_without_prifix;
+    path_without_prifix = path;
+    path_without_prifix += strlen(OB_FILE_PREFIX);
+
+    OZ (FileDirectoryUtils::is_directory(to_cstring(path_without_prifix), is_dir));
+    if (!is_dir) {
+      LOG_WARN("external location is not a directory", K(path_without_prifix));
+    } else {
+      OZ (file_dirs.push_back(path));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
       ObFullPathArrayOp dir_op(file_dirs, file_dir, allocator);
