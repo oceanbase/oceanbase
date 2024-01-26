@@ -75,6 +75,9 @@ const char *ObPrivMgr::priv_names_[] = {
     "CREATE DATABASE LINK",
     "ALTER ROUTINE",
     "CREATE ROUTINE",
+    "CREATE TABLESPACE",
+    "SHUTDOWN",
+    "RELOAD",
 };
 
 ObPrivMgr::ObPrivMgr()
