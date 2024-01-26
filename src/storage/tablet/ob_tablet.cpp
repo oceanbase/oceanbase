@@ -288,11 +288,11 @@ int ObTablet::init_for_first_time_creation(
     const share::SCN &create_scn,
     const int64_t snapshot_version,
     const ObCreateTabletSchema &storage_schema,
+    const bool need_create_empty_major_sstable,
     ObFreezer *freezer)
 {
   int ret = OB_SUCCESS;
   const lib::Worker::CompatMode compat_mode = storage_schema.get_compat_mode();
-  const bool need_create_empty_major_sstable = storage_schema.get_need_create_empty_major();
   const int64_t default_max_sync_medium_scn = 0;
   ObTableHandleV2 table_handle;
   bool is_table_row_store = false;

@@ -188,6 +188,7 @@ public:
       const int64_t snapshot_version,
       const ObCreateTabletSchema &create_tablet_schema,
       const lib::Worker::CompatMode &compat_mode,
+      const bool need_create_empty_major_sstable,
       ObTabletHandle &tablet_handle);
   int create_transfer_in_tablet(
       const share::ObLSID &ls_id,

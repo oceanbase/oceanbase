@@ -8731,6 +8731,37 @@ DEF_TO_STRING(ObCreateTabletInfo)
 
 OB_SERIALIZE_MEMBER(ObCreateTabletInfo, tablet_ids_, data_tablet_id_, table_schema_index_, compat_mode_, is_create_bind_hidden_tablets_);
 
+int ObCreateTabletExtraInfo::init(
+    const uint64_t tenant_data_version,
+    const bool need_create_empty_major)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_data_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_data_version), K(need_create_empty_major));
+  } else {
+    tenant_data_version_ = tenant_data_version;
+    need_create_empty_major_ = need_create_empty_major;
+  }
+  return ret;
+}
+
+void ObCreateTabletExtraInfo::reset()
+{
+  need_create_empty_major_ = true;
+  tenant_data_version_ = 0;
+}
+
+int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_data_version_ = other.tenant_data_version_;
+  need_create_empty_major_ = other.need_create_empty_major_;
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_);
+
 bool ObBatchCreateTabletArg::is_inited() const
 {
   return id_.is_valid() && major_frozen_scn_.is_valid();
@@ -8773,6 +8804,7 @@ void ObBatchCreateTabletArg::reset()
   }
   create_tablet_schemas_.reset();
   allocator_.reset();
+  tablet_extra_infos_.reset();
 }
 
 int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
@@ -8786,6 +8818,8 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
     LOG_WARN("failed to assign tablets", KR(ret), K(arg));
   } else if (OB_FAIL(table_schemas_.assign(arg.table_schemas_))) {
     LOG_WARN("failed to assign table schema", KR(ret), K(arg));
+  } else if (OB_FAIL(tablet_extra_infos_.assign(arg.tablet_extra_infos_))) {
+    LOG_WARN("failed to assign tablet extra infos", K(ret), K(arg));
   } else if (OB_FAIL(create_tablet_schemas_.reserve(create_tablet_schemas.count()))) {
     STORAGE_LOG(WARN, "Fail to reserve schema array", K(ret), K(create_tablet_schemas.count()));
   } else {
@@ -9010,7 +9044,7 @@ int ObBatchCreateTabletArg::is_old_mds(const char *buf,
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets));
+  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos));
   return pos;
 }
 
@@ -9021,6 +9055,8 @@ OB_DEF_SERIALIZE(ObBatchCreateTabletArg)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(serialize_for_create_tablet_schemas(buf, buf_len, pos))) {
     LOG_WARN("failed to serialize_for_create_tablet_schemas", KR(ret), KPC(this));
+  } else {
+    OB_UNIS_ENCODE_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
   }
   return ret;
 }
@@ -9030,6 +9066,7 @@ OB_DEF_SERIALIZE_SIZE(ObBatchCreateTabletArg)
   int len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, id_, major_frozen_scn_, tablets_, table_schemas_, need_check_tablet_cnt_, is_old_mds_);
   len += get_serialize_size_for_create_tablet_schemas();
+  OB_UNIS_ADD_LEN_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
   return len;
 }
 
@@ -9046,6 +9083,14 @@ OB_DEF_DESERIALIZE(ObBatchCreateTabletArg)
       } else if (pos == data_len) {
       } else if (OB_FAIL(deserialize_create_tablet_schemas(buf, data_len, pos))) {
         LOG_WARN("failed to deserialize_for_create_tablet_schemas", KR(ret));
+      } else {
+        int64_t tablet_extra_infos_count = 0;
+        OB_UNIS_DECODE(tablet_extra_infos_count);
+        if (tablet_extra_infos_count > 0 && OB_FAIL(tablet_extra_infos_.prepare_allocate(tablet_extra_infos_count))) {
+          LOG_WARN("prepare allocate failed", K(ret), K(tablet_extra_infos_count));
+        } else {
+          OB_UNIS_DECODE_ARRAY(tablet_extra_infos_, tablet_extra_infos_count);
+        }
       }
     }
   }

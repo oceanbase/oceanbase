@@ -3819,6 +3819,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
 };
 
+struct ObCreateTabletExtraInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCreateTabletExtraInfo() { reset(); }
+  ~ObCreateTabletExtraInfo() { reset(); }
+  int init(const uint64_t tenant_data_version, const bool need_create_empty_major);
+  void reset();
+  int assign(const ObCreateTabletExtraInfo &other);
+public:
+  uint64_t tenant_data_version_;
+  bool need_create_empty_major_;
+  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major));
+};
+
 struct ObBatchCreateTabletArg
 {
   OB_UNIS_VERSION(1);
@@ -3858,6 +3873,7 @@ public:
   bool is_old_mds_;
   common::ObSArray<storage::ObCreateTabletSchema*> create_tablet_schemas_;
   ObArenaAllocator allocator_;
+  common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
 };
 
 struct ObBatchRemoveTabletArg

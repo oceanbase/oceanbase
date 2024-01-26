@@ -17,6 +17,7 @@
 #include "lib/worker.h"
 #include "lib/container/ob_iarray.h"
 #include "storage/tx/ob_trans_define.h"
+#include "storage/ob_storage_schema.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,7 @@ namespace obrpc
 {
 struct ObBatchCreateTabletArg;
 struct ObCreateTabletInfo;
+struct ObCreateTabletExtraInfo;
 }
 
 namespace storage
@@ -156,6 +158,9 @@ private:
       const bool for_old_mds);
   static void handle_ret_for_replay(int &ret);
   static int convert_schemas(obrpc::ObBatchCreateTabletArg &arg);
+  static bool check_need_create_empty_major_sstable(
+      const ObCreateTabletSchema &create_tablet_schema,
+      const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info);
 };
 } // namespace storage
 } // namespace oceanbase
