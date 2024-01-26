@@ -243,7 +243,10 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
 static inline bool is_direct_load_retry_err(const int ret)
 {
   return is_ddl_stmt_packet_retry_err(ret) || ret == OB_TABLET_NOT_EXIST || ret == OB_LS_NOT_EXIST
-    || ret == OB_NOT_MASTER;
+    || ret == OB_NOT_MASTER
+    || ret == OB_TASK_EXPIRED
+    || ret == OB_REPLICA_NOT_READABLE
+    ;
 }
 
 enum ObCheckExistedDDLMode
