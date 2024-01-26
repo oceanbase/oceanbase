@@ -76,6 +76,7 @@ namespace backup {
     }
 #endif
 ERRSIM_POINT_DEF(EN_LS_BACKUP_FAILED);
+ERRSIM_POINT_DEF(EN_BACKUP_DATA_TASK_FAILED);
 
 static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
@@ -2009,6 +2010,12 @@ int ObPrefetchBackupInfoTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool need_report_error = false;
+#ifdef ERRSIM
+  if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 1 == param_.retry_id_) {
+    SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_prefetch_task");
+    DEBUG_SYNC(BEFORE_BACKUP_PREFETCH_TASK);
+  }
+#endif
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prefetch backup info task is not inited", K(ret));
@@ -2577,6 +2584,19 @@ int ObLSBackupDataTask::process()
     }
   }
 #endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 0 == param_.retry_id_ && 1 == task_id_) {
+      ret = EN_BACKUP_DATA_TASK_FAILED ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_data_task");
+        DEBUG_SYNC(BEFORE_BACKUP_DATA_TASK);
+      }
+    }
+  }
+#endif
+
   if (OB_FAIL(ret)) {
   } else if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
