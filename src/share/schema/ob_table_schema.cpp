@@ -8688,9 +8688,9 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected column group type", K(ret), KPC(column_group_arr_[i]));
         }
-      } else if (1 < cg_column_cnt) {
+      } else if (1 < cg_column_cnt || column_group_arr_[i]->get_column_group_type() != ObColumnGroupType::SINGLE_COLUMN_GROUP) {
         iter_cg_idx++;
-        // ignore column group with more than one column
+        // ignore column group with more than one column or not each column group cg
       } else if (OB_ISNULL(cg_column_ids = column_group_arr_[i]->get_column_ids())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected error for null column ids", K(ret), KPC(column_group_arr_[i]));
