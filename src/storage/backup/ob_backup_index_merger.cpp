@@ -113,7 +113,9 @@ int ObBackupMetaIndexFuser::fuse(const MERGE_ITER_ARRAY &iter_array)
 {
   int ret = OB_SUCCESS;
   ObBackupMetaIndex output;
-  int64_t largest_retry = -1;
+  output.reset();
+  int64_t largest_turn_id = -1;
+  int64_t largest_retry_id = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < iter_array.count(); ++i) {
     ObBackupMetaIndexIterator *iter = iter_array.at(i);
     if (OB_ISNULL(iter)) {
@@ -123,13 +125,20 @@ int ObBackupMetaIndexFuser::fuse(const MERGE_ITER_ARRAY &iter_array)
       continue;
     } else if (OB_FAIL(iter->get_cur_index(output))) {
       LOG_WARN("failed to get cur index", K(ret));
-    } else if (output.retry_id_ > largest_retry) {
+    } else if (output.turn_id_ > largest_turn_id) {
+      largest_turn_id = output.turn_id_;
+      largest_retry_id = output.retry_id_;
       result_ = output;
-      largest_retry = output.retry_id_;
+    } else if (output.turn_id_ == largest_turn_id) {
+      if (output.retry_id_ > largest_retry_id) {
+        largest_turn_id = output.turn_id_;
+        largest_retry_id = output.retry_id_;
+        result_ = output;
+      }
     }
   }
   if (OB_SUCC(ret)) {
-    if (-1 == largest_retry) {
+    if (-1 == largest_retry_id) {
       ret = OB_ITER_END;
     }
   }
