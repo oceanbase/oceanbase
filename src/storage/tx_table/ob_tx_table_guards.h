@@ -47,8 +47,7 @@ class ObTxTableGuards
 public:
   ObTxTableGuards()
    : tx_table_guard_(),
-     src_tx_table_guard_(),
-     src_ls_handle_() {}
+     src_tx_table_guard_() {}
 
   ~ObTxTableGuards() { reset(); }
 
@@ -56,7 +55,6 @@ public:
   {
     tx_table_guard_.reset();
     src_tx_table_guard_.reset();
-    src_ls_handle_.reset();
   }
 
   void reuse()
@@ -151,15 +149,13 @@ public:
 
   bool check_ls_offline();
 
-  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard), K_(src_ls_handle));
+  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard));
 
 public:
   storage::ObTxTableGuard tx_table_guard_;
 
-  // when dml is executing during transfer, src_tx_table_guard_ and
-  // src_ls_handle_ will be valid.
+  // dml executed during transfer, src_tx_table_guard_ will be valid.
   storage::ObTxTableGuard src_tx_table_guard_;
-  storage::ObLSHandle src_ls_handle_;
 };
 
 }  // namespace storage
