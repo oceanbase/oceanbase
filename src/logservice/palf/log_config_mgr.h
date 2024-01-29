@@ -178,6 +178,12 @@ inline bool is_may_change_replica_num(const LogConfigChangeType type)
   return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
 }
 
+inline bool is_must_not_change_replica_num(const LogConfigChangeType type)
+{
+  return ADD_LEARNER == type || REMOVE_LEARNER == type || REPLACE_LEARNERS == type ||
+      TRY_LOCK_CONFIG_CHANGE == type || UNLOCK_CONFIG_CHANGE == type;
+}
+
 inline bool is_paxos_member_list_change(const LogConfigChangeType type)
 {
   return (ADD_MEMBER == type || REMOVE_MEMBER == type
@@ -459,8 +465,11 @@ public:
 
   // for PalfHandleImpl::ack_config_log
   virtual int ack_config_log(const common::ObAddr &sender,
-                     const int64_t proposal_id,
-                     const LogConfigVersion &config_version);
+                             const int64_t proposal_id,
+                             const LogConfigVersion &config_version,
+                             bool &is_majority);
+  virtual int after_config_log_majority(const int64_t proposal_id,
+                                        const LogConfigVersion &config_version);
   int wait_config_log_persistence(const LogConfigVersion &config_version) const;
   // broadcast leader info to global learners, only called in leader active
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
@@ -592,6 +601,9 @@ private:
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
                                          const bool is_arb_replica);
+  int after_config_log_majority_(const int64_t proposal_id,
+                                 const LogConfigVersion &config_version);
+
 private:
 enum class RegisterParentReason
 {
