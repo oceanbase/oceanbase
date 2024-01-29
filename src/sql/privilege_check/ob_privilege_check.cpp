@@ -2723,10 +2723,10 @@ int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null pkg schema, unexpected", K(ret), K(pkg_id));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < sizeof(pkg_name_need_priv)/ sizeof(const char *); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(pkg_name_need_priv); ++i) {
         if (0 == pkg_schema->get_package_name().case_compare(pkg_name_need_priv[i])) {
           need_check = true;
-          for (int64_t j = 0; OB_SUCC(ret) && j < sizeof(pkg_name_need_priv)/ sizeof(const char *); ++j) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < ARRAYSIZEOF(pkg_name_only_need_obj_priv); ++j) {
             if (0 == pkg_schema->get_package_name().case_compare(pkg_name_only_need_obj_priv[j])) {
               need_only_obj_check = true;
               break;
