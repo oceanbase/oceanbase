@@ -14,6 +14,7 @@
 
 #include "ob_log_sequencer1.h"
 
+#include <math.h>
 #include "lib/string/ob_string.h"       // ObString
 #include "lib/atomic/ob_atomic.h"
 #include "lib/thread/ob_thread_name.h"
@@ -228,7 +229,10 @@ int ObLogSequencer::push(PartTransTask *part_trans_task, volatile bool &stop_fla
       hash_value = ATOMIC_FAA(&round_value_, 1);
     }
     void *push_task = static_cast<void *>(part_trans_task);
-    RETRY_FUNC(stop_flag, *(static_cast<ObMQThread *>(this)), push, push_task, hash_value, DATA_OP_TIMEOUT);
+
+    if (is_global_heartbeat || OB_SUCC(wait_until_ready_queue_not_busy_(stop_flag))) {
+      RETRY_FUNC(stop_flag, *(static_cast<ObMQThread *>(this)), push, push_task, hash_value, DATA_OP_TIMEOUT);
+    }
 
     if (OB_SUCC(ret)) {
       (void)ATOMIC_AAF(&queue_part_trans_task_count_, 1);
@@ -807,20 +811,19 @@ int ObLogSequencer::push_task_into_committer_(PartTransTask *task,
   return ret;
 }
 
-int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
+int ObLogSequencer::handle_participants_ready_trans_(
+    const bool is_dml_trans,
     TransCtx *trans_ctx,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-
-  stop_flag = stop_flag;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
 
   if (OB_ISNULL(trans_ctx)) {
     LOG_ERROR("invalid argument", K(trans_ctx));
     ret = OB_INVALID_ARGUMENT;
   } else {
     // Avoiding TransCtx recycling
-    uint64_t tenant_id = OB_INVALID_TENANT_ID;
     ObLogTenantGuard guard;
     ObLogTenant *tenant = NULL;
 
@@ -839,23 +842,67 @@ int ObLogSequencer::handle_participants_ready_trans_(const bool is_dml_trans,
         }
       }
     }
+  }
 
-    if (OB_SUCC(ret)) {
-      TrxSortElem &trx_sort_elem = trans_ctx->get_trx_sort_elem();
-      {
-        ObByteLockGuard guard(trans_queue_lock_);
-        ready_trans_queue_.push(trx_sort_elem);
-      }
-      // signal push_ready_trans_to_seq_queue_
-      ready_queue_cond_.signal();
-
-      _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=(%lu/%ld) IS_DML=%d",
-          tenant_id,
-          to_cstring(trx_sort_elem),
-          ready_trans_queue_.size(),
-          seq_trans_queue_.get_curr_total(),
-          is_dml_trans);
+  if (OB_SUCC(ret)) {
+    TrxSortElem &trx_sort_elem = trans_ctx->get_trx_sort_elem();
+    {
+      ObByteLockGuard guard(trans_queue_lock_);
+      ready_trans_queue_.push(trx_sort_elem);
     }
+    // signal push_ready_trans_to_seq_queue_
+    ready_queue_cond_.signal();
+
+    _DSTAT("[TRANS_QUEUE] TENANT_ID=%lu TRANS_ID=%s QUEUE_SIZE=(%lu/%ld) IS_DML=%d",
+        tenant_id,
+        to_cstring(trx_sort_elem),
+        ready_trans_queue_.size(),
+        seq_trans_queue_.get_curr_total(),
+        is_dml_trans);
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::wait_until_ready_queue_not_busy_(volatile bool &stop_flag)
+{
+  int ret = OB_SUCCESS;
+  const int64_t seq_trans_queue_cap = seq_trans_queue_.capacity();
+  const int64_t seq_trans_threshold = seq_trans_queue_cap * TCONF.pause_redo_dispatch_task_count_threshold / 100;
+  bool ready_queue_busy = true;
+  const int64_t start_ts = get_timestamp();
+  const int64_t base_sleep_us_if_busy = 100;
+
+  while (ready_queue_busy && !stop_flag) {
+    // ready_queue_busy = true if: seq_trans_queue is not empty and memory hold touch warn threshold
+    const int64_t mem_hold = lib::get_memory_hold();
+    const int64_t mem_limit = TCONF.memory_limit;
+    const double mem_warn_threshold = mem_limit * TCONF.memory_usage_warn_threshold / 100.0;
+    const int64_t seq_trans_cnt = seq_trans_queue_.get_curr_total();
+
+    if (mem_hold < mem_warn_threshold) {
+      ready_queue_busy = (seq_trans_cnt >= seq_trans_queue_cap);
+    } else if (mem_hold < mem_limit) {
+      ready_queue_busy = seq_trans_cnt > seq_trans_threshold;
+    } else {
+      // should not disaptch if exist trans not handled
+      ready_queue_busy = seq_trans_cnt > 0;
+    }
+
+    if (ready_queue_busy) {
+      if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_SEQ_INFO_INTERVAL)) {
+        LOG_INFO("[FLOW_CONTROL][PAUSE_DISPATCH_TO_SEQUENCER]",
+            K(mem_hold),
+            "sequencer_queue_size", queue_part_trans_task_count_,
+            "ready_queue_size", ready_trans_queue_.size(),
+            K(seq_trans_cnt));
+      }
+      ob_usleep(100);
+    }
+  }
+
+  if (stop_flag) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;
