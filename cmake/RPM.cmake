@@ -62,6 +62,9 @@ if (OB_BUILD_OPENSOURCE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh
                 @ONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/telemetry.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/telemetry.sh
+                @ONLY)
 
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
                 ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh
@@ -132,6 +135,7 @@ install(FILES
   tools/rpm/systemd/profile/post_install.sh
   tools/rpm/systemd/profile/post_uninstall.sh
   tools/rpm/systemd/profile/pre_uninstall.sh
+  tools/rpm/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
 

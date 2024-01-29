@@ -7,6 +7,7 @@ url="http://$ip:$port"
 unix_socket="/tmp/obshell/$port.sock"
 prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
 obshell="$prefix/bin/obshell"
+report=3
 
 function prepare_config_json {
   cnf_file='/etc/oceanbase.cnf'
@@ -190,6 +191,9 @@ function start_observer {
     fi
     trace=$(echo "$response" | jq -r '.data.id')
     check_trace $trace "start observer" 20 6
+    if [ $? -eq 0 ]; then
+      /bin/bash $prefix/profile/telemetry.sh $report "12"
+    fi
   elif [ "x$identity" = "xSINGLE" ]; then
     # do config observer first
     do_config_observer
@@ -202,6 +206,9 @@ function start_observer {
     fi
     trace=$(echo "$response" | jq -r '.data.id')
     check_trace $trace "start observer" 40 6
+    if [ $? -eq 0 ]; then
+      /bin/bash $prefix/profile/telemetry.sh $report "11"
+    fi
   else
     # status is UNIDENTIFIED
     echo "The observer has been installed before"
@@ -270,6 +277,8 @@ function reload_observer {
 
 if [ "x$1" = "xstart" ]; then
   echo "oceanbase service started at ${DATE}"
+  # telemetry
+  /bin/bash $prefix/profile/telemetry.sh $report "10"
   if check_daemon_process; then
     echo "The agent service is exist"
   else
