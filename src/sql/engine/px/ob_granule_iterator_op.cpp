@@ -188,7 +188,7 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
 
 void ObGranuleIteratorOp::destroy()
 {
-  rescan_tasks_info_.reset();
+  rescan_tasks_info_.destroy();
   pwj_rescan_task_infos_.reset();
   table_location_keys_.reset();
   pruning_partition_ids_.reset();
@@ -308,7 +308,11 @@ int ObGranuleIteratorOp::get_next_task_pos(int64_t &pos, const ObGITaskSet *&tas
       ret = OB_ITER_END;
     } else if (OB_FAIL(rescan_tasks_info_.rescan_tasks_map_.get_refactored(
                 ctx_.get_gi_pruning_info().get_part_id(), pos))) {
-      LOG_WARN("get tablet task pos failed", K(ret));
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_ITER_END;
+      } else {
+        LOG_WARN("get tablet task pos failed", K(ret));
+      }
     } else {
       rescan_task_idx_++;
     }
@@ -460,6 +464,8 @@ int ObGranuleIteratorOp::inner_open()
   ObOperator *real_child = nullptr;
   if (OB_FAIL(parameters_init())) {
     LOG_WARN("parameters init failed", K(ret));
+  } else if (OB_FAIL(init_rescan_tasks_info())) {
+    LOG_WARN("init rescan tasks info failed", K(ret));
   } else {
     if (!MY_SPEC.full_partition_wise()) {
       if (OB_FAIL(get_gi_task_consumer_node(this, real_child))) {
@@ -491,9 +497,6 @@ int ObGranuleIteratorOp::inner_open()
     } else if (OB_FAIL(prepare_table_scan())) {
       LOG_WARN("prepare table scan failed", K(ret));
     }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(init_rescan_tasks_info())) {
-    LOG_WARN("init rescan tasks info failed", K(ret));
   }
   return ret;
 }

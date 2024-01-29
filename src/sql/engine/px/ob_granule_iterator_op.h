@@ -154,6 +154,10 @@ private:
       rescan_tasks_pos_.reset();
       rescan_tasks_map_.clear();
     }
+    void destroy() {
+      rescan_tasks_pos_.reset();
+      rescan_tasks_map_.destroy();
+    }
     int insert_rescan_task(int64_t pos, const ObGranuleTaskInfo &info);
     // use opt means partition_pruning is enabled and pos of task of each tablet is recorded in rescan_tasks_map_.
     bool use_opt_;
