@@ -65,17 +65,6 @@ int ObDefaultValueUtils::generate_insert_value(const ColumnItem *column,
       LOG_WARN("default_value_op is INVALID", K(op), K(ret));
     }
   }
-  if (OB_SUCC(ret) && expr->is_const_expr() &&
-      !ob_is_enum_or_set_type(expr->get_data_type())) {
-    ObRawExpr* remove_const_expr = NULL;
-    if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(*params_->expr_factory_,
-                                                        *params_->session_info_,
-                                                        expr, remove_const_expr))) {
-      LOG_WARN("fail to build remove_const expr",K(ret), K(expr), K(remove_const_expr));
-    } else {
-      expr = remove_const_expr;
-    }
-  }
   return ret;
 }
 
