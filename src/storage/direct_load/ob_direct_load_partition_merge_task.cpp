@@ -473,7 +473,6 @@ int ObDirectLoadPartitionHeapTableMergeTask::RowIterator::init(
   } else {
     // init scanner_
     if (OB_FAIL(scanner_.init(merge_param.table_data_desc_.external_data_block_size_,
-                              external_table->get_meta().max_data_block_size_,
                               merge_param.table_data_desc_.compressor_type_,
                               external_table->get_fragments()))) {
       LOG_WARN("fail to init fragment scanner", KR(ret));
