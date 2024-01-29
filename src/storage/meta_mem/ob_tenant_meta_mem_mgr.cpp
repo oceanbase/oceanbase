@@ -2217,7 +2217,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init ObTenantMetaMemMgr", K(ret));
-  } else if (OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
+  } else if (!is_large && OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
     LOG_WARN("fail to try wash tablet from gc queue", K(ret), K(buf_len), K(header));
   } else if (FALSE_IT(time_guard.click("wash_queue"))) {
   } else if (OB_NOT_NULL(free_obj)) {
