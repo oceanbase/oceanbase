@@ -530,6 +530,19 @@ int ObAccessService::check_read_allowed_(
       }
     }
     if (OB_FAIL(ret)) {
+      if (OB_LS_NOT_EXIST == ret) {
+        int tmp_ret = OB_SUCCESS;
+        bool is_dropped = false;
+        schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+        if (OB_ISNULL(schema_service)) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema_service is nullptr", "tmp_ret", tmp_ret);
+        } else if (OB_SUCCESS != (tmp_ret = schema_service->check_if_tenant_has_been_dropped(tenant_id_, is_dropped))) {
+          LOG_WARN("check if tenant has been dropped fail", "tmp_ret", tmp_ret);
+        } else {
+          ret = is_dropped ? OB_TENANT_HAS_BEEN_DROPPED : ret;
+        }
+      }
     } else if (OB_FAIL(construct_store_ctx_other_variables_(*ls, tablet_id, scan_param.timeout_,
          ctx.mvcc_acc_ctx_.get_snapshot_version(), tablet_handle, ctx_guard))) {
       LOG_WARN("failed to check replica allow to read", K(ret), K(tablet_id), "timeout", scan_param.timeout_);
