@@ -10,10 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX COMMON
+
 #include "lib/stat/ob_di_cache.h"
 #include "lib/random/ob_random.h"
 #include "lib/stat/ob_session_stat.h"
 #include "lib/ob_lib_config.h"
+#include "lib/utility/ob_tracepoint.h" // for ERRSIM_POINT_DEF
 
 namespace oceanbase
 {
@@ -74,17 +77,39 @@ ObDISessionCache &ObDISessionCache::get_instance()
   return instance_;
 }
 
+ERRSIM_POINT_DEF(EN_DI_SESSION_CACHE_GET_NODE_CONFLICT);
+
 int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session_collect)
 {
   int ret = OB_SUCCESS;
   thread_local ObRandom random;
   ObSessionBucket &bucket = di_map_[session_id % MAX_SESSION_COLLECT_NUM];
+#ifdef ERRSIM
+  int conflict_retry_count = 0;
+  if (EN_DI_SESSION_CACHE_GET_NODE_CONFLICT) {
+    conflict_retry_count = -EN_DI_SESSION_CACHE_GET_NODE_CONFLICT;
+    LOG_DEBUG("di session cache node retry cnt", K(conflict_retry_count));
+  }
+  int cnt = 0;
+#endif
   while (1) {
     bucket.lock_.rdlock();
     if (OB_SUCCESS == (ret = bucket.get_the_node(session_id, session_collect))) {
       if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
+#ifdef ERRSIM
+        if (conflict_retry_count) {
+          bucket.list_.remove(session_collect);
+          session_collect->clean();
+          session_collect->lock_.unlock();
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          bucket.lock_.unlock();
+          break;
+        }
+#else
         bucket.lock_.unlock();
         break;
+#endif
       } else {
         bucket.lock_.unlock();
         continue;
@@ -95,9 +120,22 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       int64_t pos = 0;
       while (1) {
         pos = random.get(0, MAX_SESSION_COLLECT_NUM - 1);
+#ifdef ERRSIM
+        if (conflict_retry_count && cnt++ < conflict_retry_count) {
+          if (0 != collects_[pos].session_id_ &&
+              OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
+            break;
+          }
+        } else {
+          if (OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
+            break;
+          }
+        }
+#else
         if (OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
           break;
         }
+#endif
       }
       if (OB_SUCCESS == ret) {
         if (0 != collects_[pos].session_id_) {
