@@ -6577,7 +6577,37 @@ all_ncomp_dll = dict(
 )
 def_table_schema(**all_ncomp_dll)
 
-# 495 : __all_index_usage_info
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = '__all_index_usage_info',
+  table_id       = '495',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'bigint'),
+      ('object_id', 'bigint')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+      ('name', 'varchar:128'),
+      ('owner', 'varchar:128'),
+      ('total_access_count', 'bigint'),
+      ('total_exec_count', 'bigint'),
+      ('total_rows_returned', 'bigint'),
+      ('bucket_0_access_count', 'bigint'),
+      ('bucket_1_access_count', 'bigint'),
+      ('bucket_2_10_access_count', 'bigint'),
+      ('bucket_2_10_rows_returned', 'bigint'),
+      ('bucket_11_100_access_count', 'bigint'),
+      ('bucket_11_100_rows_returned', 'bigint'),
+      ('bucket_101_1000_access_count', 'bigint'),
+      ('bucket_101_1000_rows_returned', 'bigint'),
+      ('bucket_1000_plus_access_count', 'bigint'),
+      ('bucket_1000_plus_rows_returned', 'bigint'),
+      ('last_used','timestamp'),
+      ('last_flush_time', 'timestamp'),
+  ],
+)
 
 all_transfer_partition_task_def= dict(
     owner = 'msy164651',
@@ -13505,6 +13535,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__wr_sqltext']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12459',
+  table_name = '__all_virtual_index_usage_info',
+  keywords = all_def_keywords['__all_index_usage_info']))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -13952,6 +13987,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15429', all_def_keyword
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15430', all_def_keywords['__all_transfer_partition_task'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15431', all_def_keywords['__all_transfer_partition_task_history'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15432', all_def_keywords['__all_virtual_wr_sqltext'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -30952,7 +30988,41 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-#21499 DBA_OB_INDEX_USAGE
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = 'DBA_INDEX_USAGE',
+  table_id       = '21499',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      CAST(IUT.OBJECT_ID AS SIGNED) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS CHAR(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS CHAR(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS SIGNED) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS SIGNED) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS SIGNED) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS SIGNED) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS SIGNED) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS SIGNED) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS SIGNED) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS SIGNED) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS SIGNED) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS SIGNED) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS SIGNED) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS SIGNED) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS SIGNED) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS CHAR(128)) AS LAST_USED
+    FROM
+      oceanbase.__all_index_usage_info IUT
+      JOIN oceanbase.__all_table T ON IUT.OBJECT_ID = T.TABLE_ID
+      JOIN oceanbase.__all_database DB ON T.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " "),
+)
 
 def_table_schema(
   owner           = 'linzhigang.lzg',
@@ -31228,6 +31298,44 @@ def_table_schema(
   view_definition = """SELECT * FROM oceanbase.GV$OB_ACTIVE_SESSION_HISTORY WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " "),
   normal_columns  = [],
+)
+
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name     = 'CDB_INDEX_USAGE',
+  table_id       = '21513',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  view_definition = """
+    SELECT
+      IUT.TENANT_ID AS CON_ID,
+      CAST(IUT.OBJECT_ID AS SIGNED) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS CHAR(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS CHAR(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS SIGNED) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS SIGNED) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS SIGNED) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS SIGNED) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS SIGNED) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS SIGNED) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS SIGNED) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS SIGNED) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS SIGNED) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS SIGNED) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS SIGNED) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS SIGNED) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS SIGNED) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS CHAR(128)) AS LAST_USED
+    FROM
+      oceanbase.__all_virtual_index_usage_info IUT
+      JOIN oceanbase.__all_virtual_table T
+      ON IUT.TENANT_ID = T.TENANT_ID AND IUT.OBJECT_ID = T.TABLE_ID
+      JOIN oceanbase.__all_virtual_database DB
+      ON IUT.TENANT_ID = DB.TENANT_ID AND t.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " "),
 )
 
 # 余留位置（此行之前占位）
@@ -56720,6 +56828,43 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
+def_table_schema(
+  owner = 'yangjiali.yjl',
+  table_name      = 'DBA_INDEX_USAGE',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28214',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT
+      CAST(IUT.OBJECT_ID AS NUMBER) AS OBJECT_ID,
+      CAST(T.TABLE_NAME AS VARCHAR2(128)) AS NAME,
+      CAST(DB.DATABASE_NAME AS VARCHAR2(128)) AS OWNER,
+      CAST(IUT.TOTAL_ACCESS_COUNT AS NUMBER) AS TOTAL_ACCESS_COUNT,
+      CAST(IUT.TOTAL_EXEC_COUNT AS NUMBER) AS TOTAL_EXEC_COUNT,
+      CAST(IUT.TOTAL_ROWS_RETURNED AS NUMBER) AS TOTAL_ROWS_RETURNED,
+      CAST(IUT.BUCKET_0_ACCESS_COUNT AS NUMBER) AS BUCKET_0_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1_ACCESS_COUNT AS NUMBER) AS BUCKET_1_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ACCESS_COUNT AS NUMBER) AS BUCKET_2_10_ACCESS_COUNT,
+      CAST(IUT.BUCKET_2_10_ROWS_RETURNED AS NUMBER) AS BUCKET_2_10_ROWS_RETURNED,
+      CAST(IUT.BUCKET_11_100_ACCESS_COUNT AS NUMBER) AS BUCKET_11_100_ACCESS_COUNT,
+      CAST(IUT.BUCKET_11_100_ROWS_RETURNED AS NUMBER) AS BUCKET_11_100_ROWS_RETURNED,
+      CAST(IUT.BUCKET_101_1000_ACCESS_COUNT AS NUMBER) AS BUCKET_101_1000_ACCESS_COUNT,
+      CAST(IUT.BUCKET_101_1000_ROWS_RETURNED AS NUMBER) AS BUCKET_101_1000_ROWS_RETURNED,
+      CAST(IUT.BUCKET_1000_PLUS_ACCESS_COUNT AS NUMBER) AS BUCKET_1000_PLUS_ACCESS_COUNT,
+      CAST(IUT.BUCKET_1000_PLUS_ROWS_RETURNED AS NUMBER) AS BUCKET_1000_PLUS_ROWS_RETURNED,
+      CAST(IUT.LAST_USED AS VARCHAR2(128)) AS LAST_USED
+    FROM
+      SYS.ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT IUT
+      JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T ON IUT.OBJECT_ID = T.TABLE_ID
+      JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB ON T.DATABASE_ID = DB.DATABASE_ID
+    WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

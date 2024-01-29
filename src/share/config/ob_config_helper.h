@@ -717,6 +717,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };
 
+class ObConfigIndexStatsModeChecker : public ObConfigChecker {
+public:
+  ObConfigIndexStatsModeChecker(){}
+  virtual ~ObConfigIndexStatsModeChecker(){}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigIndexStatsModeChecker);
+};
 
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;

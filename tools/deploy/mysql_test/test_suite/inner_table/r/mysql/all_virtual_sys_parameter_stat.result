@@ -326,6 +326,9 @@ _hidden_sys_tenant_memory
 _ignore_system_memory_over_limit_error
 _inlist_rewrite_threshold
 _io_callback_thread_count
+_iut_enable
+_iut_max_entries
+_iut_stat_collection_type
 _lcl_op_interval
 _load_tde_encrypt_engine
 _log_writer_parallelism

@@ -1152,5 +1152,10 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
   return bret;
 }
 
+bool ObConfigIndexStatsModeChecker::check(const ObConfigItem &t) const {
+  const ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("SAMPLED") || 0 == tmp_str.case_compare("ALL");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

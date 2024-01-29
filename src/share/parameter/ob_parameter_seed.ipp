@@ -1789,6 +1789,19 @@ DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
 ERRSIM_DEF_STR(migrate_check_member_list_error_zone, OB_CLUSTER_PARAMETER, "", "specifies the zone name that migrate want to inject error when change member list",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+// index usage
+DEF_BOOL(_iut_enable, OB_TENANT_PARAMETER, "True",
+        "specifies whether allow the index table usage start monitoring.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_iut_max_entries, OB_TENANT_PARAMETER, "30000", "[0,]",
+        "maximum of index entries to be monitoring.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+
+DEF_STR_WITH_CHECKER(_iut_stat_collection_type, OB_TENANT_PARAMETER, "SAMPLED",
+    common::ObConfigIndexStatsModeChecker,
+    "specify index table usage stat collection type, values: SAMPLED, ALL",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
         "Enable extract query range for not in predicate",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

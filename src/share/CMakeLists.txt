@@ -271,6 +271,8 @@ ob_set_subtarget(ob_share common_mixed
   ash/ob_active_sess_hist_list.cpp
   ash/ob_active_sess_hist_task.cpp
   throttle/ob_throttle_common.cpp
+  index_usage/ob_index_usage_info_mgr.cpp
+  index_usage/ob_index_usage_report_task.cpp
 )
 
 ob_set_subtarget(ob_share tablet
