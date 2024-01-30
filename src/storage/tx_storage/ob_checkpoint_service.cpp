@@ -142,7 +142,7 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
     DEBUG_SYNC(BEFORE_CHECKPOINT_TASK);
     ObLS *ls = nullptr;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       ObDataCheckpoint *data_checkpoint = nullptr;
@@ -316,7 +316,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   } else {
     ObLS *ls = nullptr;
     int ls_cnt = 0;
-    for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
+    for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
       if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
