@@ -15,6 +15,10 @@
 #include "lib/ob_define.h"
 #include "isa-l/crc64.h"
 #include "isa-l/crc.h"
+#if defined(__powerpc64__) 
+#include <crc32c_ppc.h>
+#endif
+
 
 namespace oceanbase
 {
@@ -420,8 +424,17 @@ for RHEL4 support (GCC 3 doesn't support this instruction) */
 #include "arm_acle.h"
 #define crc32_sse42_quadword crc = __crc32cd(crc, *(int64_t*)buf); len -= 8, buf += 8
 #define crc32_sse42_byte crc = __crc32cb(crc, (uint8_t)*buf); len--, buf++
+#elif defined(__powerpc64__) 
+uint64_t ob_crc64_ppc64(uint64_t uCRC64, const char* buf, int64_t cb)
+{
+  if (buf == NULL || cb <= 0){
+    return uCRC64;
+  }
+  return crc32c_ppc64_vpmsum(uCRC64,(const unsigned char*)(buf), cb);
+}
 #endif /* defined(__GNUC__) && defined(__x86_64__) */
 
+#if defined(__x86_64__) || defined(__aarch64__)
 uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
 {
   uint64_t crc = uCRC64;
@@ -449,6 +462,7 @@ uint64_t crc64_sse42(uint64_t uCRC64, const char* buf, int64_t len)
 
   return crc;
 }
+#endif
 
 uint64_t crc64_sse42_manually(uint64_t crc, const char *buf, int64_t len)
 {
@@ -1103,6 +1117,7 @@ uint64_t fast_crc64_sse42_manually(uint64_t crc, const char *buf, int64_t len)
   return crc;
 }
 
+#if defined(__x86_64__)
 //If the CPU is intel, ISA-L library for CRC can be used
 uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
 {
@@ -1111,6 +1126,7 @@ uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
   }
   return crc32_iscsi((unsigned char*)(buf), cb, uCRC64);
 }
+#endif
 
 uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
 {
@@ -1150,6 +1166,9 @@ uint64_t crc64_sse42_dispatch(uint64_t crc, const char *buf, int64_t len)
     ob_crc64_sse42_func = &fast_crc64_sse42_manually;
     _OB_LOG(INFO, "Use manual crc32 table lookup for crc64 calculate");
     #endif
+  #elif defined(__powerpc64__) 
+    ob_crc64_sse42_func = &ob_crc64_ppc64;
+    _OB_LOG(INFO, "Use crc64_ppc64 for powerpc64 ppc64le");
   #else
     #error arch unsupported
   #endif

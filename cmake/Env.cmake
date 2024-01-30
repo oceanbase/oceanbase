@@ -28,6 +28,7 @@ ob_define(OB_BUILD_CCLS OFF)
 ob_define(OB_CC "")
 ob_define(OB_CXX "")
 
+
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
 # we can open this to benchmark our system partial/layered
@@ -63,7 +64,7 @@ ob_define(THIN_LTO_CONCURRENCY_LINK "")
 
 if(ENABLE_THIN_LTO)
   set(THIN_LTO_OPT "-flto=thin -fwhole-program-vtables")
-  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=32,--lto-whole-program-visibility")
+  set(THIN_LTO_CONCURRENCY_LINK "-Wl,--thinlto-jobs=10,--lto-whole-program-visibility")
 endif()
 
 set(ob_close_modules_static_name "")
@@ -273,10 +274,21 @@ if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(MTUNE_CFLAGS -mtune=core2)
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
-else()
+elif( ${ARCHITECTURE} STREQUAL "aarch64" )
     set(MARCH_CFLAGS "-march=armv8-a+crc" )
     set(MTUNE_CFLAGS "-mtune=generic" )
     set(ARCH_LDFLAGS "-l:libatomic.a")
+    set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")
+elif( ${ARCHITECTURE} STREQUAL "ppc64le" ) 
+    set(MARCH_CFLAGS "-march=ppc64le" )
+    set(MARCH_CFLAGS "-mcpu=native" )
+    set(MTUNE_CFLAGS "-mtune=native" )
+    set(ARCH_LDFLAGS "-l:libatomic.a")
+    set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")
+else()
+    set(MARCH_CFLAGS "" )
+    set(MTUNE_CFLAGS "" )
+    set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")
 endif()
 

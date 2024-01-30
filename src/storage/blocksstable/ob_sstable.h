@@ -228,6 +228,9 @@ public:
       K_(nested_offset), K_(contain_uncommitted_row), K_(filled_tx_scn), KPC_(meta), K_(valid_for_reading));
 
   static const int64_t AARCH64_CP_BUF_ALIGN = 8;
+#if defined(__powerpc64__)
+  static const int64_t PPC64LE_CP_BUF_ALIGN = 8;
+#endif
 private:
   static bool ignore_ret(const int ret);
   int check_valid_for_reading();

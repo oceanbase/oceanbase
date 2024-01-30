@@ -701,3 +701,11 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
       -mtune=core-avx2 -mavx2 -mfma -mbmi2 -mavx512vl -mavx512bw
   )
 endif()
+
+##-mcpu options automatically enable it
+##if (${ARCHITECTURE} STREQUAL "ppc64le")
+## target_compile_options(ob_sql_simd
+##        PRIVATE
+##              -mpower8-vector -mvsx -maltivec 
+## )
+##endif()

@@ -56,7 +56,9 @@ typedef llvm::ExecutionEngine ObLLVMExecEngine;
 
 #define OB_LLVM_MALLOC_GUARD(mod) lib::ObMallocHookAttrGuard malloc_guard(ObMemAttr(MTL_ID() == OB_INVALID_TENANT_ID ? OB_SYS_TENANT_ID : MTL_ID(), mod))
 
-#if !defined(__aarch64__)
+/*Do not juse use !defined(__aarch64__) here*/
+//#if !defined(__aarch64__)
+#if defined(__x86_64__)
 namespace llvm {
   struct X86MemoryFoldTableEntry;
   extern const X86MemoryFoldTableEntry* lookupUnfoldTable(unsigned MemOp);
@@ -542,7 +544,9 @@ int ObLLVMHelper::initialize()
 
   llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
 
-#if !defined(__aarch64__)
+/*Do not juse use !defined(__aarch64__) here*/
+//#if !defined(__aarch64__)
+#if defined(__x86_64__)
   // initialize LLVM X86 unfold table
   llvm::lookupUnfoldTable(0);
 #endif
@@ -2072,7 +2076,7 @@ int ObDWARFHelper::find_all_line_address(common::ObIArray<ObLineAddress>& all_li
       const DWARFDebugLine::Row &row = rows.at(i);
       if (!row.EndSequence && row.IsStmt && row.Line != 0) {
 
-#if defined(__aarch64__)
+#if ( defined(__aarch64__) || defined(__powerpc64__) )
         int64_t j = 0;
         for (; OB_SUCC(ret) && j < all_lines.count(); j++) {
           if (all_lines.at(j).get_line() == row.Line) {

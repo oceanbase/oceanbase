@@ -135,11 +135,22 @@ static __inline__ uint64_t rdtscp()
     __asm__ __volatile__("rdtscp" : "=a"(rax), "=d"(rdx) :: "%rcx");
     return (rdx << 32) + rax;
 }
-#else
+#elif defined(__aarch64__)
 static __inline__ uint64_t rdtscp()
 {
     int64_t virtual_timer_value;
     asm volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
+    return virtual_timer_value;
+}
+static __inline__ uint64_t rdtsc()
+{
+    return rdtscp();
+}
+#elif defined(__powerpc64__)
+static __inline__ uint64_t rdtscp()
+{
+    uint64_t virtual_timer_value;
+    asm volatile("mfspr %0, 268" : "=r"(virtual_timer_value)); 
     return virtual_timer_value;
 }
 static __inline__ uint64_t rdtsc()
@@ -172,13 +183,36 @@ uint64_t get_cpufreq_khz()
 
     return freq_khz;
 }
-#else
+#elif defined(__aarch64__)
 uint64_t get_cpufreq_khz(void)
 {
     uint64_t timer_frequency;
     asm volatile("mrs %0, cntfrq_el0":"=r"(timer_frequency));
     return timer_frequency / 1000;
 }
+#elif defined(__powerpc64__)
+uint64_t get_cpufreq_khz()
+{
+    char line[256];
+    FILE *stream = NULL;
+    double freq_mhz = 0.0;
+    uint64_t freq_khz = 0;
+
+    stream = fopen("/proc/cpuinfo", "r");
+    if (NULL == stream) {
+    } else {
+        while (fgets(line, sizeof(line), stream)) {
+            if (sscanf(line, "clock             :%lfMHz", &freq_mhz) == 1) {
+                freq_khz = (uint64_t)(freq_mhz * 1000UL);
+                break;
+            }
+        }
+        fclose(stream);
+    }
+
+    return freq_khz;
+}
+
 #endif
 
 // 初始化tsc时钟

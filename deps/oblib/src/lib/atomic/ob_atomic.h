@@ -30,6 +30,9 @@ namespace common
 #elif defined(__aarch64__)
 #define WEAK_BARRIER() __sync_synchronize()
 #define PAUSE() ({OB_ATOMIC_EVENT(atomic_pause); asm("yield\n");})  // for ARM
+#elif defined(__powerpc64__)
+#define WEAK_BARRIER() __COMPILER_BARRIER() 
+#define PAUSE() ({OB_ATOMIC_EVENT(atomic_pause); asm volatile("or 27,27,27\n":::"memory");})
 #else
 #error arch unsupported
 #endif
@@ -68,7 +71,9 @@ template<typename T>
     struct remove_volatile<volatile T> { using type=T; };
 #define LA_ATOMIC_ID 0
 #define ATOMIC_FAA(val, addv) ATOMIC_FAAx(val, addv, LA_ATOMIC_ID)
+#if !defined(__powerpc64__) //duplicated definition remove it for Power ppc64le on 2024-01
 #define ATOMIC_FAA(val, addv) ATOMIC_FAAx(val, addv, LA_ATOMIC_ID)
+#endif
 #define ATOMIC_FAA_AR(val, addv) __atomic_fetch_add(val, addv, __ATOMIC_ACQ_REL)
 #define ATOMIC_AAF(val, addv) ATOMIC_AAFx(val, addv, LA_ATOMIC_ID)
 #define ATOMIC_AAF_AR(val, addv) __atomic_add_fetch(val, addv, __ATOMIC_ACQ_REL)
@@ -109,6 +114,11 @@ inline int64_t dec_update(T* v_, T x)
 }
 
 #define ATOMIC_CAS(val, cmpv, newv) ATOMIC_VCAS((val), (cmpv), (newv))
+
+#if defined(__powerpc64__)
+#define ATOMIC_CAS64(val, cmpv, newv) __sync_val_compare_and_swap((val), (cmpv), (newv)) //call __sync_bool_compare_and_swap directly
+#endif
+
 #define ATOMIC_INC(val) do { IGNORE_RETURN ATOMIC_AAF((val), 1); } while (0)
 #define ATOMIC_DEC(val) do { IGNORE_RETURN ATOMIC_SAF((val), 1); } while (0)
 

@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <time.h>
 #include <sys/time.h>
+#if  defined(__powerpc64__)
+#include <crc32c_ppc.h>
+#endif
 
 #include "lib/checksum/ob_crc64.h"
 
@@ -46,13 +49,18 @@ TEST(TestCrc64, common)
     str = rand_str(tmp_str, i);
     uint64_t manually_hash = crc64_sse42_manually(intermediate_hash, str, i);
     uint64_t fast_manually_hash = fast_crc64_sse42_manually(intermediate_hash, str, i);
+    ASSERT_EQ(manually_hash, fast_manually_hash);
+#if defined(__x86_64__)
     uint64_t sse42_hash = crc64_sse42(intermediate_hash, str, i);
     uint64_t isal_hash = ob_crc64_isal(intermediate_hash, str, i);
-    ASSERT_EQ(manually_hash, fast_manually_hash);
     ASSERT_EQ(manually_hash, sse42_hash);
     ASSERT_EQ(manually_hash, isal_hash);
-    //cout << "st = "<< tmp_str << endl;
-    //cout << "crc64c = "<< manually_hash << endl;
+#elif defined(__powerpc64__)
+    uint64_t ppc64_vpmsum_hash = crc32c_ppc64_vpmsum(intermediate_hash, (const unsigned char *)str, i);
+    ASSERT_EQ(manually_hash, ppc64_vpmsum_hash);
+#endif
+    //// cout << "st = "<< tmp_str << endl;
+    //// cout << "crc64c = "<< manually_hash << endl;
   }
 }
 
@@ -69,32 +77,39 @@ TEST(TestCrc64, test_speed)
       crc64_sse42_manually(0, tmp_str, i);
     }
     int64_t end = get_current_time_us();
-    cout << "     crc64_sse42_manually, execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+    // cout << "     crc64_sse42_manually, execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
 
     start = get_current_time_us();
     for (int64_t j = 0; j < COUNT; ++j) {
       fast_crc64_sse42_manually(0, tmp_str, i);
     }
     end = get_current_time_us();
-    cout << "fast_crc64_sse42_manually, execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+    // cout << "fast_crc64_sse42_manually, execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
 
+#if defined(__x86_64__)
     start = get_current_time_us();
     for (int64_t j = 0; j < COUNT; ++j) {
       crc64_sse42(0, tmp_str, i);
     }
     end = get_current_time_us();
-    cout << "          ob_crc64(sse42), execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+    // cout << "ob_crc64(sse42), execut_count = "<< COUNT << ", cost_us = " << end - start << " len = " << i << endl;
 
     start = get_current_time_us();
     for (int64_t j = 0; j < COUNT; ++j) {
       ob_crc64_isal(0, tmp_str, i);
     }
     end = get_current_time_us();
-    cout << "          ob_crc64(ob_crc64_isal), execut_count = " << COUNT << ", cost_us = " << end - start << " len = " << i
-         << endl;
-
-    cout << endl;
-    cout << endl;
+    // cout << "ob_crc64(ob_crc64_isal), execut_count = " << COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+#elif defined(__powerpc64__)
+    start = get_current_time_us();
+    for (int64_t j = 0; j < COUNT; ++j) {
+      crc32c_ppc64_vpmsum(0, (const unsigned char *)tmp_str, i);
+    }
+    end = get_current_time_us();
+    // cout << "ob_crc64(ob_crc64_ppc_vpmsum), execut_count = " << COUNT << ", cost_us = " << end - start << " len = " << i << endl;
+#endif
+    // cout << endl;
+    // cout << endl;
   }
 }
 

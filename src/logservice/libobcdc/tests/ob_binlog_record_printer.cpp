@@ -556,7 +556,11 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   constexpr int64_t string_print_md5_threshold = 4L << 10;
   const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
     (is_string && col_data_length >= string_print_md5_threshold);
+#ifdef OB_BUILD_CLOSE_MODULES //// not for opensource on x86_64/aarch_64/ppc64le 2023-12
   bool is_json_diff = br->isJsonDiffColVal(cname);
+#else
+  bool is_json_diff = false; 
+#endif
 
   int64_t column_index = index + 1;
   ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_name:%s", column_index, cname);

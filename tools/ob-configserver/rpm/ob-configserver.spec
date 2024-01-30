@@ -5,7 +5,7 @@ Version: 1.0.0
 Release: %(echo $RELEASE)%{?dist}
 URL: https://github.com/oceanbase/oceanbase
 License: MulanPSL - 2.0
-BuildArch: x86_64 aarch64
+BuildArch: x86_64 aarch64 ppc64le
 
 %description
 configserver for oceanbase database
