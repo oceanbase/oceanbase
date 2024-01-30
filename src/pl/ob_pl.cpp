@@ -160,6 +160,10 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(_Unwind_Resume));
   jit::ObLLVMHelper::add_symbol(ObString("eh_personality"),
                                 (void*)(ObPLEH::eh_personality));
+#if defined(__powerpc64__)
+  jit::ObLLVMHelper::add_symbol(ObString("DW.ref.eh_personality"),
+                                (void*)(ObPLEH::eh_personality));
+#endif
   jit::ObLLVMHelper::add_symbol(ObString("eh_convert_exception"),
                                 (void*)(ObPLEH::eh_convert_exception));
   jit::ObLLVMHelper::add_symbol(ObString("eh_classify_exception"),
