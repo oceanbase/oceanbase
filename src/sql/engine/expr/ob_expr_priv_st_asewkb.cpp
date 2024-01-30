@@ -103,6 +103,7 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
 
   if (OB_SUCC(ret)) {
     ObString res_wkb;
+    const int64_t data_offset = WKB_OFFSET + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
     if (is_null_result) {
       res.set_null();
     } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
@@ -114,6 +115,9 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
         LOG_WARN("fail to check coordinate range", K(ret));
       } else if (OB_FAIL(lob.get_inrow_data(res_wkb))) {
         LOG_WARN("fail to get inrow data", K(ret), K(lob));
+      } else if (res_wkb.length() < data_offset) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected wkb length", K(ret), K(res_wkb.length()));
       } else if (OB_FAIL(ObGeoTypeUtil::get_header_info_from_wkb(res_wkb, header))) {
         LOG_WARN("fail to get wkb header info", K(ret), K(res_wkb));
       } else {
@@ -121,7 +125,6 @@ int ObExprStPrivAsEwkb::eval_priv_st_as_ewkb(const ObExpr &expr,
         // swkb:[srid][version][bo][type][data]
         *(reinterpret_cast<uint8_t *>(res_wkb.ptr())) = static_cast<uint8_t>(header.bo_); // 1. write [bo]
         int64_t pos = WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
-        int64_t data_offset = WKB_OFFSET + WKB_GEO_BO_SIZE + WKB_GEO_TYPE_SIZE;
         int64_t remove_len = WKB_VERSION_SIZE;
         if (0 != header.srid_) {
           ObGeoWkbByteOrderUtil::write<uint32_t>(res_wkb.ptr() + WKB_GEO_BO_SIZE,
