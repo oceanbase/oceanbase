@@ -1800,6 +1800,7 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
         LOG_WARN("self or resolve package not exist", K(ret));
       } else {
         if (OB_NOT_NULL(parent_ns_)
+            && parent_ns_->get_database_id() == package_info_resolve->get_database_id()
             && ObCharset::case_compat_mode_equal(parent_ns_->get_package_name(), package_info_resolve->get_package_name())) {
           if (OB_FAIL(
               SMART_CALL(parent_ns_->resolve_symbol(name, type, data_type, parent_id, var_idx)))) {
@@ -1834,7 +1835,8 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
               type = ObPLExternalNS::PKG_TYPE;
             }
           } else {
-            OX (data_type = var->get_type());
+            data_type = var->get_type();
+            type = ObPLExternalNS::PKG_VAR;
           }
           if (OB_SUCC(ret) && type != ObPLExternalNS::INVALID_VAR) {
             if (OB_NOT_NULL(dependency_table_)) {
