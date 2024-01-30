@@ -7150,8 +7150,8 @@ int ObPLCodeGenerator::raise_exception(ObLLVMValue &exception,
                               get_eh_service().eh_raise_exception_,
                               exception,
                               exception_result));
-#if defined(__aarch64__)
-      // On ARM, _Unwind_RaiseException may failed.
+#if ( defined(__aarch64__) || defined(__powerpc64__) ) //add for PowerPC ppc64le on 2024-1-20
+      // On ARM and PowerPC, _Unwind_RaiseException may failed.
       OZ (generate_debug(ObString("CALL: failed to raise exception!"), exception_result));
       OZ (helper_.create_load(ObString("load_ret"), get_vars().at(RET_IDX), ret_value));
       OZ (helper_.create_ret(ret_value));
