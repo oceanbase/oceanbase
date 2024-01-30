@@ -522,6 +522,9 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
         retry_info.is_select_leader_ = true;
         retry_info.read_latest_ = scan_flag_.read_latest_;
         retry_info.timeout_ = access_ctx.timeout_;
+        if (retry_info.read_latest_) {
+          tx_info.snapshot_seq_ = ObSequence::get_max_seq_no();
+        }
         ObMemLobLocationInfo location_info(tablet_id_, ls_id_, cs_type);
         if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
           STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));

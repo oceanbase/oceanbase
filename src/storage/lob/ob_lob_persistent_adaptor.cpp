@@ -980,7 +980,7 @@ int ObPersistentLobApator::build_common_scan_param(
                           false, // index_back
                           false, // query_stat
                           ObQueryFlag::MysqlMode, // sql_mode
-                          param.read_latest_ // read_latest
+                          false // read_latest
                         );
   if (! param.enable_query_cache_) query_flag.disable_cache();
   query_flag.scan_order_ = param.scan_backward_ ? ObQueryFlag::Reverse : ObQueryFlag::Forward;
