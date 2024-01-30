@@ -304,7 +304,9 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
 
     if (is_materialized_view) { //container table is only for mv
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(resolve_table_options(parse_tree.children_[TABLE_OPTION_NODE], false))) {
+        if (OB_FAIL(ObResolverUtils::check_schema_valid_for_mview(table_schema))) {
+          LOG_WARN("failed to check schema valid for mview", KR(ret), K(table_schema));
+        } else if (OB_FAIL(resolve_table_options(parse_tree.children_[TABLE_OPTION_NODE], false))) {
           LOG_WARN("fail to resolve table options", KR(ret));
         }
       }

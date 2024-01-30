@@ -8622,5 +8622,23 @@ int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
   return max_partition_num;
 }
 
+int ObResolverUtils::check_schema_valid_for_mview(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < table_schema.get_column_count()); ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_ISNULL(column_schema = table_schema.get_column_schema_by_idx(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", KR(ret));
+    } else if (column_schema->is_xmltype()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create materialized view on xmltype columns is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          "create materialized view on xmltype columns is");
+    }
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

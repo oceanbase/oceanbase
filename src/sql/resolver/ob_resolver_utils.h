@@ -789,6 +789,7 @@ public:
       const share::schema::ObTableSchema &table_schema);
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
+  static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

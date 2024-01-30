@@ -1487,7 +1487,9 @@ int ObDDLService::generate_schema(
 
   if (OB_SUCC(ret)) {
     if (schema.is_materialized_view()) {
-      if (arg.mv_ainfo_.count() <= 0) {
+      if (OB_FAIL(ObResolverUtils::check_schema_valid_for_mview(schema))) {
+        LOG_WARN("failed to check schema valid for mview", KR(ret), K(schema));
+      } else if (arg.mv_ainfo_.count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("there should be mv ainfo", KR(ret), K(arg.mv_ainfo_.count()));
       } else {
