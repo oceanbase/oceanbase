@@ -303,8 +303,16 @@ ObPacketStreamFileReader::~ObPacketStreamFileReader()
   // normal SQL processor cannot handle the packets, so we
   // eat all packets with file content.
   timeout_ts_ = -1;
-  while (!eof_ && OB_SUCC(ret)) {
+  // We will wait at most 10 seconds if there is no more data come in.
+  const int64_t wait_timeout = 10 * 1000000L; // seconds
+  int64_t wait_deadline = ObTimeUtility::current_time() + wait_timeout;
+  int64_t last_received_size = received_size_;
+  while (!eof_ && OB_SUCC(ret) && ObTimeUtility::current_time() <= wait_deadline) {
     ret = receive_packet();
+    if (received_size_ > last_received_size) {
+      last_received_size = received_size_;
+      wait_deadline = ObTimeUtility::current_time() + wait_timeout;
+    }
   }
   arena_allocator_.reset();
 }
