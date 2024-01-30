@@ -1152,7 +1152,10 @@ int ObGranuleIteratorOp::try_build_tablet2part_id_map()
     } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected part level", K(ret));
-    } else if (OB_FAIL(tablet2part_id_map_.create(max(1, table_schema->get_all_part_num()), "GITabletMap"))) {
+    } else if (OB_FAIL(tablet2part_id_map_.create(max(1, table_schema->get_all_part_num()),
+                                                  "GITabletMap",
+                                                  ObModIds::OB_HASH_NODE,
+                                                  MTL_ID()))) {
       LOG_WARN("fail create hashmap", K(ret));
     } else {
       ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
