@@ -702,10 +702,10 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
   )
 endif()
 
-##-mcpu options automatically enable it
-##if (${ARCHITECTURE} STREQUAL "ppc64le")
-## target_compile_options(ob_sql_simd
-##        PRIVATE
-##              -mpower8-vector -mvsx -maltivec 
-## )
-##endif()
+##for ppc64le, -mcpu options automatically enable these
+if (${ARCHITECTURE} STREQUAL "ppc64le")
+ target_compile_options(ob_sql_simd
+        PRIVATE
+              -mpower8-vector -mvsx -maltivec 
+ )
+endif()
