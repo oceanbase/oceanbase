@@ -729,15 +729,15 @@ int ObLSTxService::offline()
   int ret = OB_SUCCESS;
   const int64_t PRINT_LOG_INTERVAL = 1000 * 1000; // 1s
   const bool graceful = false;
-  bool is_all_tx_clean_up = false;
+  bool unused_is_all_tx_clean_up = false;
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
-  } else if (OB_FAIL(mgr_->block_all(is_all_tx_clean_up))) {
+  } else if (OB_FAIL(mgr_->block_all(unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "block all failed", K_(ls_id));
-  } else if (OB_FAIL(mgr_->kill_all_tx(graceful, is_all_tx_clean_up))) {
+  } else if (OB_FAIL(mgr_->kill_all_tx(graceful, unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "kill_all_tx failed", K_(ls_id));
-  } else if (!is_all_tx_clean_up) {
+  } else if (mgr_->get_tx_ctx_count() > 0) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
       TRANS_LOG(WARN, "transaction not empty, try again", K(ret), KP(mgr_), K_(ls_id), K(mgr_->get_tx_ctx_count()));
