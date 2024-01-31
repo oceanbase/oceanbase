@@ -1504,7 +1504,9 @@ int ObTenant::recv_request(ObRequest &req)
   if (OB_SUCC(ret)) {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
-  } else if (OB_SIZE_OVERFLOW == ret || req_queue_.size() >= FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD) {
+  }
+
+  if (OB_SIZE_OVERFLOW == ret || req_queue_.size() >= FASTSTACK_REQ_QUEUE_SIZE_THRESHOLD) {
     IGNORE_RETURN faststack();
   }
 
