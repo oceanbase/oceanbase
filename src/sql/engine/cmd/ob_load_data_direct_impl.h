@@ -475,6 +475,7 @@ private:
 private:
   ObExecContext *ctx_;
   ObLoadDataStmt *load_stmt_;
+  ObPhysicalPlan plan_;
   LoadExecuteParam execute_param_;
   LoadExecuteContext execute_ctx_;
   observer::ObTableLoadInstance direct_loader_;
