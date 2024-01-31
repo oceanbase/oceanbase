@@ -2377,6 +2377,8 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
       DASTableIdList parent_tables(phy_plan_->get_allocator());
       if(OB_FAIL(check_fk_nested_dup_del(del_table_id, root_table_id, parent_tables, is_dup))) {
         LOG_WARN("failed to perform nested duplicate table check", K(ret), K(del_table_id), K(root_table_id));
+      } else if (is_dup) {
+        LOG_TRACE("[FOREIGN KEY] find duplicate deleted table induced by foreign key casacde", K(del_table_id), K(root_table_id));
       }
     }
     if (OB_SUCC(ret) && is_dup) {
@@ -7938,7 +7940,7 @@ int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
       const uint64_t child_table_id = fk_info.child_table_id_;
       const uint64_t parent_table_id = fk_info.parent_table_id_;
       ObReferenceAction del_act = fk_info.delete_action_;
-      if (child_table_id != common::OB_INVALID_ID && del_act == ACTION_CASCADE) {
+      if (root_table_id == parent_table_id && child_table_id != common::OB_INVALID_ID && del_act == ACTION_CASCADE) {
         if (child_table_id == table_id) {
           is_dup = true;
         } else if (has_cycle_reference(parent_tables, child_table_id)) {

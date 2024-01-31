@@ -210,9 +210,6 @@ public:
   inline ObSQLSessionInfo *get_my_session() const;
   //get the parent execute context in nested sql
   ObExecContext *get_parent_ctx() { return parent_ctx_; }
-  //get the root execute context of foreign key in nested sql
-  int get_fk_root_ctx(ObExecContext* &root_ctx);
-  bool is_fk_root_ctx();
   int64_t get_nested_level() const { return nested_level_; }
   /**
    * @brief set sql proxy

@@ -137,8 +137,6 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       inf_pc_configs_(),
       curr_trans_last_stmt_end_time_(0),
       check_sys_variable_(true),
-      is_foreign_key_cascade_(false),
-      is_foreign_key_check_exist_(false),
       acquire_from_pool_(false),
       release_to_pool_(true),
       is_tenant_killed_(0),
@@ -426,8 +424,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   curr_trans_last_stmt_end_time_ = 0;
   reserved_read_snapshot_version_.reset();
   check_sys_variable_ = true;
-  is_foreign_key_cascade_ = false;
-  is_foreign_key_check_exist_ = false;
   acquire_from_pool_ = false;
   // 不要重置release_to_pool_，原因见属性声明位置的注释。
   is_tenant_killed_ = 0;
@@ -4407,6 +4403,9 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
 
   bool need_serial_exec = false;
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
+  // No meaningful field for serialization compatibility
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
   LST_DO_CODE(OB_UNIS_ENCODE,
               sys_vars_cache_.inc_data_,
               unused_safe_weak_read_snapshot,
@@ -4430,10 +4429,10 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               labels_,
               total_stmt_tables_,
               cur_stmt_tables_,
-              is_foreign_key_cascade_,
+              is_foreign_key_cascade,
               sys_var_in_pc_str_,
               config_in_pc_str_,
-              is_foreign_key_check_exist_,
+              is_foreign_key_check_exist,
               need_serial_exec,
               sql_scope_flags,
               stmt_type_,
@@ -4605,6 +4604,9 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   flt_vars_.last_flt_trace_id_.reset();
   flt_vars_.last_flt_span_id_.reset();
   const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
+  // No meaningful field for serialization compatibility
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
   LST_DO_CODE(OB_UNIS_DECODE,
               sys_vars_cache_.inc_data_,
               unused_safe_weak_read_snapshot,
@@ -4628,10 +4630,10 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
               labels_,
               total_stmt_tables_,
               cur_stmt_tables_,
-              is_foreign_key_cascade_,
+              is_foreign_key_cascade,
               sys_var_in_pc_str_,
               config_in_pc_str_,
-              is_foreign_key_check_exist_,
+              is_foreign_key_check_exist,
               need_serial_exec,
               sql_scope_flags,
               stmt_type_,
@@ -4930,7 +4932,9 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   int64_t unused_safe_weak_read_snapshot = 0;
   bool need_serial_exec = false;
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
-
+  // No meaningful field for serialization compatibility
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               sys_vars_cache_.inc_data_,
               unused_safe_weak_read_snapshot,
@@ -4954,10 +4958,10 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               labels_,
               total_stmt_tables_,
               cur_stmt_tables_,
-              is_foreign_key_cascade_,
+              is_foreign_key_cascade,
               sys_var_in_pc_str_,
               config_in_pc_str_,
-              is_foreign_key_check_exist_,
+              is_foreign_key_check_exist,
               need_serial_exec,
               sql_scope_flags,
               stmt_type_,
@@ -5941,10 +5945,6 @@ int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip
   OX (cur_stmt_tables_.reset());
   OX (sys_vars_cache_.get_autocommit_info(saved_value.inc_autocommit_));
   OX (sys_vars_cache_.set_autocommit_info(false));
-  OX (saved_value.is_foreign_key_cascade_ = is_foreign_key_cascade_);
-  OX (is_foreign_key_cascade_ = false);
-  OX (saved_value.is_foreign_key_check_exist_ = is_foreign_key_check_exist_);
-  OX (is_foreign_key_check_exist_ = false);
   return ret;
 }
 
@@ -5975,8 +5975,6 @@ int ObBasicSessionInfo::begin_nested_session(StmtSavedValue &saved_value, bool s
 int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
 {
   int ret = OB_SUCCESS;
-  OX (is_foreign_key_check_exist_ = saved_value.is_foreign_key_check_exist_);
-  OX (is_foreign_key_cascade_ = saved_value.is_foreign_key_cascade_);
   OX (sys_vars_cache_.set_autocommit_info(saved_value.inc_autocommit_));
   OZ (cur_stmt_tables_.assign(saved_value.cur_stmt_tables_));
   OZ (total_stmt_tables_.assign(saved_value.total_stmt_tables_));

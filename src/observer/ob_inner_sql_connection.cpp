@@ -2211,38 +2211,6 @@ int ObInnerSQLConnection::end_nested_session(ObSQLSessionInfo::StmtSavedValue &s
   return ret;
 }
 
-int ObInnerSQLConnection::set_foreign_key_cascade(bool is_cascade)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_casecade(is_cascade));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_cascade(bool &is_cascade) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_cascade = extern_session_->is_foreign_key_cascade());
-  return ret;
-}
-
-int ObInnerSQLConnection::set_foreign_key_check_exist(bool is_check_exist)
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (extern_session_->set_foreign_key_check_exist(is_check_exist));
-  return ret;
-}
-
-int ObInnerSQLConnection::get_foreign_key_check_exist(bool &is_check_exist) const
-{
-  int ret = OB_SUCCESS;
-  OV (is_extern_session());
-  OX (is_check_exist = extern_session_->is_foreign_key_check_exist());
-  return ret;
-}
-
 int ObInnerSQLConnection::create_session_by_mgr()
 {
   int ret = OB_SUCCESS;
