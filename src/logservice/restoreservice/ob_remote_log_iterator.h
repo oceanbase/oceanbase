@@ -125,8 +125,7 @@ private:
   void update_data_gen_max_lsn_();
   void advance_data_gen_lsn_();
   void mark_source_error_(const int ret_code);
-  bool need_prepare_buf_(const int ret_code,
-                         int has_retry_count) const;
+  bool need_prepare_buf_(const int ret_code) const;
 
 private:
   bool inited_;
