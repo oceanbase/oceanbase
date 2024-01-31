@@ -84,11 +84,11 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
   int ret = OB_SUCCESS;
   thread_local ObRandom random;
   ObSessionBucket &bucket = di_map_[session_id % MAX_SESSION_COLLECT_NUM];
-#ifdef ERRSIM
+#ifdef ENABLE_DEBUG_LOG
   int conflict_retry_count = 0;
   if (EN_DI_SESSION_CACHE_GET_NODE_CONFLICT) {
     conflict_retry_count = -EN_DI_SESSION_CACHE_GET_NODE_CONFLICT;
-    LOG_DEBUG("di session cache node retry cnt", K(conflict_retry_count));
+    LOG_INFO("di session cache node retry cnt", K(session_id), K(conflict_retry_count));
   }
   int cnt = 0;
 #endif
@@ -96,7 +96,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
     bucket.lock_.rdlock();
     if (OB_SUCCESS == (ret = bucket.get_the_node(session_id, session_collect))) {
       if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
-#ifdef ERRSIM
+#ifdef ENABLE_DEBUG_LOG
         if (conflict_retry_count) {
           bucket.list_.remove(session_collect);
           session_collect->clean();
@@ -120,7 +120,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       int64_t pos = 0;
       while (1) {
         pos = random.get(0, MAX_SESSION_COLLECT_NUM - 1);
-#ifdef ERRSIM
+#ifdef ENABLE_DEBUG_LOG
         if (conflict_retry_count && cnt++ < conflict_retry_count) {
           if (0 != collects_[pos].session_id_ &&
               OB_SUCCESS == (ret = collects_[pos].lock_.try_wrlock())) {
@@ -167,6 +167,11 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       }
     }
   }
+#ifdef ENABLE_DEBUG_LOG
+  if (conflict_retry_count) {
+    LOG_INFO("get refreshed di session cache", K(session_id), K(session_collect));
+  }
+#endif
   return ret;
 }
 
