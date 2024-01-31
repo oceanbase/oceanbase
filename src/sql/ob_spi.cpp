@@ -2549,7 +2549,7 @@ int ObSPIService::spi_resolve_prepare(common::ObIAllocator &allocator,
                                       secondary_namespace,
                                       prepare_result.has_dup_column_name_));
           } else {
-            PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, is_cursor);
+            PLPrepareCtx tmp_pl_prepare_ctx(session, secondary_namespace, false, false, false);
             const ObString &route_sql = pl_prepare_result.result_set_->get_stmt_ps_sql().empty() ?
                                           pl_prepare_result.result_set_->get_route_sql() :
                                           pl_prepare_result.result_set_->get_stmt_ps_sql();
