@@ -1,4 +1,4 @@
-static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
+static constexpr ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
@@ -51,6 +51,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*NullType=>ObJsonType*/
         ObGeometryType,      /*NullType=>ObGeometryType*/
         ObUserDefinedSQLType,/*NullType=>ObUserDefinedSQLType*/
+        ObMaxType,           /*NullType=>ObDecimalIntType*/
         ObCollectionSQLType, /* NullType=>ObCollectionSQLType*/
     },
 
@@ -106,6 +107,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*TinyInt=>ObJsonType*/
         ObGeometryType,   /*TinyInt=>ObGeometryType*/
         ObMaxType,        /*TinyInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*TinyIntType=>ObDecimalIntType*/
         ObMaxType,        /* TinyInt=>ObCollectionSQLType*/
     },
 
@@ -161,6 +163,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*SmallInt=>ObJsonType*/
         ObGeometryType,   /*SmallInt=>ObGeometryType*/
         ObMaxType,        /*SmallInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*SmallIntType=>ObDecimalIntType*/
         ObMaxType,        /*SmallInt=>ObCollectionSQLType*/
     },
 
@@ -216,6 +219,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*MediumInt=>ObJsonType*/
         ObGeometryType,   /*MediumInt=>ObGeometryType*/
         ObMaxType,        /*MediumInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*MediumIntType=>ObDecimalIntType*/
         ObMaxType,        /*MediumInt=>ObCollectionSQLType*/
     },
 
@@ -271,6 +275,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*Int32Type=>ObJsonType*/
         ObGeometryType,   /*Int32Type=>ObGeometryType*/
         ObMaxType,        /*Int32Type=>ObUserDefinedSQLType*/
+        ObMaxType,        /*Int32Type=>ObDecimalIntType*/
         ObMaxType,        /*Int32Type=>ObCollectionSQLType*/
     },
 
@@ -326,6 +331,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*IntType=>ObJsonType*/
         ObGeometryType,   /*IntType=>ObGeometryType*/
         ObMaxType,        /*IntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*IntType=>ObDecimalIntType*/
         ObMaxType,        /*IntType=>ObCollectionSQLType*/
     },
 
@@ -381,6 +387,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UTinyIntType=>ObJsonType*/
         ObGeometryType,   /*UTinyIntType=>ObGeometryType*/
         ObMaxType,        /*UTinyIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UTinyIntType=>ObDecimalIntType*/
         ObMaxType,        /*UTinyIntType=>ObCollectionSQLType*/
     },
 
@@ -436,6 +443,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*USmallIntType=>ObJsonType*/
         ObGeometryType,   /*USmallIntType=>ObGeometryType*/
         ObMaxType,        /*USmallIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*USmallIntType=>ObDecimalIntType*/
         ObMaxType,        /*USmallIntType=>ObCollectionSQLType*/
     },
 
@@ -491,6 +499,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UMediumIntType=>ObJsonType*/
         ObGeometryType,   /*UMediumIntType=>ObGeometryType*/
         ObMaxType,        /*UMediumIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UMediumIntType=>ObDecimalIntType*/
         ObMaxType,        /*UMediumIntType=>ObCollectionSQLType*/
     },
 
@@ -546,6 +555,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UInt32Type=>ObJsonType*/
         ObGeometryType,   /*UInt32Type=>ObGeometryType*/
         ObMaxType,        /*UInt32Type=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UInt32Type=>ObDecimalIntType*/
         ObMaxType,        /*UInt32Type=>ObCollectionSQLType*/
     },
 
@@ -601,6 +611,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UIntType=>ObJsonType*/
         ObGeometryType,   /*UIntType=>ObGeometryType*/
         ObMaxType,        /*UIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UIntType=>ObDecimalIntType*/
         ObMaxType,        /*UIntType=>ObCollectionSQLType*/
     },
 
@@ -656,6 +667,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*FloatType=>ObJsonType*/
         ObGeometryType,   /*FloatType=>ObGeometryType*/
         ObMaxType,        /*FloatType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*FloatType=>ObDecimalIntType*/
         ObMaxType,        /*FloatType=>ObCollectionSQLType*/
     },
 
@@ -711,6 +723,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*DoubleTYpe=>ObJsonType*/
         ObGeometryType,   /*DoubleTYpe=>ObGeometryType*/
         ObMaxType,        /*DoubleTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*DoubleType=>ObDecimalIntType*/
         ObMaxType,        /*DoubleTYpe=>ObCollectionSQLType*/
     },
 
@@ -766,6 +779,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UFloatType=>ObJsonType*/
         ObGeometryType,   /*UFloatTYpe=>ObGeometryType*/
         ObMaxType,        /*UFloatTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UFloatType=>ObDecimalIntType*/
         ObMaxType,        /*UFloatTYpe=>ObCollectionSQLType*/
     },
 
@@ -821,6 +835,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UDoubleType=>ObJsonType*/
         ObGeometryType,   /*UDoubleTYpe=>ObGeometryType*/
         ObMaxType,        /*UDoubleTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UDoubleType=>ObDecimalIntType*/
         ObMaxType,        /*UDoubleTYpe=>ObCollectionSQLType*/
     },
 
@@ -876,6 +891,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*NumberType=>ObJsonType*/
         ObGeometryType,   /*NumberTYpe=>ObGeometryType*/
         ObMaxType,        /*NumberTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*NumberType=>ObDecimalIntType*/
         ObMaxType,        /*NumberTYpe=>ObCollectionSQLType*/
     },
 
@@ -931,6 +947,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UNumberType=>ObJsonType*/
         ObGeometryType,   /*UNumberTYpe=>ObGeometryType*/
         ObMaxType,        /*UNumberTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UNumberType=>ObDecimalIntType*/
         ObMaxType,        /*UNumberTYpe=>ObCollectionSQLType*/
     },
 
@@ -986,6 +1003,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*DateTimeType=>ObJsonType*/
         ObGeometryType,      /*DateTimeTYpe=>ObGeometryType*/
         ObMaxType,           /*DateTimeTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*DateTimeType=>ObDecimalIntType*/
         ObMaxType,           /*DateTimeTYpe=>ObCollectionSQLType*/
     },
 
@@ -1041,6 +1059,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*TimestampType=>ObJsonType*/
         ObGeometryType,      /*TimestampTYpe=>ObGeometryType*/
         ObMaxType,           /*TimestampTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*TimestampType=>ObDecimalIntType*/
         ObMaxType,           /*TimestampTYpe=>ObCollectionSQLType*/
     },
 
@@ -1096,6 +1115,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*DateType=>ObJsonType*/
         ObGeometryType,      /*DateTYpe=>ObGeometryType*/
         ObMaxType,           /*DateTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*DateType=>ObDecimalIntType*/
         ObMaxType,           /*DateTYpe=>ObCollectionSQLType*/
     },
 
@@ -1151,6 +1171,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*TimeType=>ObJsonType*/
         ObGeometryType,      /*TimeTYpe=>ObGeometryType*/
         ObMaxType,           /*TimeTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*TimeType=>ObDecimalIntType*/
         ObMaxType,           /*TimeTYpe=>ObCollectionSQLType*/
     },
 
@@ -1206,6 +1227,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*YearType=>ObJsonType*/
         ObGeometryType,   /*YearTYpe=>ObGeometryType*/
         ObMaxType,        /*YearTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*YearType=>ObDecimalIntType*/
         ObMaxType,        /*YearTYpe=>ObCollectionSQLType*/
     },
 
@@ -1261,6 +1283,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*VarcharType=>ObJsonType*/
         ObGeometryType,   /*VarcharTYpe=>ObGeometryType*/
         ObMaxType,        /*VarcharTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*VarcharType=>ObDecimalIntType*/
         ObMaxType,        /*VarcharTYpe=>ObCollectionSQLType*/
     },
 
@@ -1316,6 +1339,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*CharType=>ObJsonType*/
         ObGeometryType,   /*CharType=>ObGeometryType*/
         ObMaxType,        /*CharType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*CharType=>ObDecimalIntType*/
         ObMaxType,        /*CharType=>ObCollectionSQLType*/
     },
 
@@ -1371,6 +1395,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*HexStringType=>ObJsonType*/
         ObGeometryType,   /*HexStringType=>ObGeometryType*/
         ObMaxType,        /*HexStringType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*HexStringType=>ObDecimalIntType*/
         ObMaxType,        /*HexStringType=>ObCollectionSQLType*/
     },
 
@@ -1426,6 +1451,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ExtendType=>ObJsonType*/
         ObGeometryType,  /*ExtendType=>ObGeometryType*/
         ObUserDefinedSQLType, /*ExtendType=>ObUserDefinedSQLType*/
+        ObMaxType,            /*ExtendType=>ObDecimalIntType*/
         ObCollectionSQLType,  /*ExtendType=>ObCollectionSQLType*/
     },
 
@@ -1481,6 +1507,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UnknownType=>ObJsonType*/
         ObGeometryType,   /*UnknownType=>ObGeometryType*/
         ObMaxType,        /*UnknownType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UnknownType=>ObDecimalIntType*/
         ObMaxType,        /*UnknownType=>ObCollectionSQLType*/
     },
     /*ObTinyTextType*/
@@ -1531,10 +1558,11 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTinyTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTinyTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObTinyTextType=>ObLongTextType*/
+        ObMaxType,        /*ObTinyTextType=>ObLobType*/
         ObJsonType,       /*ObTinyTextType=>ObJsonType*/
         ObGeometryType,   /*ObTinyTextType=>ObGeometryType*/
         ObMaxType,        /*ObTinyTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObTinyTextType=>ObDecimalIntType*/
         ObMaxType,        /*ObTinyTextType=>ObCollectionSQLType*/
     },
     /*ObTextType*/
@@ -1585,10 +1613,11 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObTextType=>ObLongTextType*/
+        ObMaxType,        /*ObTextType=>ObLobType*/
         ObJsonType,       /*ObTextType=>ObJsonType*/
         ObGeometryType,   /*ObTextType=>ObGeometryType*/
         ObMaxType,        /*ObTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObTextType=>ObDecimalIntType*/
         ObMaxType,        /*ObTextType=>ObCollectionSQLType*/
     },
 
@@ -1624,11 +1653,12 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMediumTextType, /*ObMediumTextType=>ObTinyTextType  */
         ObMediumTextType, /* ObMediumTextType=>ObTextType  */
         ObMediumTextType, /* ObMediumTextType=>ObMediumTextType  */
+        ObLongTextType,   /* ObMediumTextType=>ObLongTextType  */
         ObLongTextType,   /* ObMediumTextType=>ObBitType  */
         ObLongTextType,   /* ObMediumTextType=>ObEnumType  */
         ObLongTextType,   /* ObMediumTextType=>ObSetType  */
         ObMaxType,        /* ObMediumTextType=>ObEnumInnerType  */
-        ObMaxType,        /* ObMediumTextType=>ObEnumInnerType  */
+        ObMaxType,        /* ObMediumTextType=>ObSetInnerType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampTZType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampLTZType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampNanoType  */
@@ -1639,10 +1669,11 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObMediumTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObMediumTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObMediumTextType=>ObLongTextType*/
+        ObMaxType,        /*ObMediumTextType=>ObLobType*/
         ObJsonType,       /*ObMediumTextType=>ObJsonType*/
         ObGeometryType,   /*ObMediumTextType=>ObGeometryType*/
         ObMaxType,        /*ObMediumTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObMediumTextType=>ObDecimalIntType*/
         ObMaxType,        /*ObMediumTextType=>ObCollectionSQLType*/
     },
 
@@ -1694,10 +1725,11 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /*ObLongTextType=>ObNVarchar2Type       */
         ObNCharType,     /*ObLongTextType=>ObNCharType       */
         ObMaxType,       /*URowID*/
-        ObLongTextType,  /*ObLongTextType=>=>ObLongTextType*/
+        ObMaxType,       /*ObLongTextType=>ObLobType*/
         ObJsonType,      /*ObLongTextType=>ObJsonType*/
         ObGeometryType,  /*ObLongTextType=>ObGeometryType*/
         ObMaxType,       /*ObLongTextType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObLongTextType=>ObDecimalIntType*/
         ObMaxType,       /*ObLongTextType=>ObCollectionSQLType*/
     },
     /*ObBitType*/
@@ -1752,6 +1784,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*ObBitType=>ObJsonType*/
         ObGeometryType,   /*ObBitType=>ObGeometryType*/
         ObMaxType,        /*ObBitType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObBitType=>ObDecimalIntType*/
         ObMaxType,        /*ObBitType=>ObCollectionSQLType*/
     },
     /*ObEnumType*/
@@ -1806,6 +1839,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObEnumType=>ObJsonType*/
         ObMaxType,        /*ObEnumType=>ObGeometryType*/
         ObMaxType,        /*ObEnumType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObEnumType=>ObDecimalIntType*/
         ObMaxType,        /*ObEnumType=>ObCollectionSQLType*/
     },
     /*ObSetType*/
@@ -1860,6 +1894,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObSetType=>ObJsonType*/
         ObMaxType,        /*ObSetType=>ObGeometryType*/
         ObMaxType,        /*ObSetType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObSetType=>ObDecimalIntType*/
         ObMaxType,        /*ObSetType=>ObCollectionSQLType*/
     },
     /*ObEnumInnerType*/
@@ -1914,6 +1949,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObEnumInnerType=>ObJsonType*/
         ObMaxType,        /*ObEnumInnerType=>ObGeometryType*/
         ObMaxType,        /*ObEnumInnerType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObEnumInnerType=>ObDecimalIntType*/
         ObMaxType,        /*ObEnumInnerType=>ObCollectionSQLType*/
     },
     /*ObSetInnerType*/
@@ -1968,6 +2004,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObSetInnerType=>ObJsonType*/
         ObMaxType,        /*ObSetInnerType=>ObGeometryType*/
         ObMaxType,        /*ObSetInnerType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObSetInnerType=>ObDecimalIntType*/
         ObMaxType,        /*ObSetInnerType=>ObCollectionSQLType*/
     },
     /*ObTimestampTZType*/
@@ -2022,6 +2059,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,         /*ObTimestampTZType=>ObJsonType*/
         ObMaxType,         /*ObTimestampTZType=>ObGeometryType*/
         ObMaxType,         /*ObTimestampTZType=>ObUserDefinedSQLType*/
+        ObMaxType,         /*ObTimestampTZType=>ObDecimalIntType*/
         ObMaxType,         /*ObTimestampTZType=>ObCollectionSQLType*/
     },
     /*ObTimestampLTZType*/
@@ -2076,6 +2114,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,          /*ObTimestampLTZType=>ObJsonType*/
         ObMaxType,          /*ObTimestampLTZType=>ObGeometryType*/
         ObMaxType,          /*ObTimestampLTZType=>ObUserDefinedSQLType*/
+        ObMaxType,          /*ObTimestampLTZType=>ObDecimalIntType*/
         ObMaxType,          /*ObTimestampLTZType=>ObCollectionSQLType*/
     },
     /*ObTimestampNanoType*/
@@ -2130,6 +2169,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,           /*ObTimestampNanoType=>ObJsonType*/
         ObMaxType,           /*ObTimestampNanoType=>ObGeometryType*/
         ObMaxType,           /*ObTimestampNanoType=>ObUserDefinedSQLType*/
+        ObMaxType,           /*ObTimestampNanoType=>ObDecimalIntType*/
         ObMaxType,           /*ObTimestampNanoType=>ObCollectionSQLType*/
     },
     /*ObRawType*/
@@ -2184,6 +2224,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObRawType=>ObJsonType*/
         ObMaxType,       /*ObRawType=>ObGeometryType*/
         ObMaxType,       /*ObRawType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObRawType=>ObDecimalIntType*/
         ObMaxType,       /*ObRawType=>ObCollectionSQLType*/
     },
     /*ObIntervalYMType*/
@@ -2227,7 +2268,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /* ObIntervalYMType=>ObTimestampTZType  */
         ObMaxType,        /* ObIntervalYMType=>ObTimestampLTZType  */
         ObMaxType,        /* ObIntervalYMType=>ObTimestampNanoType  */
-        ObMaxType,        /* ObIntervalYMType=>ObIntervalYMType  */
+        ObMaxType,        /* ObIntervalYMType=>ObRawType  */
         ObIntervalYMType, /*ObIntervalYMType=>ObIntervalYMType  */
         ObMaxType,        /*ObIntervalYMType=>ObIntervalDSType  */
         ObIntervalYMType, /*ObIntervalYMType=>ObNumberFloatType  */
@@ -2238,6 +2279,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObIntervalYMType=>ObJsonType*/
         ObMaxType,        /*ObIntervalYMType=>ObGeometryType*/
         ObMaxType,        /*ObIntervalYMType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObIntervalYMType=>ObDecimalIntType*/
         ObMaxType,        /*ObIntervalYMType=>ObCollectionSQLType*/
     },
     /*ObIntervalDSType*/
@@ -2292,6 +2334,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObIntervalDSType=>ObJsonType*/
         ObMaxType,        /*ObIntervalDSType=>ObGeometryType*/
         ObMaxType,        /*ObIntervalDSType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObIntervalDSType=>ObDecimalIntType*/
         ObMaxType,        /*ObIntervalDSType=>ObCollectionSQLType*/
     },
 
@@ -2347,6 +2390,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*NumberFloatType=>ObJsonType*/
         ObMaxType,        /*NumberFloatType=>ObGeometryType*/
         ObMaxType,        /*NumberFloatType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObNumberFloatType=>ObDecimalIntType*/
         ObMaxType,        /*NumberFloatType=>ObCollectionSQLType*/
     },
     /*ObNVarchar2Type*/
@@ -2401,6 +2445,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObNVarchar2Type=>ObJsonType*/
         ObMaxType,       /*ObNVarchar2Type=>ObGeometryType*/
         ObMaxType,       /*ObNVarchar2Type=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObNVarchar2Type=>ObDecimalIntType*/
         ObMaxType,       /*ObNVarchar2Type=>ObCollectionSQLType*/
     },
     /*ObNCharType*/
@@ -2455,6 +2500,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObNCharType=>ObJsonType*/
         ObMaxType,       /*ObNCharType=>ObGeometryType*/
         ObMaxType,       /*ObNCharType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObNCharType=>ObDecimalIntType*/
         ObMaxType,       /*ObNCharType=>ObCollectionSQLType*/
     },
     /*ObURowIDType*/
@@ -2509,6 +2555,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /*ObURowIDType=>ObJsonType*/
         ObMaxType,     /*ObURowIDType=>ObGeometryType*/
         ObMaxType,     /*ObURowIDType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObURowIDType=>ObDecimalIntType*/
         ObMaxType,     /*ObURowIDType=>ObCollectionSQLType*/
     },
     /*ObLobType*/
@@ -2563,6 +2610,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObLobType=>ObJsonType*/
         ObMaxType,     /* ObLobType=>ObGeometryType*/
         ObMaxType,     /* ObLobType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObLobType=>ObDecimalIntType*/
         ObMaxType,     /* ObLobType=>ObCollectionSQLType*/
     },
     /*ObJsonType*/
@@ -2617,6 +2665,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObJsonType,    /*ObJsonType=>ObJsonType*/
         ObMaxType,     /*ObJsonType=>ObGeometryType*/
         ObMaxType,     /*ObJsonType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObJsonType=>ObDecimalIntType*/
         ObMaxType,     /*ObJsonType=>ObCollectionSQLType*/
     },
     /*ObGeometryType*/
@@ -2671,6 +2720,7 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObGeometryType=>ObJsonType*/
         ObGeometryType,     /* ObGeometryType=>ObGeometryType*/
         ObMaxType,          /* ObGeometryType=>ObUserDefinedSQLType*/
+        ObMaxType,          /*ObGeometryType=>ObDecimalIntType*/
         ObMaxType,     /* ObGeometryType=>ObCollectionSQLType*/
     },
     /*ObUserDefinedSQLType*/
@@ -2725,7 +2775,63 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObUserDefinedSQLType=>ObJsonType*/
         ObMaxType,     /* ObUserDefinedSQLType=>ObGeometryType*/
         ObUserDefinedSQLType, /*ObUserDefinedSQLType*/
+        ObMaxType,     /* ObUserDefinedSQLType=>ObDecimalIntType*/
         ObMaxType,     /* ObUserDefinedSQLType=>ObCollectionSQLType*/
+    },
+    /*ObDecimalIntType*/
+    {
+        ObMaxType,     /* ObDecimalIntType=>NullType  */
+        ObMaxType,     /* ObDecimalIntType=>TinyIntType  */
+        ObMaxType,     /* ObDecimalIntType=>SmallIntType  */
+        ObMaxType,     /* ObDecimalIntType=>MediumIntType  */
+        ObMaxType,     /* ObDecimalIntType=>Int32Type  */
+        ObMaxType,     /* ObDecimalIntType=>IntType  */
+        ObMaxType,     /* ObDecimalIntType=>UTinyIntType  */
+        ObMaxType,     /* ObDecimalIntType=>USmallIntType  */
+        ObMaxType,     /* ObDecimalIntType=>UMediumIntType  */
+        ObMaxType,     /* ObDecimalIntType=>UInt32Type  */
+        ObMaxType,     /* ObDecimalIntType=>UIntType  */
+        ObMaxType,     /* ObDecimalIntType=>FloatType  */
+        ObMaxType,     /* ObDecimalIntType=>DoubleType  */
+        ObMaxType,     /* ObDecimalIntType=>UFloatType  */
+        ObMaxType,     /* ObDecimalIntType=>UDoubleType  */
+        ObMaxType,     /* ObDecimalIntType=>NumberType  */
+        ObMaxType,     /* ObDecimalIntType=>UNumberType  */
+        ObMaxType,     /* ObDecimalIntType=>DateTimeType  */
+        ObMaxType,     /* ObDecimalIntType=>TimestampType  */
+        ObMaxType,     /* ObDecimalIntType=>DateType  */
+        ObMaxType,     /* ObDecimalIntType=>TimeType  */
+        ObMaxType,     /* ObDecimalIntType=>YearType  */
+        ObMaxType,     /* ObDecimalIntType=>VarcharType  */
+        ObMaxType,     /* ObDecimalIntType=>CharType  */
+        ObMaxType,     /* ObDecimalIntType=>HexStringType  */
+        ObMaxType,     /* ObDecimalIntType=>ExtendType  */
+        ObMaxType,     /* ObDecimalIntType=>UnknownType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTinyTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObMediumTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObLongTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObBitType  */
+        ObMaxType,     /* ObDecimalIntType=>ObEnumType  */
+        ObMaxType,     /* ObDecimalIntType=>ObSetType  */
+        ObMaxType,     /* ObDecimalIntType=>ObEnumInnerType  */
+        ObMaxType,     /* ObDecimalIntType=>ObSetInnerType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampTZType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObDecimalIntType=>ObRawType  */
+        ObMaxType,     /* ObDecimalIntType=>ObIntervalYMType  */
+        ObMaxType,     /* ObDecimalIntType=>ObIntervalDSType  */
+        ObMaxType,     /* ObDecimalIntType=>ObNumberFloatType  */
+        ObMaxType,     /* ObDecimalIntType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObDecimalIntType=>ObNCharType       */
+        ObMaxType,     /* ObDecimalIntType=>ObURowIDType*/
+        ObMaxType,     /* ObDecimalIntType=>ObLobType*/
+        ObMaxType,     /* ObDecimalIntType=>ObJsonType*/
+        ObMaxType,     /* ObDecimalIntType=>ObGeometryType*/
+        ObMaxType,     /* ObDecimalIntType=>ObUserDefinedSQLType*/
+        ObMaxType,     /* ObDecimalIntType=>ObDecimalIntType*/
+        ObMaxType,     /* ObDecimalIntType=>ObCollectionSQLType*/
     },
     /*ObCollectionSQLType*/
     {
@@ -2779,11 +2885,12 @@ static ObObjType MERGE_RESULT_TYPE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObCollectionSQLType=>ObJsonType*/
         ObMaxType,     /* ObCollectionSQLType=>ObGeometryType*/
         ObMaxType,     /* ObCollectionSQLType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObCollectionSQLType=>ObDecimalIntType*/
         ObCollectionSQLType, /* ObCollectionSQLType */
     },
 };
 
-static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
+static constexpr ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
     /*NullType*/
     {
         ObNullType,          /*NullType=>NullType  */
@@ -2836,6 +2943,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*NullType=>ObJsonType*/
         ObGeometryType,      /*NullType=>ObGeometryType*/
         ObUserDefinedSQLType,/*NullType=>ObUserDefinedSQLType*/
+        ObMaxType,           /*NullType=>ObDecimalIntType*/
+        ObMaxType,           /*NullType=>ObCollectionSQLType*/
     },
 
     /*TinyIntType*/
@@ -2890,6 +2999,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*TinyInt=>ObJsonType*/
         ObGeometryType,   /*TinyInt=>ObGeometryType*/
         ObMaxType,        /*TinyInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*TinyIntType=>ObDecimalIntType*/
+        ObMaxType,        /*TinyIntType=>ObCollectionSQLType*/
     },
 
     /*SmallIntType*/
@@ -2944,6 +3055,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*SmallInt=>ObJsonType*/
         ObGeometryType,   /*SmallInt=>ObGeometryType*/
         ObMaxType,        /*SmallInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*SmallIntType=>ObDecimalIntType*/
+        ObMaxType,        /*SmallIntType=>ObCollectionSQLType*/
     },
 
     /*MediumIntType*/
@@ -2998,6 +3111,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*MediumInt=>ObJsonType*/
         ObGeometryType,   /*MediumInt=>ObGeometryType*/
         ObMaxType,        /*MediumInt=>ObUserDefinedSQLType*/
+        ObMaxType,        /*MediumIntType=>ObDecimalIntType*/
+        ObMaxType,        /*MediumIntType=>ObCollectionSQLType*/
     },
 
     /*Int32Type*/
@@ -3052,6 +3167,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*Int32Type=>ObJsonType*/
         ObGeometryType,   /*Int32Type=>ObGeometryType*/
         ObMaxType,        /*Int32Type=>ObUserDefinedSQLType*/
+        ObMaxType,        /*Int32Type=>ObDecimalIntType*/
+        ObMaxType,        /*Int32Type=>ObCollectionSQLType*/
     },
 
     /*IntType*/
@@ -3106,6 +3223,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*IntType=>ObJsonType*/
         ObGeometryType,   /*IntType=>ObGeometryType*/
         ObMaxType,        /*IntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*IntType=>ObDecimalIntType*/
+        ObMaxType,        /*IntType=>ObCollectionSQLType*/
     },
 
     /*UTinyIntType*/
@@ -3160,6 +3279,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UTinyIntType=>ObJsonType*/
         ObGeometryType,   /*UTinyIntType=>ObGeometryType*/
         ObMaxType,        /*UTinyIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UTinyIntType=>ObDecimalIntType*/
+        ObMaxType,        /*UTinyIntType=>ObCollectionSQLType*/
     },
 
     /*USmallIntType*/
@@ -3214,6 +3335,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*USmallIntType=>ObJsonType*/
         ObGeometryType,   /*USmallIntType=>ObGeometryType*/
         ObMaxType,        /*USmallIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*USmallIntType=>ObDecimalIntType*/
+        ObMaxType,        /*USmallIntType=>ObCollectionSQLType*/
     },
 
     /*UMediumIntType*/
@@ -3268,6 +3391,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UMediumIntType=>ObJsonType*/
         ObGeometryType,   /*UMediumIntType=>ObGeometryType*/
         ObMaxType,        /*UMediumIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UMediumIntType=>ObDecimalIntType*/
+        ObMaxType,        /*UMediumIntType=>ObCollectionSQLType*/
     },
 
     /*UInt32Type*/
@@ -3322,6 +3447,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UInt32Type=>ObJsonType*/
         ObGeometryType,   /*UInt32Type=>ObGeometryType*/
         ObMaxType,        /*UInt32Type=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UInt32Type=>ObDecimalIntType*/
+        ObMaxType,        /*UInt32Type=>ObCollectionSQLType*/
     },
 
     /*UIntType*/
@@ -3376,6 +3503,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UIntType=>ObJsonType*/
         ObGeometryType,   /*UIntType=>ObGeometryType*/
         ObMaxType,        /*UIntType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UIntType=>ObDecimalIntType*/
+        ObMaxType,        /*UIntType=>ObCollectionSQLType*/
     },
 
     /*FloatType*/
@@ -3430,6 +3559,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*FloatType=>ObJsonType*/
         ObGeometryType,   /*FloatType=>ObGeometryType*/
         ObMaxType,        /*FloatType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*FloatType=>ObDecimalIntType*/
+        ObMaxType,        /*FloatType=>ObCollectionSQLType*/
     },
 
     /*DoubleType*/
@@ -3484,6 +3615,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*DoubleTYpe=>ObJsonType*/
         ObGeometryType,   /*DoubleTYpe=>ObGeometryType*/
         ObMaxType,        /*DoubleTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*DoubleType=>ObDecimalIntType*/
+        ObMaxType,        /*DoubleType=>ObCollectionSQLType*/
     },
 
     /*UFloatType*/
@@ -3538,6 +3671,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UFloatType=>ObJsonType*/
         ObGeometryType,   /*UFloatTYpe=>ObGeometryType*/
         ObMaxType,        /*UFloatTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UFloatType=>ObDecimalIntType*/
+        ObMaxType,        /*UFloatType=>ObCollectionSQLType*/
     },
 
     /*UDoubleType*/
@@ -3592,6 +3727,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UDoubleType=>ObJsonType*/
         ObGeometryType,   /*UDoubleTYpe=>ObGeometryType*/
         ObMaxType,        /*UDoubleTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UDoubleType=>ObDecimalIntType*/
+        ObMaxType,        /*UDoubleType=>ObCollectionSQLType*/
     },
 
     /*NumberType*/
@@ -3646,6 +3783,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*NumberType=>ObJsonType*/
         ObGeometryType,   /*NumberTYpe=>ObGeometryType*/
         ObMaxType,        /*NumberTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*NumberType=>ObDecimalIntType*/
+        ObMaxType,        /*NumberType=>ObCollectionSQLType*/
     },
 
     /*UNumberType*/
@@ -3700,6 +3839,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UNumberType=>ObJsonType*/
         ObGeometryType,   /*UNumberTYpe=>ObGeometryType*/
         ObMaxType,        /*UNumberTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UNumberType=>ObDecimalIntType*/
+        ObMaxType,        /*UNumberType=>ObCollectionSQLType*/
     },
 
     /*DateTimeType*/
@@ -3754,6 +3895,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*DateTimeType=>ObJsonType*/
         ObGeometryType,      /*DateTimeTYpe=>ObGeometryType*/
         ObMaxType,           /*DateTimeTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*DateTimeType=>ObDecimalIntType*/
+        ObMaxType,           /*DateTimeType=>ObCollectionSQLType*/
     },
 
     /*TimestampType*/
@@ -3808,6 +3951,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*TimestampType=>ObJsonType*/
         ObGeometryType,      /*TimestampTYpe=>ObGeometryType*/
         ObMaxType,           /*TimestampTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*TimestampType=>ObDecimalIntType*/
+        ObMaxType,           /*TimestampType=>ObCollectionSQLType*/
     },
 
     /*DateType*/
@@ -3862,6 +4007,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*DateType=>ObJsonType*/
         ObGeometryType,      /*DateTYpe=>ObGeometryType*/
         ObMaxType,           /*DateTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*DateType=>ObDecimalIntType*/
+        ObMaxType,           /*DateType=>ObCollectionSQLType*/
     },
 
     /*TimeType*/
@@ -3916,6 +4063,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,          /*TimeType=>ObJsonType*/
         ObGeometryType,      /*TimeTYpe=>ObGeometryType*/
         ObMaxType,           /*TimeTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,           /*TimeType=>ObDecimalIntType*/
+        ObMaxType,           /*TimeType=>ObCollectionSQLType*/
     },
 
     /*YearType*/
@@ -3970,6 +4119,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*YearType=>ObJsonType*/
         ObGeometryType,   /*YearTYpe=>ObGeometryType*/
         ObMaxType,        /*YearTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*YearType=>ObDecimalIntType*/
+        ObMaxType,        /*YearType=>ObCollectionSQLType*/
     },
 
     /*VarcharType*/
@@ -4024,6 +4175,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*VarcharType=>ObJsonType*/
         ObGeometryType,   /*VarcharTYpe=>ObGeometryType*/
         ObMaxType,        /*VarcharTYpe=>ObUserDefinedSQLType*/
+        ObMaxType,        /*VarcharType=>ObDecimalIntType*/
+        ObMaxType,        /*VarcharType=>ObCollectionSQLType*/
     },
 
     /*CharType*/
@@ -4078,6 +4231,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*CharType=>ObJsonType*/
         ObGeometryType,   /*CharType=>ObGeometryType*/
         ObMaxType,        /*CharType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*CharType=>ObDecimalIntType*/
+        ObMaxType,        /*CharType=>ObCollectionSQLType*/
     },
 
     /*HexStringType*/
@@ -4132,6 +4287,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*HexStringType=>ObJsonType*/
         ObGeometryType,   /*HexStringType=>ObGeometryType*/
         ObMaxType,        /*HexStringType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*HexStringType=>ObDecimalIntType*/
+        ObMaxType,        /*HexStringType=>ObCollectionSQLType*/
     },
 
     /*ExtendType*/
@@ -4186,6 +4343,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ExtendType=>ObJsonType*/
         ObGeometryType,  /*ExtendType=>ObGeometryType*/
         ObUserDefinedSQLType, /*ExtendType=>ObUserDefinedSQLType*/
+        ObMaxType,            /*ExtendType=>ObDecimalIntType*/
+        ObMaxType,            /*ExtendType=>ObCollectionSQLType*/
     },
 
     /*UnknownType*/
@@ -4240,6 +4399,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*UnknownType=>ObJsonType*/
         ObGeometryType,   /*UnknownType=>ObGeometryType*/
         ObMaxType,        /*UnknownType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*UnknownType=>ObDecimalIntType*/
+        ObMaxType,        /*UnknownType=>ObCollectionSQLType*/
     },
     /*ObTinyTextType*/
     {
@@ -4289,10 +4450,12 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTinyTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTinyTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObTinyTextType=>ObLongTextType*/
+        ObMaxType,        /*ObTinyTextType=>ObLobType*/
         ObJsonType,       /*ObTinyTextType=>ObJsonType*/
         ObGeometryType,   /*ObTinyTextType=>ObGeometryType*/
         ObMaxType,        /*ObTinyTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObTinyTextType=>ObDecimalIntType*/
+        ObMaxType,        /*ObTinyTextType=>ObCollectionSQLType*/
     },
     /*ObTextType*/
     {
@@ -4342,10 +4505,12 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObTextType=>ObLongTextType*/
+        ObMaxType,        /*ObTextType=>ObLobType*/
         ObJsonType,       /*ObTextType=>ObJsonType*/
         ObGeometryType,   /*ObTextType=>ObGeometryType*/
         ObMaxType,        /*ObTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObTextType=>ObDecimalIntType*/
+        ObMaxType,        /*ObTextType=>ObCollectionSQLType*/
     },
 
     /*ObMediumTextType*/
@@ -4380,11 +4545,12 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMediumTextType, /*ObMediumTextType=>ObTinyTextType  */
         ObMediumTextType, /* ObMediumTextType=>ObTextType  */
         ObMediumTextType, /* ObMediumTextType=>ObMediumTextType  */
+        ObLongTextType,   /* ObMediumTextType=>ObLongTextType  */
         ObLongTextType,   /* ObMediumTextType=>ObBitType  */
         ObLongTextType,   /* ObMediumTextType=>ObEnumType  */
         ObLongTextType,   /* ObMediumTextType=>ObSetType  */
         ObMaxType,        /* ObMediumTextType=>ObEnumInnerType  */
-        ObMaxType,        /* ObMediumTextType=>ObEnumInnerType  */
+        ObMaxType,        /* ObMediumTextType=>ObSetInnerType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampTZType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampLTZType  */
         ObMediumTextType, /*ObMediumTextType=>ObTimestampNanoType  */
@@ -4395,10 +4561,12 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type,  /*ObMediumTextType=>ObNVarchar2Type       */
         ObNCharType,      /*ObMediumTextType=>ObNCharType       */
         ObMaxType,        /*URowID*/
-        ObLongTextType,   /*ObMediumTextType=>ObLongTextType*/
+        ObMaxType,   /*ObMediumTextType=>ObLobType*/
         ObJsonType,       /*ObMediumTextType=>ObJsonType*/
         ObGeometryType,   /*ObMediumTextType=>ObGeometryType*/
         ObMaxType,        /*ObMediumTextType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObMediumTextType=>ObDecimalIntType*/
+        ObMaxType,        /*ObMediumTextType=>ObCollectionSQLType*/
     },
 
     /*ObLongTextType*/
@@ -4449,10 +4617,12 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObNVarchar2Type, /*ObLongTextType=>ObNVarchar2Type       */
         ObNCharType,     /*ObLongTextType=>ObNCharType       */
         ObMaxType,       /*URowID*/
-        ObLongTextType,  /*ObLongTextType=>=>ObLongTextType*/
+        ObMaxType,       /*ObLongTextType=>=>ObLobType*/
         ObJsonType,      /*ObLongTextType=>ObJsonType*/
         ObGeometryType,  /*ObLongTextType=>ObGeometryType*/
         ObMaxType,       /*ObLongTextType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObLongTextType=>ObDecimalIntType*/
+        ObMaxType,       /*ObLongTextType=>ObCollectionSQLType*/
     },
     /*ObBitType*/
     {
@@ -4506,6 +4676,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,       /*ObBitType=>ObJsonType*/
         ObGeometryType,   /*ObBitType=>ObGeometryType*/
         ObMaxType,        /*ObBitType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObBitType=>ObDecimalIntType*/
+        ObMaxType,        /*ObBitType=>ObCollectionSQLType*/
     },
     /*ObEnumType*/
     {
@@ -4559,6 +4731,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObEnumType=>ObJsonType*/
         ObMaxType,        /*ObEnumType=>ObGeometryType*/
         ObMaxType,        /*ObEnumType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObEnumType=>ObDecimalIntType*/
+        ObMaxType,        /*ObEnumType=>ObCollectionSQLType*/
     },
     /*ObSetType*/
     {
@@ -4612,6 +4786,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObSetType=>ObJsonType*/
         ObMaxType,        /*ObSetType=>ObGeometryType*/
         ObMaxType,        /*ObSetType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObSetType=>ObDecimalIntType*/
+        ObMaxType,        /*ObSetType=>ObCollectionSQLType*/
     },
     /*ObEnumInnerType*/
     {
@@ -4665,6 +4841,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObEnumInnerType=>ObJsonType*/
         ObMaxType,        /*ObEnumInnerType=>ObGeometryType*/
         ObMaxType,        /*ObEnumInnerType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObEnumInnerType=>ObDecimalIntType*/
+        ObMaxType,        /*ObEnumInnerType=>ObCollectionSQLType*/
     },
     /*ObSetInnerType*/
     {
@@ -4718,6 +4896,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObVarcharType,    /*ObSetInnerType=>ObJsonType*/
         ObMaxType,        /*ObSetInnerType=>ObGeometryType*/
         ObMaxType,        /*ObSetInnerType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObSetInnerType=>ObDecimalIntType*/
+        ObMaxType,        /*ObSetInnerType=>ObCollectionSQLType*/
     },
     /*ObTimestampTZType*/
     {
@@ -4771,6 +4951,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,         /*ObTimestampTZType=>ObJsonType*/
         ObMaxType,         /*ObTimestampTZType=>ObGeometryType*/
         ObMaxType,         /*ObTimestampTZType=>ObUserDefinedSQLType*/
+        ObMaxType,         /*ObTimestampTZType=>ObDecimalIntType*/
+        ObMaxType,         /*ObTimestampTZType=>ObCollectionSQLType*/
     },
     /*ObTimestampLTZType*/
     {
@@ -4824,6 +5006,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,          /*ObTimestampLTZType=>ObJsonType*/
         ObMaxType,          /*ObTimestampLTZType=>ObGeometryType*/
         ObMaxType,          /*ObTimestampLTZType=>ObUserDefinedSQLType*/
+        ObMaxType,          /*ObTimestampLTZType=>ObDecimalIntType*/
+        ObMaxType,          /*ObTimestampLTZType=>ObCollectionSQLType*/
     },
     /*ObTimestampNanoType*/
     {
@@ -4877,6 +5061,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,           /*ObTimestampNanoType=>ObJsonType*/
         ObMaxType,           /*ObTimestampNanoType=>ObGeometryType*/
         ObMaxType,           /*ObTimestampNanoType=>ObUserDefinedSQLType*/
+        ObMaxType,           /*ObTimestampNanoType=>ObDecimalIntType*/
+        ObMaxType,           /*ObTimestampNanoType=>ObCollectionSQLType*/
     },
     /*ObRawType*/
     {
@@ -4930,6 +5116,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObRawType=>ObJsonType*/
         ObMaxType,       /*ObRawType=>ObGeometryType*/
         ObMaxType,       /*ObRawType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObRawType=>ObDecimalIntType*/
+        ObMaxType,       /*ObRawType=>ObCollectionSQLType*/
     },
     /*ObIntervalYMType*/
     {
@@ -4972,7 +5160,7 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,        /* ObIntervalYMType=>ObTimestampTZType  */
         ObMaxType,        /* ObIntervalYMType=>ObTimestampLTZType  */
         ObMaxType,        /* ObIntervalYMType=>ObTimestampNanoType  */
-        ObMaxType,        /* ObIntervalYMType=>ObIntervalYMType  */
+        ObMaxType,        /* ObIntervalYMType=>ObRawType  */
         ObIntervalYMType, /*ObIntervalYMType=>ObIntervalYMType  */
         ObMaxType,        /*ObIntervalYMType=>ObIntervalDSType  */
         ObIntervalYMType, /*ObIntervalYMType=>ObNumberFloatType  */
@@ -4983,6 +5171,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObIntervalYMType=>ObJsonType*/
         ObMaxType,        /*ObIntervalYMType=>ObGeometryType*/
         ObMaxType,        /*ObIntervalYMType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObIntervalYMType=>ObDecimalIntType*/
+        ObMaxType,        /*ObIntervalYMType=>ObCollectionSQLType*/
     },
     /*ObIntervalDSType*/
     {
@@ -5036,6 +5226,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*ObIntervalDSType=>ObJsonType*/
         ObMaxType,        /*ObIntervalDSType=>ObGeometryType*/
         ObMaxType,        /*ObIntervalDSType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObIntervalDSType=>ObDecimalIntType*/
+        ObMaxType,        /*ObIntervalDSType=>ObCollectionSQLType*/
     },
 
     /*ObNumberFloatType*/
@@ -5090,6 +5282,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,        /*NumberFloatType=>ObJsonType*/
         ObMaxType,        /*NumberFloatType=>ObGeometryType*/
         ObMaxType,        /*NumberFloatType=>ObUserDefinedSQLType*/
+        ObMaxType,        /*ObNumberFloatType=>ObDecimalIntType*/
+        ObMaxType,        /*ObNumberFloatType=>ObCollectionSQLType*/
     },
     /*ObNVarchar2Type*/
     {
@@ -5143,6 +5337,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObNVarchar2Type=>ObJsonType*/
         ObMaxType,       /*ObNVarchar2Type=>ObGeometryType*/
         ObMaxType,       /*ObNVarchar2Type=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObNVarchar2Type=>ObDecimalIntType*/
+        ObMaxType,       /*ObNVarchar2Type=>ObCollectionSQLType*/
     },
     /*ObNCharType*/
     {
@@ -5196,6 +5392,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,       /*ObNCharType=>ObJsonType*/
         ObMaxType,       /*ObNCharType=>ObGeometryType*/
         ObMaxType,       /*ObNCharType=>ObUserDefinedSQLType*/
+        ObMaxType,       /*ObNCharType=>ObDecimalIntType*/
+        ObMaxType,       /*ObNCharType=>ObCollectionSQLType*/
     },
     /*ObURowIDType*/
     {
@@ -5249,6 +5447,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,     /*ObURowIDType=>ObJsonType*/
         ObMaxType,     /*ObURowIDType=>ObGeometryType*/
         ObMaxType,     /*ObURowIDType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObURowIDType=>ObDecimalIntType*/
+        ObMaxType,     /*ObURowIDType=>ObCollectionSQLType*/
     },
     /*ObLobType*/
     {
@@ -5302,6 +5502,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObLobType=>ObJsonType*/
         ObMaxType,     /* ObLobType=>ObGeometryType*/
         ObMaxType,     /* ObLobType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObLobType=>ObDecimalIntType*/
+        ObMaxType,     /*ObLobType=>ObCollectionSQLType*/
     },
     /*ObJsonType*/
     {
@@ -5355,6 +5557,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObJsonType,    /*ObJsonType=>ObJsonType*/
         ObMaxType,     /*ObJsonType=>ObGeometryType*/
         ObMaxType,     /*ObJsonType=>ObUserDefinedSQLType*/
+        ObMaxType,     /*ObJsonType=>ObDecimalIntType*/
+        ObMaxType,     /*ObJsonType=>ObCollectionSQLType*/
     },
     /*ObGeometryType*/
     {
@@ -5408,6 +5612,8 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObGeometryType=>ObJsonType*/
         ObGeometryType,     /* ObGeometryType=>ObGeometryType*/
         ObMaxType,          /* ObGeometryType=>ObUserDefinedSQLType*/
+        ObMaxType,          /*ObGeometryType=>ObDecimalIntType*/
+        ObMaxType,          /*ObGeometryType=>ObCollectionSQLType*/
     },
     /*ObUserDefinedSQLType*/
     {
@@ -5461,5 +5667,120 @@ static ObObjType MERGE_RESULT_TYPE_ORACLE[ObMaxType][ObMaxType] = {
         ObMaxType,     /* ObUserDefinedSQLType=>ObJsonType*/
         ObMaxType,     /* ObUserDefinedSQLType=>ObGeometryType*/
         ObUserDefinedSQLType, /*ObUserDefinedSQLType*/
+        ObMaxType,     /*ObUserDefinedSQLType=>ObDecimalIntType*/
+        ObMaxType,     /*ObUserDefinedSQLType=>ObCollectionSQLType*/
+    },
+    /*ObDecimalIntType*/
+    {
+        ObMaxType,     /* ObDecimalIntType=>NullType  */
+        ObMaxType,     /* ObDecimalIntType=>TinyIntType  */
+        ObMaxType,     /* ObDecimalIntType=>SmallIntType  */
+        ObMaxType,     /* ObDecimalIntType=>MediumIntType  */
+        ObMaxType,     /* ObDecimalIntType=>Int32Type  */
+        ObMaxType,     /* ObDecimalIntType=>IntType  */
+        ObMaxType,     /* ObDecimalIntType=>UTinyIntType  */
+        ObMaxType,     /* ObDecimalIntType=>USmallIntType  */
+        ObMaxType,     /* ObDecimalIntType=>UMediumIntType  */
+        ObMaxType,     /* ObDecimalIntType=>UInt32Type  */
+        ObMaxType,     /* ObDecimalIntType=>UIntType  */
+        ObMaxType,     /* ObDecimalIntType=>FloatType  */
+        ObMaxType,     /* ObDecimalIntType=>DoubleType  */
+        ObMaxType,     /* ObDecimalIntType=>UFloatType  */
+        ObMaxType,     /* ObDecimalIntType=>UDoubleType  */
+        ObMaxType,     /* ObDecimalIntType=>NumberType  */
+        ObMaxType,     /* ObDecimalIntType=>UNumberType  */
+        ObMaxType,     /* ObDecimalIntType=>DateTimeType  */
+        ObMaxType,     /* ObDecimalIntType=>TimestampType  */
+        ObMaxType,     /* ObDecimalIntType=>DateType  */
+        ObMaxType,     /* ObDecimalIntType=>TimeType  */
+        ObMaxType,     /* ObDecimalIntType=>YearType  */
+        ObMaxType,     /* ObDecimalIntType=>VarcharType  */
+        ObMaxType,     /* ObDecimalIntType=>CharType  */
+        ObMaxType,     /* ObDecimalIntType=>HexStringType  */
+        ObMaxType,     /* ObDecimalIntType=>ExtendType  */
+        ObMaxType,     /* ObDecimalIntType=>UnknownType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTinyTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObMediumTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObLongTextType  */
+        ObMaxType,     /* ObDecimalIntType=>ObBitType  */
+        ObMaxType,     /* ObDecimalIntType=>ObEnumType  */
+        ObMaxType,     /* ObDecimalIntType=>ObSetType  */
+        ObMaxType,     /* ObDecimalIntType=>ObEnumInnerType  */
+        ObMaxType,     /* ObDecimalIntType=>ObSetInnerType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampTZType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObDecimalIntType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObDecimalIntType=>ObRawType  */
+        ObMaxType,     /* ObDecimalIntType=>ObIntervalYMType  */
+        ObMaxType,     /* ObDecimalIntType=>ObIntervalDSType  */
+        ObMaxType,     /* ObDecimalIntType=>ObNumberFloatType  */
+        ObMaxType,     /* ObDecimalIntType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObDecimalIntType=>ObNCharType       */
+        ObMaxType,     /* ObDecimalIntType=>ObURowIDType*/
+        ObMaxType,     /* ObDecimalIntType=>ObLobType*/
+        ObMaxType,     /* ObDecimalIntType=>ObJsonType*/
+        ObMaxType,     /* ObDecimalIntType=>ObGeometryType*/
+        ObMaxType,     /* ObDecimalIntType=>ObUserDefinedSQLType*/
+        ObMaxType,     /* ObDecimalIntType=>ObDecimalIntType*/
+        ObMaxType,     /* ObDecimalIntType=>ObCollectionSQLType*/
+    },
+    /*ObCollectionSQLType*/
+    {
+        ObMaxType,     /* ObCollectionSQLType=>NullType  */
+        ObMaxType,     /* ObCollectionSQLType=>TinyIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>SmallIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>MediumIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>Int32Type  */
+        ObMaxType,     /* ObCollectionSQLType=>IntType  */
+        ObMaxType,     /* ObCollectionSQLType=>UTinyIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>USmallIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>UMediumIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>UInt32Type  */
+        ObMaxType,     /* ObCollectionSQLType=>UIntType  */
+        ObMaxType,     /* ObCollectionSQLType=>FloatType  */
+        ObMaxType,     /* ObCollectionSQLType=>DoubleType  */
+        ObMaxType,     /* ObCollectionSQLType=>UFloatType  */
+        ObMaxType,     /* ObCollectionSQLType=>UDoubleType  */
+        ObMaxType,     /* ObCollectionSQLType=>NumberType  */
+        ObMaxType,     /* ObCollectionSQLType=>UNumberType  */
+        ObMaxType,     /* ObCollectionSQLType=>DateTimeType  */
+        ObMaxType,     /* ObCollectionSQLType=>TimestampType  */
+        ObMaxType,     /* ObCollectionSQLType=>DateType  */
+        ObMaxType,     /* ObCollectionSQLType=>TimeType  */
+        ObMaxType,     /* ObCollectionSQLType=>YearType  */
+        ObMaxType,     /* ObCollectionSQLType=>VarcharType  */
+        ObMaxType,     /* ObCollectionSQLType=>CharType  */
+        ObMaxType,     /* ObCollectionSQLType=>HexStringType  */
+        ObMaxType,     /* ObCollectionSQLType=>ExtendType  */
+        ObMaxType,     /* ObCollectionSQLType=>UnknownType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObTinyTextType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObTextType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObMediumTextType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObLongTextType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObBitType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObEnumType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObSetType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObEnumInnerType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObSetInnerType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObTimestampTZType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObTimestampLTZType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObTimestampNanoType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObRawType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObIntervalYMType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObIntervalDSType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObNumberFloatType  */
+        ObMaxType,     /* ObCollectionSQLType=>ObNVarchar2Type       */
+        ObMaxType,     /* ObCollectionSQLType=>ObNCharType       */
+        ObMaxType,     /* ObCollectionSQLType=>ObURowIDType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObLobType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObJsonType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObGeometryType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObUserDefinedSQLType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObDecimalIntType*/
+        ObMaxType,     /* ObCollectionSQLType=>ObCollectionSQLType*/
     },
 };
+
+static_assert(is_array_fully_initialized(MERGE_RESULT_TYPE_ORACLE, ObMaxType), "MERGE_RESULT_TYPE_ORACLE is partially initlized");
+static_assert(is_array_fully_initialized(MERGE_RESULT_TYPE, ObMaxType), "MERGE_RESULT_TYPE is partially initlized");

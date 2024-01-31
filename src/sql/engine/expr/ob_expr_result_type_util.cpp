@@ -21,6 +21,24 @@
 namespace oceanbase
 {
 using namespace common;
+
+//Since ob use c++11, so we can not use loop or constains multiple return in constexpr function(which is supported in c++14)
+//So we use recursion and conditional assignment statement instead
+template <typename T, std::size_t row, std::size_t col>
+constexpr bool is_array_fully_initialized(const T (&arr)[row][col], int row_depth)
+{
+  return row_depth == 0 ?
+           true :
+           arr[row_depth - 1][col - 1] == T() ? false :
+                                                is_array_fully_initialized(arr, row_depth - 1);
+}
+
+template <typename T, std::size_t col>
+constexpr bool is_array_fully_initialized(const T (&arr)[col])
+{
+  return arr[col - 1] != T();
+}
+
 // following .map file depends on ns oceanbase::common;
 #include "sql/engine/expr/ob_expr_merge_result_type.map"
 #include "sql/engine/expr/ob_expr_relational_result_type.map"

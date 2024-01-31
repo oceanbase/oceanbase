@@ -1,4 +1,4 @@
-static ObObjType ABS_RESULT_TYPE[ObMaxType] =
+static constexpr ObObjType ABS_RESULT_TYPE[ObMaxType] =
 {
     ObDoubleType,   /* NullType             */
     ObIntType,      /* TinyIntType          */
@@ -50,12 +50,12 @@ static ObObjType ABS_RESULT_TYPE[ObMaxType] =
     ObDoubleType,    /* ObJsonType     */
     ObMaxType,      /* ObGeometryType  */
     ObMaxType,      /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,      /* ObCollectionSQLType  */
 };
 
-static_assert(sizeof(ABS_RESULT_TYPE) / sizeof(ObObjType) == ObMaxType,
-              "unexpected size of ABS_RESULT_TYPE");
 
-static ObObjType ABS_RESULT_TYPE_ORACLE[ObMaxType] =
+static constexpr ObObjType ABS_RESULT_TYPE_ORACLE[ObMaxType] =
 {
     ObNullType,     /* NullType             */
     ObNumberType,   /* TinyIntType          */
@@ -107,7 +107,9 @@ static ObObjType ABS_RESULT_TYPE_ORACLE[ObMaxType] =
     ObDoubleType,    /* ObJsonType     */
     ObMaxType,      /* ObGeometryType  */
     ObMaxType,      /* ObUserDefinedSqlType  */
+    ObMaxType,      /* ObDecimalIntType  */
+    ObMaxType,      /* ObCollectionSQLType  */
 };
 
-static_assert(sizeof(ABS_RESULT_TYPE_ORACLE) / sizeof(ObObjType) == ObMaxType,
-              "unexpected size of ABS_RESULT_TYPE_ORACLE");
+static_assert(is_array_fully_initialized(ABS_RESULT_TYPE_ORACLE), "ABS_RESULT_TYPE_ORACLE is partially initlized");
+static_assert(is_array_fully_initialized(ABS_RESULT_TYPE), "ABS_RESULT_TYPE is partially initlized");
