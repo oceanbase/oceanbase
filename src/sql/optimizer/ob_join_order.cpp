@@ -12151,19 +12151,19 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
     } else if (OB_FAIL(create_subplan_filter_for_join_path(join_path,
                                                            subquery_filters))) {
       LOG_WARN("failed to create subplan filter for join path", K(ret));
-    } else if (OB_FAIL(add_path(*get_plan(), join_path))) {
-      LOG_WARN("failed to add path", K(ret));
-    } else {
-      LOG_TRACE("succeed to create a nested loop join path", K(join_type),
-          K(join_dist_algo), K(need_mat), K(on_conditions), K(where_conditions));
     }
-    // Trace point to force use NLJ as possible
+
     if (OB_SUCC(ret)) {
       bool force_use_nlj = false;
+      // Trace point to force use NLJ as possible
       force_use_nlj = (OB_SUCCESS != (OB_E(EventTable::EN_GENERATE_PLAN_WITH_NLJ) OB_SUCCESS));
       if (force_use_nlj && !join_path->contain_normal_nl_) {
-        LOG_TRACE("trigger trace point to generate nest-loop join");
-        if (OB_FAIL(interesting_paths_.push_back(join_path))) {
+        // If the tracepoint is triggered, the nlj path is forced to add into interesting_paths,
+        // and other paths of different join types are removed
+        LOG_TRACE("trigger trace point to generate nest-loop join paths");
+        if (join_path->join_algo_ != NESTED_LOOP_JOIN) {
+          LOG_WARN("generated join type is not NLJ", K(ret));
+        } else if (OB_FAIL(interesting_paths_.push_back(join_path))) {
           LOG_WARN("failed to push back nlj path");
         } else {
           for (int64_t i = interesting_paths_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
@@ -12175,6 +12175,11 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
             }
           }
         }
+      } else if (OB_FAIL(add_path(*get_plan(), join_path))) {
+        LOG_WARN("failed to add path", K(ret));
+      } else {
+        LOG_TRACE("succeed to create a nested loop join path", K(join_type),
+            K(join_dist_algo), K(need_mat), K(on_conditions), K(where_conditions));
       }
     }
   }
