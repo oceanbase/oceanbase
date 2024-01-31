@@ -191,7 +191,6 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
-  OZ (jit_lock_.init(32));
   OZ (interface_service_.init());
   OX (serialize_composite_callback = ObUserDefinedType::serialize_obj);
   OX (deserialize_composite_callback = ObUserDefinedType::deserialize_obj);

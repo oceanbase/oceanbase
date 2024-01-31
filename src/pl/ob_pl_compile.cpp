@@ -188,7 +188,6 @@ int ObPLCompiler::compile(
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
           LOG_WARN("query or session is killed after get PL jit lock", K(ret));
@@ -432,7 +431,6 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
           LOG_WARN("query or session is killed after get PL jit lock", K(ret));
@@ -741,34 +739,31 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
 
-  {
-    ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
-    // check session status after get lock
-    if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
-      LOG_WARN("query or session is killed after get PL jit lock", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
-#ifdef USE_MCJIT
-      HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
-#else
-      HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
-                session_info_,
-                schema_guard_,
-                package_ast,
-                package.get_expressions(),
-                package.get_helper(),
-                package.get_di_helper(),
-                lib::is_oracle_mode()) {
-#endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
-        OZ (cg.init());
-        OZ (cg.generate(package));
-      }
-    }
-
-    OZ (generate_package(package_info.get_exec_env(), package_ast, package));
+  // check session status after get lock
+  if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
+    LOG_WARN("query or session is killed after get PL jit lock", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+#ifdef USE_MCJIT
+    HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
+#else
+    HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
+              session_info_,
+              schema_guard_,
+              package_ast,
+              package.get_expressions(),
+              package.get_helper(),
+              package.get_di_helper(),
+              lib::is_oracle_mode()) {
+#endif
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
+      OZ (cg.init());
+      OZ (cg.generate(package));
+    }
+  }
+
+  OZ (generate_package(package_info.get_exec_env(), package_ast, package));
 
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
