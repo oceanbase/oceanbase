@@ -244,7 +244,7 @@ protected:
   virtual int generate_dblink_raw_plan() override;
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
                                                 OSGShareInfo &info,
-                                                bool is_basic_insert_remote = false);
+                                                bool force_osg_gather = false);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
