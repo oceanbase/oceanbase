@@ -396,10 +396,12 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
               ret = OB_SUCCESS;
             }
             IGNORE_RETURN ATOMIC_FAA(&idle_us_, (wait_end_time - wait_start_time));
-            if (this->get_worker_level() == 0 && !is_group_worker()) {
+            if (this->get_worker_level() != 0) {
+              // nesting workers not allowed to calling check_worker_count
+            } else if (this->get_group() == nullptr) {
               tenant_->check_worker_count(*this);
               tenant_->lq_end(*this);
-            } else if (this->is_group_worker()) {
+            } else {
               group_->check_worker_count(*this);
             }
           }
