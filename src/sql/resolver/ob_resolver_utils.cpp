@@ -1055,7 +1055,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
           && !(ObUserDefinedSQLTC == ob_obj_type_class(src_type)
                 || ObExtendTC == ob_obj_type_class(src_type)
                 || ObGeometryTC == ob_obj_type_class(src_type)))
-        || (ObGeometryTC == ob_obj_type_class(src_type)
+        || (ObGeometryTC == ob_obj_type_class(src_type) && lib::is_oracle_mode()
             && ObExtendTC != ob_obj_type_class(dst_type))) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("argument count not match", K(ret), K(src_type), K(dst_type));

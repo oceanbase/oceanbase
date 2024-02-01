@@ -1590,7 +1590,7 @@ static int common_build_geometry(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObGeoErrLogInfo log_info;
-  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info))) {
+  if (OB_FAIL(ObGeoTypeUtil::build_geometry(allocator, wkb, geo, srs, log_info, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
     if (OB_ERR_GIS_INVALID_DATA == ret && OB_NOT_NULL(cast_name)) {
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, cast_name);
     } else if (OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE == ret && OB_NOT_NULL(cast_name)) {

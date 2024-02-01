@@ -8044,7 +8044,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
                     || obj.is_null())
                && (result_type.get_type() == ObExtendType
                     || ob_is_xml_sql_type(result_type.get_type(), result_type.get_subschema_id())))
-            || (obj.get_meta().is_geometry() && result_type.get_type() != ObExtendType)) {
+            || (obj.get_meta().is_geometry() && lib::is_oracle_mode() && result_type.get_type() != ObExtendType)) {
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("xml type can not convert other type in pl", K(ret));
         } else if (result_type.is_ext()

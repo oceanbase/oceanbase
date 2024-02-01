@@ -3501,7 +3501,7 @@ CAST_FUNC_NAME(string, geometry)
         LOG_WARN("fail to get real data.", K(ret), K(in_str));
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, in_str, srs, true, cast_name))) {
       LOG_WARN("fail to get srs item", K(ret), K(in_str));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name))) {
+    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(temp_allocator, in_str, geo, srs, cast_name, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("fail to parse geometry", K(ret), K(in_str), K(dst_geo_type));
     } else if (ObGeoType::GEOMETRY == dst_geo_type || ObGeoType::GEOTYPEMAX == dst_geo_type) {
       ObString res_wkb;

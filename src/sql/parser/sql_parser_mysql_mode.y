@@ -2953,22 +2953,27 @@ MOD '(' expr ',' expr ')'
 | _ST_ASMVT '(' column_ref ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 1, $3);
+  $$->reserved_ = 0;
 }
 | _ST_ASMVT '(' column_ref ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 2, $3, $5);
+  $$->reserved_ = 0;
 }
 | _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 3, $3, $5, $7);
+  $$->reserved_ = 0;
 }
 | _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 4, $3, $5, $7, $9);
+  $$->reserved_ = 0;
 }
 | _ST_ASMVT '(' column_ref ',' mvt_param ',' mvt_param ',' mvt_param ',' mvt_param ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 5, $3, $5, $7, $9, $11);
+  $$->reserved_ = 0;
 }
 ;
 

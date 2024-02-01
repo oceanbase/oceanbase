@@ -2754,6 +2754,8 @@ int ObMultiModeDMLResolver::geo_pre_process_mvt_agg(ParseNode &node, ObDMLResolv
     if (ori_param_num < 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected param number", K(ret), K(ori_param_num));
+    } else if (node.reserved_) {
+      // already processed, do nothing
     } else if (OB_ISNULL(node.children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr param is null", K(ret));
@@ -2814,6 +2816,7 @@ int ObMultiModeDMLResolver::geo_pre_process_mvt_agg(ParseNode &node, ObDMLResolv
         if (OB_SUCC(ret)) {
           node.num_child_ = param_count;
           node.children_ = param_vec;
+          node.reserved_ = 1;
         }
       }
     }
