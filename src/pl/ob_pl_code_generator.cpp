@@ -80,7 +80,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
         LOG_WARN("failed to create block", K(s.get_stmts()), K(ret));
       } else {
         ObLLVMBasicBlock null_start;
-        generator_.set_label(s.get_label(), s.get_level(), null_start, exit);
+        if (OB_FAIL(generator_.set_label(s, null_start, exit))) {
+          LOG_WARN("failed to set label", K(ret));
+        }
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_stmts().count(); ++i) {
@@ -851,7 +853,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), while_begin, alter_while))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, while_begin, alter_while))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(while_begin))) {
       LOG_WARN("failed to create_br", K(ret));
@@ -944,7 +946,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForLoopStmt &s)
     OZ (generator_.get_helper().create_block(ObString("forloop_continue"), generator_.get_func(), forloop_continue));
     OZ (generator_.get_helper().create_block(ObString("forloop_end"), generator_.get_func(), forloop_end));
     if (s.has_label()) {
-      OZ (generator_.set_label(s.get_label(), s.get_level(), forloop_continue, forloop_end));
+      OZ (generator_.set_label(s, forloop_continue, forloop_end));
     }
     OZ (generator_.get_helper().create_br(forloop_begin));
     OZ (generator_.set_current(forloop_begin));
@@ -1063,7 +1065,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCursorForLoopStmt &s)
       LOG_WARN("failed to craete block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("cursor_forloop_check_success"), generator_.get_func(), cursor_forloop_check_success))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), cursor_forloop_fetch, cursor_forloop_end))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, cursor_forloop_fetch, cursor_forloop_end))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_br(cursor_forloop_begin))) {
       LOG_WARN("failed to create_br", K(ret));
@@ -1312,7 +1314,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLRepeatStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("after_repeat"), generator_.get_func(), alter_repeat))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), repeat, alter_repeat))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, repeat, alter_repeat))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
@@ -1385,7 +1387,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLLoopStmt &s)
       LOG_WARN("failed to create block", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_block(ObString("after_loop"), generator_.get_func(), alter_loop))) {
       LOG_WARN("failed to create block", K(s), K(ret));
-    } else if (s.has_label() && OB_FAIL(generator_.set_label(s.get_label(), s.get_level(), loop, alter_loop))) {
+    } else if (s.has_label() && OB_FAIL(generator_.set_label(s, loop, alter_loop))) {
       LOG_WARN("failed to set current", K(s), K(ret));
     } else if (OB_FAIL(generator_.get_helper().create_ialloca(ObString("count_value"), ObIntType, 0, count_value))) {
       LOG_WARN("failed to create_ialloca", K(ret));
@@ -7998,7 +8000,7 @@ int ObPLCodeGenerator::generate_goto_label(const ObPLStmt &stmt)
       if (OB_HASH_NOT_EXIST == tmp_ret) {
         ObLLVMBasicBlock label_block;
         ObLLVMBasicBlock stack_save_block;
-        const ObString *lab = stmt.get_label();
+        const ObString *lab = stmt.get_goto_label();
         if (OB_FAIL(get_helper().create_block(NULL == lab ? ObString("") : *lab, get_func(),
                                                 label_block))) {
           LOG_WARN("create goto label failed", K(ret));
