@@ -126,9 +126,43 @@ int ObChecksumValidatorBase::validate_checksum(
                      table_count, table_compaction_map, ori_table_ids, merge_time_statistics, expected_epoch))) {
     LOG_WARN("fail to check all table verification finished", KR(ret), K_(tenant_id), K(frozen_scn));
   }
+
+  // write_ckm_and_update_report_scn in batch, before reuse batch structures, should revert
+  // un-VERIFIED tables' status to COMPACTED. so as to write_ckm_and_update_report_scn again later.
+  //
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(revert_unverified_table_status(table_compaction_map))) {
+    LOG_WARN("fail to revert unverified table status", KR(ret), K_(tenant_id), K(frozen_scn));
+  }
+  ret = (OB_SUCC(ret) ? tmp_ret : ret);
   reuse_tablet_checksum_items();
   reuse_tablet_ls_pairs();
   reuse_table_ids();
+  return ret;
+}
+
+int ObChecksumValidatorBase::revert_unverified_table_status(
+    TableCompactionMap &table_compaction_map)
+{
+  int ret = OB_SUCCESS;
+  const int64_t table_cnt = table_ids_.count();
+  for (int64_t i = 0; (i < table_cnt) && OB_SUCC(ret); ++i) {
+    const uint64_t tmp_table_id = table_ids_.at(i);
+    ObTableCompactionInfo tmp_compaction_info;
+    if (OB_FAIL(table_compaction_map.get_refactored(tmp_table_id, tmp_compaction_info))) {
+      LOG_WARN("fail to get refactored", KR(ret), K(tmp_table_id));
+    } else if (ObTableCompactionInfo::Status::VERIFIED == tmp_compaction_info.status_) {
+      // do nothing
+    } else if (ObTableCompactionInfo::Status::INDEX_CKM_VERIFIED == tmp_compaction_info.status_) {
+      tmp_compaction_info.status_ = ObTableCompactionInfo::Status::COMPACTED;
+      if (OB_FAIL(table_compaction_map.set_refactored(tmp_table_id, tmp_compaction_info, true/*overwrite*/))) {
+        LOG_WARN("fail to set refactored", KR(ret), K(tmp_table_id), K(tmp_compaction_info));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid table compaction status", KR(ret), K(tmp_table_id), K(tmp_compaction_info));
+    }
+  }
   return ret;
 }
 

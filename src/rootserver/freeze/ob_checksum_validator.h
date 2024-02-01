@@ -154,6 +154,7 @@ private:
                                                     const common::ObIArray<uint64_t> &ori_table_ids,
                                                     ObMergeTimeStatistics &merge_time_statistics,
                                                     const int64_t expected_epoch) = 0;
+  int revert_unverified_table_status(TableCompactionMap &table_compaction_map);
 
 protected:
   bool is_inited_;
