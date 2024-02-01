@@ -1,7 +1,7 @@
 {
     "obshell": {
         "agentInfo": {
-            "ip": "127.0.0.1",
+            "ip": "HOSTIP",
             "port": 2886
         },
         "zoneName": "zone1"
@@ -16,7 +16,7 @@
             "scope": {
                 "type": "server",
                 "target": [
-                    "127.0.0.1:2886"
+                    "HOSTIP:2886"
                 ]
             },
             "observerConfig": {}
