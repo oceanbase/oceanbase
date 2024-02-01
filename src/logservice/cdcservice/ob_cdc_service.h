@@ -183,6 +183,8 @@ private:
 private:
   bool is_inited_;
   volatile bool stop_flag_ CACHE_ALIGNED;
+  uint64_t tenant_id_;
+
   ObCdcStartLsnLocator locator_;
   ObCdcFetcher fetcher_;
 

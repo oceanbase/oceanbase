@@ -375,6 +375,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
   int ret = OB_SUCCESS;
   // always reserve 4K for archive header
   const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L - 4 * 1024;
+  const int64_t MAX_RETRY_COUNT = 4;
   if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
     LOG_WARN("init archive source failed", K(ctx), K(ls_id));
   } else {
@@ -383,22 +384,30 @@ int ObCdcFetcher::fetch_log_in_archive_(
     share::SCN pre_scn;
     if (OB_FAIL(pre_scn.convert_from_ts(ctx.get_progress()/1000L))) {
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
-    } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
-                                                          start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_,
-                                                          log_ext_handler_, SINGLE_READ_SIZE))) {
-      LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
-    } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
-      // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
-      if (OB_ITER_END != ret) {
-        LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
-      }
-    } else if (start_lsn != lsn) {
-      // to keep consistency with the ret code of palf
-      ret = OB_INVALID_DATA;
-      LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
-          K(remote_iter));
-    } else {
+    } else  {
+      int64_t retry_count = 0;
+      do {
+        if (! remote_iter.is_init() && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
+            start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
+          LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
+        } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
+          // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
+          if (OB_ITER_END != ret) {
+            LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
+          } else {
+            remote_iter.update_source_cb();
+            remote_iter.reset();
+            LOG_INFO("get iter end from remote_iter, retry", K(retry_count), K(MAX_RETRY_COUNT));
+          }
+        } else if (start_lsn != lsn) {
+          // to keep consistency with the ret code of palf
+          ret = OB_INVALID_DATA;
+          LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
+              K(remote_iter));
+        } else {
 
+        }
+      } while (OB_ITER_END == ret && ++retry_count < MAX_RETRY_COUNT);
     }
   }
   return ret;
