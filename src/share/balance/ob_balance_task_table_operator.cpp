@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_mysql_result.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_proxy.h"//MySQLResult
 #include "lib/mysqlclient/ob_mysql_transaction.h"//ObMySQLTrans
+#include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_BALANCE_TASK_TNAME
 #include "share/ob_dml_sql_splicer.h"//ObDMLSqlSplicer
 #include "share/balance/ob_balance_job_table_operator.h"//job_status
@@ -604,6 +605,8 @@ int ObBalanceTaskTableOperator::start_transfer_task(const uint64_t tenant_id,
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_FINISH_TRANSFER_TASK_COST_TOO_MUCH_TIME);
+
 int ObBalanceTaskTableOperator::finish_transfer_task(
     const ObBalanceTask &balance_task,
     const ObTransferTaskID transfer_task_id,
@@ -668,6 +671,11 @@ int ObBalanceTaskTableOperator::finish_transfer_task(
 
   if (OB_SUCC(ret) && to_do_part_list.empty()) {
     all_part_transferred = true;
+  }
+
+  // only for test
+  if (EN_FINISH_TRANSFER_TASK_COST_TOO_MUCH_TIME) {
+    ob_usleep(31 * 1000 * 1000L); // default internal_sql_execute_timeout + 1s
   }
 
   return ret;

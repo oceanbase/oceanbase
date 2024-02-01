@@ -342,10 +342,10 @@ int ObBalanceTaskExecuteService::execute_task_()
       ObTimeoutCtx timeout_ctx;
       const int64_t balance_task_execute_timeout = GCONF.internal_sql_execute_timeout + 100 * 1000 * 1000L; // +100s
       DEBUG_SYNC(BEFORE_EXECUTE_BALANCE_TASK);
-      if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
-        LOG_WARN("failed to start trans", KR(ret), K(tenant_id_));
-      } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, balance_task_execute_timeout))) {
+      if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, balance_task_execute_timeout))) {
         LOG_WARN("failed to get rs default timeout ctx", KR(ret));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
+        LOG_WARN("failed to start trans", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(get_balance_job_task_for_update_(task, job, task_in_trans, trans))) {
         LOG_WARN("failed to get job", KR(ret), K(task));
       } else if (task_in_trans.get_task_status().is_finish_status()) {
