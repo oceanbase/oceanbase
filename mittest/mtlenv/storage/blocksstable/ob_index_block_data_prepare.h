@@ -172,9 +172,6 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   ObClockGenerator::init();
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      tenant_id_, ObTenantIOConfig::default_instance());
-
   fake_freeze_info();
 
   // create ls

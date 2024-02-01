@@ -137,10 +137,6 @@ void TestIndexTree::SetUp()
   ASSERT_EQ(shared_blk_mgr_, MTL(ObSharedMacroBlockMgr *));
   ASSERT_EQ(mgr_, MTL(ObTenantFreezeInfoMgr *));
   int tmp_ret = OB_SUCCESS;
-  ObTenantIOConfig io_config = ObTenantIOConfig::default_instance();
-  if (OB_TMP_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
-    STORAGE_LOG(WARN, "add tenant io config failed", K(tmp_ret));
-  }
 
   prepare_schema();
   row_generate_.reset();

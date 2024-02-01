@@ -2160,7 +2160,6 @@ int ObServer::init_io()
       }
       io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
       const int64_t max_io_depth = 256;
-      ObTenantIOConfig server_tenant_io_config = ObTenantIOConfig::default_instance();
       if (OB_FAIL(ObIOManager::get_instance().set_io_config(io_config))) {
         LOG_ERROR("config io manager fail, ", KR(ret));
       } else {
@@ -2241,9 +2240,6 @@ int ObServer::init_io()
                                                                             io_config.disk_io_thread_count_ / 2,
                                                                             max_io_depth))) {
             LOG_ERROR("add device channel failed", KR(ret));
-          } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID,
-                                                                               server_tenant_io_config))) {
-            LOG_ERROR("add server tenant io manager failed", KR(ret));
           }
         }
       }
