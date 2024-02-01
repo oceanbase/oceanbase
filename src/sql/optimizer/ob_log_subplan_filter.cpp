@@ -637,6 +637,7 @@ int ObLogSubPlanFilter::replace_nested_subquery_exprs(ObRawExprReplacer &replace
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < subquery_exprs_.count(); ++i) {
     ObRawExpr *expr = subquery_exprs_.at(i);
+    int64_t ref_id = subquery_exprs_.at(i)->get_ref_id();
     if (ObOptimizerUtil::find_item(plan->get_onetime_query_refs(), expr)) {
       // do not replace onetime expr ref query, only adjust nested subquery
     } else if (OB_FAIL(replace_expr_action(replacer, expr))) {
@@ -648,6 +649,7 @@ int ObLogSubPlanFilter::replace_nested_subquery_exprs(ObRawExprReplacer &replace
       LOG_WARN("unexpected expr type", K(ret));
     } else {
       subquery_exprs_.at(i) = static_cast<ObQueryRefRawExpr*>(expr);
+      subquery_exprs_.at(i)->set_ref_id(ref_id);
     }
   }
   return ret;

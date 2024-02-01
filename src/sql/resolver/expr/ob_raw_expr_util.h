@@ -563,11 +563,10 @@ public:
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,
                                    bool is_onetime = false);
-
-  static int create_exec_param_expr(ObQueryCtx *query_ctx,
-                                    ObRawExprFactory &expr_factory,
-                                    ObRawExpr *&src_expr,
-                                    std::pair<int64_t, ObRawExpr*> &init_expr);
+  static int create_new_exec_param(ObRawExprFactory &expr_factory,
+                                   ObRawExpr *ref_expr,
+                                   ObExecParamRawExpr *&exec_param,
+                                   bool is_onetime = false);
   static int create_param_expr(ObRawExprFactory &expr_factory, int64_t param_idx, ObRawExpr *&expr);
   static int build_trim_expr(const share::schema::ObColumnSchemaV2 *column_schema,
                              ObRawExprFactory &expr_factory,
