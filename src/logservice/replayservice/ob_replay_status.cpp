@@ -282,6 +282,20 @@ int ObReplayServiceSubmitTask::next_log(const SCN &replayable_point,
 int ObReplayServiceSubmitTask::reset_iterator(PalfHandle &palf_handle, const LSN &begin_lsn)
 {
   int ret = OB_SUCCESS;
+  /*
+   * next_to_submit_lsn_ may be bigger than begin_lsn;
+  current replica is A
+  first revoke ObRoleChangeService::switch_follower_to_leader_():
+    T1 A invoke  log_handler->get_end_lsn(end_lsn) and end_lsn is 100.
+    T2 another replica B switches to leader and submits log with lsn[101, 200].
+    T3 A invoke replay_service_->switch_to_leader(ls_id)
+    T4 A failed with invoking role_change_handler->switch_to_leader(cur_task_info_).
+    replica A replayed log [101, 150) between T1 and T3.
+  then
+    T5 replica A invoke ObRoleChangeService::leader_to_follower_forcedly_()
+  within leader_to_follower_forcedly_(), parameter end_lsn passed to
+  replay_service_->switch_to_follower(ls_id, end_lsn) is 100 while next_to_submit_lsn_ is 150.
+  */
   next_to_submit_lsn_ = std::max(next_to_submit_lsn_, begin_lsn);
   if (OB_FAIL(palf_handle.seek(next_to_submit_lsn_, iterator_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -813,6 +827,15 @@ void ObReplayStatus::switch_to_follower(const palf::LSN &begin_lsn)
     role_ = FOLLOWER;
   } while (0);
 
+#ifdef ERRSIM
+int tmp_ret = OB_E(EventTable::EN_REPLAY_SERVICE_SUBMIT_TASK_SLEEP) OB_SUCCESS;
+if (OB_SUCCESS != tmp_ret) {
+  CLOG_LOG(INFO, "fake EN_REPLAY_SERVICE_SUBMIT_TASK_SLEEP ", KPC(this), K(begin_lsn));
+  SERVER_EVENT_SYNC_ADD("REPLAYSERVICE", "BEFORE_PUSH_SUBMIT_TASK");
+}
+  DEBUG_SYNC(REPLAY_SWITCH_TO_FOLLOWER_BEFORE_PUSH_SUBMIT_TASK);
+#endif
+
   RLockGuard rguard(rwlock_);
   if (!is_enabled_) {
     // do nothing
@@ -865,6 +888,20 @@ int ObReplayStatus::is_replay_done(const LSN &end_lsn,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObReplayStatus::is_submit_task_clear(bool &is_clear) const
+{
+  int ret = OB_SUCCESS;
+  is_clear = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "replay status has not been inited", K(ret));
+  } else {
+    RLockGuard rlock_guard(rwlock_);
+    is_clear = submit_log_task_.is_idle();
   }
   return ret;
 }
@@ -1374,7 +1411,7 @@ int ObReplayStatus::trigger_fetch_log()
 {
   int ret = OB_SUCCESS;
   RLockGuard rlock_guard(rwlock_);
-  if (is_enabled_) {
+  if (is_enabled_ && need_submit_log()) {
     if (OB_FAIL(submit_task_to_replay_service_(submit_log_task_))) {
       CLOG_LOG(ERROR, "failed to submit submit_log_task to replay service", K(submit_log_task_),
                   KPC(this), K(ret));
@@ -1384,5 +1421,18 @@ int ObReplayStatus::trigger_fetch_log()
   }
   return ret;
 }
+
+int ObReplayStatus::check_can_replay() const
+{
+  int ret = OB_SUCCESS;
+  {
+    RLockGuard guard(rolelock_);
+    if (FOLLOWER != role_) {
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
 } // namespace logservice
 }

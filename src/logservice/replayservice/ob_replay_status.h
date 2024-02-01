@@ -205,6 +205,11 @@ public:
     return lease_.revoke();
   }
 
+  bool is_idle() const
+  {
+    return lease_.is_idle();
+  }
+
   ObReplayServiceTaskType get_type() const
   {
     return type_;
@@ -477,8 +482,13 @@ public:
   //
   // @return : OB_SUCCESS : success
   //           OB_NOT_INIT: ObReplayStatus has not been inited
-  int is_replay_done(const palf::LSN &lsn,
-                     bool &is_done);
+  int is_replay_done(const palf::LSN &lsn, bool &is_done);
+
+  //check whether submit task is in the global queue of ObLogReplayService
+  //@param [out] : true if submit task is not in the global queue
+  //@return : OB_SUCCESS : success
+  //OB_NOT_INIT: ObReplayStatus has not been inited
+  int is_submit_task_clear(bool &is_clear) const;
   // 存在待回放的已提交日志任务
   bool has_remained_replay_task() const;
   // update right margin of logs that need to replay
@@ -513,6 +523,8 @@ public:
                            ObLogReplayBuffer *&replay_log_buf,
                            bool &need_replay,
                            const int64_t replay_queue_idx);
+  //check whether can replay log so far
+  int check_can_replay() const;
   void set_post_barrier_submitted(const palf::LSN &lsn);
   int set_post_barrier_finished(const palf::LSN &lsn);
   int trigger_fetch_log();
@@ -571,6 +583,7 @@ private:
   // 注销回调并清空任务
   int disable_();
   bool is_replay_enabled_() const;
+
 private:
   static const int64_t PENDING_COUNT_THRESHOLD = 100;
   static const int64_t EAGAIN_COUNT_THRESHOLD = 50000;
