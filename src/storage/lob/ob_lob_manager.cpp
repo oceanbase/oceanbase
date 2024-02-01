@@ -1347,7 +1347,7 @@ int ObLobManager::append(
       }
       // prepare write buffer
       ObString write_buffer;
-      int64_t buf_len = OB_MIN(ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE, append_lob_len);
+      int64_t buf_len = OB_MIN(ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE, param.byte_size_ + append_lob_len);
       char *buf = nullptr;
       if (OB_SUCC(ret)) {
         buf = reinterpret_cast<char*>(param.allocator_->alloc(buf_len));
@@ -2679,7 +2679,7 @@ int ObLobManager::write_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, uin
       } else {
         // prepare read buffer
         ObString read_buffer;
-        uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, read_param.byte_size_);;
+        uint64_t read_buff_size = OB_MIN(LOB_READ_BUFFER_LEN, read_param.byte_size_);
         char *read_buff = static_cast<char*>(param.allocator_->alloc(read_buff_size));
         if (OB_ISNULL(read_buff)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3578,6 +3578,10 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
             param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
             param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
             param.read_latest_ = retry_info->read_latest_;
+            if (param.read_latest_ && OB_NOT_NULL(param.tx_desc_)) {
+              // tx_info->snapshot_seq_ is seq_abs when read_latest is true
+              param.snapshot_.core_.scn_ = param.tx_desc_->get_tx_seq(tx_info->snapshot_seq_);
+            }
           } else {
             // When param for write, param.tx_desc_ should not be null
             // If tx indfo from lob locator is old, produce new read snapshot directly
