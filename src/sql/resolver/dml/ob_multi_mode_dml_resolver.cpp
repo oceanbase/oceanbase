@@ -1687,9 +1687,9 @@ int ObMultiModeDMLResolver::json_transform_dot_notation2_query(ParseNode &node,
       LOG_WARN("transform dot notation udt attribute failed", K(ret));
     }
   } else if (!(is_json_cst || is_json_type)) {
-    ret = OB_WRONG_COLUMN_NAME;
+    /* ret = OB_WRONG_COLUMN_NAME;
     LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int32_t>(sql_str.length() - 1), sql_str.ptr());
-    LOG_WARN("column type not json", K(ret));
+    LOG_WARN("column type not json", K(ret)); */
   } else {
     // create path node
     if (OB_ISNULL(node.children_[JsnQueryClause::JSN_QUE_PATH]->children_[1])) {
@@ -2620,7 +2620,7 @@ int ObMultiModeDMLResolver::xml_replace_col_udt_qname(ObQualifiedName& q_name, O
         }
         if (OB_SUCC(ret)) {
           udt_col_func_q_name.access_idents_.at(0).type_ = SYS_FUNC;
-          udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = static_cast<ObSysFunRawExpr *>(udt_col_ref_expr);
+          udt_col_func_q_name.access_idents_.at(0).sys_func_expr_ = udt_col_ref_expr;
           q_name = udt_col_func_q_name;
         }
       }

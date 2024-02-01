@@ -96,6 +96,22 @@ int ObRawExprFactory::create_raw_expr<ObOpRawExpr>(ObItemType expr_type, ObOpRaw
 #undef GENERATE_CASE
 #undef GENERATE_DEFAULT
 
+void ObQualifiedName::format_qualified_name()
+{
+  if (access_idents_.count() == 1) {
+    col_name_ = access_idents_.at(0).access_name_;
+  }
+  if (access_idents_.count() == 2) {
+    tbl_name_ = access_idents_.at(0).access_name_;
+    col_name_ = access_idents_.at(1).access_name_;
+  }
+  if (access_idents_.count() == 3) {
+    database_name_ = access_idents_.at(0).access_name_;
+    tbl_name_ = access_idents_.at(1).access_name_;
+    col_name_ = access_idents_.at(2).access_name_;
+  }
+}
+
 void ObQualifiedName::format_qualified_name(ObNameCaseMode mode)
 {
   UNUSED(mode); //TODO: @ryan.ly @yuming.wyc
@@ -126,6 +142,13 @@ int ObQualifiedName::replace_access_ident_params(ObRawExpr *from, ObRawExpr *to)
     OZ (access_idents_.at(i).replace_params(from, to));
   }
   return ret;
+}
+
+int ObObjAccessIdent::check_param_num() const
+{
+  return (ObRawExpr::EXPR_SYS_FUNC == sys_func_expr_->get_expr_class())
+      ? static_cast<ObSysFunRawExpr*>(sys_func_expr_)->check_param_num()
+        : OB_SUCCESS;
 }
 
 int ObObjAccessIdent::extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const

@@ -1133,13 +1133,15 @@ public:
   int extract_params(int64_t level, common::ObIArray<ObRawExpr*> &params) const;
   int replace_params(ObRawExpr *from, ObRawExpr *to);
 
+  int check_param_num() const;
+
   TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
 
   AccessNameType type_;
   common::ObString access_name_;
   int64_t access_index_;
   ObUDFInfo udf_info_;
-  ObSysFunRawExpr *sys_func_expr_;
+  ObRawExpr *sys_func_expr_;
   //a.f(x,y)(m,n)里的x、y、m、n都是f的参数，但是x、y的param_level_是0，m、n是1
   common::ObSEArray<std::pair<ObRawExpr*, int64_t>, 4, common::ModulePageAllocator, true> params_;
   bool has_brackets_; // may has empty (), record it.
@@ -1185,6 +1187,7 @@ public:
     return *this;
   }
 
+  void format_qualified_name();
   void format_qualified_name(common::ObNameCaseMode mode);
   inline bool is_unknown() const
   {
@@ -1200,6 +1203,10 @@ public:
   inline bool is_sys_func() const
   {
     return 1 == access_idents_.count() && access_idents_.at(0).is_sys_func();
+  }
+  inline bool is_col_ref_access() const
+  {
+    return 1 < access_idents_.count() && access_idents_.at(0).is_sys_func();
   }
   inline bool is_pl_udf() const
   {

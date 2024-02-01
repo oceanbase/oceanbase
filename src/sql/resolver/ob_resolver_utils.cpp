@@ -3165,14 +3165,10 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     ObQualifiedName &q_name = columns.at(i);
     if (q_name.is_sys_func()) {
-      ObSysFunRawExpr *sys_func_expr = q_name.access_idents_.at(0).sys_func_expr_;
-      if (OB_ISNULL(sys_func_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sys expr is null", K(ret));
-      } else if (OB_FAIL(sys_func_expr->check_param_num())) {
+      if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
         LOG_WARN("sys func check param failed", K(ret));
       } else {
-        real_ref_expr = sys_func_expr;
+        real_ref_expr = q_name.access_idents_.at(0).sys_func_expr_;
       }
     } else if (q_name.is_pl_udf()) {
       if (OB_FAIL(ObResolverUtils::resolve_external_symbol(*resolve_params.allocator_,
@@ -4267,31 +4263,25 @@ int ObResolverUtils::resolve_columns_for_partition_range_value_expr(ObRawExpr *&
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); i++) {
     ObQualifiedName &q_name = columns.at(i);
     if (q_name.is_sys_func()) {
-      ObSysFunRawExpr *sys_func_expr = q_name.access_idents_.at(0).sys_func_expr_;
-      if (OB_ISNULL(sys_func_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sys expr is null", K(ret));
-      } else {
-        ObRawExpr *real_ref_expr = static_cast<ObRawExpr *>(sys_func_expr);
-        for (int64_t j = 0; OB_SUCC(ret) && j < real_sys_exprs.count(); ++j) {
-          if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr,
-                                                         real_sys_exprs.at(j).first,
-                                                         real_sys_exprs.at(j).second))) {
-            LOG_WARN("failed to replace ref column", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-          // do nothing
-        } else if (OB_FAIL(sys_func_expr->check_param_num())) {
-          LOG_WARN("faield to check param num", K(ret));
-        } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr,
-                                                              q_name.ref_expr_,
-                                                              real_ref_expr))) {
+      ObRawExpr *real_ref_expr = q_name.access_idents_.at(0).sys_func_expr_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < real_sys_exprs.count(); ++j) {
+        if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr,
+                                                       real_sys_exprs.at(j).first,
+                                                       real_sys_exprs.at(j).second))) {
           LOG_WARN("failed to replace ref column", K(ret));
-        } else if (OB_FAIL(real_sys_exprs.push_back(
-                    std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, real_ref_expr)))) {
-          LOG_WARN("failed to push back pari exprs", K(ret));
         }
+      }
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
+        LOG_WARN("faield to check param num", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr,
+                                                            q_name.ref_expr_,
+                                                            real_ref_expr))) {
+        LOG_WARN("failed to replace ref column", K(ret));
+      } else if (OB_FAIL(real_sys_exprs.push_back(
+                  std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, real_ref_expr)))) {
+        LOG_WARN("failed to push back pari exprs", K(ret));
       }
     } else {
       if (OB_FAIL(log_err_msg_for_partition_value(q_name))) {
@@ -4406,15 +4396,13 @@ int ObResolverUtils::resolve_columns_for_partition_expr(ObRawExpr *&expr,
     const ObQualifiedName &q_name = columns.at(i);
     ObRawExpr *real_ref_expr = NULL;
     if (q_name.is_sys_func()) {
-      ObSysFunRawExpr *sys_func_expr = q_name.access_idents_.at(0).sys_func_expr_;
-      CK (OB_NOT_NULL(sys_func_expr));
       if (OB_SUCC(ret)) {
-        real_ref_expr = static_cast<ObRawExpr*>(sys_func_expr);
+        real_ref_expr = q_name.access_idents_.at(0).sys_func_expr_;
         for (int64_t i = 0; OB_SUCC(ret) && i < real_sys_exprs.count(); ++i) {
           OZ (ObRawExprUtils::replace_ref_column(real_ref_expr, real_sys_exprs.at(i).first, real_sys_exprs.at(i).second));
         }
 
-        OZ (sys_func_expr->check_param_num());
+        OZ (q_name.access_idents_.at(0).check_param_num());
         OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, real_ref_expr));
         OZ (real_sys_exprs.push_back(std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, real_ref_expr)));
       }
@@ -5291,7 +5279,7 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
       } else if (OB_ISNULL(q_name.access_idents_.at(0).sys_func_expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(ret));
-      } else if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
+      } else if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
         LOG_WARN("sys func param number not match", K(ret));
       } else {
         real_ref_expr = static_cast<ObRawExpr *>(q_name.access_idents_.at(0).sys_func_expr_);
@@ -5417,7 +5405,7 @@ int ObResolverUtils::resolve_check_constraint_expr(
       for (int64_t i = 0; OB_SUCC(ret) && i < ref_sys_exprs.count(); ++i) {
         OZ (ObRawExprUtils::replace_ref_column(sys_func, ref_sys_exprs.at(i).first, ref_sys_exprs.at(i).second));
       }
-      OZ (q_name.access_idents_.at(0).sys_func_expr_->check_param_num());
+      OZ (q_name.access_idents_.at(0).check_param_num());
       OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, sys_func));
       OZ (ref_sys_exprs.push_back(std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, sys_func)));
     } else if (q_name.database_name_.length() > 0 || q_name.tbl_name_.length() > 0) {

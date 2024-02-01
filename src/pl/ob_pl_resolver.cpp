@@ -11745,7 +11745,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   OZ (replace_udf_param_expr(q_name, columns, real_exprs));
   if (OB_FAIL(ret)) {
   } else if (q_name.is_sys_func()) {
-    if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
+    if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
       LOG_WARN("sys func param number not match", K(ret));
     } else {
       expr = static_cast<ObRawExpr *>(q_name.access_idents_.at(0).sys_func_expr_);

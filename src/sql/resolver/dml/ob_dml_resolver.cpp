@@ -1516,6 +1516,77 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
   return ret;
 }
 
+int ObDMLResolver::replace_col_ref_prefix(ObQualifiedName &col_ref, uint64_t idx, ObQualifiedName &q_name, bool &try_success)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr* col_ref_expr = NULL;
+  if (OB_FAIL(resolve_column_ref_expr(col_ref, col_ref_expr))) {
+    LOG_WARN("try get udt col ref failed", K(ret), K(col_ref), KPC(col_ref_expr));
+    // should not return error if not found
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(col_ref_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col ref expr is null", K(ret), KPC(col_ref_expr));
+  } else if (OB_FAIL(ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(params_.expr_factory_, params_.session_info_, col_ref_expr))) {
+    LOG_WARN("try add implict cast above sql udt col ref failed", K(ret), K(col_ref), K(col_ref_expr));
+  } else if (col_ref_expr->get_result_type().is_ext()
+              || col_ref_expr->get_result_type().is_user_defined_sql_type()
+              || col_ref_expr->get_result_type().is_geometry()) {
+    col_ref.ref_expr_= q_name.ref_expr_;
+    col_ref.access_idents_.reset();
+    if (OB_FAIL(col_ref.access_idents_.push_back(ObObjAccessIdent(ObString("UDT_REF"), OB_INVALID_INDEX)))) {
+      LOG_WARN("push back col ref ident failed", K(ret));
+    } else {
+      for (int64_t i = idx + 1; OB_SUCC(ret) && i < q_name.access_idents_.count(); i++) {
+        if (OB_FAIL(col_ref.access_idents_.push_back(q_name.access_idents_.at(i)))) {
+          LOG_WARN("push back udt member function failed", K(ret), K(i), K(q_name.access_idents_.at(i)));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        col_ref.access_idents_.at(0).type_ = SYS_FUNC;
+        col_ref.access_idents_.at(0).sys_func_expr_ = col_ref_expr;
+        q_name = col_ref;
+        q_name.database_name_.reset();
+        q_name.tbl_name_.reset();
+        q_name.col_name_.reset();
+        try_success = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::replace_col_ref_prefix(ObQualifiedName &q_name)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = 2;
+  bool try_success = false;
+  while (OB_SUCC(ret) && idx >= 0) {
+    if (idx >= (q_name.access_idents_.count() - 1) || q_name.access_idents_.at(idx).has_brackets_) {
+      idx--;
+    } else {
+      ObQualifiedName col_ref;
+      for (int64_t i = 0; OB_SUCC(ret) && i <= idx; ++i) {
+        if (OB_FAIL(col_ref.access_idents_.push_back(q_name.access_idents_.at(i)))) {
+          LOG_WARN("failed to push back", K(ret), K(q_name), K(col_ref), K(i), K(idx));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(col_ref.ref_expr_ = q_name.ref_expr_)) {
+      } else if (FALSE_IT(col_ref.format_qualified_name())) {
+      } else if (OB_FAIL(replace_col_ref_prefix(col_ref, idx, q_name, try_success))) {
+        LOG_WARN("failed to try col qname", K(ret), K(q_name), K(col_ref), K(idx));
+      } else if (try_success) {
+        break;
+      } else {
+        idx--;
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &columns)
 {
   int ret = OB_SUCCESS;
@@ -1527,7 +1598,7 @@ int ObDMLResolver::resolve_columns(ObRawExpr *&expr, ObArray<ObQualifiedName> &c
     ObRawExpr* real_ref_expr = NULL;
     params_.is_column_ref_ = expr->is_column_ref_expr();
 
-    if (OB_FAIL(ObMultiModeDMLResolver::xml_replace_col_udt_qname(q_name, this))) {
+    if (OB_FAIL(replace_col_ref_prefix(q_name))) {
       LOG_WARN("replace col udt qname failed", K(ret), K(q_name));
     } else if (OB_FAIL(resolve_qualified_identifier(q_name, columns, real_exprs, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref expr failed", K(ret), K(q_name));
@@ -1635,13 +1706,13 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(stmt_));
   } else if (q_name.is_sys_func()) {
-    if (OB_FAIL(q_name.access_idents_.at(0).sys_func_expr_->check_param_num())) {
+    if (OB_FAIL(q_name.access_idents_.at(0).check_param_num())) {
       LOG_WARN("sys func param number not match", K(ret));
     } else {
       real_ref_expr = static_cast<ObRawExpr *>(q_name.access_idents_.at(0).sys_func_expr_);
       is_external = (T_FUN_PL_GET_CURSOR_ATTR == real_ref_expr->get_expr_type());
     }
-  } else if (q_name.is_pl_udf() || q_name.is_pl_var()) {
+  } else if (q_name.is_pl_udf() || q_name.is_pl_var() || q_name.is_col_ref_access()) {
     is_external = true;
     if (OB_FAIL(resolve_external_name(q_name, columns, real_exprs, real_ref_expr))) {
       LOG_WARN("resolve column ref expr failed", K(ret), K(q_name));

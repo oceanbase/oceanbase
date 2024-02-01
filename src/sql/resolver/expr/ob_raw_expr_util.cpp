@@ -2287,7 +2287,7 @@ int ObRawExprUtils::build_generated_column_expr(ObRawExprFactory &expr_factory,
         for (int64_t i = 0; OB_SUCC(ret) && i < ref_sys_exprs.count(); ++i) {
           OZ (ObRawExprUtils::replace_ref_column(sys_func, ref_sys_exprs.at(i).first, ref_sys_exprs.at(i).second));
         }
-        OZ (q_name.access_idents_.at(0).sys_func_expr_->check_param_num());
+        OZ (q_name.access_idents_.at(0).check_param_num());
         OZ (ObRawExprUtils::replace_ref_column(expr, q_name.ref_expr_, sys_func));
         OZ (ref_sys_exprs.push_back(std::pair<ObRawExpr*, ObRawExpr*>(q_name.ref_expr_, sys_func)));
       } else if (q_name.is_pl_udf()) {
