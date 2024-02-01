@@ -1,5 +1,10 @@
+# The ip only can be set when first start up.
+# If you want to change ip you have to uninstall oceanbase and delete the data folder.
+# And then install and start the oceanbase with the new ip
+ip=127.0.0.1
 mysqlPort=2881
 rpcPort=2882
+obshellPort=2886
 rootPwd=""
 redoDir=/var/lib/oceanbase/redo
 dataDir=/var/lib/oceanbase/data
