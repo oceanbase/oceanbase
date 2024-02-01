@@ -238,6 +238,7 @@ ob_set_subtarget(oblib_lib oblog
   oblog/ob_base_log_writer.cpp
   oblog/ob_easy_log.cpp
   oblog/ob_log.cpp
+  oblog/ob_log_compressor.cpp
   oblog/ob_log_module.ipp
   oblog/ob_log_time_fmt.cpp
   oblog/ob_trace_log.cpp

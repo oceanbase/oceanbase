@@ -62,6 +62,7 @@ class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
 class ObPLogItem;
+class ObLogCompressor;
 
 extern void allow_next_syslog(int64_t count = 1);
 extern int logdata_vprintf(char *buf, const int64_t buf_len, int64_t &pos, const char *fmt, va_list args);
@@ -556,6 +557,8 @@ public:
   //@brief Set whether record old log file. If this flag and max_file_index set,
   //will record log files in the directory for log file
   int set_record_old_log_file(bool rec_old_file_flag = false);
+  int set_log_compressor(ObLogCompressor *log_compressor);
+  int64_t get_max_file_index() const { return max_file_index_; }
 
   //@brief Get the process-only ObLogger.
   static ObLogger &get_logger();
@@ -746,6 +749,7 @@ private:
       bool& disable);
 
   int log_new_file_info(const ObPLogFileStruct &log_file);
+  void unlink_if_need(const char *file);
 private:
   static const char *const errstr_[];
   // default log rate limiter if there's no tl_log_limiger
@@ -805,6 +809,7 @@ private:
   ObBlockAllocMgr* log_mem_limiter_;
   ObVSliceAlloc* allocator_;
   ObFIFOAllocator* error_allocator_;
+  ObLogCompressor* log_compressor_;
   // juse use it for test promise log print
   bool enable_log_limit_;
   RLOCAL_STATIC(ByteBuf<LOCAL_BUF_SIZE>, local_buf_);

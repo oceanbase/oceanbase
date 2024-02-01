@@ -11,7 +11,7 @@
  */
 
 #include "share/config/ob_reload_config.h"
-
+#include "lib/oblog/ob_log_compressor.h"
 
 namespace oceanbase
 {
@@ -35,6 +35,15 @@ int ObReloadConfig::reload_ob_logger_set()
     } else if (OB_FAIL(OB_LOGGER.set_record_old_log_file(conf_->enable_syslog_recycle))) {
       OB_LOG(ERROR, "fail to set_record_old_log_file",
              K(conf_->enable_syslog_recycle.str()), K(ret));
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_max_disk_size(conf_->syslog_disk_size))) {
+      OB_LOG(ERROR, "fail to set_max_disk_size",
+             K(conf_->syslog_disk_size.str()), KR(ret));
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_compress_func(conf_->syslog_compress_func.str()))) {
+      OB_LOG(ERROR, "fail to set_compress_func",
+             K(conf_->syslog_compress_func.str()), KR(ret));
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.set_min_uncompressed_count(conf_->syslog_file_uncompressed_count))) {
+      OB_LOG(ERROR, "fail to set_min_uncompressed_count",
+             K(conf_->syslog_file_uncompressed_count.str()), KR(ret));
     } else {
       OB_LOGGER.set_log_warn(conf_->enable_syslog_wf);
       OB_LOGGER.set_enable_async_log(conf_->enable_async_syslog);

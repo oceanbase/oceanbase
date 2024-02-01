@@ -218,6 +218,9 @@ standby_db_preferred_upstream_log_region
 standby_fetch_log_bandwidth_limit
 storage_meta_cache_priority
 strict_check_os_params
+syslog_compress_func
+syslog_disk_size
+syslog_file_uncompressed_count
 syslog_io_bandwidth_limit
 syslog_level
 system_memory

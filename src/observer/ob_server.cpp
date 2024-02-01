@@ -23,6 +23,7 @@
 #include "lib/lock/ob_latch.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/oblog/ob_base_log_buffer.h"
+#include "lib/oblog/ob_log_compressor.h"
 #include "lib/ob_running_mode.h"
 #include "lib/profile/ob_active_resource_list.h"
 #include "lib/profile/ob_profile_log.h"
@@ -277,6 +278,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     if (FAILEDx(OB_LOGGER.init(log_cfg, true))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
+      LOG_ERROR("log compressor init error.", KR(ret));
+    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
+      LOG_ERROR("set log compressor error.", KR(ret));
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_pre_setting())) {
@@ -295,6 +300,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     if (FAILEDx(OB_LOGGER.init(log_cfg, false))) {
       LOG_ERROR("async log init error.", KR(ret));
       ret = OB_ELECTION_ASYNC_LOG_WARN_INIT;
+    } else if (OB_FAIL(OB_LOG_COMPRESSOR.init())) {
+      LOG_ERROR("log compressor init error.", KR(ret));
+    } else if (OB_FAIL(OB_LOGGER.set_log_compressor(&OB_LOG_COMPRESSOR))) {
+      LOG_ERROR("set log compressor error.", KR(ret));
     } else if (OB_FAIL(init_tz_info_mgr())) {
       LOG_ERROR("init tz_info_mgr failed", KR(ret));
     } else if (OB_FAIL(ObSqlTaskFactory::get_instance().init())) {
@@ -550,6 +559,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy OB_LOGGER");
     OB_LOGGER.destroy();
     FLOG_INFO("OB_LOGGER destroyed");
+
+    FLOG_INFO("begin to destroy OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.destroy();
+    FLOG_INFO("OB_LOG_COMPRESSOR destroyed");
 
     FLOG_INFO("begin to destroy task controller");
     ObTaskController::get().destroy();
@@ -1167,6 +1180,10 @@ int ObServer::stop()
   OB_LOGGER.stop();
   FLOG_INFO("stop OB_LOGGER success");
 
+  FLOG_INFO("begin to stop OB_LOG_COMPRESSOR");
+  OB_LOG_COMPRESSOR.stop();
+  FLOG_INFO("stop OB_LOG_COMPRESSOR success");
+
   FLOG_INFO("begin to stop task controller");
   ObTaskController::get().stop();
   FLOG_INFO("stop task controller success");
@@ -1517,6 +1534,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait OB_LOGGER");
     OB_LOGGER.wait();
     FLOG_INFO("wait OB_LOGGER success");
+
+    FLOG_INFO("begin to wait OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.wait();
+    FLOG_INFO("wait OB_LOG_COMPRESSOR success");
 
     FLOG_INFO("begin to wait task controller");
     ObTaskController::get().wait();
@@ -2018,13 +2039,21 @@ int ObServer::init_pre_setting()
     const bool record_old_log_file = config_.enable_syslog_recycle;
     const bool log_warn = config_.enable_syslog_wf;
     const bool enable_async_syslog = config_.enable_async_syslog;
+    const int64_t max_disk_size = config_.syslog_disk_size;
+    const int64_t min_uncompressed_count = config_.syslog_file_uncompressed_count;
+    const char *compress_func_ptr = config_.syslog_compress_func.str();
     OB_LOGGER.set_max_file_index(max_log_cnt);
     OB_LOGGER.set_record_old_log_file(record_old_log_file);
     LOG_INFO("Whether record old log file", K(record_old_log_file));
     OB_LOGGER.set_log_warn(log_warn);
     LOG_INFO("Whether log warn", K(log_warn));
     OB_LOGGER.set_enable_async_log(enable_async_syslog);
-    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog));
+    OB_LOG_COMPRESSOR.set_max_disk_size(max_disk_size);
+    LOG_INFO("Whether compress syslog file", K(compress_func_ptr));
+    OB_LOG_COMPRESSOR.set_compress_func(compress_func_ptr);
+    OB_LOG_COMPRESSOR.set_min_uncompressed_count(min_uncompressed_count);
+    LOG_INFO("init log config", K(record_old_log_file), K(log_warn), K(enable_async_syslog),
+             K(max_disk_size), K(compress_func_ptr), K(min_uncompressed_count));
     if (0 == max_log_cnt) {
       LOG_INFO("won't recycle log file");
     } else {
@@ -3695,6 +3724,10 @@ int ObServer::stop_server_in_arb_mode()
     OB_LOGGER.stop();
     FLOG_INFO("stop OB_LOGGER success");
 
+    FLOG_INFO("begin to stop OB_LOG_COMPRESSOR");
+    OB_LOG_COMPRESSOR.stop();
+    FLOG_INFO("stop OB_LOG_COMPRESSOR success");
+
     FLOG_INFO("begin to stop task controller");
     ObTaskController::get().stop();
     FLOG_INFO("stop task controller success");
@@ -3730,6 +3763,10 @@ int ObServer::wait_server_in_arb_mode()
   FLOG_INFO("begin to wait OB_LOGGER");
   OB_LOGGER.wait();
   FLOG_INFO("wait OB_LOGGER success");
+
+  FLOG_INFO("begin to wait OB_LOG_COMPRESSOR");
+  OB_LOG_COMPRESSOR.wait();
+  FLOG_INFO("wait OB_LOG_COMPRESSOR success");
 
   FLOG_INFO("begin to wait task controller");
   ObTaskController::get().wait();
@@ -3768,6 +3805,7 @@ int ObServer::destroy_server_in_arb_mode()
 {
   int ret = OB_SUCCESS;
   OB_LOGGER.destroy();
+  OB_LOG_COMPRESSOR.destroy();
   ObTaskController::get().destroy();
   sig_worker_->destroy();
   signal_handle_->destroy();

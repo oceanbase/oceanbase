@@ -189,12 +189,13 @@ DEF_CAP(syslog_io_bandwidth_limit, OB_CLUSTER_PARAMETER, "30MB",
 DEF_INT(diag_syslog_per_error_limit, OB_CLUSTER_PARAMETER, "200", "[0,]",
         "DIAG syslog limitation for each error per second, exceeding syslog would be truncated",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(max_syslog_file_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
-        "specifies the maximum number of the log files "
-        "that can co-exist before the log file recycling kicks in. "
-        "Each log file can occupy at most 256MB disk space. "
-        "When this value is set to 0, no log file will be removed. Range: [0, +∞) in integer",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT_WITH_CHECKER(max_syslog_file_count, OB_CLUSTER_PARAMETER, "0",
+                     common::ObConfigMaxSyslogFileCountChecker,
+                     "specifies the maximum number of the log files "
+                     "that can co-exist before the log file recycling kicks in. "
+                     "Each log file can occupy at most 256MB disk space. "
+                     "When this value is set to 0, no log file will be removed. Range: [0, +∞) in integer",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_async_syslog, OB_CLUSTER_PARAMETER, "True",
          "specifies whether use async log for observer.log, elec.log and rs.log",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -206,6 +207,20 @@ DEF_BOOL(enable_syslog_recycle, OB_CLUSTER_PARAMETER, "False",
          "specifies whether log file recycling is turned on. "
          "Value: True：turned on; False: turned off",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(syslog_disk_size, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
+        "the size of disk space used by the syslog files. Range: [0, +∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(syslog_compress_func, OB_CLUSTER_PARAMETER, "none",
+                     common::ObConfigSyslogCompressFuncChecker,
+                     "compress function name for syslog files, "
+                     "values: none, zstd_1.0, zstd_1.3.8",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT_WITH_CHECKER(syslog_file_uncompressed_count, OB_CLUSTER_PARAMETER, "0",
+                     common::ObConfigSyslogFileUncompressedCountChecker,
+                     "specifies the minimum number of the syslog files that will not be compressed. "
+                     "Each syslog file can occupy at most 256MB disk space. "
+                     "When this value is set to 0, all syslog file may be compressed. Range: [0, +∞) in integer",
+                     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(memory_limit_percentage, OB_CLUSTER_PARAMETER, "80", "[10, 95]",
         "the size of the memory reserved for internal use(for testing purpose). Range: [10, 95]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
