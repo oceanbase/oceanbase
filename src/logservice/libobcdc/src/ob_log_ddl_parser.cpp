@@ -168,10 +168,12 @@ int ObLogDdlParser::handle(void *data,
           "compat_mode", print_compat_mode(compat_mode), KPC(task));
     } else {
       lib::CompatModeGuard g(compat_mode);
+      const bool is_build_baseline = false;
 
       // Parse DDL task
-      if (OB_FAIL(part_trans_parser_->parse(*task, stop_flag))) {
-        LOG_ERROR("parse DDL task fail", KR(ret), KPC(task), "compat_mode", print_compat_mode(compat_mode));
+      if (OB_FAIL(part_trans_parser_->parse(*task, is_build_baseline, stop_flag))) {
+        LOG_ERROR("parse DDL task fail", KR(ret), KPC(task), K(is_build_baseline),
+            "compat_mode", print_compat_mode(compat_mode));
       } else {
         // The DDL task does not need to go through the formatter module, and here the formatting is set to complete directly
         // DDL Handler directly waits for formatting to complete or not

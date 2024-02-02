@@ -556,7 +556,7 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
   constexpr int64_t string_print_md5_threshold = 4L << 10;
   const bool is_type_for_md5_printing = is_lob || is_json || is_geometry || is_xml ||
     (is_string && col_data_length >= string_print_md5_threshold);
-  
+
   bool is_diff = (index < new_cols_count) && new_cols[index].m_diff_val;
 
   int64_t column_index = index + 1;

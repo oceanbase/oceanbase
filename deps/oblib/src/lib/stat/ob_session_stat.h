@@ -69,6 +69,8 @@ private:
   uint64_t prev_tenant_id_;
   uint64_t prev_session_id_;
   ObSessionDIBuffer *buffer_;
+  ObWaitEventDesc *prev_max_wait_;
+  ObWaitEventStat *prev_total_wait_;
 };
 
 class ObTenantStatEstGuard
@@ -120,6 +122,8 @@ inline int ObSessionDIBuffer::switch_session(const uint64_t session_id, const bo
   } else {
     if (NULL != session_collect_) {
       if (session_collect_ != &local_session_collect_) {
+        session_collect_->base_value_.reset_max_wait();
+        session_collect_->base_value_.reset_total_wait();
         session_collect_->lock_.unlock();
       } else {
         local_session_collect_.clean();

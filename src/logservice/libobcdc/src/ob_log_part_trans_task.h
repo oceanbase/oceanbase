@@ -540,6 +540,7 @@ public:
       ObLogBR *br,
       const uint64_t row_index,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema_info,
+      const bool is_build_baseline,
       bool &is_valid_ddl,
       int64_t &update_schema_version,
       uint64_t &exec_tennat_id,
@@ -579,11 +580,13 @@ public:
 
 private:
   int parse_ddl_info_(
+      const bool is_build_baseline,
       bool &contain_ddl_stmt,
       int64_t &update_schema_version,
       volatile bool &stop_flag);
   int parse_schema_version_(ObObj &col_value, int64_t &schema_version);
   int parse_ddl_info_from_normal_columns_(
+      const bool is_build_baseline,
       ColValueList &col_value_list,
       ObLobDataOutRowCtxList &new_lob_ctx_cols);
   // 1. schema non-split mode returns the pure_id itself

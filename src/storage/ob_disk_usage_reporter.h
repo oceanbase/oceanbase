@@ -68,7 +68,6 @@ public:
   // get data disk used size of specified tenant_id in current observer
   int get_data_disk_used_size(const uint64_t tenant_id, int64_t &used_size) const;
   int get_clog_disk_used_size(const uint64_t tenant_id, int64_t &used_size) const;
-  void set_count_sstable_data_trigger() { ATOMIC_SET(&sstable_data_size_, -1); }
 
 private:
   class ObReportResultGetter final
@@ -120,7 +119,6 @@ private:
   ReportResultMap result_map_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObDiskUsageTableOperator disk_usage_table_operator_;
-  int64_t sstable_data_size_;
 };
 
 } // namespace storage

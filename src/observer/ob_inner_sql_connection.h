@@ -443,6 +443,9 @@ private:
   int64_t prev_session_id_;
   ObActiveSessionStat *prev_stat_;
   bool need_record_;
+  bool prev_is_bkgd_active_;
+  ObWaitEventDesc *prev_max_wait_;
+  ObWaitEventStat *prev_total_wait_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

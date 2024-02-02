@@ -290,6 +290,7 @@ tools/rpm/systemd/profile/oceanbase-service.sh
 tools/rpm/systemd/profile/post_install.sh
 tools/rpm/systemd/profile/pre_uninstall.sh
 tools/rpm/systemd/profile/post_uninstall.sh
+tools/rpm/systemd/profile/telemetry.sh
 
 ############# unittest #############
 unittest/**/test_*

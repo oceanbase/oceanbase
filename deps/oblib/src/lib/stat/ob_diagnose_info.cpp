@@ -639,18 +639,6 @@ int ObDiagnoseSessionInfo::update_stat(const int16_t stat_no, const int64_t delt
   return ret;
 }
 
-inline int ObDiagnoseSessionInfo::set_max_wait(ObWaitEventDesc *max_wait)
-{
-  max_wait_ = max_wait;
-  return OB_SUCCESS;
-}
-
-inline int ObDiagnoseSessionInfo::set_total_wait(ObWaitEventStat *total_wait)
-{
-  total_wait_ = total_wait;
-  return OB_SUCCESS;
-}
-
 inline int ObDiagnoseSessionInfo::set_tenant_id(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -840,6 +828,7 @@ ObWaitEventGuard::~ObWaitEventGuard()
 ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di)
   : prev_wait_(NULL), di_(di)
 {
+  max_wait_ = max_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != max_wait)) {
@@ -860,16 +849,30 @@ ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo 
 ObMaxWaitGuard::~ObMaxWaitGuard()
 {
   if (need_record_ && OB_LIKELY(NULL != di_)) {
-    if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventDesc *max_wait = di_->get_max_wait();
-      if (NULL != max_wait) {
-        if (max_wait->wait_time_ > prev_wait_->wait_time_) {
-          *prev_wait_ = *max_wait;
+    ObDiagnoseSessionInfo *current_di = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    if (OB_NOT_NULL(current_di)) {
+      if (OB_NOT_NULL(current_di->get_max_wait())) {
+        if (OB_UNLIKELY(current_di != di_)) {
+          if (max_wait_ != current_di->get_max_wait()) {
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", K(di_),
+                K(current_di));
+          }
+          di_ = current_di;
         }
-        di_->set_max_wait(prev_wait_);
+      } else {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", K(di_), K(current_di));
       }
-    } else {
-      di_->reset_max_wait();
+      if (OB_LIKELY(NULL != prev_wait_)) {
+        ObWaitEventDesc *max_wait = di_->get_max_wait();
+        if (NULL != max_wait) {
+          if (max_wait->wait_time_ > prev_wait_->wait_time_) {
+            *prev_wait_ = *max_wait;
+          }
+          di_->set_max_wait(prev_wait_);
+        }
+      } else {
+        di_->reset_max_wait();
+      }
     }
   }
 }
@@ -877,6 +880,7 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
 ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di)
   : prev_wait_(NULL), di_(di)
 {
+  total_wait_ = total_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != total_wait)) {
@@ -897,15 +901,30 @@ ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessio
 ObTotalWaitGuard::~ObTotalWaitGuard()
 {
   if (need_record_ && OB_LIKELY(NULL != di_)) {
-    if (OB_LIKELY(NULL != prev_wait_)) {
-      ObWaitEventStat *total_wait = di_->get_total_wait();
-      if (NULL != total_wait) {
-        prev_wait_->total_waits_ += total_wait->total_waits_;
-        prev_wait_->time_waited_ += total_wait->time_waited_;
-        di_->set_total_wait(prev_wait_);
+    ObDiagnoseSessionInfo *current_di = ObDiagnoseSessionInfo::get_local_diagnose_info();
+    if (OB_NOT_NULL(current_di)) {
+      if (OB_NOT_NULL(current_di->get_total_wait())) {
+        if (OB_UNLIKELY(current_di != di_)) {
+          if (total_wait_ != current_di->get_total_wait()) {
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", K(di_),
+                K(current_di));
+          }
+          di_ = current_di;
+        }
+      } else {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", K(di_), K(current_di));
       }
-    } else {
-      di_->reset_total_wait();
+
+      if (OB_LIKELY(NULL != prev_wait_)) {
+        ObWaitEventStat *total_wait = di_->get_total_wait();
+        if (NULL != total_wait) {
+          prev_wait_->total_waits_ += total_wait->total_waits_;
+          prev_wait_->time_waited_ += total_wait->time_waited_;
+          di_->set_total_wait(prev_wait_);
+        }
+      } else {
+        di_->reset_total_wait();
+      }
     }
   }
 }
