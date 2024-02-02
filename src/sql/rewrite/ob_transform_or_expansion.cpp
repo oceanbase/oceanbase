@@ -157,6 +157,7 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
     for (int64_t i = 0; OB_SUCC(ret) && !trans_happened && i < trans_infos.count(); ++i) {
       ctx.or_expand_type_ = trans_infos.at(i).or_expand_type_;
       ctx.is_set_distinct_ = trans_infos.at(i).is_set_distinct_;
+      ctx.is_valid_topk_ = trans_infos.at(i).is_valid_topk_;
       ctx.expand_exprs_.reuse();
       ObDMLStmt *trans_stmt = upper_stmt;
       ObSelectStmt *transformed_union_stmt = NULL;
@@ -165,8 +166,10 @@ int ObTransformOrExpansion::transform_in_where_conditon(ObIArray<ObParentDMLStmt
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
-      } else if (OB_FAIL(transform_or_expansion(spj_stmt, OB_INVALID_ID, trans_infos.at(i).pos_,
-                                                !expect_ordering.empty(), ctx,
+      } else if (OB_FAIL(transform_or_expansion(spj_stmt,
+                                                OB_INVALID_ID,
+                                                trans_infos.at(i).pos_,
+                                                ctx,
                                                 transformed_union_stmt,
                                                 unique_key_provider))) {
         LOG_WARN("failed to do transformation", K(ret));
@@ -266,8 +269,11 @@ int ObTransformOrExpansion::transform_in_semi_info(ObIArray<ObParentDMLStmt> &pa
             LOG_WARN("failed to check is valid semi anti cond", K(ret), K(*semi_info));
           } else if (INVALID_OR_EXPAND_TYPE == ctx.or_expand_type_) {
             /*do nothing*/
-          } else if (OB_FAIL(transform_or_expansion(spj_stmt, semi_info->semi_id_, i,
-                                                    false, ctx, transformed_union_stmt,
+          } else if (OB_FAIL(transform_or_expansion(spj_stmt,
+                                                    semi_info->semi_id_,
+                                                    i,
+                                                    ctx,
+                                                    transformed_union_stmt,
                                                     unique_key_provider))) {
             LOG_WARN("failed to do transformation", K(ret));
           } else if (OB_FAIL(merge_stmt(trans_stmt, spj_stmt, transformed_union_stmt))) {
@@ -431,9 +437,12 @@ int ObTransformOrExpansion::try_do_transform_inner_join(ObIArray<ObParentDMLStmt
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
-      } else if (OB_FAIL(transform_or_expansion(ref_query, OB_INVALID_ID,
-                                                trans_infos.at(i).pos_, false,
-                                                ctx, union_stmt, unique_key_provider))) {
+      } else if (OB_FAIL(transform_or_expansion(ref_query,
+                                                OB_INVALID_ID,
+                                                trans_infos.at(i).pos_,
+                                                ctx,
+                                                union_stmt,
+                                                unique_key_provider))) {
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(merge_stmt(trans_stmt, ref_query, union_stmt))) {
         LOG_WARN("failed to merge stmt", K(ret));
@@ -550,9 +559,12 @@ int ObTransformOrExpansion::try_do_transform_left_join(ObIArray<ObParentDMLStmt>
       if (reached_max_times_for_or_expansion()) {
         /*do nothing*/
         OPT_TRACE("retry count reached max times:", try_times_);
-      } else if (OB_FAIL(transform_or_expansion(ref_query, joined_table->table_id_,
-                                                trans_infos.at(i).pos_, false, ctx,
-                                                trans_ref_query, unique_key_provider2))) {
+      } else if (OB_FAIL(transform_or_expansion(ref_query,
+                                                joined_table->table_id_,
+                                                trans_infos.at(i).pos_,
+                                                ctx,
+                                                trans_ref_query,
+                                                unique_key_provider2))) {
         LOG_WARN("failed to do transformation", K(ret));
       } else if (OB_FAIL(do_transform_for_left_join(trans_ref_query, left_unique_pos,
                                                     right_flag_pos))) {
@@ -1438,6 +1450,7 @@ int ObTransformOrExpansion::get_common_columns_in_condition(const ObDMLStmt *stm
       LOG_WARN("failed to inner get same columns in condition", K(ret));
     }
     for (int64_t i = 1; OB_SUCC(ret) && !pre_cols.empty() && i < expr->get_param_count(); ++i) {
+      cur_cols.reuse();
       if (OB_FAIL(inner_get_common_columns_in_condition(stmt, expr->get_param_expr(i), cur_cols))) {
         LOG_WARN("failed to inner get same columns in condition", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::intersect(pre_cols, cur_cols, pre_cols))) {
@@ -1812,6 +1825,7 @@ int ObTransformOrExpansion::is_valid_topk_cond(const ObDMLStmt &stmt,
       } else if (is_match) {
         trans_info.is_set_distinct_ = true;
         trans_info.or_expand_type_ |= OR_EXPAND_TOP_K;
+        trans_info.is_valid_topk_ = true;
       }
     }
   }
@@ -1837,6 +1851,7 @@ int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
   is_valid = false;
   using_same_cols = true;
   common_cols.reuse();
+  int classify_count = 0;
   OPT_TRACE("check expr:", expr);
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1847,9 +1862,12 @@ int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
   } else if (T_OP_OR != expr->get_expr_type() && T_OP_IN != expr->get_expr_type()) {
     is_valid = false;
     OPT_TRACE("not or/in expr");
-  } else if (T_OP_OR == expr->get_expr_type() &&
-             expr->get_param_count() <= MAX_STMT_NUM_FOR_OR_EXPANSION) {
-    is_valid = expr->get_param_count() > 1;
+  } else if (T_OP_OR == expr->get_expr_type()) {
+    if (OB_FAIL(pre_classify_or_expr(expr, classify_count))) {
+      LOG_WARN("failed to classify or expr", K(ret));
+    } else {
+      is_valid = expr->get_param_count() > 1 && classify_count <= MAX_STMT_NUM_FOR_OR_EXPANSION;
+    }
   } else if (is_topk && T_OP_IN == expr->get_expr_type() && !expr->has_flag(CNT_SUB_QUERY)) {
     const ObRawExpr *right_expr = NULL;
     if (OB_UNLIKELY(2 != expr->get_param_count())) {
@@ -1888,6 +1906,10 @@ int ObTransformOrExpansion::check_condition_valid_basic(const ObDMLStmt *stmt,
   } else if (common_cols.empty() && using_same_cols && !expr->has_flag(CNT_SUB_QUERY)) {
     is_valid = false;
     OPT_TRACE("or expr from same table, will not expand");
+  } else if (using_same_cols && T_OP_OR == expr->get_expr_type()
+             && expr->get_param_count() > MAX_STMT_NUM_FOR_OR_EXPANSION) {
+    is_valid = false;
+    OPT_TRACE("or expr param count > MAX_STMT_NUM_FOR_OR_EXPANSION, will not expand");
   } else {
     is_valid = NULL == ctx.hint_ || ctx.hint_->enable_use_concat(*expr);
     if (!is_valid) {
@@ -1933,6 +1955,10 @@ int ObTransformOrExpansion::is_condition_valid(const ObDMLStmt *stmt,
              OB_FAIL(is_valid_topk_cond(*stmt, expect_ordering, common_cols,
                                         equal_sets, const_exprs, trans_info))) {
     LOG_WARN("failed to check is valid topk cond", K(ret));
+  } else if ((trans_info.or_expand_type_ & OR_EXPAND_TOP_K)
+             && T_OP_OR == expr->get_expr_type()
+             && expr->get_param_count() > MAX_STMT_NUM_FOR_OR_EXPANSION) {
+    trans_info.or_expand_type_ = INVALID_OR_EXPAND_TYPE; // means is_valid == false
   } else if (NULL != ctx.hint_ && ctx.hint_->is_enable_hint()) {
     // 2. match basic condition, do transform if use hint.
     if (OB_FAIL(get_use_hint_expand_type(*expr, can_set_distinct, trans_info))) {
@@ -2071,7 +2097,6 @@ int ObTransformOrExpansion::is_expand_anti_or_cond(const ObRawExpr &expr,
 int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
                                                    const uint64_t trans_id,
                                                    const int64_t expr_pos,
-                                                   bool is_topk,
                                                    ObCostBasedRewriteCtx &ctx,
                                                    ObSelectStmt *&trans_stmt,
                                                    StmtUniqueKeyProvider &unique_key_provider)
@@ -2111,7 +2136,7 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
     LOG_WARN("failed to get expand conds", K(ret));
   } else if (FALSE_IT(view_stmt = copy_stmt)) {
     // never reach
-  } else if (OB_INVALID_ID == trans_id && !is_topk &&
+  } else if (OB_INVALID_ID == trans_id && !ctx.is_valid_topk_ &&
              OB_FAIL(get_condition_related_view(copy_stmt, view_stmt, view_table,
                                                 view_expr_pos, conds_exprs,
                                                 ctx.is_set_distinct_))) {
@@ -2121,8 +2146,8 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
   } else if (ctx.is_set_distinct_ && !ctx.is_unique_ &&
              OB_FAIL(unique_key_provider.recursive_set_stmt_unique(view_stmt, ctx_, true))) {
     LOG_WARN("failed to set stmt unique", K(ret));
-  } else if (!is_topk &&
-             OB_FAIL(classify_or_expr(*view_stmt, conds_exprs->at(view_expr_pos)))) {
+  } else if (!ctx.is_valid_topk_
+             && OB_FAIL(classify_or_expr(*view_stmt, conds_exprs->at(view_expr_pos)))) {
     LOG_WARN("failed to classify or expr", K(ret), KPC(conds_exprs->at(view_expr_pos)));
   } else {
     const uint64_t or_expr_count = get_or_expr_count(*conds_exprs->at(view_expr_pos));
@@ -2415,6 +2440,7 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   trans_type = INVALID_OR_EXPAND_TYPE;
   bool check_status = false;
+  int classify_count = 0;
   OPT_TRACE("check expr:", expr);
   if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(semi_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2422,9 +2448,7 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
   } else if (expr->has_flag(CNT_ROWNUM)) {
     /* do nothing */
     OPT_TRACE("expr has rownum");
-  } else if (T_OP_OR != expr->get_expr_type() ||
-             expr->get_param_count() <= 1 ||
-             expr->get_param_count() > MAX_STMT_NUM_FOR_OR_EXPANSION) {
+  } else if (T_OP_OR != expr->get_expr_type() || expr->get_param_count() <= 1) {
     /* do nothing */
     OPT_TRACE("not or expr");
   } else if (OB_FAIL(check_condition_on_same_columns(*stmt, *expr, check_status))) {
@@ -2432,6 +2456,11 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
   } else if (check_status) {
     /* do nothing */
     OPT_TRACE("or expr param from same table");
+  } else if (OB_FAIL(pre_classify_or_expr(expr, classify_count))) {
+    LOG_WARN("failed to classify or expr", K(ret));
+  } else if (classify_count > MAX_STMT_NUM_FOR_OR_EXPANSION) {
+    /* do nothing */
+    OPT_TRACE("or expr classify count more than MAX_STMT_NUM_FOR_OR_EXPANSION");
   } else if (NULL != ctx.hint_) {
     trans_type = ctx.hint_->enable_use_concat(*expr) ? OR_EXPAND_HINT : INVALID_OR_EXPAND_TYPE;
     if (INVALID_OR_EXPAND_TYPE == trans_type) {
@@ -2441,7 +2470,7 @@ int ObTransformOrExpansion::is_valid_semi_anti_cond(const ObDMLStmt *stmt,
     LOG_WARN("failed to check is expand anti or cond", K(ret));
   } else if (check_status) {
     /* do nothing */
-    OPT_TRACE("is anti join or condition, do not exoand");
+    OPT_TRACE("is anti join or condition, do not expand");
   } else {
     const int64_t N = expr->get_param_count();
     const ObRawExpr *child_expr = NULL;
@@ -2879,6 +2908,53 @@ int ObTransformOrExpansion::construct_transform_hint(ObDMLStmt &stmt, void *tran
   return ret;
 }
 
+// Classify or expr to get union count before do_transform
+int ObTransformOrExpansion::pre_classify_or_expr(const ObRawExpr *expr, int &count)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TableColBitSet, 4> table_col_bit_sets;
+  count = 0;
+  if (OB_ISNULL(expr) || T_OP_OR != expr->get_expr_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected expr", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      TableColBitSet table_col_bit_set;
+      bool from_same_table = true;
+      int64_t table_id = OB_INVALID_ID;
+      const ObRawExpr *branch = NULL;
+      if (OB_ISNULL(branch = expr->get_param_expr(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (branch->has_flag(CNT_SUB_QUERY) || branch->get_relation_ids().is_empty()) {
+        // conditions with subqueries will be classfied separately
+        // irrelevant conditions will be classfied separately
+        ++count;
+      } else if (OB_FAIL(extract_columns(branch,
+                                         table_id,
+                                         from_same_table,
+                                         table_col_bit_set.column_bit_set_))) {
+        LOG_WARN("failed to extract columns info", K(ret), KPC(branch));
+      } else if (!from_same_table) {
+        // conditions of multiple tables will be classfied separately
+        ++count;
+      } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid table id", K(ret), KPC(branch), K(table_id));
+      } else if (FALSE_IT(table_col_bit_set.table_id_ = table_id)) {
+      } else if (!ObOptimizerUtil::find_item(table_col_bit_sets,
+                                             table_col_bit_set)) {
+        if (OB_FAIL(table_col_bit_sets.push_back(table_col_bit_set))) {
+          LOG_WARN("failed to push back bit set", K(ret));
+        } else {
+          ++count;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // Classify isomorphic predicates into the same class
 // For example:
 //     select * from t1,t2 where t1.a=1 or t1.a=t2.b or t1.a=t2.b+1 or t1.a>2 or t1.c=3
@@ -2948,9 +3024,8 @@ int ObTransformOrExpansion::classify_or_expr(const ObDMLStmt &stmt, ObRawExpr *&
     }
 
     if (OB_FAIL(ret) || !classify_happened) {
-    } else if (OB_UNLIKELY(1 == expr_classes.count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("or expansion for same cols", K(ret));
+    } else if (1 == expr_classes.count()) {
+      //do nothing
     } else {
       //modify the expr according to the partitions
       ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
