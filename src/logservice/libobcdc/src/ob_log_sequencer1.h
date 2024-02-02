@@ -170,6 +170,7 @@ private:
   int handle_participants_ready_trans_(const bool is_dml_trans,
       TransCtx *trans_ctx,
       volatile bool &stop_flag);
+  int wait_until_ready_queue_not_busy_(volatile bool &stop_flag);
   // Once the participants are gathered, the entire DML transaction is processed
   // TODO
   int handle_dml_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, volatile bool &stop_flag);
