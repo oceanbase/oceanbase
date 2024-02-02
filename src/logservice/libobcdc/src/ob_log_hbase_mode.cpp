@@ -64,27 +64,6 @@ void ObLogHbaseUtil::destroy()
   column_id_map_.destroy();
 }
 
-int ObLogHbaseUtil::add_hbase_table_id(const ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-
-  bool is_hbase_mode_table = false;
-  const uint64_t table_id = table_schema.get_table_id();
-  const char *table_name = table_schema.get_table_name();
-
-  if (OB_FAIL(filter_hbase_mode_table_(table_schema, is_hbase_mode_table))) {
-    LOG_ERROR("filter_hbase_mode_table_ fail", KR(ret), K(table_id), K(table_name), K(is_hbase_mode_table));
-  } else if (! is_hbase_mode_table) {
-    LOG_INFO("[IS_NOT_HBASE_TABLE]", K(table_name), K(table_id), K(is_hbase_mode_table));
-  } else if (OB_FAIL(table_id_set_.set_refactored(table_id))) {
-    LOG_ERROR("add_table_id into table_id_set_ fail", KR(ret), K(table_name), K(table_id));
-  } else {
-    LOG_INFO("[HBASE] add_table_id into table_id_set_ succ", K(table_name), K(table_id));
-  }
-
-  return ret;
-}
-
 int ObLogHbaseUtil::filter_hbase_mode_table_(const ObTableSchema &table_schema,
     bool &is_hbase_mode_table)
 {
@@ -93,11 +72,11 @@ int ObLogHbaseUtil::filter_hbase_mode_table_(const ObTableSchema &table_schema,
   is_hbase_mode_table = false;
   // Marks the presence or absence of a specified column
   int column_flag[HBASE_TABLE_COLUMN_COUNT];
+  memset(column_flag, '\0', sizeof(column_flag));
   // Mark column T as bigint or not
   bool is_T_column_bigint_type = false;
   // Record T-column id
   uint64_t column_id = OB_INVALID_ID;
-  memset(column_flag, '\0', sizeof(column_flag));
   ObColumnIterByPrevNextID pre_next_id_iter(table_schema);
 
   while (OB_SUCCESS == ret) {
@@ -110,23 +89,9 @@ int ObLogHbaseUtil::filter_hbase_mode_table_(const ObTableSchema &table_schema,
     } else if (OB_ISNULL(column_schema)) {
       LOG_ERROR("column_schema is null", KPC(column_schema));
       ret = OB_ERR_UNEXPECTED;
+    } else if (match_column_name_(*column_schema, HBASE_TABLE_COLUMN_COUNT, column_flag, is_T_column_bigint_type, column_id)) {
+      LOG_WARN("match column name failed", KR(ret), K(column_schema));
     } else {
-      const char *column_name = column_schema->get_column_name();
-
-      if (0 == strcmp(column_name, K_COLUMN)) {
-        column_flag[0]++;
-      } else if (0 == strcmp(column_name, Q_COLUMN)) {
-        column_flag[1]++;
-      } else if (0 == strcmp(column_name, T_COLUMN)) {
-        column_flag[2]++;
-
-        if (ObIntType == column_schema->get_data_type()) {
-          is_T_column_bigint_type = true;
-          column_id = column_schema->get_column_id();
-        }
-      } else if (0 == strcmp(column_name, V_COLUMN)) {
-        column_flag[3]++;
-      }
     }
   } // while
 
@@ -135,38 +100,54 @@ int ObLogHbaseUtil::filter_hbase_mode_table_(const ObTableSchema &table_schema,
     ret = OB_SUCCESS;
   }
 
-  int64_t hbase_table_column_cnt = 0;
-  // check contains four columns K, Q, T, V
-  for (int64_t idx=0; idx < HBASE_TABLE_COLUMN_COUNT && OB_SUCC(ret); ++idx) {
-    if (1 == column_flag[idx]) {
-      ++hbase_table_column_cnt;
-    }
+  if (OB_SUCC(ret) && OB_FAIL(judge_and_add_hbase_table_(table_schema, is_T_column_bigint_type, column_id,
+      HBASE_TABLE_COLUMN_COUNT, column_flag, is_hbase_mode_table))) {
+    LOG_WARN("judge hbase table failed", KR(ret), K(table_schema), K(is_hbase_mode_table), K(is_T_column_bigint_type),
+        K(column_id), K(column_flag));
   }
 
-  if (OB_SUCC(ret)) {
-    if ((HBASE_TABLE_COLUMN_COUNT == hbase_table_column_cnt)
-        && is_T_column_bigint_type) {
-      is_hbase_mode_table = true;
+  return ret;
+}
 
-      TableID table_key(table_schema.get_table_id());
-      if (OB_UNLIKELY(OB_INVALID_ID == column_id)) {
-        LOG_ERROR("column_id is not valid", K(column_id));
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(column_id_map_.insert(table_key, column_id))) {
-        LOG_ERROR("column_id_map_ insert fail", KR(ret), K(table_key), K(column_id));
+int ObLogHbaseUtil::filter_hbase_mode_table_(const ObDictTableMeta &table_meta,
+    bool &is_hbase_mode_table)
+{
+  int ret = OB_SUCCESS;
+
+  is_hbase_mode_table = false;
+  // Marks the presence or absence of a specified column
+  int column_flag[HBASE_TABLE_COLUMN_COUNT];
+  memset(column_flag, '\0', sizeof(column_flag));
+  // Mark column T as bigint or not
+  bool is_T_column_bigint_type = false;
+  // Record T-column id
+  uint64_t column_id = OB_INVALID_ID;
+
+  const int64_t column_count = table_meta.get_column_count();
+  const datadict::ObDictColumnMeta *col_metas = table_meta.get_column_metas();
+  if (column_count <= 0) {
+    LOG_TRACE("table don't have columns, skip", K(table_meta));
+  } else if (OB_ISNULL(col_metas)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("col_metas is nullptr", KR(ret), K(col_metas), K(table_meta));
+  } else {
+    for (int idx = 0; OB_SUCC(ret) && idx < column_count; idx++) {
+      const ObDictColumnMeta *col_meta = col_metas + idx;
+      if (OB_ISNULL(col_meta)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("unexpected invalid ObDictColumnMeta", KR(ret), K(col_meta), K(table_meta));
+      } else if (match_column_name_(*col_meta, HBASE_TABLE_COLUMN_COUNT, column_flag, is_T_column_bigint_type, column_id)) {
+        LOG_WARN("match column name failed", KR(ret), K(col_meta));
       } else {
-        // succ
       }
-    } else {
-      is_hbase_mode_table = false;
     }
   }
 
-  LOG_INFO("[HBASE] table info", "table_id", table_schema.get_table_id(),
-      "table_name", table_schema.get_table_name(),
-      K(hbase_table_column_cnt),
-      K(column_id), K(is_T_column_bigint_type),
-      K(is_hbase_mode_table));
+  if (OB_SUCC(ret) && OB_FAIL(judge_and_add_hbase_table_(table_meta, is_T_column_bigint_type, column_id,
+      HBASE_TABLE_COLUMN_COUNT, column_flag, is_hbase_mode_table))) {
+    LOG_WARN("judge hbase table failed", KR(ret), K(table_meta), K(is_T_column_bigint_type),
+        K(column_id), K(column_flag), K(is_hbase_mode_table));
+  }
 
   return ret;
 }
@@ -223,6 +204,85 @@ int ObLogHbaseUtil::is_hbase_table(const uint64_t table_id,
     } else {
       LOG_ERROR("table_id_set_ exist_refactored fail", KR(ret), K(table_id));
     }
+  }
+
+  return ret;
+}
+
+template <class COLUMN_SCHEMA>
+int ObLogHbaseUtil::match_column_name_(const COLUMN_SCHEMA &col_schema,
+    const int column_flag_size,
+    int *column_flag,
+    bool &is_T_column_bigint_type,
+    uint64_t &column_id)
+{
+  int ret = OB_SUCCESS;
+  const char *column_name = col_schema.get_column_name();
+
+  if (HBASE_TABLE_COLUMN_COUNT > column_flag_size) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("column_flag is invalid", KR(ret), K(column_flag));
+  } else if (0 == strcmp(column_name, K_COLUMN)) {
+    column_flag[0]++;
+  } else if (0 == strcmp(column_name, Q_COLUMN)) {
+    column_flag[1]++;
+  } else if (0 == strcmp(column_name, T_COLUMN)) {
+    column_flag[2]++;
+    if (ObIntType == col_schema.get_data_type()) {
+      is_T_column_bigint_type = true;
+      column_id = col_schema.get_column_id();
+    }
+  } else if (0 == strcmp(column_name, V_COLUMN)) {
+    column_flag[3]++;
+  }
+
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogHbaseUtil::judge_and_add_hbase_table_(const TABLE_SCHEMA &table_schema,
+    const bool is_T_column_bigint_type,
+    const uint64_t column_id,
+    const int column_flag_size,
+    const int *column_flag,
+    bool &is_hbase_mode_table)
+{
+  int ret = OB_SUCCESS;
+  int64_t hbase_table_column_cnt = 0;
+
+  if (HBASE_TABLE_COLUMN_COUNT > column_flag_size) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("column_flag is invalid ", KR(ret), K(column_flag));
+  } else {
+    // check contains four columns K, Q, T, V
+    for (int64_t idx = 0; idx < column_flag_size; ++idx) {
+      if (1 == column_flag[idx]) {
+        ++hbase_table_column_cnt;
+      }
+    }
+
+    if ((HBASE_TABLE_COLUMN_COUNT == hbase_table_column_cnt)
+        && is_T_column_bigint_type) {
+      is_hbase_mode_table = true;
+
+      TableID table_key(table_schema.get_table_id());
+      if (OB_UNLIKELY(OB_INVALID_ID == column_id)) {
+        LOG_ERROR("column_id is not valid", K(column_id));
+        ret = OB_ERR_UNEXPECTED;
+      } else if (OB_FAIL(column_id_map_.insert(table_key, column_id))) {
+        LOG_ERROR("column_id_map_ insert fail", KR(ret), K(table_key), K(column_id));
+      } else {
+        // succ
+      }
+    } else {
+      is_hbase_mode_table = false;
+    }
+
+    LOG_INFO("[HBASE] table info", "table_id", table_schema.get_table_id(),
+        "table_name", table_schema.get_table_name(),
+        K(hbase_table_column_cnt),
+        K(column_id), K(is_T_column_bigint_type),
+        K(is_hbase_mode_table));
   }
 
   return ret;

@@ -676,6 +676,10 @@ int read_from_file(const char *file_path, char *buf, const int64_t buf_len);
     } \
   } while (0)
 
+// convert to compat mode
+int convert_to_compat_mode(const common::ObCompatibilityMode &compatible_mode,
+    lib::Worker::CompatMode &compat_mode);
+
 } // namespace libobcdc
 } // namespace oceanbase
 #endif /* OCEANBASE_LIBOBCDC_UTILS_H__ */

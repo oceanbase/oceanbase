@@ -1066,22 +1066,54 @@ int ObLogSequencer::handle_multi_data_source_info_(
           } // wait_until_formatter_done_
         }
       }
-
+      bool need_new_schema = false;
       if (OB_SUCC(ret)) {
         if (OB_ISNULL(ddl_processor)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("expect valid ddl_processor", KR(ret));
-        } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, stop_flag))) {
+        } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, false, stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_ddl_trans for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
           }
-        } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
-            && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
-          LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
-              K(stop_flag));
+        } else if (OB_FAIL(need_acquire_new_schema_(*part_trans_task, need_new_schema))) {
+          LOG_ERROR("execute need_acquire_new_schema_ failed", KR(ret), KPC(part_trans_task));
+        } else if (need_new_schema) {
+          if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+              && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+            LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+                K(stop_flag));
+          } else if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, true, stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("handle_ddl_trans_update_tic for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+            }
+          } else {
+            LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          }
         } else {
-          LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          if (OB_FAIL(ddl_processor->handle_ddl_trans(*part_trans_task, tenant, true, stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("handle_ddl_trans_update_tic for data_dict mode failed", KR(ret), K(tenant), KPC(part_trans_task));
+            }
+          } else if (part_trans_task->get_multi_data_source_info().is_ddl_trans()
+              && OB_FAIL(handle_ddl_multi_data_source_info_(*part_trans_task, tenant, trans_ctx))) {
+            LOG_ERROR("handle_ddl_multi_data_source_info_ failed", KR(ret), KPC(part_trans_task), K(trans_ctx),
+                K(stop_flag));
+          } else {
+            LOG_DEBUG("handle_ddl_trans and mds for data_dict mode done", KPC(part_trans_task));
+          }
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && part_trans_task->is_sys_ls_part_trans() && part_trans_task->need_update_table_id_cache()) {
+      if (OB_FAIL(wait_until_parser_done_("update_table_id_cache_op", stop_flag))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
+        }
+      } else if (OB_FAIL(update_table_id_cache_(part_mgr, part_trans_task))) {
+        LOG_ERROR("update table_id_cache failed", KR(ret), KPC(part_trans_task));
+      } else {
+        LOG_INFO("update table_id_cache success", KPC(part_trans_task));
       }
     }
 
@@ -1329,6 +1361,85 @@ int ObLogSequencer::do_trans_stat_(const uint64_t tenant_id,
     trans_stat_mgr_->do_rps_stat_before_filter(total_stmt_cnt);
     if (OB_FAIL(trans_stat_mgr_->do_tenant_tps_rps_stat(tenant_id, total_stmt_cnt))) {
       LOG_ERROR("do tenant rps stat before filter", KR(ret), K(tenant_id), K(total_stmt_cnt));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &need_new_schema)
+{
+  int ret = OB_SUCCESS;
+  need_new_schema = false;
+  if (OB_UNLIKELY(! task.is_ddl_trans())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid ddl task which is not DDL trans", KR(ret), K(task));
+  } else {
+    IStmtTask *stmt_task = task.get_stmt_list().head_;
+    while (NULL != stmt_task && OB_SUCCESS == ret) {
+      DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
+      if (OB_UNLIKELY(! stmt_task->is_ddl_stmt()) || OB_ISNULL(ddl_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
+      } else if (OB_DDL_CREATE_TABLE == ddl_stmt->get_operation_type()
+          || OB_DDL_ALTER_TABLE == ddl_stmt->get_operation_type()
+          || OB_DDL_TABLE_RENAME == ddl_stmt->get_operation_type()) {
+        need_new_schema = true;
+        break;
+      } else {
+        stmt_task = stmt_task->get_next();
+      }
+    }
+  }
+  LOG_DEBUG("ddl task needs schema info", KR(ret), K(task), K(need_new_schema));
+  return ret;
+}
+
+int ObLogSequencer::update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTransTask *task)
+{
+  int ret = OB_SUCCESS;
+  ObArray<TICUpdateInfo> tic_update_infos;
+  task->get_tic_update_info(tic_update_infos);
+  for (int i = 0;  OB_SUCC(ret) && i < tic_update_infos.count(); i++) {
+    const TICUpdateInfo tic_update_info = tic_update_infos[i];
+    TICUpdateInfo::TICUpdateReason update_reason = tic_update_info.reason_;
+    switch (update_reason) {
+      case TICUpdateInfo::TICUpdateReason::DROP_TABLE:
+      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE: {
+        const uint64_t table_id = tic_update_info.table_id_;
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.delete_table_id_from_cache(table_id))) {
+          LOG_ERROR("[Sequencer] delete table_id from cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("delete table_id from cache success", K(tic_update_info));
+        }
+        break;
+      }
+      case TICUpdateInfo::TICUpdateReason::CREATE_TABLE:
+      case TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD: {
+        const uint64_t table_id = tic_update_info.table_id_;
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.insert_table_id_into_cache(table_id, database_id))) {
+          LOG_ERROR("[Sequencer] insert table_id into cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("insert table_id into cache success", K(tic_update_info));
+        }
+        break;
+      }
+      case TICUpdateInfo::TICUpdateReason::DROP_DATABASE: {
+        const uint64_t database_id = tic_update_info.database_id_;
+        if (OB_FAIL(part_mgr.delete_db_from_cache(database_id))) {
+          LOG_ERROR("[Sequencer] delete db from cache failed", KR(ret), K(tic_update_info));
+        } else {
+          ISTAT("delete db from cache success", K(tic_update_info));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("[Sequencer] invalid tic update reason", KR(ret), K(tic_update_info));
+        break;
+      }
     }
   }
 

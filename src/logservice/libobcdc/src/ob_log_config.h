@@ -63,7 +63,7 @@ class ObLogConfig : public common::ObBaseConfig
   typedef std::map<std::string, std::string> ConfigMap;
 
 public:
-  ObLogConfig() : inited_(false), common_config_()
+  ObLogConfig() : inited_(false), common_config_(), tb_white_list_buf_(nullptr), tb_black_list_buf_(nullptr)
   {
   }
 
@@ -76,14 +76,26 @@ public:
 public:
   virtual bool need_print_config(const std::string& config_key) const override;
   void print() const;
+
+  int load_from_file(const char *config_file,
+      const int64_t version = 0,
+      const bool check_name = false);
+
   int load_from_map(const ConfigMap& configs,
       const int64_t version = 0,
       const bool check_name = false);
 
+  int dump2file(const char *file) const;
   common::ObCommonConfig &get_common_config() { return common_config_; }
 
   // remove quotes of cluster_url
   int format_cluster_url();
+
+private:
+  int load_from_buffer_(char *config_str,
+      const int64_t config_str_len,
+      const int64_t version,
+      const bool check_name);
 
 public:
 
@@ -543,6 +555,9 @@ public:
   // 2. Backup is on by default
   T_DEF_BOOL(enable_output_invisible_column, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // Whether to open white black list
+  T_DEF_BOOL(enable_white_black_list, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+
   // The point in time when the sql server used for querying in SYSTABLE HELPER changes, i.e., the periodic rotation of the sql server
   T_DEF_INT_INFT(sql_server_change_interval_sec, OB_CLUSTER_PARAMETER, 60, 1,
       "change interval of sql server in seconds");
@@ -590,9 +605,22 @@ public:
 
 #undef OB_CLUSTER_PARAMETER
 
+public:
+  const char *get_tb_white_list_buf()
+  {
+    return tb_white_list_buf_;
+  }
+
+  const char *get_tb_black_list_buf()
+  {
+    return tb_black_list_buf_;
+  }
+
 private:
   bool                  inited_;
   ObLogFakeCommonConfig common_config_;
+  char *tb_white_list_buf_;
+  char *tb_black_list_buf_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogConfig);

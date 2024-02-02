@@ -1280,6 +1280,7 @@ int DdlStmtTask::parse_ddl_info(
     ObLogBR *br,
     const uint64_t row_index,
     const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema_info,
+    const bool is_build_baseline,
     bool &is_valid_ddl,
     int64_t &update_schema_version,
     uint64_t &exec_tenant_id,
@@ -1305,7 +1306,7 @@ int DdlStmtTask::parse_ddl_info(
       false,
       &all_ddl_operation_table_schema_info))) {
     LOG_ERROR("parse columns fail", KR(ret), K(row_));
-  } else if (OB_FAIL(parse_ddl_info_(contain_ddl_stmt, update_schema_version, stop_flag))) {
+  } else if (OB_FAIL(parse_ddl_info_(is_build_baseline, contain_ddl_stmt, update_schema_version, stop_flag))) {
     if (OB_INVALID_DATA == ret) {
       // If invalid data is encountered, the log is printed but the dirty data is ignored
       LOG_ERROR("fail to parse DDL, __all_ddl_operation table data is invalid",
@@ -1422,6 +1423,7 @@ int DdlStmtTask::parse_ddl_info(
 }
 
 int DdlStmtTask::parse_ddl_info_(
+    const bool is_build_baseline,
     bool &contain_ddl_stmt,
     int64_t &update_schema_version,
     volatile bool &stop_flag)
@@ -1438,7 +1440,7 @@ int DdlStmtTask::parse_ddl_info_(
     ret = OB_ERR_UNEXPECTED;
   } else {
     PartTransTask &part_trans_task = get_host();
-    if (nullptr != new_lob_ctx_cols && new_lob_ctx_cols->has_out_row_lob()) {
+    if (nullptr != new_lob_ctx_cols && new_lob_ctx_cols->has_out_row_lob() && !is_build_baseline) {
       new_lob_ctx_cols->reset(
           this,
           part_trans_task.get_tenant_id(),
@@ -1498,8 +1500,8 @@ int DdlStmtTask::parse_ddl_info_(
       update_schema_version = ddl_op_schema_version_;
 
       // parse normal columns
-      if (OB_FAIL(parse_ddl_info_from_normal_columns_(*new_cols, *new_lob_ctx_cols))) {
-        LOG_ERROR("parse_ddl_info_from_normal_columns_ fail", KR(ret), K(*new_cols), K(*new_lob_ctx_cols));
+      if (OB_FAIL(parse_ddl_info_from_normal_columns_(is_build_baseline, *new_cols, *new_lob_ctx_cols))) {
+        LOG_ERROR("parse_ddl_info_from_normal_columns_ fail", KR(ret), K(is_build_baseline), K(*new_cols), K(*new_lob_ctx_cols));
       } else {
         // verify parse result
         if (ddl_stmt_str_.empty()) {
@@ -1654,6 +1656,7 @@ int DdlStmtTask::parse_schema_version_(ObObj &value, int64_t &schema_version)
 }
 
 int DdlStmtTask::parse_ddl_info_from_normal_columns_(
+    const bool is_build_baseline,
     ColValueList &col_value_list,
     ObLobDataOutRowCtxList &new_lob_ctx_cols)
 {
@@ -1726,6 +1729,8 @@ int DdlStmtTask::parse_ddl_info_from_normal_columns_(
       case ALL_DDL_OPERATION_TABLE_DDL_STMT_STR_COLUMN_ID: {
         if (! cv_node->is_out_row_) {
           ddl_stmt_str_ = value.get_varchar();
+        } else if (is_build_baseline) {
+          // do nothing
         } else {
           ObString *new_col_str = nullptr;
 
@@ -2183,6 +2188,7 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
+    tic_update_infos_(),
     allocator_(),
     log_entry_task_base_allocator_()
 {
@@ -2318,6 +2324,7 @@ void PartTransTask::reset()
   is_data_ready_ = false;
   wait_formatted_cond_ = NULL;
   output_br_count_by_turn_ = 0;
+  tic_update_infos_.reset();
   // reuse memory
   allocator_.reset();
   log_entry_task_base_allocator_.destroy();
@@ -2780,6 +2787,15 @@ int PartTransTask::check_for_ddl_trans(
     }
   }
 
+  return ret;
+}
+
+int PartTransTask::push_tic_update_info(const TICUpdateInfo &tic_update_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tic_update_infos_.push_back(tic_update_info))) {
+    LOG_ERROR("push tic_update_info failed", KR(ret), K(tic_update_info));
+  }
   return ret;
 }
 

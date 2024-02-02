@@ -474,5 +474,14 @@ int64_t FetchStatInfoPrinter::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
+int64_t FetchStatInfoPrinter::get_traffic() const
+{
+  int64_t traffic = 0;
+  if (0 < delta_second_) {
+    traffic = static_cast<int64_t>(static_cast<double>(delta_fsi_.fetch_log_size_) / delta_second_);
+  }
+  return traffic;
+}
+
 }
 }

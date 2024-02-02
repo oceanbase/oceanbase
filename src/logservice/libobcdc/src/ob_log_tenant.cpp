@@ -26,6 +26,7 @@
 
 #include "ob_log_start_schema_matcher.h"                            // ObLogStartSchemaMatcher
 #include "ob_log_store_service.h"                                   // IObLogStoreService
+#include "ob_log_schema_getter.h"                                   // ObLogSchemaGuard
 
 #define STAT(level, tag_str, args...) OBLOG_LOG(level, "[STAT] [TENANT] " tag_str, ##args)
 #define ISTAT(tag_str, args...) STAT(INFO, tag_str, ##args)
@@ -41,6 +42,7 @@ namespace libobcdc
 ObLogTenant::ObLogTenant() :
     inited_(false),
     tenant_id_(OB_INVALID_TENANT_ID),
+    compat_mode_(lib::Worker::CompatMode::INVALID),
     start_schema_version_(OB_INVALID_VERSION),
     task_queue_(NULL),
     ls_mgr_(*this),
@@ -102,9 +104,13 @@ int ObLogTenant::init(
   } else if (OB_FAIL(ls_mgr_.init(tenant_id, start_schema_version, tenant_mgr.ls_info_map_,
       tenant_mgr.ls_add_cb_array_, tenant_mgr.ls_rc_cb_array_))) {
     LOG_ERROR("ls_mgr_ init fail", KR(ret), K(tenant_id_), K(start_schema_version));
-  } else if (OB_FAIL(part_mgr_.init(tenant_id, start_schema_version, tenant_mgr.enable_oracle_mode_match_case_sensitive_,
-      tenant_mgr.gindex_cache_, tenant_mgr.table_id_cache_))) {
-      LOG_ERROR("part_mgr_ init fail", KR(ret), K(tenant_id), K(start_schema_version));
+  } else if (OB_FAIL(init_compat_mode_(tenant_id, start_schema_version, compat_mode_))) {
+    LOG_ERROR("get compat_mode failed", KR(ret), K(tenant_id), K(start_schema_version));
+  } else if (OB_FAIL(part_mgr_.init(tenant_id, start_schema_version,
+      tenant_mgr.enable_oracle_mode_match_case_sensitive_,
+      tenant_mgr.enable_white_black_list_,
+      tenant_mgr.gindex_cache_))) {
+    LOG_ERROR("part_mgr_ init fail", KR(ret), K(tenant_id), K(start_schema_version));
   } else if (OB_FAIL(databuff_printf(tenant_name_, sizeof(tenant_name_), pos, "%s", tenant_name))) {
     LOG_ERROR("print tenant name fail", KR(ret), K(pos), K(tenant_id), K(tenant_name));
   } else if (OB_FAIL(TCTX.timezone_info_getter_->init_tenant_tz_info(tenant_id))) {
@@ -143,10 +149,52 @@ int ObLogTenant::init(
 
     inited_ = true;
 
-    LOG_INFO("init tenant succ", K(tenant_id), K(tenant_name), K(start_schema_version),
+    LOG_INFO("init tenant succ", K(tenant_id), K(tenant_name), K_(compat_mode), K(start_schema_version),
         K(start_tstamp_ns), K(start_seq));
   }
 
+  return ret;
+}
+
+int ObLogTenant::init_compat_mode_(const uint64_t tenant_id, const int64_t start_schema_version,
+    lib::Worker::CompatMode &compat_mode)
+{
+  int ret = OB_SUCCESS;
+  if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+    IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+    ObLogSchemaGuard schema_guard;
+    if (OB_FAIL(schema_getter->get_lazy_schema_guard(tenant_id, start_schema_version,
+        DATA_OP_TIMEOUT, schema_guard))) {
+      if (OB_TIMEOUT != ret) {
+        LOG_ERROR("get lazy schema_guard failed", KR(ret), K(tenant_id), K(start_schema_version));
+      }
+    } else if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, compat_mode, DATA_OP_TIMEOUT))) {
+      if (OB_TIMEOUT != ret) {
+        LOG_ERROR("get tenant_compat_mode failed", KR(ret), K(tenant_id));
+      }
+    }
+  } else {
+    ObDictTenantInfoGuard dict_tenant_info_guard;
+    ObDictTenantInfo *tenant_info = nullptr;
+    common::ObCompatibilityMode compatible_mode = common::ObCompatibilityMode::OCEANBASE_MODE;
+    if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+      LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant_info is nullptr", KR(ret), K(tenant_id));
+    } else {
+      compatible_mode = tenant_info->get_compatibility_mode();
+    }
+
+    if (common::ObCompatibilityMode::MYSQL_MODE == compatible_mode) {
+      compat_mode = lib::Worker::CompatMode::MYSQL;
+    } else if (common::ObCompatibilityMode::ORACLE_MODE == compatible_mode) {
+      compat_mode = lib::Worker::CompatMode::ORACLE;
+    } else {
+      compat_mode = lib::Worker::CompatMode::INVALID;
+    }
+  }
+  LOG_INFO("init compat_mode success", K(tenant_id), K(start_schema_version), K(compat_mode));
   return ret;
 }
 
@@ -173,6 +221,8 @@ void ObLogTenant::reset()
   uint64_t tenant_id = tenant_id_;
   tenant_id_ = OB_INVALID_TENANT_ID;
   tenant_name_[0] = '\0';
+
+  compat_mode_ = lib::Worker::CompatMode::INVALID;
 
   start_schema_version_ = OB_INVALID_VERSION;
 

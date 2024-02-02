@@ -172,6 +172,7 @@ public:
   int free_dict_table_meta(datadict::ObDictTableMeta *dict_table_meta);
   int insert_dict_table_meta(datadict::ObDictTableMeta *dict_table_meta);
   int replace_dict_table_meta(const datadict::ObDictTableMeta &new_dict_table_meta);
+  int remove_table_meta(const uint64_t table_id);
 
   // Get TenantSchemaInfo
   int get_tenant_schema_info(TenantSchemaInfo &tenant_schema_info);

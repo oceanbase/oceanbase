@@ -41,6 +41,7 @@
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
 #include "lib/allocator/ob_lf_fifo_allocator.h"     // ObConcurrentFIFOAllocator
 #include "ob_log_safe_arena.h"
+#include "ob_log_tic_update_info.h"                 // TICUpdateInfo
 
 namespace oceanbase
 {
@@ -537,6 +538,7 @@ public:
       ObLogBR *br,
       const uint64_t row_index,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema_info,
+      const bool is_build_baseline,
       bool &is_valid_ddl,
       int64_t &update_schema_version,
       uint64_t &exec_tennat_id,
@@ -576,11 +578,13 @@ public:
 
 private:
   int parse_ddl_info_(
+      const bool is_build_baseline,
       bool &contain_ddl_stmt,
       int64_t &update_schema_version,
       volatile bool &stop_flag);
   int parse_schema_version_(ObObj &col_value, int64_t &schema_version);
   int parse_ddl_info_from_normal_columns_(
+      const bool is_build_baseline,
       ColValueList &col_value_list,
       ObLobDataOutRowCtxList &new_lob_ctx_cols);
   // 1. schema non-split mode returns the pure_id itself
@@ -1145,6 +1149,16 @@ public:
       ObSchemaOperationType &op_type) const;
   ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
   void set_unserved() { set_unserved_(); }
+  int push_tic_update_info(const TICUpdateInfo &tic_update_info);
+  void get_tic_update_info(ObArray<TICUpdateInfo> &tic_update_infos) const
+  {
+    tic_update_infos = tic_update_infos_;
+  }
+
+  bool need_update_table_id_cache() const
+  {
+    return !tic_update_infos_.empty();
+  }
 
   TO_STRING_KV(
       "state", serve_state_,
@@ -1319,6 +1333,8 @@ private:
   common::ObCond          *wait_formatted_cond_;
 
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
+
+  ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
 
   // allocator used to alloc:
   // LogEntryNode/RollbackNode

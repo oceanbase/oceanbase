@@ -305,7 +305,7 @@ void FetchStream::configure(const ObLogFetcherConfig &config)
   LOG_INFO("[CONFIG]", K(timer_task_wait_time_msec));
 }
 
-void FetchStream::do_stat()
+void FetchStream::do_stat(int64_t &traffic)
 {
   ObByteLockGuard lock_guard(stat_lock_);
 
@@ -334,7 +334,7 @@ void FetchStream::do_stat()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);
     }
-
+    traffic = fsi_printer.get_traffic();
     last_stat_time_ = cur_time;
     last_stat_info_ = cur_stat_info_;
   }

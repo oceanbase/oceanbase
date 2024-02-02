@@ -718,8 +718,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   bool enable_output_hidden_primary_key = (TCONF.enable_output_hidden_primary_key != 0);
   bool enable_oracle_mode_match_case_sensitive = (TCONF.enable_oracle_mode_match_case_sensitive != 0);
   const char *rs_list = TCONF.rootserver_list.str();
-  const char *tb_white_list = TCONF.tb_white_list.str();
-  const char *tb_black_list = TCONF.tb_black_list.str();
   const char *tg_white_list = TCONF.tablegroup_white_list.str();
   const char *tg_black_list = TCONF.tablegroup_black_list.str();
   int64_t max_cached_trans_ctx_count = MAX_CACHED_TRANS_CTX_COUNT;
@@ -743,6 +741,13 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   drc_message_factory_binlog_record_type_.assign(drc_message_factory_binlog_record_type_str,
       strlen(drc_message_factory_binlog_record_type_str));
+
+  const bool enable_white_black_list = (1 == TCONF.enable_white_black_list);
+
+  const char *tb_white_list = TCONF.get_tb_white_list_buf() != NULL ?  TCONF.get_tb_white_list_buf()
+      : TCONF.tb_white_list.str();
+  const char *tb_black_list = TCONF.get_tb_black_list_buf() != NULL ?  TCONF.get_tb_black_list_buf()
+      : TCONF.tb_black_list.str();
 
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
@@ -864,7 +869,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       CDC_CFG_MGR.get_resource_collector_queue_length(),
       br_pool_, trans_ctx_mgr_, meta_manager_, store_service_, err_handler);
 
-  INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive, refresh_mode_);
+  INIT(tenant_mgr_, ObLogTenantMgr, enable_oracle_mode_match_case_sensitive,
+      enable_white_black_list, refresh_mode_);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObCDCTimeZoneInfoGetter::get_instance().init(TCONF.timezone.str(),
@@ -950,7 +956,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit, enable_sort_by_seq_no, *trans_stat_mgr_);
 
-  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison);
+  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison,
+      TCONF.enable_white_black_list);
 
   INIT(sequencer_, ObLogSequencer, TCONF.sequencer_thread_num, CDC_CFG_MGR.get_sequencer_queue_length(),
       *trans_ctx_mgr_, *trans_stat_mgr_, *committer_, *trans_redo_dispatcher_, *trans_msg_sorter_, *err_handler);
@@ -980,7 +987,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
-              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
+              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler, *part_trans_parser_,
               cluster_info.cluster_id_, TCONF, start_seq))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
@@ -2180,6 +2187,7 @@ void ObLogInstance::timer_routine()
         resource_collector_->print_stat_info();
         reader_->print_stat_info();
         lob_aux_meta_storager_.print_stat_info();
+        part_trans_parser_->print_stat_info();
       }
 
       // Periodic memory recycling

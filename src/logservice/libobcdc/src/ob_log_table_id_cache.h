@@ -70,10 +70,21 @@ struct TableInfoEraserByTenant
   bool operator()(const TableID &table_id_key, TableInfo &tb_info);
 };
 
+struct TableInfoEraserByDatabase
+{
+  uint64_t database_id_;
+
+  explicit TableInfoEraserByDatabase(const uint64_t database_id)
+    : database_id_(database_id) {}
+
+  bool operator()(const TableID &table_id_key, uint64_t &val);
+};
+
 // Global General Index Cache
 typedef common::ObLinearHashMap<TableID, TableInfo> GIndexCache;
-// TableIDCache, records master table, unique index table, global unique index table_id, used to filter tables within a partition group
-typedef common::ObLinearHashMap<TableID, TableInfo> TableIDCache;
+// TableIDCache, contains the table_id in tb_white_list and not in tb_black_list
+// The kv pair is <table_id, database_id>
+typedef common::ObLinearHashMap<TableID, uint64_t> TableIDCache;
 }
 }
 

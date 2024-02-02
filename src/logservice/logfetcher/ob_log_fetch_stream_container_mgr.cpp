@@ -182,7 +182,6 @@ int ObFsContainerMgr::get_fsc(const logservice::TenantLSID &tls_id,
 void ObFsContainerMgr::print_stat()
 {
   int ret = OB_SUCCESS;
-  SvrStreamStatFunc svr_stream_stat_func;
 
   int64_t alloc_count = fsc_pool_.get_alloc_count();
   int64_t free_count = fsc_pool_.get_free_count();
@@ -196,10 +195,20 @@ void ObFsContainerMgr::print_stat()
   fs_pool_.print_stat();
   rpc_result_pool_.print_stat();
 
-  // Statistics every FetchStreamContainer
-  if (OB_FAIL(fsc_map_.for_each(svr_stream_stat_func))) {
+  TenantStreamStatFunc tenant_stream_stat_func;
+  if (OB_FAIL(fsc_map_.for_each(tenant_stream_stat_func))) {
     LOG_ERROR("for each FetchStreamContainer map fail", KR(ret));
+  } else {
+    _LOG_INFO("[STAT] [FETCH_STREAM] TENANT=%lu/sec, TRAFFIC=%s/sec", self_tenant_id_, SIZE_TO_STR(tenant_stream_stat_func.total_traffic_));
   }
+}
+
+bool ObFsContainerMgr::TenantStreamStatFunc::operator() (const logservice::TenantLSID &key, FetchStreamContainer *value)
+{
+  int64_t ls_traffic = 0;
+  (void) value->do_stat(ls_traffic);
+  total_traffic_ += ls_traffic;
+  return true;
 }
 
 } // namespace logfetcher

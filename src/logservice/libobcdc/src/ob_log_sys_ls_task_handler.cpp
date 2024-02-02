@@ -371,9 +371,17 @@ int ObLogSysLsTaskHandler::handle_task_(PartTransTask &task,
     const bool is_using_online_schema = is_online_refresh_mode(TCTX.refresh_mode_);
     // The following handles DDL transaction tasks and DDL heartbeat tasks
     // NOTICE: handle_ddl_trans before sequencer when using online_schmea, otherwise(using data_dict) handle_ddl_trans in sequencer.
-    if (task.is_ddl_trans() && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant, stop_flag_))) {
+    // First output ddl trans and then update tic
+    if (task.is_ddl_trans() && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant,
+        false /* need_update_tic */, stop_flag_))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("ddl_processor_ handle_ddl_trans fail", KR(ret), K(task), K(ddl_tenant_id), K(tenant),
+            K(is_tenant_served));
+      }
+    } else if (task.is_ddl_trans() && is_using_online_schema && OB_FAIL(ddl_processor_->handle_ddl_trans(task, *tenant,
+        true /* need_update_tic */, stop_flag_))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("ddl_processor_ handle_ddl_trans_update_tic fail", KR(ret), K(task), K(ddl_tenant_id), K(tenant),
             K(is_tenant_served));
       }
     }

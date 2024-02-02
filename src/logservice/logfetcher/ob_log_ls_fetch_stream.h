@@ -124,7 +124,7 @@ public:
   int get_upper_limit(int64_t &upper_limit_ns);
 
   // Execution Statistics
-  void do_stat();
+  void do_stat(int64_t &traffic);
 
   int64_t get_fetch_task_count() const { return 1; }
 

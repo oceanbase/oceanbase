@@ -52,7 +52,7 @@ public:
       const common::ObAddr &request_svr);
 
   // print stat info
-  void do_stat();
+  void do_stat(int64_t &traffic);
 
 public:
   TO_STRING_KV("stype", print_fetch_stream_type(stype_),

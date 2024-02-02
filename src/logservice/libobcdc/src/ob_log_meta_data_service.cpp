@@ -18,6 +18,7 @@
 #include "logservice/restoreservice/ob_log_archive_piece_mgr.h"
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h"
 #include "logservice/archiveservice/ob_archive_define.h"
+#include "ob_log_part_trans_parser.h"
 
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [SERVICE] " fmt, ##args)
@@ -42,7 +43,8 @@ ObLogMetaDataService::ObLogMetaDataService() :
     fetcher_(),
     baseline_loader_(),
     incremental_replayer_(),
-    fetcher_dispatcher_()
+    fetcher_dispatcher_(),
+    part_trans_parser_(NULL)
 {
 }
 
@@ -58,6 +60,7 @@ int ObLogMetaDataService::init(
     IObLogSysLsTaskHandler *sys_ls_handler,
     common::ObMySQLProxy *proxy,
     IObLogErrHandler *err_handler,
+    IObLogPartTransParser &part_trans_parser,
     const int64_t cluster_id,
     const ObLogConfig &cfg,
     const int64_t start_seq)
@@ -69,7 +72,7 @@ int ObLogMetaDataService::init(
     LOG_ERROR("init twice", KR(ret));
   } else if (OB_FAIL(baseline_loader_.init(cfg))) {
     LOG_ERROR("ObLogMetaDataBaselineLoader init fail", KR(ret));
-  } else if (OB_FAIL(incremental_replayer_.init())) {
+  } else if (OB_FAIL(incremental_replayer_.init(part_trans_parser))) {
     LOG_ERROR("ObLogMetaDataReplayer init fail", KR(ret));
   } else if (OB_FAIL(fetcher_dispatcher_.init(&incremental_replayer_, start_seq))) {
     LOG_ERROR("ObLogMetaDataFetcherDispatcher init fail", KR(ret));
@@ -94,6 +97,7 @@ void ObLogMetaDataService::destroy()
     baseline_loader_.destroy();
     incremental_replayer_.destroy();
     fetcher_dispatcher_.destroy();
+    part_trans_parser_ = NULL;
     is_inited_ = false;
   }
 }

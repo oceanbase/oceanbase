@@ -21,6 +21,8 @@
 #include "ob_log_table_id_cache.h"              // GIndexCache, TableIDCache
 #include "ob_cdc_tablet_to_table_info.h"        // TabletToTableInfo
 #include "ob_log_utils.h"                       // _SEC_
+#include "ob_log_part_trans_task.h"             // PartTransTask
+#include "ob_log_meta_data_struct.h"            // ObDictTenantInfo
 
 namespace oceanbase
 {
@@ -42,6 +44,7 @@ using share::schema::ObTablegroupSchema;
 namespace libobcdc
 {
 class ObLogSchemaGuard;
+class IObLogTableMatcher;
 
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,20 +54,6 @@ public:
   virtual ~IObLogPartMgr() {}
 
 public:
-  /// Init TabletToTableInfo:
-  /// add all user tablet(with tenant_id_ and cur_schema_version) into tablet_to_table_info
-  /// @param timeout                schema operation timeout
-  /// @retval OB_SUCCESS            op success
-  virtual int add_all_user_tablets_info(const int64_t timeout) = 0;
-
-  /// Init TabletToTableInfo by Data Dictionary:
-  /// add all user tablet(with tenant_id_ and cur_schema_version) into tablet_to_table_info
-  /// @param timeout                operation timeout
-  /// @retval OB_SUCCESS            op success
-  virtual int add_all_user_tablets_info(
-      const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
-      const int64_t timeout) = 0;
-
   /// Add a table
   /// @note must be called by a single thread in order according to the Schema version, should not concurrently add table in a random order
   ///
@@ -91,6 +80,11 @@ public:
       ObLogSchemaGuard &schema_guard,
       const char *&tenant_name,
       const char *&db_name,
+      const int64_t timeout) = 0;
+
+  virtual int add_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
       const int64_t timeout) = 0;
 
   /// Add a global unique index table, create index table scenario
@@ -150,6 +144,11 @@ public:
       const char *event,
       const int64_t timeout) = 0;
 
+  virtual int alter_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout) = 0;
+
   /// Delete a table
   /// @note must be called by a single thread in order by Schema version, no concurrent messy deletions
   ////
@@ -173,6 +172,16 @@ public:
       ObLogSchemaGuard &old_schema_guard,
       const char *&tenant_name,
       const char *&db_name,
+      const int64_t timeout) = 0;
+
+  virtual int drop_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t old_schema_version,
+      const int64_t timeout) = 0;
+
+  virtual int rename_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
       const int64_t timeout) = 0;
 
   /// Delete global index table, Delete index table scenario
@@ -215,6 +224,16 @@ public:
       const int64_t start_schema_version,
       const int64_t timeout) = 0;
 
+  /// Drop databse is not necessary actually, because drop database ddl will delete every table in database.
+  /// Here is for the sake of protection. But there is a bad case if users configure like this:
+  ///   tb_white_list=*.*.white*
+  ///   tb_black_list=*.*.black*
+  /// In this case, any database will not be matched.
+  virtual int drop_database(const uint64_t database_id,
+      const int64_t old_schema_version,
+      DdlStmtTask &ddl_stmt,
+      const int64_t timeout) = 0;
+
   /// update schema version
   virtual int update_schema_version(const int64_t schema_version) = 0;
 
@@ -235,6 +254,9 @@ public:
       ObCDCTableInfo &table_info) const = 0;
   virtual int apply_create_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info) = 0;
   virtual int apply_delete_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info) = 0;
+  virtual int insert_table_id_into_cache(const uint64_t table_id, const uint64_t database_id) = 0;
+  virtual int delete_table_id_from_cache(const uint64_t table_id) = 0;
+  virtual int delete_db_from_cache(const uint64_t database_id) = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -253,14 +275,15 @@ public:
   int init(const uint64_t tenant_id,
       const int64_t start_schema_version,
       const bool enable_oracle_mode_match_case_sensitive,
-      GIndexCache &gi_cache,
-      TableIDCache &table_id_cache);
+      const bool enable_white_black_list,
+      GIndexCache &gi_cache);
   void reset();
   int64_t get_schema_version() const { return ATOMIC_LOAD(&cur_schema_version_); }
 
 public:
-  virtual int add_all_user_tablets_info(const int64_t timeout);
-  virtual int add_all_user_tablets_info(
+  virtual int add_all_user_tablets_and_tables_info(const int64_t timeout);
+  virtual int add_all_user_tablets_and_tables_info(
+      ObDictTenantInfo *tenant_info,
       const ObIArray<const datadict::ObDictTableMeta *> &table_metas,
       const int64_t timeout);
   virtual int add_table(const uint64_t table_id,
@@ -272,6 +295,10 @@ public:
       const char *&tenant_name,
       const char *&db_name,
       const int64_t timeout);
+  virtual int add_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout);
   virtual int alter_table(const uint64_t table_id,
       const int64_t schema_version_before_alter,
       const int64_t schema_version_after_alter,
@@ -282,6 +309,10 @@ public:
       const char *&old_db_name,
       const char *event,
       const int64_t timeout);
+  virtual int alter_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
+      const int64_t timeout);
   virtual int drop_table(const uint64_t table_id,
       const int64_t schema_version_before_drop,
       const int64_t schema_version_after_drop,
@@ -289,6 +320,14 @@ public:
       ObLogSchemaGuard &old_schema_guard,
       const char *&tenant_name,
       const char *&db_name,
+      const int64_t timeout);
+  virtual int drop_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t old_schema_version,
+      const int64_t timeout);
+  virtual int rename_table(const uint64_t table_id,
+      DdlStmtTask &ddl_stmt,
+      const int64_t new_schema_version,
       const int64_t timeout);
   virtual int add_index_table(const uint64_t table_id,
       const int64_t start_schema_version,
@@ -308,6 +347,10 @@ public:
       const int64_t start_serve_tstamp,
       const int64_t start_schema_version,
       const int64_t timeout);
+  virtual int drop_database(const uint64_t database_id,
+      const int64_t old_schema_version,
+      DdlStmtTask &ddl_stmt,
+	  const int64_t timeout);
   virtual int update_schema_version(const int64_t schema_version);
   virtual int is_exist_table_id_cache(const uint64_t table_id,
       bool &is_exist);
@@ -322,6 +365,9 @@ public:
 
   virtual int apply_create_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info);
   virtual int apply_delete_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info);
+  virtual int insert_table_id_into_cache(const uint64_t table_id, const uint64_t database_id);
+  virtual int delete_table_id_from_cache(const uint64_t table_id);
+  virtual int delete_db_from_cache(const uint64_t database_id);
 
 private:
   template<class TableMeta>
@@ -340,11 +386,20 @@ private:
   int is_exist_table_id_cache_(const uint64_t table_id,
       const bool is_global_normal_index,
       bool &is_exist);
-
   int try_get_offline_ddl_origin_table_schema_(const ObSimpleTableSchemaV2 &table_schema,
       ObLogSchemaGuard &schema_guard,
       const int64_t timeout,
       const ObSimpleTableSchemaV2 *&origin_table_schema);
+  int try_get_offline_ddl_origin_table_meta_(const datadict::ObDictTableMeta &table_meta,
+      ObDictTenantInfo *tenant_info,
+      datadict::ObDictTableMeta *&origin_table_meta);
+  int try_get_lob_aux_primary_table_schema_(const ObSimpleTableSchemaV2 &table_schema,
+      ObLogSchemaGuard &schema_guard,
+      const int64_t timeout,
+      const ObSimpleTableSchemaV2 *&primary_table_schema);
+  int try_get_lob_aux_primary_table_meta_(const datadict::ObDictTableMeta &table_meta,
+      ObDictTenantInfo *tenant_info,
+      datadict::ObDictTableMeta *&primary_table_meta);
   /// Add a table
   /// When manipulating a global index table, primary_table_schema represents its primary table schema, add_index_table()/do_add_all_tables_()
   /// When handle OFFLINE_DDL scenario, if it is a hidden table, primary_table_schema is the table schema of the origin associated table, add_table()/do_add_all_tables()
@@ -471,21 +526,130 @@ private:
       const ObSimpleTableSchemaV2 *&tb_schema,
       const char *&tenant_name,
       const char *&db_name);
+  int add_user_table_info_(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const int64_t timeout);
+  int add_user_table_info_(ObDictTenantInfo *tenant_info,
+      const datadict::ObDictTableMeta *table_meta,
+      const int64_t timeout);
+  // is_user_table is for filtering not user defined table.
+  // chosen is for filtering user defined table which is not in white list.
+  // NOTICE: It is not enough to have chosen without is_user_able. Because outer layer will set
+  // different tic update info according to chosen such as rename_table and alter_table. If there
+  // is no is_user_table, outer layer will not ignore user undefined table.
+  int table_match_(const uint64_t table_id,
+      const int64_t schema_version,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      bool &is_user_table,
+      bool &chosen,
+      uint64_t &database_id,
+      const int64_t timeout);
+  int table_match_(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      bool &is_user_table,
+      bool &chosen,
+      uint64_t &database_id,
+      int64_t timeout);
+  int table_match_(ObDictTenantInfo *tenant_info,
+      const datadict::ObDictTableMeta *table_meta,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      bool &is_user_table,
+      bool &chosen,
+      uint64_t &database_id,
+      const int64_t timeout);
+  int matching_based_table_matcher_(const char *tenant_name,
+      const char *database_name,
+      const char *table_name,
+      bool &chosen);
+  int database_match_(const uint64_t database_id,
+      const int64_t schema_version,
+      const char *&tenant_name,
+      const char *&database_name,
+      bool &chosen,
+      const int64_t timeout);
+  int get_table_info_of_table_id_(const uint64_t table_id,
+      const int64_t schema_version,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      uint64_t &database_id,
+      bool &is_user_table,
+      const int64_t timeout);
+  // For optimization, table_match is not required in drop_table scenario
+  int get_schema_info_of_table_id_(const uint64_t table_id,
+      const int64_t schema_version,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      const int64_t timeout);
+  int get_database_info_of_database_id_(const uint64_t database_id,
+      const int64_t schema_version,
+      const char *&tenant_name,
+      const char *&database_name,
+      const int64_t timeout);
+  int get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      uint64_t &database_id,
+      bool &is_user_table,
+      const int64_t timeout);
+  int get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
+      const datadict::ObDictTableMeta *table_meta,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      uint64_t &database_id,
+      bool &is_user_table,
+      const int64_t timeout);
+  int inner_get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard,
+      const ObSimpleTableSchemaV2 *table_schema,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      uint64_t &database_id,
+      bool &is_user_table,
+      const int64_t timeout);
+  int inner_get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
+      const datadict::ObDictTableMeta *table_meta,
+      const char *&tenant_name,
+      const char *&database_name,
+      const char *&table_name,
+      uint64_t &database_id,
+      bool &is_user_table);
+  int try_add_hbase_table_(const uint64_t table_id,
+      const char *table_name,
+      const int64_t schema_version,
+      const int64_t timeout);
+  template<class TABLE_SCHEMA>
+  int try_add_hbase_table_(const TABLE_SCHEMA *table_schema,
+      const char *table_name,
+      const int64_t timeout);
 
 private:
-  ObLogTenant       &host_;
+  ObLogTenant        &host_;
 
-  bool              inited_;
-  uint64_t          tenant_id_;
-  GIndexCache       *global_normal_index_table_cache_; // global normal index cache
-  TableIDCache      *table_id_cache_;
-  TabletToTableInfo tablet_to_table_info_; // TabletID->TableID
+  bool               inited_;
+  uint64_t           tenant_id_;
+  GIndexCache        *global_normal_index_table_cache_; // global normal index cache
+  TabletToTableInfo  tablet_to_table_info_; // TabletID->TableID
+  TableIDCache       table_id_cache_;
 
-  int64_t           cur_schema_version_ CACHE_ALIGNED;
+  int64_t            cur_schema_version_ CACHE_ALIGNED;
 
   // Default whitelist match insensitive
-  bool              enable_oracle_mode_match_case_sensitive_;
-  bool              enable_check_schema_version_;
+  bool               enable_oracle_mode_match_case_sensitive_;
+  bool               enable_check_schema_version_;
+  bool               enable_white_black_list_;
+  int                fnmatch_flags_;
 
   // Conditional
   common::ObThreadCond   schema_cond_;

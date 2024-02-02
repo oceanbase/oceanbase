@@ -51,7 +51,8 @@ ObLogTenantMgr::ObLogTenantMgr() :
     ls_rc_cb_array_(),
     tenant_id_set_(),
     ls_getter_(),
-    enable_oracle_mode_match_case_sensitive_(false)
+    enable_oracle_mode_match_case_sensitive_(false),
+    enable_white_black_list_(true)
 {
 }
 
@@ -62,6 +63,7 @@ ObLogTenantMgr::~ObLogTenantMgr()
 
 int ObLogTenantMgr::init(
     const bool enable_oracle_mode_match_case_sensitive,
+    const bool enable_white_black_list,
     const RefreshMode &refresh_mode)
 {
   int ret = OB_SUCCESS;
@@ -87,8 +89,10 @@ int ObLogTenantMgr::init(
     inited_ = true;
     refresh_mode_ = refresh_mode;
     enable_oracle_mode_match_case_sensitive_ = enable_oracle_mode_match_case_sensitive;
+    enable_white_black_list_ = enable_white_black_list;
 
     LOG_INFO("ObLogTenantMgr init succ", K(enable_oracle_mode_match_case_sensitive_),
+        K(enable_white_black_list_),
         "refresh_mode", print_refresh_mode(refresh_mode_));
   }
 
@@ -114,6 +118,7 @@ void ObLogTenantMgr::destroy()
     tenant_id_set_.destroy();
     ls_getter_.destroy();
     enable_oracle_mode_match_case_sensitive_ = false;
+    enable_white_black_list_ = true;
 
     LOG_INFO("ObLogTenantMgr destroy succ");
   }
@@ -423,8 +428,8 @@ int ObLogTenantMgr::start_tenant_service_(
   } else {
     // Note: The sys tenant does not have data dictionary data
     if (is_online_refresh_mode(refresh_mode_) || OB_SYS_TENANT_ID == tenant_id) {
-      if (OB_FAIL(tenant->add_all_user_tablets_info(timeout))) {
-        LOG_ERROR("add_all_user_tablets_info failed", KR(ret), KPC(tenant), K(timeout));
+      if (OB_FAIL(tenant->add_all_user_tablets_and_tables_info(timeout))) {
+        LOG_ERROR("add all user tablets and tables failed", KR(ret), KPC(tenant), K(timeout));
       }
 
       // get ls ids when is not normal new created tenant
@@ -448,8 +453,8 @@ int ObLogTenantMgr::start_tenant_service_(
         LOG_ERROR("tenant_info is nullptr", K(tenant_id));
       } else if (OB_FAIL(tenant_info->get_table_metas_in_tenant(table_metas))) {
         LOG_ERROR("tenant_info get_table_metas_in_tenant failed", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(tenant->add_all_user_tablets_info(table_metas, timeout))) {
-        LOG_ERROR("add_all_user_tablets_info failed", KR(ret), K(tenant_id), K(table_metas));
+      } else if (OB_FAIL(tenant->add_all_user_tablets_and_tables_info(tenant_info, table_metas, timeout))) {
+        LOG_ERROR("add all user tablets and tables failed", KR(ret), KPC(tenant_info), K(timeout));
       }
 
       // get ls ids when is not normal new created tenant

@@ -177,7 +177,9 @@ public:
   virtual ~ObLogTenantMgr();
 
 public:
-  int init(const bool enable_oracle_mode_match_case_sensitive, const RefreshMode &refresh_mode);
+  int init(const bool enable_oracle_mode_match_case_sensitive,
+      const bool enable_white_black_list,
+      const RefreshMode &refresh_mode);
   void destroy();
 
   int register_ls_add_callback(LSAddCallback *callback);
@@ -437,6 +439,7 @@ private:
   ObLogLsGetter       ls_getter_;
 
   bool                enable_oracle_mode_match_case_sensitive_;
+  bool                enable_white_black_list_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTenantMgr);
 };

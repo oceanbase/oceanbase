@@ -19,6 +19,7 @@
 #include "ob_log_fetch_stream_container.h"      // FetchStreamContainer
 #include "ob_log_fetch_stream_pool.h"           // FetchStreamPool
 #include "ob_log_fetch_log_rpc.h"               // FetchLogARpcResultPool
+#include "ob_log_tenant.h"
 
 namespace oceanbase
 {
@@ -72,8 +73,9 @@ private:
     bool operator() (const logservice::TenantLSID &key, FetchStreamContainer* value)
     {
       UNUSED(key);
+      int64_t traffic = 0;
       if (NULL != value) {
-        value->do_stat();
+        value->do_stat(traffic);
       }
       return true;
     }
@@ -81,21 +83,35 @@ private:
 
   typedef common::ObLinearHashMap<logservice::TenantLSID, FetchStreamContainer*> FscMap;
   typedef common::ObSmallObjPool<FetchStreamContainer> FscPool;
+  typedef common::ObLinearHashMap<TenantID, int64_t> TenantFetchInfoMap; // Map of tenant_id -> fetch log traffic
   // TODO
   static const int64_t SVR_STREAM_POOL_BLOCK_SIZE = 1 << 22;
+
+  struct TenantStreamStatFunc
+  {
+    TenantStreamStatFunc(TenantFetchInfoMap *tenant_fetch_traffic_map) : tenant_fetch_traffic_map_(tenant_fetch_traffic_map) {}
+    bool operator() (const logservice::TenantLSID &key, FetchStreamContainer *value);
+    TenantFetchInfoMap *tenant_fetch_traffic_map_;
+  };
+
+  struct TenantStreamStatPrinter
+  {
+    bool operator() (const TenantID &tenant_id, const int64_t traffic);
+  };
 
 private:
   bool is_inited_;
 
   // External modules
-  IObLogRpc                     *rpc_;                    // RPC handler
-  IObLSWorker                   *stream_worker_;          // Stream master
-  PartProgressController        *progress_controller_;    // progress controller
+  IObLogRpc                     *rpc_;                      // RPC handler
+  IObLSWorker                   *stream_worker_;            // Stream master
+  PartProgressController        *progress_controller_;      // progress controller
 
   FscMap                        fsc_map_;
-  FscPool                       fsc_pool_;                // Supports multi-threaded alloc/release
-  FetchStreamPool               fs_pool_;                 // FetchStream object pool
-  FetchLogARpcResultPool        rpc_result_pool_;         // RPC resujt object pool
+  FscPool                       fsc_pool_;                  // Supports multi-threaded alloc/release
+  FetchStreamPool               fs_pool_;                   // FetchStream object pool
+  FetchLogARpcResultPool        rpc_result_pool_;           // RPC resujt object pool
+  TenantFetchInfoMap            tenant_fetch_traffic_map_;  // Tenant fetch log traffic map
 };
 
 } // namespace libobcdc
