@@ -318,6 +318,9 @@ private:
   void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_update_hidden_sys();
+  int check_if_multi_tenant_synced();
+  int check_if_schema_ready();
+  int check_if_timezone_usable();
   int parse_mode();
   void deinit_zlib_lite_compressor();
 
