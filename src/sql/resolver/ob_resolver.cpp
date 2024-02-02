@@ -1152,6 +1152,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
+      case T_CANCEL_TRANSFER_PARTITION: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_CANCEL_BALANCE_JOB: {
+        REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         const char *type_name = get_type_name(parse_tree.type_);

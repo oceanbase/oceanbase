@@ -63,7 +63,7 @@ public:
    * @param [in] dest_ls:         destination log stream
    * @param [in] part_list:       partition list for transfer
    * @param [in] balance_task_id: parenet balance task id
-   * @param [out] task_id:        unique transfer task id
+   * @param [out] task:        transfer task
    * @return
    * - OB_SUCCESS:                generate task successfully
    * - other:                     generate task failed
@@ -74,7 +74,7 @@ public:
       const share::ObLSID &dest_ls,
       const share::ObTransferPartList &part_list,
       const share::ObBalanceTaskID balance_task_id,
-      share::ObTransferTaskID &task_id);
+      share::ObTransferTask &transfer_task);
   /*
    * try cancel and clear transfer task (only task in INIT status can be canceled)
    *

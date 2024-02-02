@@ -23015,3 +23015,335 @@ question_mask_size: 0
     }
   ]
 }
+**************   Case 188   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TRANSFER_PARTITION_TO_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PARTITION_INFO",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 189   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TRANSFER_PARTITION_TO_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PARTITION_INFO",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 190   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_PARTITION_INFO",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 191   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_PARTITION_INFO",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            }
+          ]
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 192   ***************
+alter system cancel transfer partition ALL;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALL",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":""
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 193   ***************
+alter system cancel transfer partition ALL tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALL",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":""
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 194   ***************
+alter system cancel balance job;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_BALANCE_JOB",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 195   ***************
+alter system cancel balance job tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_BALANCE_JOB",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

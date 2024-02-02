@@ -232,11 +232,11 @@ int ObTransferPartitionHelper::try_finish_failed_task_(const ObTransferPartList 
   } else {
     ObTransferPartitionTaskStatus status = ObTransferPartitionTaskStatus::TRP_TASK_STATUS_FAILED;
     START_TRANSACTION(sql_proxy_, tenant_id_)
-      if (FAILEDx(ObTransferPartitionTaskTableOperator::finish_task(
-              tenant_id_, part_list, max_task_id_, status, comment, trans))) {
-        LOG_WARN("failed to finish task", KR(ret), K(tenant_id_), K(part_list),
-        K(max_task_id_));
-      }
+    if (FAILEDx(ObTransferPartitionTaskTableOperator::finish_task(
+            tenant_id_, part_list, max_task_id_, status, comment, trans))) {
+      LOG_WARN("failed to finish task", KR(ret), K(tenant_id_), K(part_list),
+      K(max_task_id_));
+    }
     END_TRANSACTION(trans)
   }
   return ret;

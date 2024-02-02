@@ -5749,24 +5749,35 @@ int resolve_transfer_partition_to_ls(
   return ret;
 }
 
-int get_and_verify_tenant_name_for_transfer_partition(
+int get_and_verify_tenant_name(
     const ParseNode *parse_node,
     const uint64_t exec_tenant_id,
-    uint64_t &target_tenant_id)
+    uint64_t &target_tenant_id,
+    const char * const op_str)
 {
   int ret = OB_SUCCESS;
   ObString tenant_name;
   ObSchemaGetterGuard schema_guard;
-  if (OB_UNLIKELY(!is_valid_tenant_id(exec_tenant_id))) {
+  int tmp_ret = OB_SUCCESS;
+  const int64_t COMMENT_LENGTH = 512;
+  char comment[COMMENT_LENGTH] = {0};
+  int64_t pos = 0;
+  if (OB_UNLIKELY(!is_valid_tenant_id(exec_tenant_id))
+      || OB_ISNULL(op_str)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("exec tenant id is invalid", KR(ret), K(exec_tenant_id));
+    LOG_WARN("exec tenant id is invalid", KR(ret), K(exec_tenant_id), K(op_str));
   } else if (NULL == parse_node) {
     if (OB_SYS_TENANT_ID != exec_tenant_id) {
       target_tenant_id = exec_tenant_id;
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("no specified tenant in the sys tenant's session", KR(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Transfer partition of SYS tenant is");
+      if (OB_TMP_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
+              "%s of SYS tenant is", op_str))) {
+        LOG_WARN("failed to printf to comment", KR(ret), KR(tmp_ret), K(op_str));
+      } else {
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, comment);
+      }
     }
   } else if (OB_FAIL(resolve_tenant_name(parse_node, exec_tenant_id, tenant_name))) {
     LOG_WARN("fail to resolve target tenant id", KR(ret));
@@ -5784,7 +5795,12 @@ int get_and_verify_tenant_name_for_transfer_partition(
   } else if (OB_UNLIKELY(!is_user_tenant(target_tenant_id))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support user tenant", KR(ret), K(target_tenant_id));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Transfer partition of META or SYS tenant is");
+    if (OB_TMP_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
+            "%s of META or SYS tenant is", op_str))) {
+      LOG_WARN("failed to printf to comment", KR(ret), KR(tmp_ret), K(op_str));
+    } else {
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, comment);
+    }
   } else if (OB_SYS_TENANT_ID != exec_tenant_id && target_tenant_id != exec_tenant_id) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("no support operating other user tenants", KR(ret), K(target_tenant_id), K(exec_tenant_id));
@@ -5792,9 +5808,9 @@ int get_and_verify_tenant_name_for_transfer_partition(
   return ret;
 }
 
-int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
+int ObTransferPartitionResolver::resolve_transfer_partition_(const ParseNode &parse_tree)
 {
-  int ret = OB_SUCCESS;
+int ret = OB_SUCCESS;
   ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
   uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
   if (OB_UNLIKELY(T_TRANSFER_PARTITION != parse_tree.type_)) {
@@ -5804,17 +5820,18 @@ int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(stmt)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("create stmt fail", KR(ret));
-  } else if (2 != parse_tree.num_child_
-        || OB_ISNULL(parse_tree.children_[0])
-        ||OB_ISNULL(session_info_)) {
+  } else if (2 != parse_tree.num_child_ || OB_ISNULL(session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
-        KP(parse_tree.children_[0]), KP(session_info_));
-  } else if (OB_FAIL(get_and_verify_tenant_name_for_transfer_partition(
+        KP(session_info_));
+  } else if (OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
+  } else if (OB_FAIL(get_and_verify_tenant_name(
       parse_tree.children_[1],
       session_info_->get_effective_tenant_id(),
-      target_tenant_id))) {
-    LOG_WARN("fail to execute get_and_verify_tenant_name_for_transfer_partition", KR(ret),
+      target_tenant_id, "Transfer partition"))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
         K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[1]));
   } else {
     ParseNode *transfer_partition_node = parse_tree.children_[0];
@@ -5835,27 +5852,132 @@ int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
     if (OB_SUCC(ret)) {
       stmt_ = stmt;
     }
-    if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
-      if (OB_ISNULL(schema_checker_)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret));
-      } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
-        session_info_->get_effective_tenant_id(),
-        session_info_->get_priv_user_id(),
-        ObString(""),
-        // why use T_ALTER_SYSTEM_SET_PARAMETER?
-        // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
-        // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
-        // and prohibit other user to do this operation
-        // so we reuse this.
-        stmt::T_ALTER_SYSTEM_SET_PARAMETER,
-        session_info_->get_enable_role_array()))) {
-        LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
-      }
+  }
+  return ret;
+}
+int ObTransferPartitionResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (T_TRANSFER_PARTITION == parse_tree.type_) {
+    if (OB_FAIL(resolve_transfer_partition_(parse_tree))) {
+      LOG_WARN("failed to reslove transfer partition", KR(ret));
+    }
+  } else if (T_CANCEL_TRANSFER_PARTITION == parse_tree.type_) {
+    if (OB_FAIL(resolve_cancel_transfer_partition_(parse_tree))) {
+      LOG_WARN("failed to resolve cancel transfer partition", KR(ret));
+    }
+  } else if (T_CANCEL_BALANCE_JOB == parse_tree.type_) {
+    if (OB_FAIL(resolve_cancel_balance_job_(parse_tree))) {
+      LOG_WARN("failed to resolve cancel balance job", KR(ret));
+    }
+  } else  {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION", KR(ret), "type",
+        get_type_name(parse_tree.type_));
+  }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_ISNULL(schema_checker_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
+            session_info_->get_effective_tenant_id(),
+            session_info_->get_priv_user_id(),
+            ObString(""),
+            // why use T_ALTER_SYSTEM_SET_PARAMETER?
+            // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+            // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+            // and prohibit other user to do this operation
+            // so we reuse this.
+            stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+            session_info_->get_enable_role_array()))) {
+      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
     }
   }
   return ret;
 }
 
+int ObTransferPartitionResolver::resolve_cancel_transfer_partition_(const ParseNode &parse_tree)
+{
+int ret = OB_SUCCESS;
+  ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(T_CANCEL_TRANSFER_PARTITION != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION", KR(ret), "type",
+        get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create stmt fail", KR(ret));
+  } else if (2 != parse_tree.num_child_ || OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
+        KP(session_info_));
+  } else if (OB_ISNULL(parse_tree.children_[0])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parse node is null", KR(ret),  KP(parse_tree.children_[0]));
+  } else if (OB_FAIL(get_and_verify_tenant_name(
+      parse_tree.children_[1],
+      session_info_->get_effective_tenant_id(),
+      target_tenant_id, "Cancel transfer partition"))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+        K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[1]));
+  } else {
+    ParseNode *transfer_partition_node = parse_tree.children_[0];
+    uint64_t table_id = OB_INVALID_ID;
+    ObObjectID object_id = OB_INVALID_OBJECT_ID;
+    rootserver::ObTransferPartitionArg::ObTransferPartitionType type = rootserver::ObTransferPartitionArg::INVALID_TYPE;
+    if (T_PARTITION_INFO == transfer_partition_node->type_) {
+      type = rootserver::ObTransferPartitionArg::CANCEL_TRANSFER_PARTITION;
+      if (OB_FAIL(resolve_part_info(*transfer_partition_node, table_id, object_id))) {
+        LOG_WARN("failed to resolve part info", KR(ret));
+      }
+    } else if (T_ALL == transfer_partition_node->type_) {
+      type = rootserver::ObTransferPartitionArg::CANCEL_TRANSFER_PARTITION_ALL;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid transfer partition node type", KR(ret), "type", get_type_name(transfer_partition_node->type_));
+    }
+    if (FAILEDx(stmt->get_arg().init_for_cancel_transfer_partition(
+            target_tenant_id, type, table_id, object_id))) {
+      LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id), K(type),
+          K(table_id), K(object_id));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
+int ObTransferPartitionResolver::resolve_cancel_balance_job_(const ParseNode &parse_tree)
+{
+int ret = OB_SUCCESS;
+  ObTransferPartitionStmt *stmt = create_stmt<ObTransferPartitionStmt>();
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_UNLIKELY(T_CANCEL_BALANCE_JOB != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_TRANSFER_PARTITION", KR(ret), "type",
+        get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create stmt fail", KR(ret));
+  } else if (1 != parse_tree.num_child_
+        || OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
+        KP(session_info_));
+  } else if (OB_FAIL(get_and_verify_tenant_name(
+      parse_tree.children_[0],
+      session_info_->get_effective_tenant_id(),
+      target_tenant_id, "Cancel balance job"))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+        K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[0]));
+  } else if (OB_FAIL(stmt->get_arg().init_for_cancel_balance_job(
+            target_tenant_id))) {
+      LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id));
+  } else {
+    stmt_ = stmt;
+  }
+  return ret;
+}
 } // end namespace sql
 } // end namespace oceanbase

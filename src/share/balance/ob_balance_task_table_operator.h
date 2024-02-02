@@ -395,8 +395,19 @@ public:
    * @return OB_SUCCESS if success, otherwise failed
    * */
   static int load_can_execute_task(const uint64_t tenant_id,
-                                       ObBalanceTaskIArray &task_array,
-                                       ObISQLClient &client);
+                                   ObBalanceTaskIArray &task_array,
+                                   ObISQLClient &client);
+  /*
+   * @description: load all task
+   * @param[in] tenant_id : user_tenant_id
+   * @param[out] balance_task_array : get all task
+   * @param[in] client: sql client or trans
+   * @return OB_SUCCESS if success, otherwise failed
+   * */
+  static int load_task(const uint64_t tenant_id,
+                                   ObBalanceTaskIArray &task_array,
+                                   ObISQLClient &client);
+
   /*
    * @description: load all task of the balance job that parent list not empty
    * @param[in] job_id : balance_job_id
@@ -429,7 +440,7 @@ public:
    * @param[in] trans: update in trans
    * @return OB_SUCCESS if success, otherwise failed
    * */
-  static int update_merge_ls_part_list(const uint64_t tenant_id,
+  static int update_task_part_list(const uint64_t tenant_id,
                                const ObBalanceTaskID balance_task_id,
                                const ObTransferPartList &part_list,
                                common::ObMySQLTransaction &trans);

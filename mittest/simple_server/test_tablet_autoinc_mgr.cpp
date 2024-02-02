@@ -180,11 +180,13 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
 
   // transfer t1 to other ls
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   const ObLSID src_ls_id(1001);
   const ObLSID dst_ls_id(1002);
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
-  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, src_ls_id, dst_ls_id, g_part_list, ObBalanceTaskID(123), task_id));
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, src_ls_id, dst_ls_id, g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   ASSERT_EQ(OB_SUCCESS, trans.end(true));
   ObTransferStatus expected_status(ObTransferStatus::COMPLETED);
   ObTransferTask task;

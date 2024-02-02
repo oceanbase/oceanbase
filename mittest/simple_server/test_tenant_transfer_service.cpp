@@ -164,10 +164,12 @@ TEST_F(TestTenantTransferService, test_service)
 
   // generate transfer task
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1),
-      g_part_list, ObBalanceTaskID(123), task_id));
+      g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
@@ -263,10 +265,12 @@ TEST_F(TestTenantTransferService, test_batch_part_list)
 
   // generate transfer task in batch
   ObTransferTaskID batch_task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1001),
-      g_batch_part_list, ObBalanceTaskID(124), batch_task_id));
+      g_batch_part_list, ObBalanceTaskID(124), transfer_task));
+  batch_task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
@@ -298,10 +302,12 @@ TEST_F(TestTenantTransferService, test_empty_list)
   INNER_EXE_SQL("alter system set_tp tp_name = EN_TENANT_TRANSFER_ALL_LIST_EMPTY, error_code = 4016, frequency = 1");
   // transfer
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1),
-      g_part_list, ObBalanceTaskID(124), task_id));
+      g_part_list, ObBalanceTaskID(124), transfer_task));
+  task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {

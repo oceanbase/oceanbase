@@ -313,10 +313,12 @@ TEST_F(TestTransferHandler, test_transfer_1001_to_1002)
   //title: 1001 ls transfer to 1002 ls
   // generate transfer task
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1001), ObLSID(1002),
-      g_part_list, ObBalanceTaskID(123), task_id));
+      g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
@@ -352,10 +354,12 @@ TEST_F(TestTransferHandler, test_transfer_1002_to_1001)
   //title: 1002 ls transfer to 1001 ls
   // generate transfer task
   ObTransferTaskID task_id;
+  ObTransferTask transfer_task;
   ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->generate_transfer_task(trans, ObLSID(1002), ObLSID(1001),
-      g_part_list, ObBalanceTaskID(123), task_id));
+      g_part_list, ObBalanceTaskID(123), transfer_task));
+  task_id = transfer_task.get_task_id();
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {

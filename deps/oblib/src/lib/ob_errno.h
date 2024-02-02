@@ -43,6 +43,7 @@ constexpr int OB_CONFLICT_VALUE = -4021;
 constexpr int OB_ITEM_NOT_SETTED = -4022;
 constexpr int OB_EAGAIN = -4023;
 constexpr int OB_BUF_NOT_ENOUGH = -4024;
+constexpr int OB_PARTIAL_FAILED = -4025;
 constexpr int OB_READ_NOTHING = -4026;
 constexpr int OB_FILE_NOT_EXIST = -4027;
 constexpr int OB_DISCONTINUOUS_LOG = -4028;

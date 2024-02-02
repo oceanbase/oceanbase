@@ -23,7 +23,6 @@ constexpr int OB_LAST_ERROR_CODE = -38105;
 constexpr int OB_ERR_SQL_START = -5000;
 constexpr int OB_ERR_SQL_END = -5999;
 constexpr int OB_PACKET_NOT_SENT = -4011;
-constexpr int OB_PARTIAL_FAILED = -4025;
 constexpr int OB_SCHEMA_ERROR = -4029;
 constexpr int OB_TENANT_OUT_OF_MEM = -4030;
 constexpr int OB_UNKNOWN_OBJ = -4031;
@@ -1837,7 +1836,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__USER_ERROR_MSG "Item not set"
 #define OB_EAGAIN__USER_ERROR_MSG "Try again"
 #define OB_BUF_NOT_ENOUGH__USER_ERROR_MSG "Buffer not enough"
-#define OB_PARTIAL_FAILED__USER_ERROR_MSG "Partial failed"
+#define OB_PARTIAL_FAILED__USER_ERROR_MSG "%s"
 #define OB_READ_NOTHING__USER_ERROR_MSG "No data - zero rows fetched, selected, or processed"
 #define OB_FILE_NOT_EXIST__USER_ERROR_MSG "File not exist"
 #define OB_DISCONTINUOUS_LOG__USER_ERROR_MSG "Log entry not continuous"
@@ -3988,7 +3987,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4022, Item not set"
 #define OB_EAGAIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4023, Try again"
 #define OB_BUF_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4024, Buffer not enough"
-#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, Partial failed"
+#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, %s"
 #define OB_READ_NOTHING__ORA_USER_ERROR_MSG "ORA-01403: no data found"
 #define OB_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4027, File not exist"
 #define OB_DISCONTINUOUS_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4028, Log entry not continuous"

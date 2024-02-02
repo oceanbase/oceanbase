@@ -835,6 +835,27 @@ int ObBalanceTaskTableOperator::load_can_execute_task(const uint64_t tenant_id,
   return ret;
 }
 
+int ObBalanceTaskTableOperator::load_task(const uint64_t tenant_id,
+                                       ObBalanceTaskIArray &task_array,
+                                       ObISQLClient &client)
+{
+  int ret = OB_SUCCESS;
+  task_array.reset();
+  ObSqlString sql;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s",
+                                    OB_ALL_BALANCE_TASK_TNAME))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(sql));
+  } else if (OB_FAIL(read_tasks_(tenant_id, client, sql, task_array))) {
+    LOG_WARN("failed to read task", KR(ret), K(tenant_id), K(sql));
+  }
+  LOG_INFO("load all balance task", KR(ret), K(task_array), K(sql));
+  return ret;
+}
+
+
 int ObBalanceTaskTableOperator::get_job_cannot_execute_task(
     const uint64_t tenant_id, const ObBalanceJobID balance_job_id,
     ObBalanceTaskIArray &task_array, ObISQLClient &client)
@@ -988,7 +1009,7 @@ int ObBalanceTaskTableOperator::get_job_task_cnt(const uint64_t tenant_id,
   return ret;
 }
 
-int ObBalanceTaskTableOperator::update_merge_ls_part_list(const uint64_t tenant_id,
+int ObBalanceTaskTableOperator::update_task_part_list(const uint64_t tenant_id,
                                const ObBalanceTaskID balance_task_id,
                                const ObTransferPartList &part_list,
                                common::ObMySQLTransaction &trans)
@@ -998,16 +1019,16 @@ int ObBalanceTaskTableOperator::update_merge_ls_part_list(const uint64_t tenant_
   int64_t affected_rows = 0;
   common::ObArenaAllocator allocator;
   ObString part_list_str;
+  //maybe part_list empty
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-                  || !balance_task_id.is_valid()
-                  || 0 == part_list.count())) {
+                  || !balance_task_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_task_id),
              K(part_list));
   } else if (OB_FAIL(part_list.to_display_str(allocator, part_list_str))) {
     LOG_WARN("failed to transfer list to str", KR(ret), K(part_list));
   } else if (OB_FAIL(sql.assign_fmt("update %s set part_list = '%.*s', part_count = %ld where "
-                                "task_id = %ld and part_count = 0",
+                                "task_id = %ld",
                                 OB_ALL_BALANCE_TASK_TNAME, part_list_str.length(),
                                 part_list_str.ptr(), part_list.count(), balance_task_id.id()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(balance_task_id), K(part_list_str));

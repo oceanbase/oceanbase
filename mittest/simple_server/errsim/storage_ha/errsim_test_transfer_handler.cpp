@@ -256,9 +256,12 @@ int TestTransferHandler::generate_transfer_task(
     } else if (OB_FAIL(trans.start(&inner_sql_proxy, g_tenant_id))) {
       LOG_WARN("failed to start trans", K(ret));
     } else {
+      ObTransferTask transfer_task;
       if (OB_FAIL(tenant_transfer->generate_transfer_task(trans, src_ls_id, dest_ls_id,
-          g_part_list, ObBalanceTaskID(123), task_id))) {
+          g_part_list, ObBalanceTaskID(123), transfer_task))) {
         LOG_WARN("failed to generate transfer task", K(ret));
+      } else {
+        task_id = transfer_task.get_task_id();
       }
     }
 

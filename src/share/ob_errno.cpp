@@ -352,10 +352,10 @@ static const _error _error_OB_PARTIAL_FAILED = {
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
       .str_error             = "Partial failed",
-      .str_user_error        = "Partial failed",
+      .str_user_error        = "%s",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -4025, Partial failed",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4025, Partial failed"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4025, %s"
 };
 static const _error _error_OB_READ_NOTHING = {
       .error_name            = "OB_READ_NOTHING",

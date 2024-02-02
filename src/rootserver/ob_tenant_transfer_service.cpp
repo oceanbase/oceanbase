@@ -1078,10 +1078,9 @@ int ObTenantTransferService::generate_transfer_task(
     const ObLSID &dest_ls,
     const ObTransferPartList &part_list,
     const ObBalanceTaskID balance_task_id,
-    ObTransferTaskID &task_id)
+    ObTransferTask &task)
 {
   int ret = OB_SUCCESS;
-  task_id.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1093,7 +1092,8 @@ int ObTenantTransferService::generate_transfer_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(src_ls), K(dest_ls), K(part_list), K(balance_task_id));
   } else {
-    ObTransferTask task;
+    task.reset();
+    ObTransferTaskID task_id;
     ObCurTraceId::TraceId trace_id;
     trace_id.init(GCONF.self_addr_);
     ObTransferStatus status(ObTransferStatus::INIT);

@@ -107,20 +107,20 @@ private:
   int wait_tenant_ready_();
   int try_update_task_comment_(const share::ObBalanceTask &task,
   const common::ObSqlString &comment, ObISQLClient &sql_client);
-  int finish_transfer_partition_task_(const ObTransferTask &transfer_task,
+  int finish_transfer_partition_task_(const share::ObTransferTask &transfer_task,
                                       const share::ObBalanceJob &job,
                                      ObMySQLTransaction &trans);
-  int load_finish_transfer_part_tasks_(const ObTransferTask &transfer_task,
+  int load_finish_transfer_part_tasks_(const share::ObTransferTask &transfer_task,
                                        const share::ObBalanceJob &job,
-                                       ObTransferPartList &new_finish_list,
-                                       ObTransferPartitionTaskID &max_task_id,
-                                       ObLSID &dest_ls,
+                                       share::ObTransferPartList &new_finish_list,
+                                       share::ObTransferPartitionTaskID &max_task_id,
+                                       share::ObLSID &dest_ls,
                                        ObMySQLTransaction &trans);
   int try_start_transfer_partition_task_(
        const share::ObBalanceJob &job,
-       const ObTransferPartList &part_list,
-       const ObTransferTaskID &transfer_id,
-       const ObLSID &dest_ls,
+       const share::ObTransferPartList &part_list,
+       const share::ObTransferTaskID &transfer_id,
+       const share::ObLSID &dest_ls,
        ObMySQLTransaction &trans);
 private:
   bool inited_;
