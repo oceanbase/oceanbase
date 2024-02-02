@@ -760,7 +760,11 @@ inline int ObITabletMdsInterface::fill_virtual_info(ObIArray<mds::MdsNodeInfoFor
   if (CLICK_FAIL(get_mds_data_from_tablet<share::ObTabletAutoincSeq>([&allocator, &seq_on_tablet](const share::ObTabletAutoincSeq &seq) {
     return seq_on_tablet.assign(allocator, seq);
   }))) {
-    MDS_LOG_GET(WARN, "fatil to get seq from disk");
+    if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (CLICK_FAIL(fill_virtual_info_by_obj_(seq_on_tablet, mds::NodePosition::DISK, mds_node_info_array))) {
     MDS_LOG_GET(WARN, "fatil to fill seq from disk");
   } else if (CLICK_FAIL(fill_virtual_info_by_obj_(get_mds_data_().tablet_status_cache_, mds::NodePosition::TABLET, mds_node_info_array))) {
