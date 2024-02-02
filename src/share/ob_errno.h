@@ -794,6 +794,7 @@ constexpr int OB_TABLE_DEFINITION_CHANGED = -5386;
 constexpr int OB_ERR_NO_ROUTINE_PRIVILEGE = -5387;
 constexpr int OB_ERR_USER_REFFERD_AS_DEFINER = -5388;
 constexpr int OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER = -5389;
+constexpr int OB_ERR_NO_COLUMN_PRIVILEGE = -5390;
 constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
@@ -2790,6 +2791,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__USER_ERROR_MSG "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__USER_ERROR_MSG "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
+#define OB_ERR_NO_COLUMN_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__USER_ERROR_MSG "object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
@@ -5012,6 +5014,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5387, %.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5388, User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5389, Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
+#define OB_ERR_NO_COLUMN_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5390, %.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-04043: object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
@@ -6303,7 +6306,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2218];
+extern int g_all_ob_errnos[2219];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
