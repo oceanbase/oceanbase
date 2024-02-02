@@ -79,7 +79,7 @@ int ObIOManager::init(const int64_t memory_limit,
       LOG_WARN("init server tenant io mgr start failed", K(ret));
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_UNLIKELY(!is_inited_)) {
     destroy();
   }
   return ret;
@@ -661,13 +661,15 @@ void ObTenantIOManager::destroy()
   ATOMIC_STORE(&is_working_, false);
 
   const int64_t start_ts = ObTimeUtility::current_time();
-  while (1 != get_ref_cnt()) {
-    if (REACH_TIME_INTERVAL(1000L * 1000L)) { //1s
-      LOG_INFO("wait tenant io manager quit", K(MTL_ID()), K(start_ts), K(get_ref_cnt()));
+  if (is_inited_) {
+    while (1 != get_ref_cnt()) {
+      if (REACH_TIME_INTERVAL(1000L * 1000L)) { //1s
+        LOG_INFO("wait tenant io manager quit", K(MTL_ID()), K(start_ts), K(get_ref_cnt()));
+      }
+      ob_usleep((useconds_t)10L * 1000L); //10ms
     }
-    ob_usleep((useconds_t)10L * 1000L); //10ms
+    dec_ref();
   }
-  dec_ref();
 
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(io_scheduler_) && OB_FAIL(io_scheduler_->remove_phyqueues(MTL_ID()))) {

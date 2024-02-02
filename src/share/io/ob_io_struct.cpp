@@ -777,7 +777,7 @@ int ObIOTuner::init()
   } else {
     is_inited_ = true;
   }
-  if (OB_FAIL(ret)) {
+  if (OB_UNLIKELY(!is_inited_)) {
     destroy();
   }
   return ret;
