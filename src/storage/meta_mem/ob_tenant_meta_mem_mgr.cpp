@@ -704,6 +704,8 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
       LOG_WARN("unexpected null tablet pointer", K(ret), K(key), K(ptr_handle));
     } else if (OB_FAIL(tablet_ptr->remove_tablet_from_old_version_chain(tablet))) {
       LOG_WARN("fail to remove tablet from old version chain", K(ret), K(key), KPC(tablet));
+    } else {
+      tablet->reset_memtable();
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
