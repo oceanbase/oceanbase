@@ -67,6 +67,12 @@ public:
                                         schema::ObColumnSchemaV2 &column_schema,
                                         common::ObIAllocator &alloc,
                                         sql::ObSQLSessionInfo &session_info);
+  static int resolve_columns_nullable_value(const sql::ObSelectStmt *select_stmt,
+                                            const sql::SelectItem &select_item,
+                                            ObColumnSchemaV2 &column_schema,
+                                            ObIAllocator &alloc,
+                                            ObSQLSessionInfo &session_info,
+                                            share::schema::ObSchemaGetterGuard *schema_guard);
 private:
   int check_privilege(ObCreateTableStmt *stmt,
                       ObSelectStmt *select_stmt);
