@@ -1396,6 +1396,8 @@ int ObPartTransCtx::get_prepare_version_if_prepared(bool &is_prepared, SCN &prep
 {
   int ret = OB_SUCCESS;
   ObTxState cur_state = exec_info_.state_;
+  // strong memory barrier on ARM
+  WEAK_BARRIER();
 
   if (ObTxState::PREPARE == cur_state || ObTxState::PRE_COMMIT == cur_state) {
     is_prepared = true;
