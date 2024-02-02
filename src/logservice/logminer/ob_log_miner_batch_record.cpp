@@ -59,7 +59,7 @@ int ObLogMinerBatchRecord::append_record(const ObLogMinerRecord &record)
   int ret = OB_SUCCESS;
   if (freezed_) {
     ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("batch csv record has been freezed, need retry", K(freezed_), "buf_len", buf_.length(),
+    LOG_WARN("batch record has been freezed, need retry", K(freezed_), "buf_len", buf_.length(),
         "buf_cap", buf_.capacity());
   } else {
     const RecordType record_type = record.get_record_type();
@@ -200,14 +200,17 @@ void ObLogMinerBatchRecord::update_progress_range_(const int64_t progress)
 int ObLogMinerBatchRecord::write_record_(const ObLogMinerRecord &record)
 {
   int ret = OB_SUCCESS;
+  bool is_written = false;
   if (OB_ISNULL(converter_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get an invalid converter when write_record", K(record));
-  } else if (OB_FAIL(converter_->write_record(record, buf_))) {
+  } else if (OB_FAIL(converter_->write_record(record, buf_, is_written))) {
     LOG_ERROR("converter failed to convert record", K(record), "buf_len", buf_.length(),
         "buf_cap", buf_.capacity());
   } else {
-    written_record_count_++;
+    if (is_written) {
+      written_record_count_++;
+    }
   }
   return ret;
 }

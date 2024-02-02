@@ -191,7 +191,7 @@ int ObLogMinerRecordAggregator::handle(void *data, const int64_t thread_index, v
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerRecordAggregator exit");
+    err_handle_->handle_error(ret, "ObLogMinerRecordAggregator exit unexpected\n");
   }
 
   return ret;

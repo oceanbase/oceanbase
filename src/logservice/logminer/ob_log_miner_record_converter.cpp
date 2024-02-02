@@ -28,7 +28,7 @@ namespace oceanbase
 {
 namespace oblogminer
 {
-
+////////////////////////////// ObLogMinerRecordCsvConverter //////////////////////////////
 #define MINER_SCHEMA_DEF(field, id, args...) \
 ObLogMinerRecordCsvConverter::ColType::field,
 const ObLogMinerRecordCsvConverter::ColType ObLogMinerRecordCsvConverter::COL_ORDER[] =
@@ -40,11 +40,23 @@ const ObLogMinerRecordCsvConverter::ColType ObLogMinerRecordCsvConverter::COL_OR
 ILogMinerRecordConverter *ILogMinerRecordConverter::get_converter_instance(const RecordFileFormat format)
 {
   static ObLogMinerRecordCsvConverter csv_converter;
+  static ObLogMinerRecordRedoSqlConverter redo_sql_converter;
+  static ObLogMinerRecordUndoSqlConverter undo_sql_converter;
 
   ILogMinerRecordConverter *converter = nullptr;
   switch(format) {
     case RecordFileFormat::CSV: {
       converter = &csv_converter;
+      break;
+    }
+
+    case RecordFileFormat::REDO_ONLY: {
+      converter = &redo_sql_converter;
+      break;
+    }
+
+    case RecordFileFormat::UNDO_ONLY: {
+      converter = &undo_sql_converter;
       break;
     }
 
@@ -64,7 +76,7 @@ ObLogMinerRecordCsvConverter::ObLogMinerRecordCsvConverter():
     tz_info_() {}
 
 int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
-    common::ObStringBuffer &buffer)
+    common::ObStringBuffer &buffer, bool &is_written)
 {
   int ret = OB_SUCCESS;
 
@@ -183,6 +195,11 @@ int ObLogMinerRecordCsvConverter::write_record(const ObLogMinerRecord &record,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    is_written = true;
+    LOG_TRACE("ObLogMinerRecordCsvConverter write record succ", K(record));
+  }
+
   return ret;
 }
 
@@ -257,6 +274,53 @@ int ObLogMinerRecordCsvConverter::set_timezone(const char *timezone)
     LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone));
     LOGMINER_STDOUT("parse timezone failed\n");
   }
+  return ret;
+}
+
+////////////////////////////// ObLogMinerRecordRedoSqlConverter //////////////////////////////
+
+int ObLogMinerRecordRedoSqlConverter::write_record(const ObLogMinerRecord &record,
+    common::ObStringBuffer &buffer, bool &is_written)
+{
+  int ret = OB_SUCCESS;
+  if (!record.get_redo_stmt().empty()) {
+    APPEND_STR(buffer, record.get_redo_stmt().string());
+    APPEND_STR(buffer, "\n");
+    if (OB_SUCC(ret)) {
+      is_written = true;
+      LOG_TRACE("ObLogMinerRecordRedoSqlConverter write record succ", K(record));
+    }
+  }
+  return ret;
+}
+
+int ObLogMinerRecordRedoSqlConverter::set_timezone(const char *timezone)
+{
+  UNUSED(timezone);
+  int ret = OB_SUCCESS;
+  return ret;
+}
+////////////////////////////// ObLogMinerRecordUndoSqlConverter //////////////////////////////
+
+int ObLogMinerRecordUndoSqlConverter::write_record(const ObLogMinerRecord &record,
+    common::ObStringBuffer &buffer, bool &is_written)
+{
+  int ret = OB_SUCCESS;
+  if (!record.get_undo_stmt().empty()) {
+    APPEND_STR(buffer, record.get_undo_stmt().string());
+    APPEND_STR(buffer, "\n");
+    if (OB_SUCC(ret)) {
+      is_written = true;
+      LOG_TRACE("ObLogMinerRecordUndoSqlConverter write record succ", K(record));
+    }
+  }
+  return ret;
+}
+
+int ObLogMinerRecordUndoSqlConverter::set_timezone(const char *timezone)
+{
+  UNUSED(timezone);
+  int ret = OB_SUCCESS;
   return ret;
 }
 

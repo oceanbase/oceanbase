@@ -18,6 +18,7 @@
 #include "lib/string/ob_string_buffer.h"
 #include "lib/utility/ob_print_utils.h"
 #include "ob_log_miner_mode.h"
+#include "ob_log_miner_record_file_format.h"
 
 namespace oceanbase
 {
@@ -48,6 +49,7 @@ public:
     KCSTRING(end_time_),
     KCSTRING(log_level_),
     KCSTRING(timezone_),
+    KCSTRING(record_format_),
     K(verbose_),
     K(print_usage_)
   );
@@ -69,6 +71,7 @@ public:
   const char    *end_time_;
   const char    *log_level_;
   const char    *timezone_;
+  const char    *record_format_;
   bool          verbose_;
   bool          print_usage_;
 private:
@@ -88,6 +91,7 @@ class AnalyzerArgs {
   static const char *START_TIME_US_KEY;
   static const char *END_TIME_US_KEY;
   static const char *TIMEZONE_KEY;
+  static const char *RECORD_FORMAT_KEY;
 public:
   AnalyzerArgs() { reset(); }
   int init(const ObLogMinerCmdArgs &args);
@@ -105,7 +109,8 @@ public:
     KCSTRING(log_level_),
     K(start_time_us_),
     K(end_time_us_),
-    KCSTRING(timezone_)
+    KCSTRING(timezone_),
+    K(record_format_)
   );
 
 public:
@@ -121,6 +126,7 @@ public:
   int64_t start_time_us_;
   int64_t end_time_us_;
   char *timezone_;
+  RecordFileFormat record_format_;
 private:
   ObArenaAllocator alloc_;
 };
@@ -164,6 +170,7 @@ public:
   static const char *DEFAULT_LOGMNR_TIMEZONE;
   static const char *DEFAULT_LOGMNR_OPERATIONS;
   static const char *DEFAULT_LOGMNR_TABLE_LIST;
+  static const char *DEFAULT_LOGMNR_FORMAT;
 public:
   ObLogMinerArgs() { reset(); }
   ~ObLogMinerArgs() { reset(); }

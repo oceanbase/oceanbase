@@ -28,6 +28,7 @@ namespace oblogminer
 const char * ObLogMinerFileManager::META_PREFIX = "META/";
 const char * ObLogMinerFileManager::META_EXTENSION = "meta";
 const char * ObLogMinerFileManager::CSV_SUFFIX = "csv";
+const char * ObLogMinerFileManager::SQL_SUFFIX = "sql";
 const char * ObLogMinerFileManager::CONFIG_FNAME = "CONFIG";
 const char * ObLogMinerFileManager::CHECKPOINT_FNAME = "CHECKPOINT";
 const char * ObLogMinerFileManager::INDEX_FNAME = "COMMIT_INDEX";
@@ -124,6 +125,7 @@ int ObLogMinerFileManager::append_records(const ObLogMinerBatchRecord &batch_rec
       if (0 < data_len && nullptr != data && OB_FAIL(append_data_file_(file_id, data, data_len))) {
         LOG_ERROR("file manager write file failed", K(batch_record));
       } else if (OB_ISNULL(meta)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("get meta succ but meta is null", K(meta));
       } else {
         const ObLogMinerProgressRange &range = batch_record.get_progress_range();
@@ -325,6 +327,12 @@ const char *ObLogMinerFileManager::data_file_extension_() const
       break;
     }
 
+    case RecordFileFormat::REDO_ONLY:
+    case RecordFileFormat::UNDO_ONLY: {
+      suffix = "sql";
+      break;
+    }
+
     case RecordFileFormat::JSON: {
       suffix = "json";
       break;
@@ -351,7 +359,7 @@ const char *ObLogMinerFileManager::data_file_extension_() const
 int ObLogMinerFileManager::create_data_file_(const int64_t file_id)
 {
   int ret = OB_SUCCESS;
-  // create csv file, generate csv header first.
+  // create file, generate file header first.
   int64_t pos = 0;
   // do not free meta here, meta would be universally freed in write_checkpoint
   ObLogMinerFileMeta *meta = op_alloc(ObLogMinerFileMeta);
@@ -429,6 +437,12 @@ int ObLogMinerFileManager::generate_data_file_header_(
       break;
     }
 
+    case RecordFileFormat::REDO_ONLY:
+    case RecordFileFormat::UNDO_ONLY: {
+      // do nothing;
+      break;
+    }
+
 
     // TODO: support other type
     default: {
@@ -477,7 +491,9 @@ int ObLogMinerFileManager::append_file_(const ObString &uri,
   ObIOFd fd;
   ObIODevice *device_handle = nullptr;
   int64_t write_size = 0;
-  if (OB_FAIL(utils.open_with_access_type(device_handle, fd, output_dest_.get_storage_info(),
+  if (nullptr == data || 0 == data_len) {
+    // do nothing
+  } else if (OB_FAIL(utils.open_with_access_type(device_handle, fd, output_dest_.get_storage_info(),
       uri, common::OB_STORAGE_ACCESS_RANDOMWRITER))) {
     LOG_ERROR("failed to open device", K(uri), K(output_dest_), K(uri));
   } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
@@ -625,15 +641,17 @@ int ObLogMinerFileManager::init_path_for_analyzer_()
     if (OB_FAIL(adapter.mkdir(output_dest_.get_root_path(), output_dest_.get_storage_info()))) {
       LOG_ERROR("failed to make output_dest", K(output_dest_));
     }
-  } else {
+  } 
+  // oss don't create directory actually, so is_empty_directory() must be checked.
+  if(OB_SUCC(ret)) {
     bool is_empty = false;
     if (OB_FAIL(adapter.is_empty_directory(output_dest_.get_root_path(),
         output_dest_.get_storage_info(), is_empty))) {
       LOG_ERROR("failed to check is empty directory", K(output_dest_));
     } else if (!is_empty) {
+      ret = OB_INVALID_ARGUMENT;
       LOG_ERROR("init for analyzer but not empty directory", K(output_dest_), K(is_empty));
       LOGMINER_STDOUT("not empty output directory: %s\n", output_dest_.get_root_path().ptr());
-      ret = OB_INVALID_ARGUMENT;
     }
   }
 

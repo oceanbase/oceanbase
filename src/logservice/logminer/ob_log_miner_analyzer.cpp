@@ -59,7 +59,7 @@ int ObLogMinerAnalyzer::init(const AnalyzerArgs &args, ILogMinerFileManager *fil
     if (OB_FAIL(lib::ThreadPool::init())) {
       LOG_ERROR("analyzer thread pool failed to init");
     } else if (OB_FAIL(init_component<ObLogMinerDataManager>(data_manager_,
-        LogMinerMode::ANALYSIS, RecordFileFormat::CSV, args.start_time_us_, args.end_time_us_, this))) {
+        LogMinerMode::ANALYSIS, args.record_format_, args.start_time_us_, args.end_time_us_, this))) {
       LOG_ERROR("failed to init ObLogMinerDataManager", K(args));
     } else if (OB_FAIL(init_component<ObLogMinerResourceCollector>(resource_collector_,
         data_manager_, this))) {
@@ -180,7 +180,7 @@ void ObLogMinerAnalyzer::handle_error(int err_code, const char *fmt, ...)
 {
   int ret = OB_SUCCESS;
   constexpr int64_t err_msg_len = 1024;
-  char err_msg[err_msg_len];
+  char err_msg[err_msg_len] = {0};
   static int stop_once = 0;
 
   if (IS_INIT) {
@@ -190,6 +190,8 @@ void ObLogMinerAnalyzer::handle_error(int err_code, const char *fmt, ...)
     vsnprintf(err_msg, err_msg_len, fmt, arg);
     if (ret != OB_SUCCESS) {
       LOG_ERROR(err_msg);
+      LOGMINER_STDOUT(err_msg);
+      LOGMINER_STDOUT("please check log[%s] for more detail\n", ObLogMinerArgs::LOGMINER_LOG_FILE);
     } else {
       LOG_INFO(err_msg);
     }

@@ -23,11 +23,9 @@ namespace oceanbase
 {
 namespace oblogminer
 {
-
 ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
               binlogBuf *old_bufs,
               RecordType type,
-              obmysql::EMySQLFieldType data_type,
               lib::Worker::CompatMode compat_mode,
               const char *db_name,
               const char *table_name,
@@ -36,7 +34,6 @@ ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
 ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
               binlogBuf *old_bufs,
               RecordType type,
-              obmysql::EMySQLFieldType data_type,
               lib::Worker::CompatMode compat_mode,
               const char *db_name,
               const char *table_name,

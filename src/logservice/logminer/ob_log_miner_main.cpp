@@ -14,6 +14,7 @@
 
 #include "ob_log_miner.h"
 #include "ob_log_miner_args.h"
+#include "ob_log_miner_logger.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::oblogminer;
@@ -31,10 +32,14 @@ int main(int argc, char *argv[])
 
   if (OB_FAIL(args.init(argc, argv))) {
     LOG_ERROR("logminer get invalid arguments", K(argc), K(args));
+    LOGMINER_STDOUT("logminer get invalid arguments, please check log[%s] for more detail\n",
+        ObLogMinerArgs::LOGMINER_LOG_FILE);
   } else if (args.print_usage_) {
     ObLogMinerCmdArgs::print_usage(argv[0]);
   } else if (OB_FAIL(logminer_instance.init(args))) {
     LOG_ERROR("logminer instance init failed", K(args));
+    LOGMINER_STDOUT("logminer init failed, please check log[%s] for more detail\n",
+        ObLogMinerArgs::LOGMINER_LOG_FILE);
   } else {
     logminer_instance.run();
   }

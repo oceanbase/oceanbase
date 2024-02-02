@@ -19,6 +19,7 @@
 #include "ob_log_miner_progress_range.h"
 #include "ob_log_miner_file_meta.h"
 #include "ob_log_miner_analyzer_checkpoint.h"
+#include "ob_log_miner_record_file_format.h"
 
 
 namespace oceanbase
@@ -28,15 +29,6 @@ namespace oblogminer
 
 class ObLogMinerArgs;
 class ObLogMinerBatchRecord;
-
-enum class RecordFileFormat
-{
-  INVALID = -1,
-  CSV = 0,
-  JSON,
-  PARQUET,
-  AVRO
-};
 
 class ILogMinerFileManager
 {
@@ -92,6 +84,7 @@ public:
   static const char *META_PREFIX;
   static const char *META_EXTENSION;
   static const char *CSV_SUFFIX;
+  static const char *SQL_SUFFIX;
   static const char *CONFIG_FNAME;
   static const char *CHECKPOINT_FNAME;
   static const char *INDEX_FNAME;

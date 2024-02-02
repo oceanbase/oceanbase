@@ -34,13 +34,13 @@ void ObLogMinerCmdArgs::print_usage(const char *prog_name)
   fprintf(stderr,
   "Oceanbase LogMiner is a tool that converts CLOG in Oceanbase to a format that is readable by humans.\n"
   "The following are examples demonstrating how to use:\n"
-  "%s -c cluster-addr -u user-name -p password -l table-list -s start-time -o result_location\n"
-  "%s -a archive-dest -s start-time -e end-time -O insert|update|delete -o result_location\n"
+  "%s -c \"ip:port\" -u \"user@tenant\" -p \"password\" -s \"2023-01-01 10:00:00\" -o \"file:///data/output/\"\n"
+  "%s -a \"file:///data/archive/\" -s \"2023-01-01 10:00:00\" -O \"insert\" -o \"file:///data/output/\"\n"
   "Options are list below:\n"
   "   -m, --mode                      Specifies the working mode of LogMiner, which currently only supports\n"
   "                                   \"analysis\" mode. The default is analysis mode.\n"
-  "   -c, --cluster-addr              A list of IP addresses and ports separated by semicolons\n"
-  "                                   (e.g., ip1:port1;ip2:port2;ip3:port3), where\n"
+  "   -c, --cluster-addr              A list of IP addresses and ports separated by Vertical bar '|'\n"
+  "                                   (e.g., ip1:port1|ip2:port2|ip3:port3), where\n"
   "                                   the IP is the observer's IP and the port is the observer's SQL port.\n"
   "   -u, --user-name                 The tenant's username, including the tenant (e.g., root@sys).\n"
   "   -p, --password                  The password corresponding to the tenant user.\n"
@@ -58,6 +58,7 @@ void ObLogMinerCmdArgs::print_usage(const char *prog_name)
   "   -h, --help                      Displays the help message.\n"
   "   -v, --verbose                   Determines whether to output detailed logs to the command line.\n"
   "   -z, --timezone                  Specifies the timezone, default is +8:00.\n"
+  "   -f, --record_format             Specifies the record format, default is CSV format. Options include: CSV, REDO_ONLY, UNDO_ONLY\n"
   "   -L  --log_level                 The log level of LogMiner, default is ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN.\n"
   "\n",
   prog_name, prog_name
@@ -82,6 +83,7 @@ void ObLogMinerCmdArgs::reset()
   end_time_ = nullptr;
   log_level_ = nullptr;
   timezone_ = nullptr;
+  record_format_ = nullptr;
   verbose_ = false;
   print_usage_ = false;
 }
@@ -90,7 +92,7 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
 {
   int ret = OB_SUCCESS;
   int opt = -1;
-  const char *short_opts = "m:c:u:p:a:l:C:s:e:O:o:r:t:S:hL:z:v";
+  const char *short_opts = "m:c:u:p:a:l:C:s:e:O:o:r:t:S:hL:z:f:v";
   const struct option long_opts[] = {
     {"mode", 1, NULL, 'm'},
     {"cluster-addr", 1, NULL, 'c'},
@@ -109,6 +111,7 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
     {"help", 0, NULL, 'h'},
     {"log_level", 1, NULL, 'L'},
     {"timezone", 1, NULL, 'z'},
+    {"record_format", 1, NULL, 'f'},
     {"verbose", 0, NULL, 'v'},
     {0, 0, 0, 0},
   };
@@ -211,6 +214,11 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
         break;
       }
 
+      case 'f': {
+        record_format_ = optarg;
+        break;
+      }
+
       case 'v': {
         verbose_ = true;
         break;
@@ -225,6 +233,7 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
   LOG_INFO("parse cmd args finished", KPC(this));
   if (OB_SUCC(ret) && OB_FAIL(validate_())) {
     LOG_ERROR("logminer command arguments are invalid", KPC(this));
+    LOGMINER_STDOUT("logminer command arguments are invalid\n");
   }
 
   return ret;
@@ -238,6 +247,7 @@ int ObLogMinerCmdArgs::validate_() const
   } else if (! is_logminer_mode_valid(mode_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("logminer mode is invalid", K(mode_));
+    LOGMINER_STDOUT("logminer mode is invalid\n");
   } else if (is_analysis_mode(mode_)) {
     const bool server_args_set = (nullptr != cluster_addr_) || (nullptr != user_name_) || (nullptr != password_);
     const bool server_args_complete = (nullptr != cluster_addr_) && (nullptr != user_name_) && (nullptr != password_);
@@ -281,8 +291,9 @@ int ObLogMinerCmdArgs::validate_() const
       LOG_ERROR("some analysis specified arguments are set in flashback mode", KCSTRING(table_list_), KCSTRING(operations_));
     }
   } else {
-    LOG_ERROR("logminer mode is invalid", K(mode_));
     ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("logminer mode is invalid", K(mode_));
+    LOGMINER_STDOUT("logminer mode is invalid\n");
   }
 
   return ret;
@@ -302,6 +313,7 @@ const char *AnalyzerArgs::LOG_LEVEL_KEY = "log_level";
 const char *AnalyzerArgs::START_TIME_US_KEY = "start_time_us";
 const char *AnalyzerArgs::END_TIME_US_KEY = "end_time_us";
 const char *AnalyzerArgs::TIMEZONE_KEY = "timezone";
+const char *AnalyzerArgs::RECORD_FORMAT_KEY = "record_format";
 void AnalyzerArgs::reset()
 {
   cluster_addr_ = nullptr;
@@ -316,6 +328,7 @@ void AnalyzerArgs::reset()
   start_time_us_ = OB_INVALID_TIMESTAMP;
   end_time_us_ = OB_INVALID_TIMESTAMP;
   timezone_ = nullptr;
+  record_format_ = RecordFileFormat::INVALID;
   alloc_.reset();
 }
 
@@ -329,6 +342,7 @@ int AnalyzerArgs::init(const ObLogMinerCmdArgs &args)
     const char *operations = nullptr == args.operations_ ? ObLogMinerArgs::DEFAULT_LOGMNR_OPERATIONS : args.operations_;
     const char *timezone = nullptr == args.timezone_ ? ObLogMinerArgs::DEFAULT_LOGMNR_TIMEZONE : args.timezone_;
     const char *table_list = nullptr == args.table_list_ ? ObLogMinerArgs::DEFAULT_LOGMNR_TABLE_LIST : args.table_list_;
+    const char *record_format_str = nullptr == args.record_format_ ? ObLogMinerArgs::DEFAULT_LOGMNR_FORMAT : args.record_format_;
     ObTimeZoneInfo tz_info;
     ObTimeConvertCtx cvrt_ctx(&tz_info, true);
     if (OB_FAIL(deep_copy_cstring(alloc_, args.cluster_addr_, cluster_addr_))) {
@@ -353,9 +367,18 @@ int AnalyzerArgs::init(const ObLogMinerCmdArgs &args)
       LOG_ERROR("failed to deep copy timezone", K(args));
     }
 
-    if (OB_FAIL(tz_info.set_timezone(ObString(timezone_)))) {
-      LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone_));
-      LOGMINER_STDOUT("parse timezone failed\n");
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tz_info.set_timezone(ObString(timezone_)))) {
+        LOG_ERROR("parse timezone failed", K(ret), KCSTRING(timezone_));
+        LOGMINER_STDOUT("parse timezone failed\n");
+      } else {
+        record_format_ = get_record_file_format(record_format_str);
+        if (RecordFileFormat::INVALID == record_format_) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_ERROR("parse record_format failed", K(ret), KCSTRING(record_format_str));
+          LOGMINER_STDOUT("parse record_format failed\n");
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       if (is_number(args.start_time_)) {
@@ -365,6 +388,9 @@ int AnalyzerArgs::init(const ObLogMinerCmdArgs &args)
         }
       } else if (OB_FAIL(ObTimeConverter::str_to_datetime(ObString(args.start_time_), cvrt_ctx, start_time_us_))) {
         LOG_ERROR("parse start time for AnalyzerArgs failed", K(ret), K(args), K(start_time_us_));
+      }
+      if (OB_FAIL(ret)) {
+        LOGMINER_STDOUT("parse start time for AnalyzerArgs failed\n");
       }
     }
     if (OB_SUCC(ret)) {
@@ -376,7 +402,10 @@ int AnalyzerArgs::init(const ObLogMinerCmdArgs &args)
               K(strerror(errno)));
         }
       } else if (OB_FAIL(ObTimeConverter::str_to_datetime(ObString(args.end_time_), cvrt_ctx, end_time_us_))) {
-        LOG_ERROR("parse start time for AnalyzerArgs failed", K(ret), K(args), K(end_time_us_));
+        LOG_ERROR("parse end time for AnalyzerArgs failed", K(ret), K(args), K(end_time_us_));
+      }
+      if (OB_FAIL(ret)) {
+        LOGMINER_STDOUT("parse end time for AnalyzerArgs failed\n");
       }
     }
 
@@ -452,14 +481,18 @@ int AnalyzerArgs::serialize(char *buf, const int64_t buf_len, int64_t &pos) cons
       empty_str_wrapper(log_level_)))) {
     LOG_ERROR("failed to print log_level", KCSTRING(log_level_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%ld\n", START_TIME_US_KEY,
-    start_time_us_))) {
+      start_time_us_))) {
     LOG_ERROR("failed to print start_time_us", K(start_time_us_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%ld\n", END_TIME_US_KEY,
-    end_time_us_))) {
+      end_time_us_))) {
     LOG_ERROR("failed to print end_time_us", K(end_time_us_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", TIMEZONE_KEY,
-    timezone_))) {
+      timezone_))) {
     LOG_ERROR("failed to print timezone", KCSTRING(timezone_), K(buf_len), K(pos));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", RECORD_FORMAT_KEY,
+      record_file_format_str(record_format_)))) {
+    LOG_ERROR("failed to print record format", KCSTRING(record_file_format_str(record_format_)),
+        K(buf_len), K(pos));
   }
   return ret;
 }
@@ -467,6 +500,7 @@ int AnalyzerArgs::serialize(char *buf, const int64_t buf_len, int64_t &pos) cons
 int AnalyzerArgs::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  ObString record_format_str;
   if (OB_FAIL(parse_line(CLUSTER_ADDR_KEY, buf, data_len, pos, alloc_, cluster_addr_))) {
     LOG_ERROR("failed to get cluster_addr", K(data_len), K(pos));
   } else if (OB_FAIL(parse_line(USER_NAME_KEY, buf, data_len, pos, alloc_, user_name_))) {
@@ -491,6 +525,11 @@ int AnalyzerArgs::deserialize(const char *buf, const int64_t data_len, int64_t &
     LOG_ERROR("failed to get end_time_us", K(data_len), K(pos));
   } else if (OB_FAIL(parse_line(TIMEZONE_KEY, buf, data_len, pos, alloc_, timezone_))) {
     LOG_ERROR("failed to get timezone", K(data_len), K(pos));
+  } else if (OB_FAIL(parse_line(RECORD_FORMAT_KEY, buf, data_len, pos, record_format_str))) {
+    LOG_ERROR("failed to ger record_format", K(data_len), K(pos));
+  }
+  if (OB_SUCC(ret)) {
+    record_format_ = get_record_file_format(record_format_str);
   }
   return ret;
 }
@@ -498,7 +537,7 @@ int AnalyzerArgs::deserialize(const char *buf, const int64_t data_len, int64_t &
 int64_t AnalyzerArgs::get_serialize_size() const
 {
   int64_t size = 0;
-  char buf[30];
+  char buf[30] = {0};
   int64_t start_time_us_len = snprintf(buf, sizeof(buf), "%ld", start_time_us_);
   int64_t end_time_us_len = snprintf(buf, sizeof(buf), "%ld", end_time_us_);
   // need add "=" and "\n"
@@ -514,6 +553,7 @@ int64_t AnalyzerArgs::get_serialize_size() const
   size += strlen(START_TIME_US_KEY) + 1 + start_time_us_len + 1;
   size += strlen(END_TIME_US_KEY) + 1 + end_time_us_len + 1;
   size += strlen(TIMEZONE_KEY) + 1 + strlen(empty_str_wrapper(timezone_)) + 1;
+  size += strlen(RECORD_FORMAT_KEY) + 1 + strlen(record_file_format_str(record_format_)) + 1;
   return size;
 }
 
@@ -616,6 +656,7 @@ const char *ObLogMinerArgs::LOGMINER_LOG_FILE = "oblogminer.log";
 const char *ObLogMinerArgs::DEFAULT_LOGMNR_TIMEZONE = "+8:00";
 const char *ObLogMinerArgs::DEFAULT_LOGMNR_OPERATIONS = "insert|delete|update";
 const char *ObLogMinerArgs::DEFAULT_LOGMNR_TABLE_LIST = "*.*.*";
+const char *ObLogMinerArgs::DEFAULT_LOGMNR_FORMAT = "csv";
 
 
 void ObLogMinerArgs::reset()

@@ -13,9 +13,13 @@
 #ifndef OCEANBASE_LOG_MINER_UTILS_H_
 #define OCEANBASE_LOG_MINER_UTILS_H_
 
+#ifndef OB_USE_DRCMSG
+#include "ob_cdc_msg_convert.h"
+#endif
 #include "lib/alloc/alloc_struct.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/string/ob_fixed_length_string.h"
+#include "lib/string/ob_string_buffer.h"
 #include "libobcdc.h"
 #include <cstdint>
 namespace oceanbase
@@ -58,6 +62,8 @@ int expect_token(const char *buf, const int64_t data_len, int64_t &pos, const ch
 int deep_copy_cstring(ObIAllocator &alloc, const char *src_str, char *&dst_str);
 
 bool is_trans_end_record_type(const RecordType type);
+
+int uint_to_bit(const uint64_t bit_val, ObStringBuffer &str_val);
 
 template<class Derived, class Base, class ...Args>
 int init_component(Base *&ptr, Args&& ...arg)

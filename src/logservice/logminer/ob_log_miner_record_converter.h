@@ -26,14 +26,14 @@ class ILogMinerRecordConverter
 public:
   // TODO: there may be concurrency issue in future?
   static ILogMinerRecordConverter *get_converter_instance(const RecordFileFormat format);
-  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer) = 0;
+  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written) = 0;
   virtual int set_timezone(const char *timezone) = 0;
 };
 
 class ObLogMinerRecordCsvConverter: public ILogMinerRecordConverter
 {
 public:
-  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer);
+  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
   virtual int set_timezone(const char *timezone);
 public:
   ObLogMinerRecordCsvConverter();
@@ -59,6 +59,27 @@ private:
 
   ObTimeZoneInfo tz_info_;
 
+};
+
+class ObLogMinerRecordRedoSqlConverter: public ILogMinerRecordConverter
+{
+public:
+  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
+  virtual int set_timezone(const char *timezone);
+public:
+  ObLogMinerRecordRedoSqlConverter() {}
+  ~ObLogMinerRecordRedoSqlConverter() {}
+
+};
+
+class ObLogMinerRecordUndoSqlConverter: public ILogMinerRecordConverter
+{
+public:
+  virtual int write_record(const ObLogMinerRecord &record, common::ObStringBuffer &buffer, bool &is_written);
+  virtual int set_timezone(const char *timezone);
+public:
+  ObLogMinerRecordUndoSqlConverter() {}
+  ~ObLogMinerRecordUndoSqlConverter() {}
 };
 
 }

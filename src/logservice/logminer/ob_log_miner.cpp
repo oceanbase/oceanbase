@@ -87,8 +87,6 @@ int ObLogMiner::init(const ObLogMinerArgs &args)
     LOGMINER_STDOUT("ObLogMiner init succeed\n");
   } else {
     LOG_INFO("ObLogMiner init failed", K(args));
-    LOGMINER_STDOUT("ObLogMiner init failed, please check log[%s] for more detail\n",
-        ObLogMinerArgs::LOGMINER_LOG_FILE);
   }
   return ret;
 }
@@ -97,7 +95,7 @@ int ObLogMiner::init_analyzer_(const ObLogMinerArgs &args)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_component<ObLogMinerFileManager>(file_manager_,
-      args.analyzer_args_.output_dst_, RecordFileFormat::CSV, ObLogMinerFileManager::FileMgrMode::ANALYZE))) {
+      args.analyzer_args_.output_dst_, args.analyzer_args_.record_format_, ObLogMinerFileManager::FileMgrMode::ANALYZE))) {
     LOG_ERROR("failed to initialize file_manager for analysis mode", K(args));
   } else if (OB_FAIL(init_component<ObLogMinerAnalyzer>(analyzer_, args.analyzer_args_, file_manager_))) {
     LOG_ERROR("analyzer failed to init", K(args));

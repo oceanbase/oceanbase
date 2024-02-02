@@ -165,7 +165,7 @@ void ObLogMinerBRProducer::run1()
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerBRProducer exit");
+    err_handle_->handle_error(ret, "ObLogMinerBRProducer exit unexpected\n");
   }
 }
 

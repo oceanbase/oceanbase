@@ -162,7 +162,7 @@ int ObLogMinerResourceCollector::handle(void *data, const int64_t thread_index, 
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerResourceCollector exit");
+    err_handle_->handle_error(ret, "ObLogMinerResourceCollector exit unexpected\n");
   }
   return ret;
 }

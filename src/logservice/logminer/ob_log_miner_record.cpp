@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX LOGMNR
 
-#include "rpc/obmysql/ob_mysql_global.h"
+#include "lib/utility/ob_fast_convert.h"
 #include "ob_log_miner_record.h"
 #include "ob_log_miner_br.h"
 #include "ob_log_binlog_record.h"
@@ -43,6 +43,10 @@ namespace oblogminer
 {
 const char *ObLogMinerRecord::ORACLE_ESCAPE_CHAR = "\"";
 const char *ObLogMinerRecord::MYSQL_ESCAPE_CHAR = "`";
+const char *ObLogMinerRecord::ORA_GEO_PREFIX = "SRID=";
+const char *ObLogMinerRecord::JSON_EQUAL = "JSON_EQUAL";
+const char *ObLogMinerRecord::LOB_COMPARE = "0=DBMS_LOB.COMPARE";
+const char *ObLogMinerRecord::ST_EQUALS = "ST_Equals";
 
 ObLogMinerRecord::ObLogMinerRecord():
     ObLogMinerRecyclableTask(TaskType::LOGMINER_RECORD),
@@ -437,60 +441,80 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
     binlogBuf *new_cols = cdc_rec.newCols(new_col_cnt);
     binlogBuf *old_cols = cdc_rec.oldCols(old_col_cnt);
     ITableMeta *tbl_meta = cdc_rec.getTableMeta();
-    bool has_lob_type = false;
-    const int col_cnt = tbl_meta->getColCount();
-    for (int i = 0; i < col_cnt && OB_SUCC(ret) && !has_lob_type; i++) {
-      IColMeta *col_meta = tbl_meta->getCol(i);
-      if (OB_ISNULL(col_meta)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("get null col_meta", "table_name", tbl_meta->getName(), K(i));
-      } else {
-        has_lob_type = is_lob_type_(col_meta);
-      }
-    }
-    // only build insert redo sql if record has lob type.
+    // When updating or deleting records with lob type,
+    // the null value of the lob type column may be incorrect
+    // due to the limitations of obcdc.
+	  bool has_lob_null = false;
+	  // xmltype and sdo_geometry type don't support compare operation.
+    bool has_unsupport_type_compare = false;
     if (OB_SUCC(ret)) {
       switch(record_type_) {
+        // Insert records with lob type is accurate. obcdc will output all value of lob type.
         case EINSERT: {
           if (OB_FAIL(build_insert_stmt_(redo_stmt_, new_cols, new_col_cnt, tbl_meta))) {
             LOG_ERROR("build insert redo stmt failed", KPC(this));
           } else {
-            if (!has_lob_type) {
-              if (OB_FAIL(build_delete_stmt_(undo_stmt_, new_cols, new_col_cnt, tbl_meta))) {
-                LOG_ERROR("build insert undo stmt failed", KPC(this));
-              }
+            if (OB_FAIL(build_delete_stmt_(undo_stmt_, new_cols, new_col_cnt,
+                tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+              LOG_ERROR("build insert undo stmt failed", KPC(this));
             } else {
-              LOG_INFO("unsupported build insert undo sql for lob type", KPC(this));
+              // ignore has_lob_null
+              if (has_unsupport_type_compare) {
+                APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
+              }
             }
           }
           break;
         }
 
+        // Update records with lob type maybe inaccurate,
+        // if NULL value appears in the pre/post mirror, the NULL may be incorrect.
         case EUPDATE: {
-          if (!has_lob_type) {
-            if (OB_FAIL(build_update_stmt_(redo_stmt_, new_cols, new_col_cnt,
-                old_cols, old_col_cnt, tbl_meta))) {
-              LOG_ERROR("build update redo stmt failed", KPC(this));
-            } else if (OB_FAIL(build_update_stmt_(undo_stmt_, old_cols, old_col_cnt,
-                new_cols, new_col_cnt, tbl_meta))) {
-              LOG_ERROR("build update undo stmt failed", KPC(this));
-            }
+          if (OB_FAIL(build_update_stmt_(redo_stmt_, new_cols, new_col_cnt, old_cols,
+              old_col_cnt, tbl_meta,  has_lob_null, has_unsupport_type_compare))) {
+            LOG_ERROR("build update redo stmt failed", KPC(this));
           } else {
-            LOG_INFO("unsupported build update redo/undo sql for lob type", KPC(this));
+            if (has_lob_null || has_unsupport_type_compare) {
+              APPEND_STMT(redo_stmt_, "/* POTENTIALLY INACCURATE */");
+              has_lob_null = false;
+              has_unsupport_type_compare = false;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(build_update_stmt_(undo_stmt_, old_cols, old_col_cnt, new_cols,
+                new_col_cnt, tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+              LOG_ERROR("build update undo stmt failed", KPC(this));
+            } else {
+              if (has_lob_null || has_unsupport_type_compare) {
+                APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
+              }
+            }
           }
           break;
         }
 
+        // Delete records with lob type maybe inaccurate,
+        // if NULL value appears in the pre mirror, the NULL may be incorrect.
         case EDELETE: {
-          if (!has_lob_type) {
-            if (OB_FAIL(build_delete_stmt_(redo_stmt_, old_cols, old_col_cnt, tbl_meta))) {
-              LOG_ERROR("build delete redo stmt failed", KPC(this));
-            } else if (OB_FAIL(build_insert_stmt_(undo_stmt_, old_cols,
-                old_col_cnt, tbl_meta))) {
-              LOG_ERROR("build delete undo stmt failed", KPC(this));
-            }
+          if (OB_FAIL(build_delete_stmt_(redo_stmt_, old_cols, old_col_cnt,
+              tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+            LOG_ERROR("build delete redo stmt failed", KPC(this));
           } else {
-            LOG_INFO("unsupported build delete redo/undo sql for lob type", KPC(this));
+            if (has_lob_null || has_unsupport_type_compare) {
+              APPEND_STMT(redo_stmt_, "/* POTENTIALLY INACCURATE */");
+              has_lob_null = false;
+              has_unsupport_type_compare = false;
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(build_insert_stmt_(undo_stmt_, old_cols, 
+                old_col_cnt, tbl_meta, has_lob_null))) {
+              LOG_ERROR("build delete undo stmt failed", KPC(this));
+            } else {
+              if (has_lob_null) {
+                APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
+              }
+            }
           }
           break;
         }
@@ -510,6 +534,20 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
     binlogBuf *new_cols,
     const unsigned int new_col_cnt,
     ITableMeta *tbl_meta)
+{
+  int ret = OB_SUCCESS;
+  // ignore has_lob_null
+  bool has_lob_null = false;
+  if (OB_FAIL(build_insert_stmt_(stmt, new_cols, new_col_cnt, tbl_meta, has_lob_null))) {
+    LOG_ERROR("build insert stmt failed", KPC(this));
+  }
+  return ret;
+}
+int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
+    binlogBuf *new_cols,
+    const unsigned int new_col_cnt,
+    ITableMeta *tbl_meta,
+    bool &has_lob_null)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -555,6 +593,11 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
         LOG_ERROR("failed to build column_value", "table_name", tbl_meta->getName(),
             "col_idx", i);
       }
+      if (OB_SUCC(ret)) {
+        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
+          has_lob_null = true;
+        }
+      }
     }
 
     APPEND_STMT(stmt, ");");
@@ -571,7 +614,9 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
     const unsigned int new_col_cnt,
     binlogBuf *old_cols,
     const unsigned int old_col_cnt,
-    ITableMeta *tbl_meta)
+    ITableMeta *tbl_meta,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -607,10 +652,16 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
         LOG_ERROR("failed to build column_value", "table_name", tbl_meta->getName(),
             "col_idx", i);
       }
+      if (OB_SUCC(ret)) {
+        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
+          has_lob_null = true;
+        }
+      }
     }
     APPEND_STMT(stmt, " WHERE ");
 
-    if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt, tbl_meta))) {
+    if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt,
+        tbl_meta, has_lob_null, has_unsupport_type_compare))) {
       LOG_ERROR("build where conds failed",);
     }
     if (lib::Worker::CompatMode::MYSQL == compat_mode_) {
@@ -634,7 +685,9 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
 int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     binlogBuf *old_cols,
     const unsigned int old_col_cnt,
-    ITableMeta *tbl_meta)
+    ITableMeta *tbl_meta,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -651,7 +704,8 @@ int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     APPEND_ESCAPE_CHAR(stmt);
     APPEND_STMT(stmt, " WHERE ");
 
-    if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt, tbl_meta))) {
+    if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt,
+        tbl_meta, has_lob_null, has_unsupport_type_compare))) {
       LOG_ERROR("build where conds failed",);
     }
     if (lib::Worker::CompatMode::MYSQL == compat_mode_) {
@@ -664,7 +718,6 @@ int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     }
 
     APPEND_STMT(stmt, ";");
-
     if (OB_SUCC(ret)) {
       LOG_TRACE("build delete stmt", "delete_stmt", stmt.ptr());
     }
@@ -706,6 +759,7 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
     ObArenaAllocator tmp_alloc;
     ObString target_str;
     ObString src_str(col_data.buf_used_size, col_data.buf);
+    ObString srid;
     const char *src_encoding_str = col_meta->getEncoding();
     const ObCharsetType src_cs_type = ObCharset::charset_type(src_encoding_str);
     const ObCollationType src_coll_type = ObCharset::get_default_collation(src_cs_type);
@@ -714,10 +768,13 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
     const char *curr_ptr = nullptr, *next_ptr = nullptr;
     int64_t buf_size = 0;
     int64_t data_len = 0;
+    ObStringBuffer str_val(alloc_);
+    bool is_atoi_valid = false;
 
     if (src_coll_type == dst_coll_type) {
-      curr_ptr = src_str.ptr();
-      buf_size = src_str.length();
+      target_str.assign_ptr(src_str.ptr(), src_str.length());
+      curr_ptr = target_str.ptr();
+      buf_size = target_str.length();
     } else {
       if (OB_FAIL(ObCharset::charset_convert(tmp_alloc, src_str, src_coll_type,
           dst_coll_type, target_str))) {
@@ -730,6 +787,33 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
             K(src_coll_type), K(dst_coll_type), K(target_str));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (is_geo_type_(col_meta) && lib::Worker::CompatMode::ORACLE == compat_mode_) {
+        if (!target_str.prefix_match(ORA_GEO_PREFIX)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("convert oracle geometry column value failed", K(target_str));
+        } else {
+          curr_ptr += strlen(ORA_GEO_PREFIX);
+          buf_size -= strlen(ORA_GEO_PREFIX);
+          next_ptr = static_cast<const char*>(memchr(curr_ptr, ';', buf_size));
+          if (nullptr == next_ptr) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("convert oracle geometry column value failed", K(target_str));
+          } else {
+            data_len = next_ptr - curr_ptr;
+            srid.assign_ptr(curr_ptr, data_len);
+            next_ptr++;
+            curr_ptr = next_ptr;
+            buf_size -= (data_len + 1); // ignore ";"
+          }
+        }
+        APPEND_STMT(stmt, "SDO_GEOMETRY(");
+      } else if (is_geo_type_(col_meta) && lib::Worker::CompatMode::MYSQL == compat_mode_) {
+        APPEND_STMT(stmt, "ST_GeomFromText(");
+      } else if (is_bit_type_(col_meta)) {
+        APPEND_STMT(stmt, "b");
+      }
+    }
 
     APPEND_STMT(stmt, "\'");
     while (OB_SUCC(ret) && (nullptr != (next_ptr =
@@ -737,13 +821,36 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
       // next_ptr point to the of '\''
       next_ptr++;
       data_len = next_ptr - curr_ptr;
-      APPEND_STMT(stmt, curr_ptr, data_len);
-      APPEND_STMT(stmt, "'");
+      APPEND_STMT(str_val, curr_ptr, data_len);
+      APPEND_STMT(str_val, "'");
       curr_ptr = next_ptr;
       buf_size -= data_len;
     }
-    APPEND_STMT(stmt, curr_ptr, buf_size);
+    APPEND_STMT(str_val, curr_ptr, buf_size);
+    if (OB_SUCC(ret) && is_bit_type_(col_meta)) {
+      uint64_t bit_val = common::ObFastAtoi<uint64_t>::atoi(str_val.ptr(), str_val.ptr()
+          + str_val.length(), is_atoi_valid);
+      if (!is_atoi_valid) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("str convert to uint64 failed failed", K(str_val));
+      } else {
+        str_val.reset();
+        if (OB_FAIL(uint_to_bit(bit_val, str_val))) {
+          LOG_ERROR("convert uint64 to bit failed", K(bit_val));
+        }
+      }
+    }
+    APPEND_STMT(stmt, str_val.ptr());
     APPEND_STMT(stmt, "\'");
+    if (OB_SUCC(ret)) {
+      if (is_geo_type_(col_meta) && lib::Worker::CompatMode::ORACLE == compat_mode_) {
+        APPEND_STMT(stmt, ", ");
+        APPEND_STMT(stmt, srid.ptr(), srid.length());
+        APPEND_STMT(stmt, ")");
+      } else if (is_geo_type_(col_meta) && lib::Worker::CompatMode::MYSQL == compat_mode_) {
+        APPEND_STMT(stmt, ")");
+      }
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_ERROR("get not supported column type", "col_name", col_meta->getName(),
@@ -756,15 +863,19 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
 int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
-		ITableMeta *tbl_meta)
+		ITableMeta *tbl_meta,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (!unique_keys_.empty()) {
-    if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta, unique_keys_))) {
+    if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta,
+        unique_keys_, has_lob_null, has_unsupport_type_compare))) {
       LOG_ERROR("build unique keys failed", K(stmt), K(unique_keys_));
     }
   } else if (!primary_keys_.empty()) {
-    if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta, primary_keys_))) {
+    if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta,
+        primary_keys_, has_lob_null, has_unsupport_type_compare))) {
       LOG_ERROR("build primary keys failed", K(stmt), K(primary_keys_));
     }
   } else {
@@ -774,7 +885,7 @@ int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
         APPEND_STMT(stmt, " AND ");
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(build_cond_(stmt, cols, i, tbl_meta, col_meta))) {
+        if (OB_FAIL(build_cond_(stmt, cols, i, tbl_meta, col_meta, has_lob_null, has_unsupport_type_compare))) {
           LOG_ERROR("build cond failed", "table_name", tbl_meta->getName());
         }
       }
@@ -787,7 +898,9 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
 		ITableMeta *tbl_meta,
-		const KeyArray &key)
+		const KeyArray &key,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < key.count(); i++) {
@@ -801,7 +914,8 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
         APPEND_STMT(stmt, " AND ");
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(build_cond_(stmt, cols, col_idx, tbl_meta, col_meta))) {
+        if (OB_FAIL(build_cond_(stmt, cols, col_idx, tbl_meta, col_meta,
+            has_lob_null, has_unsupport_type_compare))) {
           LOG_ERROR("build cond failed", "table_name", tbl_meta->getName());
         }
       }
@@ -814,13 +928,126 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,
 		ITableMeta *tbl_meta,
-		IColMeta *col_meta)
+		IColMeta *col_meta,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_meta)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get null col_meta", "table_name", tbl_meta->getName(), K(col_idx));
+  } else {
+    if (is_lob_type_(col_meta) && nullptr != cols[col_idx].buf) {
+      // build lob type compare condition, excluding null value condition
+      if (OB_FAIL(build_lob_cond_(stmt, cols, col_idx, tbl_meta,
+          col_meta, has_lob_null, has_unsupport_type_compare))) {
+        LOG_ERROR("build lob condition failed", "table_name", tbl_meta->getName());
+      }
+    } else {
+      if (OB_FAIL(build_normal_cond_(stmt, cols, col_idx, tbl_meta, col_meta))) {
+        LOG_ERROR("build normal condition failed", "table_name", tbl_meta->getName());
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_lob_type_(col_meta) && nullptr == cols[col_idx].buf) {
+        has_lob_null = true;
+      }
+    }
   }
+  return ret;
+}
+
+int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+		ITableMeta *tbl_meta,
+		IColMeta *col_meta,
+    bool &has_lob_null,
+		bool &has_unsupport_type_compare)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_lob_type_(col_meta) || nullptr == cols[col_idx].buf)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("column type or value is unexpected", KP(col_meta), K(col_idx));
+  } else {
+    obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+    if (lib::Worker::CompatMode::ORACLE == compat_mode_) {
+      if (obmysql::MYSQL_TYPE_JSON == type) {
+        if (OB_FAIL(build_func_cond_(stmt, cols, col_idx, tbl_meta, col_meta, JSON_EQUAL))) {
+          LOG_ERROR("build func cond failed", "table_name", tbl_meta->getName(), K(JSON_EQUAL));
+        }
+      } else if (obmysql::MYSQL_TYPE_ORA_XML == type ||
+          obmysql::MYSQL_TYPE_GEOMETRY == type) {
+        if (OB_FAIL(build_normal_cond_(stmt, cols, col_idx, tbl_meta, col_meta))) {
+            LOG_ERROR("build xml condition failed", "table_name", tbl_meta->getName(),
+          "col_idx", col_idx);
+        } else {
+          // oracle xml and geometry type don't support compare operation.
+          has_unsupport_type_compare = true;
+        }
+      } else {
+        if (OB_FAIL(build_func_cond_(stmt, cols, col_idx, tbl_meta, col_meta, LOB_COMPARE))) {
+          LOG_ERROR("build func cond failed", "table_name", tbl_meta->getName(), K(LOB_COMPARE));
+        }
+      }
+    } else if (lib::Worker::CompatMode::MYSQL == compat_mode_) {
+      if (obmysql::MYSQL_TYPE_JSON == type) {
+        APPEND_ESCAPE_CHAR(stmt);
+        APPEND_STMT(stmt, col_meta->getName());
+        APPEND_ESCAPE_CHAR(stmt);
+        APPEND_STMT(stmt, "=cast(");
+        if (OB_SUCC(ret) && OB_FAIL(build_column_value_(stmt, col_meta, cols[col_idx]))) {
+          LOG_ERROR("failed to build column_value", "table_name", tbl_meta->getName(),
+              "col_idx", col_idx);
+        }
+        APPEND_STMT(stmt, "as json)");
+      } else if (obmysql::MYSQL_TYPE_GEOMETRY == type) {
+        if (OB_FAIL(build_func_cond_(stmt, cols, col_idx, tbl_meta, col_meta, ST_EQUALS))) {
+          LOG_ERROR("build func cond failed", "table_name", tbl_meta->getName(), K(ST_EQUALS));
+        }
+      } else {
+        if (OB_FAIL(build_normal_cond_(stmt, cols, col_idx, tbl_meta, col_meta))) {
+            LOG_ERROR("build xml condition failed", "table_name", tbl_meta->getName(),
+          "col_idx", col_idx);
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("compat mode is invalid", K(compat_mode_));
+    }
+  }
+  return ret;
+}
+
+int ObLogMinerRecord::build_func_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+		IColMeta *col_meta,
+    const char *func_name)
+{
+  int ret = OB_SUCCESS;
+  APPEND_STMT(stmt, func_name);
+  APPEND_STMT(stmt, "(");
+  APPEND_ESCAPE_CHAR(stmt);
+  APPEND_STMT(stmt, col_meta->getName());
+  APPEND_ESCAPE_CHAR(stmt);
+  APPEND_STMT(stmt, ", ");
+  if (OB_SUCC(ret) && OB_FAIL(build_column_value_(stmt, col_meta, cols[col_idx]))) {
+    LOG_ERROR("failed to build column_value", "table_name", tbl_meta->getName(),
+        "col_idx", col_idx);
+  }
+  APPEND_STMT(stmt, ")");
+  return ret;
+}
+
+int ObLogMinerRecord::build_normal_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+		ITableMeta *tbl_meta,
+		IColMeta *col_meta)
+{
+  int ret = OB_SUCCESS;
   APPEND_ESCAPE_CHAR(stmt);
   APPEND_STMT(stmt, col_meta->getName());
   APPEND_ESCAPE_CHAR(stmt);
@@ -842,7 +1069,10 @@ int ObLogMinerRecord::build_hex_val_(ObStringBuffer &stmt,
     binlogBuf &col_data)
 {
   int ret = OB_SUCCESS;
-  char byte_buf[3];
+  char byte_buf[3] = {0};
+  if (OB_FAIL(stmt.reserve(stmt.length() + col_data.buf_used_size * 2))) {
+    LOG_ERROR("stmt reserve failed", K(stmt), K(col_data.buf_used_size));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_data.buf_used_size; i++) {
     // there may be a sign for signed char, 2 byte is not enough, use unsigned char instead.
     unsigned char curr_byte = col_data.buf[i];
@@ -999,6 +1229,7 @@ bool ObLogMinerRecord::is_lob_type_(IColMeta *col_meta) const
     case obmysql::MYSQL_TYPE_ORA_CLOB:
     case obmysql::MYSQL_TYPE_JSON:
     case obmysql::MYSQL_TYPE_GEOMETRY:
+    case obmysql::MYSQL_TYPE_ORA_XML:
       bret = true;
       break;
     default:
@@ -1007,6 +1238,27 @@ bool ObLogMinerRecord::is_lob_type_(IColMeta *col_meta) const
   }
   return bret;
 }
+
+bool ObLogMinerRecord::is_geo_type_(IColMeta *col_meta) const
+{
+  obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+  bool bret = false;
+  if (obmysql::MYSQL_TYPE_GEOMETRY == type) {
+    bret = true;
+  }
+  return bret;
+}
+
+bool ObLogMinerRecord::is_bit_type_(IColMeta *col_meta) const
+{
+  obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+  bool bret = false;
+  if (obmysql::MYSQL_TYPE_BIT == type) {
+    bret = true;
+  }
+  return bret;
+}
+
 
 }
 }
