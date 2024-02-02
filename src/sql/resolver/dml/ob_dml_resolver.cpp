@@ -10839,10 +10839,12 @@ int ObDMLResolver::format_from_subquery(const ObString &unpivot_alias_name,
     }
   } else {
     int64_t pos = 0;
+    ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
+    obj_print_params.print_origin_stmt_ = true;
     ObSelectStmtPrinter stmt_printer(expr_str_buf, OB_MAX_DEFAULT_VALUE_LENGTH, &pos,
                                      static_cast<ObSelectStmt*>(table_item.ref_query_),
                                      schema_checker_->get_schema_guard(),
-                                     params_.query_ctx_->get_timezone_info());
+                                     obj_print_params, true);
     if (OB_FAIL(stmt_printer.do_print())) {
       LOG_WARN("fail to print generated table", K(ret));
     } else if (OB_FAIL(sql.append_fmt(" FROM (%.*s)", static_cast<int32_t>(pos), expr_str_buf))) {
