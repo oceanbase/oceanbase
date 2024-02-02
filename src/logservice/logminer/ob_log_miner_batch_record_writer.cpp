@@ -49,7 +49,7 @@ int ObLogMinerBatchRecordWriter::init(ILogMinerDataManager *data_mgr,
     LOG_ERROR("BatchRecordWriter has been initialized", K(is_inited_));
   } else if (OB_ISNULL(data_mgr) || OB_ISNULL(res_collector) || OB_ISNULL(file_mgr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("get invalid argument when initializing BatchCsvRecordWriter", K(data_mgr),
+    LOG_ERROR("get invalid argument when initializing BatchRecordWriter", K(data_mgr),
         K(res_collector), K(file_mgr));
   } else if (OB_FAIL(BatchWriterThreadPool::init(BATCH_WRITER_THREAD_NUM, BATCH_WRITER_QUEUE_SIZE))) {
     LOG_ERROR("BatchWriterThreadPool failed to init");
@@ -125,10 +125,10 @@ int ObLogMinerBatchRecordWriter::push(ObLogMinerBatchRecord *record)
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-    LOG_ERROR("BatchCsvRecordWriter hasn't been initialized", K(is_inited_));
+    LOG_ERROR("BatchRecordWriter hasn't been initialized", K(is_inited_));
   } else if (OB_ISNULL(record)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("get invalid record when trying to push record into BatchCsvWriter", K(record));
+    LOG_ERROR("get invalid record when trying to push record into BatchWriter", K(record));
   } else {
     LOG_TRACE("ObLogMinerBatchRecordWriter push batch record into queue", KPC(record));
     const int64_t DATA_OP_TIMEOUT = 1L * 1000 * 1000;
@@ -154,7 +154,7 @@ int ObLogMinerBatchRecordWriter::handle(void *data, const int64_t thread_index, 
     LOG_ERROR("BatchRecordWriter hasn't been initialized", K(is_inited_));
   } else if (OB_ISNULL(data)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("get invalid data when handling data in BatchCsvWriter", K(data));
+    LOG_ERROR("get invalid data when handling data in BatchWriter", K(data));
   } else {
     ObLogMinerBatchRecord *record = static_cast<ObLogMinerBatchRecord*>(data);
     const char *data = nullptr;
@@ -174,7 +174,7 @@ int ObLogMinerBatchRecordWriter::handle(void *data, const int64_t thread_index, 
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerBatchRecordWriter exit");
+    err_handle_->handle_error(ret, "ObLogMinerBatchRecordWriter exit unexpected\n");
   }
 
   return ret;
@@ -225,7 +225,7 @@ void ObLogMinerBatchRecordWriter::run1()
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "Checkpointer exit");
+    err_handle_->handle_error(ret, "Checkpointer exit unexpected\n");
   }
 }
 

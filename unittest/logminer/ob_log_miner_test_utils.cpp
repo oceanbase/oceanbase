@@ -23,7 +23,6 @@ namespace oblogminer
 ObLogMinerBR *v_build_logminer_br(binlogBuf *new_bufs,
               binlogBuf *old_bufs,
               RecordType type,
-              obmysql::EMySQLFieldType data_type,
               lib::Worker::CompatMode compat_mode,
               const char *db_name,
               const char *table_name,
@@ -58,19 +57,27 @@ ObLogMinerBR *v_build_logminer_br(binlogBuf *new_bufs,
   const char *next = nullptr;
   int64_t arg_idx = 0;
   for (int i = 0; i < arg_count; i++) {
-    const char *col_arg = va_arg(*ap, const char *);
-    int len = col_arg == nullptr ? 0 : strlen(col_arg);
-    if (0 == i%3) { // column name
+    const char *col_arg = nullptr;
+    int len = 0;
+    int data_type = 0;
+    if (3 > i%4) {
+      col_arg = va_arg(*ap, const char *);
+      len = col_arg == nullptr ? 0 : strlen(col_arg);
+    } else {
+      data_type = va_arg(*ap, int);
+    }
+    if (0 == i%4) { // column name
       col_meta = DRCMessageFactory::createColMeta();
       EXPECT_NE(col_meta, nullptr);
       col_meta->setName(col_arg);
-      col_meta->setType(data_type);
       col_meta->setEncoding(encoding);
       tab_meta->append(col_arg, col_meta);
-    } else if (1 == i%3 && EDELETE != type) { // new value, EDELETE hasn't new value
+    } else if (1 == i%4 && EDELETE != type) { // new value, EDELETE hasn't new value
       rec->putNew(col_arg, len);
-    } else if (2 == i%3 && EINSERT != type) { // old value, EINSERT hasn't old value
+    } else if (2 == i%4 && EINSERT != type) { // old value, EINSERT hasn't old value
       rec->putOld(col_arg, len);
+    } else if (3 == i%4) { // column data type
+      col_meta->setType(data_type);
     }
   }
   rec->setTableMeta(tab_meta);
@@ -81,7 +88,6 @@ ObLogMinerBR *v_build_logminer_br(binlogBuf *new_bufs,
 ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
               binlogBuf *old_bufs,
               RecordType type,
-              obmysql::EMySQLFieldType data_type,
               lib::Worker::CompatMode compat_mode,
               const char *db_name,
               const char *table_name,
@@ -91,7 +97,7 @@ ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
   va_list ap;
   ObLogMinerBR *br = nullptr;
   va_start(ap, arg_count);
-  br = v_build_logminer_br(new_bufs, old_bufs, type, data_type,
+  br = v_build_logminer_br(new_bufs, old_bufs, type,
       compat_mode, db_name, table_name, encoding, arg_count, &ap);
   va_end(ap);
   return br;
@@ -100,7 +106,6 @@ ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
 ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
               binlogBuf *old_bufs,
               RecordType type,
-              obmysql::EMySQLFieldType data_type,
               lib::Worker::CompatMode compat_mode,
               const char *db_name,
               const char *table_name,
@@ -109,7 +114,7 @@ ObLogMinerBR *build_logminer_br(binlogBuf *new_bufs,
   va_list ap;
   ObLogMinerBR *br = nullptr;
   va_start(ap, arg_count);
-  br = v_build_logminer_br(new_bufs, old_bufs, type, data_type,
+  br = v_build_logminer_br(new_bufs, old_bufs, type,
       compat_mode, db_name, table_name, "utf8mb4", arg_count, &ap);
   va_end(ap);
   return br;

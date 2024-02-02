@@ -118,7 +118,6 @@ void ObLogMinerDataManager::destroy()
     logminer_batch_record_alloc_.destroy();
     logminer_record_alloc_.destroy();
     err_handle_ = nullptr;
-    is_inited_ = false;
     LOG_INFO("ObLogMinerDataManager destroyed");
     LOGMINER_STDOUT_V("ObLogMinerDataManager destroyed\n");
   }
@@ -245,7 +244,7 @@ bool ObLogMinerDataManager::reach_end_progress(const int64_t progress) const
   bool bret = false;
   if (OB_INVALID_TIMESTAMP == progress) {
     bret = false;
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "get invalid progress when judging reach end progress",
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get invalid progress when judging reach end progress",
         K(progress), K(end_progress_));
   } else if (is_analysis_mode(mode_)) {
     bret = progress > end_progress_;
@@ -288,7 +287,8 @@ void ObLogMinerDataManager::do_statistics_()
       "active_batch_record_cnt", cur_stat.batch_record_alloc_count_ - cur_stat.batch_record_release_count_);
   LOG_INFO("[DATA_MANAGER] [STAT] [OUTPUT_PROGRESS]", K(output_progress_), K(start_progress_), K(end_progress_),
       K(record_count_));
-  if (output_progress_ != OB_INVALID_TIMESTAMP) {
+  // only print intermediate progress here.
+  if (output_progress_ != OB_INVALID_TIMESTAMP && !reach_end_progress(output_progress_)) {
     if (OB_FAIL(LOGMINER_LOGGER.log_progress(record_count_, output_progress_, start_progress_, end_progress_))) {
         LOG_WARN("log progress failed", K(record_count_), K(output_progress_), K(start_progress_), K(end_progress_));
       }

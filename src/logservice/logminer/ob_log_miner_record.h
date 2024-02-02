@@ -14,12 +14,14 @@
 #define OCEANBASE_LOG_MINER_RECORD_H_
 
 #include "lib/string/ob_string_buffer.h"
-#include "ob_log_miner_br.h"
 #include "lib/container/ob_se_array.h"
+#include "lib/worker.h"
+#include "rpc/obmysql/ob_mysql_global.h"
+#include "storage/tx/ob_trans_define.h"
+
+#include "ob_log_miner_br.h"
 #include "ob_log_miner_recyclable_task.h"
 #include "ob_log_miner_utils.h"
-#include "storage/tx/ob_trans_define.h"
-#include "lib/worker.h"
 
 namespace oceanbase
 {
@@ -121,6 +123,7 @@ public:
 		K(tenant_name_),
 		K(database_name_),
 		K(table_name_),
+		K(trans_id_),
 		K(primary_keys_),
 		K(unique_keys_),
 		K(record_type_),
@@ -156,18 +159,28 @@ private:
 			binlogBuf *new_cols,
 			const unsigned int new_col_cnt,
 			ITableMeta *tbl_meta);
+	
+	int build_insert_stmt_(ObStringBuffer &stmt,
+			binlogBuf *new_cols,
+			const unsigned int new_col_cnt,
+			ITableMeta *tbl_meta,
+			bool &has_lob_null);
 
 	int build_update_stmt_(ObStringBuffer &stmt,
 			binlogBuf *new_cols,
 			const unsigned int new_col_cnt,
 			binlogBuf *old_cols,
 			const unsigned int old_col_cnt,
-			ITableMeta *tbl_meta);
+			ITableMeta *tbl_meta,
+			bool &has_lob_null,
+			bool &has_unsupport_type_compare);
 
 	int build_delete_stmt_(ObStringBuffer &stmt,
 			binlogBuf *old_cols,
 			const unsigned int old_col_cnt,
-			ITableMeta *tbl_meta);
+			ITableMeta *tbl_meta,
+			bool &has_lob_null,
+			bool &has_unsupport_type_compare);
 
 	int build_column_value_(ObStringBuffer &stmt,
 			IColMeta *col_meta,
@@ -176,15 +189,42 @@ private:
 	int build_where_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
-		ITableMeta *tbl_meta);
-
+		ITableMeta *tbl_meta,
+		bool &has_lob_null,
+		bool &has_unsupport_type_compare);
+	
 	int build_key_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
 		ITableMeta *tbl_meta,
-		const KeyArray &key);
-
+		const KeyArray &key,
+		bool &has_lob_null,
+		bool &has_unsupport_type_compare);
+	
 	int build_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+		ITableMeta *tbl_meta,
+		IColMeta *col_meta,
+		bool &has_lob_null,
+		bool &has_unsupport_type_compare);
+	
+	int build_lob_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+		ITableMeta *tbl_meta,
+		IColMeta *col_meta,
+		bool &has_lob_null,
+		bool &has_unsupport_type_compare);
+	
+	int build_func_cond_(ObStringBuffer &stmt,
+		binlogBuf *cols,
+		const unsigned int col_idx,
+		ITableMeta *tbl_meta,
+		IColMeta *col_meta,
+		const char *func_name);
+	
+	int build_normal_cond_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_idx,
 		ITableMeta *tbl_meta,
@@ -202,9 +242,17 @@ private:
 
 	bool is_lob_type_(IColMeta *col_meta) const;
 
+	bool is_geo_type_(IColMeta *col_meta) const;
+
+	bool is_bit_type_(IColMeta *col_meta) const;
+
 private:
     static const char *ORACLE_ESCAPE_CHAR;
 	static const char *MYSQL_ESCAPE_CHAR;
+	static const char *ORA_GEO_PREFIX;
+	static const char *JSON_EQUAL;
+	static const char *LOB_COMPARE;
+	static const char *ST_EQUALS;
 
 	bool 					is_inited_;
 	bool					is_filtered_;

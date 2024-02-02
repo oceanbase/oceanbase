@@ -53,6 +53,7 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
 {
   ObLogMinerRecordCsvConverter converter;
   ObConcurrentFIFOAllocator alloc;
+  bool is_written = false;
   EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
   ObStringBuffer str_buf(&alloc);
   ObLogMinerRecord *rec = nullptr;
@@ -64,7 +65,8 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
         ukarr1, sizeof(ukarr1)/sizeof(const char*), "a/b/c/d/e", EINSERT, 1645539742222222,
         "INSERT INTO \"test\".\"sbtest1\"(\"aaa\",\"bbb\",\"ccc\") VALUES('1','2','3');",
         "DELETE FROM \"test\".\"sbtest1\" WHERE \"aaa\"='1' and \"bbb\"='2' and \"ccc\"='3';");
-  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf));
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
   EXPECT_STREQ(
     "1002,345,\"aaa/bbb\",\"test_tenant\",\"test\",\"sbtest1\",\"INSERT\",1,1645539742222222000,\"2022-02-22 22:22:22.222222\","
     "\"INSERT INTO \"\"test\"\".\"\"sbtest1\"\"(\"\"aaa\"\",\"\"bbb\"\",\"\"ccc\"\") VALUES('1','2','3');\","
@@ -79,7 +81,9 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
         "\"aaa\" = '4' AND \"bbb\" = '5' and \"ccc\" = '6' LIMIT 1;",
         "UPDATE \"test\".\"sbtest1\" SET \"aaa\" = '4', \"bbb\" = '5', \"ccc\" = '6' WHERE "
         "\"aaa\" = '1' AND \"bbb\" = '2' and \"ccc\" = '3' LIMIT 1;");
-  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf));
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
   EXPECT_STREQ(
     "1002,345,\"aaa/bbb\",\"test_tenant\",\"test\",\"sbtest1\",\"UPDATE\",2,0,\"1970-01-01 08:00:00.000000\","
     "\"UPDATE \"\"test\"\".\"\"sbtest1\"\" SET \"\"aaa\"\" = '1', \"\"bbb\"\" = '2', \"\"ccc\"\" = '3' WHERE "
@@ -94,7 +98,9 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
         nullptr, 0, nullptr, EDDL, 4611686018427387,
         "CREATE TABLE t1(id INT, name TEXT);",
         nullptr);
-  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf));
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
   EXPECT_STREQ(
     "1002,345,\"\",\"test_tenant\",\"test\",\"\",\"DDL\",4,4611686018427387000,\"2116-02-21 07:53:38.427387\","
     "\"CREATE TABLE t1(id INT, name TEXT);\","
@@ -108,13 +114,105 @@ TEST(test_ob_log_miner_record_converter, CsvConverterWriteRecord)
         "DELETE FROM \"test\".\"sbtest1\" WHERE \"aaa\"='1' and \"bbb\"='2' and \"ccc\"='3';",
         "INSERT INTO \"test\".\"sbtest1\"(\"aaa\",\"bbb\",\"ccc\") VALUES('1','2','3');"
         );
-  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf));
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
   EXPECT_STREQ(
     "1002,345,\"aaa/bbb\",\"test_tenant\",\"test\",\"sbtest1\",\"DELETE\",3,0,\"1970-01-01 08:00:00.000000\","
     "\"DELETE FROM \"\"test\"\".\"\"sbtest1\"\" WHERE \"\"aaa\"\"='1' and \"\"bbb\"\"='2' and \"\"ccc\"\"='3';\","
     "\"INSERT INTO \"\"test\"\".\"\"sbtest1\"\"(\"\"aaa\"\",\"\"bbb\"\",\"\"ccc\"\") VALUES('1','2','3');\","
     "1\n", str_buf.ptr());
   str_buf.reset();
+  destroy_miner_record(rec);
+}
+
+TEST(test_ob_log_miner_record_converter, RedoSqlConverterWriteRecord)
+{
+  ObLogMinerRecordRedoSqlConverter converter;
+  ObConcurrentFIFOAllocator alloc;
+  bool is_written = false;
+  EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
+  ObStringBuffer str_buf(&alloc);
+  ObLogMinerRecord *rec = nullptr;
+  const char *pkarr1[] = {"aaa", "bbb"};
+  const char *ukarr1[] = {"ccc"};
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "sbtest1", 345, pkarr1, sizeof(pkarr1)/ sizeof(const char*),
+        ukarr1, sizeof(ukarr1)/sizeof(const char*), "a/b/c/d/e", EINSERT, 1645539742222222,
+        "INSERT INTO \"test\".\"sbtest1\"(\"aaa\",\"bbb\",\"ccc\") VALUES('1','2','3');",
+        "DELETE FROM \"test\".\"sbtest1\" WHERE \"aaa\"='1' and \"bbb\"='2' and \"ccc\"='3';");
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
+  EXPECT_STREQ(
+    "INSERT INTO \"test\".\"sbtest1\"(\"aaa\",\"bbb\",\"ccc\") VALUES('1','2','3');\n", str_buf.ptr());
+  str_buf.reset();
+  destroy_miner_record(rec);
+
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "", 345, nullptr,0,
+        nullptr, 0, nullptr, EDDL, 4611686018427387,
+        "CREATE TABLE t1(id INT, name TEXT);",
+        nullptr);
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
+  EXPECT_STREQ(
+    "CREATE TABLE t1(id INT, name TEXT);\n", str_buf.ptr());
+  str_buf.reset();
+  destroy_miner_record(rec);
+
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "", 345, nullptr,0,
+        nullptr, 0, nullptr, EBEGIN, 4611686018427387,
+        nullptr,
+        nullptr);
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(false, is_written);
+  destroy_miner_record(rec);
+}
+
+TEST(test_ob_log_miner_record_converter, UndoSqlConverterWriteRecord)
+{
+  ObLogMinerRecordUndoSqlConverter converter;
+  ObConcurrentFIFOAllocator alloc;
+  bool is_written = false;
+  EXPECT_EQ(OB_SUCCESS, alloc.init(1 << 20, 1 << 20, 1 << 13));
+  ObStringBuffer str_buf(&alloc);
+  ObLogMinerRecord *rec = nullptr;
+  const char *pkarr1[] = {"aaa", "bbb"};
+  const char *ukarr1[] = {"ccc"};
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "sbtest1", 345, pkarr1, sizeof(pkarr1)/ sizeof(const char*),
+        ukarr1, sizeof(ukarr1)/sizeof(const char*), "a/b/c/d/e", EINSERT, 1645539742222222,
+        "INSERT INTO \"test\".\"sbtest1\"(\"aaa\",\"bbb\",\"ccc\") VALUES('1','2','3');",
+        "DELETE FROM \"test\".\"sbtest1\" WHERE \"aaa\"='1' and \"bbb\"='2' and \"ccc\"='3';");
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(true, is_written);
+  EXPECT_STREQ(
+    "DELETE FROM \"test\".\"sbtest1\" WHERE \"aaa\"='1' and \"bbb\"='2' and \"ccc\"='3';\n", str_buf.ptr());
+  str_buf.reset();
+  destroy_miner_record(rec);
+
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "", 345, nullptr, 0,
+        nullptr, 0, nullptr, EDDL, 4611686018427387,
+        "CREATE TABLE t1(id INT, name TEXT);",
+        nullptr);
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(false, is_written);
+  str_buf.reset();
+  destroy_miner_record(rec);
+
+  rec = build_logminer_record(alloc, lib::Worker::CompatMode::MYSQL,
+        1002, 1, "test_tenant", "test", "", 345, nullptr,0,
+        nullptr, 0, nullptr, EBEGIN, 4611686018427387,
+        nullptr,
+        nullptr);
+  is_written = false;
+  EXPECT_EQ(OB_SUCCESS, converter.write_record(*rec, str_buf, is_written));
+  EXPECT_EQ(false, is_written);
   destroy_miner_record(rec);
 }
 

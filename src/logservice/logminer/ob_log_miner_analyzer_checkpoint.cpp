@@ -54,7 +54,7 @@ int64_t ObLogMinerCheckpoint::get_serialize_size() const
 {
   int64_t len = 0;
   const int64_t digit_max_len = 30;
-  char digit[digit_max_len];
+  char digit[digit_max_len] = {0};
   len += snprintf(digit, digit_max_len, "%ld", progress_);
   len += snprintf(digit, digit_max_len, "%ld", cur_file_id_);
   len += snprintf(digit, digit_max_len, "%ld", max_file_id_);

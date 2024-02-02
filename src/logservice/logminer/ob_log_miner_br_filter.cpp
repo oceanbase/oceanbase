@@ -432,7 +432,7 @@ int ObLogMinerBRFilter::handle(void *data, const int64_t thread_index, volatile 
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerBRFilter exit");
+    err_handle_->handle_error(ret, "ObLogMinerBRFilter exit unexpected\n");
   }
   return ret;
 }

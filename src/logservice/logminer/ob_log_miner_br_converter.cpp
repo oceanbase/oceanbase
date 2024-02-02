@@ -173,7 +173,6 @@ int ObLogMinerBRConverter::handle(void *data, const int64_t thread_index, volati
   } else if (OB_FAIL(writer_->push(record))) {
     LOG_ERROR("failed to push record into writer", K(record), K(writer_));
   }
-
   if (OB_SUCC(ret) && OB_NOT_NULL(br)) {
     if (OB_FAIL(resource_collector_->revert(br))) {
       LOG_ERROR("failed to revert logminer br", K(br), K(resource_collector_));
@@ -181,7 +180,7 @@ int ObLogMinerBRConverter::handle(void *data, const int64_t thread_index, volati
   }
 
   if (OB_FAIL(ret)) {
-    err_handle_->handle_error(ret, "ObLogMinerBRFilter exit");
+    err_handle_->handle_error(ret, "ObLogMinerBRFilter exit unexpected\n");
   }
   return ret;
 }

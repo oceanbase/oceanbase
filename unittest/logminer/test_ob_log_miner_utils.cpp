@@ -240,6 +240,36 @@ TEST(test_ob_log_miner_utils, ExpectToken)
   pos = 0;
 }
 
+TEST(test_ob_log_miner_utils, ConvertUintToBit)
+{
+  uint64_t val = 0;
+  ObArenaAllocator tmp_alloc;
+  ObStringBuffer bit_str(&tmp_alloc);
+  EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
+  EXPECT_STREQ("0", bit_str.ptr());
+  bit_str.reset();
+
+  val = 1;
+  EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
+  EXPECT_STREQ("1", bit_str.ptr());
+  bit_str.reset();
+
+  val = 6;
+  EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
+  EXPECT_STREQ("110", bit_str.ptr());
+  bit_str.reset();
+
+  val = 1836032;
+  EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
+  EXPECT_STREQ("111000000010000000000", bit_str.ptr());
+  bit_str.reset();
+
+  val = 183848324234;
+  EXPECT_EQ(OB_SUCCESS, uint_to_bit(val, bit_str));
+  EXPECT_STREQ("10101011001110001101101100110010001010", bit_str.ptr());
+  bit_str.reset();
+}
+
 }
 }
 

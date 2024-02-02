@@ -368,6 +368,30 @@ int deep_copy_cstring(ObIAllocator &alloc, const char *src_str, char *&dst_str)
   return ret;
 }
 
+int uint_to_bit(const uint64_t bit_uint, ObStringBuffer &bit_str)
+{
+  int ret = OB_SUCCESS;
+  const int bits = 64;
+  int i = bits-1;
+  if (0 == bit_uint) {
+    if (OB_FAIL(bit_str.append("0"))) {
+      LOG_ERROR("bit_str append failed", K(bit_str));
+    }
+  } else {
+    // ignore leading zeroes
+    while (0 == (bit_uint & (1ull << i)) && 0 <= i) {
+      i--;
+    }
+    while (OB_SUCC(ret) && 0 <= i) {
+      if (OB_FAIL(bit_str.append((bit_uint & (1ull << i)) ? "1" : "0"))) {
+        LOG_ERROR("bit_str append failed", K(bit_str));
+      }
+      i--;
+    }
+  }
+  return ret;
+}
+
 
 }
 }

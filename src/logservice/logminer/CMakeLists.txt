@@ -21,6 +21,7 @@ ob_set_subtarget(oblogminer_obj_list common
   ob_log_miner_progress_range.cpp
   ob_log_miner_record_aggregator.cpp
   ob_log_miner_record_converter.cpp
+  ob_log_miner_record_file_format.cpp
   ob_log_miner_record_filter.cpp
   ob_log_miner_record_parser.cpp
   ob_log_miner_record_rewriter.cpp

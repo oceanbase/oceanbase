@@ -43,9 +43,9 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
     old_buf[i].buf_used_size = 0;
   }
   EXPECT_EQ(OB_SUCCESS, col_filter.init("[]"));
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "val1", "val2");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "val1", "val2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
@@ -93,44 +93,47 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
       "\"column_cond\":[{\"col1\":\"val1\"},{\"col2\":\"val2\"}]"
     "}"
   "]"));
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "val1", "val2");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "val1", "val2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col2", "val3", "val2");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col2", "val3", "val2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col2", "val3", "val3", "col1", nullptr, "val1");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col2", "val3", "val3",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING), "col1", nullptr, "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db2", "table1", 6, "col2", "val3", nullptr, "col1", "val1", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db2", "table1", 8, "col2", "val3", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col1", "val1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table2", 6, "col2", "val3", "val3", "col1", nullptr, "val1");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table2", 8, "col2", "val3", "val3",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING), 
+      "col1", nullptr, "val1", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col2", "val3", "val3", "col3", nullptr, "val4");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col2", "val3", "val3",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col3", nullptr, "val4", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
-  br = build_logminer_br(new_buf, old_buf, EDDL,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EDDL, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table2", 0);
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
@@ -143,86 +146,92 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   EXPECT_EQ(OB_SUCCESS, col_filter.init(
     "[{\"database_name\":\"db1\", \"table_name\":\"table1\","
     "\"column_cond\":[{\"col1\":\"val1\", \"col2\":\"val2\"}]}]"));
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db2", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db0", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db0", "non_spec_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db3", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db3", "non_spec_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db3", "tmp_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db3", "tmp_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val2", "val2", "col2", "val1", "val3");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val2", "val2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val1", "val3", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val1", "val1", "col2", "val1", "val3");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val1", "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val1", "val3", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val10", "val100", "col2", "val2", "val2");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val10", "val100",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val2", "val2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val1", "val2", "col2", "val1", "val2");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val1", "val2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val1", "val2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", nullptr, "val1", "col2", nullptr, "val2");
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", nullptr, "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", nullptr, "val2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 9, "col1", "val10", "val1", "col2", "val20", "val2", "col3", "val3", "val30");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 12, "col1", "val10", "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val20", "val2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col3", "val3", "val30", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
@@ -232,44 +241,44 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   EXPECT_EQ(OB_SUCCESS, col_filter.init(
     "[{\"database_name\":\"db1\", \"table_name\":\"table1\","
     "\"column_cond\":[{\"col1\":null}]}]"));
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db2", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db2", "non_spec_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "non_spec_val", "xx");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE,lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "non_spec_val", "xx",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", nullptr, nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", nullptr, nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", nullptr, nullptr);
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", nullptr, nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", nullptr, "xx");
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", nullptr, "xx",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
@@ -279,37 +288,38 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   EXPECT_EQ(OB_SUCCESS, col_filter.init(
     "[{\"database_name\":\"db1\", \"table_name\":\"table1\","
     "\"column_cond\":[{\"col1\":\"val1\", \"col2\":\"val2\"}, {\"col3\":null}]}]"));
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db2", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db2", "non_spec_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT,lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col3", nullptr, nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col3", nullptr, nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val1", nullptr, "col2", "val2", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val1", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val2", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "val1", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "val1", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
@@ -320,30 +330,32 @@ TEST(ob_log_miner_br_filter, ColumnBRFilterPlugin)
   EXPECT_EQ(OB_SUCCESS, col_filter.init(
     "[{\"database_name\":\"db1\", \"table_name\":\"table1\","
     "\"column_cond\":[{\"col1\":\"val1\", \"col2\":\"val2\"}, {\"col3\":\"val3\", \"col4\":\"val4\"}]}]"));
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db2", "non_spec_tbl", 3, "non_spec_col", "non_spec_val", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db2", "non_spec_tbl", 4, "non_spec_col", "non_spec_val", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "val1", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "val1", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val1", nullptr, "col2", "val2", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val1", nullptr,
+       static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+       "col2", "val2", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 6, "col1", "val1", nullptr, "col3", "val3", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 8, "col1", "val1", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col3", "val3", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, col_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
@@ -380,36 +392,31 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
 
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert"));
 
-  br = build_logminer_br(new_buf, old_buf, EBEGIN,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL, 
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, HEARTBEAT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, HEARTBEAT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
@@ -419,22 +426,19 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
 
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert|update"));
 
-  br = build_logminer_br(new_buf, old_buf, HEARTBEAT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, HEARTBEAT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
@@ -444,57 +448,54 @@ TEST(ob_log_miner_br_filter, OperationBRFilterPlugin)
 
   EXPECT_EQ(OB_SUCCESS, op_filter.init("insert|update|delete"));
 
-  br = build_logminer_br(new_buf, old_buf, EINSERT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", "val10", nullptr);
+  br = build_logminer_br(new_buf, old_buf, EINSERT, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", "val10", nullptr,
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EUPDATE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 9, "col1", "val10", "val1", "col2", "val20", "val2", "col3", "val3", "val30");
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 12, "col1", "val10", "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col2", "val20", "val2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "col3", "val3", "val30", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EDELETE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
-      "tenant1.db1", "table1", 3, "col1", nullptr, "val1");
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant1.db1", "table1", 4, "col1", nullptr, "val1",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EBEGIN,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, ECOMMIT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, ECOMMIT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, HEARTBEAT,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, HEARTBEAT, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EBEGIN,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EBEGIN, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(false, need_filter);
   destroy_miner_br(br);
 
-  br = build_logminer_br(new_buf, old_buf, EREPLACE,
-      obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING, lib::Worker::CompatMode::MYSQL,
+  br = build_logminer_br(new_buf, old_buf, EREPLACE, lib::Worker::CompatMode::MYSQL,
       "tenant1.db1", "table1", 0);
   EXPECT_EQ(OB_SUCCESS, op_filter.filter(*br, need_filter));
   EXPECT_EQ(true, need_filter);

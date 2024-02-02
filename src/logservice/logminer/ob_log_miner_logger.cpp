@@ -39,7 +39,7 @@ int LogMinerLogger::set_timezone(const char *timezone)
   return ret;
 }
 
-void LogMinerLogger::log_stdout(const char *format, ...)
+void LogMinerLogger::log_stdout(const char *format, ...) 
 {
   va_list vl;
   va_start(vl, format);
@@ -47,7 +47,7 @@ void LogMinerLogger::log_stdout(const char *format, ...)
   va_end(vl);
 }
 
-void LogMinerLogger::log_stdout_v(const char *format, ...)
+void LogMinerLogger::log_stdout_v(const char *format, ...) 
 {
   if (verbose_) {
     log_stdout(format);
