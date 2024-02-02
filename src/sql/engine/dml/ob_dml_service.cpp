@@ -736,7 +736,7 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
     if (OB_SUCC(ret) && !is_skipped && OB_NOT_NULL(del_rtdef.se_rowkey_dist_ctx_) && !has_instead_of_trg) {
       bool is_distinct = false;
       ObExecContext *root_ctx = nullptr;
-      if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+      if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
         LOG_WARN("get root ExecContext failed", K(ret));
       } else if (OB_ISNULL(root_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1386,7 +1386,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
       if (dml_op.is_fk_nested_session()) {
         // for delete distinct check that has foreign key, perform global distinct check between nested session,
         // to avoid delete same row mutiple times between different nested sqls
-        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1402,6 +1402,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
             // for table not deleted at parent session, create a new hash set and add to the list at root ctx
             DmlRowkeyDistCtx del_ctx;
             del_ctx.table_id_ = del_table_id;
+            LOG_TRACE("[FOREIGN KEY] create hash set used for checking duplicate rowkey due to cascade delete", K(del_table_id));
             if (OB_FAIL(ObDMLService::create_rowkey_check_hashset(dml_op.get_spec().rows_, root_ctx, del_ctx.deleted_rows_))) {
               LOG_WARN("failed to create hash set", K(ret));
             } else if (OB_FAIL(del_ctx_list.push_back(del_ctx))) {
@@ -1420,7 +1421,8 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
         DASDelCtxList& del_ctx_list = dml_op.get_exec_ctx().get_das_ctx().get_das_del_ctx_list();
         DmlRowkeyDistCtx del_ctx;
         del_ctx.table_id_ = del_table_id;
-        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+        LOG_TRACE("[FOREIGN KEY] create hash set used for checking duplicate rowkey due to cascade delete", K(del_table_id));
+        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx) || root_ctx != &dml_op.get_exec_ctx()) {
           ret = OB_ERR_UNEXPECTED;
@@ -1438,7 +1440,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
       }
     } else { //T_DISTINCT_NONE == del_ctdef.distinct_algo_, means optimizer think don't need to create a new hash set for distinct check
       if (dml_op.is_fk_nested_session()) { //for delete triggered by delete cascade, need to check whether upper nested sqls will delete the same table
-        if (OB_FAIL(dml_op.get_exec_ctx().get_fk_root_ctx(root_ctx))) {
+        if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
           LOG_WARN("failed to get root exec ctx", K(ret));
         } else if (OB_ISNULL(root_ctx)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1447,6 +1449,7 @@ int ObDMLService::init_del_rtdef(ObDMLRtCtx &dml_rtctx,
           DASDelCtxList& del_ctx_list = root_ctx->get_das_ctx().get_das_del_ctx_list();
           if (ObDMLService::is_nested_dup_table(del_table_id, del_ctx_list)) {
             // A duplicate table was found
+            LOG_TRACE("[FOREIGN KEY] get hash set used for checking duplicate rowkey due to cascade delete", K(del_table_id));
             if (OB_FAIL(ObDMLService::get_nested_dup_table_ctx(del_table_id, del_ctx_list, del_rtdef.se_rowkey_dist_ctx_))) {
               LOG_WARN("failed to get nested duplicate delete table ctx for fk nested session", K(ret));
             }
@@ -2428,6 +2431,32 @@ int ObDMLService::log_user_error_inner(
     LOG_USER_ERROR(OB_ERR_DATA_TRUNCATED, column_name.length(), column_name.ptr(), row_num);
   } else {
     LOG_WARN("fail to operate row", K(ret));
+  }
+  return ret;
+}
+
+// get the exec_ctx to create hash set to perform duplicate rowkey check,
+// which is used to avoid delete or update same row mutiple times
+int ObDMLService::get_exec_ctx_for_duplicate_rowkey_check(ObExecContext *ctx, ObExecContext* &needed_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *parent_ctx = nullptr;
+  needed_ctx = nullptr;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else if (OB_ISNULL(parent_ctx = ctx->get_parent_ctx())) {
+    // case1: current ctx is the root ctx, means current stmt is the root stmt,
+    // create hash set at current ctx to perform duplicate rowkey check
+    needed_ctx = ctx;
+  } else if (!(parent_ctx->get_das_ctx().is_fk_cascading_)) {
+    // case2: current stmt is not the root stmt, is not triggered by foreign key cascade operations
+    // may be trigger or PL instead, create hash set at current ctx to perform duplicate rowkey check
+    needed_ctx = ctx;
+  } else if (OB_FAIL(SMART_CALL(get_exec_ctx_for_duplicate_rowkey_check(parent_ctx, needed_ctx)))) {
+    // case3: current stmt is a nested stmt, and is triggered by foreign key cascade operations
+    // need to find it's ancestor ctx which is not triggered by cascade operations
+    LOG_WARN("failed to get the exec_ctx to perform duplicate rowkey check between nested sqls", K(ret), K(ctx->get_nested_level()));
   }
   return ret;
 }

@@ -315,7 +315,6 @@ public:
       cur_stmt_tables_.reset();
       read_uncommited_ = false;
       inc_autocommit_ = false;
-      is_foreign_key_cascade_ = false;
       need_serial_exec_ = false;
     }
   public:
@@ -330,8 +329,6 @@ public:
 //  bool in_transaction_;                   // 对应TransSavedValue的trans_flags_，不放在基类中。
     bool read_uncommited_;
     bool inc_autocommit_;
-    bool is_foreign_key_cascade_;
-    bool is_foreign_key_check_exist_;
     bool need_serial_exec_;
   public:
     // 原TransSavedValue的属性
@@ -1276,11 +1273,6 @@ public:
   void set_tenant_killed() { ATOMIC_STORE(&is_tenant_killed_, 1); }
   bool is_use_inner_allocator() const;
   int64_t get_reused_count() const { return reused_count_; }
-  bool is_foreign_key_cascade() const { return is_foreign_key_cascade_; }
-  void set_foreign_key_casecade(bool value) { is_foreign_key_cascade_ = value; }
-  bool is_foreign_key_check_exist() const { return is_foreign_key_check_exist_; }
-  void set_foreign_key_check_exist(bool value) { is_foreign_key_check_exist_ = value; }
-  bool reuse_cur_sql_no() const { return is_foreign_key_cascade() || is_foreign_key_check_exist(); }
   inline void set_first_need_txn_stmt_type(stmt::StmtType stmt_type)
   {
     if (stmt::T_NONE == first_need_txn_stmt_type_) {
@@ -2188,8 +2180,6 @@ private:
   int64_t curr_trans_last_stmt_end_time_;
 
   bool check_sys_variable_;
-  bool is_foreign_key_cascade_;
-  bool is_foreign_key_check_exist_;
   bool acquire_from_pool_;
   // 在构造函数中初始化为true，在一些特定错误情况下被设为false，表示session不能释放回session pool。
   // 所以reset接口中不需要、并且也不能重置release_to_pool_。
