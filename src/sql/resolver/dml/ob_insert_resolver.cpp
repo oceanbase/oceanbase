@@ -304,6 +304,19 @@ int ObInsertResolver::process_values_function(ObRawExpr *&expr)
                                                                 T_INSERT_SCOPE,
                                                                 true))) {
             LOG_WARN("fail to add additional function", K(ret));
+          } else if (value_expr->is_const_expr() &&
+                     !ob_is_enum_or_set_type(value_expr->get_data_type())) {
+            ObRawExpr* remove_const_expr = NULL;
+            if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(*params_.expr_factory_,
+                                                                *params_.session_info_,
+                                                                value_expr, remove_const_expr))) {
+              LOG_WARN("fail to build remove_const expr",K(ret), K(expr), K(remove_const_expr));
+            } else {
+              value_expr = remove_const_expr;
+            }
+          }
+          if (OB_FAIL(ret)) {
+            //do nothing
           } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(expr, b_expr, value_expr))) {
             LOG_WARN("fail to replace ref column", K(ret), K(b_expr), K(value_expr));
           } else {
