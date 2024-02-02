@@ -3709,6 +3709,10 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
             param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
             param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
             param.read_latest_ = retry_info->read_latest_;
+            if (param.read_latest_ && OB_NOT_NULL(param.tx_desc_)) {
+              // tx_info->snapshot_seq_ is seq_abs when read_latest is true
+              param.snapshot_.core_.scn_ = param.tx_desc_->get_tx_seq(tx_info->snapshot_seq_);
+            }
           } else {
             // When param for write, param.tx_desc_ should not be null
             // If tx indfo from lob locator is old, produce new read snapshot directly
