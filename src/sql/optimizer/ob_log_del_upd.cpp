@@ -1358,7 +1358,7 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_guard, fk_info.parent_column_ids_, scan_index_tid))) {
           LOG_WARN("failed to get index tid used to build scan das task for foreign key checks", K(ret));
         } else if (OB_INVALID_ID == scan_index_tid) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_CANNOT_ADD_FOREIGN;
           LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
         } else {
           ObRawExpr* fk_look_up_part_id_expr = nullptr;
