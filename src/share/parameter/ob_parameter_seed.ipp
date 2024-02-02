@@ -1268,11 +1268,6 @@ DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
 DEF_BOOL(_enable_oracle_priv_check, OB_CLUSTER_PARAMETER, "True",
          "whether turn on oracle privilege check ",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-// for pl/sql compiler
-DEF_STR(plsql_ccflags, OB_TENANT_PARAMETER, "",
-        "provides a mechanism that allows PL/SQL programmers to control"
-        "conditional compilation of each PL/SQL library unit independently",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(plsql_code_type, OB_TENANT_PARAMETER, "native",
         "specifies the compilation mode for PL/SQL library units",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1286,10 +1281,6 @@ DEF_INT(plsql_optimize_level, OB_TENANT_PARAMETER, "1",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
          "allows some abnormal behavior that Version 8 disallows, not available",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR(plsql_warnings, OB_TENANT_PARAMETER, "DISABLE::ALL",
-        "enables or disables the reporting of warning messages by the"
-        "PL/SQL compiler, and specifies which warning messages to show as errors",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",

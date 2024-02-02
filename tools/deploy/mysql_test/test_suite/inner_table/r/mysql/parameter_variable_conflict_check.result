@@ -6,13 +6,9 @@ FROM __all_sys_variable a, __all_virtual_sys_parameter_stat b
 WHERE a.name = b.name 
 GROUP BY a.name;
 para_name	var_name
-plsql_warnings	plsql_warnings
-plsql_ccflags	plsql_ccflags
 
 ######  case2: under mysql tenant  ######
 SELECT a.name as para_name, b.name as var_name 
 FROM V$OB_PARAMETERS a, __all_sys_variable b 
 WHERE a.name = b.name;
 para_name	var_name
-plsql_warnings	plsql_warnings
-plsql_ccflags	plsql_ccflags

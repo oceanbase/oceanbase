@@ -175,12 +175,10 @@ optimizer_index_cost_adj
 opt_tab_stat_cache_priority
 partition_balance_schedule_interval
 plan_cache_evict_interval
-plsql_ccflags
 plsql_code_type
 plsql_debug
 plsql_optimize_level
 plsql_v2_compatibility
-plsql_warnings
 px_task_size
 px_workers_per_cpu_quota
 query_response_time_flush
