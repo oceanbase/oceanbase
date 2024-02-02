@@ -80,6 +80,11 @@ public:
   static int check_tenant_is_existed(ObMultiVersionSchemaService *schema_service,
                                      const uint64_t tenant_id,
                                      bool &is_existed);
+  static int set_tde_parameters(common::ObMySQLProxy *sql_proxy,
+                                obrpc::ObCommonRpcProxy *rpc_proxy,
+                                const uint64_t tenant_id,
+                                const ObString &tde_method,
+                                const ObString &kms_info);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreCommonUtil);
