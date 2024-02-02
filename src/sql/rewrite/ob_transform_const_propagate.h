@@ -364,6 +364,10 @@ private:
 
   int check_constraint_value_validity(ObRawExpr *value_expr, bool &reject);
 
+  int check_can_replace_child_of_row(ConstInfoContext &const_ctx,
+                                     ObRawExpr *&cur_expr,
+                                     bool &can_replace_child);
+
 private:
   typedef ObSEArray<PullupConstInfo, 2> PullupConstInfos;
   ObArenaAllocator allocator_;
