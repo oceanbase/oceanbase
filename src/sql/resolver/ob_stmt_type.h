@@ -297,6 +297,8 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_FLUSH_PRIVILEGES, no_priv_needed, 298)
 
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_TRANSFER_PARTITION, get_sys_tenant_alter_system_priv, 297)
 // OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ALTER_LS_REPLICA, get_sys_tenant_alter_system_priv, 299)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_PROCEDURE_CODE, err_stmt_type_priv, 300)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_SHOW_FUNCTION_CODE, err_stmt_type_priv, 301)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 
