@@ -178,24 +178,20 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
   }
 
   while (OB_SUCC(ret) && need_to_refresh_table(*iter.table_iter())) {
-    if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
+    const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
+    if (OB_UNLIKELY(remain_timeout <= 0)) {
+      ret = OB_TRANS_STMT_TIMEOUT;
+    } else if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
-        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+        remain_timeout,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
         relative_table.allow_not_ready()))) {
-      LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(tablet_id),
-           "table id", relative_table.get_table_id());
+      LOG_WARN("fail to get read tables", K(ret), K(ls_id), K(remain_timeout),
+           "table_id", relative_table.get_table_id());
     } else {
       // no worry. iter will hold tablet reference and its life cycle is longer than guard
       tablet_ = iter.get_tablet();
-      // TODO: check if session is killed
-      if (store_ctx_.timeout_ > 0) {
-        const int64_t query_left_time = store_ctx_.timeout_ - ObTimeUtility::current_time();
-        if (query_left_time <= 0) {
-          ret = OB_TRANS_STMT_TIMEOUT;
-        }
-      }
     }
   }
 
