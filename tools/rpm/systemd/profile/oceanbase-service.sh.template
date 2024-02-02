@@ -1,16 +1,16 @@
 #!/bin/bash
 
 DATE=`date '+%Y-%m-%d %H:%M:%S'`
-ip='127.0.0.1'
+cnf_file='/etc/oceanbase.cnf'
+ip=`hostname -i`
 port=2886
-url="http://$ip:$port"
-unix_socket="/tmp/obshell/$port.sock"
+url="http://localhost"
 prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+unix_socket="$prefix/run/obshell.sock"
 obshell="$prefix/bin/obshell"
 report=3
 
 function prepare_config_json {
-  cnf_file='/etc/oceanbase.cnf'
   json_pre_file="$prefix/profile/oceanbase-pre.json"
   json_file="$prefix/profile/oceanbase.json"
   rm -rf $json_file
@@ -18,11 +18,19 @@ function prepare_config_json {
   local temp_file=$(mktemp)
 
   while IFS='=' read -r key value; do
+    # delete empty and comment line
+    if [[ ! $key || $key =~ ^[[:space:]]*# ]]; then
+        continue
+    fi
     key=$(echo "$key" | awk '{$1=$1};1')
     value=$(echo "$value" | awk '{$1=$1};1')
     value=$(echo "$value" | sed 's/^"//' | sed 's/"$//')
     if [[ -n "$key" && ! "$key" =~ ^\; ]]; then
-      if [[ $key == *"rootPwd"* ]]; then
+      if [[ $key == *"ip"* ]]; then
+        ip=$value
+      elif [[ $key == *"obshellPort"* ]]; then
+        port=$value
+      elif [[ $key == *"rootPwd"* ]]; then
         jq --arg parent "oceanbase_ce" --arg child "cluster" --arg key "$key" --arg value "$value" '.[$parent][$child][$key] = $value' "$json_file" > "$temp_file"
         mv "$temp_file" "$json_file"
       else
@@ -31,6 +39,8 @@ function prepare_config_json {
       fi
     fi
   done < "$cnf_file"
+  sed -i "s|2886|${port}|g" $json_file
+  sed -i "s|HOSTIP|${ip}|g" $json_file
 }
 
 function do_reload_observer {
@@ -89,7 +99,7 @@ function check_trace {
   local count=0
   echo "the $content trace id is $dag_trace"
   while true; do
-    response=$(curl --silent -XGET $url/api/v1/task/dag/$dag_trace)
+    response=$(curl --silent -XGET --unix-socket $unix_socket $url/api/v1/task/dag/$dag_trace)
     state=$(echo "$response" | jq -r '.data.state')
     echo "the response state is $state"
     if [ "x$state" = "xSUCCEED" ]; then
@@ -167,12 +177,10 @@ function deploy_observer {
 }
 
 function start_observer {
-  prepare_config_json
   systemd-notify --ready
   # check observer status
   response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
   identity=$(echo "$response" | jq -r '.data.agent.identity')
-  echo $identity
   systemd-notify "STATUS=Service is running"
   if [ "x$identity" = "xCLUSTER AGENT" ]; then
     echo "The observer is already bootstrap, please start it immediately"
@@ -192,7 +200,7 @@ function start_observer {
     trace=$(echo "$response" | jq -r '.data.id')
     check_trace $trace "start observer" 20 6
     if [ $? -eq 0 ]; then
-      /bin/bash $prefix/profile/telemetry.sh $report "12"
+      /bin/bash $prefix/profile/telemetry.sh $report "12" >/dev/null 2>&1
     fi
   elif [ "x$identity" = "xSINGLE" ]; then
     # do config observer first
@@ -207,7 +215,7 @@ function start_observer {
     trace=$(echo "$response" | jq -r '.data.id')
     check_trace $trace "start observer" 40 6
     if [ $? -eq 0 ]; then
-      /bin/bash $prefix/profile/telemetry.sh $report "11"
+      /bin/bash $prefix/profile/telemetry.sh $report "11" >/dev/null 2>&1
     fi
   else
     # status is UNIDENTIFIED
@@ -239,7 +247,7 @@ function start_observer {
             echo "The agent dose not know the observer password"
             echo "1. Please set environment: export OB_ROOT_PASSWORD={root_passowrd}"
             echo "2. Kill all the obshell process"
-            echo "3. Restart the agent process: $prefix/bin/obshell admin start --ip 127.0.0.1 --port 2886"
+            echo "3. Restart the agent process: $prefix/bin/obshell admin start --ip $ip --port $port"
         fi
         sleep 30
     done
@@ -277,8 +285,8 @@ function reload_observer {
 
 if [ "x$1" = "xstart" ]; then
   echo "oceanbase service started at ${DATE}"
-  # telemetry
-  /bin/bash $prefix/profile/telemetry.sh $report "10"
+  /bin/bash $prefix/profile/telemetry.sh $report "10" >/dev/null 2>&1
+  prepare_config_json
   if check_daemon_process; then
     echo "The agent service is exist"
   else

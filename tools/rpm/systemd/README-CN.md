@@ -12,6 +12,10 @@
 yum install oceanbase-ce
 systemctl start oceanbase
 ```
+可以通过以下指令将oceanbase服务设置为开机自启动：
+```bash
+systemctl enable oceanbase
+```
 
 ## systemd介绍
 Systemd提供了自动化管理oceanbase的启动和停止，可以通过systemctl指令对oceanbase进行管理控制，例如：
