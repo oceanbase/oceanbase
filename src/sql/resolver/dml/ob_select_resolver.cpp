@@ -1467,6 +1467,9 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
     const ObTableSchema *table_schema = NULL;
     int64_t for_update_cnt = 0;
     CK (OB_NOT_NULL(params_.schema_checker_));
+    if (OB_SUCC(ret) && params_.is_cursor_ && skip_locked) {
+      stmt->get_query_ctx()->disable_udf_parallel_ |= true;
+    }
     for (int64_t i = 0; OB_SUCC(ret) && for_update_cnt <= 1 && i < select_stmt->get_table_size(); i++) {
       // 1. 单表的for update, 需要把表的rowid加入到 select_item中
       // 2. 多表join for update, 不能加入rowid,因为不确定要加哪个表的rowid
