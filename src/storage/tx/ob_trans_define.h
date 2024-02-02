@@ -1758,6 +1758,21 @@ private:
   ObBlockedTransArray blocked_trans_ids_;
 };
 
+enum class PartCtxSource
+{
+  UNKOWN = 0,
+  MVCC_WRITE = 1,
+  REGISTER_MDS = 2,
+  REPLAY = 3,
+  RECOVER = 4,
+  TRANSFER = 5,
+  TRANSFER_RECOVER = 6,
+};
+
+bool is_transfer_ctx(PartCtxSource ctx_source);
+
+const char *to_str(PartCtxSource src);
+
 enum class RetainCause : int16_t
 {
   UNKOWN = -1,

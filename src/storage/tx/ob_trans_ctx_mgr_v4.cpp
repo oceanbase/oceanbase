@@ -407,7 +407,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
   if (is_tx_blocked_()) {
     block = true;
   } else if (is_normal_blocked_()) {
-    if (!arg.for_special_tx_) {
+    if (arg.ctx_source_ != PartCtxSource::REGISTER_MDS) {
       block = true;
     }
   }
@@ -464,6 +464,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           epoch_v,
                           this,
                           arg.for_replay_,
+                          arg.ctx_source_,
                           arg.xid_))) {
     // when transfer move active tx ctx, we will create tx ctx when dest_ls has no this tx
     // we want to promise the created ctx state new enouth before insert to dest_ls ctx_map
@@ -2687,7 +2688,7 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         TRANS_LOG(WARN, "tx ctx not exist", K(ls_id_), K(move_tx_param), K(arg));
       }
       ObTxCreateArg create_arg(!is_master(),
-                               false,
+                               PartCtxSource::TRANSFER,
                                tenant_id_,
                                arg.tx_id_,
                                ls_id_,

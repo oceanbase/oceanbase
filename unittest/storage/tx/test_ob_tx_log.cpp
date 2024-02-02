@@ -62,6 +62,7 @@ ObTxSEQ TEST_MAX_SUBMITTED_SEQ_NO = ObTxSEQ(12345, 0);
 ObTxSEQ TEST_SERIAL_FINAL_SEQ_NO = ObTxSEQ(12346, 0);
 LSKey TEST_LS_KEY;
 ObXATransID TEST_XID;
+ObTxPrevLogType TEST_PREV_LOG_TYPE(ObTxPrevLogType::TypeEnum::TRANSFER_IN);
 
 
 struct OldTestLog
@@ -215,7 +216,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_CLUSTER_VERSION,
                                        TEST_XID,
                                        TEST_SERIAL_FINAL_SEQ_NO);
-  ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET);
+  ObTxPrepareLog filll_prepare(TEST_LS_ARRAY, TEST_LOG_OFFSET, TEST_PREV_LOG_TYPE);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
                             TEST_CHECKSUM,
                             TEST_CHECKSUM_SIGNATURE_ARRAY,
@@ -223,7 +224,8 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                             TEST_TX_BUFFER_NODE_ARRAY,
                             TEST_TRANS_TYPE,
                             TEST_LOG_OFFSET,
-                            TEST_INFO_ARRAY);
+                            TEST_INFO_ARRAY,
+                            TEST_PREV_LOG_TYPE);
   ObTxClearLog fill_clear(TEST_LS_ARRAY);
   ObTxAbortLog fill_abort(TEST_TX_BUFFER_NODE_ARRAY);
   ObTxRecordLog fill_record(TEST_LOG_OFFSET, TEST_LOG_OFFSET_ARRY);
@@ -282,12 +284,14 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(tx_log_header));
   EXPECT_EQ(ObTxLogType::TX_PREPARE_LOG, tx_log_header.get_tx_log_type());
   ASSERT_EQ(OB_SUCCESS, replay_block.deserialize_log_body(replay_prepare));
+  EXPECT_EQ(TEST_PREV_LOG_TYPE.prev_log_type_, replay_prepare.get_prev_log_type().prev_log_type_);
 
   ObTxCommitLogTempRef commit_temp_ref;
   ObTxCommitLog replay_commit(commit_temp_ref);
   ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(tx_log_header));
   EXPECT_EQ(ObTxLogType::TX_COMMIT_LOG, tx_log_header.get_tx_log_type());
   ASSERT_EQ(OB_SUCCESS, replay_block.deserialize_log_body(replay_commit));
+  EXPECT_EQ(TEST_PREV_LOG_TYPE.prev_log_type_, replay_commit.get_prev_log_type().prev_log_type_);
 
   ObTxClearLogTempRef clear_temp_ref;
   ObTxClearLog replay_clear(clear_temp_ref);
@@ -347,7 +351,8 @@ TEST_F(TestObTxLog, tx_log_body_redo)
                             TEST_TX_BUFFER_NODE_ARRAY,
                             TEST_TRANS_TYPE,
                             TEST_LOG_OFFSET,
-                            TEST_INFO_ARRAY);
+                            TEST_INFO_ARRAY,
+                            TEST_PREV_LOG_TYPE);
 
   ObTxLogBlockHeader &fill_block_header = fill_block.get_header();
   fill_block_header.init(TEST_ORG_CLUSTER_ID, TEST_CLUSTER_VERSION, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
@@ -645,6 +650,8 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   replay_member_cnt++;
   EXPECT_EQ(fill_prepare.get_prev_lsn(), replay_prepare.get_prev_lsn());
   replay_member_cnt++;
+  EXPECT_EQ(fill_prepare.get_prev_log_type().prev_log_type_, replay_prepare.get_prev_log_type().prev_log_type_);
+  replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 
   ObTxCommitLogTempRef commit_temp_ref;
@@ -870,7 +877,8 @@ TEST_F(TestObTxLog, test_commit_log_with_checksum_signature)
                      tx_buffer_node_array,
                      1,
                      LogOffSet(100),
-                     ls_info_array);
+                     ls_info_array,
+                     TEST_PREV_LOG_TYPE);
   int64_t size = log0.get_serialize_size();
   char *buf = new char[size];
   int64_t pos = 0;

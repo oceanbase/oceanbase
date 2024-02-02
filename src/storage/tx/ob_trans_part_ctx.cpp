@@ -87,6 +87,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
                          const int64_t epoch,
                          ObLSTxCtxMgr *ls_ctx_mgr,
                          const bool for_replay,
+                         const PartCtxSource ctx_source,
                          ObXATransID xid)
 {
   int ret = OB_SUCCESS;
@@ -135,6 +136,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     trans_id_ = trans_id;
     trans_expired_time_ = trans_expired_time;
     ctx_create_time_ = ObClockGenerator::getClock();
+    ctx_source_ = ctx_source;
     cluster_version_accurate_ = cluster_version > 0;
     cluster_version_ = cluster_version ?: LAST_BARRIER_DATA_VERSION;
     part_trans_action_ = ObPartTransAction::INIT;
@@ -286,8 +288,8 @@ void ObPartTransCtx::destroy()
 
     if (mds_cache_.is_mem_leak()) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mds memory leak!", K(trans_id_), K(ls_id_),
-                    K(mds_cache_), K(exec_info_), K(ctx_tx_data_), K(start_replay_ts_),
-                    K(start_recover_ts_), K(ctx_create_time_));
+                    K(mds_cache_), K(exec_info_), K(ctx_tx_data_), K(create_ctx_scn_),
+                    K(ctx_source_), K(ctx_create_time_));
       FORCE_PRINT_TRACE(tlog_, "[check mds mem leak] ");
     }
 
@@ -354,8 +356,8 @@ void ObPartTransCtx::default_init_()
   is_ctx_table_merged_ = false;
   mds_cache_.reset();
   retain_ctx_func_ptr_ = nullptr;
-  start_replay_ts_.reset();
-  start_recover_ts_.reset();
+  create_ctx_scn_.reset();
+  ctx_source_ = PartCtxSource::UNKOWN;
   replay_completeness_.reset();
   is_submitting_redo_log_for_freeze_ = false;
   start_working_log_ts_ = SCN::min_scn();
@@ -1685,7 +1687,11 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
             ->get_tx_version_mgr()
             .update_max_commit_ts(ctx_tx_data_.get_commit_version(), false);
       }
-      start_recover_ts_ = exec_info_.max_applying_log_ts_;
+      create_ctx_scn_ = exec_info_.max_applying_log_ts_;
+
+      if(!exec_info_.transfer_parts_.empty()) {
+        ctx_source_ = PartCtxSource::TRANSFER_RECOVER;
+      }
     }
     TRANS_LOG(INFO, "recover tx ctx table info succeed", K(ret), KPC(this), K(ctx_info));
   }
@@ -3165,12 +3171,13 @@ int ObPartTransCtx::submit_prepare_log_()
 
   if (OB_SUCC(ret)) {
     ObTxLogCb *log_cb = NULL;
+    ObTxPrevLogType prev_log_type(ObTxPrevLogType::TypeEnum::COMMIT_INFO);
 
-    if (OB_FAIL(get_prev_log_lsn_(log_block, ObTxLogType::TX_COMMIT_INFO_LOG, prev_lsn))) {
+    if (OB_FAIL(get_prev_log_lsn_(log_block, prev_log_type, prev_lsn))) {
       TRANS_LOG(WARN, "get prev log lsn failed", K(ret), K(*this));
     }
 
-    ObTxPrepareLog prepare_log(exec_info_.incremental_participants_, prev_lsn);
+    ObTxPrepareLog prepare_log(exec_info_.incremental_participants_, prev_lsn, prev_log_type);
 
     if (OB_FAIL(ret)) {
       // do nothing
@@ -3330,20 +3337,20 @@ int ObPartTransCtx::submit_commit_log_()
   if (OB_SUCC(ret)) {
     SCN log_commit_version;
     ObSEArray<uint64_t, 1> checksum_arr;
+    ObTxPrevLogType prev_log_type;
     if (exec_info_.need_checksum_
         && replay_completeness_.is_complete()
         && OB_FAIL(mt_ctx_.calc_checksum_all(checksum_arr))) {
       TRANS_LOG(WARN, "calc checksum failed", K(ret));
     } else if (!local_tx) {
       log_commit_version = ctx_tx_data_.get_commit_version();
-      if (OB_FAIL(get_prev_log_lsn_(log_block, ObTxLogType::TX_PREPARE_LOG, prev_lsn))) {
+      prev_log_type.set_prepare();
+      if (OB_FAIL(get_prev_log_lsn_(log_block, prev_log_type, prev_lsn))) {
         TRANS_LOG(WARN, "get prev log lsn failed", K(ret), K(*this));
-      } else if (!prev_lsn.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexpected prev lsn in 2pc commit log", K(ret), KPC(this));
       }
     } else {
-      if (OB_FAIL(get_prev_log_lsn_(log_block, ObTxLogType::TX_COMMIT_INFO_LOG, prev_lsn))) {
+      prev_log_type.set_commit_info();
+      if (OB_FAIL(get_prev_log_lsn_(log_block, prev_log_type, prev_lsn))) {
         TRANS_LOG(WARN, "get prev log lsn failed", K(ret), K(*this));
       }
     }
@@ -3356,7 +3363,8 @@ int ObPartTransCtx::submit_commit_log_()
                              checksum_sig,
                              exec_info_.incremental_participants_,
                              multi_source_data, exec_info_.trans_type_, prev_lsn,
-                             coord_prepare_info_arr_);
+                             coord_prepare_info_arr_,
+                             prev_log_type);
     ObTxLogCb *log_cb = NULL;
     bool redo_log_submitted = false;
     LogBarrierType commit_log_barrier_type =  LogBarrierType::NO_NEED_BARRIER;
@@ -4225,12 +4233,16 @@ int ObPartTransCtx::get_max_submitting_log_info_(palf::LSN &lsn, SCN &log_ts)
       lsn = log_cb->get_lsn();
       log_ts = log_cb->get_log_ts();
     }
+  } else
+  {
+    lsn.reset();
   }
+
   return ret;
 }
 
 int ObPartTransCtx::get_prev_log_lsn_(const ObTxLogBlock &log_block,
-                                      ObTxLogType prev_log_type,
+                                      ObTxPrevLogType &prev_log_type,
                                       palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
@@ -4238,10 +4250,13 @@ int ObPartTransCtx::get_prev_log_lsn_(const ObTxLogBlock &log_block,
   SCN tmp_log_ts;
   bool in_same_block = false;
 
-  if (is_contain(log_block.get_cb_arg_array(), prev_log_type)) {
+  if (!prev_log_type.is_normal_log() || !log_block.is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(INFO, "invalid arguments", K(ret), K(prev_log_type), K(log_block));
+  } else if (is_contain(log_block.get_cb_arg_array(), prev_log_type.convert_to_tx_log_type())) {
     // invalid lsn
     lsn.reset();
-    in_same_block = true;
+    prev_log_type.set_self();
   } else if (OB_FAIL(get_max_submitting_log_info_(tmp_lsn, tmp_log_ts))) {
   } else if (tmp_lsn.is_valid()) {
     if (exec_info_.max_durable_lsn_.is_valid() && exec_info_.max_durable_lsn_ > tmp_lsn) {
@@ -4252,9 +4267,14 @@ int ObPartTransCtx::get_prev_log_lsn_(const ObTxLogBlock &log_block,
     lsn = exec_info_.max_durable_lsn_;
   }
 
-  if (!in_same_block && !lsn.is_valid()) {
+  if (OB_SUCC(ret) && !lsn.is_valid() && is_transfer_ctx(ctx_source_) /*is_transfer*/) {
+    prev_log_type.set_tranfer_in();
+  }
+
+  if (!prev_log_type.is_valid() || (prev_log_type.is_normal_log() && !lsn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected prev lsn", K(ret), K(log_block), K(prev_log_type), K(lsn), KPC(this));
+    TRANS_LOG(WARN, "unexpected prev lsn", K(ret), K(log_block), K(prev_log_type), K(lsn),
+              KPC(this));
   }
   return ret;
 }
@@ -4429,8 +4449,8 @@ int ObPartTransCtx::check_replay_avaliable_(const palf::LSN &offset,
   }
 
   if (OB_SUCC(ret)) {
-    if (need_replay && !start_replay_ts_.is_valid()) {
-      start_replay_ts_ = timestamp;
+    if (need_replay && !create_ctx_scn_.is_valid()) {
+      create_ctx_scn_ = timestamp;
     }
 
     if (need_replay) {
@@ -4605,7 +4625,7 @@ int ObPartTransCtx::check_trans_type_for_replay_(const int32_t &trans_type,
 {
   int ret = OB_SUCCESS;
 
-  if (start_replay_ts_ == commit_log_ts) {
+  if (create_ctx_scn_ == commit_log_ts) {
     // TRANS_LOG(INFO, "start replay from commit log", K(trans_type), K(commit_log_ts));
     exec_info_.trans_type_ = trans_type;
   } else if (exec_info_.trans_type_ != trans_type) {

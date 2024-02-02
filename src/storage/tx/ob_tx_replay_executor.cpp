@@ -277,7 +277,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
       // since 4.3, cluster version in log_block_header
       const uint64_t cluster_version = log_block_.get_header().get_cluster_version();
       ObTxCreateArg arg(true, /* for_replay */
-                        false, /* for_special_tx */
+                        PartCtxSource::REPLAY,
                         tenant_id_,
                         tx_id,
                         ls_id_,
