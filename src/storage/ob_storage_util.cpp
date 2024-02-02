@@ -492,9 +492,6 @@ int fill_exprs_lob_locator(
     STORAGE_LOG(WARN, "Unexpected param", K(ret), K(col_param.get_meta_type()),
                 K(context.lob_locator_helper_), K(expr.get_format(eval_ctx)));
   } else {
-    if (0 == vector_offset) {
-      context.lob_locator_helper_->reuse();
-    }
     ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr.get_vector(eval_ctx));
     ObDatum datum;
     ObLength length;

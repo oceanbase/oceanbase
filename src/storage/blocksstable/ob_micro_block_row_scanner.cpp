@@ -684,7 +684,7 @@ int ObIMicroBlockRowScanner::get_rows_for_old_format(
                                             *col_params.at(i),
                                             row_cap,
                                             datum_infos.at(i).datum_ptr_ + vector_offset,
-                                            0 == vector_offset))) {
+                                            false))) {
           LOG_WARN("Fail to fill lob locator", K(ret));
         }
       }
