@@ -2238,6 +2238,44 @@ int64_t ObStorageMultiPartWriter::get_length()
   return ret_int;
 }
 
+int ObStorageMultiPartWriter::complete()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited", K(ret));
+  } else if (OB_ISNULL(multipart_writer_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "multipart writer not opened", K(ret));
+  } else if (OB_FAIL(multipart_writer_->complete())) {
+    STORAGE_LOG(WARN, "failed to complete", K(ret));
+  }
+
+  print_access_storage_log("ObStorageMultiPartWriter::complete", uri_, start_ts, 0);
+  return ret;
+}
+
+int ObStorageMultiPartWriter::abort()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  if (OB_FAIL(ret)) {
+  } else if (ObStorageGlobalIns::get_instance().is_io_prohibited()) {
+    ret = OB_BACKUP_IO_PROHIBITED;
+    STORAGE_LOG(WARN, "current observer backup io is prohibited");
+  } else if (OB_ISNULL(multipart_writer_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "multipart writer not opened", K(ret));
+  } else if (OB_FAIL(multipart_writer_->abort())) {
+    STORAGE_LOG(WARN, "failed to abort", K(ret));
+  }
+
+  print_access_storage_log("ObStorageMultiPartWriter::abort", uri_, start_ts, 0);
+  return ret;
+}
+
 int ObStorageMultiPartWriter::close()
 {
   int ret = OB_SUCCESS;

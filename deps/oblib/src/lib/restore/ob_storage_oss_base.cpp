@@ -213,39 +213,40 @@ static void convert_io_error(aos_status_t *aos_ret, int &ob_errcode)
     ob_errcode = OB_OSS_ERROR;
   } else if (!aos_status_is_ok(aos_ret)) {
     switch (aos_ret->code) {
-
-    case OSS_PERMISSION_DENIED: {
+      case OSS_PERMISSION_DENIED: {
         ob_errcode = OB_BACKUP_PERMISSION_DENIED;
-    break;
-     }
-
-    case OSS_OBJECT_NOT_EXIST: {
-        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
-    break;
-     }
-
-    case OSS_OBJECT_PWRITE_OFFSET_NOT_MATH: {
-        ob_errcode = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
-    break;
-     }
-
-    case OSS_LIMIT_EXCEEDED: {
-        ob_errcode = OB_IO_LIMIT;
-    break;
-     }
-
-    case OSS_BAD_REQUEST: {
-      if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
-        ob_errcode = OB_CHECKSUM_ERROR;
-      } else {
-        ob_errcode = OB_OSS_ERROR;
+        break;
       }
-    }
 
-    default: {
-      ob_errcode = OB_OSS_ERROR;
-    }
-  } // end swtich
+      case OSS_OBJECT_NOT_EXIST: {
+        ob_errcode = OB_BACKUP_FILE_NOT_EXIST;
+        break;
+      }
+
+      case OSS_OBJECT_PWRITE_OFFSET_NOT_MATH: {
+        ob_errcode = OB_BACKUP_PWRITE_OFFSET_NOT_MATCH;
+        break;
+      }
+
+      case OSS_LIMIT_EXCEEDED: {
+        ob_errcode = OB_IO_LIMIT;
+        break;
+      }
+
+      case OSS_BAD_REQUEST: {
+        if (0 == STRCMP("InvalidDigest", aos_ret->error_code)) {
+          ob_errcode = OB_CHECKSUM_ERROR;
+        } else {
+          ob_errcode = OB_OSS_ERROR;
+        }
+        break;
+      }
+
+      default: {
+        ob_errcode = OB_OSS_ERROR;
+        break;
+      }
+    } // end swtich
   }
 }
 
@@ -762,11 +763,6 @@ int ObStorageOssMultiPartWriter::write(const char * buf,const int64_t size)
     if (base_buf_pos_ == OSS_BASE_BUFFER_SIZE) {
       if (OB_FAIL(write_single_part())) {
         OB_LOG(WARN, "write file error", K(bucket_), K(object_), K(ret));
-
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(cleanup())) {
-          OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K(upload_id_.data));
-        }
       } else {
         base_buf_pos_ = 0;
       }
@@ -883,10 +879,9 @@ int ObStorageOssMultiPartWriter::write_single_part()
   return ret;
 }
 
-int ObStorageOssMultiPartWriter::close()
+int ObStorageOssMultiPartWriter::complete()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   const int64_t start_time = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!is_inited())) {
@@ -894,22 +889,17 @@ int ObStorageOssMultiPartWriter::close()
     OB_LOG(WARN, "oss client not inited", K(ret));
   } else if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_OSS_ERROR;
-    OB_LOG(WARN, "oss writer cannot close before it is opened", K(ret));
+    OB_LOG(WARN, "oss multipart writer cannot close before it is opened", K(ret));
   } else if (0 != base_buf_pos_) {//base_buf has data
-    if(OB_SUCCESS != (ret = write_single_part())) {
+    if (OB_FAIL(write_single_part())) {
       OB_LOG(WARN, "write the last size to oss error",
           K_(base_buf_pos), K_(bucket), K_(object), K(ret));
-      ret = OB_OSS_ERROR;
-
-      if (OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K(upload_id_.data));
-      }
     } else {
       base_buf_pos_ = 0;
     }
   }
 
-  if (OB_SUCCESS == ret) {
+  if (OB_SUCC(ret)) {
     aos_string_t bucket;
     aos_string_t object;
     aos_str_set(&bucket, bucket_.ptr());
@@ -987,30 +977,34 @@ int ObStorageOssMultiPartWriter::close()
       }
     }
 
-    if (OB_FAIL(ret) && OB_TMP_FAIL(cleanup())) {
-      OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K(upload_id_.data));
-    }
   }
-
-  reset();
 
   const int64_t total_cost_time = ObTimeUtility::current_time() - start_time;
   if (total_cost_time > 3 * 1000 * 1000) {
-    OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "oss writer close cost too much time", K(total_cost_time), K(ret));
+    OB_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "oss writer complete cost too much time",
+        K(total_cost_time), K(ret));
   }
 
   return ret;
 }
 
-int ObStorageOssMultiPartWriter::cleanup()
+int ObStorageOssMultiPartWriter::close()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
+  reset();
+  return ret;
+}
+
+int ObStorageOssMultiPartWriter::abort()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     OB_LOG(WARN, "oss client not inited", K(ret));
-  } else if(OB_UNLIKELY(!is_opened_)) {
+  } else if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_OSS_ERROR;
-    OB_LOG(WARN, "oss writer cannot cleanup before it is opened", K(ret));
+    OB_LOG(WARN, "oss multipart writer cannot abort before it is opened", K(ret));
   } else {
     aos_string_t bucket;
     aos_string_t object;
@@ -1022,7 +1016,7 @@ int ObStorageOssMultiPartWriter::cleanup()
     if (OB_ISNULL(aos_ret = oss_abort_multipart_upload(oss_option_, &bucket, &object,
         &upload_id_, &resp_headers)) || !aos_status_is_ok(aos_ret)) {
       convert_io_error(aos_ret, ret);
-      OB_LOG(WARN, "Abort the multipart error", K(bucket_), K(object_), K(ret));
+      OB_LOG(WARN, "Abort the multipart error", K_(bucket), K_(object), K(ret));
     }
   }
   return ret;

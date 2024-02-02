@@ -387,13 +387,15 @@ public:
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info);
   int write(const char *buf, const int64_t size);
   int pwrite(const char *buf, const int64_t size, const int64_t offset);
+  int complete();
+  int abort();
   int close();
   bool is_opened()  const {return is_opened_;}
   int64_t get_length();
   TO_STRING_KV(KP_(multipart_writer), K_(start_ts), K_(is_opened), KCSTRING_(uri));
 
 protected:
-  ObIStorageWriter *multipart_writer_;
+  ObIStorageMultiPartWriter *multipart_writer_;
   ObStorageFileMultiPartWriter file_multipart_writer_;
   ObStorageCosMultiPartWriter cos_multipart_writer_;
   ObStorageOssMultiPartWriter oss_multipart_writer_;

@@ -288,7 +288,8 @@ int ObAppendableFragmentMeta::parse_from(ObString &fragment_name)
         ret = OB_INVALID_ARGUMENT;
         OB_LOG(WARN, "invalid fragment suffix", K(ret), K(fragment_suffix));
       } else {
-        STRCPY(suffix_, fragment_suffix);
+        MEMCPY(suffix_, fragment_suffix, strlen(fragment_suffix));
+        suffix_[strlen(fragment_suffix)] = '\0';
       }
     }
   }

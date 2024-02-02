@@ -599,6 +599,7 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
     }
     default: {
       ob_errcode = OB_S3_ERROR;
+      break;
     }
   }
 }
@@ -624,6 +625,7 @@ static void convert_io_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
     }
     default: {
       convert_http_error(s3_err, ob_errcode);
+      break;
     }
   }
 }
@@ -1838,7 +1840,6 @@ void ObStorageS3MultiPartWriter::reset()
 int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_S3_ERROR;
@@ -1876,10 +1877,6 @@ int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *
         file_length_ = 0;
         is_opened_ = true;
       }
-
-      if (OB_FAIL(ret) && OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
-      }
     }
   }
 
@@ -1892,7 +1889,6 @@ int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *
 int ObStorageS3MultiPartWriter::write_(const char *buf, const int64_t size)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   int64_t fill_size = 0;
   int64_t buf_pos = 0;
   ObExternalIOCounterGuard io_guard;
@@ -1912,10 +1908,6 @@ int ObStorageS3MultiPartWriter::write_(const char *buf, const int64_t size)
     if (base_buf_pos_ == S3_MULTIPART_UPLOAD_BUFFER_SIZE) {
       if (OB_FAIL(write_single_part_())) {
         OB_LOG(WARN, "failed to write single s3 part", K(ret), K_(bucket), K_(object));
-
-        if (OB_TMP_FAIL(cleanup())) {
-          OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
-        }
       } else {
         base_buf_pos_ = 0;
       }
@@ -1934,21 +1926,16 @@ int ObStorageS3MultiPartWriter::pwrite_(const char *buf, const int64_t size, con
   return write(buf, size);
 }
 
-int ObStorageS3MultiPartWriter::close_()
+int ObStorageS3MultiPartWriter::complete_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;
   if (OB_UNLIKELY(!is_opened_)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "s3 multipart writer cannot close before it is opened", K(ret));
+    OB_LOG(WARN, "s3 multipart writer cannot compelete before it is opened", K(ret));
   } else if (base_buf_pos_ > 0) {
     if (OB_FAIL(write_single_part_())) {
       OB_LOG(WARN, "failed to upload last part into s3", K(ret), K_(base_buf_pos));
-
-      if (OB_TMP_FAIL(cleanup())) {
-        OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
-      }
     } else {
       base_buf_pos_ = 0;
     }
@@ -2002,16 +1989,19 @@ int ObStorageS3MultiPartWriter::close_()
           K(ret), K_(bucket), K_(object));
     }
 
-    if (OB_FAIL(ret) && OB_TMP_FAIL(cleanup())) {
-      OB_LOG(WARN, "fail to abort multiupload", K(ret), K(tmp_ret), K_(upload_id));
-    }
   }
+  return ret;
+}
 
+int ObStorageS3MultiPartWriter::close_()
+{
+  int ret = OB_SUCCESS;
+  ObExternalIOCounterGuard io_guard;
   reset();
   return ret;
 }
 
-int ObStorageS3MultiPartWriter::cleanup()
+int ObStorageS3MultiPartWriter::abort_()
 {
   int ret = OB_SUCCESS;
   ObExternalIOCounterGuard io_guard;

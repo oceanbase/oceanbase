@@ -443,6 +443,17 @@ int ObExternTabletMetaWriter::close()
   } else if (OB_FAIL(file_write_ctx_.close())) {
     LOG_WARN("failed to close file writer", K(ret));
   }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
+      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
+    }
+  } else {
+    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+      ret = COVER_SUCC(tmp_ret);
+      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
+    }
+  }
   if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
     ret = COVER_SUCC(tmp_ret);
     LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));

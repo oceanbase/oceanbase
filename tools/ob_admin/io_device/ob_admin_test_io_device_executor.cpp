@@ -268,6 +268,7 @@ int ObAdminTestIODeviceExecutor::test_appendable_check_file_(const char* check_f
 int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* check_file_dir)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObBackupIoAdapter util;
   share::ObBackupStorageInfo storage_info;
   ObIOFd fd;
@@ -296,26 +297,39 @@ int ObAdminTestIODeviceExecutor::test_multipart_upload_check_file_(const char* c
     STORAGE_LOG(WARN, "device handle is NULL", K(ret), K(device_handle), K_(backup_path));
   } else if (OB_FAIL(device_handle->write(fd, check_file_content, real_len, write_size))) {
     STORAGE_LOG(WARN, "failed to write check file", K(ret), K(check_file_content), K(real_len));
-  } else if (OB_FAIL(util.close_device_and_fd(device_handle, fd))) {
-    STORAGE_LOG(WARN, "fail to close device and fd", K(ret), KP(device_handle), K(fd));
-  } else if (OB_FAIL(util.is_exist(check_file_path, &storage_info, is_exist))) {
-    STORAGE_LOG(WARN, "failed to check if normal check file is exist", K(ret), K(check_file_path));
-  } else if (!is_exist) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "normal check file does not exist!", K(ret), K(check_file_path));
-  } else if (OB_FAIL(util.get_file_length(check_file_path, &storage_info, check_file_len))) {
-    STORAGE_LOG(WARN, "failed to get check file length", K(ret), K(check_file_path));
-  } else if (real_len != check_file_len) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "get check file length does not match real length", K(ret), K(check_file_path), K(real_len), K(check_file_len));
-  } else if (OB_ISNULL(read_file_buf = reinterpret_cast<char*>(allocator_.alloc(check_file_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "failed to allocate buf", K(ret), K(check_file_path), K(check_file_len));
-  } else if (OB_FAIL(util.read_single_file(check_file_path, &storage_info, read_file_buf, check_file_len, read_size))) {
-    STORAGE_LOG(WARN, "failed to read check file",  K(ret), K(check_file_path), K(check_file_len));
-  } else if (read_size != check_file_len) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "read check file length does not match real length",  K(ret), K(check_file_path), K(read_size), K(check_file_len));
+  } else if (OB_FAIL(device_handle->complete(fd))) {
+    STORAGE_LOG(WARN, "fail to complete multipart upload", K(ret), K(device_handle), K(fd));
+  }
+  if (OB_SUCCESS != ret) {
+    if (OB_TMP_FAIL(device_handle->abort(fd))) {
+      ret = COVER_SUCC(tmp_ret);
+      STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+    }
+  }
+  if (OB_TMP_FAIL(util.close_device_and_fd(device_handle, fd))) {
+    ret = COVER_SUCC(tmp_ret);
+    STORAGE_LOG(WARN, "fail to close device and fd", K(ret), K(tmp_ret), K(device_handle), K(fd));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(util.is_exist(check_file_path, &storage_info, is_exist))) {
+      STORAGE_LOG(WARN, "failed to check if normal check file is exist", K(ret), K(check_file_path));
+    } else if (!is_exist) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "normal check file does not exist!", K(ret), K(check_file_path));
+    } else if (OB_FAIL(util.get_file_length(check_file_path, &storage_info, check_file_len))) {
+      STORAGE_LOG(WARN, "failed to get check file length", K(ret), K(check_file_path));
+    } else if (real_len != check_file_len) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "get check file length does not match real length", K(ret), K(check_file_path), K(real_len), K(check_file_len));
+    } else if (OB_ISNULL(read_file_buf = reinterpret_cast<char*>(allocator_.alloc(check_file_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to allocate buf", K(ret), K(check_file_path), K(check_file_len));
+    } else if (OB_FAIL(util.read_single_file(check_file_path, &storage_info, read_file_buf, check_file_len, read_size))) {
+      STORAGE_LOG(WARN, "failed to read check file",  K(ret), K(check_file_path), K(check_file_len));
+    } else if (read_size != check_file_len) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "read check file length does not match real length",  K(ret), K(check_file_path), K(read_size), K(check_file_len));
+    }
   }
   return ret;
 }
@@ -406,6 +420,7 @@ int ObAdminTestIODeviceExecutor::test_clean_backup_file_()
 int ObAdminTestIODeviceExecutor::test_backup_data_()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObBackupIoAdapter util;
   share::ObBackupStorageInfo storage_info;
   ObIOFd fd;
@@ -455,10 +470,22 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
         total_size += buf_size;
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(device_handle->complete(fd))) {
+        STORAGE_LOG(WARN, "fail to complete multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+      }
+    } else {
+      if (OB_TMP_FAIL(device_handle->abort(fd))) {
+        ret = COVER_SUCC(tmp_ret);
+        STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+      }
+    }
+    if (OB_TMP_FAIL(util.close_device_and_fd(device_handle, fd))) {
+      ret = COVER_SUCC(tmp_ret);
+      STORAGE_LOG(WARN, "fail to close device and fd", K(ret), K(device_handle), K(fd));
+    }
     if(OB_SUCC(ret)) {
-      if (OB_FAIL(util.close_device_and_fd(device_handle, fd))) {
-        STORAGE_LOG(WARN, "fail to close multipart writer and release device!", K(ret), K(data_file_path));
-      } else if (OB_FAIL(util.get_file_length(data_file_path, &storage_info, read_size))) {
+       if (OB_FAIL(util.get_file_length(data_file_path, &storage_info, read_size))) {
         STORAGE_LOG(WARN, "fail to get multipart upload file length", K(ret), K(data_file_path));
       } else if (read_size != total_size) {
         ret = OB_ERR_UNEXPECTED;

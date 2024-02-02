@@ -548,6 +548,10 @@ int TestCommonStorage::check_basic_multipartwriter()
           }
         }
 
+        if (OB_SUCC(ret) && OB_FAIL(multiwriter.complete())) {
+          OB_LOG(WARN, "fail to complete", K(ret));
+        }
+
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(multiwriter.close())) {
           ret = (OB_SUCCESS != ret) ? ret : tmp_ret;

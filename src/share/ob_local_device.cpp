@@ -303,6 +303,18 @@ int ObLocalDevice::open(const char *pathname, const int flags, const mode_t mode
   return ret;
 }
 
+int ObLocalDevice::complete(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::abort(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
+}
+
 int ObLocalDevice::close(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;

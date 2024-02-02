@@ -499,7 +499,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3AppendWriter);
 };
 
-class ObStorageS3MultiPartWriter : public ObStorageS3Base, public ObIStorageWriter
+class ObStorageS3MultiPartWriter : public ObStorageS3Base, public ObIStorageMultiPartWriter
 {
 public:
   ObStorageS3MultiPartWriter();
@@ -518,6 +518,14 @@ public:
   {
     return do_safely(&ObStorageS3MultiPartWriter::pwrite_, this, buf, size, offset);
   }
+  virtual int complete() override
+  {
+    return do_safely(&ObStorageS3MultiPartWriter::complete_, this);
+  }
+  virtual int abort() override
+  {
+    return do_safely(&ObStorageS3MultiPartWriter::abort_, this);
+  }
   virtual int close() override
   {
     return do_safely(&ObStorageS3MultiPartWriter::close_, this);
@@ -525,12 +533,12 @@ public:
   virtual int64_t get_length() const override { return file_length_; }
   virtual bool is_opened() const override { return is_opened_; }
 
-  int cleanup();
-
 private:
   int open_(const ObString &uri, ObObjectStorageInfo *storage_info);
   int write_(const char *buf, const int64_t size);
   int pwrite_(const char *buf, const int64_t size, const int64_t offset);
+  int complete_();
+  int abort_();
   int close_();
   int write_single_part_();
 
