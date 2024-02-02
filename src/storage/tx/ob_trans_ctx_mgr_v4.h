@@ -580,7 +580,6 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(active_tx_count),
-               K_(total_active_readonly_request_count),
                K_(ls_retain_ctx_mgr),
                K_(aggre_rec_scn),
                K_(prev_aggre_rec_scn),
