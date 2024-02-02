@@ -987,7 +987,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
-              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
+              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler, *part_trans_parser_,
               cluster_info.cluster_id_, TCONF, start_seq))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }

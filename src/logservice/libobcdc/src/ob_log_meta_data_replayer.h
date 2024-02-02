@@ -17,6 +17,7 @@
 #include "ob_log_part_trans_task_queue.h"       // SafePartTransTaskQueue
 #include "ob_log_meta_data_struct.h"            // ObDictTenantInfo
 #include "ob_log_schema_incremental_replay.h"   // ObLogSchemaIncReplay
+#include "ob_log_part_trans_parser.h"           // IObLogPartTransParser
 
 namespace oceanbase
 {
@@ -50,7 +51,7 @@ public:
       ObDictTenantInfo &tenant_info);
 
 public:
-  int init();
+  int init(IObLogPartTransParser &part_trans_parser);
   void destroy();
 
 private:
@@ -86,10 +87,16 @@ private:
       PartTransTask &part_trans_task,
       ReplayInfoStat &replay_info_stat);
 
+  bool need_remove_by_op_type_(const ObSchemaOperationType op_type)
+  {
+    return OB_DDL_DROP_TABLE == op_type || OB_DDL_DROP_INDEX == op_type || OB_DDL_DROP_GLOBAL_INDEX == op_type;
+  }
+
 private:
   bool is_inited_;
   SafePartTransTaskQueue queue_;
   ObLogSchemaIncReplay schema_inc_replay_;
+  IObLogPartTransParser *part_trans_parser_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogMetaDataReplayer);
 };

@@ -1664,6 +1664,22 @@ int read_from_file(const char *file_path, char *buf, const int64_t buf_len)
   return ret;
 }
 
+int convert_to_compat_mode(const common::ObCompatibilityMode &compatible_mode,
+    lib::Worker::CompatMode &compat_mode)
+{
+  int ret = OB_SUCCESS;
+  if (common::ObCompatibilityMode::MYSQL_MODE == compatible_mode) {
+    compat_mode = lib::Worker::CompatMode::MYSQL;
+  } else if (common::ObCompatibilityMode::ORACLE_MODE == compatible_mode) {
+    compat_mode = lib::Worker::CompatMode::ORACLE;
+  } else {
+    ret = OB_INVALID_DATA;
+    LOG_ERROR("invalid compatible_mode", KR(ret), K(compatible_mode));
+  }
+
+  return ret;
+}
+
 //////////////////////////////////////////////////////////////////
 
 } // namespace libocdc
