@@ -926,13 +926,13 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
       if (OB_NOT_NULL(current_di->get_max_wait())) {
         if (OB_UNLIKELY(current_di != di_)) {
           if (max_wait_ != current_di->get_max_wait()) {
-            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", K(di_),
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this),
                 K(current_di));
           }
           di_ = current_di;
         }
       } else {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", K(di_), K(current_di));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", KPC(this), K(current_di));
       }
       if (OB_LIKELY(NULL != prev_wait_)) {
         ObWaitEventDesc *max_wait = di_->get_max_wait();
@@ -978,13 +978,13 @@ ObTotalWaitGuard::~ObTotalWaitGuard()
       if (OB_NOT_NULL(current_di->get_total_wait())) {
         if (OB_UNLIKELY(current_di != di_)) {
           if (total_wait_ != current_di->get_total_wait()) {
-            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", K(di_),
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this),
                 K(current_di));
           }
           di_ = current_di;
         }
       } else {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", K(di_), K(current_di));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", KPC(this), K(current_di));
       }
 
       if (OB_LIKELY(NULL != prev_wait_)) {

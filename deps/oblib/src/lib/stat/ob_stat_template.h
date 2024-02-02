@@ -32,7 +32,7 @@ public:
   void wrlock();
   void wr2rdlock();
   void unlock();
-  inline uint32_t get_lock() {return lock_;}
+  inline uint32_t get_lock() const {return lock_;}
 private:
   static const uint32_t WRITE_MASK = 1<<30;
   volatile uint32_t lock_;

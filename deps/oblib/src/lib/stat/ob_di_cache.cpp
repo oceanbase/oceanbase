@@ -88,7 +88,8 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
   int conflict_retry_count = 0;
   if (EN_DI_SESSION_CACHE_GET_NODE_CONFLICT) {
     conflict_retry_count = -EN_DI_SESSION_CACHE_GET_NODE_CONFLICT;
-    LOG_INFO("di session cache node retry cnt", K(session_id), K(conflict_retry_count));
+    LOG_INFO("di session cache node retry cnt", K(session_id), K(conflict_retry_count),
+        K(session_collect), KPC(session_collect));
   }
   int cnt = 0;
 #endif
@@ -98,10 +99,20 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
       if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
 #ifdef ENABLE_DEBUG_LOG
         if (conflict_retry_count) {
-          bucket.list_.remove(session_collect);
-          session_collect->clean();
-          session_collect->lock_.unlock();
-          ret = OB_ENTRY_NOT_EXIST;
+          bucket.lock_.unlock();
+          bucket.lock_.wrlock();
+          if (session_collect->lock_.get_lock() == 1) {
+            session_collect->lock_.unlock();
+            session_collect->lock_.wrlock();
+            bucket.list_.remove(session_collect);
+            session_collect->clean();
+            session_collect->lock_.unlock();
+            ret = OB_ENTRY_NOT_EXIST;
+          } else {
+            // current collect hold by several session. we cannot release it right now.
+            bucket.lock_.unlock();
+            break;
+          }
         } else {
           bucket.lock_.unlock();
           break;
@@ -169,7 +180,7 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
   }
 #ifdef ENABLE_DEBUG_LOG
   if (conflict_retry_count) {
-    LOG_INFO("get refreshed di session cache", K(session_id), K(session_collect));
+    LOG_INFO("get refreshed di session cache", K(session_id), K(session_collect), KPC(session_collect));
   }
 #endif
   return ret;
