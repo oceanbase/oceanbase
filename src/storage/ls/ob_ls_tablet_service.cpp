@@ -3212,7 +3212,6 @@ int ObLSTabletService::lock_rows(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
     const ObDMLBaseParam &dml_param,
-    const int64_t abs_lock_timeout,
     const ObLockFlag lock_flag,
     const bool is_sfu,
     ObNewRowIterator *row_iter,
@@ -3255,8 +3254,6 @@ int ObLSTabletService::lock_rows(
     } else {
       timeguard.click("GetIds");
       run_ctx.column_ids_ = &column_ids;
-      ctx.mvcc_acc_ctx_.abs_lock_timeout_ =
-        ObTablet::get_lock_wait_timeout(abs_lock_timeout, dml_param.timeout_);
       ObTabletHandle tmp_handle;
       while (OB_SUCCESS == ret && OB_SUCC(row_iter->get_next_row(row))) {
         // Let ObStorageTableGuard refresh retired memtable, should not hold origin tablet handle
@@ -3300,7 +3297,6 @@ int ObLSTabletService::lock_row(
     ObTabletHandle &tablet_handle,
     ObStoreCtx &ctx,
     const ObDMLBaseParam &dml_param,
-    const int64_t abs_lock_timeout,
     const ObNewRow &row,
     const ObLockFlag lock_flag,
     const bool is_sfu)
@@ -3329,8 +3325,6 @@ int ObLSTabletService::lock_row(
     } else if (OB_FAIL(run_ctx.relative_table_.get_rowkey_column_ids(col_desc))) {
       LOG_WARN("Fail to get column desc", K(ret));
     } else {
-      ctx.mvcc_acc_ctx_.abs_lock_timeout_ =
-        ObTablet::get_lock_wait_timeout(abs_lock_timeout, dml_param.timeout_);
       if (ObTimeUtility::current_time() > dml_param.timeout_) {
         ret = OB_TIMEOUT;
         int64_t cur_time = ObClockGenerator::getClock();

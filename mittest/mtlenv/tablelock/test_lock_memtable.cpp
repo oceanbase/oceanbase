@@ -650,7 +650,7 @@ TEST_F(TestLockMemtable, lock_twice_out)
   ret = memtable_.lock(param,
                        store_ctx2,
                        lock_second);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+  ASSERT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, ret);
 
   // 2.1 update to complete
   LOG_INFO("TestLockMemtable::lock_twice_out 2.1");
@@ -687,7 +687,7 @@ TEST_F(TestLockMemtable, lock_twice_out)
   ret = memtable_.lock(param,
                        store_ctx2,
                        lock_second);
-  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
+  ASSERT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, ret);
   // clean: unlock complete.
   LOG_INFO("TestLockMemtable::lock_twice_out clean");
   share::SCN min_commited_scn;

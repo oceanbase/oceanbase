@@ -74,7 +74,6 @@ int ObDDLLock::lock_for_add_drop_index_in_trans(
       LOG_WARN("failed to lock index table", K(ret));
     }
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -132,7 +131,6 @@ int ObDDLLock::lock_for_add_drop_index(
       }
     }
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -187,7 +185,6 @@ int ObDDLLock::lock_for_add_lob_in_trans(
   } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id, data_tablet_ids, ROW_EXCLUSIVE, timeout_us, trans))) {
     LOG_WARN("failed to lock data table tablets", K(ret));
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -212,7 +209,6 @@ int ObDDLLock::lock_for_add_partition_in_trans(
   } else {
     LOG_INFO("skip ddl lock", K(ret), K(table_id));
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -242,7 +238,6 @@ int ObDDLLock::lock_for_drop_partition_in_trans(
   } else {
     LOG_INFO("skip ddl lock", K(ret), K(table_id));
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -262,7 +257,6 @@ int ObDDLLock::lock_for_common_ddl_in_trans(const ObTableSchema &table_schema, O
   } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id, table_id, ROW_SHARE, timeout_us, trans))) {
     LOG_WARN("failed to lock ddl table", K(ret));
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -282,7 +276,6 @@ int ObDDLLock::lock_for_common_ddl(
   } else if (OB_FAIL(ObOnlineDDLLock::lock_table(tenant_id, table_id, ROW_SHARE, lock_owner, timeout_us, trans))) {
     LOG_WARN("failed to lock ddl table", K(ret));
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
@@ -325,7 +318,6 @@ int ObDDLLock::lock_for_offline_ddl(
       LOG_WARN("failed to check tablet in same ls", K(ret));
     }
   }
-  ret = share::ObDDLUtil::is_table_lock_retry_ret_code(ret) ? OB_EAGAIN : ret;
   return ret;
 }
 
