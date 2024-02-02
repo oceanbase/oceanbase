@@ -166,6 +166,9 @@ enum ObTableModeFlag
   TABLE_MODE_NORMAL = 0,
   TABLE_MODE_QUEUING = 1,
   TABLE_MODE_PRIMARY_AUX_VP = 2,
+  TABLE_MODE_QUEUING_ENHANCED = 3,  // Placeholder: ENHANCED/SUPERIOR/PREMIUM will be introduced in 4.2.3 and not supported by resolver now.
+  TABLE_MODE_QUEUING_SUPERIOR = 4,
+  TABLE_MODE_QUEUING_PREMIUM = 5,
   TABLE_MODE_MAX,
 };
 
