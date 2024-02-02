@@ -402,6 +402,7 @@ int ObMPStmtPrexecute::clean_ps_stmt(ObSQLSessionInfo &session,
      *    只有 THIS_WORKER.need_retry() 的时候队列重试需要清理，
      *    其他时候都退化成了 local 重试，不需要清理
      */
+    get_ctx().cur_sql_ = sql_;
     if (OB_FAIL(session.close_ps_stmt(stmt_id_))) {
       LOG_WARN("close cursor failed.", K(ret), K(stmt_id_));
     }
