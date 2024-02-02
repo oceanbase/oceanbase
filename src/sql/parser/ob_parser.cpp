@@ -558,13 +558,30 @@ int ObParser::split_start_with_pl(const ObString &stmt,
     ObString part(remain, stmt.ptr());
 
     if (OB_FAIL(tmp_ret = parse(part, parse_result, parse_mode, false, true))) {
-      ret = queries.push_back(part);
+      if(parse_result.result_tree_ != NULL && parse_result.result_tree_->num_child_ > 0) {
+        ret = OB_SUCCESS;
+        for (int64_t i = 0; OB_SUCC(ret) && i < parse_result.result_tree_->num_child_; ++i) {
+          int64_t str_len = parse_result.result_tree_->children_[i]->str_len_;
+          int64_t offset = parse_result.result_tree_->children_[i]->pos_;
+          ObString query(str_len, stmt.ptr() + offset);
+          OZ(queries.push_back(query));
+        }
+        int64_t success_len = 0;
+        OX(success_len = parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->str_len_ +
+          parse_result.result_tree_->children_[parse_result.result_tree_->num_child_ - 1]->pos_);
+        if(OB_SUCC(ret) && ';' == stmt[success_len]) success_len++;
+        CK(success_len < remain);
+        ObString error_part(remain - success_len, stmt.ptr() + success_len);
+        OZ(queries.push_back(error_part));
+      } else {
+        ret = queries.push_back(part);
+      }
       if (OB_SUCCESS == ret) {
         parse_stat.parse_fail_ = true;
         parse_stat.fail_query_idx_ = queries.count() - 1;
         parse_stat.fail_ret_ = tmp_ret;
       }
-      LOG_WARN("fail parse multi part", K(part), K(stmt), K(ret));
+      LOG_WARN("fail parse multi part", K(part), K(stmt), K(tmp_ret));
     } else {
       CK(remain == parse_result.end_col_);
       CK(nullptr != bak_allocator);
