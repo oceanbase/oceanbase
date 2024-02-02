@@ -106,6 +106,7 @@ int ObCDCTenantSQLServerProvider::prepare_refresh()
   } else if (OB_FAIL(query_tenant_server_())) {
     LOG_WARN("query_tenant_server_ failed", KR(ret));
   }
+  LOG_INFO("prepare_refresh tenant sql_server_provider done", KR(ret));
 
   return ret;
 }
@@ -120,6 +121,7 @@ int ObCDCTenantSQLServerProvider::end_refresh()
   } else if (OB_FAIL(refresh_server_lock_.unlock())) {
     LOG_ERROR("release refresh_server_lock_ failed", KR(ret), K(this));
   }
+  LOG_INFO("refresh tenant sql_server_provider end", KR(ret));
 
   return ret;
 }
@@ -296,7 +298,7 @@ int ObCDCTenantSQLServerProvider::query_tenant_server_()
             LOG_WARN("tenant_server_list is empty but tenant is not dropped", K(tenant_id), K(tenant_server_list));
           }
         } else {
-          LOG_DEBUG("find tenant servers", K(tenant_id), K(tenant_server_list));
+          LOG_INFO("find tenant servers", K(tenant_id), K(tenant_server_list));
         }
 
         if (OB_NOT_NULL(tenant_server_list)) {

@@ -133,9 +133,10 @@ int ObLogLsGetter::get_ls_ids(
       // query and set
       if (OB_FAIL(query_and_set_tenant_ls_info_(tenant_id, snapshot_ts))) {
         LOG_ERROR("query_and_set_tenant_ls_info_ failed", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_ls_ids_cache_.get(tenant_id, ls_ids))) {
+        LOG_ERROR("get tenant_ls_ids from cache failed", KR(ret), K(tenant_id), K(snapshot_ts));
       }
     }
-  } else {
   }
 
   if (OB_SUCC(ret)) {
@@ -143,6 +144,10 @@ int ObLogLsGetter::get_ls_ids(
       if (OB_FAIL(ls_id_array.push_back(ls_ids.at(idx)))) {
         LOG_ERROR("ls_id_array push_back failed", KR(ret), K(ls_id_array));
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      LOG_INFO("get_ls_ids succ", K(tenant_id), K(ls_id_array), K(snapshot_ts));
     }
   }
 

@@ -81,6 +81,11 @@ private:
       ObLobDataOutRowCtxList &task,
       ObLobDataGetCtx &lob_data_get_ctx,
       volatile bool &stop_flag);
+  int check_empty_outrow_lob_col_(
+      ObLobDataGetCtx &lob_data_get_ctx,
+      uint32_t seq_no_cnt,
+      uint32_t del_seq_no_cnt,
+      bool &is_update_outrow_lob_from_empty_to_empty);
   int get_lob_col_fra_ctx_list_(
       const bool is_new_col,
       const transaction::ObTxSEQ &seq_no_start,
