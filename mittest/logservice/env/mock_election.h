@@ -25,6 +25,7 @@ public:
   virtual ~MockElection() { }
   int init(const int64_t id, const common::ObAddr &self);
   void stop() override final;
+  int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final;
   // 设置成员列表
   int set_memberlist(const MemberList &new_member_list) override final;
   // 获取选举当前的角色

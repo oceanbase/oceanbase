@@ -1236,8 +1236,9 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
                                       TimeoutChecker &not_timeout)
 {
   int ret = OB_SUCCESS;
+  bool has_renew_barrier = false;
   while (OB_SUCC(ret) && OB_SUCC(not_timeout())) {
-    bool need_wlock = (false == state_mgr_.is_changing_config_with_arb());
+    bool need_wlock = !has_renew_barrier;
     bool need_rlock = !need_wlock;
     if (DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
         true == ATOMIC_LOAD(&has_higher_prio_config_change_)) {
@@ -1248,10 +1249,17 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
     }
     if (true == need_wlock) {
       WLockGuard guard(lock_);
+      // if the reconfiguration request do not change memberlist or replica_num,
+      // it's safe to commit logs after the reconfiguration barrier before the
+      // reconfiguration log is committed.
+      const bool do_not_change_quorum = is_must_not_change_replica_num(args.type_);
       if (OB_FAIL(config_mgr_.renew_config_change_barrier())) {
         PALF_LOG(WARN, "renew_config_change_barrier failed", KR(ret), KPC(this), K(args));
-      } else if (OB_FAIL(state_mgr_.set_changing_config_with_arb())) {
+      } else if (false == do_not_change_quorum &&
+          OB_FAIL(state_mgr_.set_changing_config_with_arb())) {
         PALF_LOG(WARN, "set_changing_config_with_arb failed", KR(ret), KPC(this), K(args));
+      } else {
+        has_renew_barrier = true;
       }
     } else if (true == need_rlock) {
       RLockGuard guard(lock_);
@@ -1259,10 +1267,12 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
         PALF_LOG(WARN, "wait_log_barrier_ failed", KR(ret), KPC(this), K(args));
       } else if (OB_EAGAIN == ret) {
         ret = OB_SUCCESS;
-        ob_usleep(10 * 1000);
       } else {
         break;
       }
+    }
+    if (OB_SUCC(ret) && true == need_rlock) {
+      ob_usleep(10 * 1000);
     }
   }
   return ret;
@@ -1357,12 +1367,30 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       }
     }
     time_guard.click("precheck");
-    // step 3: waiting for log barrier if a arbitration member exists
+    // step 3: check whether the new config info can be set to the election module
+    while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
+      {
+        RLockGuard guard(lock_);
+        LogConfigVersion config_version;
+        if (OB_FAIL(config_mgr_.get_config_version(config_version))) {
+          PALF_LOG(WARN, "get_config_version failed", KR(ret), KPC(this), K(config_version));
+        } else if (OB_FAIL(config_version.inc_update_version(proposal_id))) {
+          PALF_LOG(WARN, "inc_update_version failed", KR(ret), KPC(this), K(config_version));
+        } else if (OB_FAIL(election_.can_set_memberlist(config_version))) {
+          ret = (OB_OP_NOT_ALLOW == ret)? OB_SUCCESS: ret;
+        } else {
+          break;
+        }
+      }
+      ob_usleep(50 * 1000);
+    }
+    time_guard.click("wait_ele");
+    // step 4: waiting for log barrier if a arbitration member exists
     if (OB_SUCC(ret) && true == new_config_info.config_.arbitration_member_.is_valid()) {
       ret = wait_log_barrier_(args, new_config_info, not_timeout);
     }
     time_guard.click("wait_barrier");
-    // step 4: motivate reconfiguration
+    // step 5: motivate reconfiguration
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       bool need_wlock = false;
       bool need_rlock = false;
@@ -1387,7 +1415,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         break;
       }
       if (false == need_rlock && false == need_wlock) {
-        const int64_t SLEEP_US = (state_mgr_.is_changing_config_with_arb())? 10 * 1000: 50 * 1000;
+        const int64_t SLEEP_US = (state_mgr_.is_changing_config_with_arb())? 1 * 1000: 50 * 1000;
         ob_usleep(SLEEP_US);
       }
       if (true == need_wlock) {
@@ -4050,22 +4078,29 @@ int PalfHandleImpl::ack_config_log(const common::ObAddr &server,
                                    const LogConfigVersion &config_version)
 {
   int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-  const int64_t &curr_proposal_id = state_mgr_.get_proposal_id();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
-  } else if (msg_proposal_id != curr_proposal_id) {
-    PALF_LOG(WARN, "proposal_id does not match", KR(ret), KPC(this), K(msg_proposal_id),
-        K(server), K(curr_proposal_id));
-  } else if (self_ != state_mgr_.get_leader()) {
-    ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "self is not leader, state not match", KR(ret), KPC(this),
-        K(server), K(msg_proposal_id), K(curr_proposal_id));
-  } else if (OB_FAIL(config_mgr_.ack_config_log(server, msg_proposal_id, config_version))) {
-    PALF_LOG(WARN, "ObLogConfigMgr ack_config_log failed", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
-  } else {
-    PALF_LOG(INFO, "ack_config_log success", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+  bool is_majority = false;
+  do {
+    RLockGuard guard(lock_);
+    const int64_t &curr_proposal_id = state_mgr_.get_proposal_id();
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
+    } else if (msg_proposal_id != curr_proposal_id) {
+      PALF_LOG(WARN, "proposal_id does not match", KR(ret), KPC(this), K(msg_proposal_id),
+          K(server), K(curr_proposal_id));
+    } else if (self_ != state_mgr_.get_leader()) {
+      ret = OB_STATE_NOT_MATCH;
+      PALF_LOG(WARN, "self is not leader, state not match", KR(ret), KPC(this),
+          K(server), K(msg_proposal_id), K(curr_proposal_id));
+    } else if (OB_FAIL(config_mgr_.ack_config_log(server, msg_proposal_id, config_version, is_majority))) {
+      PALF_LOG(WARN, "ObLogConfigMgr ack_config_log failed", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+    } else {
+      PALF_LOG(INFO, "ack_config_log success", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+    }
+  } while (0);
+  if (is_majority) {
+    WLockGuard guard(lock_);
+    (void) config_mgr_.after_config_log_majority(msg_proposal_id, config_version);
   }
   return ret;
 }
@@ -4215,7 +4250,8 @@ int PalfHandleImpl::after_flush_config_change_meta_(const int64_t proposal_id, c
     PALF_LOG(WARN, "LogConfigMgr after_flush_config_log failed", K(ret), KPC(this), K(proposal_id),
         K(config_version));
   } else if (self_ == leader) {
-    if (OB_FAIL(config_mgr_.ack_config_log(self_, proposal_id, config_version))) {
+    bool unused_bool = false;
+    if (OB_FAIL(config_mgr_.ack_config_log(self_, proposal_id, config_version, unused_bool))) {
       PALF_LOG(WARN, "ack_config_log failed", K(ret), KPC(this), K(config_version));
     }
   } else if (false == leader.is_valid()) {
