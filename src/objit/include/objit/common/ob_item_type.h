@@ -2413,6 +2413,7 @@ typedef enum ObItemType
   T_AUTO_INCREMENT_CACHE_SIZE,
 
   T_IGNORE_UNKNOWN_USER,
+  T_SHOW_PROFILE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -837,7 +837,7 @@
   "have_profiling": {
     "id": 55,
     "name": "have_profiling",
-    "default_value": "YES",
+    "default_value": "NO",
     "base_value": "YES",
     "data_type": "varchar",
     "info": "",
@@ -1400,6 +1400,36 @@
     "min_val": "0",
     "max_val": "2147483647",
     "publish_version": "410",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "profiling": {
+    "id": 97,
+    "name": "profiling",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "info": "",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "enum_names": [
+      "OFF",
+      "ON"
+    ],
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "profiling_history_size": {
+    "id": 98,
+    "name": "profiling_history_size",
+    "default_value": "15",
+    "base_value": "15",
+    "data_type": "int",
+    "info": "",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
