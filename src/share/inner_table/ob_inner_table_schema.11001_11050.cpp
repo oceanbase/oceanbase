@@ -10753,7 +10753,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_schema(ObTableSchema &table_schema
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      16, //column_length
+      128, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -12486,7 +12486,7 @@ int ObInnerTableSchema::all_virtual_sql_audit_all_virtual_sql_audit_i1_schema(Ob
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      16, //column_length
+      128, //column_length
       -1, //column_precision
       -1, //column_scale
       false,//is_nullable

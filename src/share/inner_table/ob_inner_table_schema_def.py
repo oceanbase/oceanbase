@@ -7937,7 +7937,7 @@ def_table_schema(
     ('ps_inner_stmt_id', 'int'),
     ('transaction_id', 'int'),
     ('snapshot_version', 'uint'),
-    ('snapshot_source', 'varchar:16'),
+    ('snapshot_source', 'varchar:128'),
     ('request_type', 'int'),
     ('is_batched_multi_stmt', 'bool'),
     ('ob_trace_info', 'varchar:4096'),

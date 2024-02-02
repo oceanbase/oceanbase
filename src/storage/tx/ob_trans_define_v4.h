@@ -270,12 +270,13 @@ struct ObTxReadSnapshot
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
   void specify_snapshot_scn(const share::SCN snapshot);
   void wait_consistency();
-  ObString get_source_name() const;
+  const char* get_source_name() const;
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
   const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
+  int generate_snapshot_source(char *buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
