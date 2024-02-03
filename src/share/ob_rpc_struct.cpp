@@ -7094,7 +7094,16 @@ OB_SERIALIZE_MEMBER((ObLabelSePolicyDDLArg, ObDDLArg), ddl_type_, schema_);
 OB_SERIALIZE_MEMBER((ObLabelSeComponentDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeLabelDDLArg, ObDDLArg), ddl_type_, schema_, policy_name_);
 OB_SERIALIZE_MEMBER((ObLabelSeUserLevelDDLArg, ObDDLArg), ddl_type_, level_schema_, policy_name_);
-OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_);
+OB_SERIALIZE_MEMBER(ObCheckServerEmptyArg, mode_, sys_data_version_, server_id_);
+int ObCheckServerEmptyArg::assign(const ObCheckServerEmptyArg &other)
+{
+  int ret = OB_SUCCESS;
+  mode_ = other.mode_;
+  sys_data_version_ = other.sys_data_version_;
+  server_id_ = other.server_id_;
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObCheckServerForAddingServerArg, mode_, sys_tenant_data_version_, server_id_);
 int ObCheckServerForAddingServerArg::init(
     const Mode &mode,
