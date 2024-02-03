@@ -13,8 +13,8 @@ At present, the guide is composed of the following parts:
     1. [Install toolchain](toolchain.md)
     2. [Get the code, build and run](build-and-run.md)
     3. Set up an IDE
-    4. Write and run unit tests
-    5. Debug and profile
+    4. [Write and run unit tests](unittest.md)
+    5. [Debug](debug.md)
     6. Commit code and submit a pull request
 2. **Contribute to OceanBase**: helps you quickly get involved in the OceanBase community, which illustrates what contributions you can make and how to quickly make one.
 
