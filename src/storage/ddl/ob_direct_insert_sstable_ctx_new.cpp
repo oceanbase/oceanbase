@@ -45,7 +45,7 @@ int64_t ObTenantDirectLoadMgr::generate_context_id()
 }
 
 ObTenantDirectLoadMgr::ObTenantDirectLoadMgr()
-  : is_inited_(false), slice_id_generator_(0), context_id_generator_(0)
+  : is_inited_(false), slice_id_generator_(0), context_id_generator_(0), last_gc_time_(0)
 {
 }
 
@@ -960,18 +960,18 @@ int ObTenantDirectLoadMgr::GetGcCandidateOp::operator() (common::hash::HashMapPa
   const ObTabletDirectLoadMgrKey &key = kv.first;
   ObTabletDirectLoadMgr *tablet_direct_load_mgr = kv.second;
   if (1 == tablet_direct_load_mgr->get_ref()) {
-    if (OB_FAIL(candidate_mgrs_.push_back(key))) {
+    if (OB_FAIL(candidate_mgrs_.push_back(std::make_pair(tablet_direct_load_mgr->get_ls_id(), key)))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }
   return ret;
 }
 
-int ObTenantDirectLoadMgr::gc_tablet_direct_load(ObLS &ls)
+int ObTenantDirectLoadMgr::gc_tablet_direct_load()
 {
   int ret = OB_SUCCESS;
-  if (!tablet_mgr_map_.empty()) {
-    ObSEArray<ObTabletDirectLoadMgrKey, 8> candidate_mgrs;
+  if (!tablet_mgr_map_.empty() && ObDDLUtil::reach_time_interval(10 * 1000 * 1000, last_gc_time_)) {
+    ObSEArray<std::pair<share::ObLSID, ObTabletDirectLoadMgrKey>, 8> candidate_mgrs;
     {
       ObBucketTryRLockAllGuard guard(bucket_lock_);
       if (OB_SUCC(guard.get_ret())) {
@@ -980,12 +980,23 @@ int ObTenantDirectLoadMgr::gc_tablet_direct_load(ObLS &ls)
       }
     }
 
-    for (int64_t i = 0; i < candidate_mgrs.count(); i++) {
-      int tmp_ret = OB_SUCCESS;
-      ObTabletDirectLoadMgrKey mgr_key = candidate_mgrs.at(i);
+    for (int64_t i = 0; i < candidate_mgrs.count(); i++) { // overwrite ret
+      const share::ObLSID &ls_id = candidate_mgrs.at(i).first;
+      const ObTabletDirectLoadMgrKey &mgr_key = candidate_mgrs.at(i).second;
+      ObLSService *ls_svr = MTL(ObLSService*);
+      ObLS *ls = nullptr;
+      ObLSHandle ls_handle;
       ObTabletHandle tablet_handle;
-      if (OB_TMP_FAIL(ls.get_tablet(mgr_key.tablet_id_, tablet_handle))) {
-        LOG_WARN("failed to get tablet", K(ret), K(mgr_key));
+      if (OB_ISNULL(ls_svr)) {
+        LOG_WARN("invalid mtl ObLSService", K(ret));
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+        LOG_WARN("get log stream failed", K(ret), K(ls_id));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("log stream not exist", K(ret));
+      } else if (OB_FAIL(ls->get_tablet(mgr_key.tablet_id_, tablet_handle,
+              ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+        LOG_WARN("failed to get tablet", K(ret), K(ls_id), K(mgr_key));
       } else if (tablet_handle.get_obj()->get_major_table_count() > 0) {
         (void)remove_tablet_direct_load(mgr_key);
       }
@@ -2497,7 +2508,7 @@ int ObTabletFullDirectLoadMgr::commit(
     }
   }
   if (OB_SUCC(ret) && lob_mgr_handle_.is_valid()) {
-    const ObLSID &ls_id = lob_mgr_handle_.get_full_obj()->get_ls_id();
+    const share::ObLSID &ls_id = lob_mgr_handle_.get_full_obj()->get_ls_id();
     const ObTabletID &lob_tablet_id = lob_mgr_handle_.get_full_obj()->get_tablet_id();
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;

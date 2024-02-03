@@ -418,7 +418,6 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           }
         }
       }
-      (void)tenant_direct_load_mgr->gc_tablet_direct_load(*ls_);
     }
   }
   return OB_SUCCESS;
@@ -460,6 +459,13 @@ SCN ObLSDDLLogHandler::get_rec_scn()
   } else if (!rec_scn.is_max()) {
     last_rec_scn_ = SCN::max(last_rec_scn_, rec_scn);
   }
+
+  // gc tablet direct load periodically
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  if (OB_NOT_NULL(tenant_direct_load_mgr)) {
+    (void)tenant_direct_load_mgr->gc_tablet_direct_load();
+  }
+
   LOG_INFO("[CHECKPOINT] ObLSDDLLogHandler::get_rec_scn", K(ret),
       "ls_id", OB_ISNULL(ls_) ? ObLSID() : ls_->get_ls_id(),
       K(barrier_tablet_id), K(rec_scn), K_(last_rec_scn));

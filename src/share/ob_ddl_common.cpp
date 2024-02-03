@@ -1762,6 +1762,19 @@ int ObDDLUtil::check_schema_version_refreshed(
   return ret;
 }
 
+bool ObDDLUtil::reach_time_interval(const int64_t i, volatile int64_t &last_time)
+{
+  bool bret = false;
+  const int64_t old_time = last_time;
+  const int64_t cur_time = common::ObTimeUtility::fast_current_time();
+  if (OB_UNLIKELY((i + last_time) < cur_time)
+      && old_time == ATOMIC_CAS(&last_time, old_time, cur_time))
+  {
+    bret = true;
+  }
+  return bret;
+}
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
