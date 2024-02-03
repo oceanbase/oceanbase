@@ -623,7 +623,8 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     trans_param.need_add_gby_ = (left_exprs.count() != 0);
     ctx.is_multi_join_cond_ = is_multi_join_cond;
     need_check_cost = true;
-  } else {
+  } else if (!stmt.has_for_update()) {
+    // If there is FOR UPDATE, can not use TO_INNER_GBY
     // TO_INNER_GBY : for following cases:
     // 1. there are more than one compare-join-conditions
     // 2. non-standard correlated condition(s) exist
