@@ -35,6 +35,7 @@
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_occam_time_guard.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -788,6 +789,8 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
         K(readable_scn), K(offline_scn), K(ls_id), K(gc_state));
   } else if (readable_scn < offline_scn) {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait readable_scn", K(ret), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
+  } else if (concurrency_control::ObDataValidationService::need_delay_resource_recycle(ls_id)) {
+    CLOG_LOG(INFO, "need delay resource recycle", K(ls_id));
   } else if (OB_FAIL(check_if_tenant_in_archive_(tenant_in_archive))) {
     CLOG_LOG(WARN, "check_if_tenant_in_archive_ failed", K(ret), K(ls_id), K(gc_state));
   } else if (! tenant_in_archive) {
