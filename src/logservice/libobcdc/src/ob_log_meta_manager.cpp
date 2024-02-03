@@ -1709,9 +1709,12 @@ int ObLogMetaManager::set_unique_keys_(ITableMeta *table_meta,
     int64_t column_count = tb_schema_info.get_usr_column_count();
     LOG_TRACE("set_unique_keys_ begin", KPC(table_schema), K(index_table_count), K(tb_schema_info));
     if (column_count < 0) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("column_num is invalid", "table_name", table_schema->get_table_name(),
           "table_id", table_schema->get_table_id(), K(column_count));
-      ret = OB_ERR_UNEXPECTED;
+    } else if (0 == column_count) {
+      LOG_INFO("ignore table without usr_column", "table_id", table_schema->get_table_id(),
+          "table_name", table_schema->get_table_name(), K(column_count) );
     } else {
       if (index_table_count > 0) {
         int64_t is_uk_column_array_size = column_count * sizeof(bool);
