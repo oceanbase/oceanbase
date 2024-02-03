@@ -352,6 +352,7 @@ public:
   // ========================================================
   // newly added for 4.0
 
+  bool is_decided() const { return ctx_tx_data_.is_decided(); }
   int retry_dup_trx_before_prepare(
       const share::SCN &before_prepare_version,
       const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);

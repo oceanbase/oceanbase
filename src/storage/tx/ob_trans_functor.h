@@ -1378,6 +1378,8 @@ public:
   IteratePartCtxAskSchedulerStatusFunctor()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+    first_err_code_ = OB_SUCCESS;
+    has_start_scn_ctx_cnt_ = 0;
     min_start_scn_.set_max();
   }
 
@@ -1390,24 +1392,29 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
-      share::SCN ctx_start_scn = tx_ctx->get_start_log_ts();
-      if (!ctx_start_scn.is_valid()) {
-        ctx_start_scn.set_max();
+      // logic for get min_start_scn
+      if (tx_ctx->is_decided()) {
+        TRANS_LOG(DEBUG, "skip record committed tx", KPC(tx_ctx));
+      } else if (tx_ctx->get_start_log_ts().is_valid()) {
+        has_start_scn_ctx_cnt_++;
+        min_start_scn_ = MIN(min_start_scn_, tx_ctx->get_start_log_ts());
       }
 
-      if (OB_FALSE_IT(min_start_scn_ = MIN(min_start_scn_, ctx_start_scn))) {
-        // do nothing
-      } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
-        TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
-      } else {
-        // do nothing
+      // logic for gc tx ctx
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(tx_ctx->check_scheduler_status())) {
+        TRANS_LOG(WARN, "check scheduler status error", KR(tmp_ret), "ctx", *tx_ctx);
       }
     }
 
     if (OB_FAIL(ret)) {
       min_start_scn_.reset();
+      has_start_scn_ctx_cnt_ = 0;
+      if (OB_SUCCESS == first_err_code_) {
+        // record first error code if exist
+        first_err_code_ = ret;
+      }
     }
-
     return true;
   }
 
@@ -1417,15 +1424,29 @@ public:
   {
     MinStartScnStatus start_status = MinStartScnStatus::HAS_CTX;
 
-    if (!min_start_scn_.is_valid()) {
+    if (OB_SUCCESS != first_err_code_) {
       start_status = MinStartScnStatus::UNKOWN;
-    } else if (min_start_scn_.is_max()) {
+    } else if (!min_start_scn_.is_valid()) {
+      start_status = MinStartScnStatus::UNKOWN;
+    } else if (0 == has_start_scn_ctx_cnt_ || min_start_scn_.is_max()) {
       start_status = MinStartScnStatus::NO_CTX;
+      if ((0 == has_start_scn_ctx_cnt_) && (!min_start_scn_.is_max())) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unexpected values pair", K(has_start_scn_ctx_cnt_), K(min_start_scn_));
+      }
     }
+
+    TRANS_LOG(DEBUG,
+              "get min start status",
+              K(first_err_code_),
+              K(has_start_scn_ctx_cnt_),
+              K(min_start_scn_),
+              K(start_status));
     return start_status;
   }
 
 private:
+  int first_err_code_;
+  int64_t has_start_scn_ctx_cnt_;
   share::SCN min_start_scn_;
 };
 
