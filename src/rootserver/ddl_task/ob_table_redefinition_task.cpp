@@ -1063,7 +1063,8 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
          + serialization::encoded_length_i8(copy_indexes) + serialization::encoded_length_i8(copy_triggers)
          + serialization::encoded_length_i8(copy_constraints) + serialization::encoded_length_i8(copy_foreign_keys)
          + serialization::encoded_length_i8(ignore_errors) + serialization::encoded_length_i8(do_finish)
-         + serialization::encoded_length_i64(target_cg_cnt_);
+         + serialization::encoded_length_i64(target_cg_cnt_)
+         + serialization::encoded_length_i64(complete_sstable_job_ret_code_);
 }
 
 int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1096,6 +1097,8 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
     LOG_WARN("fail to serialize is_do_finish", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, target_cg_cnt_))) {
     LOG_WARN("fail to serialize target_cg_cnt", K(ret));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, complete_sstable_job_ret_code_))) {
+    LOG_WARN("fail to serialize complete sstable job ret code", K(ret));
   }
   FLOG_INFO("serialize message for table redefinition", K(ret),
       K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
@@ -1146,6 +1149,11 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const uint64_t tenant
       is_copy_foreign_keys_ = static_cast<bool>(copy_foreign_keys);
       is_ignore_errors_ = static_cast<bool>(ignore_errors);
       is_do_finish_ = static_cast<bool>(do_finish);
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &complete_sstable_job_ret_code_))) {
+        LOG_WARN("fail to deserialize is_do_finish_", K(ret));
+      }
     }
   }
   FLOG_INFO("deserialize message for table redefinition", K(ret),

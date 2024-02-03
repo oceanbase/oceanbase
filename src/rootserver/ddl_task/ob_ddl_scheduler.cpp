@@ -513,9 +513,10 @@ int ObRedefCallback::modify_info(ObTableRedefinitionTask &redef_task,
       } else {
         message.reset();
         message.assign(buf, serialize_param_size);
-        if (OB_FAIL(ObDDLTaskRecordOperator::update_message(trans,
+        if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code_and_message(trans,
                                                             redef_task.get_tenant_id(),
                                                             redef_task.get_task_id(),
+                                                            redef_task.get_ret_code(),
                                                             message))) {
           LOG_WARN("update task message failed", K(ret), K(redef_task.get_tenant_id()),
                                                  K(redef_task.get_task_id()), K(message));
@@ -650,13 +651,6 @@ int ObFinishRedefCallback::update_task_info_in_queue(ObTableRedefinitionTask& re
                                                   ObDDLTaskQueue &ddl_task_queue)
 {
   return ddl_task_queue.update_task_process_schedulable(ObDDLTaskID(redef_task.get_tenant_id(),redef_task.get_task_id()));
-}
-
-int ObUpdateSSTableCompleteStatusCallback::set_ret_code(const int ret_code)
-{
-  int ret = OB_SUCCESS;
-  ret_code_ = ret_code;
-  return ret;
 }
 
 int ObUpdateSSTableCompleteStatusCallback::update_redef_task_info(ObTableRedefinitionTask &redef_task)
