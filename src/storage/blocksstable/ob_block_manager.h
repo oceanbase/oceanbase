@@ -339,7 +339,9 @@ private:
 
 private:
   void update_partial_status(const ObMacroBlockMarkerStatus &tmp_status);
-  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
+  int get_macro_block_info(const MacroBlockId &macro_id,
+                           ObMacroBlockInfo &macro_block_info,
+                           ObMacroBlockHandle &macro_block_handle);
   bool is_bad_block(const MacroBlockId &macro_block_id);
   int mark_macro_blocks(
       MacroBlkIdMap &mark_info,
@@ -452,7 +454,7 @@ private:
     void reset();
 
   private:
-    int check_block(const MacroBlockId &macro_id);
+    int check_block(ObMacroBlockHandle &macro_block_handle);
     void inspect_bad_block();
 
   private:
