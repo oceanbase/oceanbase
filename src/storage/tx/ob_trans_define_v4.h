@@ -276,7 +276,7 @@ struct ObTxReadSnapshot
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
   const ObAddr get_snapshot_acquire_addr() const { return snapshot_acquire_addr_; }
-  int generate_snapshot_source(char *buf, const int64_t buf_len) const;
+  int format_source_for_display(char *buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
@@ -514,6 +514,7 @@ private:
   mutable ObSpinLock lock_;
   ObSpinLock commit_cb_lock_;       // protect commit_cb_ field
   ObITxCallback *commit_cb_;        // async commit callback
+  int64_t cb_tid_;                  // commit callback thread id
   int64_t exec_info_reap_ts_;       // the time reaping incremental tx exec info
   MaskSet brpc_mask_set_;           // used in message driven savepoint rollback
   ObTransCond rpc_cond_;            // used in message driven savepoint rollback

@@ -380,6 +380,7 @@ ObTxDesc::ObTxDesc()
     lock_(common::ObLatchIds::TX_DESC_LOCK),
     commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
     commit_cb_(NULL),
+    cb_tid_(-1),
     exec_info_reap_ts_(0),
     brpc_mask_set_(),
     rpc_cond_(),
@@ -425,6 +426,7 @@ int ObTxDesc::switch_to_idle()
   abort_cause_ = 0;
   can_elr_ = false;
   commit_cb_ = NULL;
+  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   commit_task_.reset();
   state_ = State::IDLE;
@@ -530,6 +532,7 @@ void ObTxDesc::reset()
   can_elr_ = false;
 
   commit_cb_ = NULL;
+  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   brpc_mask_set_.reset();
   rpc_cond_.reset();
@@ -921,15 +924,18 @@ bool ObTxDesc::execute_commit_cb()
         executed = true;
         cb = commit_cb_;
         commit_cb_ = NULL;
+        ATOMIC_STORE_REL(&cb_tid_, GETTID());
         // NOTE: it is required add trace event before callback,
         // because txDesc may be released after callback called
         REC_TRANS_TRACE_EXT(&tlog_, exec_commit_cb,
                             OB_ID(arg), (void*)cb,
                             OB_ID(ref), get_ref(),
                             OB_ID(thread_id), GETTID());
+        commit_cb_lock_.unlock();
         cb->callback(commit_out_);
+      } else {
+        commit_cb_lock_.unlock();
       }
-      commit_cb_lock_.unlock();
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
@@ -1242,14 +1248,14 @@ const char* ObTxReadSnapshot::get_source_name() const
 }
 
 /*
- * generate sql_audit's snapshot_source fileds
+ * format snapshot info for sql audit display
  * contains: src, ls_id, ls_role, parts
  * when shorter than 128 char like:
  * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(id:1001,epoch:1111),(id:1002,epoch:12222)]"
  * when longer than 128 char, with "..." in the end
  * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(lsid:1001,epoch:1111),(lsid:1002,epoch:122..."
 */
-int ObTxReadSnapshot::generate_snapshot_source(char *buf, const int64_t buf_len) const
+int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
