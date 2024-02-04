@@ -546,6 +546,7 @@ ob_set_subtarget(ob_storage memtable
 ob_set_subtarget(ob_storage memtable_mvcc
   memtable/mvcc/ob_multi_version_iterator.cpp
   memtable/mvcc/ob_mvcc_ctx.cpp
+  memtable/mvcc/ob_mvcc_acc_ctx.cpp
   memtable/mvcc/ob_mvcc_engine.cpp
   memtable/mvcc/ob_mvcc_iterator.cpp
   memtable/mvcc/ob_mvcc_row.cpp

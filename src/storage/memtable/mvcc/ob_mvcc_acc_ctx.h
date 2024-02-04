@@ -229,6 +229,9 @@ public:
     }
     return expire_ts;
   }
+  // for read uncommitted data, txn possible rollbacked before iterate
+  // check txn status after read rows to ensure read result is correct
+  int check_txn_status_if_read_uncommitted();
   TO_STRING_KV(K_(type),
                K_(abs_lock_timeout),
                K_(tx_lock_timeout),

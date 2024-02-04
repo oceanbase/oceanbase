@@ -362,19 +362,23 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     if (GCONF.enable_defensive_check()
         && access_ctx_->query_flag_.is_lookup_for_4377()
         && OB_ITER_END == ret) {
-      ret = OB_ERR_DEFENSIVE_CHECK;
-      ObString func_name = ObString::make_string("[index lookup]ObSingleMerge::inner_get_next_row");
-      LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-      LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
-                    K(have_uncommited_row),
-                    K(enable_fuse_row_cache),
-                    K(read_snapshot_version),
-                    KPC(read_info),
-                    KPC(access_ctx_->store_ctx_),
-                    K(tables_));
-      concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
-      dump_table_statistic_for_4377();
-      dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+      if (OB_FAIL(access_ctx_->store_ctx_->mvcc_acc_ctx_.check_txn_status_if_read_uncommitted())) {
+        STORAGE_LOG(WARN, "rowkey does not exist because transaction has already been killed", KP(this), K(ret));
+      } else {
+        ret = OB_ERR_DEFENSIVE_CHECK;
+        ObString func_name = ObString::make_string("[index lookup]ObSingleMerge::inner_get_next_row");
+        LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+        LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
+                      K(have_uncommited_row),
+                      K(enable_fuse_row_cache),
+                      K(read_snapshot_version),
+                      KPC(read_info),
+                      KPC(access_ctx_->store_ctx_),
+                      K(tables_));
+        concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
+        dump_table_statistic_for_4377();
+        dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+      }
     }
 
     rowkey_ = NULL;
