@@ -3062,7 +3062,7 @@ int ObTransformPreProcess::transform_for_temporary_table(ObDMLStmt *&stmt,
           TableItem *view_table = NULL;
           ObSelectStmt *ref_query = NULL;
           TableItem *child_table = NULL;
-          if (stmt->is_single_table_stmt()) {
+          if (stmt->is_single_table_stmt() && !stmt->is_hierarchical_query()) {
             if (OB_FAIL(add_filter_for_temporary_table(*stmt, *table_item, table_schema->is_oracle_trx_tmp_table()))) {
               LOG_WARN("add filter for temporary table failed", K(ret));
             } else {
