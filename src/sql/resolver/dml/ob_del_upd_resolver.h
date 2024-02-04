@@ -50,7 +50,7 @@ public:
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
-
+  inline bool is_resolve_insert_update() { return is_resolve_insert_update_;}
 protected:
 
   int resolve_assignments(const ParseNode &parse_node,
@@ -259,6 +259,8 @@ private:
   bool is_column_specify_;
   bool is_oracle_tmp_table_; //是否创建oracle的临时表
   int64_t oracle_tmp_table_type_;
+protected:
+  bool is_resolve_insert_update_;
 };
 
 } /* namespace sql */

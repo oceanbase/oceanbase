@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/json/ob_json_print_utils.h"  // for SJ
 #include "lib/time/ob_time_utility.h"
@@ -4927,9 +4928,18 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
     //for insert into t1 values((select c1 from dual)) ==> can't check column c1 in t1;
     if (cur_resolver->get_basic_stmt() != NULL &&
         cur_resolver->get_basic_stmt()->is_insert_stmt()) {
-      //do nothing
+    //INSERT INTO t0 values (1,10) ON DUPLICATE KEY UPDATE b = (SELECT y FROM t1 WHERE x = values(a));
+    // ==> should check column a in duplicate key update;
+      if (static_cast<ObDelUpdResolver*>(cur_resolver)->is_resolve_insert_update()) {
+        if (OB_FAIL(cur_resolver->resolve_column_ref_expr(q_name, real_ref_expr))) {
+          LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column ref failed", K(ret), K(q_name));
+        }
+      }
     } else if (OB_FAIL(cur_resolver->resolve_column_ref_for_subquery(q_name, real_ref_expr))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "resolve column for subquery failed", K(ret), K(q_name));
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
     } else if (OB_ISNULL(query_ref = cur_resolver->get_subquery())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no subquery is found", K(ret));

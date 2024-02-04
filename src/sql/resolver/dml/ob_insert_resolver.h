@@ -54,6 +54,7 @@ public:
   {
     return static_cast<ObInsertStmt*>(stmt_);
   }
+  bool is_mock_for_row_alias() {return is_mock_;}
 protected:
   int process_values_function(ObRawExpr *&expr) override;
   virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref) override;
@@ -93,6 +94,8 @@ private:
   int check_ambiguous_column(ObString &column_name,
                              ObIArray<ObString> &ori_column_names,
                              ObIArray<ObString> &row_alias_column_names);
+  bool find_in_column(ObString &column_name,
+                      ObIArray<ObString> &column_names);
   virtual int resolve_insert_update_assignment(const ParseNode *node, ObInsertTableInfo& table_info) override;
   int replace_column_to_default(ObRawExpr *&origin);
   virtual int check_returning_validity() override;
@@ -115,6 +118,7 @@ private:
   int64_t row_count_;
   ObSelectResolver *sub_select_resolver_;
   bool autoinc_col_added_;
+  bool is_mock_;
 };
 }  // namespace sql
 }  // namespace oceanbase

@@ -4215,6 +4215,19 @@ int ObRawExprUtils::erase_inner_added_exprs(ObRawExpr *src_expr, ObRawExpr *&out
   return ret;
 }
 
+int ObRawExprUtils::erase_inner_cast_exprs(ObRawExpr *src_expr, ObRawExpr *&out_expr)
+{
+  int ret = OB_SUCCESS;
+  CK(OB_NOT_NULL(src_expr));
+  OX(out_expr = src_expr);
+  if (OB_SUCC(ret) && src_expr->has_flag(IS_INNER_ADDED_EXPR) &&
+      T_FUN_SYS_CAST == src_expr->get_expr_type()) {
+      CK(2 == src_expr->get_param_count());
+      OZ(erase_inner_added_exprs(src_expr->get_param_expr(0), out_expr));
+  }
+  return ret;
+}
+
 int ObRawExprUtils::erase_operand_implicit_cast(ObRawExpr *src, ObRawExpr *&out)
 {
   int ret = OB_SUCCESS;
