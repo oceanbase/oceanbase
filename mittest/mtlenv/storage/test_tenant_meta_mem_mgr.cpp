@@ -1543,6 +1543,41 @@ TEST_F(TestTenantMetaMemMgr, test_heap)
   ASSERT_EQ(0, heap.count());
 }
 
+TEST_F(TestTenantMetaMemMgr, test_tablet_gc_queue)
+{
+  ObTenantMetaMemMgr::TabletGCQueue gc_queue;
+  ASSERT_EQ(0, gc_queue.count());
+  ASSERT_EQ(nullptr, gc_queue.gc_head_);
+  ASSERT_EQ(nullptr, gc_queue.gc_tail_);
+
+  ObTablet *tablet = new ObTablet();
+  ASSERT_EQ(OB_SUCCESS, gc_queue.push(tablet));
+  ASSERT_EQ(1, gc_queue.count());
+
+  ASSERT_EQ(tablet, gc_queue.pop());
+  ASSERT_TRUE(gc_queue.is_empty());
+  delete tablet;
+
+  ASSERT_EQ(OB_INVALID_ARGUMENT, gc_queue.push(nullptr));
+  ASSERT_TRUE(gc_queue.is_empty());
+
+  const int64_t tablet_cnt = 1000;
+  for (int i = 0; i < tablet_cnt; ++i) {
+    tablet = new ObTablet();
+    ASSERT_EQ(OB_SUCCESS, gc_queue.push(tablet));
+    ASSERT_EQ(i + 1, gc_queue.count());
+    ASSERT_EQ(OB_INVALID_ARGUMENT, gc_queue.push(nullptr));
+    ASSERT_EQ(i + 1, gc_queue.count());
+  }
+  ASSERT_EQ(tablet_cnt, gc_queue.count());
+  for (int j = 0; j < tablet_cnt; ++j) {
+    ASSERT_NE(nullptr, tablet = gc_queue.pop());
+    ASSERT_EQ(tablet_cnt - 1 - j, gc_queue.count());
+    delete tablet;
+  }
+  ASSERT_TRUE(gc_queue.is_empty());
+}
+
 } // end namespace storage
 } // end namespace oceanbase
 
