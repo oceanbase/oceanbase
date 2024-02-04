@@ -265,6 +265,7 @@ const int64_t FAST_ARRAY_COUNT = OB_DEFAULT_SE_ARRAY_COUNT;
 typedef common::ObFastArray<int64_t, FAST_ARRAY_COUNT> IntFastArray;
 typedef common::ObFastArray<uint64_t, FAST_ARRAY_COUNT> UIntFastArray;
 typedef common::ObFastArray<ObRawExpr *, FAST_ARRAY_COUNT> RawExprFastArray;
+typedef common::ObTuple<ObRawExpr*, ObConstRawExpr*, int64_t> ExternalParamInfo;
 
 struct ExternalParams{
   ExternalParams() : by_name_(false), params_( ){}
@@ -278,18 +279,18 @@ public:
     by_name_ = other.by_name_;
     return params_.assign(other.params_);
   }
-  std::pair<ObRawExpr*, ObConstRawExpr*> &at(int64_t i)
+  ExternalParamInfo &at(int64_t i)
   {
     return params_.at(i);
   }
-  int push_back(const std::pair<ObRawExpr*, ObConstRawExpr*> &param)
+  int push_back(const ExternalParamInfo &param)
   {
     return params_.push_back(param);
   }
 
 public:
   bool by_name_;
-  common::ObSEArray<std::pair<ObRawExpr*, ObConstRawExpr*>, 8> params_;
+  common::ObSEArray<ExternalParamInfo, 8> params_;
 };
 
 struct ObStarExpansionInfo{

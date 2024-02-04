@@ -7265,23 +7265,39 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExpr *expr)
+int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExprFactory &expr_factory, ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (NULL == expr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
-    for (int64_t i = 0; i < expr->get_param_count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *&child = expr->get_param_expr(i);
-      for (int64_t j = 0; j < param_infos.count(); ++j) {
-        if (child == param_infos.at(j).second) {
-          child = param_infos.at(j).first;
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_infos.count(); ++j) {
+        if (child == param_infos.at(j).element<1>()) {
+          child = param_infos.at(j).element<0>();
+          param_infos.at(j).element<2>()--;
+          if (0 == param_infos.at(j).element<2>()) {
+            ObConstRawExpr *null_expr = nullptr;
+            if (OB_FAIL(expr_factory.create_raw_expr(T_NULL, null_expr))) {
+              LOG_WARN("fail to create null expr", K(ret));
+            } else {
+              ObObjParam null_val;
+              null_val.set_null();
+              null_val.set_param_meta();
+              null_expr->set_param(null_val);
+              null_expr->set_value(null_val);
+              param_infos.at(j).element<0>() = null_expr;
+            }
+          }
           break;
         }
       }
-      if (OB_FAIL(revert_external_param_info(param_infos, child))) {
-        LOG_WARN("failed to revert external param info", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(revert_external_param_info(param_infos, expr_factory, child))) {
+          LOG_WARN("failed to revert external param info", K(ret));
+        }
       }
     }
   }
@@ -7299,7 +7315,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
     for (int64_t i = 0;
         OB_SUCC(ret) && OB_INVALID_INDEX == same_idx && i < param_infos.count();
         ++i) {
-      ObRawExpr *original_expr = param_infos.at(i).first;
+      ObRawExpr *original_expr = param_infos.at(i).element<0>();
       if (OB_ISNULL(original_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
@@ -7308,43 +7324,71 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
       } else { /*do nothing*/ }
     }
   }
+#define SET_RESULT_TYPE(encode_num)  \
+  do {   \
+    if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, encode_num, expr))) {   \
+      LOG_WARN("create param expr failed", K(ret));   \
+    } else if (OB_ISNULL(expr)) {   \
+      ret = OB_ERR_UNEXPECTED;  \
+      LOG_WARN("access idxs is empty", K(ret));  \
+    } else {  \
+      sql::ObExprResType result_type = expr->get_result_type();  \
+      if (result_type.get_length() == -1) {   \
+        if (result_type.is_varchar() || result_type.is_nvarchar2()) {  \
+          result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);   \
+        } else if (result_type.is_char() || result_type.is_nchar()) {  \
+          result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
+        }  \
+      }  \
+      expr->set_result_type(result_type); \
+      param_expr = static_cast<ObConstRawExpr*>(expr); \
+      const_cast<sql::ObExprResType &>(param_expr->get_result_type()).set_param(param_expr->get_value());  \
+    }  \
+  } while (0)
+
   if (OB_SUCC(ret)) {
+    ObRawExpr *original_ref = expr;
+    ObConstRawExpr *param_expr = nullptr;
     if (OB_INVALID_INDEX != same_idx) {
-      expr = param_infos.at(same_idx).second;
-    } else {
-      /*
-       * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
-       * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
-       * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
-       */
-      std::pair<ObRawExpr*, ObConstRawExpr*> param_info;
-      ObRawExpr *original_ref = expr;
-      if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, prepare_param_count++, expr))) {
-        LOG_WARN("create param expr failed", K(ret));
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("access idxs is empty", K(ret));
+      if (param_infos.at(same_idx).element<2>() > 0) {
+        expr = param_infos.at(same_idx).element<1>();
+        param_infos.at(same_idx).element<2>()++;
       } else {
-        sql::ObExprResType result_type = expr->get_result_type();
-        if (result_type.get_length() == -1) {
-          if (result_type.is_varchar() || result_type.is_nvarchar2()) {
-            result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
-          } else if (result_type.is_char() || result_type.is_nchar()) {
-            result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
-          }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref count unexpected", K(ret));
+      }
+    } else {
+      int64_t available_idx = OB_INVALID_INDEX;
+      for (int64_t i = 0;
+          OB_SUCC(ret) && OB_INVALID_INDEX == available_idx && i < param_infos.count();
+          ++i) {
+        if (0 == param_infos.at(i).element<2>()) {
+          available_idx = i;
         }
-        expr->set_result_type(result_type);
-        ObConstRawExpr *param_expr = static_cast<ObConstRawExpr*>(expr);
-        const_cast<sql::ObExprResType &>(param_expr->get_result_type())
-                                          .set_param(param_expr->get_value());
-        param_info.first = original_ref;
-        param_info.second = param_expr;
-        if (OB_FAIL(param_infos.push_back(param_info))) {
-          LOG_WARN("push_back error", K(ret));
+      }
+      if (OB_INVALID_INDEX != available_idx) {
+        int64_t encode_num = param_infos.at(available_idx).element<1>()->get_value().get_unknown();
+        SET_RESULT_TYPE(encode_num);
+        if (OB_SUCC(ret)) {
+          param_infos.at(available_idx) = ExternalParamInfo(original_ref, param_expr, 1);
+        }
+      } else {
+        /*
+        * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
+        * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
+        * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
+        */
+        SET_RESULT_TYPE(prepare_param_count++);
+        if (OB_SUCC(ret)) {
+          ExternalParamInfo param_info(original_ref, param_expr, 1);
+          if (OB_FAIL(param_infos.push_back(param_info))) {
+            LOG_WARN("push_back error", K(ret));
+          }
         }
       }
     }
   }
+#undef SET_RESULT_TYPE
   return ret;
 }
 
