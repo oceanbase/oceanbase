@@ -6554,6 +6554,7 @@ public:
                K(trigger_info_),
                K(with_replace_),
                K(in_second_stage_),
+               K(with_if_not_exist_),
                K(error_info_),
                K(dependency_infos_));
 public:
@@ -6568,7 +6569,8 @@ public:
     {
       uint32_t with_replace_:1;
       uint32_t in_second_stage_:1; // is second create trigger stage
-      uint32_t reserved_:30;
+      uint32_t with_if_not_exist_:1;
+      uint32_t reserved_:29;
     };
   };
   share::schema::ObErrorInfo error_info_;
