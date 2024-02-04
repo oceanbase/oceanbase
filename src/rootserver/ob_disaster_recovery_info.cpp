@@ -63,21 +63,21 @@ int DRServerStatInfo::assign(
 int DRUnitStatInfo::init(
     const uint64_t unit_id,
     const bool in_pool,
-    const share::ObUnitInfo &unit_info,
+    const share::ObUnit &unit,
     DRServerStatInfo *server_stat,
     const int64_t outside_replica_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == unit_id
-                  || !unit_info.is_valid()
+                  || !unit.is_valid()
                   || nullptr == server_stat)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(unit_id), K(unit_info), KP(server_stat));
+    LOG_WARN("invalid argument", KR(ret), K(unit_id), K(unit), KP(server_stat));
   } else {
     unit_id_ = unit_id;
     in_pool_ = in_pool;
-    if (OB_FAIL(unit_info_.assign(unit_info))) {
-      LOG_WARN("fail to assign", KR(ret));
+    if (OB_FAIL(unit_.assign(unit))) {
+      LOG_WARN("fail to assign", KR(ret), K(unit));
     } else {
       server_stat_ = server_stat;
       outside_replica_cnt_ = outside_replica_cnt;
@@ -90,11 +90,11 @@ int DRUnitStatInfo::assign(
     const DRUnitStatInfo &that)
 {
   int ret = OB_SUCCESS;
-  this->unit_id_ = that.unit_id_;
-  this->in_pool_ = that.in_pool_;
-  if (OB_FAIL(this->unit_info_.assign(that.unit_info_))) {
-    LOG_WARN("fail to assign", KR(ret));
+  if (OB_FAIL(this->unit_.assign(that.unit_))) {
+    LOG_WARN("fail to assign unit", KR(ret), K(that.unit_));
   } else {
+    this->unit_id_ = that.unit_id_;
+    this->in_pool_ = that.in_pool_;
     this->server_stat_ = that.server_stat_;
     this->outside_replica_cnt_ = that.outside_replica_cnt_;
   }
@@ -113,6 +113,11 @@ int DRLSInfo::init()
   } else if (OB_UNLIKELY(nullptr == schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema service ptr is null", KR(ret), KP(schema_service_));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(unit_operator_.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("unit operator init failed", KR(ret));
   } else if (OB_FAIL(unit_stat_info_map_.init(
           UNIT_MAP_BUCKET_NUM))) {
     LOG_WARN("fail to init unit stat info map", KR(ret));
@@ -314,32 +319,29 @@ int DRLSInfo::fill_servers()
 int DRLSInfo::fill_units()
 {
   int ret = OB_SUCCESS;
-  common::ObArray<share::ObUnitInfo> unit_info_array;
-  if (OB_UNLIKELY(nullptr == unit_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unit mgr ptr is null", KR(ret), KP(unit_mgr_));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == resource_tenant_id_)) {
+  common::ObArray<share::ObUnit> unit_array;
+  if (OB_UNLIKELY(OB_INVALID_ID == resource_tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(resource_tenant_id_));
-  } else if (OB_FAIL(unit_mgr_->get_all_unit_infos_by_tenant(
-          resource_tenant_id_, unit_info_array))) {
+  } else if (OB_FAIL(unit_operator_.get_units_by_tenant(
+          resource_tenant_id_, unit_array))) {
     LOG_WARN("fail to get all unit infos by tenant", KR(ret), K(resource_tenant_id_));
   } else {
-    FOREACH_X(u, unit_info_array, OB_SUCC(ret)) {
+    FOREACH_X(u, unit_array, OB_SUCC(ret)) {
       UnitStatInfoMap::Item *item = nullptr;
       ServerStatInfoMap::Item *server_item = nullptr;
       if (OB_UNLIKELY(nullptr == u)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("u ptr is null", KR(ret));
-      } else if (OB_FAIL(unit_stat_info_map_.locate(u->unit_.unit_id_, item))) {
-        LOG_WARN("fail to locate unit", KR(ret), "unit_id", u->unit_.unit_id_);
-      } else if (OB_FAIL(server_stat_info_map_.locate(u->unit_.server_, server_item))) {
-        LOG_WARN("fail to locate server", KR(ret), "server", u->unit_.server_);
+      } else if (OB_FAIL(unit_stat_info_map_.locate(u->unit_id_, item))) {
+        LOG_WARN("fail to locate unit", KR(ret), "unit_id", u->unit_id_);
+      } else if (OB_FAIL(server_stat_info_map_.locate(u->server_, server_item))) {
+        LOG_WARN("fail to locate server", KR(ret), "server", u->server_);
       } else if (OB_UNLIKELY(nullptr == item || nullptr == server_item)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("item ptr is null", KR(ret));
       } else if (OB_FAIL(item->v_.init(
-              u->unit_.unit_id_,
+              u->unit_id_,
               true, /*in pool*/
               *u,
               &server_item->v_,
@@ -445,9 +447,9 @@ int DRLSInfo::build_disaster_ls_info(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("DRWorker not init", KR(ret));
-  } else if (OB_ISNULL(schema_service_) || OB_ISNULL(unit_mgr_)) {
+  } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service ptr is null", KR(ret), KP(schema_service_), KP(unit_mgr_));
+    LOG_WARN("schema service ptr is null", KR(ret), KP(schema_service_));
   } else if (resource_tenant_id_ != gen_user_tenant_id(ls_info.get_tenant_id())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant id not match", KR(ret), K(resource_tenant_id_),
@@ -479,37 +481,36 @@ int DRLSInfo::build_disaster_ls_info(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < inner_ls_info_.get_replicas().count(); ++i) {
       ServerStatInfoMap::Item *server = nullptr;
-      UnitStatInfoMap::Item *unit = nullptr;
+      UnitStatInfoMap::Item *unit_in_map = nullptr;
       UnitStatInfoMap::Item *unit_in_group = nullptr;
-      share::ObUnitInfo unit_info;
+      share::ObUnit unit;
       share::ObLSReplica &ls_replica = inner_ls_info_.get_replicas().at(i);
       if (!ls_replica.get_in_member_list() && !ls_replica.get_in_learner_list()) {
         LOG_INFO("replica is neither in member list nor in learner list", K(ls_replica));
       } else if (OB_FAIL(server_stat_info_map_.locate(ls_replica.get_server(), server))) {
         LOG_WARN("fail to locate server", KR(ret), "server", ls_replica.get_server());
-      } else if (OB_FAIL(unit_stat_info_map_.locate(ls_replica.get_unit_id(), unit))) {
+      } else if (OB_FAIL(unit_stat_info_map_.locate(ls_replica.get_unit_id(), unit_in_map))) {
         LOG_WARN("fail to locate unit", KR(ret), "unit_id", ls_replica.get_unit_id());
       } else {
         if (0 == ls_status_info.unit_group_id_) {
-          unit_in_group = unit;
-        } else if (OB_FAIL(unit_mgr_->get_unit_in_group(
-                ls_replica.get_tenant_id(),
+          unit_in_group = unit_in_map;
+        } else if (OB_FAIL(unit_operator_.get_unit_in_group(
                 ls_status_info.unit_group_id_,
                 ls_replica.get_zone(),
-                unit_info))) {
+                unit))) {
           LOG_WARN("fail to get unit in group", KR(ret), K(ls_replica));
-        } else if (OB_FAIL(unit_stat_info_map_.locate(unit_info.unit_.unit_id_, unit_in_group))) {
-          LOG_WARN("fail to locate unit", KR(ret), "unit_id", unit_info.unit_.unit_id_);
+        } else if (OB_FAIL(unit_stat_info_map_.locate(unit.unit_id_, unit_in_group))) {
+          LOG_WARN("fail to locate unit", KR(ret), "unit_id", unit.unit_id_);
         }
 
         if (OB_SUCC(ret)) {
-          if (OB_ISNULL(server) || OB_ISNULL(unit) || OB_ISNULL(unit_in_group)) {
+          if (OB_ISNULL(server) || OB_ISNULL(unit_in_map) || OB_ISNULL(unit_in_group)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unit or server ptr is null", KR(ret), KP(server), KP(unit), K(ls_replica));
+            LOG_WARN("unit or server ptr is null", KR(ret), KP(server), KP(unit_in_map), K(ls_replica));
           } else if (OB_FAIL(append_replica_server_unit_stat(
-                  &server->v_, &unit->v_, &unit_in_group->v_))) {
+                  &server->v_, &unit_in_map->v_, &unit_in_group->v_))) {
             LOG_WARN("fail to append replica server/unit stat", KR(ret),
-                     "server_stat_info", server->v_, "unit_stat_info", unit->v_);
+                     "server_stat_info", server->v_, "unit_stat_info", unit_in_map->v_);
           }
         }
       }
