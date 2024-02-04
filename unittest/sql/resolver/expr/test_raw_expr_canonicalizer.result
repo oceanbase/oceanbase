@@ -261,13 +261,13 @@ not not a > b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":16,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"a",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -309,13 +309,13 @@ not not a > b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":17,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"b",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -386,13 +386,13 @@ not a > b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":16,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"a",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -434,13 +434,13 @@ not a > b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":17,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"b",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -511,13 +511,13 @@ not a = b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":16,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"a",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -559,13 +559,13 @@ not a = b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":17,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"b",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -636,13 +636,13 @@ not a < b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":16,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"a",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -684,13 +684,13 @@ not a < b
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":17,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"b",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -762,13 +762,13 @@ not a is true
       ],
       "rel_id": [
       ],
-      "table_id":-1,
-      "column_id":-1,
+      "table_id":0,
+      "column_id":16,
       "database_name":"",
       "table_name":"",
       "synonym_name":"",
       "synonym_db_name":"",
-      "column_name":"",
+      "column_name":"a",
       "column_flags":0,
       "enum_set_values": [
       ],
@@ -900,13 +900,13 @@ not a between 1 and 100
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"a",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -1008,13 +1008,13 @@ not a between 1 and 100
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"a",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2078,13 +2078,13 @@ not(not(a))
               ],
               "rel_id": [
               ],
-              "table_id":-1,
-              "column_id":-1,
+              "table_id":0,
+              "column_id":16,
               "database_name":"",
               "table_name":"",
               "synonym_name":"",
               "synonym_db_name":"",
-              "column_name":"",
+              "column_name":"a",
               "column_flags":0,
               "enum_set_values": [
               ],
@@ -2219,13 +2219,13 @@ A or (A And B) or (A And C)
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"A",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2267,7 +2267,8 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
-    "CNT_COLUMN"
+    "CNT_COLUMN",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -2325,13 +2326,13 @@ A or (A And B) or (A And C)
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"A",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2350,7 +2351,7 @@ A or (A And B) or (A And C)
       ]
     },
      {
-      "item_type":"T_OP_BOOL",
+      "item_type":"T_OP_OR",
       "result_type": {
         "meta": {
           "type":"",
@@ -2370,14 +2371,15 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
+        "IS_OR",
         "CNT_COLUMN",
-        "IS_INNER_ADDED_EXPR"
+        "CNT_OR"
       ],
       "rel_id": [
       ],
       "children": [
          {
-          "item_type":"T_REF_COLUMN",
+          "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
               "type":"",
@@ -2397,32 +2399,243 @@ A or (A And B) or (A And C)
             }
           },
           "expr_info": [
-            "IS_COLUMN",
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
+          ],
+          "rel_id": [
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":0,
+              "column_id":17,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"B",
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1,
+              "udt_set_id":0
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_AND",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
             "CNT_COLUMN"
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
-          "database_name":"",
-          "table_name":"",
-          "synonym_name":"",
-          "synonym_db_name":"",
-          "column_name":"",
-          "column_flags":0,
-          "enum_set_values": [
-          ],
-          "is_lob_column":false,
-          "is_joined_dup_column":false,
-          "is_unpivot_mocked_column":false,
-          "is_hidden":false,
-          "from_alias_table":false,
-          "is_rowkey_column":false,
-          "is_unique_key_column":false,
-          "is_mul_key_column":false,
-          "is_strict_json_column":0,
-          "srs_id":-1,
-          "udt_set_id":0
+          "children": [
+             {
+              "item_type":"T_OP_BOOL",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "CNT_COLUMN",
+                "IS_INNER_ADDED_EXPR"
+              ],
+              "rel_id": [
+              ],
+              "children": [
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":0,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                  ],
+                  "table_id":0,
+                  "column_id":19,
+                  "database_name":"",
+                  "table_name":"",
+                  "synonym_name":"",
+                  "synonym_db_name":"",
+                  "column_name":"C",
+                  "column_flags":0,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false,
+                  "is_joined_dup_column":false,
+                  "is_unpivot_mocked_column":false,
+                  "is_hidden":false,
+                  "from_alias_table":false,
+                  "is_rowkey_column":false,
+                  "is_unique_key_column":false,
+                  "is_mul_key_column":false,
+                  "is_strict_json_column":0,
+                  "srs_id":-1,
+                  "udt_set_id":0
+                }
+              ]
+            },
+             {
+              "item_type":"T_OP_BOOL",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "CNT_COLUMN",
+                "IS_INNER_ADDED_EXPR"
+              ],
+              "rel_id": [
+              ],
+              "children": [
+                 {
+                  "item_type":"T_REF_COLUMN",
+                  "result_type": {
+                    "meta": {
+                      "type":"",
+                      "collation":"binary",
+                      "coercibility":"NUMERIC"
+                    },
+                    "accuracy": {
+                      "length":-1,
+                      "precision":-1,
+                      "scale":-1
+                    },
+                    "flag":0,
+                    "calc_type": {
+                      "type":"NULL",
+                      "collation":"invalid_type",
+                      "coercibility":"INVALID"
+                    }
+                  },
+                  "expr_info": [
+                    "IS_COLUMN",
+                    "CNT_COLUMN"
+                  ],
+                  "rel_id": [
+                  ],
+                  "table_id":0,
+                  "column_id":20,
+                  "database_name":"",
+                  "table_name":"",
+                  "synonym_name":"",
+                  "synonym_db_name":"",
+                  "column_name":"D",
+                  "column_flags":0,
+                  "enum_set_values": [
+                  ],
+                  "is_lob_column":false,
+                  "is_joined_dup_column":false,
+                  "is_unpivot_mocked_column":false,
+                  "is_hidden":false,
+                  "from_alias_table":false,
+                  "is_rowkey_column":false,
+                  "is_unique_key_column":false,
+                  "is_mul_key_column":false,
+                  "is_strict_json_column":0,
+                  "srs_id":-1,
+                  "udt_set_id":0
+                }
+              ]
+            }
+          ]
         }
       ]
     }
@@ -2450,7 +2663,8 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
-    "CNT_COLUMN"
+    "CNT_COLUMN",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -2508,13 +2722,13 @@ A or (A And B) or (A And C)
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"A",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2533,7 +2747,7 @@ A or (A And B) or (A And C)
       ]
     },
      {
-      "item_type":"T_OP_BOOL",
+      "item_type":"T_OP_OR",
       "result_type": {
         "meta": {
           "type":"",
@@ -2553,14 +2767,15 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
+        "IS_OR",
         "CNT_COLUMN",
-        "IS_INNER_ADDED_EXPR"
+        "CNT_OR"
       ],
       "rel_id": [
       ],
       "children": [
          {
-          "item_type":"T_REF_COLUMN",
+          "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
               "type":"",
@@ -2580,32 +2795,138 @@ A or (A And B) or (A And C)
             }
           },
           "expr_info": [
-            "IS_COLUMN",
-            "CNT_COLUMN"
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
-          "database_name":"",
-          "table_name":"",
-          "synonym_name":"",
-          "synonym_db_name":"",
-          "column_name":"",
-          "column_flags":0,
-          "enum_set_values": [
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":0,
+              "column_id":17,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"B",
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1,
+              "udt_set_id":0
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_BOOL",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
           ],
-          "is_lob_column":false,
-          "is_joined_dup_column":false,
-          "is_unpivot_mocked_column":false,
-          "is_hidden":false,
-          "from_alias_table":false,
-          "is_rowkey_column":false,
-          "is_unique_key_column":false,
-          "is_mul_key_column":false,
-          "is_strict_json_column":0,
-          "srs_id":-1,
-          "udt_set_id":0
+          "rel_id": [
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":0,
+              "column_id":19,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"C",
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1,
+              "udt_set_id":0
+            }
+          ]
         }
       ]
     }
@@ -2633,7 +2954,8 @@ A or (A And B) or (A And C)
     }
   },
   "expr_info": [
-    "CNT_COLUMN"
+    "CNT_COLUMN",
+    "CNT_OR"
   ],
   "rel_id": [
   ],
@@ -2691,13 +3013,13 @@ A or (A And B) or (A And C)
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":16,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"A",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2768,13 +3090,13 @@ A or (A And B) or (A And C)
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
+          "table_id":0,
+          "column_id":17,
           "database_name":"",
           "table_name":"",
           "synonym_name":"",
           "synonym_db_name":"",
-          "column_name":"",
+          "column_name":"B",
           "column_flags":0,
           "enum_set_values": [
           ],
@@ -2793,7 +3115,7 @@ A or (A And B) or (A And C)
       ]
     },
      {
-      "item_type":"T_OP_BOOL",
+      "item_type":"T_OP_OR",
       "result_type": {
         "meta": {
           "type":"",
@@ -2813,14 +3135,15 @@ A or (A And B) or (A And C)
         }
       },
       "expr_info": [
+        "IS_OR",
         "CNT_COLUMN",
-        "IS_INNER_ADDED_EXPR"
+        "CNT_OR"
       ],
       "rel_id": [
       ],
       "children": [
          {
-          "item_type":"T_REF_COLUMN",
+          "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
               "type":"",
@@ -2840,32 +3163,138 @@ A or (A And B) or (A And C)
             }
           },
           "expr_info": [
-            "IS_COLUMN",
-            "CNT_COLUMN"
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
           ],
           "rel_id": [
           ],
-          "table_id":-1,
-          "column_id":-1,
-          "database_name":"",
-          "table_name":"",
-          "synonym_name":"",
-          "synonym_db_name":"",
-          "column_name":"",
-          "column_flags":0,
-          "enum_set_values": [
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":0,
+              "column_id":18,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"C",
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1,
+              "udt_set_id":0
+            }
+          ]
+        },
+         {
+          "item_type":"T_OP_BOOL",
+          "result_type": {
+            "meta": {
+              "type":"",
+              "collation":"binary",
+              "coercibility":"NUMERIC"
+            },
+            "accuracy": {
+              "length":-1,
+              "precision":-1,
+              "scale":-1
+            },
+            "flag":0,
+            "calc_type": {
+              "type":"NULL",
+              "collation":"invalid_type",
+              "coercibility":"INVALID"
+            }
+          },
+          "expr_info": [
+            "CNT_COLUMN",
+            "IS_INNER_ADDED_EXPR"
           ],
-          "is_lob_column":false,
-          "is_joined_dup_column":false,
-          "is_unpivot_mocked_column":false,
-          "is_hidden":false,
-          "from_alias_table":false,
-          "is_rowkey_column":false,
-          "is_unique_key_column":false,
-          "is_mul_key_column":false,
-          "is_strict_json_column":0,
-          "srs_id":-1,
-          "udt_set_id":0
+          "rel_id": [
+          ],
+          "children": [
+             {
+              "item_type":"T_REF_COLUMN",
+              "result_type": {
+                "meta": {
+                  "type":"",
+                  "collation":"binary",
+                  "coercibility":"NUMERIC"
+                },
+                "accuracy": {
+                  "length":-1,
+                  "precision":-1,
+                  "scale":-1
+                },
+                "flag":0,
+                "calc_type": {
+                  "type":"NULL",
+                  "collation":"invalid_type",
+                  "coercibility":"INVALID"
+                }
+              },
+              "expr_info": [
+                "IS_COLUMN",
+                "CNT_COLUMN"
+              ],
+              "rel_id": [
+              ],
+              "table_id":0,
+              "column_id":21,
+              "database_name":"",
+              "table_name":"",
+              "synonym_name":"",
+              "synonym_db_name":"",
+              "column_name":"D",
+              "column_flags":0,
+              "enum_set_values": [
+              ],
+              "is_lob_column":false,
+              "is_joined_dup_column":false,
+              "is_unpivot_mocked_column":false,
+              "is_hidden":false,
+              "from_alias_table":false,
+              "is_rowkey_column":false,
+              "is_unique_key_column":false,
+              "is_mul_key_column":false,
+              "is_strict_json_column":0,
+              "srs_id":-1,
+              "udt_set_id":0
+            }
+          ]
         }
       ]
     }

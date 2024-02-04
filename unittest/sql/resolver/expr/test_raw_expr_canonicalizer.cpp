@@ -64,6 +64,8 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
   ObArray<ObAggFunRawExpr*> aggr_exprs;
   ObArray<ObWinFunRawExpr*> win_exprs;
   ObArray<ObUDFInfo> udf_info;
+  ObArray<ObRawExpr*> ref_exprs;
+  ObArray<ObRawExpr*> replace_ref_exprs;
   const char *expr_str = expr;
   ObArenaAllocator allocator(ObModIds::TEST);
   ObRawExprFactory expr_factory(allocator);
@@ -81,6 +83,21 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
   ObRawExpr *raw_expr = NULL;
   OK(ObRawExprUtils::make_raw_expr_from_str(expr_str, strlen(expr_str), ctx, raw_expr, columns,
                                             sys_vars, &sub_query_info, aggr_exprs ,win_exprs, udf_info));
+  for (int64_t i = 0; i < columns.count(); i++) {
+    bool is_set_ref = false;
+    for (int64_t j = 0; j < i; j++) {
+      if (0 == columns.at(i).col_name_.case_compare(columns.at(j).col_name_)) {
+        is_set_ref = true;
+        OK(ref_exprs.push_back(columns.at(i).ref_expr_));
+        OK(replace_ref_exprs.push_back(columns.at(j).ref_expr_));
+      }
+    }
+    if (!is_set_ref) {
+      columns.at(i).ref_expr_->set_ref_id(0, i + 16);
+      columns.at(i).ref_expr_->set_column_name(columns.at(i).col_name_);
+    }
+  }
+  OK(ObRawExprUtils::replace_ref_column(raw_expr, ref_exprs, replace_ref_exprs));
   _OB_LOG(DEBUG, "================================================================");
   _OB_LOG(DEBUG, "%s", expr);
   _OB_LOG(DEBUG, "%s", CSJ(raw_expr));

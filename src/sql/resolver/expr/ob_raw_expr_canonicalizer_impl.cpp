@@ -18,6 +18,7 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/ob_sql_context.h"
 #include "common/ob_smart_call.h"
+#include "sql/resolver/expr/ob_shared_expr_resolver.h"
 namespace oceanbase
 {
 using namespace common;
@@ -133,18 +134,38 @@ int ObRawExprCanonicalizerImpl::remove_duplicate_conds(ObRawExpr *&expr)
              expr->get_expr_type() == T_OP_AND) {
     ObOpRawExpr *op_expr = static_cast<ObOpRawExpr *>(expr);
     ObSEArray<ObRawExpr *, 4> param_conds;
-    for (int64_t i = 0; OB_SUCC(ret) && i < op_expr->get_param_count(); ++i) {
-      if (OB_FAIL(add_var_to_array_no_dup(param_conds, op_expr->get_param_expr(i)))) {
-        LOG_WARN("failed to append array no dup", K(ret));
+    const int64_t param_count = op_expr->get_param_count();
+    ObQuestionmarkEqualCtx cmp_ctx(true);
+    if (param_count > 1 && param_count <= 100) {
+      if (OB_FAIL(param_conds.assign(op_expr->get_param_exprs()))) {
+        LOG_WARN("failed to assign array", K(ret));
+      } else {
+        for (int64_t i = param_count - 1; OB_SUCC(ret) && i >= 1; i--) {
+          for (int64_t j = 0; OB_SUCC(ret) && j < i; j++) {
+            if (param_conds.at(i)->same_as(*param_conds.at(j), &cmp_ctx)) {
+              if (OB_FAIL(param_conds.remove(i))) {
+                LOG_WARN("failed to remove", K(ret));
+              } else if (cmp_ctx.equal_pairs_.empty()) {
+                /* do nothing */
+              } else if (OB_FAIL(append(ctx_.stmt_->get_query_ctx()->all_equal_param_constraints_,
+                                        cmp_ctx.equal_pairs_))) {
+                LOG_WARN("failed to append expr", K(ret));
+              } else {
+                cmp_ctx.equal_pairs_.reset();
+              }
+              break;
+            }
+          }
+        }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (param_conds.count() == op_expr->get_param_count()) {
-        // do nothing
-      } else if (param_conds.count() == 1) {
-        expr = param_conds.at(0);
-      } else if (OB_FAIL(op_expr->get_param_exprs().assign(param_conds))) {
-        LOG_WARN("failed to assign param conditions", K(ret));
+      if (OB_SUCC(ret)) {
+        if (param_conds.count() == param_count) {
+          // do nothing
+        } else if (param_conds.count() == 1) {
+          expr = param_conds.at(0);
+        } else if (OB_FAIL(op_expr->get_param_exprs().assign(param_conds))) {
+          LOG_WARN("failed to assign param conditions", K(ret));
+        }
       }
     }
   }
