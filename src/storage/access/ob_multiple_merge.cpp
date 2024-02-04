@@ -1265,21 +1265,26 @@ int ObMultipleMerge::refresh_tablet_iter()
   } else {
     // reset first, in case get_read_tables fail and rowkey_read_info_ become dangling
     access_param_->iter_param_.rowkey_read_info_ = nullptr;
-    const common::ObTabletID tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(access_ctx_->ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-      LOG_WARN("failed to get ls", K(ret));
+    const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
+    const share::ObLSID &ls_id = access_ctx_->ls_id_;
+    const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
+    if (OB_UNLIKELY(remain_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
+    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
-        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+        remain_timeout,
         get_table_param_->sample_info_.is_no_sample()
           ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
           : INT64_MAX,
         get_table_param_->tablet_iter_,
         false/*allow_not_ready*/))) {
-      LOG_WARN("failed to refresh tablet iterator", K(ret), K_(get_table_param), KP_(access_param));
+      LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
     } else {
       get_table_param_->refreshed_merge_ = this;
       access_param_->iter_param_.rowkey_read_info_ =
