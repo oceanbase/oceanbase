@@ -1428,8 +1428,14 @@ int ObStorageOssUtil::update_file_modify_time(const common::ObString& uri, const
     while (retry_count < OB_MAX_RETRY_TIMES) {
       // get acl
       if (OB_ISNULL(aos_ret = oss_get_object_acl(oss_option_, &bucket, &object, &get_acl, &resp_headers)) ||
-          !aos_status_is_ok(aos_ret)) {
-        ret = OB_OSS_ERROR;
+          !aos_status_is_ok(aos_ret) || 0 == get_acl.len || OB_ISNULL(get_acl.data)) {
+        if (OSS_OBJECT_NOT_EXIST == aos_ret->code) {
+          ret = OB_BACKUP_FILE_NOT_EXIST;
+          OB_LOG(WARN, "backup file do not exist", K(ret), K(uri));
+          break;
+        } else {
+          ret = OB_OSS_ERROR;
+        }
         OB_LOG(WARN, "get bucket acl fail", K(ret), K(uri));
         print_oss_info(aos_ret);
       } else {
