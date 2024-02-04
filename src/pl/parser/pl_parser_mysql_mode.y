@@ -304,10 +304,12 @@ stmt_list:
     stmt_list ';' stmt
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_LINK_NODE, 2, $1, $3);
+      parse_ctx->stmt_tree_ = $$;
     }
   | stmt
     {
       $$ = $1;
+      parse_ctx->stmt_tree_ = $$;
     }
 /*  | stmt_list ';' error
     {
