@@ -11303,6 +11303,7 @@ int ObPLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     OZ (columns.at(i).replace_access_ident_params(q_name.ref_expr_, expr));
   }
   CK (OB_NOT_NULL(expr));
+  OZ (ObRawExprUtils::set_call_in_pl(expr));
   OZ (formalize_expr(*expr));
   return ret;
 }

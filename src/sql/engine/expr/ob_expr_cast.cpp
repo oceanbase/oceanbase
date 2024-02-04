@@ -430,7 +430,13 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
             : (OB_NOT_NULL(type_ctx.get_session())
                 ? type_ctx.get_session()->get_actual_nls_length_semantics()
                 : LS_BYTE));
-        if (len > 0) { // cast(1 as char(10))
+        if (len < 0 && !is_called_in_sql() && lib::is_oracle_mode()) {
+          if (dst_type.is_char() || dst_type.is_nchar()) {
+            type.set_full_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE, length_semantics);
+          } else if (dst_type.is_nvarchar2() || dst_type.is_varchar()) {
+            type.set_full_length(OB_MAX_ORACLE_VARCHAR_LENGTH, length_semantics);
+          }
+        } else if (len > 0) { // cast(1 as char(10))
           type.set_full_length(len, length_semantics);
         } else if (OB_FAIL(get_cast_string_len(type1, dst_type, type_ctx, len, length_semantics,
                                                collation_connection,
