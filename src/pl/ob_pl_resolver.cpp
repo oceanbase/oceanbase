@@ -11380,8 +11380,8 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   OX (coll_expr->set_result_type(res_type));
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
+    ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
     if (coll_type->get_element_type().is_obj_type()) {
-      ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
       const ObDataType *data_type = coll_type->get_element_type().get_data_type();
       CK (OB_NOT_NULL(data_type));
       OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
@@ -11396,7 +11396,36 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
                                                  true));
       OZ (coll_expr->add_param_expr(child));
     } else {
-      OZ (coll_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(i)));
+      bool is_legal = true;
+      uint64_t actual_udt_id = OB_INVALID_ID;
+      if (child->get_result_type().is_null()) {
+      } else if (child->get_result_type().is_ext()) {
+        if (child->is_obj_access_expr()) {
+          ObPLDataType actually_type;
+          const ObObjAccessRawExpr *obj_access = NULL;
+          CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(child)));
+          OZ (obj_access->get_final_type(actually_type));
+          OX (actual_udt_id = actually_type.get_user_type_id());
+        } else {
+          actual_udt_id = child->get_result_type().get_udt_id();
+        }
+        if (actual_udt_id != coll_type->get_element_type().get_user_type_id()) {
+          OZ (check_composite_compatible(current_block_->get_namespace(),
+                                          actual_udt_id,
+                                          coll_type->get_element_type().get_user_type_id(),
+                                          is_legal));
+        }
+      } else {
+        is_legal = false;
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!is_legal) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
+                K(ret), K(actual_udt_id), K(coll_type->get_element_type()));
+      } else {
+        OZ (coll_expr->add_param_expr(child));
+      }
     }
   }
   OX (expr = coll_expr);

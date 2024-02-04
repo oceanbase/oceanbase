@@ -32644,7 +32644,7 @@ int ObDDLService::alter_package(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(ddl_operator.alter_package(package_info, trans, public_routine_infos,
+    } else if (OB_FAIL(ddl_operator.alter_package(package_info, schema_guard, trans, public_routine_infos,
                                                   error_info, ddl_stmt_str))) {
       LOG_WARN("alter package failed", K(package_info), K(ret));
     }
