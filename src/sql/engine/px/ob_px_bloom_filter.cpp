@@ -204,10 +204,10 @@ int ObPxBloomFilter::put(uint64_t hash)
   } else {
     uint32_t hash_high = (uint32_t)(hash >> 32);
   uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
-    (void)set(block_begin, 1L << hash_high);
-    (void)set(block_begin + 1, 1L << (hash_high >> 8));
-    (void)set(block_begin + 2, 1L << (hash_high >> 16));
-    (void)set(block_begin + 3, 1L << (hash_high >> 24));
+    (void)set(block_begin, 1L << (hash_high % 64));
+    (void)set(block_begin + 1, 1L << ((hash_high >> 8) % 64));
+    (void)set(block_begin + 2, 1L << ((hash_high >> 16) % 64));
+    (void)set(block_begin + 3, 1L << ((hash_high >> 24) % 64));
   }
   return ret;
 }
@@ -228,13 +228,13 @@ int ObPxBloomFilter::might_contain_nonsimd(uint64_t hash, bool &is_match)
   is_match = true;
   uint32_t hash_high = (uint32_t)(hash >> 32);
   uint64_t block_begin = (hash & ((bits_count_ >> (LOG_HASH_COUNT + 6)) - 1)) << LOG_HASH_COUNT;
-  if (!get(block_begin, 1L << hash_high)) {
+  if (!get(block_begin, 1L << (hash_high % 64))) {
     is_match = false;
-  } else if (!get(block_begin + 1, 1L << (hash_high >> 8))) {
+  } else if (!get(block_begin + 1, 1L << ((hash_high >> 8) % 64))) {
     is_match = false;
-  } else if (!get(block_begin + 2, 1L << (hash_high >> 16))) {
+  } else if (!get(block_begin + 2, 1L << ((hash_high >> 16) % 64))) {
     is_match = false;
-  } else if (!get(block_begin + 3, 1L << (hash_high >> 24))) {
+  } else if (!get(block_begin + 3, 1L << ((hash_high >> 24) % 64))) {
     is_match = false;
   }
   return ret;
