@@ -39,6 +39,7 @@ namespace share
 {
 class ObLSID;
 struct ObLSStatusInfo;
+
 #define ALL_LS_EVENT_ADD(tenant_id, ls_id, event, ret, sql, args...)\
   do {\
     const int64_t MAX_VALUE_LENGTH = 512; \
