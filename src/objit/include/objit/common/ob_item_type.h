@@ -2416,6 +2416,7 @@ typedef enum ObItemType
 
   T_IGNORE_UNKNOWN_USER,
   T_SHOW_PROFILE,
+  T_ALTER_TABLE_FORCE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
