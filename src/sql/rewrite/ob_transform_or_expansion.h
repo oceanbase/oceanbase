@@ -206,6 +206,7 @@ private:
   bool reached_max_times_for_or_expansion() { return try_times_ >= MAX_TIMES_FOR_OR_EXPANSION; }
 
   int check_upd_del_stmt_validity(const ObDelUpdStmt &stmt, bool &is_valid);
+  int disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt);
 
   int has_odd_function(const ObDMLStmt &stmt, bool &has);
 
