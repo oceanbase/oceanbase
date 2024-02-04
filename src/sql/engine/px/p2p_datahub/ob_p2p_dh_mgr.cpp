@@ -407,6 +407,7 @@ int ObP2PDatahubManager::P2PMsgSetCall::operator() (const common::hash::HashMapP
         K(dh_key_), K(dh_msg_.get_dm_cb_node_seq_id()));
     if (OB_FAIL(dh_msg_.regenerate())) {
       LOG_WARN("failed to do regen_call", K(dh_key_));
+    } else if (FALSE_IT(dh_msg_.check_finish_receive())) {
     }
   }
   if (OB_FAIL(ret)) {
