@@ -2171,7 +2171,7 @@ int ObMemtable::split_ranges_for_sample(const blocksstable::ObDatumRange &table_
                                         ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges)
 {
   int ret = OB_SUCCESS;
-  if (sample_rate_percentage == 0 || sample_rate_percentage >= 100) {
+  if (sample_rate_percentage == 0 || sample_rate_percentage > 100) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "invalid sample_rate_percentage", KR(ret), K(sample_rate_percentage));
   } else {
