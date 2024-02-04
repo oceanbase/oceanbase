@@ -118,7 +118,8 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
       if (stmt::T_SELECT == result.get_stmt_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select stmt do not use async plan in prexecute.", K(ret));
-      } else {
+      } else if (!result.is_async_end_trans_submitted()) {
+        // is_async_end_trans_submitted 表示异步回包准备好了
         ObOKPParam ok_param;
         ok_param.affected_rows_ = result.get_affected_rows();
         ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
