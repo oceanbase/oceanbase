@@ -504,6 +504,7 @@ public:
   void set_pushdown_param_null(const common::ObIArray<ObDynamicParamSetter> &rescan_params);
   void set_feedback_node_idx(int64_t idx)
   { fb_node_idx_ = idx; }
+  TO_STRING_KV(K_(spec));
 protected:
   int init_skip_vector();
   // Execute filter
