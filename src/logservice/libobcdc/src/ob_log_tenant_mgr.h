@@ -416,7 +416,7 @@ private:
       int64_t &start_commit_version);
   int get_min_add_tenant_start_ddl_commit_version_(int64_t &commit_version);
   void try_del_tenant_start_ddl_info_(const uint64_t tenant_id);
-  int filter_dropped_tenant_(common::ObIArray<uint64_t> &tenant_id_list);
+  int filter_by_current_tenant_status_(common::ObIArray<uint64_t> &tenant_id_list);
 private:
   bool                inited_;
   RefreshMode         refresh_mode_;
