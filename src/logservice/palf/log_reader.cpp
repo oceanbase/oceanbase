@@ -97,7 +97,7 @@ int LogReader::pread(const block_id_t block_id,
 
   if (-1 != read_io_fd && -1 == ::close(read_io_fd)) {
     ret = convert_sys_errno();
-    PALF_LOG(ERROR, "close read_io_fd failed", K(ret), K(read_io_fd));
+    PALF_LOG(ERROR, "close read_io_fd failed", K(ret), K(read_io_fd), K(errno));
   }
   return ret;
 }
