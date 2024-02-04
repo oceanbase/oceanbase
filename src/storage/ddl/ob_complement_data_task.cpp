@@ -730,7 +730,8 @@ int ObComplementPrepareTask::process()
 }
 
 ObComplementWriteTask::ObComplementWriteTask()
-  : ObITask(TASK_TYPE_COMPLEMENT_WRITE), is_inited_(false), task_id_(0), param_(nullptr),
+  : ObITask(TASK_TYPE_COMPLEMENT_WRITE), allocator_("WriteTaskAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    is_inited_(false), task_id_(0), param_(nullptr),
     context_(nullptr), write_row_(),
     col_ids_(), org_col_ids_(), output_projector_()
 {
@@ -738,6 +739,11 @@ ObComplementWriteTask::ObComplementWriteTask()
 
 ObComplementWriteTask::~ObComplementWriteTask()
 {
+  col_ids_.reset();
+  org_col_ids_.reset();
+  output_projector_.reset();
+  write_row_.reset();
+  allocator_.reset();
 }
 
 int ObComplementWriteTask::init(const int64_t task_id, ObComplementDataParam &param,
@@ -762,7 +768,7 @@ int ObComplementWriteTask::init(const int64_t task_id, ObComplementDataParam &pa
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("hidden table schema not exist", K(ret), K(param));
   } else if (OB_FAIL(write_row_.init(
-              param.allocator_, hidden_table_schema->get_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
+              allocator_, hidden_table_schema->get_column_count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
     LOG_WARN("Fail to init write row", K(ret));
   } else {
     write_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
