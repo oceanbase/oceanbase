@@ -104,7 +104,7 @@ int ObAllVirtualSessionEvent::inner_get_next_row(ObNewRow *&row)
         collect_->lock_.unlock();
       }
     }
-    while (0 == event_iter_ && session_iter_ < session_status_.count()) {
+    while (OB_SUCCESS == ret && 0 == event_iter_ && session_iter_ < session_status_.count()) {
       while (OB_SUCCESS == ret && session_iter_ < session_status_.count()) {
         collect_ = session_status_.at(session_iter_).second;
         if (NULL != collect_ && OB_SUCCESS == collect_->lock_.try_rdlock()) {
