@@ -355,6 +355,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         break;
       case T_VARIABLE_SET: {
         RESOLVE_STMT(PL_ASSIGN, resolve_assign, ObPLAssignStmt);
+        OZ (try_transform_assign_to_dynamic_SQL(stmt, func));
       }
         break;
       case T_SP_IF: {
@@ -9974,6 +9975,111 @@ int ObPLResolver::transform_subquery_expr(const ParseNode *node,
         LOG_WARN("inner error", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func)
+{
+  int ret = OB_SUCCESS;
+  int64_t into_count = OB_INVALID_COUNT;
+  int64_t value_count = OB_INVALID_COUNT;
+  int64_t expr_count = OB_INVALID_COUNT;
+  ObPLAssignStmt * assign_stmt = NULL;
+  CK (OB_NOT_NULL(assign_stmt = static_cast<ObPLAssignStmt *>(old_stmt)));
+  OX (into_count = assign_stmt->get_into_count());
+  OX (value_count = assign_stmt->get_value_count());
+  if(lib::is_mysql_mode() && into_count > 0 && value_count > 0 && into_count == value_count) {
+    bool is_need_transform_to_dynamic = false;
+    ObSEArray<int64_t, 1> var_val_pos_array;
+    OX (expr_count = func.get_expr_count());
+    for(int64_t i = 0; i < into_count && OB_SUCC(ret); i++) {
+      ObRawExpr* sql_expr = NULL;
+      ObRawExpr* into_expr = NULL;
+      int64_t sql_expr_index = assign_stmt->get_value_index(i);
+      int64_t into_expr_index = assign_stmt->get_into_index(i);
+      CK (sql_expr_index >= 0 && sql_expr_index < expr_count && into_expr_index >= 0 && into_expr_index < expr_count);
+      CK (OB_NOT_NULL(sql_expr = func.get_expr(sql_expr_index)));
+      CK (OB_NOT_NULL(into_expr = func.get_expr(into_expr_index)));
+      if(OB_SUCC(ret) && sql_expr->get_expr_type() == T_FUN_SUBQUERY &&
+        into_expr->get_expr_type() == T_OP_GET_USER_VAR) {
+          OZ (transform_to_new_assign_stmt(var_val_pos_array, assign_stmt));
+          OZ (transform_var_val_to_dynamic_SQL(sql_expr_index, into_expr_index, func));
+          OX (is_need_transform_to_dynamic = true);
+          LOG_INFO("try transform var_val to dynamic SQL!",K(ret), K(sql_expr_index), K(into_expr_index), K(i));
+      } else {
+        OZ (var_val_pos_array.push_back(i));
+      }
+    }
+    if(OB_SUCC(ret) && is_need_transform_to_dynamic) {
+      if(!var_val_pos_array.empty()) {
+        OZ (transform_to_new_assign_stmt(var_val_pos_array, assign_stmt));
+      }
+      old_stmt->~ObPLStmt();
+      OX (old_stmt = NULL);
+    }
+  }
+  return ret;
+}
+
+int ObPLResolver::transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func)
+{
+  int ret = OB_SUCCESS;
+  ObPLStmt *stmt = NULL;
+  ObPLExecuteStmt* execute_stmt = NULL;
+  ObObjParam val;
+  ObString str_val;
+  ObConstRawExpr *c_expr = NULL;
+  ObPlQueryRefRawExpr* sql = NULL;
+  ObCollationType collation_connection = CS_TYPE_INVALID;
+  OZ (stmt_factory_.allocate(PL_EXECUTE, current_block_, stmt));
+  CK (OB_NOT_NULL(execute_stmt = static_cast<ObPLExecuteStmt *>(stmt)));
+  CK (OB_NOT_NULL(sql = static_cast<ObPlQueryRefRawExpr *>(func.get_expr(sql_expr_index))));
+  // for SQL, construct an ObConstRawExpr from ObPlQueryRefRawExpr
+  OZ (ob_write_string(resolve_ctx_.allocator_, sql->get_ps_sql(), str_val));
+  OX (val.set_string(ObCharType, str_val));
+  OX (val.set_collation_level(CS_LEVEL_COERCIBLE));
+  OZ (current_block_->get_namespace().get_external_ns()->get_resolve_ctx().session_info_.get_collation_connection(collation_connection));
+  OX (val.set_collation_type(collation_connection));
+  OZ (expr_factory_.create_raw_expr(T_CHAR, c_expr));
+  OX (c_expr->set_value(val));
+  OZ (func.add_expr(c_expr));
+  OX (execute_stmt->set_sql(func.get_expr_count() - 1));
+  // for into
+  OZ (execute_stmt->add_into(into_expr_index, current_block_->get_namespace(), *func.get_expr(into_expr_index)));
+  // for using
+  if(OB_SUCC(ret)) {
+    for(int64_t param_pos = 0; param_pos < sql->get_param_count() && OB_SUCC(ret); param_pos++) {
+      for(int64_t using_pos = 0; using_pos < func.get_expr_count() && OB_SUCC(ret); using_pos++) {
+        if(func.get_expr(using_pos) == sql->get_param_expr(param_pos)) {
+          // CK (func.get_expr(using_pos)->get_expr_type() == T_QUESTIONMARK);
+          OZ (execute_stmt->get_using().push_back(InOutParam(using_pos, PL_PARAM_IN, OB_INVALID_INDEX)));
+          break;
+        } else {
+          CK (using_pos < func.get_expr_count() - 1);
+        }
+      }
+    }
+  }
+  OZ (current_block_->add_stmt(stmt));
+  LOG_INFO("now transform var_val to dynamic SQL!",K(ret), K(sql_expr_index), K(into_expr_index), K(str_val));
+  return ret;
+}
+
+int ObPLResolver::transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt)
+{
+  int ret = OB_SUCCESS;
+  if(!transform_array.empty()) {
+    ObPLStmt *stmt = NULL;
+    ObPLAssignStmt * new_assign_stmt = NULL;
+    OZ (stmt_factory_.allocate(PL_ASSIGN, current_block_, stmt));
+    CK (OB_NOT_NULL(new_assign_stmt = static_cast<ObPLAssignStmt *>(stmt)));
+    for(int64_t i = 0; i < transform_array.count() && OB_SUCC(ret); i++) {
+      OZ (new_assign_stmt->add_into(old_stmt->get_into_index(transform_array.at(i))));
+      OZ (new_assign_stmt->add_value(old_stmt->get_value_index(transform_array.at(i))));
+    }
+    OX (transform_array.reset());
+    OZ (current_block_->add_stmt(stmt));
   }
   return ret;
 }
