@@ -178,6 +178,7 @@ if(OB_BUILD_OPENSOURCE)
 install(
   FILES
     ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/libobcdc.conf
+    ${PROJECT_SOURCE_DIR}/tools/upgrade/obcdc_compatiable_ob_info.yaml
     DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}
   COMPONENT cdc
   )
@@ -185,6 +186,7 @@ else()
 install(
   FILES
     ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/libobcdc.conf
+    ${PROJECT_SOURCE_DIR}/tools/upgrade/obcdc_compatiable_ob_info.yaml
     ${PROJECT_SOURCE_DIR}/src/logservice/libobcdc/tests/timezone_info.conf
     DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}
   COMPONENT cdc
