@@ -432,8 +432,8 @@ int ObLogTenantMgr::start_tenant_service_(
       } else if (OB_SYS_TENANT_ID == tenant_id) {
         // sys tenant, do nothing
       } else if (! is_normal_new_created_tenant) {
-        if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, ls_id_array))) {
-          LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array));
+        if (OB_FAIL(ls_getter_.get_ls_ids(tenant_id, start_tstamp_ns, ls_id_array))) {
+          LOG_ERROR("ls_getter_ get_ls_ids failed", KR(ret), K(tenant_id), K(ls_id_array), K(start_tstamp_ns));
         }
       }
     } else if (is_data_dict_refresh_mode(refresh_mode_)) {
@@ -611,7 +611,7 @@ int ObLogTenantMgr::add_tenant(
         ObDictTenantInfoGuard dict_tenant_info_guard;
         ObDictTenantInfo *tenant_info = nullptr;
 
-        if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+        if (FAILEDx(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
           LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
         } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1333,8 +1333,10 @@ int ObLogTenantMgr::get_tenant_ids_(
     // get available tenant id list
     else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, timeout))) {
       LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_id_list), K(timeout));
-    } else if (OB_FAIL(ls_getter_.init(tenant_id_list))) {
-      LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list));
+    } else if (OB_FAIL(filter_dropped_tenant_(tenant_id_list))) {
+      LOG_ERROR("filter_dropped_tenant_ fail", KR(ret), K(tenant_id_list), K(timeout));
+    } else if (OB_FAIL(ls_getter_.init(tenant_id_list, start_tstamp_ns))) {
+      LOG_ERROR("ObLogLsGetter init fail", KR(ret), K(tenant_id_list), K(start_tstamp_ns));
     }
   } else if (is_data_dict_refresh_mode(refresh_mode_)) {
     IObLogSysTableHelper *systable_helper = TCTX.systable_helper_;
@@ -1785,6 +1787,41 @@ bool ObLogTenantMgr::GlobalHeartbeatUpdateFunc::operator()(const TenantID &tid, 
   }
 
   return bool_ret;
+}
+
+int ObLogTenantMgr::filter_dropped_tenant_(common::ObIArray<uint64_t> &tenant_id_list)
+{
+  int ret = OB_SUCCESS;
+  IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+  common::ObArray<uint64_t> tmp_tenant_id_list;
+
+  if (OB_FAIL(tmp_tenant_id_list.assign(tenant_id_list))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant_id_list assign fail", KR(ret), K(tenant_id_list), K(tmp_tenant_id_list));
+  } else if (FALSE_IT(tenant_id_list.reset())) {
+  } else if (OB_ISNULL(schema_getter)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid arguments", KR(ret), K(schema_getter));
+  } else {
+    ARRAY_FOREACH_N(tmp_tenant_id_list, idx, count) {
+      const uint64_t tenant_id = tmp_tenant_id_list.at(idx);
+      bool is_tenant_dropping_or_dropped = false;
+
+      if (OB_FAIL(schema_getter->check_if_tenant_is_dropping_or_dropped(tenant_id, is_tenant_dropping_or_dropped))) {
+        LOG_ERROR("check_if_tenant_is_dropping_or_dropped fail", KR(ret), K(tenant_id), K(is_tenant_dropping_or_dropped));
+      } else if (is_tenant_dropping_or_dropped) {
+        LOG_INFO("tenant is dropping or has been dropped", K(tenant_id), K(is_tenant_dropping_or_dropped));
+      } else if (OB_FAIL(tenant_id_list.push_back(tenant_id))) {
+        LOG_ERROR("tenant_id_list push_back fail", KR(ret), K(tenant_id));
+      } else {
+      }
+    }
+
+    LOG_INFO("filter dropped tenant finished", "origin_tenant_id_list", tmp_tenant_id_list,
+        "filtered_tenant_id_list", tenant_id_list);
+  }
+
+  return ret;
 }
 
 } // namespace libobcdc

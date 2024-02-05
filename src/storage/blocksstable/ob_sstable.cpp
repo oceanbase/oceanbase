@@ -41,6 +41,8 @@ using namespace share;
 namespace blocksstable
 {
 
+const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF = "DO_NOT_VISIT";
+const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE = 13;
 void ObSSTableMetaHandle::reset()
 {
   handle_.reset();
@@ -58,7 +60,6 @@ int ObSSTableMetaHandle::get_sstable_meta(const ObSSTableMeta *&sstable_meta) co
   }
   return ret;
 }
-
 
 ObSSTableMetaCache::ObSSTableMetaCache()
   : header_(0),
@@ -571,7 +572,7 @@ int ObSSTable::exist(
       || !context.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(rowkey), K(param), K(context));
-  } else if (meta_->is_empty()) {
+  } else if (no_data_to_read()) {
     is_exist = false;
     has_found = false;
   } else {
@@ -634,7 +635,7 @@ int ObSSTable::exist(ObRowsInfo &rows_info, bool &is_exist, bool &all_rows_found
   } else if (OB_UNLIKELY(rows_info.tablet_id_ != key_.tablet_id_)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("Tablet id not match", K(ret), K_(key), K(rows_info));
-  } else if (is_empty()) {
+  } else if (no_data_to_read()) {
     // Skip
   } else if (rows_info.all_rows_found()) {
     all_rows_found = true;
@@ -862,7 +863,7 @@ int ObSSTable::check_rows_locked(
   } else if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), KP_(meta));
-  } else if (meta_->is_empty() || (is_major_sstable() && !check_exist)) {
+  } else if (no_data_to_read() || (is_major_sstable() && !check_exist)) {
   } else if (!check_exist && get_upper_trans_version() <= snapshot_version.get_val_for_tx()) {
     if (max_trans_version.get_val_for_tx() < get_upper_trans_version()) {
       if (OB_FAIL(max_trans_version.convert_for_tx(get_upper_trans_version()))) {
@@ -915,7 +916,7 @@ int ObSSTable::check_row_locked(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(key), K_(valid_for_reading), KPC_(meta));
-  } else if (is_empty()) {
+  } else if (no_data_to_read()) {
   } else if (OB_FAIL(get_last_rowkey(sstable_endkey))) {
     LOG_WARN("Fail to get SSTable endkey", K(ret), KP_(meta));
   } else if (OB_ISNULL(sstable_endkey)) {
@@ -948,18 +949,23 @@ int ObSSTable::check_row_locked(
   return ret;
 }
 
-int ObSSTable::set_upper_trans_version(const int64_t upper_trans_version)
+int ObSSTable::set_upper_trans_version(
+    const int64_t upper_trans_version,
+    const bool force_update)
 {
   int ret = OB_SUCCESS;
 
   const int64_t old_val = ATOMIC_LOAD(&meta_cache_.upper_trans_version_);
   // only set once
   if (INT64_MAX == old_val && INT64_MAX != upper_trans_version) {
-    const int64_t new_val = std::max(upper_trans_version, meta_cache_.max_merged_trans_version_);
+    int64_t new_val = upper_trans_version;
+    if (OB_LIKELY(!force_update)) {
+      new_val = std::max(new_val, meta_cache_.max_merged_trans_version_);
+    }
     ATOMIC_CAS(&meta_cache_.upper_trans_version_, old_val, new_val);
   }
 
-  LOG_INFO("succeed to set upper trans version", K(key_),
+  LOG_INFO("succeed to set upper trans version", K(force_update), K(key_),
       K(upper_trans_version), K(meta_cache_.upper_trans_version_));
   return ret;
 }
@@ -1659,13 +1665,18 @@ int ObSSTable::get_index_tree_root(
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("The SSTable has not been inited", K(ret), K_(valid_for_reading), K_(meta));
-  } else if (OB_UNLIKELY(is_empty())) {
+  } else if (OB_UNLIKELY(no_data_to_read())) {
     index_data.reset();
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("SSTable is empty", K(ret));
   } else if (OB_UNLIKELY(!is_loaded())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("can not get index tree rot from an unloaded sstable", K(ret));
+  } else if (is_ddl_merge_empty_sstable()) {
+    // mock here, skip valid_check
+    index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
+    index_data.buf_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
+    index_data.size_ = DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
   } else if (OB_UNLIKELY(!meta_->get_root_info().get_addr().is_valid()
                       || !meta_->get_root_info().get_block_data().is_valid())) {
     ret = OB_STATE_NOT_MATCH;
@@ -1679,6 +1690,10 @@ int ObSSTable::get_index_tree_root(
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Shouldn't happen, transform has already been done in initialize,", K(ret), KPC(this));
+  }
+  if (OB_SUCC(ret) && is_ddl_merge_sstable()) {
+    index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
+    LOG_INFO("empty ddl merge sstable", K(index_data));
   }
   return ret;
 }
@@ -1796,6 +1811,9 @@ int ObSSTable::get_last_rowkey(const ObDatumRowkey *&sstable_endkey)
       } else if (OB_FAIL(block_meta_tree->get_last_rowkey(sstable_endkey))) {
         LOG_WARN("get last rowkey failed", K(ret));
       }
+    } else if (is_ddl_merge_sstable()) {
+      //todo qilu: get endkey from sstable + ddl kv after ddl_kv_mgr refactor
+      sstable_endkey = &ObDatumRowkey::MAX_ROWKEY;
     } else {
       if (OB_ISNULL(idx_data_header = reinterpret_cast<const ObIndexBlockDataHeader *>(
           root_block.get_extra_buf()))) {

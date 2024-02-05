@@ -225,7 +225,7 @@ public:
   //                      bool &is_rowkey_column) const;
   //int check_is_index_table(uint64_t table_id, bool &is_index_table) const;
   int get_can_read_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool with_mv) const;
-  int get_can_write_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool only_global = false) const;
+  int get_can_write_index_array(const uint64_t tenant_id, uint64_t table_id, uint64_t *index_tid_array, int64_t &size, bool only_global = false, bool with_mlog = false) const;
   // tenant
   int get_tenant_id(const common::ObString &tenant_name, uint64_t &teannt_id);
   int get_tenant_info(const uint64_t &tenant_id, const share::schema::ObTenantSchema *&tenant_schema);

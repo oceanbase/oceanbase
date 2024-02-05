@@ -64,12 +64,11 @@ namespace common
 #define CM_GEOMETRY_TYPE_RESERVED3       (1ULL << 14)
 #define CM_GEOMETRY_TYPE_RESERVED4       (1ULL << 15)
 #define CM_GEOMETRY_TYPE_RESERVED5       (1ULL << 16)
-
-#define CM_CONST_TO_DECIMAL_INT_UP       (1ULL << 17)
+#define CM_SQL_TO_JSON_SCALAR            (1ULL << 17)
 #define CM_CONST_TO_DECIMAL_INT_DOWN     (1ULL << 18)
 #define CM_CONST_TO_DECIMAL_INT_EQ        (1ULL << 19)
 #define CM_BY_TRANSFORMER                (1ULL << 20)
-
+#define CM_CONST_TO_DECIMAL_INT_UP       (1ULL << 21)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持
@@ -123,6 +122,9 @@ typedef uint64_t ObCastMode;
 #define CM_IS_STRICT_JSON(mode)               ((CM_STRICT_JSON & (mode)) != 0)
 #define CM_IS_JSON_VALUE(mode)                CM_IS_ERROR_ON_SCALE_OVER(mode)
 #define CM_IS_TO_COLUMN_CS_LEVEL(mode)        ((CM_TO_COLUMN_CS_LEVEL & (mode)) != 0)
+// for json type cast
+#define CM_IS_SQL_AS_JSON_SCALAR(mode)        ((CM_SQL_TO_JSON_SCALAR & (mode)) != 0)
+#define CM_SET_SQL_AS_JSON_SCALAR(mode)       (CM_SQL_TO_JSON_SCALAR | (mode))
 // for geomerty type cast
 #define CM_IS_GEOMETRY_GEOMETRY(mode)             ((((mode) >> 12) & 0x1F) == 0)
 #define CM_IS_GEOMETRY_POINT(mode)                ((((mode) >> 12) & 0x1F) == 1)
@@ -400,11 +402,7 @@ public:
                      const ObObj &in_obj, ObObj &out_obj);
   static int to_type(const ObObjType expect_type, ObCollationType expect_cs_type,
                      ObCastCtx &cast_ctx, const ObObj &in_obj, ObObj &out_obj);
-  static int get_zero_value(const ObObjType expect_type,
-                            ObCollationType expect_cs_type,
-                            int64_t data_len,
-                            ObIAllocator &alloc,
-                            ObObj &zero_obj);
+  static int get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj);
   static int enumset_to_inner(const ObObjMeta &expect_meta,
                               const ObObj &in_obj, ObObj &out_obj,
                               common::ObIAllocator &allocator,

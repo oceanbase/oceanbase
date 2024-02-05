@@ -30,6 +30,10 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::serialization;
 using namespace oceanbase::rpc::frame;
 
+extern "C" {
+int ussl_check_pcode_mismatch_connection(int fd, uint32_t pcode);
+};
+
 namespace oceanbase
 {
 namespace obrpc
@@ -193,15 +197,22 @@ void *ObRpcNetHandler::decode(easy_message_t *ms)
         LOG_ERROR("failed to decode", K(easy_conn), KP(ms), K(is_current_normal_mode), K(ret));
       } else {
         if (NULL != pkt) {
-          const int64_t receive_ts = common::ObClockGenerator::getClock();
-          const int64_t fly_ts = receive_ts - pkt->get_timestamp();
-          if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-            LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
-                    "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), "connection", easy_connection_str(ms->c));
-          }
-          pkt->set_receive_ts(receive_ts);
-          if (receive_ts - start_ts > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
-            LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "packet decode cost too much time", "pcode", pkt->get_pcode(), "connection", easy_connection_str(ms->c));
+          uint32_t pcode = pkt->get_pcode();
+          if (OB_UNLIKELY(ussl_check_pcode_mismatch_connection(ms->c->fd, pcode))) {
+            pkt = NULL;
+            ms->status = EASY_ERROR;
+            LOG_WARN_RET(common::OB_BAD_ADDRESS, "enable bypass connection received other RPC, disconnect", K(pcode));
+          } else {
+            const int64_t receive_ts = common::ObTimeUtility::current_time();
+            const int64_t fly_ts = receive_ts - pkt->get_timestamp();
+            if (!pkt->is_resp() && fly_ts > common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+              LOG_WARN_RET(common::OB_ERR_TOO_MUCH_TIME, "packet fly cost too much time", "pcode", pkt->get_pcode(),
+                      "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), "connection", easy_connection_str(ms->c));
+            }
+            pkt->set_receive_ts(receive_ts);
+            if (receive_ts - start_ts > common::OB_MAX_PACKET_DECODE_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+              LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "packet decode cost too much time", "pcode", pkt->get_pcode(), "connection", easy_connection_str(ms->c));
+            }
           }
         } else {
           //receive data is not enough

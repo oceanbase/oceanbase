@@ -54,6 +54,7 @@ public:
   const common::ObTabletID &get_tablet_id() const override { return meta_.tablet_id_; }
   int64_t get_row_count() const override { return meta_.row_count_; }
   bool is_valid() const override { return is_inited_; }
+  void release_data() override { /*do nothing*/ }
   const ObDirectLoadFastHeapTableMeta &get_meta() const { return meta_; }
   TO_STRING_KV(K_(meta));
 private:

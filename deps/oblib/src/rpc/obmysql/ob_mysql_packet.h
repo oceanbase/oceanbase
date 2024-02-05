@@ -105,7 +105,8 @@ enum class ObMySQLPacketType
   PKT_PREPARE,   // 9 -> prepare packet;
   PKT_RESHEAD,   // 10 -> result header packet
   PKT_PREXEC,    // 11 -> prepare execute packet;
-  PKT_END        // 12 -> end of packet type
+  PKT_FILENAME,  // 12 -> send file name to client(load local infile)
+  PKT_END        // 13 -> end of packet type
 };
 
 union ObServerStatusFlags
@@ -161,6 +162,10 @@ union ObProxyCapabilityFlags
   bool is_weak_stale_feedback() const { return 1 == cap_flags_.OB_CAP_PROXY_WEAK_STALE_FEEDBACK; }
   bool is_flt_show_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT
                                                         && is_ob_protocol_v2_support(); }
+  bool is_session_sync_support() const { return 1 == cap_flags_.OB_CAP_PROXY_SESSIOIN_SYNC
+                                                        && is_ob_protocol_v2_support(); }
+  bool is_load_local_support() const { return 1 == cap_flags_.OB_CAP_LOCAL_FILES; }
+  bool is_client_sessid_support() const { return 1 == cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID; }
 
   uint64_t capability_;
   struct CapabilityFlags
@@ -194,8 +199,8 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_PROXY_FULL_LINK_TRACING_EXT:       1;
     // duplicate session_info sync of transaction type
     uint64_t OB_CAP_SERVER_DUP_SESS_INFO_SYNC:         1;
-
     uint64_t OB_CAP_LOCAL_FILES:                       1;
+    // client session id consultation
     uint64_t OB_CAP_PROXY_CLIENT_SESSION_ID:           1;
     uint64_t OB_CAP_OB_PROTOCOL_V2_COMPRESS:           1;
     uint64_t OB_CAP_RESERVED_NOT_USE:                 41;
@@ -521,6 +526,7 @@ public:
       is_weak_read_(false),
       txn_free_route_(false),
       proxy_switch_route_(false),
+      consume_size_(0),
       extra_info_()
   {}
 
@@ -550,6 +556,9 @@ public:
   const common::ObString &get_trace_info() const { return extra_info_.trace_info_; }
   virtual int64_t get_serialize_size() const;
 
+  void set_consume_size(int64_t consume_size) { consume_size_ = consume_size; }
+  int64_t get_consume_size() const { return consume_size_; }
+
   virtual void reset() {
     ObMySQLPacket::reset();
     cmd_ = COM_MAX_NUM;
@@ -558,6 +567,7 @@ public:
     txn_free_route_ = false;
     proxy_switch_route_ = false;
     extra_info_.reset();
+    consume_size_ = 0;
   }
 
   virtual void assign(const ObMySQLRawPacket &other)
@@ -569,10 +579,12 @@ public:
     txn_free_route_ = other.txn_free_route_;
     extra_info_ = other.extra_info_;
     proxy_switch_route_ = other.proxy_switch_route_;
+    consume_size_ = other.consume_size_;
   }
 
   TO_STRING_KV("header", hdr_, "can_reroute", can_reroute_pkt_, "weak_read", is_weak_read_,
-            "txn_free_route_", txn_free_route_, "proxy_switch_route", proxy_switch_route_);
+            "txn_free_route_", txn_free_route_, "proxy_switch_route", proxy_switch_route_,
+            "consume_size", consume_size_);
 protected:
   virtual int serialize(char*, const int64_t, int64_t&) const;
 
@@ -584,6 +596,12 @@ private:
   bool is_weak_read_;
   bool txn_free_route_;
   bool proxy_switch_route_;
+
+  // In load local scenario, we should tell the NIO to consume specific size data.
+  // The size is a packet size in usually. But the mysql packet size if not equal
+  // to the packet that we received if we use ob20 or compress protocol.
+  // NOTE: one ob20 or compress packet has only one mysql packet in request message.
+  int64_t consume_size_;
 public:
   Ob20ExtraInfo extra_info_;
 };

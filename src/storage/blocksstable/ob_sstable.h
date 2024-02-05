@@ -36,6 +36,8 @@ class ObRowState;
 }
 namespace blocksstable
 {
+extern const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
+extern const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
 class ObSSTableSecMetaIterator;
 class ObIMacroBlockIterator;
 struct ObMacroBlocksWriteCtx;
@@ -200,7 +202,7 @@ public:
       storage::ObTableAccessContext &context,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
-  int set_upper_trans_version(const int64_t upper_trans_version);
+  int set_upper_trans_version(const int64_t upper_trans_version, const bool force_update);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -225,6 +227,14 @@ public:
   bool is_empty() const
   {
     return 0 == meta_cache_.data_macro_block_count_;
+  }
+  virtual bool no_data_to_read() const override
+  {
+    return is_empty() && !is_ddl_merge_sstable();
+  }
+  virtual bool is_ddl_merge_empty_sstable() const override
+  {
+    return is_empty() && is_ddl_merge_sstable();
   }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }

@@ -109,7 +109,7 @@ ObLocalDevice::~ObLocalDevice()
 int ObLocalDevice::init(const common::ObIODOpts &opts)
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, "LOCALDEVICE");
+  const ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "LDIOSetup");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     SHARE_LOG(WARN, "The local device has been inited, ", K(ret));
@@ -301,6 +301,18 @@ int ObLocalDevice::open(const char *pathname, const int flags, const mode_t mode
     fd.second_id_ = local_fd;
   }
   return ret;
+}
+
+int ObLocalDevice::complete(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::abort(const ObIOFd &fd)
+{
+  UNUSED(fd);
+  return OB_NOT_SUPPORTED;
 }
 
 int ObLocalDevice::close(const ObIOFd &fd)
@@ -643,6 +655,39 @@ int ObLocalDevice::fstat(const ObIOFd &fd, ObIODFileStat &statbuf)
     }
   }
   return ret;
+}
+
+int ObLocalDevice::del_unmerged_parts(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_exist(const char *pathname, bool &is_exist)
+{
+  UNUSED(pathname);
+  UNUSED(is_exist);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_stat(const char *pathname, ObIODFileStat &statbuf)
+{
+  UNUSED(pathname);
+  UNUSED(statbuf);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_unlink(const char *pathname)
+{
+  UNUSED(pathname);
+  return OB_NOT_SUPPORTED;
+}
+
+int ObLocalDevice::adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op)
+{
+  UNUSED(dir_name);
+  UNUSED(op);
+  return OB_NOT_SUPPORTED;
 }
 
 //block interfaces
@@ -1465,7 +1510,7 @@ int ObLocalDevice::open_block_file(
     }
 
     if (OB_SUCC(ret)) {
-      const ObMemAttr mem_attr(OB_SYS_TENANT_ID, "LOCALDEVICE");
+      const ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "LDBlockBitMap");
       total_block_cnt_ = block_file_size_ / block_size_;
       if (OB_ISNULL(free_block_array_ = (int64_t *) ob_malloc(sizeof(int64_t) * total_block_cnt_, mem_attr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1489,7 +1534,7 @@ int ObLocalDevice::resize_block_file(const int64_t new_size)
   // copy free block info to new_free_block_array
   int ret = OB_SUCCESS;
   int sys_ret = 0;
-  const ObMemAttr mem_attr(OB_SYS_TENANT_ID, "LOCALDEVICE");
+  const ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "LDBlockBitMap");
   int64_t new_total_block_cnt = new_size / block_size_;
   int64_t *new_free_block_array = nullptr;
   bool *new_block_bitmap = nullptr;

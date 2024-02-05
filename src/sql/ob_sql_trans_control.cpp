@@ -181,6 +181,7 @@ int ObSqlTransControl::explicit_start_trans(ObExecContext &ctx, const bool read_
     session->get_tx_desc() = NULL;
   }
   OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
+  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   NG_TRACE_EXT(start_trans, OB_ID(ret), ret,
                OB_ID(trans_id), tx_id.get_id(),
                OB_ID(timeout), tx_param.timeout_us_,
@@ -207,6 +208,14 @@ int ObSqlTransControl::implicit_end_trans(ObExecContext &exec_ctx,
 #endif
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   CK (OB_NOT_NULL(session));
+  if (OB_SUCCESS != ret) {
+    // do nothing
+  } else if (session->associated_xa()) {
+    // NOTE that not support dblink trans in this interface
+    // PLEASE handle implicit cases for dblink trans instead of this interface
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()));
+  }
   int64_t tx_id = 0;
   OX (tx_id = session->get_tx_id().get_id());
   CHECK_TX_FREE_ROUTE(exec_ctx, session);
@@ -235,6 +244,7 @@ int ObSqlTransControl::explicit_end_trans(ObExecContext &exec_ctx, const bool is
     CK (OB_NOT_NULL(callback = &session->get_end_trans_cb()));
   }
   OZ (end_trans(exec_ctx, is_rollback, true, callback));
+  OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
   FLT_SET_TAG(trans_id, txn_id.get_id());
   if (hint.length()) {
     LOG_INFO("explicit end trans with hint",
@@ -347,7 +357,11 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
   int ret = OB_SUCCESS;
   if (!session->get_is_deserialized() && session->is_in_transaction()) {
     auto session_id = session->get_sessid();
-    LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
+    if (cause >= 0) {
+      LOG_INFO("begin to kill tx", "caused_by", transaction::ObTxAbortCauseNames::of(cause), K(cause), K(session_id), KPC(session));
+    } else {
+      LOG_INFO("begin to kill tx", "caused_by", common::ob_error_name(cause), K(cause), K(session_id), KPC(session));
+    }
     transaction::ObTxDesc *tx_desc = session->get_tx_desc();
     auto tx_tenant_id = tx_desc->get_tenant_id();
     const ObTransID tx_id = tx_desc->get_tx_id();
@@ -560,7 +574,9 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     ar_snapshot.version_ = snapshot.core_.version_;
     ar_snapshot.tx_id_ = snapshot.core_.tx_id_.get_id();
     ar_snapshot.scn_ = snapshot.core_.scn_.cast_to_int();
-    ar_snapshot.source_ = snapshot.get_source_name().ptr();
+    (void)snapshot.format_source_for_display(audit_record.snapshot_source_, sizeof(audit_record.snapshot_source_));
+    ar_snapshot.source_ = audit_record.snapshot_source_;
+    audit_record.seq_num_ = ObSequence::get_max_seq_no();
   }
   if (OB_SUCC(ret) && !session->has_start_stmt()) {
     OZ (session->set_start_stmt());
@@ -823,6 +839,9 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  if (user_create) {
+    OX(session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
+  }
   return ret;
 }
 
@@ -943,6 +962,9 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
+  if (0 == session->get_raw_audit_record().seq_num_) {
+    OX (session->get_raw_audit_record().seq_num_ = ObSequence::get_max_seq_no());
+  }
   if (start_hook) {
     int tmp_ret = txs->sql_stmt_end_hook(session->get_xid(), *session->get_tx_desc());
     if (OB_SUCCESS != tmp_ret) {
@@ -1098,7 +1120,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #else
   if (OB_FAIL(ret) || rollback) { print_log = true; }
 #endif
-  if (print_log && OB_NOT_NULL(session)) {
+  if (print_log
+      && OB_NOT_NULL(session)
+      && OB_TRY_LOCK_ROW_CONFLICT != exec_ctx.get_errcode()) {
     LOG_INFO("end stmt", K(ret),
              "plain_select", is_plain_select,
              "stmt_type", stmt_type,
@@ -1136,9 +1160,10 @@ int ObSqlTransControl::create_anonymous_savepoint(ObExecContext &exec_ctx, trans
   ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
   CK (OB_NOT_NULL(session));
   OZ (get_tx_service(session, txs));
+  CK (OB_NOT_NULL(session->get_tx_desc()));
   ObTxParam tx_param;
-  OZ (build_tx_param_(session, tx_param));
-  OZ (txs->create_implicit_savepoint(*session->get_tx_desc(), tx_param, savepoint), *session->get_tx_desc());
+  const int16_t branch_id = DAS_CTX(exec_ctx).get_write_branch_id();
+  OZ (txs->create_branch_savepoint(*session->get_tx_desc(), branch_id, savepoint), *session->get_tx_desc());
   return ret;
 }
 
@@ -1493,6 +1518,17 @@ int ObSqlTransControl::check_free_route_tx_alive(ObSQLSessionInfo &session, tran
       OZ (txs->tx_free_route_check_alive(txn_free_route_ctx, *tx, session.get_sessid()));
     }
   }
+  return ret;
+}
+
+int ObSqlTransControl::alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  transaction::ObTxDesc *tx_desc = NULL;
+  CK (OB_NOT_NULL(session));
+  CK (OB_NOT_NULL(tx_desc = session->get_tx_desc()));
+  OZ (tx_desc->alloc_branch_id(count, branch_id));
   return ret;
 }
 

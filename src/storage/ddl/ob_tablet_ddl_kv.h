@@ -20,6 +20,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/memtable/mvcc/ob_keybtree.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
@@ -40,47 +41,95 @@ class ObDataMacroBlockMeta;
 namespace storage
 {
 
+class ObBlockMetaTreeValue final
+{
+public:
+  ObBlockMetaTreeValue() : co_sstable_row_offset_(0), block_meta_(nullptr), rowkey_(nullptr), header_() {}
+  ObBlockMetaTreeValue(const blocksstable::ObDataMacroBlockMeta *block_meta,
+                       const blocksstable::ObDatumRowkey *rowkey)
+    : co_sstable_row_offset_(0), block_meta_(block_meta), rowkey_(rowkey), header_(){}
+  ~ObBlockMetaTreeValue()
+  {
+    co_sstable_row_offset_ = 0;
+    block_meta_ = nullptr;
+    rowkey_ = nullptr;
+  }
+  TO_STRING_KV(K_(co_sstable_row_offset), KPC_(block_meta), KPC_(rowkey), K_(header));
+
+public:
+  int64_t co_sstable_row_offset_;
+  const blocksstable::ObDataMacroBlockMeta *block_meta_;
+  const blocksstable::ObDatumRowkey *rowkey_;
+  blocksstable::ObIndexBlockRowHeader header_;
+};
+
+struct ObDDLBlockMeta
+{
+public:
+  ObDDLBlockMeta() : block_meta_(nullptr), end_row_offset_(-1) {}
+  TO_STRING_KV(KPC(block_meta_), K(end_row_offset_));
+public:
+  const blocksstable::ObDataMacroBlockMeta *block_meta_;
+  int64_t end_row_offset_;
+};
+
 class ObBlockMetaTree
 {
-  typedef keybtree::ObKeyBtree<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> KeyBtree;
-  typedef keybtree::BtreeIterator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeIterator;
-  typedef keybtree::BtreeNodeAllocator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeNodeAllocator;
-  typedef keybtree::BtreeRawIterator<blocksstable::ObDatumRowkeyWrapper, blocksstable::ObDataMacroBlockMeta *> BtreeRawIterator;
+  typedef keybtree::ObKeyBtree<blocksstable::ObDatumRowkeyWrapper, ObBlockMetaTreeValue *> KeyBtree;
+  typedef keybtree::BtreeNodeAllocator<blocksstable::ObDatumRowkeyWrapper, ObBlockMetaTreeValue *> BtreeNodeAllocator;
+  typedef keybtree::BtreeRawIterator<blocksstable::ObDatumRowkeyWrapper, ObBlockMetaTreeValue *> BtreeRawIterator;
 public:
   ObBlockMetaTree();
   virtual ~ObBlockMetaTree();
   int init(ObTablet &tablet,
            const ObITable::TableKey &table_key,
            const share::SCN &ddl_start_scn,
-           const int64_t data_format_version);
+           const uint64_t data_format_version,
+           const ObStorageSchema *storage_schema);
   void destroy();
+  void destroy_tree_value();
   int insert_macro_block(const ObDDLMacroHandle &macro_handle,
                          const blocksstable::ObDatumRowkey *rowkey,
-                         const blocksstable::ObDataMacroBlockMeta *meta);
+                         const blocksstable::ObDataMacroBlockMeta *meta,
+                         const int64_t co_sstable_row_offset);
+  int locate_key(const blocksstable::ObDatumRange &range,
+                 const blocksstable::ObStorageDatumUtils &datum_utils,
+                 blocksstable::DDLBtreeIterator &iter,
+                 ObBlockMetaTreeValue *&cur_tree_value) const;
   int locate_range(const blocksstable::ObDatumRange &range,
                    const blocksstable::ObStorageDatumUtils &datum_utils,
                    const bool is_left_border,
                    const bool is_right_border,
-                   int64_t &begin_idx,
-                   int64_t &end_idx);
+                   const bool is_reverse_scan,
+                   blocksstable::DDLBtreeIterator &iter,
+                   ObBlockMetaTreeValue *&cur_tree_value) const;
   int skip_to_next_valid_position(const blocksstable::ObDatumRowkey &rowkey,
                                   const blocksstable::ObStorageDatumUtils &datum_utils,
-                                  int64_t &current_pos);
-  int get_index_block_row_header(const int64_t idx,
-                                 const blocksstable::ObIndexBlockRowHeader *&header,
-                                 const blocksstable::ObDatumRowkey *&endkey);
-  int get_macro_block_meta(const int64_t idx,
-                           blocksstable::ObDataMacroBlockMeta &macro_meta);
+                                  blocksstable::DDLBtreeIterator &iter,
+                                  ObBlockMetaTreeValue *&tree_value) const;
+  int get_next_tree_value(blocksstable::DDLBtreeIterator &iter,
+                          const int64_t step,
+                          ObBlockMetaTreeValue *&tree_value) const;
   int64_t get_macro_block_cnt() const { return macro_blocks_.count(); }
   int get_last_rowkey(const blocksstable::ObDatumRowkey *&last_rowkey);
-  int build_sorted_rowkeys();
-  int get_sorted_meta_array(ObIArray<const blocksstable::ObDataMacroBlockMeta *> &meta_array) const;
+  int get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array);
   int exist(const blocksstable::ObDatumRowkey *rowkey, bool &is_exist);
   const blocksstable::ObDataStoreDesc &get_data_desc() const { return data_desc_.get_desc(); }
-  const blocksstable::ObDatumRowkey *get_rowkey(const int64_t idx) const { return sorted_rowkeys_[idx].rowkey_; }
-  int64_t get_rowkey_count() const { return sorted_rowkeys_.count(); }
+  bool is_valid() const { return is_inited_; }
+  int64_t get_memory_used() const;
+  const KeyBtree &get_keybtree() const { return block_tree_; }
+  TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_));
 
-  TO_STRING_KV(K(is_inited_), K(macro_blocks_.count()), K(arena_.total()), K(data_desc_), K(sorted_rowkeys_.count()));
+private:
+  int lower_bound(const blocksstable::ObDatumRowkey *target_rowkey,
+                  const blocksstable::ObStorageDatumUtils &datum_utils,
+                  blocksstable::ObDatumRowkey *&rowkey,
+                  ObBlockMetaTreeValue *&tree_value) const;
+  int upper_bound(const blocksstable::ObDatumRowkey *target_rowkey,
+                  const blocksstable::ObStorageDatumUtils &datum_utils,
+                  blocksstable::ObDatumRowkey *&rowkey,
+                  ObBlockMetaTreeValue *&tree_value) const;
+
 private:
   struct IndexItem final
   {
@@ -96,13 +145,10 @@ private:
   };
   struct CompareFunctor
   {
-    CompareFunctor(const blocksstable::ObStorageDatumUtils &datum_utils,
-                   const bool need_compare_datum_cnt = true)
-      : datum_utils_(datum_utils), need_compare_datum_cnt_(need_compare_datum_cnt) {}
+    CompareFunctor(const blocksstable::ObStorageDatumUtils &datum_utils) : datum_utils_(datum_utils) {}
     bool operator ()(const IndexItem &item, const blocksstable::ObDatumRowkey &rowkey);
     bool operator ()(const blocksstable::ObDatumRowkey &rowkey, const IndexItem &item);
     const blocksstable::ObStorageDatumUtils &datum_utils_;
-    const bool need_compare_datum_cnt_;
   };
 
 private:
@@ -112,71 +158,118 @@ private:
   BtreeNodeAllocator tree_allocator_;
   KeyBtree block_tree_;
   blocksstable::ObWholeDataStoreDesc data_desc_;
-  ObArray<IndexItem> sorted_rowkeys_;
+  blocksstable::ObStorageDatumUtils row_id_datum_utils_;
+  blocksstable::ObStorageDatumUtils *datum_utils_;
 };
 
+class ObDDLMemtable : public blocksstable::ObSSTable
+{
+public:
+  ObDDLMemtable();
+  virtual ~ObDDLMemtable();
+  int init(
+      ObTablet &tablet,
+      const ObITable::TableKey &table_key,
+      const share::SCN &ddl_start_scn,
+      const uint64_t data_format_version);
+  void reset();
+  int insert_block_meta_tree(
+      const ObDDLMacroHandle &macro_handle,
+      blocksstable::ObDataMacroBlockMeta *data_macro_meta,
+      const int64_t co_sstable_row_offset);
+  void set_scn_range(
+      const share::SCN &start_scn,
+      const share::SCN &end_scn);
+  const ObBlockMetaTree *get_block_meta_tree() { return &block_meta_tree_; }
+  int init_ddl_index_iterator(const blocksstable::ObStorageDatumUtils *datum_utils,
+                              const bool is_reverse_scan,
+                              blocksstable::ObDDLIndexBlockRowIterator *ddl_kv_index_iter);
+  int64_t get_memory_used() const { return block_meta_tree_.get_memory_used(); }
+  INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, K(is_inited_), K(block_meta_tree_));
+private:
+  int init_sstable_param(
+      ObTablet &tablet,
+      const ObITable::TableKey &table_key,
+      const share::SCN &ddl_start_scn,
+      ObTabletCreateSSTableParam &sstable_param);
+private:
+  bool is_inited_;
+  ObArenaAllocator allocator_;
+  ObBlockMetaTree block_meta_tree_;
+};
 
-class ObDDLKV : public blocksstable::ObSSTable
+class ObDDLKV
 {
 public:
   ObDDLKV();
-  virtual ~ObDDLKV();
-  virtual void inc_ref() override;
-  virtual int64_t dec_ref() override;
-  virtual int64_t get_ref() const override { return ObITable::get_ref(); }
-  int init(ObTablet &tablet,
+  ~ObDDLKV();
+  int init(const share::ObLSID &ls_id,
+           const common::ObTabletID &tablet_id,
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
-           const int64_t data_format_version);
+           const uint64_t data_format_version);
   void reset();
-  int set_macro_block(ObTablet &tablet, const ObDDLMacroBlock &macro_block);
+  int set_macro_block(
+      ObTablet &tablet,
+      const ObDDLMacroBlock &macro_block,
+      const int64_t snapshot_version,
+      const uint64_t data_format_version,
+      const bool can_freeze);
 
   int freeze(const share::SCN &freeze_scn);
   bool is_freezed() const { return ATOMIC_LOAD(&is_freezed_); }
-  int close(ObTablet &tablet);
+  int close();
   int prepare_sstable(const bool need_check = true);
   bool is_closed() const { return is_closed_; }
   share::SCN get_min_scn() const { return min_scn_; }
   share::SCN get_freeze_scn() const { return freeze_scn_; }
   share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
   share::SCN get_start_scn() const { return last_freezed_scn_; }
-  int64_t get_macro_block_cnt() const { return block_meta_tree_.get_macro_block_cnt(); }
+  share::SCN get_end_scn() const { return freeze_scn_; }
+  int64_t get_macro_block_cnt() const { return macro_block_count_; }
+  int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
+  int get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
+  ObIArray<ObDDLMemtable *> &get_ddl_memtables() { return ddl_memtables_; }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();
+  void inc_ref();
+  int64_t dec_ref();
+  int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
+  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  int64_t get_snapshot_version() const { return snapshot_version_; }
+  int64_t get_memory_used() const;
+  TO_STRING_KV(K_(is_inited), K_(is_closed), K_(ref_cnt), K_(ls_id), K_(tablet_id),
+      K_(ddl_start_scn), K_(snapshot_version), K_(data_format_version),
+      K_(is_freezed), K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn), K_(pending_cnt),
+      K_(macro_block_count), K_(ddl_memtables));
+private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
   int wait_pending();
-  INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, K_(is_inited), K_(ls_id), K_(tablet_id), K_(ddl_start_scn), K_(snapshot_version),
-      K_(is_freezed), K_(is_closed),
-      K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn),
-      K_(pending_cnt), K_(data_format_version), K_(ref_cnt),
-      K_(block_meta_tree));
-private:
-  int insert_block_meta_tree(const ObDDLMacroHandle &macro_handle,
-                             blocksstable::ObDataMacroBlockMeta *data_macro_meta);
-  int init_sstable_param(ObTablet &tablet,
-                         const ObITable::TableKey &table_key,
-                         const share::SCN &ddl_start_scn,
-                         ObTabletCreateSSTableParam &sstable_param);
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;
   bool is_inited_;
+  bool is_closed_;
+  int64_t ref_cnt_;
+  common::TCRWLock lock_; // lock for block_meta_tree_ and freeze_log_ts_
+  common::ObArenaAllocator arena_allocator_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::SCN ddl_start_scn_; // the log ts of ddl start log
   int64_t snapshot_version_; // the snapshot version for major sstable which is completed by ddl
-  common::TCRWLock lock_; // lock for block_meta_tree_ and freeze_log_ts_
-  common::ObArenaAllocator arena_allocator_;
+  uint64_t data_format_version_;
+
+  // freeze related
   bool is_freezed_;
-  bool is_closed_;
   share::SCN last_freezed_scn_; // the freezed log ts of last ddl kv. the log ts range of this ddl kv is (last_freezed_log_ts_, freeze_log_ts_]
   share::SCN min_scn_; // the min log ts of macro blocks
   share::SCN max_scn_; // the max log ts of macro blocks
   share::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
   int64_t pending_cnt_; // the amount of kvs that are replaying
-  int64_t data_format_version_;
-  ObBlockMetaTree block_meta_tree_;
+
+  int64_t macro_block_count_;
+  ObArray<ObDDLMemtable *> ddl_memtables_;
 };
 
 

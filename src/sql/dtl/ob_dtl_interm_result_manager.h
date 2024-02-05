@@ -21,6 +21,7 @@
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "lib/allocator/ob_allocator.h"
 #include "share/detect/ob_detectable_id.h"
+#include "sql/engine/basic/ob_temp_column_store.h"
 
 namespace oceanbase
 {
@@ -76,16 +77,18 @@ struct ObDTLIntermResultInfo
 {
   friend class ObDTLIntermResultManager;
   ObDTLIntermResultInfo()
-      : datum_store_(NULL), ret_(common::OB_SUCCESS),
+      : datum_store_(NULL), col_store_(NULL), ret_(common::OB_SUCCESS),
       is_read_(false), is_eof_(false), ref_count_(0),
-      trace_id_(), dump_time_(0), dump_cost_(0), unregister_dm_info_()
+      trace_id_(), dump_time_(0), dump_cost_(0), unregister_dm_info_(), use_rich_format_(false)
   {}
   ~ObDTLIntermResultInfo() {}
-  bool is_store_valid() const { return NULL != datum_store_; }
+  bool is_store_valid() const { return use_rich_format_ ? NULL != col_store_ : NULL != datum_store_; }
 
-  void reset() { datum_store_ = NULL; is_read_ = false; ret_ = common::OB_SUCCESS; }
+  void reset() { datum_store_ = NULL; col_store_ = NULL; is_read_ = false; ret_ = common::OB_SUCCESS; }
   void set_eof(bool flag) { is_eof_ = flag; }
+  void set_use_rich_format(bool use_rich_format) { use_rich_format_= use_rich_format; }
   int64_t get_ref_count() { return ATOMIC_LOAD(&ref_count_); }
+  uint64_t get_tenant_id() const { return use_rich_format_ ? col_store_->get_tenant_id() : datum_store_->get_tenant_id(); }
 private:
   void inc_ref_count() { ATOMIC_INC(&ref_count_); }
   int64_t dec_ref_count() { return ATOMIC_SAF(&ref_count_, 1); }
@@ -96,10 +99,12 @@ public:
     K_(is_eof),
     K_(ref_count),
     K_(dump_cost),
-    K_(monitor_info)
+    K_(monitor_info),
+    K_(use_rich_format)
   );
 
   sql::ObChunkDatumStore *datum_store_;
+  sql::ObTempColumnStore *col_store_;
   int ret_;
   bool is_read_;
   bool is_eof_;
@@ -110,6 +115,7 @@ public:
   common::ObUnregisterDmInfo unregister_dm_info_;
   ObDTLIntermResultMonitorInfo monitor_info_;
   uint64_t tenant_id_;
+  bool use_rich_format_;
 };
 
 struct ObDTLIntermResultInfoGuard
@@ -123,9 +129,9 @@ struct ObDTLIntermResultInfoGuard
   ObDTLIntermResultInfo *result_info_;
 };
 
-// helper macro to dispatch action to daum_store_
+// helper macro to dispatch action to datum_store_ / col_store_
 #define DTL_IR_STORE_DO(ir, act, ...) \
-    ((ir).datum_store_->act(__VA_ARGS__))
+    ((ir).use_rich_format_ ? ((ir).col_store_->act(__VA_ARGS__)) : ((ir).datum_store_->act(__VA_ARGS__)))
 
 class ObDTLIntermResultGC
 {
@@ -209,11 +215,12 @@ public:
 class ObDTLIntermResultGCTask : public common::ObTimerTask
 {
 public:
-  ObDTLIntermResultGCTask() : dtl_interm_result_manager_(NULL) {}
+  ObDTLIntermResultGCTask() : dtl_interm_result_manager_(NULL), is_start_(false) {}
   virtual ~ObDTLIntermResultGCTask() {}
   virtual void runTimerTask() override;
   const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L; // 10秒间隔
   ObDTLIntermResultManager *dtl_interm_result_manager_;
+  bool is_start_;
 };
 
 class ObDTLIntermResultManager
@@ -231,8 +238,8 @@ public:
   typedef common::hash::ObHashMap<ObDTLIntermResultKey, ObDTLIntermResultInfo *> MAP;
   int get_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo &result_info);
   int create_interm_result_info(ObMemAttr &attr, ObDTLIntermResultInfoGuard &result_info_guard,
-                                const ObDTLIntermResultMonitorInfo &monitor_info);
-  int erase_interm_result_info(ObDTLIntermResultKey &key, bool need_unregister_check_item_from_dm=true);
+                                const ObDTLIntermResultMonitorInfo &monitor_info, bool use_rich_format = false);
+  int erase_interm_result_info(const ObDTLIntermResultKey &key, bool need_unregister_check_item_from_dm=true);
   int insert_interm_result_info(ObDTLIntermResultKey &key, ObDTLIntermResultInfo *&result_info);
   // 以下两个接口会持有bucket读锁.
   int clear_timeout_result_info(ObDTLIntermResultGC &gc);

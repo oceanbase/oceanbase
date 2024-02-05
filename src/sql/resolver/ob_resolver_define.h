@@ -264,6 +264,7 @@ const int64_t FAST_ARRAY_COUNT = OB_DEFAULT_SE_ARRAY_COUNT;
 typedef common::ObFastArray<int64_t, FAST_ARRAY_COUNT> IntFastArray;
 typedef common::ObFastArray<uint64_t, FAST_ARRAY_COUNT> UIntFastArray;
 typedef common::ObFastArray<ObRawExpr *, FAST_ARRAY_COUNT> RawExprFastArray;
+typedef common::ObTuple<ObRawExpr*, ObConstRawExpr*, int64_t> ExternalParamInfo;
 
 struct ExternalParams{
   ExternalParams() : by_name_(false), params_( ){}
@@ -277,18 +278,18 @@ public:
     by_name_ = other.by_name_;
     return params_.assign(other.params_);
   }
-  std::pair<ObRawExpr*, ObConstRawExpr*> &at(int64_t i)
+  ExternalParamInfo &at(int64_t i)
   {
     return params_.at(i);
   }
-  int push_back(const std::pair<ObRawExpr*, ObConstRawExpr*> &param)
+  int push_back(const ExternalParamInfo &param)
   {
     return params_.push_back(param);
   }
 
 public:
   bool by_name_;
-  common::ObSEArray<std::pair<ObRawExpr*, ObConstRawExpr*>, 8> params_;
+  common::ObSEArray<ExternalParamInfo, 8> params_;
 };
 
 struct ObResolverParams
@@ -314,6 +315,7 @@ struct ObResolverParams
        is_from_show_resolver_(false),
        is_restore_(false),
        is_from_create_view_(false),
+       is_from_create_mview_(false),
        is_from_create_table_(false),
        is_prepare_protocol_(false),
        is_pre_execute_(false),
@@ -376,6 +378,7 @@ public:
   //查询建表、创建视图不能包含临时表;
   //前者是实现起来问题, 后者是兼容MySQL;
   bool is_from_create_view_;
+  bool is_from_create_mview_;
   bool is_from_create_table_;
   bool is_prepare_protocol_;
   bool is_pre_execute_;

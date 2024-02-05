@@ -369,13 +369,13 @@ int ObTabletTableStore::inner_replace_sstables(
 {
   int ret = OB_SUCCESS;
   // check table key first
-  ObITable *tmp_table = nullptr;
+  ObSSTableWrapper tmp_wrapper;
   for (int64_t i = 0; OB_SUCC(ret) && i < replace_sstable_array.count(); ++i) {
     const ObITable *table = replace_sstable_array.at(i);
     if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table must be sstable", K(ret), KPC(table));
-    } else if (OB_FAIL(old_store.get_table(table->get_key(), tmp_table))) {
+    } else if (OB_FAIL(old_store.get_sstable(table->get_key(), tmp_wrapper))) {
       LOG_WARN("failed to get the same key sstable in old store", K(ret), KPC(table), K(old_store));
     }
   }
@@ -587,7 +587,7 @@ int ObTabletTableStore::try_cache_local_sstable_meta(
       if (array_sstable->is_loaded()) {
         // sstable is already loaded to memory
       } else if (array_sstable->is_remote_logical_minor_sstable()) {
-        // no need to cache remote logical minor sstable.
+        // no need to cache remote logical minor sstable, here only for compatible.
       } else if (OB_FAIL(load_sstable(
           array_sstable->get_addr(), array_sstable->is_co_sstable(), sstable_handle))) {
         LOG_WARN("fail to load sstable", K(ret), KPC(array_sstable));
@@ -704,7 +704,7 @@ int ObTabletTableStore::calculate_read_tables(
     if (OB_FAIL(iterator.add_table(meta_major_tables_.at(0)))) {
       LOG_WARN("failed to add meta major table to iterator", K(ret), K(meta_major_tables_));
     }
-  } else if (!is_major_sstable_empty(tablet)) {
+  } else if (!is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
     if (!major_tables_.empty()) {
       for (int64_t i = major_tables_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
         if (major_tables_[i]->get_snapshot_version() <= snapshot_version) {
@@ -737,6 +737,7 @@ int ObTabletTableStore::calculate_read_tables(
           LOG_DEBUG("the snapshot_version of ddl major sstable is not match",
               "ddl_major_sstable_version", first_ddl_sstable->get_data_version(), K(snapshot_version));
         }
+        LOG_INFO("calc ddl read tables", K(ret), K(snapshot_version), K(ddl_major_sstables.count()), KPC(first_ddl_sstable));
       }
     }
   } else { // no major table, not ready for reading
@@ -772,7 +773,7 @@ int ObTabletTableStore::calculate_read_tables(
     }
   } else { // not find base table
     if (!allow_no_ready_read) {
-      if (is_major_sstable_empty(tablet)) {
+      if (is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)) {
         ret = OB_REPLICA_NOT_READABLE;
         LOG_WARN("no base table, not allow no ready read, tablet is not readable",
                  K(ret), K(snapshot_version), K(allow_no_ready_read), K(PRINT_TS(*this)));
@@ -823,11 +824,22 @@ int ObTabletTableStore::get_table(
   int ret = OB_SUCCESS;
   handle.reset();
   ObITable *table = nullptr;
+  ObSSTableWrapper sstable_wrapper;
+
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table store is unexpected invalid", K(ret), KPC(this));
-  } else if (OB_FAIL(get_table(table_key, table))) {
-    LOG_WARN("fail to get table pointer", K(ret));
+  } else if (!table_key.is_memtable()) {
+    if (OB_FAIL(get_sstable(table_key, sstable_wrapper))) {
+      LOG_WARN("fail to get sstable wrapper", K(ret), K(table_key));
+    } else {
+      table = sstable_wrapper.get_sstable();
+    }
+  } else if (OB_FAIL(get_memtable(table_key, table))) {
+    LOG_WARN("fail to get memtable pointer", K(ret), K(table_key));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("found null table pointer", K(ret), K(table_key));
@@ -837,7 +849,11 @@ int ObTabletTableStore::get_table(
       LOG_WARN("Failed to set memtable to handle", K(ret), K(handle), K(table_key), KPC(table));
     }
   } else if (static_cast<ObSSTable *>(table)->is_loaded()) {
-    if (!table_store_handle.is_valid()) {
+    if (table->is_cg_sstable() && sstable_wrapper.get_meta_handle().is_valid()) {
+      if ( OB_FAIL(handle.set_sstable(sstable_wrapper.get_sstable(), sstable_wrapper.get_meta_handle()))) {
+        LOG_WARN("fail to set cg sstable to handle", K(ret), K(sstable_wrapper));
+      }
+    } else if (!table_store_handle.is_valid()) {
       // table store object on tablet meta memory
       if (OB_FAIL(handle.set_sstable_with_tablet(table))) {
         LOG_WARN("failed to set sstable to handle", K(ret));
@@ -862,14 +878,14 @@ int ObTabletTableStore::get_table(
   return ret;
 }
 
-int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable *&table) const
+int ObTabletTableStore::get_sstable(const ObITable::TableKey &table_key, ObSSTableWrapper &wrapper) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid())) {
+  if (OB_UNLIKELY(!table_key.is_valid() || table_key.is_memtable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key));
   } else {
-    table = nullptr;
+    wrapper.reset();
     const ObSSTableArray *sst_array = nullptr;
     if (table_key.is_major_sstable()) {
       sst_array = table_key.is_meta_major_sstable()
@@ -881,18 +897,37 @@ int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable 
       sst_array = &ddl_sstables_;
     }
 
+    if (OB_ISNULL(sst_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable array", K(ret), K(table_key));
+    } else if (sst_array->empty()) {
+      // not found
+    } else if (OB_FAIL(sst_array->get_table(table_key, wrapper))) {
+      LOG_WARN("fail to get table from sstable array", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(wrapper.get_sstable())) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("table not found", K(ret), K(table_key));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::get_memtable(const ObITable::TableKey &table_key, ObITable *&table) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_key.is_valid() && !table_key.is_memtable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(table_key));
+  } else {
+    table = nullptr;
     if (table_key.is_memtable()) {
       common::SpinRLockGuard guard(memtables_lock_);
       if (OB_FAIL(memtables_.find(table_key, table))) {
         LOG_WARN("fail to get memtable", K(ret), K(table_key), K_(memtables));
       }
-    } else if (OB_ISNULL(sst_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null sstable array", K(ret), K(table_key));
-    } else if (sst_array->empty()) {
-      // not found
-    } else if (OB_FAIL(sst_array->get_table(table_key, table))) {
-      LOG_WARN("fail to get table from sstable array", K(ret));
     }
 
     if (OB_FAIL(ret)) {
@@ -915,7 +950,8 @@ int ObTabletTableStore::get_read_tables(
   if (OB_UNLIKELY(snapshot_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(snapshot_version));
-  } else if (OB_UNLIKELY(is_major_sstable_empty(tablet) && minor_tables_.empty() && allow_no_ready_read)) {
+  } else if (OB_UNLIKELY(is_major_sstable_empty(tablet.get_tablet_meta().ddl_commit_scn_)
+        && minor_tables_.empty() && allow_no_ready_read)) {
     if (memtables_.empty()) {
       LOG_INFO("no table in table store, cannot read", K(ret), K(*this));
     } else if (OB_FAIL(iterator.add_tables(memtables_))) {
@@ -981,7 +1017,7 @@ int ObTabletTableStore::get_all_sstable(
     LOG_WARN("fail to add all major tables to iterator", K(ret), K_(major_tables));
   } else if (!minor_tables_.empty() && OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("fail to add all minor tables to iterator", K(ret), K_(major_tables));
-  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count()))) {
+  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count(), unpack_co_table))) {
     LOG_WARN("fail to add all ddl sstables to iterator", K(ret), K_(ddl_sstables));
   }
   return ret;
@@ -1074,7 +1110,7 @@ int ObTabletTableStore::get_ha_tables(ObTableStoreIterator &iter, bool &is_ready
     LOG_WARN("failed to add major table to iterator", K(ret));
   } else if (!minor_tables_.empty() && OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("failed to add minor table to iterator", K(ret));
-  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count()))) {
+  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count(), true/*unpack_co*/))) {
     LOG_WARN("failed to add ddl table to iterator", K(ret));
   } else if (OB_FAIL(iter.set_retire_check())) {
     LOG_WARN("failed to set retire check to iterator", K(ret));
@@ -1452,10 +1488,10 @@ int ObTabletTableStore::build_meta_major_table(
   return ret;
 }
 
-bool ObTabletTableStore::is_major_sstable_empty(const ObTablet &tablet) const
+bool ObTabletTableStore::is_major_sstable_empty(const share::SCN &ddl_commit_scn) const
 {
   return major_tables_.empty()
-    && !tablet.get_tablet_meta().ddl_commit_scn_.is_valid_and_not_min(); // ddl logic major sstable require commit scn valid
+    && !ddl_commit_scn.is_valid_and_not_min(); // ddl logic major sstable require commit scn valid
 }
 
 int ObTabletTableStore::get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_sstables) const
@@ -1476,8 +1512,15 @@ int ObTabletTableStore::get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_s
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_mem_sstables_.count(); ++i) {
-      if (OB_FAIL(ddl_major_sstables.push_back(ddl_mem_sstables_[i]))) {
-        LOG_WARN("push back old ddl sstable failed", K(ret), K(i));
+      ObIArray<ObDDLMemtable *> &ddl_memtables_in_kv = ddl_mem_sstables_[i]->get_ddl_memtables();
+      if (ddl_memtables_in_kv.empty()) {
+        // skip
+      } else {
+        ObDDLMemtable *ddl_memtable = ddl_memtables_in_kv.at(0);
+        if (ObITable::DDL_MEM_SSTABLE == ddl_memtable->get_key().table_type_
+            && OB_FAIL(ddl_major_sstables.push_back(ddl_memtable))) {
+          LOG_WARN("push back old ddl sstable failed", K(ret), K(i));
+        }
       }
     }
   }
@@ -1489,8 +1532,8 @@ int ObTabletTableStore::pull_ddl_memtables(
     const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObITable *> ddl_memtables;
-  if (OB_FAIL(tablet.get_ddl_memtables(ddl_memtables))) {
+  ObArray<ObDDLKV *> ddl_memtables;
+  if (OB_FAIL(tablet.get_ddl_kvs(ddl_memtables))) {
     LOG_WARN("failed to get ddl memtables array from tablet", K(ret));
   } else if (!ddl_memtables.empty() && OB_FAIL(ddl_mem_sstables_.init(allocator, ddl_memtables))) {
     LOG_WARN("assign ddl memtables failed", K(ret), K(ddl_memtables));
@@ -1603,35 +1646,52 @@ int ObTabletTableStore::build_memtable_array(const ObTablet &tablet)
 int ObTabletTableStore::check_ready_for_read(const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
+  ObReadyForReadParam param;
+  if (OB_FAIL(tablet.get_ready_for_read_param(param))) {
+    LOG_WARN("fail to get ready for read param", K(ret), K(tablet));
+  } else if (OB_FAIL(check_ready_for_read(param))) {
+    if (OB_SIZE_OVERFLOW == ret) {
+      diagnose_table_count_unsafe(tablet);
+    } else {
+      LOG_WARN("fail to check ready for read", K(ret), K(tablet));
+    }
+  }
+  return ret;
+}
+
+void ObTabletTableStore::diagnose_table_count_unsafe(const ObTablet &tablet)
+{
+  compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
+  MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+}
+
+int ObTabletTableStore::check_ready_for_read(const ObReadyForReadParam &param)
+{
+  int ret = OB_SUCCESS;
   is_ready_for_read_ = false;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KPC(this));
-  } else if (is_major_sstable_empty(tablet)) {
+  } else if (is_major_sstable_empty(param.ddl_commit_scn_)) {
     LOG_INFO("no valid major sstable, not ready for read", K(*this));
   } else if (OB_FAIL(check_continuous())) {
     LOG_WARN("failed to check continuous of tables", K(ret));
   } else if (minor_tables_.count() + 1 > MAX_SSTABLE_CNT_IN_STORAGE) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("Too Many sstables in table store", K(ret), KPC(this), K(tablet));
-    compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(
-      compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
-    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+    LOG_WARN("Too Many sstables in table store", K(ret), KPC(this));
   } else if (get_table_count() > ObTabletTableStore::MAX_SSTABLE_CNT) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this), K(tablet));
-    compaction::ObPartitionMergePolicy::diagnose_table_count_unsafe(compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_SPECIAL, tablet);
-    MTL(concurrency_control::ObMultiVersionGarbageCollector *)->report_sstable_overflow();
+    LOG_WARN("Too Many sstables, cannot add another sstable any more", K(ret), KPC(this));
   } else if (minor_tables_.empty()) {
     is_ready_for_read_ = true;
   } else {
-    const SCN &clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
+    const SCN &clog_checkpoint_scn = param.clog_checkpoint_scn_;
     const SCN &last_minor_end_scn = minor_tables_.get_boundary_table(true/*last*/)->get_end_scn();
     if (OB_UNLIKELY(clog_checkpoint_scn != last_minor_end_scn)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("last minor table's end_scn must be equal to clog_checkpoint_scn",
-          K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this), K(tablet));
+          K(ret), K(last_minor_end_scn), K(clog_checkpoint_scn), KPC(this));
     } else {
       is_ready_for_read_ = true;
     }
@@ -2266,9 +2326,6 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
     common::ObIArray<ObITable *> &new_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) remove logical sstable in 4.2 RC3
-  //1.ha now will not reuse minor sstable so it need add minor sstable which is from src and end_scn <= clog_checkpoint_scn
-  //2.old store minor sstables contains remote logical sstable and after clog_checkpoint_scn sstables.
   SCN max_copy_end_scn;
   max_copy_end_scn.set_min();
   ObArray<ObITable *> tmp_minor_sstables;
@@ -2286,11 +2343,8 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
   for (int64_t i = 0; OB_SUCC(ret) && i < old_store_minor_sstables.count(); ++i) {
     ObITable *table = old_store_minor_sstables.at(i);
     if (table->is_remote_logical_minor_sstable()) {
-      if (max_copy_end_scn < table->get_end_scn() && !max_copy_end_scn.is_min()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote logical minor sstable end scn is bigger than max copy end scn, unexpected",
-            K(ret), K(max_copy_end_scn), KPC(table));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old store minor sstable contains logical sstable, unexpected", K(ret), K(old_store_minor_sstables));
     } else if (table->get_end_scn() <= max_copy_end_scn) {
       //do nothing
     } else if (OB_FAIL(tmp_minor_sstables.push_back(table))) {
@@ -2373,7 +2427,6 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
     common::ObIArray<ObITable *> &old_store_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  int64_t remote_logical_minor_sstable_count = 0;
 
   if (OB_FAIL(check_minor_tables_continue_(old_store_minor_sstables))) {
     LOG_WARN("failed to check minor tables continue", K(ret), K(old_store_minor_sstables));
@@ -2382,16 +2435,10 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
   //check old store remote logical minor sstable count should be less than 1
   for (int64_t i = 0; OB_SUCC(ret) && i < old_store_minor_sstables.count(); ++i) {
     ObITable *table = old_store_minor_sstables.at(i);
-    if (OB_ISNULL(table) || !table->is_multi_version_minor_sstable()) {
+    if (OB_ISNULL(table) || !table->is_multi_version_minor_sstable() || table->is_remote_logical_minor_sstable()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null or table type is unexpected", K(ret), KPC(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      remote_logical_minor_sstable_count++;
     }
-  }
-  if (OB_SUCC(ret) && remote_logical_minor_sstable_count > 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("old table store remote logical minor sstable count more than 1", K(ret), K(old_store_minor_sstables));
   }
   return ret;
 }
@@ -2399,89 +2446,13 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
 int ObTabletTableStore::get_ha_mini_minor_sstables_(ObTableStoreIterator &iter) const
 {
   int ret = OB_SUCCESS;
-  int64_t index = 0;
-
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
     ObSSTable *table = minor_tables_[i];
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      index = i + 1;
-      break;
-    }
-  }
-
-  for (int64_t i = index; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
-    ObSSTable *table = minor_tables_[i];
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet table store has multi remote logical minor sstable, unexpected !!!", K(ret), K(minor_tables_));
     } else if (OB_FAIL(iter.add_table(table))) {
       LOG_WARN("failed to push table into minor sstables array", K(ret), KPC(table), K(minor_tables_));
-    }
-  }
-  return ret;
-}
-
-int ObTabletTableStore::update_ha_minor_sstables_(
-    common::ObArenaAllocator &allocator,
-    const ObTablet &tablet,
-    const ObBatchUpdateTableStoreParam &param,
-    const ObTabletTableStore &old_store)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObITable *> new_minor_tables;
-  const ObSSTableArray &old_minor_tables = old_store.minor_tables_;
-
-  if (param.start_scn_ >= tablet.get_clog_checkpoint_scn()) {
-    //no need keep local minor sstable
-    LOG_INFO("start scn is bigger than clog checkpoint ts, no need keep local minor sstable", K(old_store));
-  } else {
-    int64_t index = 0;
-    bool has_remote_logical_sstable = false;
-    for (int64_t i = 0; i < old_minor_tables.count(); ++i) {
-      const ObITable *table = old_minor_tables[i];
-      if (table->is_remote_logical_minor_sstable()) {
-        has_remote_logical_sstable = true;
-        index = i;
-        break;
-      }
-    }
-
-    if (has_remote_logical_sstable) {
-      ObITable *table = old_minor_tables[index];
-      if (!table->is_remote_logical_minor_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table type is unexpected", K(ret), KPC(table), K(old_store), K(param));
-      } else if (param.start_scn_ >= table->get_end_scn()) {
-        //no need remote logical sstable
-        index = index + 1;
-      } else {
-        ObSSTable *sstable = static_cast<ObSSTable *>(table);
-        share::ObScnRange new_scn_range;
-        share::ObScnRange original_scn_range = sstable->get_scn_range();
-        new_scn_range.start_scn_ = param.start_scn_;
-        new_scn_range.end_scn_ = table->get_end_scn();
-        sstable->set_scn_range(new_scn_range);
-        LOG_INFO("cut ha remote logical sstable log ts range", KPC(sstable), K(new_scn_range), K(original_scn_range));
-      }
-    } else {
-      //local minor sstable contain param.start_scn, reuse local sstable
-      //index = 0
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(old_minor_tables.get_all_tables(new_minor_tables))) {
-        LOG_WARN("failed to get all minor tables", K(ret), K(old_minor_tables));
-      } else if (index >= new_minor_tables.count()) {
-        //reuse nothing, copy from src
-      } else if (OB_FAIL(minor_tables_.init(allocator, new_minor_tables, index))) {
-        LOG_WARN("failed to init minor_tables", K(ret), K(new_minor_tables));
-      }
     }
   }
   return ret;
@@ -2495,11 +2466,7 @@ int ObTabletTableStore::build_ha_minor_tables_(
     const int64_t inc_base_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  if (param.update_logical_minor_sstable_) {
-    if (OB_FAIL(update_ha_minor_sstables_(allocator, tablet, param, old_store))) {
-      LOG_WARN("failed to update ha minor sstables", K(ret), K(param), K(old_store));
-    }
-  } else if (param.is_transfer_replace_) {
+  if (param.is_transfer_replace_) {
     if (OB_FAIL(replace_transfer_minor_sstables_(allocator, tablet, param, old_store))) {
       LOG_WARN("failed to replace transfer minor tables", K(ret), K(param), K(old_store));
     }
@@ -2565,14 +2532,17 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
     }
     if (ddl_mem_sstables_.is_valid()) {
       for (int64_t i = 0; i < ddl_mem_sstables_.count(); ++i) {
-        ObITable *table = ddl_mem_sstables_[i];
-        if (NULL != table && table->is_sstable()) {
+        ObDDLKV *table = ddl_mem_sstables_[i];
+        if (NULL != table) {
           J_OBJ_START();
-          J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
-              "tablet_id", table->get_key().tablet_id_,
-              "scn_range", table->get_key().scn_range_,
+          ObScnRange scn_range;
+          scn_range.start_scn_ = table->get_start_scn();
+          scn_range.end_scn_ = table->get_freeze_scn();
+          J_KV(K(i), "type", ObITable::get_table_type_name(ObITable::DDL_MEM_SSTABLE),
+              "tablet_id", table->get_tablet_id(),
+              "scn_range", scn_range,
               "ref", table->get_ref(),
-              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version());
+              "max_merge_version", table->get_snapshot_version());
           J_OBJ_END();
           J_COMMA();
         }
@@ -2636,9 +2606,9 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
       bool is_print = false;
       print_arr(major_tables_, "MAJOR", buf, buf_len, pos, is_print);
       print_arr(minor_tables_, "MINOR", buf, buf_len, pos, is_print);
-      print_arr(ddl_sstables_, "DDL_DUMP", buf, buf_len, pos, is_print);
       print_ddl_mem(ddl_mem_sstables_, "DDL_MEM", buf, buf_len, pos, is_print);
       print_mem(memtables_, "MEM", buf, buf_len, pos, is_print);
+      print_arr(ddl_sstables_, "DDL_SSTABLES", buf, buf_len, pos, is_print);
       print_arr(meta_major_tables_, "META_MAJOR", buf, buf_len, pos, is_print);
     } else {
       J_EMPTY_OBJ();
@@ -2682,7 +2652,7 @@ void ObPrintTableStore::print_ddl_mem(
     if (is_print && 0 == i) {
       J_NEWLINE();
     }
-    table_to_string(tables[i], i == 0 ? table_arr : " ", buf, buf_len, pos);
+    ddl_kv_to_string(tables[i], i == 0 ? table_arr : " ", buf, buf_len, pos);
     if (i < tables.count() - 1) {
       J_NEWLINE();
     }
@@ -2740,6 +2710,33 @@ void ObPrintTableStore::table_to_string(
       table->get_max_merged_trans_version(),
       table->get_start_scn().get_val_for_tx(),
       table->get_end_scn().get_val_for_tx(),
+      table->get_ref(),
+      uncommit_row);
+  }
+}
+
+void ObPrintTableStore::ddl_kv_to_string(
+     ObDDLKV *table,
+     const char* table_arr,
+     char *buf,
+     const int64_t buf_len,
+     int64_t &pos) const
+{
+  if (nullptr != table) {
+    ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
+    BUF_PRINTF("[%ld] [ ", GETTID());
+    BUF_PRINTO(PC(trace_id));
+    BUF_PRINTF(" ] ");
+    const char *table_name = ObITable::get_table_type_name(ObITable::DDL_MEM_SSTABLE);
+    const char *uncommit_row = "false";
+
+    BUF_PRINTF(" %-10s %-14s %-19lu %-19lu %-19lu %-19lu %-4ld %-16s ",
+      table_arr,
+      table_name,
+      table->get_snapshot_version(),
+      table->get_snapshot_version(),
+      table->get_start_scn().get_val_for_tx(),
+      table->get_freeze_scn().get_val_for_tx(),
       table->get_ref(),
       uncommit_row);
   }

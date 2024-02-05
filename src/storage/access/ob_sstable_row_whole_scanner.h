@@ -13,7 +13,7 @@
 #ifndef OB_STORAGE_OB_SSTABLE_ROW_WHOLE_SCANNER_H_
 #define OB_STORAGE_OB_SSTABLE_ROW_WHOLE_SCANNER_H_
 
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/ob_micro_block_row_scanner.h"
 #include "storage/blocksstable/ob_macro_block_bare_iterator.h"
 #include "ob_store_row_iterator.h"
@@ -56,6 +56,7 @@ public:
       access_ctx_(nullptr),
       sstable_(nullptr),
       allocator_(common::ObModIds::OB_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      io_buf_(),
       prefetch_macro_cursor_(0),
       cur_macro_cursor_(0),
       is_macro_prefetch_end_(false),
@@ -66,8 +67,7 @@ public:
       is_inited_(false),
       last_micro_block_recycled_(false),
       last_mvcc_row_already_output_(false),
-      iter_macro_cnt_(0),
-      io_buf_()
+      iter_macro_cnt_(0)
   {}
 
   virtual ~ObSSTableRowWholeScanner();
@@ -125,6 +125,7 @@ private:
   blocksstable::ObSSTable *sstable_;
   blocksstable::ObDatumRange query_range_;
   common::ObArenaAllocator allocator_;
+  compaction::ObCompactionBuffer io_buf_[PREFETCH_DEPTH];
   int64_t prefetch_macro_cursor_;
   int64_t cur_macro_cursor_;
   bool is_macro_prefetch_end_;
@@ -138,7 +139,6 @@ private:
   bool last_micro_block_recycled_;
   bool last_mvcc_row_already_output_;
   int64_t iter_macro_cnt_;
-  compaction::ObCompactionBuffer io_buf_[PREFETCH_DEPTH];
 };
 
 }

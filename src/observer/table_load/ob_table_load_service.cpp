@@ -60,16 +60,12 @@ void ObTableLoadService::ObCheckTenantTask::runTimerTask()
     LOG_WARN("ObTableLoadService::ObCheckTenantTask not init", KR(ret), KP(this));
   } else {
     LOG_DEBUG("table load check tenant", K(tenant_id_));
-    ObTenant *tenant = nullptr;
-    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id_, tenant))) {
-      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id_));
-    } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                           tenant->get_unit_status())) {
-      LOG_DEBUG("tenant unit status not normal, clear", K(tenant_id_), KPC(tenant));
+    if (OB_FAIL(ObTableLoadService::check_tenant())) {
+      LOG_WARN("fail to check_tenant", KR(ret));
       // abort all client task
       service_.abort_all_client_task();
       // fail all current tasks
-      service_.fail_all_ctx(OB_ERR_UNEXPECTED_UNIT_STATUS);
+      service_.fail_all_ctx(ret);
     }
   }
 }
@@ -220,7 +216,7 @@ bool ObTableLoadService::ObGCTask::gc_table_not_exist_ctx(ObTableLoadTableCtx *t
       const ObTableSchema *table_schema = nullptr;
       if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id_, hidden_table_id, schema_guard,
                                                       table_schema))) {
-        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret)) {
+        if (OB_UNLIKELY(OB_TABLE_NOT_EXIST != ret && OB_TENANT_NOT_EXIST != ret)) {
           LOG_WARN("fail to get table schema", KR(ret), K(tenant_id_), K(hidden_table_id));
         } else {
           LOG_INFO("hidden table not exist, gc table load ctx", K(tenant_id_), K(table_id),
@@ -372,6 +368,9 @@ int ObTableLoadService::mtl_init(ObTableLoadService *&service)
   return ret;
 }
 
+
+
+
 int ObTableLoadService::check_tenant()
 {
   int ret = OB_SUCCESS;
@@ -379,8 +378,13 @@ int ObTableLoadService::check_tenant()
   ObTenant *tenant = nullptr;
   if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
     LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+  } else if (tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_MARK_DELETING
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_WAIT_GC_IN_OBSERVER
+    || tenant->get_unit_status() == ObUnitInfoGetter::ObUnitStatus::UNIT_DELETING_IN_OBSERVER) {
+    ret = OB_EAGAIN;
+    LOG_WARN("unit is migrate out, should retry direct load", KR(ret), K(tenant->get_unit_status()));
   } else if (OB_UNLIKELY(ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL !=
-                         tenant->get_unit_status())) {
+                         tenant->get_unit_status() && ObUnitInfoGetter::ObUnitStatus::UNIT_MIGRATE_OUT != tenant->get_unit_status())) {
     ret = OB_ERR_UNEXPECTED_UNIT_STATUS;
     LOG_WARN("unit status not normal", KR(ret), K(tenant->get_unit_status()));
   }
@@ -403,17 +407,22 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     }
-    // check if it is an oracle temporary table
-    else if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+    // check if it is a user table
+    else if (!table_schema->is_user_table()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
-    }
-    // check if it is a view
-    else if (table_schema->is_view_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("direct-load does not support view table", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      if (lib::is_oracle_mode() && table_schema->is_tmp_table()) {
+        LOG_WARN("direct-load does not support oracle temporary table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support oracle temporary table");
+      } else if (table_schema->is_view_table()) {
+        LOG_WARN("direct-load does not support view table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support view table");
+      } else if (table_schema->is_mlog_table()) {
+        LOG_WARN("direct-load does not support materialized view log table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support materialized view log table");
+      } else {
+        LOG_WARN("direct-load does not support non-user table", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
+      }
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {
@@ -436,6 +445,12 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+    }
+    // check if table has mlog
+    else if (table_schema->has_mlog_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
     }
   }
   return ret;

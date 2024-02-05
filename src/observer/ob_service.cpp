@@ -1536,14 +1536,15 @@ int ObService::check_server_for_adding_server(
         KR(ret), K(arg), K(sys_tenant_data_version), K(arg.get_sys_tenant_data_version()));
   } else {
     bool server_empty = false;
+    char build_version[common::OB_SERVER_VERSION_LENGTH] = {'\0'};
     if (OB_FAIL(check_server_empty(server_empty))) {
       LOG_WARN("check_server_empty failed", KR(ret));
+    } else if (OB_FAIL(get_package_and_svn(build_version, sizeof(build_version)))) {
+      LOG_WARN("fail to get build_version", KR(ret));
     } else {
-      char build_version[common::OB_SERVER_VERSION_LENGTH] = {0};
       ObServerInfoInTable::ObBuildVersion build_version_string;
       ObZone zone;
       int64_t sql_port = GCONF.mysql_port;
-      get_package_and_svn(build_version, sizeof(build_version));
 
       if (OB_SUCC(ret) && server_empty) {
         uint64_t server_id = arg.get_server_id();
@@ -1641,8 +1642,9 @@ int ObService::get_build_version(share::ObServerInfoInTable::ObBuildVersion &bui
   int ret = OB_SUCCESS;
   char build_version_char_array[common::OB_SERVER_VERSION_LENGTH] = {0};
   build_version.reset();
-  get_package_and_svn(build_version_char_array, sizeof(build_version));
-  if (OB_FAIL(build_version.assign(build_version_char_array))) {
+  if (OB_FAIL(get_package_and_svn(build_version_char_array, sizeof(build_version_char_array)))) {
+    LOG_WARN("fail to get build_version", KR(ret));
+  } else if (OB_FAIL(build_version.assign(build_version_char_array))) {
     LOG_WARN("fail to assign build_version", KR(ret), K(build_version_char_array));
   }
   return ret;
@@ -1659,6 +1661,130 @@ int ObService::get_partition_count(obrpc::ObGetPartitionCountResult &result)
   // } else if (OB_FAIL(gctx_.par_ser_->get_partition_count(result.partition_count_))) {
   //   LOG_WARN("failed to get partition count", K(ret));
   // }
+  return ret;
+}
+
+int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  ObLSService *ls_service = nullptr;
+  bool is_exist = false;
+  ObMigrationOpArg migration_op_arg;
+  if (tenant_id != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcLSAddReplicaP::process tenant not match", KR(ret), K(tenant_id));
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "data_src", arg.data_source_.get_server(), "dest", arg.dst_.get_server());
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->check_ls_exist(arg.ls_id_, is_exist))) {
+      LOG_WARN("failed to check ls exist", KR(ret), K(arg));
+    } else if (is_exist) {
+      ret = OB_LS_EXIST;
+      LOG_WARN("can not add ls which local ls is exist", KR(ret), K(arg), K(is_exist));
+    } else {
+      migration_op_arg.cluster_id_ = GCONF.cluster_id;
+      migration_op_arg.data_src_ = arg.data_source_;
+      migration_op_arg.dst_ = arg.dst_;
+      migration_op_arg.ls_id_ = arg.ls_id_;
+      //TODO(muwei.ym) need check priority in 4.2 RC3
+      migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
+      migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
+      migration_op_arg.src_ = arg.data_source_;
+      migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
+      if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
+        LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "schedule_ls_add failed", "tenant_id", arg.tenant_id_,
+        "ls_id", arg.ls_id_, "result", ret);
+  }
+  return ret;
+}
+
+int ObService::do_remove_ls_paxos_replica(const obrpc::ObLSDropPaxosReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "dest", arg.remove_member_.get_server());
+    LOG_INFO("start do remove ls paxos member", K(arg));
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls->get_ls_remove_member_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls remove handler should not be NULL", KR(ret), K(arg));
+    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_paxos_member(arg))) {
+      LOG_WARN("failed to remove paxos member", KR(ret), K(arg));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_paxos_member failed", "tenant_id",
+        arg.tenant_id_, "ls_id", arg.ls_id_.id(), "result", ret);
+  }
+  return ret;
+}
+
+int ObService::do_remove_ls_nonpaxos_replica(const obrpc::ObLSDropNonPaxosReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = arg.tenant_id_;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  if (tenant_id != MTL_ID()) {
+    ret = guard.switch_to(tenant_id);
+  }
+  ObCurTraceId::set(arg.task_id_);
+  if (OB_SUCC(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member start", "tenant_id", arg.tenant_id_, "ls_id", arg.ls_id_.id(),
+                     "dest", arg.remove_member_.get_server());
+    LOG_INFO("start do remove ls learner member", K(arg));
+    ls_service = MTL(ObLSService*);
+    if (OB_ISNULL(ls_service)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("mtl ObLSService should not be null", KR(ret));
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("failed to get ls", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg));
+    } else if (OB_ISNULL(ls->get_ls_remove_member_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls remove handler should not be NULL", KR(ret), K(arg));
+    } else if (OB_FAIL(ls->get_ls_remove_member_handler()->remove_learner_member(arg))) {
+      LOG_WARN("failed to remove paxos member", KR(ret), K(arg));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "remove_ls_learner_member failed", "tenant_id",
+        arg.tenant_id_, "ls_id", arg.ls_id_.id(), "result", ret);
+  }
   return ret;
 }
 
@@ -2755,11 +2881,11 @@ int ObService::get_leader_locations(
               // skip
             /*
              * This function may be blocked when dick is hang,
-             * we consider leader's status is always RESTORE_NONE
+             * we consider leader's restore status is always NONE
              * } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
              *   LOG_WARN("get restore status failed", KR(ret));
              */
-            } else if (FALSE_IT(restore_status = ObLSRestoreStatus::RESTORE_NONE)) {
+            } else if (FALSE_IT(restore_status = ObLSRestoreStatus::NONE)) {
             } else if (OB_FAIL(leader_location.init(
                   GCTX.config_->cluster_id,  /*cluster_id*/
                   tenant_id,                 /*tenant_id*/
@@ -3029,6 +3155,7 @@ int ObService::get_ls_replayed_scn(
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
+    share::SCN offline_scn;
     if (OB_ISNULL(ls_svr)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
@@ -3044,10 +3171,14 @@ int ObService::get_ls_replayed_scn(
         LOG_WARN("failed to get all replica readable scn", KR(ret));
       }
     }
-    if (FAILEDx(result.init(arg.get_tenant_id(), arg.get_ls_id(), cur_readable_scn, GCTX.self_addr()))) {
-      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn));
+    if (FAILEDx(ls->get_offline_scn(offline_scn))) {
+      LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
+    } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(),
+            cur_readable_scn, offline_scn, get_self_addr()))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn), K(offline_scn));
     }
-    LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result));
+    LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn), K(arg), K(result),
+        K(offline_scn));
   }
 
   return ret;

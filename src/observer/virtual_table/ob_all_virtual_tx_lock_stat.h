@@ -23,7 +23,15 @@
 
 namespace oceanbase
 {
-
+namespace common
+{
+template <typename T>
+class ObSharedGuard;
+}
+namespace storage
+{
+class ObLSIterator;
+}
 namespace transaction
 {
 class ObTransService;
@@ -58,6 +66,9 @@ private:
   void release_last_tenant() override;
 
   int prepare_start_to_read_();
+  int get_next_ls_(ObLS *&ls);
+  int get_next_tx_ctx_(transaction::ObPartTransCtx *&tx_ctx);
+  int get_next_tx_lock_stat_iter_(transaction::ObTxLockStatIterator &tx_lock_stat_iter);
   int get_next_tx_lock_stat_(transaction::ObTxLockStat &tx_lock_stat);
   static const int64_t OB_MIN_BUFFER_SIZE = 128;
   static const int64_t OB_MEMTABLE_KEY_BUFFER_SIZE = 128;
@@ -67,9 +78,11 @@ private:
   char memtable_key_buffer_[OB_MEMTABLE_KEY_BUFFER_SIZE];
   int output_row_(const transaction::ObTxLockStat& tx_lock_stat, ObNewRow *&row);
 private:
+  static const int64_t MAX_RETRY_TIMES = 10;
+  ObSharedGuard<storage::ObLSIterator> ls_iter_guard_;
   share::ObLSID ls_id_;
-  transaction::ObTransService *txs_;
-  transaction::ObLSIDIterator ls_id_iter_;
+  ObLS *ls_;
+  transaction::ObLSTxCtxIterator ls_tx_ctx_iter_;
   transaction::ObTxLockStatIterator tx_lock_stat_iter_;
 };
 }//observer

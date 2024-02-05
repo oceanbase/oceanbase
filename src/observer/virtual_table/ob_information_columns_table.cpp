@@ -219,7 +219,7 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "table_schema should not be NULL", K(ret));
     } else {
-      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view();
+      bool is_normal_view = table_schema->is_view_table()&& !table_schema->is_materialized_view() && (table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_NORMAL || table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
       //  不显示索引表
       if (table_schema->is_aux_table()
          || table_schema->is_tmp_table()
@@ -235,7 +235,10 @@ int ObInfoSchemaColumnsTable::iterate_table_schema_array(const bool is_filter_ta
       }
       // for system view, its column info depend on hard code, so its valid by default, but do not have column meta
       // status default value is valid, old version also work whether what status it read because its column count = 0
-      bool view_is_invalid = (0 == table_schema->get_object_status() || 0 == table_schema->get_column_count());
+      bool view_is_invalid = (0 == table_schema->get_object_status()
+                              || 0 == table_schema->get_column_count()
+                              || (table_schema->is_sys_view()
+                                  && table_schema->get_schema_version() <= GCTX.start_time_));
       if (OB_FAIL(ret)) {
       } else if (is_normal_view && view_is_invalid) {
         mem_context_->reset_remain_one_page();
@@ -317,7 +320,6 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
     // do nothing
   }
   while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_more_) {
-    ++logical_index;
     if (OB_ISNULL(column_schema)) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "column_schema is NULL", K(ret));
@@ -326,6 +328,7 @@ int ObInfoSchemaColumnsTable::iterate_column_schema_array(
       if (column_schema->is_hidden()) {
         continue;
       }
+      ++logical_index;
       // use const_column_iterator, if it's index table
       // so should use the physical position
       if (table_schema.is_index_table()) {
@@ -946,7 +949,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes))) {
+                                                              column_attributes, false))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {
@@ -1058,9 +1061,7 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             break;
           }
         case IS_NULLABLE: {
-            ObString nullable_val = ObString::make_string(
-                column_attributes.null_ ? "YES" : "NO");
-            cells[cell_idx].set_varchar(nullable_val);
+            cells[cell_idx].set_varchar(column_attributes.null_);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
                                                    ObCharset::get_default_charset()));
             break;

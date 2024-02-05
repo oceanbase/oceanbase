@@ -144,6 +144,7 @@ int async_cb(easy_request_t *r)
   if (!OB_SUCC(ret)) {
     LOG_WARN("process async request fail", K(r), K(ret), K(pcode));
   }
+  THIS_WORKER.get_sql_arena_allocator().reset();
 
   const int64_t cur_time = ObTimeUtility::current_time();
   const int64_t total_time = cur_time  - start_time;

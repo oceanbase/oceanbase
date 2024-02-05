@@ -39,6 +39,9 @@ docker run -p 2881:2881 --name oceanbase-ce -e MODE=slim -e OB_MEMORY_LIMIT=5G -
 
 # 根据当前容器情况部署最大规格的实例
 docker run -p 2881:2881 --name oceanbase-ce -e MODE=normal -d oceanbase/oceanbase-ce
+
+# 部署一个快速启动镜像，mode可以为任意模式
+docker run -p 2881:2881 --name oceanbase-ce -e FASTBOOT=true -d oceanbase/oceanbase-ce
 ```
 
 启动预计需要 2-5 分钟。执行以下命令，如果返回 `boot success!`，则启动成功。
@@ -75,7 +78,8 @@ mysql -uroot -h127.1 -P2881
 | 变量名称 | 默认值 | 描述                                                  |
 | ---------------- | ------------- | ------------------------------------------------------------ |
 | MODE             | {mini, slim, normal}  | mini或者不赋值变量表示使用mini模式部署OceanBase数据库实例，仅用来研究学习使用。不适合用于生产或性能测试。slim适用于更小的自定义配置，移除obagent，支持自定义的初始化脚本在绑定目录/root/boot/init.d，如果不绑定该目录，docker不会执行该租户的初始化sql。|
-| EXIT_WHILE_ERROR | true          | OceanBase 如果启动失败，是否退出容器。比如初次run镜像失败，或start容器失败，可以将此参数设置为false,那么OB启动失败，也可以进入容器，查看OceanBase的运行日志，然后进行排查。 |
+| FASTBOOT         | false      | true表示镜像会以快速启动的方式运行。 |
+| EXIT_WHILE_ERROR | true       | OceanBase 如果启动失败，是否退出容器。比如初次run镜像失败，或start容器失败，可以将此参数设置为false,那么OB启动失败，也可以进入容器，查看OceanBase的运行日志，然后进行排查。 |
 | OB_CLUSTER_NAME  | obcluster  | oceanbase集群名 |
 | OB_TENANT_NAME   | test       | oceanbase mysql租户名|
 | OB_MEMORY_LIMIT  | 6G         | oceanbase启动memory_limit参数配置 |
@@ -113,14 +117,14 @@ docker run -d -p 2881:2881 -v $PWD/ob:/root/ob -v $PWD/obd:/root/.obd --name oce
 docker -v 参数的详细说明可以参考 [docker volumn](https://docs.docker.com/storage/volumes/)。
 
 ## 快速单机启动镜像构建
-在`tools/docker/standalone`目录下提供`fast_boot_docker_build.sh`脚本，通过该脚本可以构建快速启动镜像。在运行脚本之前，请首先修改`tools/docker/standalone/boot/_env`环境配置脚本：
+在`tools/docker/standalone`目录下提供`docker_build.sh`脚本，通过该脚本可以构建快速启动镜像。在运行脚本之前，请首先修改`tools/docker/standalone/boot/_env`环境配置脚本：
 
-- 必须：将`MODE`配置项修改为`STANDALONE`
 - 可选：修改其余配置项
 
 修改完毕后，执行镜像构建脚本：
 
-- `./fast_boot_docker_build.sh <oceanbase_rpm_version>` 例如：`./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
+- 构建最新版镜像 `./docker_build.sh`
+- 构建某个特别版本的oceanbase镜像 `./docker_build.sh <oceanbase_rpm_version>` 例如：`./docker_build.sh 4.2.1.0-100000102023092807`
 
 等待构建完毕后，可使用前述相同的方式启动、测试实例。
 

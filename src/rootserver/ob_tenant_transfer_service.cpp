@@ -386,8 +386,6 @@ int ObTenantTransferService::get_member_lists_by_inner_sql_(
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSqlString sql;
-      ObString src_ls_member_list_str;
-      ObString dest_ls_member_list_str;
       common::sqlclient::ObMySQLResult *res = NULL;
       if (OB_FAIL(sql.assign_fmt(
           "SELECT PAXOS_MEMBER_LIST FROM %s WHERE TENANT_ID = %lu AND ROLE = 'LEADER'"
@@ -404,44 +402,51 @@ int ObTenantTransferService::get_member_lists_by_inner_sql_(
       } else if (OB_ISNULL(res = result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get mysql result failed", KR(ret), K(sql));
-      } else if (OB_FAIL(res->next())) {
-        LOG_WARN("next failed, neither src_ls nor dest_ls was found", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(res->get_varchar("PAXOS_MEMBER_LIST", src_ls_member_list_str))) {
-        LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(res->next())) {
-        LOG_WARN("next failed, src_ls or dest_ls not found", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(res->get_varchar("PAXOS_MEMBER_LIST", dest_ls_member_list_str))) {
-        LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls));
-      } else if (OB_FAIL(ObLSReplica::text2member_list(
-          to_cstring(src_ls_member_list_str),
-          src_ls_member_list))) {
-        LOG_WARN("text2member_list failed", KR(ret), K_(tenant_id), K(src_ls), K(src_ls_member_list_str));
-      } else if (OB_FAIL(ObLSReplica::text2member_list(
-          to_cstring(dest_ls_member_list_str),
-          dest_ls_member_list))) {
-        LOG_WARN("text2member_list failed", KR(ret), K_(tenant_id), K(dest_ls), K(dest_ls_member_list_str));
+      } else if (OB_FAIL(construct_ls_member_list_(*res, src_ls_member_list))) {
+        LOG_WARN("construct src ls member list failed", KR(ret), K_(tenant_id), K(src_ls));
+      } else if (OB_FAIL(construct_ls_member_list_(*res, dest_ls_member_list))) {
+        LOG_WARN("construct dest ls member list failed", KR(ret), K_(tenant_id), K(dest_ls));
       }
       // double check sql result
       if (OB_FAIL(ret)) {
         if (OB_UNLIKELY(OB_ITER_END == ret)) { // read less than two rows
           ret = OB_LEADER_NOT_EXIST;
           LOG_WARN("leader of src_ls or dest_ls not found", KR(ret), K_(tenant_id), K(src_ls),
-              K(dest_ls), K(src_ls_member_list_str), K(dest_ls_member_list_str));
+              K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list));
         } else {
           LOG_WARN("get ls member_list from inner table failed", KR(ret), K_(tenant_id),
-              K(src_ls), K(dest_ls), K(src_ls_member_list_str), K(dest_ls_member_list_str));
+              K(src_ls), K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list));
         }
       } else if (OB_SUCC(res->next())) { // make sure read only two rows
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read too much ls from inner table", KR(ret), K_(tenant_id),
-            K(src_ls), K(dest_ls), K(src_ls_member_list_str), K(dest_ls_member_list_str), K(sql));
+            K(src_ls), K(dest_ls), K(src_ls_member_list), K(dest_ls_member_list), K(sql));
       } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("next failed", KR(ret), K_(tenant_id), K(src_ls), K(dest_ls),
-            K(sql), K(src_ls_member_list_str), K(dest_ls_member_list_str));
+            K(sql), K(src_ls_member_list), K(dest_ls_member_list));
       } else {
         ret = OB_SUCCESS;
       }
     } // end SMART_VAR
+  }
+  return ret;
+}
+
+int ObTenantTransferService::construct_ls_member_list_(
+    sqlclient::ObMySQLResult &res,
+    ObLSReplica::MemberList &ls_member_list)
+{
+  int ret = OB_SUCCESS;
+  ls_member_list.reset();
+  ObString ls_member_list_str;
+  if (OB_FAIL(res.next())) {
+    LOG_WARN("next failed", KR(ret));
+  } else if (OB_FAIL(res.get_varchar("PAXOS_MEMBER_LIST", ls_member_list_str))) {
+    LOG_WARN("fail to get PAXOS_MEMBER_LIST", KR(ret));
+  } else if (OB_FAIL(ObLSReplica::text2member_list(
+      to_cstring(ls_member_list_str),
+      ls_member_list))) {
+    LOG_WARN("text2member_list failed", KR(ret), K(ls_member_list_str));
   }
   return ret;
 }

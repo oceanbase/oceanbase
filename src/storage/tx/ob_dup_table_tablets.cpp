@@ -384,18 +384,8 @@ int ObLSDupTabletsMgr::init_free_tablet_pool_()
   const uint64_t tenant_id = MTL_ID();
 
   for (int i = 0; i < RESERVED_FREE_SET_COUNT && OB_SUCC(ret); i++) {
-    DupTabletChangeMap *tmp_map_ptr = nullptr;
-    if (OB_ISNULL(tmp_map_ptr = static_cast<DupTabletChangeMap *>(
-                      share::mtl_malloc(sizeof(DupTabletChangeMap), "DupTabletMap")))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      // } else if (OB_FALSE_IT(extra_free_set_alloc_count_++)) {
-    } else if (OB_FALSE_IT(new (tmp_map_ptr) DupTabletChangeMap(i + 1))) {
-    } else if (OB_FAIL(tmp_map_ptr->create(tenant_id, 1024))) {
-      DUP_TABLE_LOG(WARN, "create dup_tablet hash map", K(ret));
-    } else if (false == (free_set_pool_.add_last(tmp_map_ptr))) {
-      ret = OB_ERR_UNEXPECTED;
-      DUP_TABLE_LOG(WARN, "push back into free_set_pool failed", K(ret),
-                    K(free_set_pool_.get_size()), KPC(tmp_map_ptr));
+    if (OB_FAIL(alloc_one_free_tablet_set_(i + 1))) {
+      DUP_TABLE_LOG(WARN, "alloc one free tablet set failed", K(ret), K(i));
     }
   }
 
@@ -1136,7 +1126,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  SpinRLockGuard guard(dup_tablets_lock_);
+  SpinWLockGuard guard(dup_tablets_lock_);
 
   unique_id_array.reuse();
 
@@ -1243,7 +1233,7 @@ int ObLSDupTabletsMgr::prepare_serialize(int64_t &max_ser_size,
 
   if (OB_SUCC(ret)
       && ObTimeUtility::fast_current_time() - ATOMIC_LOAD(&last_readable_sync_succ_time_)
-             <= 30 * 60 * 1000 * 1000) {
+             <= 30 * 1000 * 1000) {
     ret = OB_LOG_TOO_LARGE;
     DUP_TABLE_LOG(DEBUG,
                   "Too many readable tablets log entry. Stop serializing readable tablet log",
@@ -2318,29 +2308,58 @@ int ObLSDupTabletsMgr::discover_dup_tablet_(const common::ObTabletID &tablet_id,
                 K(readable_tablets_list_.get_size()));
   return ret;
 }
-int ObLSDupTabletsMgr::alloc_extra_free_tablet_set_()
+
+int ObLSDupTabletsMgr::alloc_one_free_tablet_set_(const uint64_t uid)
 {
   int ret = OB_SUCCESS;
 
+  const int64_t origin_free_set_size = free_set_pool_.get_size();
+  bool construct_object_succ = true;
+
   DupTabletChangeMap *tmp_map_ptr = nullptr;
   const uint64_t tenant_id = MTL_ID();
+
   if (OB_ISNULL(tmp_map_ptr = static_cast<DupTabletChangeMap *>(
                     share::mtl_malloc(sizeof(DupTabletChangeMap), "DupTabletMap")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_FALSE_IT(extra_free_set_alloc_count_++)) {
-  } else if (OB_FALSE_IT(new (tmp_map_ptr) DupTabletChangeMap(RESERVED_FREE_SET_COUNT
-                                                              + extra_free_set_alloc_count_))) {
+    DUP_TABLE_LOG(WARN, "alloc a dup tablet map failed", K(ret), K(uid), KPC(tmp_map_ptr));
+  } else if (OB_FALSE_IT(new (tmp_map_ptr) DupTabletChangeMap(uid))) {
+  } else if (OB_FALSE_IT(construct_object_succ = true)) {
   } else if (OB_FAIL(tmp_map_ptr->create(tenant_id, 1024))) {
     DUP_TABLE_LOG(WARN, "create dup_tablet hash map", K(ret));
   } else if (false == (free_set_pool_.add_last(tmp_map_ptr))) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     DUP_TABLE_LOG(WARN, "push back into free_set_pool failed", K(ret), K(free_set_pool_.get_size()),
                   KPC(tmp_map_ptr));
   }
-  DUP_TABLE_LOG(INFO, "alloc a extra free tablet set", K(ret), K(last_no_free_set_time_),
-                K(extra_free_set_alloc_count_), KPC(changing_new_set_),
-                K(free_set_pool_.get_size()), K(need_confirm_new_queue_.get_size()),
-                K(readable_tablets_list_.get_size()));
+
+  if (OB_FAIL(ret)) {
+    if (free_set_pool_.get_size() == origin_free_set_size) {
+      if (OB_NOT_NULL(tmp_map_ptr)) {
+        if (construct_object_succ) {
+          if (tmp_map_ptr->created()) {
+            tmp_map_ptr->destroy();
+          }
+          tmp_map_ptr->~DupTabletChangeMap();
+        }
+
+        mtl_free(tmp_map_ptr);
+      }
+
+    } else {
+      DUP_TABLE_LOG(
+          ERROR, "unexpected free set in hash_map, rewrite the err_code as OB_ERR_UNEXPECTED",
+          K(ret), KPC(tmp_map_ptr), K(origin_free_set_size), K(free_set_pool_.get_size()));
+      ret = OB_ERR_UNEXPECTED;
+    }
+  } else {
+    if (uid > RESERVED_FREE_SET_COUNT) {
+      DUP_TABLE_LOG(INFO, "alloc a extra free tablet set", K(ret), K(last_no_free_set_time_),
+                    K(uid), K(extra_free_set_alloc_count_), KPC(changing_new_set_),
+                    K(free_set_pool_.get_size()), K(need_confirm_new_queue_.get_size()),
+                    K(readable_tablets_list_.get_size()));
+    }
+  }
   return ret;
 }
 
@@ -2365,8 +2384,11 @@ int ObLSDupTabletsMgr::get_free_tablet_set(DupTabletChangeMap *&free_set,
   }
 
   while (OB_SUCC(ret) && target_id > RESERVED_FREE_SET_COUNT + extra_free_set_alloc_count_) {
-    if (OB_FAIL(alloc_extra_free_tablet_set_())) {
+    if (OB_FAIL(
+            alloc_one_free_tablet_set_(RESERVED_FREE_SET_COUNT + extra_free_set_alloc_count_ + 1))) {
       DUP_TABLE_LOG(WARN, "alloc extra free tablet set failed", K(ret));
+    } else {
+      extra_free_set_alloc_count_++;
     }
   }
 
@@ -2377,8 +2399,12 @@ int ObLSDupTabletsMgr::get_free_tablet_set(DupTabletChangeMap *&free_set,
 
     if (force_alloc || extra_free_set_alloc_count_ < MAX_FREE_SET_COUNT - RESERVED_FREE_SET_COUNT
         || ObTimeUtility::fast_current_time() - last_no_free_set_time_ >= 3 * 1000 * 1000) {
-      if (OB_FAIL(alloc_extra_free_tablet_set_())) {
-        DUP_TABLE_LOG(WARN, "alloc extra free tablet set failed", K(ret));
+      if (OB_FAIL(alloc_one_free_tablet_set_(RESERVED_FREE_SET_COUNT + extra_free_set_alloc_count_
+                                            + 1))) {
+        DUP_TABLE_LOG(WARN, "alloc extra free tablet set failed", K(ret),
+                      K(RESERVED_FREE_SET_COUNT), K(extra_free_set_alloc_count_));
+      } else {
+        extra_free_set_alloc_count_++;
       }
     }
   }
@@ -2962,12 +2988,12 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
         if (0 == need_confirm_set->size()) {
           // do nothing
         } else {
-          CollectTabletsHandler changing_new_handler(
+          CollectTabletsHandler need_confirm_handler(
               collect_ts, ls_id, tenant_id, addr, is_master(),
               need_confirm_set->get_common_header().get_unique_id(), TabletSetAttr::DATA_SYNCING,
               // tablet_gc_window_,
               collect_iter);
-          if (OB_FAIL(hash_for_each_update(*need_confirm_set, changing_new_handler))) {
+          if (OB_FAIL(hash_for_each_update(*need_confirm_set, need_confirm_handler))) {
             DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
           }
         }
@@ -2985,12 +3011,12 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
         if (0 == readable_set->size()) {
           // do nothing
         } else {
-          CollectTabletsHandler changing_new_handler(
+          CollectTabletsHandler readable_handler(
               collect_ts, ls_id, tenant_id, addr, is_master(),
               readable_set->get_common_header().get_unique_id(), TabletSetAttr::READABLE,
               // tablet_gc_window_,
               collect_iter);
-          if (OB_FAIL(hash_for_each_update(*readable_set, changing_new_handler))) {
+          if (OB_FAIL(hash_for_each_update(*readable_set, readable_handler))) {
             DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
           }
         }
@@ -3005,18 +3031,17 @@ int ObLSDupTabletsMgr::get_tablets_stat(ObDupLSTabletsStatIterator &collect_iter
     if (0 == removing_old_set_->size()) {
       // do nothing
     } else {
-      CollectTabletsHandler changing_new_handler(
+      CollectTabletsHandler old_handler(
           collect_ts, ls_id, tenant_id, addr, is_master(),
           removing_old_set_->get_common_header().get_unique_id(), TabletSetAttr::DELETING,
           // tablet_gc_window_,
           collect_iter);
-      if (OB_FAIL(hash_for_each_update(*removing_old_set_, changing_new_handler))) {
+      if (OB_FAIL(hash_for_each_update(*removing_old_set_, old_handler))) {
         DUP_TABLE_LOG(WARN, "push into iter failed", KPC(this));
       }
     }
   }
-  // TODO siyu: for debug
-  DUP_TABLE_LOG(WARN, "collect all", K(ret), KPC(this));
+
   return ret;
 }
 
@@ -3025,14 +3050,12 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
 {
   int ret = OB_SUCCESS;
   // iter changing new
-  // const ObAddr addr = GCTX.self_addr();
   const int64_t tenant_id = MTL_ID();
   SpinRLockGuard rlock(dup_tablets_lock_);
 
   if (OB_NOT_NULL(changing_new_set_)) {
     DupTabletSetChangeStatus *tmp_status = changing_new_set_->get_change_status();
     if (OB_NOT_NULL(tmp_status)) {
-      // share::SCN not_used = share::SCN::min_scn();
       ObDupTableLSTabletSetStat tmp_stat;
       tmp_stat.set_basic_info(tenant_id, ls_id, is_master());
 
@@ -3054,7 +3077,6 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
     DLIST_FOREACH(need_confirm_set, need_confirm_new_queue_)
     {
       if (OB_NOT_NULL(need_confirm_set)) {
-        DUP_TABLE_LOG(WARN, "need confirm  tablets ", KPC(need_confirm_set));
         DupTabletSetChangeStatus *tmp_status = need_confirm_set->get_change_status();
         if (OB_NOT_NULL(tmp_status)) {
           ObDupTableLSTabletSetStat tmp_stat;
@@ -3105,7 +3127,6 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
   if (OB_SUCC(ret) && OB_NOT_NULL(removing_old_set_)) {
     share::SCN not_used = share::SCN::min_scn();
     DupTabletSetChangeStatus *tmp_status = removing_old_set_->get_change_status();
-    DUP_TABLE_LOG(WARN, "old tablets ", KPC(removing_old_set_), KPC(tmp_status));
     if (OB_NOT_NULL(tmp_status)) {
       ObDupTableLSTabletSetStat tmp_stat;
       tmp_stat.set_basic_info(tenant_id, ls_id, is_master());
@@ -3122,8 +3143,7 @@ int ObLSDupTabletsMgr::get_tablet_set_stat(ObDupLSTabletSetStatIterator &collect
       DUP_TABLE_LOG(WARN, "change status is null", KPC(this), KP(tmp_status));
     }
   }
-  // TODO siyu: for debug
-  DUP_TABLE_LOG(WARN, "collect all", K(ret), KPC(this));
+
   return ret;
 }
 

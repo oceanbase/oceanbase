@@ -182,8 +182,9 @@ void *AChunkMgr::low_alloc(const uint64_t size, const bool can_use_huge_page, bo
     void *shad_ptr  = SANITY_TO_SHADOW(ptr);
     ssize_t shad_size = SANITY_TO_SHADOW_SIZE(size);
     if (MAP_FAILED == ::mmap(shad_ptr, shad_size, prot, flags, fd, offset)) {
-      LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "sanity alloc shadow failed", K(errno), KP(shad_ptr));
-      abort();
+      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "sanity alloc shadow failed", K(errno), KP(shad_ptr));
+      ::munmap(ptr, size);
+      ptr = nullptr;
     } else {
       IGNORE_RETURN ATOMIC_FAA(&shadow_hold_, shad_size);
       //memset(shad_ptr, 0, shad_size);

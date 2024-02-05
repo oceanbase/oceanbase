@@ -29,6 +29,8 @@
 #include "log_tool/ob_admin_log_tool_executor.h"
 #include "slog_tool/ob_admin_slog_executor.h"
 #include "dump_ckpt/ob_admin_dump_ckpt_executor.h"
+#include "io_bench/ob_admin_io_adapter_bench.h"
+#include "io_device/ob_admin_test_io_device_executor.h"
 #include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::common;
@@ -143,6 +145,10 @@ int main(int argc, char *argv[])
       executor = new ObAdminSlogExecutor();
     } else if (0 == strcmp("dump_ckpt", argv[1])) {
       executor = new ObAdminDumpCkptExecutor();
+    } else if (0 == strcmp("io_adapter_benchmark", argv[1])) {
+      executor = new ObAdminIOAdapterBenchmarkExecutor();
+    } else if (0 == strcmp("test_io_device", argv[1])) {
+      executor = new ObAdminTestIODeviceExecutor();
     } else if (0 == strncmp("-h", argv[1], 2) || 0 == strncmp("-S", argv[1], 2)) {
       executor = new ObAdminServerExecutor();
     } else {

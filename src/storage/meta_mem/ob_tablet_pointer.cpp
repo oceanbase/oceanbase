@@ -155,7 +155,7 @@ int ObTabletPointer::read_from_disk(
   return ret;
 }
 
-int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
+int ObTabletPointer::hook_obj(const ObTabletAttr &attr, ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
 {
   int ret = OB_SUCCESS;
   guard.reset();
@@ -175,7 +175,7 @@ int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
     obj_.ptr_ = t;
     guard.set_obj(obj_);
     ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
-    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(*t))) { // only set tablet attr when first hook obj
+    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(attr))) { // only set tablet attr when first hook obj
       STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(guard));
     }
   }
@@ -415,7 +415,10 @@ void ObTabletPointer::set_initial_state(const bool initial_state)
   ATOMIC_STORE(&initial_state_, initial_state);
 }
 
-int ObTabletPointer::create_ddl_kv_mgr(const share::ObLSID &ls_id, const ObTabletID &tablet_id, ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+int ObTabletPointer::create_ddl_kv_mgr(
+    const share::ObLSID &ls_id,
+    const ObTabletID &tablet_id,
+    ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 {
   int ret = OB_SUCCESS;
   ddl_kv_mgr_handle.reset();
@@ -520,6 +523,11 @@ void ObTabletPointer::set_tablet_status_written()
   mds_table_handler_.set_tablet_status_written();
 }
 
+void ObTabletPointer::reset_tablet_status_written()
+{
+  mds_table_handler_.reset_tablet_status_written();
+}
+
 bool ObTabletPointer::is_tablet_status_written() const
 {
   return mds_table_handler_.is_tablet_status_written();
@@ -534,6 +542,7 @@ int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline(const ObTable
 {
   int ret = OB_SUCCESS;
   mds::MdsTableHandle mds_table;
+  reset_tablet_status_written();
   if (tablet_id.is_ls_inner_tablet()) {
     LOG_INFO("skip inner tablet", K(tablet_id));
   } else if (OB_FAIL(protected_memtable_mgr_handle_.reset())) {
@@ -654,16 +663,14 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   return ret;
 }
 
-int ObTabletPointer::set_tablet_attr(ObTablet &tablet)
+int ObTabletPointer::set_tablet_attr(const ObTabletAttr &attr)
 {
   int ret = OB_SUCCESS;
-  attr_.reset();
-  if (OB_FAIL(tablet.calc_tablet_attr(attr_))) {
-    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
-      ret = OB_SUCCESS; // the invalid attr is allowed
-    } else {
-      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(tablet));
-    }
+  if (OB_UNLIKELY(!attr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(attr));
+  } else {
+    attr_ = attr;
   }
   return ret;
 }
@@ -685,7 +692,7 @@ ObITabletFilterOp::~ObITabletFilterOp()
   total_tablet_cnt_ += total_cnt_;
   not_in_mem_tablet_cnt_ += not_in_mem_cnt_;
   invalid_attr_tablet_cnt_ += invalid_attr_cnt_;
-  LOG_INFO("zhuixin debug filter destructed",
+  LOG_INFO("tablet skip filter destructed",
       K_(total_cnt), K_(skip_cnt), K_(not_in_mem_cnt), K_(invalid_attr_cnt),
       K_(total_tablet_cnt), K_(total_skip_cnt), K_(not_in_mem_tablet_cnt), K_(invalid_attr_tablet_cnt));
 }

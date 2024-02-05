@@ -130,7 +130,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     table_direct_insert_ctx_(),
     errcode_(OB_SUCCESS),
     dblink_snapshot_map_(),
-    cur_row_num_(-1)
+    cur_row_num_(-1),
+    is_online_stats_gathering_(false)
 {
 }
 
@@ -772,6 +773,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
       }
       phy_plan_ctx_->set_consistency_level(consistency);
       phy_plan_ctx_->set_timeout_timestamp(start_time + plan_timeout);
+      phy_plan_ctx_->set_rich_format(my_session_->use_rich_format());
       reference_my_plan(&plan);
       phy_plan_ctx_->set_ignore_stmt(plan.is_ignore());
       phy_plan_ctx_->set_foreign_key_checks(0 != foreign_key_checks);
@@ -876,6 +878,19 @@ int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
     }
   } else {
     pwj_map = pwj_map_;
+  }
+  return ret;
+}
+
+int ObExecContext::get_local_var_array(int64_t local_var_array_id, const ObLocalSessionVar *&var_array)
+{
+  int ret = OB_SUCCESS;
+  var_array = NULL;
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy_plan_ctx_ is null", K(ret));
+  } else if (OB_FAIL(phy_plan_ctx_->get_local_session_vars(local_var_array_id, var_array))) {
+    LOG_WARN("get local session var failed", K(ret), K(local_var_array_id));
   }
   return ret;
 }

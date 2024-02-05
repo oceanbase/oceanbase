@@ -17,7 +17,6 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_se_array.h"
-#include "lib/allocator/ob_slice_alloc.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase {

@@ -14,6 +14,7 @@
 #include "ob_table_scan_executor.h"
 #include "ob_table_context.h"
 #include "sql/das/ob_das_utils.h"
+#include "share/index_usage/ob_index_usage_info_mgr.h"
 
 namespace oceanbase
 {
@@ -273,6 +274,15 @@ int ObTableApiScanExecutor::close()
       LOG_WARN("fail to close all das task", K(ret));
     } else {
       reset();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    oceanbase::share::ObIndexUsageInfoMgr *mgr = MTL(oceanbase::share::ObIndexUsageInfoMgr *);
+    if (tb_ctx_.get_table_id() == tb_ctx_.get_ref_table_id()) {
+      // skip // use primary key, do nothing
+    } else if (OB_NOT_NULL(mgr)) {
+      mgr->update(tb_ctx_.get_tenant_id(), tb_ctx_.get_index_table_id());
     }
   }
 

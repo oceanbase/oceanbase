@@ -278,6 +278,7 @@ typedef struct pn_client_req_t
   easy_head_t head;
 } pn_client_req_t;
 
+
 typedef struct pn_client_slice_t
 {
   int64_t ref_;
@@ -302,13 +303,19 @@ static void pn_pktc_resp_cb(pktc_cb_t* cb, const char* resp, int64_t sz)
   if (req) {
     req->resp_cb = NULL;
   }
+  if (cb->sk) {
+    cb->sk->sk_diag_info.doing_cnt --;
+    cb->sk->sk_diag_info.done_cnt ++;
+  }
   PNIO_DELAY_WARN(STAT_TIME_GUARD(eloop_client_cb_count, eloop_client_cb_time));
   pn_cb->client_cb(pn_cb->arg, cb->errcode, resp, sz);
   cfifo_free(pn_cb);
 }
 
-static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const char* req, int64_t req_sz, int16_t categ_id, int64_t expire_us, client_cb_t client_cb, void* arg)
+static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, const pn_pkt_t* pkt)
 {
+  const char* req = pkt->buf;
+  const int64_t req_sz = pkt->sz;
   pn_client_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req) + req_sz);
   if (unlikely(NULL == pn_req)) {
     return NULL;
@@ -320,19 +327,39 @@ static pktc_req_t* pn_create_pktc_req(pn_t* pn, uint64_t pkt_id, addr_t dest, co
   }
   pktc_cb_t* cb = &pn_cb->cb;
   pktc_req_t* r = &pn_req->req;
-  pn_cb->client_cb = client_cb;
-  pn_cb->arg = arg;
+  pn_cb->client_cb = pkt->cb;
+  pn_cb->arg = pkt->arg;
   cb->id = pkt_id;
-  cb->expire_us = expire_us;
+  cb->expire_us = pkt->expire_us;
   cb->resp_cb = pn_pktc_resp_cb;
   cb->errcode = PNIO_OK;
   cb->req = r;
+  cb->sk = NULL;
+  r->pkt_type = PN_NORMAL_PKT;
   r->flush_cb = pn_pktc_flush_cb;
   r->resp_cb = cb;
   r->dest = dest;
-  r->categ_id = categ_id;
+  r->categ_id = pkt->categ_id;
+  r->sk = NULL;
   dlink_init(&r->link);
   eh_copy_msg(&r->msg, cb->id, req, req_sz);
+  return r;
+}
+
+static pktc_req_t* pn_create_cmd_req(pn_t* pn, int64_t cmd, uint64_t pkt_id)
+{
+  pktc_req_t* r = NULL;
+  pn_client_cmd_req_t* pn_req = (typeof(pn_req))cfifo_alloc(&pn->client_req_alloc, sizeof(*pn_req));
+  if (likely(pn_req)) {
+    memset(pn_req, 0, sizeof(*pn_req));
+    r = &pn_req->req;
+    r->pkt_type = PN_CMD_PKT;
+    r->flush_cb = NULL;
+    r->resp_cb = NULL;
+    pn_req->cmd = cmd;
+    pn_req->arg = pkt_id;
+    eh_copy_msg(&r->msg, pkt_id, NULL, 0);
+  }
   return r;
 }
 
@@ -348,9 +375,15 @@ static pn_t* get_pn_for_send(pn_grp_t* pgrp, int tid)
   return pgrp->pn_array[tid % pgrp->count];
 }
 
-PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int64_t sz, int16_t categ_id, int64_t expire_us, client_cb_t cb, void* arg)
+PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const pn_pkt_t* pkt, uint32_t* pkt_id_ret)
 {
   int err = 0;
+  const char* buf = pkt->buf;
+  const int64_t sz = pkt->sz;
+  const int16_t categ_id = pkt->categ_id;
+  const int64_t expire_us = pkt->expire_us;
+  const void* arg = pkt->arg;
+
   pn_grp_t* pgrp = locate_grp(gtid>>32);
   pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
   addr_t dest = {.ip=addr->sin_addr.s_addr, .port=htons(addr->sin_port), .tid=0};
@@ -364,12 +397,13 @@ PN_API int pn_send(uint64_t gtid, struct sockaddr_in* addr, const char* buf, int
   } else if (LOAD(&pn->is_stop_)) {
     err = PNIO_STOPPED;
   } else {
-    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, buf, sz, categ_id, expire_us, cb, arg);
+    pktc_req_t* r = pn_create_pktc_req(pn, pkt_id, dest, pkt);
     if (NULL == r) {
       err = ENOMEM;
     } else {
       if (NULL != arg) {
         *((void**)arg) = r;
+        *pkt_id_ret = pkt_id;
       }
       err = pktc_post(&pn->pktc, r);
     }
@@ -574,6 +608,24 @@ PN_API uint64_t pn_get_rxbytes(int grp_id) {
   return bytes;
 }
 
+PN_API int pn_terminate_pkt(uint64_t gtid, uint32_t pkt_id) {
+  int err = 0;
+  pn_grp_t* pgrp = locate_grp(gtid>>32);
+  if (NULL == pgrp) {
+    err = EINVAL;
+  } else {
+    pn_t* pn = get_pn_for_send(pgrp, gtid & 0xffffffff);
+    pktc_req_t* r = pn_create_cmd_req(pn, PN_CMD_TERMINATE_PKT, pkt_id);
+    if (NULL == r) {
+      err = ENOMEM;
+      rk_warn("create cmd req failed, gtid=0x%lx, pkt_id=%u", gtid, pkt_id);
+    } else {
+      err = pktc_post(&pn->pktc, r);
+    }
+  }
+  return err;
+}
+
 int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
 {
   int ret = 0;
@@ -587,4 +639,53 @@ int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid)
     ret = dispatch_fd_to(fd, group_id, thread_idx);
   }
   return ret;
+}
+
+PN_API int pn_get_fd(uint64_t req_id)
+{
+  int fd = -1;
+  pn_resp_ctx_t* ctx = (typeof(ctx))req_id;
+  if (unlikely(NULL == ctx)) {
+    rk_warn("invalid arguments, req_id=%p", ctx);
+  } else {
+    pkts_t* pkts = &ctx->pn->pkts;
+    pkts_sk_t* sock = (typeof(sock))idm_get(&pkts->sk_map, ctx->sock_id);
+    fd = sock->fd;
+  }
+  return fd;
+}
+
+void pn_print_diag_info(pn_comm_t* pn_comm) {
+  pn_t* pn = (pn_t*)pn_comm;
+  int64_t client_cnt = 0;
+  int64_t server_cnt = 0;
+  // print socket diag info
+  dlink_for(&pn->pktc.sk_list, p) {
+    pktc_sk_t* s = structof(p, pktc_sk_t, list_link);
+    rk_info("client:%p_%s_%s_%d_%ld_%d, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+              s, T2S(addr, s->sk_diag_info.local_addr), T2S(addr, s->dest), s->fd, s->sk_diag_info.establish_time, s->conn_ok,
+              s->wq.cnt, s->wq.sz,
+              s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+              s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+              s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+              s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+    client_cnt++;
+  }
+  if (pn->pkts.sk_list.next != NULL) {
+    dlink_for(&pn->pkts.sk_list, p) {
+      pkts_sk_t* s = structof(p, pkts_sk_t, list_link);
+      rk_info("server:%p_%s_%d_%ld, write_queue=%lu/%lu, write=%lu/%lu, read=%lu/%lu, doing=%lu, done=%lu, write_time=%lu, read_time=%lu, process_time=%lu",
+                s, T2S(addr, s->peer), s->fd, s->sk_diag_info.establish_time,
+                s->wq.cnt, s->wq.sz,
+                s->sk_diag_info.write_cnt, s->sk_diag_info.write_size,
+                s->sk_diag_info.read_cnt, s->sk_diag_info.read_size,
+                s->sk_diag_info.doing_cnt, s->sk_diag_info.done_cnt,
+                s->sk_diag_info.write_wait_time, s->sk_diag_info.read_time, s->sk_diag_info.read_process_time);
+      server_cnt++;
+    }
+  }
+  // print pnio diag info
+  rk_info("client_send:%lu/%lu, client_queue_time=%lu, cnt=%ld, server_send:%lu/%lu, server_queue_time=%lu, cnt=%ld",
+            pn->pktc.diag_info.send_cnt, pn->pktc.diag_info.send_size, pn->pktc.diag_info.sc_queue_time, client_cnt,
+            pn->pkts.diag_info.send_cnt, pn->pkts.diag_info.send_size, pn->pkts.diag_info.sc_queue_time, server_cnt);
 }

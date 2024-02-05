@@ -244,8 +244,8 @@ void TestCGScanner::test_random(const bool is_reverse)
   buf = allocator_.alloc(sizeof(ObCGRowScanner));
   ASSERT_NE(nullptr, buf);
   ObCGRowScanner *cg_scanner = new (buf) ObCGRowScanner();
-  ObCGTableWrapper wrapper;
-  wrapper.cg_sstable_ = &sstable_;
+  ObSSTableWrapper wrapper;
+  wrapper.sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, cg_scanner->init(access_param_.iter_param_, context_, wrapper));
 
   int retry_cnt = 15;
@@ -327,8 +327,8 @@ void TestCGScanner::test_border(const bool is_reverse)
   buf = allocator_.alloc(sizeof(ObCGRowScanner));
   ASSERT_NE(nullptr, buf);
   ObCGRowScanner *cg_scanner = new (buf) ObCGRowScanner();
-  ObCGTableWrapper wrapper;
-  wrapper.cg_sstable_ = &sstable_;
+  ObSSTableWrapper wrapper;
+  wrapper.sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, cg_scanner->init(access_param_.iter_param_, context_, wrapper));
 
   int64_t start = 0;
@@ -417,8 +417,8 @@ TEST_F(TestCGScanner, test_large_micro_selected)
   buf = allocator_.alloc(sizeof(ObCGRowScanner));
   ASSERT_NE(nullptr, buf);
   ObCGRowScanner *cg_scanner = new (buf) ObCGRowScanner();
-  ObCGTableWrapper wrapper;
-  wrapper.cg_sstable_ = &sstable_;
+  ObSSTableWrapper wrapper;
+  wrapper.sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, cg_scanner->init(access_param_.iter_param_, context_, wrapper));
 
   int64_t start = 0;
@@ -578,8 +578,8 @@ TEST_F(TestCGScanner, test_filter)
   buf = allocator_.alloc(sizeof(ObCGRowScanner));
   ASSERT_NE(nullptr, buf);
   ObCGRowScanner *cg_scanner = new (buf) ObCGRowScanner();
-  ObCGTableWrapper wrapper;
-  wrapper.cg_sstable_ = &sstable_;
+  ObSSTableWrapper wrapper;
+  wrapper.sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, cg_scanner->init(access_param_.iter_param_, context_, wrapper));
 
   sql::PushdownFilterInfo pd_filter;
@@ -594,6 +594,7 @@ TEST_F(TestCGScanner, test_filter)
   pd_filter.cell_data_ptrs_ = reinterpret_cast<const char **>(buf3);
   buf3 = allocator_.alloc(sizeof(int64_t) * pd_filter.batch_size_);
   pd_filter.row_ids_ = reinterpret_cast<int64_t *>(buf3);
+  pd_filter.skip_bit_ = to_bit_vector(allocator_.alloc(ObBitVector::memory_size(256)));
   pd_filter.is_inited_ = true;
 
   int64_t start = 5;

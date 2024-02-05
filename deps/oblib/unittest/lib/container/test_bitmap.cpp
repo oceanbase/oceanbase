@@ -48,14 +48,20 @@ protected:
 private:
   DISALLOW_COPY_AND_ASSIGN(TestObBitmap);
 
-  inline bool test(const int64_t idx) const
+  inline bool test(const int64_t idx, uint64_t *data = nullptr) const
   {
-    return data_[idx / 64] & (1LU << (idx % 64));
+    if (nullptr == data) {
+      data = data_;
+    }
+    return data[idx / 64] & (1LU << (idx % 64));
   }
 
-  inline void set(const int64_t idx)
+  inline void set(const int64_t idx, uint64_t *data = nullptr)
   {
-    data_[idx / 64] |= 1LU << (idx % 64);
+    if (nullptr == data) {
+      data = data_;
+    }
+    data[idx / 64] |= 1LU << (idx % 64);
   }
   uint64_t *data_;
 };
@@ -312,6 +318,57 @@ TEST_F(TestObBitmap, to_bits_mask)
       ASSERT_TRUE(test(i));
     }
   }
+}
+
+TEST_F(TestObBitmap, bitmap_filter)
+{
+  const int64_t row_size = 1000;
+  const int64_t uint64_byte_size = (row_size + 63) / 64 * 8;
+  const bool has_null = true;
+  uint64_t *null_vector = static_cast<uint64_t *>(allocator_.alloc(uint64_byte_size));
+  uint64_t *skip = static_cast<uint64_t *>(allocator_.alloc(uint64_byte_size));
+  uint64_t *data = static_cast<uint64_t *>(allocator_.alloc(row_size * 8));
+  MEMSET(static_cast<void *>(null_vector), 0, uint64_byte_size);
+  MEMSET(static_cast<void *>(skip), 0, uint64_byte_size);
+  for (int64_t i = 0; i < row_size; ++i) {
+    if ((i % 2) == 0) {
+      set(i, skip);
+    }
+    if ((i % 3) == 0) {
+      set(i, null_vector);
+    }
+    if ((i % 5) == 0) {
+      data[i] = 0;
+    } else {
+      data[i] = 1;
+    }
+  }
+  ObBitmap::filter(has_null, reinterpret_cast<uint8_t *>(null_vector), data, row_size, reinterpret_cast<uint8_t *>(skip));
+  for (int64_t i = 0; i < row_size; ++i) {
+    if ((i % 2) == 0 || (i % 3 == 0) || (i % 5 == 0)) {
+      EXPECT_TRUE(test(i, skip));
+    } else {
+      EXPECT_FALSE(test(i, skip));
+    }
+  }
+}
+
+TEST_F(TestObBitmap, benchmark_bitmap_filter)
+{
+  const int64_t row_size = 256;
+  const int64_t uint64_byte_size = (row_size + 63) / 64 * 8;
+  const bool has_null = true;
+  uint64_t *null_vector = static_cast<uint64_t *>(allocator_.alloc(uint64_byte_size));
+  uint64_t *skip = static_cast<uint64_t *>(allocator_.alloc(uint64_byte_size));
+  uint64_t *data = static_cast<uint64_t *>(allocator_.alloc(row_size * 8));
+  auto start = std::chrono::high_resolution_clock::now();
+  size_t loop_time = 1000000;
+  while (loop_time--) {
+    ObBitmap::filter(has_null, reinterpret_cast<uint8_t *>(null_vector), data, row_size, reinterpret_cast<uint8_t *>(skip));
+  }
+  auto end = std::chrono::high_resolution_clock::now();
+  LOG_INFO("benchmark_bitmap_filter costs ns",
+            K(std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count()));
 }
 
 // For 8192 rows:

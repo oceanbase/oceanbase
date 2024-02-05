@@ -101,6 +101,7 @@ public:
 
   virtual int locate_by_scn_coarsely(const share::SCN &scn, palf::LSN &result_lsn) = 0;
   virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn) = 0;
+  virtual int get_max_decided_scn_as_leader(share::SCN &scn) const = 0;
   virtual int advance_base_lsn(const palf::LSN &lsn) = 0;
   virtual int get_begin_lsn(palf::LSN &lsn) const = 0;
   virtual int get_end_lsn(palf::LSN &lsn) const = 0;
@@ -340,6 +341,19 @@ public:
   // - OB_NEED_RETRY: the block is being flashback, need retry.
   // - others: bug
   int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn) override final;
+  // @brief, get max committed scn from applyservice, which is the max scn of log committed by oneself as leader;
+  // Example:
+  // At time T1, the replica of the log stream is the leader and the maximum SCN of the logs
+  // confirmed by this replica is 100. At time T2, the replica switches to being a follower and the
+  // maximum SCN of the logs synchronized and replayed is 200. At time T3, the log stream replica
+  // switches back to being the leader and writes logs with SCNs ranging from 201 to 300, all of
+  // which are not confirmed. In this case, the returned value of the interface would be 100.
+  // @param[out] max scn of logs confirmed by this replica as being leader
+  // @return
+  //  OB_NOT_INIT : ls is not inited
+  //  OB_ERR_UNEXPECTED: unexpected error such as apply_service_ is NULL
+  //  OB_SUCCESS
+  int get_max_decided_scn_as_leader(share::SCN &scn) const override final;
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
   // @param[in] const LSN&, recycable lsn.
   int advance_base_lsn(const palf::LSN &lsn) override final;
@@ -662,8 +676,12 @@ public:
 
   // @brief, check if replay is enabled.
   bool is_replay_enabled() const override final;
-  // @brief, get max decided log ts considering both apply and replay.
-  // @param[out] int64_t&, max decided log ts ns.
+  // @brief, get max decided scn considering both apply and replay.
+  // @param[out] int64_t&, max decided scn.
+  // @return
+  // OB_NOT_INIT: not inited
+  // OB_STATE_NOT_MATCH: ls is offline or stopped
+  // OB_SUCCESS
   int get_max_decided_scn(share::SCN &scn) override final;
   // @brief: store a persistent flag which means this paxos replica  can not reply ack when receiving logs.
   // By default, paxos replica can reply ack.
@@ -691,6 +709,7 @@ public:
 private:
   static constexpr int64_t MIN_CONN_TIMEOUT_US = 5 * 1000 * 1000;     // 5s
   typedef common::TCRWLock::RLockGuardWithTimeout RLockGuardWithTimeout;
+  typedef common::TCRWLock::RLockGuard RLockGuard;
   typedef common::TCRWLock::WLockGuardWithTimeout WLockGuardWithTimeout;
 private:
   int submit_config_change_cmd_(const LogConfigChangeCmd &req);

@@ -247,27 +247,29 @@ struct ObMvccRow
 
   // Spin lock that protects row data.
   ObRowLatch latch_;
-  // Update count since last row compact.
-  int32_t update_since_compact_;
   uint8_t flag_;
   blocksstable::ObDmlFlag first_dml_flag_;
   blocksstable::ObDmlFlag last_dml_flag_;
-  ObMvccTransNode *list_head_;
-  transaction::ObTransID max_trans_id_;
-  share::SCN max_trans_version_;
-  transaction::ObTransID max_elr_trans_id_;
-  share::SCN max_elr_trans_version_;
-  ObMvccTransNode *latest_compact_node_;
-  // using for optimizing inserting trans node when replaying
-  ObMvccRowIndex *index_;
+  int32_t update_since_compact_;
+
   int64_t total_trans_node_cnt_;
   int64_t latest_compact_ts_;
   int64_t last_compact_cnt_;
-  // TODO(handora.qc): remove it after link all nodes
-  uint32_t max_modify_count_;
-  uint32_t min_modify_count_;
+  share::SCN max_trans_version_;
+  share::SCN max_elr_trans_version_;
+  share::SCN max_modify_scn_;
+  share::SCN min_modify_scn_;
+  transaction::ObTransID max_trans_id_;
+  transaction::ObTransID max_elr_trans_id_;
+  ObMvccTransNode *list_head_;
+  ObMvccTransNode *latest_compact_node_;
+  ObMvccRowIndex *index_;
 
-  ObMvccRow() { reset(); }
+  ObMvccRow()
+  {
+    STATIC_ASSERT(sizeof(ObMvccRow) <= 120, "Size of ObMvccRow Overflow.");
+    reset();
+  }
   void reset();
 
   // ===================== ObMvccRow Operation Interface =====================
@@ -360,8 +362,8 @@ struct ObMvccRow
   bool is_valid_replay_queue_index(const int64_t index) const;
 
   // ======================== ObMvccRow Row Metas ========================
-  // first dml and last dml is the important statistics for row estimation
-  void update_dml_flag_(blocksstable::ObDmlFlag flag, uint32_t modify_count);
+  // first dml and last dml is the importatnt statistics for row estimation
+  void update_dml_flag_(const blocksstable::ObDmlFlag flag, const share::SCN modify_count);
   blocksstable::ObDmlFlag get_first_dml_flag() const { return first_dml_flag_; }
 
   // max_trans_version/max_elr_trans_version is the max (elr) version on the row

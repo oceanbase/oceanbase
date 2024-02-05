@@ -98,7 +98,7 @@ public:
       const char *buf,
       const int64_t buf_len,
       ObTablet *t);
-  int hook_obj(ObTablet *&t, ObMetaObjGuard<ObTablet> &guard);
+  int hook_obj(const ObTabletAttr &attr, ObTablet *&t, ObMetaObjGuard<ObTablet> &guard);
   int release_obj(ObTablet *&t);
   int dump_meta_obj(ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
 
@@ -116,6 +116,7 @@ public:
   // interfaces forward to mds_table_handler_
   void mark_mds_table_deleted();
   void set_tablet_status_written();
+  void reset_tablet_status_written();
   bool is_tablet_status_written() const;
   int try_release_mds_nodes_below(const share::SCN &scn);
   int try_gc_mds_table();
@@ -123,7 +124,7 @@ public:
   int get_min_mds_ckpt_scn(share::SCN &scn);
   ObLS *get_ls() const;
   // the RW operations of tablet_attr are protected by lock guard of tablet_map_
-  int set_tablet_attr(ObTablet &tablet);
+  int set_tablet_attr(const ObTabletAttr &attr);
   bool is_attr_valid() const { return attr_.is_valid(); }
 private:
   int wash_obj();
@@ -144,7 +145,9 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletPointer); // 288B
 };
 
-struct ObTabletResidentInfo final {
+struct ObTabletResidentInfo final
+{
+public:
   ObTabletResidentInfo(ObTabletAttr &attr, ObTabletID &tablet_id, share::ObLSID &ls_id)
   : attr_(attr), tablet_addr_(), tablet_id_(tablet_id), ls_id_(ls_id)
     {}
@@ -158,10 +161,10 @@ struct ObTabletResidentInfo final {
   bool has_nested_table() const { return attr_.has_nested_table_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(tablet_addr), K_(attr));
 public:
-	ObTabletAttr &attr_;
+  ObTabletAttr &attr_;
   ObMetaDiskAddr tablet_addr_; // used to identify one tablet
-	ObTabletID tablet_id_;
-	share::ObLSID ls_id_;
+  ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
 };
 
 class ObITabletFilterOp

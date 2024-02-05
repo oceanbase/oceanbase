@@ -263,10 +263,7 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
       //single table delete, delete list is same with from list
       CK(delete_stmt->get_table_size() == 1);
       OZ(delete_tables_.push_back(delete_stmt->get_table_item(0)));
-      if (OB_SUCC(ret) && delete_stmt->get_table_item(0)->is_view_table_ && is_oracle_mode()) {
-        OZ(has_need_fired_trigger_on_view(delete_stmt->get_table_item(0), has_tg));
-      }
-      OX(delete_stmt->set_has_instead_of_trigger(has_tg));
+      OZ (check_need_fired_trigger(table_item));
     } else {
       //multi table delete
       is_multi_table_delete = true;
@@ -289,6 +286,8 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
           ret = OB_ERR_NONUNIQ_TABLE;
           LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item->table_name_.length(),
                       table_item->table_name_.ptr());
+        } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+          LOG_WARN("failed to check need fired trigger", K(ret));
         } else if (OB_FAIL(delete_tables_.push_back(table_item))) {
           LOG_WARN("failed to push back table item", K(ret));
         }
@@ -387,7 +386,6 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
   uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
   int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
-  bool is_need_all_columns = true;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(delete_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -412,16 +410,13 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
     table_info = new(ptr) ObDeleteTableInfo();
-    const bool need_check_uk = true;
     if (OB_FAIL(table_info->part_ids_.assign(base_table_item.part_ids_))) {
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!delete_stmt->has_instead_of_trigger()) {
       // todo @zimiao error logging also need all columns ?
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(table_item, table_info->column_exprs_))) {
         LOG_WARN("add all rowkey columns to stmt failed", K(ret));
-      } else if (OB_FAIL(need_all_columns(*table_schema, binlog_row_image, need_check_uk, is_need_all_columns))) {
-        LOG_WARN("call need_all_columns failed", K(ret), K(binlog_row_image));
-      } else if (is_need_all_columns) {
+      } else if (need_all_columns(*table_schema, binlog_row_image)) {
         if (OB_FAIL(add_all_columns_to_stmt(table_item, table_info->column_exprs_))) {
           LOG_WARN("fail to add all column to stmt", K(ret), K(table_item));
         }

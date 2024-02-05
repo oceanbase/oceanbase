@@ -475,7 +475,8 @@ bool ObSSTableRowScanner<ObCOPrefetcher>::can_blockscan() const
 {
   return is_scan(type_) &&
          nullptr != block_row_store_ &&
-         prefetcher_.switch_to_columnar_scan();
+         prefetcher_.switch_to_columnar_scan() &&
+         !sstable_->is_ddl_merge_sstable();
 }
 
 template<>

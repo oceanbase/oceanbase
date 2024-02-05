@@ -140,10 +140,17 @@ public:
                                  const bool if_not_exist);
   virtual int drop_unit_config(const share::ObUnitConfigName &name, const bool if_exist);
   virtual int alter_unit_config(const share::ObUnitConfig &unit_config);
+  virtual int check_unit_config_exist(const share::ObUnitConfigName &unit_config_name,
+                                      bool &is_exist);
 
   // resource pool related
   virtual int check_tenant_pools_in_shrinking(const uint64_t tenant_id, bool &is_shrinking);
   virtual int check_pool_in_shrinking(const uint64_t pool_id, bool &is_shrinking);
+  virtual int check_resource_pool_exist(const share::ObResourcePoolName &resource_pool_name,
+                                        bool &is_exist);
+  virtual int clone_resource_pool(share::ObResourcePool &resource_pool,
+                                  const share::ObUnitConfigName &unit_config_name,
+                                  const uint64_t source_tenant_id);
   virtual int create_resource_pool(share::ObResourcePool &resource_pool,
                                    const share::ObUnitConfigName &config_name,
                                    const bool if_not_exist);
@@ -157,6 +164,9 @@ public:
       const share::ObResourcePool &alter_pool,
       const share::ObUnitConfigName &config_name,
       const common::ObIArray<uint64_t> &delete_unit_id_array);
+  virtual int drop_resource_pool(
+      const uint64_t pool_id,
+      const bool if_exist);
   virtual int drop_resource_pool(
       const share::ObResourcePoolName &name,
       const bool if_exist);
@@ -188,7 +198,9 @@ public:
       const lib::Worker::CompatMode compat_mode,
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
       const uint64_t tenant_id,
-      const bool is_bootstrap = false);
+      const bool is_bootstrap,
+      const uint64_t source_tenant_id,
+      const bool check_data_version);
   virtual int revoke_pools(
       common::ObMySQLTransaction &trans,
       common::ObIArray<uint64_t> &new_ug_id_array,
@@ -436,6 +448,8 @@ private:
                            bool &is_enough,
                            AlterResourceErr &err_index) const;
   virtual int migrate_unit_(const uint64_t unit_id, const common::ObAddr &dst, const bool is_manual = false);
+  int inner_get_all_unit_infos_by_tenant_(const uint64_t tenant_id,
+                                          ObIArray<share::ObUnitInfo> &unit_infos);
   int do_migrate_unit_notify_resource_(const share::ObResourcePool &pool,
                                        const share::ObUnit &new_unit,
                                        const bool is_manual,
@@ -467,7 +481,7 @@ private:
   int inner_get_pool_ids_of_tenant(const uint64_t tenant_id,
                                    ObIArray<uint64_t> &pool_ids) const;
 
-  int check_resource_pool(share::ObResourcePool &resource_pool) const;
+  int check_resource_pool(share::ObResourcePool &resource_pool, const bool is_clone_tenant) const;
   int allocate_pool_units_(common::ObISQLClient &client,
                           const share::ObResourcePool &pool,
                           const common::ObIArray<common::ObZone> &zones,
@@ -716,12 +730,44 @@ private:
   int check_pool_ownership_(const uint64_t tenant_id,
                            const common::ObIArray<share::ObResourcePoolName> &pool_names,
                            const bool grant);
+
+  int construct_pool_units_to_grant_(
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      const share::ObResourcePool &new_pool,
+      const common::ObIArray<share::ObUnit *> &zone_sorted_unit_array,
+      const common::ObIArray<uint64_t> &new_ug_ids,
+      const lib::Worker::CompatMode &compat_mode,
+      ObNotifyTenantServerResourceProxy &notify_proxy,
+      const uint64_t source_tenant_id,
+      ObIArray<share::ObUnit> &pool_units,
+      const bool check_data_version);
+
+  int construct_unit_group_id_for_unit_(
+      const uint64_t source_tenant_id,
+      const common::ObIArray<share::ObUnitInfo> &source_units,
+      const common::ObIArray<uint64_t> &source_unit_group_ids,
+      const share::ObUnit &target_unit,
+      const int64_t unit_index,
+      const int64_t unit_num,
+      const common::ObIArray<uint64_t> &new_ug_ids,
+      uint64_t &unit_group_id);
+
+  // construct source unit group ids from source units
+  // @params[in]  source_units, unit belongs to source tenant
+  // @params[out] source_unit_group_ids, the result
+  int construct_source_unit_group_ids_(
+      const common::ObIArray<share::ObUnitInfo> &source_units,
+      common::ObIArray<uint64_t> &source_unit_group_ids);
+
   int do_grant_pools_(common::ObMySQLTransaction &trans,
                      const common::ObIArray<uint64_t> &new_unit_group_id_array,
                      const lib::Worker::CompatMode compat_mode,
                      const common::ObIArray<share::ObResourcePoolName> &pool_names,
                      const uint64_t tenant_id,
-                     const bool is_bootstrap);
+                     const bool is_bootstrap,
+                     const uint64_t source_tenant_id,
+                     const bool check_data_version);
 
   int do_revoke_pools_(common::ObMySQLTransaction &trans,
                       const common::ObIArray<uint64_t> &new_unit_group_id_array,
@@ -770,6 +816,7 @@ private:
   int delete_tenant_pool(const uint64_t tenant_id, share::ObResourcePool *pool);
   int delete_config_pool(const uint64_t config_id, share::ObResourcePool *pool);
   int delete_migrate_unit(const common::ObAddr &src_server, const uint64_t unit_id);
+  int inner_drop_resource_pool(share::ObResourcePool *pool);
 
   int get_unit_config_by_name(const share::ObUnitConfigName &name,
                               share::ObUnitConfig *&config) const;
@@ -808,7 +855,8 @@ private:
       const lib::Worker::CompatMode compat_mode,
       const share::ObUnit &unit,
       const bool if_not_grant,
-      const bool skip_offline_server);
+      const bool skip_offline_server,
+      const bool check_data_version);
   int build_notify_create_unit_resource_rpc_arg_(
       const uint64_t tenant_id,
       const share::ObUnit &unit,
@@ -816,6 +864,8 @@ private:
       const uint64_t unit_config_id,
       const bool if_not_grant,
       obrpc::TenantServerUnitConfig &rpc_arg) const;
+  int check_dest_data_version_is_loaded_(
+      const uint64_t tenant_id, const ObAddr &addr);
   int do_notify_unit_resource_(
     const common::ObAddr server,
     const obrpc::TenantServerUnitConfig &notify_arg,
@@ -916,10 +966,12 @@ private:
   int inner_create_unit_config_(
       const share::ObUnitConfig &unit_config,
       const bool if_not_exist);
-  int inner_create_resource_pool(
+  int inner_create_resource_pool_(
       share::ObResourcePool &resource_pool,
       const share::ObUnitConfigName &config_name,
-      const bool if_not_exist);
+      const bool if_not_exist,
+      const uint64_t source_tenant_id,
+      const common::ObIArray<share::ObUnitInfo> &source_units);
   int inner_try_delete_migrate_unit_resource(
       const uint64_t unit_id,
       const common::ObAddr &migrate_from_server);
@@ -960,6 +1012,63 @@ private:
   int get_pool_unit_group_id_(
       const share::ObResourcePool &pool,
       common::ObIArray<uint64_t> &new_unit_group_id_array);
+  // clone tenant resource pool related
+  int construct_resource_pool_to_clone_(
+      const uint64_t source_tenant_id,
+      share::ObResourcePool &pool_to_clone);
+  int construct_source_tenant_unit_num_(
+      const uint64_t source_tenant_id,
+      int64_t &unit_num);
+  int check_new_pool_units_for_clone_tenant_(
+      ObISQLClient &client,
+      const share::ObResourcePool &pool,
+      const common::ObIArray<share::ObUnitInfo> &source_units);
+  int construct_server_resources_info_(
+      const ObZone &zone,
+      const ObIArray<share::ObUnitInfo> &source_units,
+      ObIArray<share::ObServerInfoInTable> &server_infos,
+      ObIArray<ObUnitPlacementStrategy::ObServerResource> &server_resources);
+  int check_server_resources_and_persist_unit_info_(
+      ObISQLClient &client,
+      ObNotifyTenantServerResourceProxy &notify_proxy,
+      const ObZone &zone,
+      const share::ObResourcePool &pool,
+      const ObIArray<share::ObServerInfoInTable> &server_infos,
+      const ObIArray<ObUnitPlacementStrategy::ObServerResource> &server_resources,
+      const share::ObUnitResource &config);
+
+  int try_persist_unit_info_(
+      ObNotifyTenantServerResourceProxy &notify_proxy,
+      ObISQLClient &client,
+      const ObZone &zone,
+      const share::ObResourcePool &pool,
+      const lib::Worker::CompatMode &compat_mode,
+      const uint64_t unit_group_id,
+      const ObAddr &server,
+      ObIArray<common::ObAddr> &new_servers,
+      ObIArray<share::ObUnit> &units);
+  int check_server_status_valid_and_construct_log_(
+      const share::ObServerInfoInTable &server_info,
+      const bool for_clone_tenant,
+      bool &is_server_valid,
+      std::string &not_valid_reason) const;
+  int check_server_resource_enough_and_construct_log_(
+      const ObUnitPlacementStrategy::ObServerResource &server_resource,
+      const share::ObUnitResource &config,
+      bool &is_resource_enough,
+      std::string &resource_not_enough_reason) const;
+  int construct_valid_servers_resource_(
+      const ObZone &zone,
+      const share::ObUnitResource &config,
+      const ObIArray<ObAddr> &excluded_servers,
+      const ObIArray<share::ObServerInfoInTable> &servers_info,
+      const ObIArray<ObUnitPlacementStrategy::ObServerResource> &server_resources,
+      const char* module,
+      const bool for_clone_tenant,
+      int64_t &not_excluded_server_count,
+      std::string &resource_not_enough_reason,
+      ObIArray<ObUnitPlacementStrategy::ObServerResource> &valid_server_resources) const;
+
   // arrange unit related
   int allocate_new_pool_units_(
       common::ObISQLClient &client,

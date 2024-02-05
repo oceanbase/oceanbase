@@ -280,6 +280,7 @@ palf::AccessMode LogService::get_palf_access_mode(const share::ObTenantRole &ten
       break;
     case share::ObTenantRole::STANDBY_TENANT:
     case share::ObTenantRole::RESTORE_TENANT:
+    case share::ObTenantRole::CLONE_TENANT:
       mode = palf::AccessMode::RAW_WRITE;
       break;
     default:

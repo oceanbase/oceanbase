@@ -8,7 +8,7 @@ os=9
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/aarch64/
 
-[target-apr-el9]
+[target-el9]
 os=9
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/development-kit/el/9/aarch64/
@@ -26,15 +26,16 @@ devdeps-mxml-2.12.0-12022090616.el8.aarch64.rpm
 devdeps-xz-5.2.2-42022090615.el8.aarch64.rpm
 devdeps-lua-5.4.6-22023082916.el8.aarch64.rpm
 devdeps-oss-c-sdk-3.9.2-182022100412.el8.aarch64.rpm
-devdeps-zlib-static-1.2.7-132022100815.el8.aarch64.rpm
+devdeps-zlib-static-1.2.13-32023061421.el8.aarch64.rpm
 devdeps-ncurses-static-6.2-72022100815.el8.aarch64.rpm
 devdeps-boost-1.74.0-22022110914.el8.aarch64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el8.aarch64.rpm
 devdeps-icu-69.1-72022112416.el8.aarch64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
+devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 
-[deps-apr-el9]
-devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=apr-el9
+[deps-el9]
+devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.aarch64.rpm

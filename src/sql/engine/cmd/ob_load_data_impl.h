@@ -26,11 +26,12 @@
 #include "lib/container/ob_bit_set.h"
 #include "lib/utility/ob_utility.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/optimizer/ob_table_location.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
 #include "sql/engine/ob_des_exec_context.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "common/storage/ob_io_device.h"
 
 namespace oceanbase
@@ -384,7 +385,8 @@ struct ObCSVFormats {
 class ObLoadFileDataTrimer
 {
 public:
-  ObLoadFileDataTrimer() : incomplate_data_(NULL), incomplate_data_len_(0), lines_cnt_(0) {}
+  ObLoadFileDataTrimer() : incomplate_data_(NULL), incomplate_data_len_(0),
+    incomplate_data_buf_len_(ObLoadFileBuffer::MAX_BUFFER_SIZE), lines_cnt_(0) {}
   int init(common::ObIAllocator &allocator, const ObCSVFormats &formats);
   //for debug
   ObString get_incomplate_data_string() {
@@ -396,10 +398,12 @@ public:
   bool has_incomplate_data() const { return incomplate_data_len_ > 0; }
   int64_t get_lines_count() const { return lines_cnt_; }
   void commit_line_cnt(int64_t line_cnt) { lines_cnt_ += line_cnt; }
+  int expand_buf(common::ObIAllocator &allocator);
 private:
-  ObCSVFormats formats_;//TODO [load data] change to ObInverseParser(formats)
+  ObCSVFormats formats_;
   char *incomplate_data_;
   int64_t incomplate_data_len_;
+  int64_t incomplate_data_buf_len_;
   int64_t lines_cnt_;
 };
 
@@ -491,6 +495,9 @@ struct ObShuffleTaskHandle {
                       common::ObBitSet<> &main_string_values,
                       uint64_t tenant_id);
   ~ObShuffleTaskHandle();
+
+  int expand_buf(const int64_t max_size);
+
   ObArenaAllocator allocator;
   ObDesExecContext exec_ctx;
   ObLoadFileBuffer *data_buffer;
@@ -505,6 +512,7 @@ struct ObShuffleTaskHandle {
   common::ObBitSet<> &string_values;
   ObShuffleResult result;
   ObSEArray<ObParserErrRec, 16> err_records;
+  common::ObMemAttr attr;
   TO_STRING_KV("task_id", result.task_id_);
 };
 
@@ -677,7 +685,7 @@ public:
     InsertTask,
   };
   struct ToolBox {
-    ToolBox() : device_handle_(NULL), fd_(), expr_buffer(nullptr) {}
+    ToolBox() : file_reader(nullptr), job_status(nullptr), expr_buffer(nullptr), temp_handle(nullptr) {}
     int init(ObExecContext &ctx, ObLoadDataStmt &load_stmt);
     int build_calc_partid_expr(ObExecContext &ctx,
                                ObLoadDataStmt &load_stmt,
@@ -685,14 +693,13 @@ public:
     int release_resources();
 
     //modules
-    ObFileReader file_reader;
-    ObIODevice* device_handle_;
-    ObIOFd fd_;
+    ObFileReader * file_reader;
     ObFileAppender file_appender;
     ObFileReadCursor read_cursor;
     ObLoadFileDataTrimer data_trimer;
     ObInsertValueGenerator generator;
     ObDataFragMgr data_frag_mgr;
+    ObFileReadParam file_read_param;
 
     //running control
     ObParallelTaskController shuffle_task_controller;
@@ -711,6 +718,7 @@ public:
     int64_t num_of_table_column;
     int64_t parallel;
     int64_t batch_row_count;
+    int64_t batch_buffer_size;
     int64_t data_frag_mem_usage_limit; //limit = data_frag_mem_usage_limit * MAX_BUFFER_SIZE
     int64_t file_size;
     int64_t ignore_rows;
@@ -737,6 +745,7 @@ public:
     common::ObSEArray<int64_t, 1> file_buf_row_num;
     int64_t last_session_check_ts;
     common::ObSEArray<ObLoadTableColumnDesc, 16> insert_infos;
+    ObShuffleTaskHandle *temp_handle;
 
     //debug values
     int64_t insert_dispatch_rows;
@@ -759,7 +768,7 @@ public:
   int execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt);
 
   int shuffle_task_gen_and_dispatch(ObExecContext &ctx, ToolBox &box);
-  int next_file_buffer(ToolBox &box, ObLoadFileBuffer &data_buffer, int64_t limit = INT64_MAX);
+  int next_file_buffer(ObExecContext &ctx, ToolBox &box, ObShuffleTaskHandle *handle, int64_t limit = INT64_MAX);
   int handle_returned_shuffle_task(ToolBox &box, ObShuffleTaskHandle &handle);
   int wait_shuffle_task_return(ToolBox &box);
 

@@ -166,13 +166,14 @@ public:
     return basic_meta_.column_cnt_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   }
 
-  OB_INLINE int16_t get_index_tree_height() const { return basic_meta_.data_index_tree_height_; }
+  OB_INLINE int16_t get_index_tree_height(const bool is_ddl_merge_sstable) const { return is_ddl_merge_sstable ? 2 : basic_meta_.data_index_tree_height_; }
   OB_INLINE ObSSTableStatus get_status() const
   {
     return static_cast<ObSSTableStatus>(basic_meta_.status_);
   }
   OB_INLINE int64_t get_occupy_size() const { return basic_meta_.occupy_size_; }
   OB_INLINE int64_t get_row_count() const { return basic_meta_.row_count_; }
+  OB_INLINE int64_t get_end_row_id(const bool is_ddl_merge_empty_sstable) const { return is_ddl_merge_empty_sstable ? INT64_MAX : basic_meta_.row_count_ - 1; }
   OB_INLINE int64_t get_data_micro_block_count() const
   {
     return basic_meta_.get_data_micro_block_count();

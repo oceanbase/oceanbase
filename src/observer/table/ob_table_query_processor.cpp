@@ -55,6 +55,7 @@ int ObTableQueryP::check_arg()
   } else if (!(arg_.consistency_level_ == ObTableConsistencyLevel::STRONG ||
                 arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
     LOG_WARN("some options not supported yet", K(ret),
              "consistency_level", arg_.consistency_level_);
   }
@@ -66,8 +67,8 @@ void ObTableQueryP::audit_on_finish()
   audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
       ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
   audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = true; // todo: exact judgement
-  audit_record_.affected_rows_ = result_.get_row_count();
+  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
+  audit_record_.affected_rows_ = 0;
   audit_record_.try_cnt_ = retry_count_ + 1;
 }
 
@@ -127,6 +128,7 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
   ObExprFrameInfo *expr_frame_info = nullptr;
   bool is_weak_read = arg_.consistency_level_ == ObTableConsistencyLevel::EVENTUAL;
   tb_ctx_.set_scan(true);
+  tb_ctx_.set_entity_type(arg_.entity_type_);
 
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));

@@ -67,6 +67,7 @@
 #include "storage/high_availability/ob_ls_block_tx_service.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
+#include "storage/ls/ob_ls_transfer_status.h"
 
 namespace oceanbase
 {
@@ -283,6 +284,8 @@ public:
   ObTransferHandler *get_transfer_handler() { return &transfer_handler_; }
   ObLSTransferInfo &get_ls_startup_transfer_info() { return startup_transfer_info_; }
 
+  // for transfer record MDS phase
+  ObLSTransferStatus &get_transfer_status() { return ls_transfer_status_; }
   //remove member handler
   ObLSRemoveMemberHandler *get_ls_remove_member_handler() { return &ls_remove_member_handler_; }
 
@@ -307,7 +310,8 @@ public:
   bool is_create_committed() const;
   bool is_need_gc() const;
   bool is_in_gc();
-  bool is_enable_for_restore() const;
+  bool is_restore_first_step() const;
+  bool is_clone_first_step() const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
   // int prepare_rebuild();
@@ -336,6 +340,7 @@ public:
   // create all the inner tablet.
   int create_ls_inner_tablet(const lib::Worker::CompatMode compat_mode,
                              const share::SCN &create_scn);
+  int remove_ls_inner_tablet();
 
   // get the meta package of ls: ObLSMeta, PalfBaseInfo
   // @param[in] check_archive, if need check archive,
@@ -381,9 +386,15 @@ public:
   int flush_if_need(const bool need_flush);
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   int check_can_replay_clog(bool &can_replay);
-  int check_can_online(bool &can_online);
+  int check_ls_need_online(bool &need_online);
 
-  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle() const;
+  void set_delay_resource_recycle();
+  void clear_delay_resource_recycle();
+
+  TO_STRING_KV(K_(running_state), K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler),
+               K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info), K_(need_delay_resource_recycle));
 private:
   void update_state_seq_();
   int ls_init_for_dup_table_();
@@ -403,6 +414,15 @@ private:
       ObTabletHandle &handle);
   int offline_advance_epoch_();
   int online_advance_epoch_();
+  int register_to_service_();
+  int register_common_service();
+  int register_sys_service();
+  int register_user_service();
+
+  void unregister_from_service_();
+  void unregister_common_service_();
+  void unregister_sys_service_();
+  void unregister_user_service_();
 public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,
@@ -560,6 +580,8 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, disable_to_read, void);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_with_timeout, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_mds_table_mgr, int);
+  // for transfer to check tablet no active memtable
+  DELEGATE_WITH_RET(ls_tablet_svr_, check_tablet_no_active_memtable, int);
 
   // ObLockTable interface:
   // check whether the lock op is conflict with exist lock.
@@ -744,6 +766,7 @@ public:
   // @return OB_NOT_MASTER, if the LogStream is follower replica
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_with_timeout, int);
 
   // Decrease the specified tx_ctx's reference count
   // @param [in] tx_ctx: the TxCtx will be revert
@@ -805,6 +828,7 @@ public:
   // iterate the obj lock op at tx service.
   // int iterate_tx_obj_lock_op(ObLockOpIterator &iter) const;
   CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_obj_lock_op, int);
+  CONST_DELEGATE_WITH_RET(ls_tx_svr_, iterate_tx_ctx, int);
 
   DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, get_active_tx_count, int);
@@ -812,6 +836,19 @@ public:
   //dup table ls meta interface
   CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
   DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);
+
+  // for transfer to modify active tx ctx state
+  DELEGATE_WITH_RET(ls_tx_svr_, transfer_out_tx_op, int);
+
+  // for transfer to wait tx write end
+  DELEGATE_WITH_RET(ls_tx_svr_, wait_tx_write_end, int);
+
+  // for transfer collect src_ls tx ctx
+  DELEGATE_WITH_RET(ls_tx_svr_, collect_tx_ctx, int);
+
+  // for transfer move tx ctx to dest_ls
+  DELEGATE_WITH_RET(ls_tx_svr_, move_tx_op, int);
+
 
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
@@ -975,8 +1012,13 @@ private:
   ObTransferHandler transfer_handler_;
   // Record the dependent transfer information when restarting
   ObLSTransferInfo startup_transfer_info_;
+  // for transfer MDS phase
+  ObLSTransferStatus ls_transfer_status_;
   // this is used for the meta lock, and will be removed later
   RWLock meta_rwlock_;
+
+  // for delaying the resource recycle after correctness issue
+  bool need_delay_resource_recycle_;
 };
 
 }

@@ -713,7 +713,8 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
       table_assign = &assigns.at(assigns.count() - 1);
     }
   }
-  if (OB_SUCC(ret) && (is_mysql_mode() || assign.column_expr_->is_generated_column())) {
+  if (OB_SUCC(ret) && !params_.is_prepare_stage_
+      && (is_mysql_mode() || assign.column_expr_->is_generated_column())) {
     //in MySQL:
     //The second assignment in the following statement sets col2 to the current (updated) col1 value,
     //not the original col1 value.
@@ -895,16 +896,11 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
             }
           } else if (new_table_item->is_generated_table() || new_table_item->is_temp_table()) {
             const bool inner_log_error = false;
-            if (new_table_item->is_view_table_ && is_oracle_mode()
-                && stmt_->is_support_instead_of_trigger_stmt()) {
-              bool has_tg = false;
-              OZ (has_need_fired_trigger_on_view(new_table_item, has_tg));
-              OX ((static_cast<ObDelUpdStmt*>(stmt_))
-                   ->set_has_instead_of_trigger(has_tg));
-            }
-            if (OB_FAIL(SMART_CALL(set_base_table_for_updatable_view(*new_table_item,
-                                                                     *new_col_ref,
-                                                                     inner_log_error)))) {
+            if (OB_FAIL(check_need_fired_trigger(new_table_item))) {
+              LOG_WARN("check has need fired trigger failed", K(ret));
+            } else if (OB_FAIL(SMART_CALL(set_base_table_for_updatable_view(*new_table_item,
+                                                                            *new_col_ref,
+                                                                            inner_log_error)))) {
               LOG_WARN("find base table for updatable view failed", K(ret));
             }
           } else if (new_table_item->is_fake_cte_table()) {
@@ -1767,36 +1763,19 @@ int ObDelUpdResolver::build_returning_lob_expr(ObColumnRefRawExpr *ref_expr, ObS
   return ret;
 }
 
-int ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
-                                       const int64_t binlog_row_image,
-                                       const int64_t need_check_uk,
-                                       bool &need_all_columns)
+bool ObDelUpdResolver::need_all_columns(const ObTableSchema &table_schema,
+                                        const int64_t binlog_row_image)
 {
-  int ret = OB_SUCCESS;
-  const bool is_binlog_full_mode = (ObBinlogRowImage::FULL == binlog_row_image) ? true : false;
-  bool has_not_null_uk = false;
-  if (!is_binlog_full_mode && need_check_uk && table_schema.is_heap_table()) {
-    // Need check UK for heap table only when binlog_row_image is not FULL.
-    ObSchemaGetterGuard *schema_guard = NULL;
-    CK (OB_NOT_NULL(schema_checker_));
-    CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
-    if (OB_SUCC(ret) && OB_FAIL(table_schema.has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
-      LOG_WARN("has_not_null_unique_key failed", K(ret), K(table_schema));
-    }
-  }
-  // For heap table:
-  // 1) If it does not have [NOT NULL UK], need record all columns.
-  // 2) If it has [NOT NULL UK], only need record all columns when UK is one of the updated columns,
-  //    or just need record UK in OldRow.
-  if (OB_SUCC(ret)) {
-    need_all_columns = (is_binlog_full_mode ||
-            (table_schema.is_heap_table() && !has_not_null_uk) ||
-            table_schema.get_foreign_key_infos().count() > 0 ||
-            table_schema.get_trigger_list().count() > 0 ||
-            table_schema.has_check_constraint() ||
-            table_schema.has_generated_and_partkey_column());
-  }
-  return ret;
+  // Returns True although binlog_row_image is MINIMAL temporarily,
+  // because optimizer may need full columns currently.
+  // This can be optimized later.
+  return (table_schema.is_heap_table() ||
+          table_schema.get_foreign_key_infos().count() > 0 ||
+          table_schema.get_trigger_list().count() > 0 ||
+          table_schema.has_check_constraint() ||
+          table_schema.has_generated_and_partkey_column() ||
+          binlog_row_image == ObBinlogRowImage::FULL ||
+          binlog_row_image == ObBinlogRowImage::MINIMAL);
 }
 
 int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
@@ -1929,72 +1908,6 @@ int ObDelUpdResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item
   return ret;
 }
 
-int ObDelUpdResolver::add_all_unique_key_columns_to_stmt(const TableItem &table_item,
-                                                         ObIArray<ObColumnRefRawExpr*> &column_exprs)
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = NULL;
-  const TableItem &base_table_item = table_item.get_base_table_item();
-  ObDelUpdStmt *stmt = get_del_upd_stmt();
-
-  ObSchemaGetterGuard *schema_guard = NULL;
-  uint64_t view_id = OB_INVALID_ID;
-  CK (OB_NOT_NULL(schema_checker_));
-  CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
-
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(stmt));
-  } else if (stmt->has_instead_of_trigger()) {
-    // do nothing, instead of trigger doesn't have rowkey
-  } else if (OB_ISNULL(params_.session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params_.session_info_ is null", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
-                                                       base_table_item.ref_id_,
-                                                       table_schema,
-                                                       base_table_item.is_link_table()))) {
-    LOG_WARN("table schema not found", K(base_table_item));
-  } else if (NULL == table_schema) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid table schema", K(table_item));
-  } else {
-    // extract all column_ids for unique key, and add them into stmt
-    ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-    if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-      LOG_WARN("get simple_index_infos failed", K(ret));
-    } else {
-      const uint64_t tenant_id = table_schema->get_tenant_id();
-      for (int64_t i = 0; OB_SUCCESS == ret && i < simple_index_infos.count(); ++i) {
-        const ObTableSchema *index_table_schema = NULL;
-        if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
-            simple_index_infos.at(i).table_id_, index_table_schema))) {
-          LOG_WARN("fail to get table schema", K(tenant_id),
-                  K(simple_index_infos.at(i).table_id_), K(ret));
-        } else if (OB_ISNULL(index_table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("index table schema must not be NULL", K(ret));
-        } else if (!index_table_schema->is_unique_index()) {
-          // not unique index, skip
-        } else {
-          ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
-          for ( ; iter != index_table_schema->column_end(); iter++) {
-            const ObColumnSchemaV2 *column_schema = *iter;
-            if (OB_ISNULL(column_schema)) {
-              LOG_WARN("unexpected err", KPC(column_schema));
-            } else if (!column_schema->is_index_column()) {
-              // skip non index column
-            } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
-              LOG_WARN("add column to stmt failed", K(ret), K(table_item));
-            } else { /*do nothing*/ }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 //for ObDelUpdStmt
 // add column's related columns in index to stmt
 // if column_id is OB_INVALID_ID, all indexes' columns would be added to stmt
@@ -2099,47 +2012,6 @@ int ObDelUpdResolver::add_all_index_rowkey_to_stmt(const TableItem &table_item,
   return ret;
 }
 
-int ObDelUpdResolver::add_necessary_columns_for_minimal_mode(const TableItem &table_item,
-                                                             ObIArray<ObColumnRefRawExpr*> &column_exprs)
-{
-  // The timestamp and datetime columns need to be recorded unconditionly for MINIMAL mode.
-  int ret = OB_SUCCESS;
-  const ObTableSchema *table_schema = NULL;
-  const TableItem& base_table_item = table_item.get_base_table_item();
-  if (OB_ISNULL(params_.session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params_.session_info_ is null", K(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
-                                                       base_table_item.ref_id_,
-                                                       table_schema,
-                                                       base_table_item.is_link_table()))) {
-    LOG_WARN("not find table schema", K(ret), K(base_table_item));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(table_schema), K(ret));
-  } else {
-    ObTableSchema::const_column_iterator iter = table_schema->column_begin();
-    ObTableSchema::const_column_iterator end = table_schema->column_end();
-    for (; OB_SUCC(ret) && iter != end; ++iter) {
-      const ObColumnSchemaV2 *column = *iter;
-      if (OB_ISNULL(column)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column schema", K(column));
-      } else if (column->get_meta_type().is_datetime() ||
-        column->get_meta_type().is_timestamp() ||
-        column->get_meta_type().is_time() ||
-        column->get_meta_type().is_date() ||
-        column->get_meta_type().is_otimestamp_type()) {
-        // date/datatime and time/timestamp column need to be added to old_row
-        if (OB_FAIL(add_column_to_stmt(table_item, *column, column_exprs))) {
-          LOG_WARN("add column item to stmt failed", K(ret));
-        }
-      } else { /* do nothing */ }
-    }
-  }
-  return ret;
-}
-
 int ObDelUpdResolver::add_all_index_rowkey_to_stmt(const TableItem &table_item,
                                                    const ObTableSchema *index_schema,
                                                    ObIArray<ObColumnRefRawExpr *> &column_items)
@@ -2225,34 +2097,6 @@ int ObDelUpdResolver::add_all_partition_key_columns_to_stmt(const TableItem &tab
   return ret;
 }
 
-int ObDelUpdResolver::add_udt_hidden_columns_for_minimal_mode(const TableItem &table_item,
-                                                              const ObTableSchema *table_schema,
-                                                              ObColumnRefRawExpr *col_expr,
-                                                              ObIArray<ObColumnRefRawExpr *> &column_items)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema) || OB_ISNULL(col_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid arguments", K(ret));
-  } else if (!col_expr->get_result_type().is_user_defined_sql_type()) {
-    // not udt column ref, do nothing
-  } else {
-    ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
-    if (OB_FAIL(table_schema->get_column_schema_in_same_col_group(col_expr->get_column_id(),
-                                                                  col_expr->get_udt_set_id(),
-                                                                  hidden_cols))) {
-      LOG_WARN("failed to get column schema", K(ret));
-    } else {
-      for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
-        if (OB_FAIL(add_column_to_stmt(table_item, *(hidden_cols[i]), column_items))) {
-          LOG_WARN("add column to stmt failed", K(ret), K(table_item), K(i), K(*(hidden_cols[i])));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDelUpdResolver::uv_check_key_preserved(const TableItem &table_item, bool &key_preserved)
 {
   int ret = OB_SUCCESS;
@@ -2298,63 +2142,86 @@ int ObDelUpdResolver::uv_check_key_preserved(const TableItem &table_item, bool &
   return ret;
 }
 
-//检查user_view上是否有对应dml事件触发且状态为enabled的instead of trigger
-int ObDelUpdResolver::has_need_fired_trigger_on_view(const TableItem* view_item, bool &has)
+int ObDelUpdResolver::check_need_fired_trigger(const TableItem* table_item)
 {
   int ret = OB_SUCCESS;
-  has = false;
-  const ObTableSchema *view_schema = NULL;
+  bool has = false;
+  const ObTableSchema *table_schema = NULL;
   ObSchemaGetterGuard *schema_guard = NULL;
-  uint64_t view_id = OB_INVALID_ID;
-  CK (OB_NOT_NULL(view_item));
-  CK (OB_NOT_NULL(schema_checker_));
-  CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
-  OX (view_id = view_item->ref_id_);
-  if (OB_SUCC(ret) && !view_item->alias_name_.empty()) {
-    uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t table_id = OB_INVALID_ID;
+  CK (OB_NOT_NULL(table_item));
+  if (OB_SUCC(ret)
+      && !session_info_->get_ddl_info().is_ddl()
+      && !table_item->is_index_table_
+      && (table_item->is_basic_table() || table_item->is_view_table_)) {
     CK (OB_NOT_NULL(schema_checker_));
-    CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()))
-    OZ (schema_guard->get_table_id(tenant_id, view_item->database_name_,
-                                   view_item->table_name_, false /*is_index*/,
-                                   ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, view_id));
-  }
-  OZ (schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), view_id, view_schema), view_id);
-  CK (OB_NOT_NULL(view_schema));
-  if (OB_SUCC(ret) && view_schema->is_user_view()) {
-    const uint64_t tenant_id = view_schema->get_tenant_id();
-    const ObIArray<uint64_t> &tg_list = view_schema->get_trigger_list();
-    const ObTriggerInfo *tg_info = NULL;
-    uint64_t tg_id = OB_INVALID_ID;
-    uint64_t dml_event = 0;
-    switch (stmt_->get_stmt_type())
-    {
-    case stmt::T_INSERT:
-      dml_event = ObTriggerEvents::get_insert_event();
-      break;
-    case stmt::T_UPDATE:
-      dml_event = ObTriggerEvents::get_update_event();
-      break;
-    case stmt::T_DELETE:
-      dml_event = ObTriggerEvents::get_delete_event();
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("stmt type is error", K(stmt_->get_stmt_type()), K(ret));
-      break;
+    CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
+    OX (table_id = table_item->ref_id_);
+    if (OB_SUCC(ret)) {
+      if (stmt::T_INSERT == stmt_->get_stmt_type() || stmt::T_INSERT_ALL == stmt_->get_stmt_type()) {
+        table_id = (!OB_ISNULL(table_item->ref_query_) && table_item->ref_query_->is_view_stmt())
+                              ? table_item->ref_query_->get_view_ref_id()
+                              : table_item->get_base_table_item().ref_id_;
+      } else if (!table_item->alias_name_.empty() && table_item->is_view_table_) {
+        uint64_t tenant_id = session_info_->get_effective_tenant_id();
+        CK (OB_NOT_NULL(schema_checker_));
+        CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()))
+        OZ (schema_guard->get_table_id(tenant_id, table_item->database_name_,
+                                      table_item->table_name_, false /*is_index*/,
+                                      ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id));
+      }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && !has && i < tg_list.count(); i++) {
-      OX (tg_id = tg_list.at(i));
-      OZ (schema_guard->get_trigger_info(tenant_id, tg_id, tg_info));
-      OV (OB_NOT_NULL(tg_info));
-      OX (has = (tg_info->is_enable() && tg_info->has_event(dml_event)));
-    }
-    if (OB_SUCC(ret) && has) {
-      CK (stmt_->is_support_instead_of_trigger_stmt());
-      if (OB_SUCC(ret)) {
-        ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(stmt_);
-        if (del_upd_stmt->is_returning()) {
-          ret = OB_ERR_RETURNING_CLAUSE;
-          LOG_WARN("RETURNING clause is currently not supported for INSTEAD OF Triggers", K(ret));
+    OZ (schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_id, table_schema), table_id);
+    CK (OB_NOT_NULL(table_schema));
+    if (OB_SUCC(ret)) {
+      const uint64_t tenant_id = table_schema->get_tenant_id();
+      const ObIArray<uint64_t> &tg_list = table_schema->get_trigger_list();
+      const ObTriggerInfo *tg_info = NULL;
+      uint64_t tg_id = OB_INVALID_ID;
+      uint64_t dml_event = 0;
+      switch (stmt_->get_stmt_type())
+      {
+      case stmt::T_INSERT:
+      case stmt::T_INSERT_ALL:
+        dml_event = ObTriggerEvents::get_insert_event();
+        break;
+      case stmt::T_UPDATE:
+        dml_event = ObTriggerEvents::get_update_event();
+        break;
+      case stmt::T_DELETE:
+        dml_event = ObTriggerEvents::get_delete_event();
+        break;
+      case stmt::T_MERGE:
+        dml_event = ObTriggerEvents::get_all_event();
+        break;
+      case stmt::T_REPLACE:
+        dml_event = ObTriggerEvents::get_insert_event() + ObTriggerEvents::get_update_event();
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("stmt type is error", K(stmt_->get_stmt_type()), K(ret));
+        break;
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && !has && i < tg_list.count(); i++) {
+        OX (tg_id = tg_list.at(i));
+        OZ (schema_guard->get_trigger_info(tenant_id, tg_id, tg_info));
+        OV (OB_NOT_NULL(tg_info));
+        OX (has = (tg_info->is_enable() && tg_info->has_event(dml_event)));
+      }
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= has);
+      if (OB_SUCC(ret) && has && table_schema->is_user_view()) {
+        if (!stmt_->is_support_instead_of_trigger_stmt()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("only insert/update/delete stmt support instead of trigger", K(ret), K(stmt_->get_stmt_type()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "except for insert/update/delete statement, instead of trigger is");
+        } else {
+          ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(stmt_);
+          if (del_upd_stmt->is_returning()) {
+            ret = OB_ERR_RETURNING_CLAUSE;
+            LOG_WARN("RETURNING clause is currently not supported for INSTEAD OF Triggers", K(ret));
+          } else {
+            del_upd_stmt->set_has_instead_of_trigger(true);
+          }
         }
       }
     }
@@ -2485,11 +2352,50 @@ int ObDelUpdResolver::view_pullup_part_exprs()
           LOG_WARN("failed to push back pullup partition expr", K(ret));
         }
       }
+
+      // pull up the partition expr from view stmt to root stmt
+      const ObTableSchema *table_schema = NULL;
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(table) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_) || OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item is null", K(ret));
+      } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       table->get_base_table_item().ref_id_,
+                                                       table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(table->get_base_table_item().ref_id_));
+      } else if (OB_NOT_NULL(table_schema)) {
+        const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_part_exprs().count(); ++i) {
+          ObDMLStmt::PartExprItem pei = sel_stmt->get_part_exprs().at(i);
+          if (!is_fk_parent_table(foreign_key_infos, pei.index_tid_)) {
+            continue;
+          } else if (OB_FAIL(copier.copy(pei.part_expr_, pei.part_expr_))) {
+            LOG_WARN("failed to copy part expr", K(ret));
+          } else if (OB_FAIL(copier.copy(pei.subpart_expr_, pei.subpart_expr_))) {
+            LOG_WARN("failed to copy subpart expr", K(ret));
+          } else if (OB_FAIL(stmt->get_part_exprs().push_back(pei))) {
+            LOG_WARN("failed to push back pullup partition expr", K(ret));
+          }
+        }
+      }
     }
   }
   return ret;
 }
 
+bool ObDelUpdResolver::is_fk_parent_table(const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos, const uint64_t table_id)
+{
+  bool is_pk_table = false;
+  for (int64_t i = 0; i < foreign_key_infos.count() && !is_pk_table; i++) {
+    const ObForeignKeyInfo &foreign_key_info = foreign_key_infos.at(i);
+    const uint64_t parent_table_id = foreign_key_info.parent_table_id_;
+    if (table_id == parent_table_id) {
+      is_pk_table = true;
+    }
+  }
+  return is_pk_table;
+}
 int ObDelUpdResolver::expand_record_to_columns(const ParseNode &record_node,
                                                ObIArray<ObRawExpr *> &value_list)
 {

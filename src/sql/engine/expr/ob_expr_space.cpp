@@ -19,6 +19,7 @@
 #include "sql/engine/expr/ob_expr_repeat.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
+#include "ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -42,12 +43,10 @@ inline int ObExprSpace::calc_result_type1(
   } else if (type1.is_literal()) {
     const ObObj &obj = type1.get_param();
     ObArenaAllocator alloc(ObModIds::OB_SQL_RES_TYPE);
-    const ObDataTypeCastParams dtc_params =
-          ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
+    const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
     int64_t cur_time = 0;
     ObCastMode cast_mode = CM_NONE;
-    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(type_ctx.get_session(), cast_mode))) {
-      LOG_WARN("failed to get default cast mode", K(ret));
+    if (FALSE_IT(ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode))) {
     } else {
       cast_mode |= CM_WARN_ON_FAIL;
       ObCastCtx cast_ctx(
@@ -61,7 +60,7 @@ inline int ObExprSpace::calc_result_type1(
   }
   type.set_type(res_type);
   type.set_collation_level(type1.get_collation_level());
-  type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
+  type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
   if (ObVarcharType == type.get_type()) {
     if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_0_0) {
       type.set_length(OB_MAX_VARCHAR_LENGTH);
@@ -99,12 +98,16 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
   ObString space(1, " ");
   ObExprStrResAlloc expr_res_alloc(expr, ctx);
   bool has_lob_header = expr.obj_meta_.has_lob_header();
-  if (OB_FAIL(expr.args_[0]->eval(ctx, count))) {
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  if (OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session", K(ret));
+  } else if (OB_FAIL(expr.args_[0]->eval(ctx, count))) {
     LOG_WARN("evaluate parameters failed", K(ret));
   } else if (count->is_null()) {
     expr_datum.set_null();
-  } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
-    LOG_WARN("get max length failed", K(ret));
+  } else if (OB_FAIL(helper.get_max_allowed_packet(max_size))) {
+    LOG_WARN("get max packet length failed", K(ret));
   } else if (count->get_int() > max_size) {
     LOG_WARN("Result of space was larger than max_allow_packet_size",
              K(count->get_int()), K(max_size));
@@ -112,6 +115,9 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
     expr_datum.set_null();
   } else {
     if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+      // TODO:@huangweixiang.hwx(from @xiaofeng.lby)
+      // 1. If we do not need to consider the character set, changing repeat to memset may be better
+      // 2. Actually, we need to deal with the character set.
       ret = ObExprRepeat::repeat(output, is_null, space, count->get_int(), expr_res_alloc, max_size);
     } else { // text tc
       ret = ObExprRepeat::repeat_text(expr.datum_meta_.type_, has_lob_header, output, is_null,
@@ -126,6 +132,18 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
         expr_datum.set_string(output);
       }
     }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSpace, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(4);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_MAX_ALLOWED_PACKET);
   }
   return ret;
 }

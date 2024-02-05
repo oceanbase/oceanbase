@@ -109,6 +109,9 @@ static constexpr const int64_t OB_COMMENT_LENGTH = 1024;
 static constexpr const int64_t DEFAULT_ARCHIVE_FILE_SIZE = 64 << 20; // 64MB
 static constexpr const int64_t DEFAULT_BACKUP_DATA_FILE_SIZE = 4 * 1024LL * 1024LL * 1024LL; // 4GB
 
+// max ObMigrationTabletParam serialize size during backup.
+static constexpr const int64_t MAX_BACKUP_TABLET_META_SERIALIZE_SIZE = 2 * 1024LL * 1024LL; // 2MB
+
 //add by physical backup and restore
 const char *const OB_STR_INCARNATION = "incarnation";
 const char *const OB_STRING_BACKUP_DATA = "data";
@@ -889,7 +892,7 @@ public:
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
-  virtual int parse_storage_info_(const char *storage_info, bool &has_appid) override;
+  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
@@ -1220,10 +1223,11 @@ public:
     CANCELED = 5,
     BACKUP_SYS_META = 6,
     BACKUP_USER_META = 7,
-    BACKUP_DATA_SYS = 8,
-    BACKUP_DATA_MINOR = 9,
-    BACKUP_DATA_MAJOR = 10,
-    BACKUP_LOG = 11,
+    BACKUP_META_FINISH = 8,
+    BACKUP_DATA_SYS = 9,
+    BACKUP_DATA_MINOR = 10,
+    BACKUP_DATA_MAJOR = 11,
+    BACKUP_LOG = 12,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1434,10 +1438,11 @@ struct ObBackupDataTaskType final
   enum Type
   {
     BACKUP_META = 0, // backup ls, tablet meta and inner tablet sstable
-    BACKUP_DATA_MINOR = 1,
-    BACKUP_DATA_MAJOR = 2,
-    BACKUP_PLUS_ARCHIVE_LOG = 3,
-    BACKUP_BUILD_INDEX = 4,
+    BACKUP_META_FINISH = 1,
+    BACKUP_DATA_MINOR = 2,
+    BACKUP_DATA_MAJOR = 3,
+    BACKUP_PLUS_ARCHIVE_LOG = 4,
+    BACKUP_BUILD_INDEX = 5,
     BACKUP_MAX
   };
   ObBackupDataTaskType() : type_(Type::BACKUP_MAX) {}

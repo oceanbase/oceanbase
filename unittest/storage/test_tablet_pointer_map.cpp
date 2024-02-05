@@ -107,7 +107,7 @@ void TestMetaPointerMap::FakeLs(ObLS &ls)
   ls.ls_meta_.ls_id_.id_ = 1001;
   ls.ls_meta_.gc_state_ = logservice::LSGCState::NORMAL;
   ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
-  ls.ls_meta_.restore_status_ = ObLSRestoreStatus::RESTORE_NONE;
+  ls.ls_meta_.restore_status_ = ObLSRestoreStatus::NONE;
   ls.ls_meta_.rebuild_seq_ = 0;
 }
 
@@ -264,7 +264,11 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   old_tablet->is_inited_ = true;
   old_tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
+  ObUpdateTabletPointerParam param;
+  ret = handle.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  param.tablet_addr_ = phy_addr;
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, handle, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTablet *tablet = new ObTablet();
@@ -277,7 +281,10 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
 
   tablet->is_inited_ = true;
   tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, tablet_handle);
+  ret = handle.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  param.tablet_addr_ = phy_addr;
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, tablet_handle, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet_map_.map_.size());
 
@@ -354,7 +361,11 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
   old_tablet->is_inited_ = true;
   old_tablet->table_store_addr_.addr_.set_none_addr(); // mock empty_shell to pass test
 
-  ret = tablet_map_.compare_and_swap_addr_and_object(key, phy_addr, handle, handle);
+  ObUpdateTabletPointerParam param;
+  ret = handle.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(common::OB_SUCCESS, ret);
+  param.tablet_addr_ = phy_addr;
+  ret = tablet_map_.compare_and_swap_addr_and_object(key, handle, handle, param);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObTabletPointerHandle ptr_hdl(tablet_map_);

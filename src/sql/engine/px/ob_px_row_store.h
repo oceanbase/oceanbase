@@ -22,6 +22,9 @@
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/basic/ob_compact_row.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
+#include "sql/dtl/ob_dtl_vectors_buffer.h"
 
 namespace oceanbase
 {
@@ -31,7 +34,7 @@ namespace sql
 class ObReceiveRowReader
 {
 public:
-  ObReceiveRowReader() :
+  ObReceiveRowReader(int64_t id) :
       recv_head_(NULL),
       recv_tail_(NULL),
       iterated_buffers_(NULL),
@@ -39,7 +42,9 @@ public:
       cur_iter_rows_(0),
       recv_list_rows_(0),
       datum_iter_(NULL),
-      row_iter_(NULL)
+      row_iter_(NULL),
+      curr_vector_(),
+      id_(id)
   {
   }
   ~ObReceiveRowReader()
@@ -82,6 +87,18 @@ public:
                           ObEvalCtx &eval_ctx,
                           const ObChunkDatumStore::StoredRow **srows,
                           const int64_t read_rows);
+  int attach_vectors(const common::ObIArray<ObExpr*> &exprs,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                     const RowMeta &meta,
+                     ObEvalCtx &eval_ctx,
+                     const ObCompactRow **srows,
+                     const int64_t read_rows);
+  int attach_vectors(const common::ObIArray<ObExpr*> &exprs,
+                     const ObIArray<ObExpr*> &dynamic_const_exprs,
+                     ObEvalCtx &eval_ctx,
+                     const int64_t max_rows,
+                     int64_t &read_rows,
+                     dtl::ObDtlVectors &data_buffer);
 
   // get row interface for PX_CHUNK_ROW
   int get_next_row(common::ObNewRow &row);
@@ -99,7 +116,11 @@ public:
                      ObEvalCtx &eval_ctx,
                      const int64_t max_rows, int64_t &read_rows,
                      const ObChunkDatumStore::StoredRow **srows);
-
+  int get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
+                         const ObIArray<ObExpr*> &dynamic_const_exprs,
+                         ObEvalCtx &eval_ctx,
+                         const int64_t max_rows, int64_t &read_rows,
+                         const ObCompactRow **srows);
   void reset();
 
 private:
@@ -107,6 +128,11 @@ private:
   // return NULL for iterate end.
   const ROW *next_store_row();
 
+  int get_next_compact_rows(ObTempRowStore::RowBlock *blk,
+                            int64_t max_rows,
+                            int64_t &read_rows,
+                            const ObCompactRow **srows);
+  int check_and_switch_buffer(dtl::ObDtlLinkedBuffer *&buffer);
   void move_to_iterated(const int64_t rows);
   void free(dtl::ObDtlLinkedBuffer *buf);
   inline void free_iterated_buffers()
@@ -131,6 +157,9 @@ private:
   // store iterator for interm result iteration.
   ObChunkDatumStore::Iterator *datum_iter_;
   ObChunkRowStore::Iterator *row_iter_;
+  dtl::ObDtlMsgType msg_type_;
+  dtl::ObDtlVectors curr_vector_;
+  int64_t id_;
 };
 
 class ObPxNewRow
@@ -155,13 +184,14 @@ public:
       row_cell_count_(row.get_count()),
       type_(dtl::ObDtlMsgType::PX_CHUNK_ROW)
       {}
-  ObPxNewRow(const common::ObIArray<ObExpr*> &exprs)
+  ObPxNewRow(const common::ObIArray<ObExpr*> &exprs, int64_t vector_row_idx, dtl::ObDtlMsgType type)
     : des_row_buf_(nullptr),
       des_row_buf_size_(0),
       row_(nullptr),
       exprs_(&exprs),
       row_cell_count_(exprs.count()),
-      type_(dtl::ObDtlMsgType::PX_DATUM_ROW)
+      type_(type),
+      vector_row_idx_(vector_row_idx)
       {}
   ~ObPxNewRow() { }
   void set_eof_row();
@@ -175,6 +205,8 @@ public:
   { return type_; }
   inline void set_data_type(const dtl::ObDtlMsgType type)
   {  type_ = type; }
+  int64_t get_vector_row_idx() const { return vector_row_idx_; }
+  void set_vector_row_idx(int64_t idx) { vector_row_idx_ = idx; }
   TO_STRING_KV(K_(row_cell_count), K_(des_row_buf_size));
 private:
   static const int64_t EOF_ROW_FLAG = -1;
@@ -184,6 +216,7 @@ private:
   const common::ObIArray<ObExpr*> *exprs_;
   int64_t row_cell_count_; // row_cell_count_ 取特殊值 -1 时表示 EOFRow，get_row 返回 OB_ITER_END
   dtl::ObDtlMsgType type_;
+  int64_t vector_row_idx_;
   DISALLOW_COPY_AND_ASSIGN(ObPxNewRow);
 };
 }

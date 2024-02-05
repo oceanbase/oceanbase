@@ -155,18 +155,20 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       transaction::ObTransService *trans_service = nullptr;
       ObTabletTableIterator iterator;
       ObQueryFlag query_flag(ObQueryFlag::Forward,
-          true, /*is daily merge scan*/
-          true, /*is read multiple macro block*/
-          false, /*sys task scan, read one macro block in single io*/
-          false, /*is full row scan?*/
-          false,
-          false);
+          false, /* daily merge*/
+          true,  /* use *optimize */
+          false,  /* use whole macro scan*/
+          false, /* not full row*/
+          false, /* not index_back*/
+          false);/* query stat */
+      query_flag.disable_cache();
       query_flag.skip_read_lob_ = 1;
       ObDatumRange range;
       bool allow_not_ready = false;
       ObArray<bool> need_reshape;
       ObLSHandle ls_handle;
       range.set_whole_range();
+
       if (OB_ISNULL(trans_service = MTL(transaction::ObTransService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trans_service is null", K(ret));
@@ -352,6 +354,7 @@ int ObUniqueIndexChecker::scan_main_table_with_column_checksum(
     param.org_col_ids_ = &org_col_ids;
     param.output_projector_ = &output_projector;
     param.is_scan_index_ = false;
+
     STORAGE_LOG(INFO, "scan main table column checksum", K(col_ids), K(org_col_ids));
     if (OB_FAIL(scan_table_with_column_checksum(param, column_checksum, row_count))) {
       STORAGE_LOG(WARN, "fail to scan table with column checksum", K(ret));
@@ -495,6 +498,7 @@ int ObUniqueIndexChecker::report_column_checksum(
         item.execution_id_ = execution_id_;
         item.tenant_id_ = tenant_id_;
         item.table_id_ = report_table_id;
+        item.tablet_id_ = tablet_id_.id();
         item.ddl_task_id_ = task_id_;
         item.column_id_ = column_ids.at(i).col_id_;
         item.task_id_ = -tablet_id_.id();
@@ -506,7 +510,12 @@ int ObUniqueIndexChecker::report_column_checksum(
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
+      uint64_t data_format_version;
+      int64_t snapshot_version = 0;
+      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_information(tenant_id_, task_id_, data_format_version, snapshot_version, unused_task_status))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       }
     }

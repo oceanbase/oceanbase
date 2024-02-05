@@ -21,7 +21,7 @@
 #include "share/ob_task_define.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
-#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
 #include "storage/blocksstable/index_block/ob_index_block_row_struct.h"
 #include "storage/blocksstable/ob_macro_block_writer.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
@@ -295,6 +295,7 @@ int ObMicroBlockBufferHelper::dump_micro_block_writer_buffer(const char *buf, co
  */
 ObMicroBlockAdaptiveSplitter::ObMicroBlockAdaptiveSplitter()
   : macro_store_size_(0),
+    min_micro_row_count_(0),
     is_use_adaptive_(false)
 {}
 
@@ -302,7 +303,7 @@ ObMicroBlockAdaptiveSplitter::~ObMicroBlockAdaptiveSplitter()
 {
 }
 
-int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const bool is_use_adaptive)
+int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const int64_t min_micro_row_count, const bool is_use_adaptive)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(macro_store_size <= 0)) {
@@ -312,6 +313,7 @@ int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const boo
     reset();
     macro_store_size_ = macro_store_size;
     is_use_adaptive_ = is_use_adaptive;
+    min_micro_row_count_ = MAX(min_micro_row_count, MICRO_ROW_MIN_COUNT);
   }
 
   return ret;
@@ -319,6 +321,7 @@ int ObMicroBlockAdaptiveSplitter::init(const int64_t macro_store_size, const boo
 
 void ObMicroBlockAdaptiveSplitter::reset()
 {
+  min_micro_row_count_ = 0;
   for (int64_t i = 0; i <= DEFAULT_MICRO_ROW_COUNT; i++) {
     compression_infos_[i].reset();
   }
@@ -341,7 +344,7 @@ int ObMicroBlockAdaptiveSplitter::check_need_split(const int64_t micro_size,
   } else if (!is_use_adaptive_ || micro_size >= ObIMicroBlockWriter::DEFAULT_MICRO_MAX_SIZE) {
     is_split = true;
   } else {
-    const int64_t adaptive_row_count = MAX(MICRO_ROW_MIN_COUNT, DEFAULT_MICRO_ROW_COUNT - (micro_size - split_size) / split_size);
+    const int64_t adaptive_row_count = MAX(min_micro_row_count_, DEFAULT_MICRO_ROW_COUNT - (micro_size - split_size) / split_size);
     const int64_t compression_ratio = micro_row_count <= DEFAULT_MICRO_ROW_COUNT ?
       compression_infos_[micro_row_count].compression_ratio_ : compression_infos_[0].compression_ratio_;
     const int64_t estimate_micro_size = micro_size * compression_ratio / 100;
@@ -509,10 +512,9 @@ int ObMacroBlockWriter::open(
     } else if (OB_FAIL(init_pre_agg_util(data_store_desc))) {
       STORAGE_LOG(WARN, "Failed to init pre aggregate utilities", K(ret));
     } else {
-      //TODO  use 4.1.0.0 for version judgment
       const bool is_use_adaptive = !data_store_desc_->is_major_merge_type()
        || data_store_desc_->get_major_working_cluster_version() >= DATA_VERSION_4_1_0_0;
-      if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.get_macro_store_size(), is_use_adaptive))) {
+      if (OB_FAIL(micro_block_adaptive_splitter_.init(data_store_desc.get_macro_store_size(), 0/*min_micro_row_count*/, is_use_adaptive))) {
         STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
           "macro_store_size", data_store_desc.get_macro_store_size());
       } else if (data_store_desc_->get_major_working_cluster_version() < DATA_VERSION_4_2_0_0) {
@@ -1294,7 +1296,6 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
     }
   }
 
-  // TODO(zhuixin.gsy): ensure bloomfilter correct for index micro block
   if (OB_SUCC(ret)) {
     last_micro_size_ = micro_block_desc.data_size_;
     last_micro_expand_pct_ = micro_block_desc.original_size_  * 100 / micro_block_desc.data_size_;
@@ -1343,7 +1344,7 @@ int ObMacroBlockWriter::try_active_flush_macro_block()
 int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
 {
   int ret = OB_SUCCESS;
-  ObLogicMacroBlockId cur_logic_id; // TODO(zhuixin.gsy) rm this if DDL Rebuild Ready
+  ObLogicMacroBlockId cur_logic_id;
   cur_logic_id.logic_version_ = data_store_desc_->get_logical_version();
   cur_logic_id.column_group_idx_ = data_store_desc_->get_table_cg_idx();
   cur_logic_id.data_seq_.macro_data_seq_ = current_macro_seq_;
@@ -1368,7 +1369,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
                                                                 cur_logic_id,
                                                                 macro_block.get_data_buf(),
                                                                 upper_align(macro_block.get_data_size(), DIO_ALIGN_SIZE),
-                                                                current_macro_seq_))) {
+                                                                macro_block.get_row_count()))) {
     STORAGE_LOG(WARN, "fail to do callback flush", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -1817,7 +1818,7 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
   int ret = OB_SUCCESS;
   const ObIArray<ObSkipIndexColMeta> &full_agg_metas = data_store_desc.get_agg_meta_array();
   const bool need_pre_aggregation =
-      data_store_desc.is_major_merge_type()
+      data_store_desc.is_major_or_meta_merge_type()
       && nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
   if (!need_pre_aggregation) {

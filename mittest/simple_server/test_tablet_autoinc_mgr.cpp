@@ -198,7 +198,7 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
   }
 
   // remove source ls and clear src ls cache
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(src_ls_id, false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(src_ls_id));
   ASSERT_EQ(OB_SUCCESS, ls_location_service->erase_location_(GCONF.cluster_id, g_tenant_id, src_ls_id));
 
   // insert lob

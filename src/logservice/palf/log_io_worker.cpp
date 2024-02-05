@@ -324,7 +324,6 @@ int LogIOWorker::reduce_io_task_(void *task)
   }
 
   if (false == last_io_task_has_been_reduced && OB_NOT_NULL(io_task)) {
-    io_task = reinterpret_cast<LogIOFlushLogTask *>(io_task);
     ret = handle_io_task_(io_task);
   }
   PALF_LOG(TRACE, "reduce_io_task_ finished", K(ret), K(tmp_ret), KPC(this));
@@ -362,6 +361,7 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
     PALF_LOG(ERROR, "batch_io_task_array_ init failed", K(ret));
   } else {
     for (int i = 0; i < batch_width  && OB_SUCC(ret); i++) {
+      bool last_io_task_push_success = false;
       char *ptr = reinterpret_cast<char*>(mtl_malloc(sizeof(BatchLogIOFlushLogTask), "LogIOTask"));
       BatchLogIOFlushLogTask *io_task = NULL;
       if (NULL == ptr) {
@@ -370,11 +370,18 @@ int LogIOWorker::BatchLogIOFlushLogTaskMgr::init(int64_t batch_width,
       } else if (FALSE_IT(io_task = new(ptr)(BatchLogIOFlushLogTask))) {
       } else if (OB_FAIL(io_task->init(batch_depth, allocator))) {
         PALF_LOG(ERROR, "BatchLogIOFlushLogTask init failed", K(ret));
+        // NB: push batch will not failed becaue batch_io_task_array_ has reserved.
       } else if (OB_FAIL(batch_io_task_array_.push_back(io_task))) {
         PALF_LOG(ERROR, "batch_io_task_array_ push_back failed", K(ret), KP(io_task));
       } else {
+        last_io_task_push_success = true;
         PALF_LOG(INFO, "BatchLogIOFlushLogTask init success", K(ret), K(i),
                  KP(io_task));
+      }
+      if (!last_io_task_push_success && NULL != io_task) {
+        io_task->destroy();
+        mtl_free(io_task);
+        io_task = NULL;
       }
     }
     batch_width_ = usable_count_ = batch_width;
@@ -398,6 +405,7 @@ void LogIOWorker::BatchLogIOFlushLogTaskMgr::destroy()
     }
   }
   wait_cost_stat_ = NULL;
+  batch_io_task_array_.destroy();
 }
 
 int LogIOWorker::BatchLogIOFlushLogTaskMgr::insert(LogIOFlushLogTask *io_task)

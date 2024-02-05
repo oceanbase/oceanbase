@@ -49,18 +49,9 @@ public:
   // for static engine batch
   static int eval_oracle_to_char_batch(
       const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
+  DECLARE_SET_LOCAL_SESSION_VARS;
 
 protected:
-
-  static int interval_to_char(common::ObObj &result,
-                       const common::ObObj *objs_array,
-                       int64_t param_num,
-                       common::ObExprCtx &expr_ctx);
-
-  static int process_number_value(common::ObExprCtx &expr_ctx,
-                                  const common::ObObj &obj,
-                                  const int scale,
-                                  common::ObString &number_str);
 
   static int process_number_format(common::ObString &fmt_raw,
                                    int &scale, bool &has_fm);
@@ -69,12 +60,6 @@ protected:
                                       const char *format_str, const int64_t format_len,
                                       char *result_buf, int64_t &result_size, bool has_fm);
   static int64_t trim_number(const common::ObString &number);
-
-  static int is_valid_to_char_number(const common::ObObj *objs_array,
-                                     const int64_t param_num);
-  static int process_number_sci_value(common::ObExprCtx &expr_ctx,
-                                      const common::ObObj &obj, const int scale,
-                                      common::ObString &number_sci);
 
   // functions for static typing engine, it's hard to reuse the code of old engine,
   // we copy the old functions adapt it to new engine.
@@ -119,6 +104,7 @@ protected:
   static int convert_to_ob_time(ObEvalCtx &ctx,
                                 const common::ObDatum &input,
                                 const common::ObObjType input_type,
+                                const ObTimeZoneInfo *tz_info,
                                 common::ObTime &ob_time);
 
 };

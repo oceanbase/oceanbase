@@ -22,6 +22,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "common/ob_timeout_ctx.h"
 #include "rootserver/ob_root_utils.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 
 namespace oceanbase
 {
@@ -153,6 +154,25 @@ int ObUnitTableOperator::get_units(const common::ObAddr &server,
   return ret;
 }
 
+int ObUnitTableOperator::check_server_empty(const common::ObAddr &server, bool &is_empty)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObUnit> units;
+  is_empty = true;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", KR(ret), K(server));
+  } else if (OB_FAIL(get_units(server, units))) {
+    LOG_WARN("fail to get units", KR(ret), K(server));
+  } else if (units.count() > 0) {
+    is_empty = false;
+  }
+  return ret;
+}
+
 int ObUnitTableOperator::get_units(const common::ObIArray<uint64_t> &pool_ids,
                                    common::ObIArray<ObUnit> &units) const
 {
@@ -189,12 +209,15 @@ int ObUnitTableOperator::get_units(const common::ObIArray<uint64_t> &pool_ids,
 }
 
 int ObUnitTableOperator::update_unit(common::ObISQLClient &client,
-                                     const ObUnit &unit)
+                                     const ObUnit &unit,
+                                     const bool need_check_conflict_with_clone)
 {
   int ret = OB_SUCCESS;
   char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   char migrate_from_svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
   const char *unit_status_str = NULL;
+  rootserver::ObConflictCaseWithClone case_to_check(rootserver::ObConflictCaseWithClone::MODIFY_UNIT);
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -215,6 +238,16 @@ int ObUnitTableOperator::update_unit(common::ObISQLClient &client,
     }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (need_check_conflict_with_clone) {
+    if (OB_FAIL(rootserver::ObTenantSnapshotUtil::lock_unit_for_tenant(client, unit, tenant_id))) {
+      LOG_WARN("fail to lock __all_unit_table for clone check", KR(ret), K(unit), K(need_check_conflict_with_clone));
+    } else if (!is_valid_tenant_id(tenant_id)) {
+      // this unit is not granted to tenant, just ignore
+    } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+      LOG_WARN("fail to check whether tenant is cloning", KR(ret), K(tenant_id), K(case_to_check), K(need_check_conflict_with_clone));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(unit.get_unit_status_str(unit_status_str))) {
     LOG_WARN("fail to get unit status", K(ret));
@@ -434,9 +467,12 @@ int ObUnitTableOperator::get_resource_pool(common::ObISQLClient &sql_client,
 }
 
 int ObUnitTableOperator::update_resource_pool(common::ObISQLClient &client,
-                                              const ObResourcePool &resource_pool)
+                                              const ObResourcePool &resource_pool,
+                                              const bool need_check_conflict_with_clone)
 {
   int ret = OB_SUCCESS;
+  ObResourcePool resource_pool_to_lock;
+  rootserver::ObConflictCaseWithClone case_to_check(rootserver::ObConflictCaseWithClone::MODIFY_RESOURCE_POOL);
   SMART_VAR(char[MAX_ZONE_LIST_LENGTH], zone_list_str) {
     zone_list_str[0] = '\0';
 
@@ -452,6 +488,21 @@ int ObUnitTableOperator::update_resource_pool(common::ObISQLClient &client,
     } else if (OB_FAIL(zone_list2str(resource_pool.zone_list_,
         zone_list_str, MAX_ZONE_LIST_LENGTH))) {
       LOG_WARN("zone_list2str failed", "zone_list", resource_pool.zone_list_, K(ret));
+    // try lock resource pool to update for clone tenant conflict check
+    } else if (need_check_conflict_with_clone) {
+      if (!is_valid_tenant_id(resource_pool.tenant_id_)) {
+        // this resource pool has not granted to any tenant, just ignore
+      } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::lock_resource_pool_for_tenant(
+                      client, resource_pool))) {
+        LOG_WARN("fail to lock the resource pool to update", KR(ret), K(resource_pool), K(need_check_conflict_with_clone));
+      } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(
+                            resource_pool.tenant_id_,
+                            case_to_check))) {
+        LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret), K(resource_pool),
+                 K(case_to_check), K(need_check_conflict_with_clone));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       ObDMLSqlSplicer dml;
       ObString resource_pool_name(strlen(resource_pool.name_.ptr()), resource_pool.name_.ptr());
@@ -888,7 +939,7 @@ int ObUnitTableOperator::read_unit_group(const ObMySQLResult &result, ObSimpleUn
   return ret;
 }
 
-int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit) const
+int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit)
 {
   int ret = OB_SUCCESS;
   unit.reset();
@@ -898,28 +949,23 @@ int ObUnitTableOperator::read_unit(const ObMySQLResult &result, ObUnit &unit) co
   char migrate_from_svr_ip[OB_IP_STR_BUFF] = "";
   char status[MAX_UNIT_STATUS_LENGTH] = "";
   int64_t migrate_from_svr_port = 0;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    EXTRACT_INT_FIELD_MYSQL(result, "unit_id", unit.unit_id_, uint64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "resource_pool_id", unit.resource_pool_id_, uint64_t);
-    EXTRACT_INT_FIELD_MYSQL(result, "unit_group_id", unit.unit_group_id_, uint64_t);
-    EXTRACT_STRBUF_FIELD_MYSQL(result, "zone", unit.zone_.ptr(), MAX_ZONE_LENGTH, tmp_real_str_len);
-    EXTRACT_STRBUF_FIELD_MYSQL(result, "svr_ip", ip, OB_IP_STR_BUFF, tmp_real_str_len);
-    EXTRACT_INT_FIELD_MYSQL(result, "svr_port", port, int64_t);
-    EXTRACT_STRBUF_FIELD_MYSQL(result, "migrate_from_svr_ip", migrate_from_svr_ip,
-                               OB_IP_STR_BUFF, tmp_real_str_len);
-    EXTRACT_INT_FIELD_MYSQL(result, "migrate_from_svr_port", migrate_from_svr_port, int64_t);
-    EXTRACT_BOOL_FIELD_MYSQL(result, "manual_migrate", unit.is_manual_migrate_);
-    EXTRACT_STRBUF_FIELD_MYSQL(result, "status", status, MAX_UNIT_STATUS_LENGTH, tmp_real_str_len);
-    EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", unit.replica_type_, common::ObReplicaType);
-    (void) tmp_real_str_len; // make compiler happy
-    unit.server_.set_ip_addr(ip, static_cast<int32_t>(port));
-    unit.migrate_from_server_.set_ip_addr(
-        migrate_from_svr_ip, static_cast<int32_t>(migrate_from_svr_port));
-    unit.status_ = ObUnit::str_to_unit_status(status);
-  }
+  EXTRACT_INT_FIELD_MYSQL(result, "unit_id", unit.unit_id_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "resource_pool_id", unit.resource_pool_id_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, "unit_group_id", unit.unit_group_id_, uint64_t);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, "zone", unit.zone_.ptr(), MAX_ZONE_LENGTH, tmp_real_str_len);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, "svr_ip", ip, OB_IP_STR_BUFF, tmp_real_str_len);
+  EXTRACT_INT_FIELD_MYSQL(result, "svr_port", port, int64_t);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, "migrate_from_svr_ip", migrate_from_svr_ip,
+                             OB_IP_STR_BUFF, tmp_real_str_len);
+  EXTRACT_INT_FIELD_MYSQL(result, "migrate_from_svr_port", migrate_from_svr_port, int64_t);
+  EXTRACT_BOOL_FIELD_MYSQL(result, "manual_migrate", unit.is_manual_migrate_);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, "status", status, MAX_UNIT_STATUS_LENGTH, tmp_real_str_len);
+  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "replica_type", unit.replica_type_, common::ObReplicaType);
+  (void) tmp_real_str_len; // make compiler happy
+  unit.server_.set_ip_addr(ip, static_cast<int32_t>(port));
+  unit.migrate_from_server_.set_ip_addr(
+      migrate_from_svr_ip, static_cast<int32_t>(migrate_from_svr_port));
+  unit.status_ = ObUnit::str_to_unit_status(status);
   return ret;
 }
 

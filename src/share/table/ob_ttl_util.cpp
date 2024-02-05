@@ -139,10 +139,6 @@ int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_stat
     status = OB_TTL_TASK_RUNNING;
   } else if (tenant_status == OB_RS_TTL_TASK_SUSPEND) {
     status = OB_TTL_TASK_PENDING;
-  } else if (tenant_status == OB_RS_TTL_TASK_CANCEL) {
-    status = OB_TTL_TASK_CANCEL;
-  } else if (tenant_status == OB_RS_TTL_TASK_MOVE) {
-    status = OB_TTL_TASK_MOVING;
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid type", K(tenant_status), K(status));
@@ -153,7 +149,8 @@ int ObTTLUtil::transform_tenant_state(const common::ObTTLTaskStatus& tenant_stat
 int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
                                   common::ObISQLClient& proxy,
                                   const ObTTLTaskStatus local_state,
-                                  const int64_t local_task_id)
+                                  const int64_t local_task_id,
+                                  bool &tenant_state_changed)
 {
   int ret = OB_SUCCESS;
 
@@ -174,6 +171,7 @@ int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
     LOG_WARN("fail to transform ttl tenant task status", KR(ret), K(tenant_task.status_));
   } else if (tenant_state != local_state) {
     ret = OB_EAGAIN;
+    tenant_state_changed = true;
     FLOG_INFO("state of tenant task is different from local task state", K(ret), K(tenant_id), K(tenant_task.task_id_ ), K(local_state));
   }
 
@@ -600,7 +598,10 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   ObSqlString sql;
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("replace into %s select * from %s "
+  if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
+              " tenant_id, task_id, table_id, tablet_id, task_start_time,"
+              " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code from %s"
               " where task_id = %ld and tablet_id != -1  and table_id != -1"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
@@ -720,9 +721,9 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
               json::Value *ttl_val = elem->value_;
               if (NULL != ttl_val && ttl_val->get_type() == json::JT_NUMBER) {
                 if (ttl_val->get_number() <= 0) {
-                  ret = OB_INVALID_ARGUMENT;
+                  ret = OB_TTL_INVALID_HBASE_TTL;
                   LOG_WARN("time to live should greater than 0", K(ret), K(ttl_val));
-                  LOG_USER_ERROR(OB_INVALID_ARGUMENT, "time to live, which should greater than 0");
+                  LOG_USER_ERROR(OB_TTL_INVALID_HBASE_TTL);
                 } else {
                   time_to_live = static_cast<int32_t>(ttl_val->get_number());
                 }
@@ -731,9 +732,9 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
               json::Value *max_versions_val = elem->value_;
               if (NULL != max_versions_val && max_versions_val->get_type() == json::JT_NUMBER) {
                 if (max_versions_val->get_number() <= 0) {
-                  ret = OB_INVALID_ARGUMENT;
+                  ret = OB_TTL_INVALID_HBASE_MAXVERSIONS;
                   LOG_WARN("max versions should greater than 0", K(ret), K(max_versions_val));
-                  LOG_USER_ERROR(OB_INVALID_ARGUMENT, "max versions, which should greater than 0");
+                  LOG_USER_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS);
                 } else {
                   max_versions = static_cast<int32_t>(max_versions_val->get_number());
                 }
@@ -760,7 +761,7 @@ int ObTTLUtil::parse_kv_attributes(const ObString &kv_attributes, int32_t &max_v
       }
     }
   } else {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported kv attribute", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "kv attributes with wrong format");
   }
@@ -807,6 +808,7 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
       ObString right = ttl_definition;
       bool is_end = false;
       int64_t i = 0;
+      // example: "c +  INTERVAL 40 MINUTE"
       while (OB_SUCC(ret) && !is_end) {
         ObString left = right.split_on(',');
         if (left.empty()) {
@@ -815,12 +817,14 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
         }
         ObTableTTLExpr ttl_expr;
         ObString column_str = left.split_on('+').trim();
+        // example: "  INTERVAL 40 MINUTE"
         left = left.trim();
+        // example: "INTERVAL 40 MINUTE"
         left += strlen("INTERVAL");
         left = left.trim();
+        // example: "40  MINUTE"
         ObString interval_str = left.split_on(' ');
-        left.trim();
-        ObString time_unit_str = left;
+        ObString time_unit_str = left.trim();
 
         ttl_expr.column_name_ = column_str;
         ttl_expr.interval_ = atol(interval_str.ptr());
@@ -838,42 +842,43 @@ int ObTableTTLChecker::init(const schema::ObTableSchema &table_schema, bool in_f
           ttl_expr.time_unit_ = ObTableTTLTimeUnit::YEAR;
         } else {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("unepxected time unit", K(ret));
+          LOG_WARN("unepxected time unit", K(ret), K(time_unit_str));
         }
 
         // 2. get delta second and month
         int64_t nsecond = 0;
         int64_t nmonth = 0;
-        switch (ttl_expr.time_unit_) {
-          case ObTableTTLTimeUnit::SECOND: {
-            nsecond = ttl_expr.interval_;
-            break;
+        if (OB_SUCC(ret)) {
+          switch (ttl_expr.time_unit_) {
+            case ObTableTTLTimeUnit::SECOND: {
+              nsecond = ttl_expr.interval_;
+              break;
+            }
+            case ObTableTTLTimeUnit::MINUTE: {
+              nsecond = ttl_expr.interval_ * 60;
+              break;
+            }
+            case ObTableTTLTimeUnit::HOUR: {
+              nsecond = ttl_expr.interval_ * 60 * 60;
+              break;
+            }
+            case ObTableTTLTimeUnit::DAY: {
+              nsecond = ttl_expr.interval_ * 60 * 60 * 24;
+              break;
+            }
+            case ObTableTTLTimeUnit::MONTH: {
+              nmonth = ttl_expr.interval_;
+              break;
+            }
+            case ObTableTTLTimeUnit::YEAR: {
+              nmonth = ttl_expr.interval_ * 12;
+              break;
+            }
+            default:
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected time unit", K(ret), K_(ttl_expr.time_unit));
           }
-          case ObTableTTLTimeUnit::MINUTE: {
-            nsecond = ttl_expr.interval_ * 60;
-            break;
-          }
-          case ObTableTTLTimeUnit::HOUR: {
-            nsecond = ttl_expr.interval_ * 60 * 60;
-            break;
-          }
-          case ObTableTTLTimeUnit::DAY: {
-            nsecond = ttl_expr.interval_ * 60 * 60 * 24;
-            break;
-          }
-          case ObTableTTLTimeUnit::MONTH: {
-            nmonth = ttl_expr.interval_;
-            break;
-          }
-          case ObTableTTLTimeUnit::YEAR: {
-            nmonth = ttl_expr.interval_ * 12;
-            break;
-          }
-          default:
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected time unit", K(ret), K_(ttl_expr.time_unit));
         }
-
 
         if (OB_SUCC(ret)) {
           ttl_expr.nsecond_ = nsecond;
@@ -1122,7 +1127,11 @@ int ObTTLUtil::get_tenant_table_ids(const uint64_t tenant_id, ObIArray<uint64_t>
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
+  if (!schema_service.is_tenant_full_schema(tenant_id)) {
+    ret = OB_EAGAIN;
+    LOG_INFO("tenant does not has a full schema already, maybe server is restart, need retry!");
+  } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_ids_in_tenant(tenant_id, table_id_array))) {
     LOG_WARN("fail to get table ids in tenant", KR(ret), K(tenant_id));
@@ -1141,16 +1150,16 @@ int ObTTLUtil::check_is_ttl_table(const ObTableSchema &table_schema, bool &is_tt
   return ret;
 }
 
-int ObTTLUtil::check_ttl_task_exists(uint64_t tenant_id, common::ObISQLClient& proxy,
-                                     const uint64_t& task_id, const uint64_t& table_id,
-                                     ObTabletID& tablet_id, bool &is_exists)
+int ObTTLUtil::check_task_status_from_sys_table(uint64_t tenant_id, common::ObISQLClient& proxy,
+                                                const uint64_t& task_id, const uint64_t& table_id,
+                                                ObTabletID& tablet_id, bool &is_exists, bool &is_end_state)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  uint64_t result_cnt = 0;
-  if (OB_FAIL(sql.assign_fmt("SELECT (SELECT COUNT(*) FROM %s WHERE table_id = %ld"
-    " AND tablet_id = %ld AND task_id = %ld) + (SELECT COUNT(*) FROM %s WHERE"
-    " table_id = %ld AND tablet_id = %ld AND task_id = %ld) AS cnt",
+  ObTTLTaskStatus status = ObTTLTaskStatus::OB_TTL_TASK_INVALID;
+  if (OB_FAIL(sql.assign_fmt("(SELECT STATUS FROM %s WHERE table_id = %ld"
+    " AND tablet_id = %ld AND task_id = %ld limit 1) UNION (SELECT STATUS FROM %s WHERE"
+    " table_id = %ld AND tablet_id = %ld AND task_id = %ld limit 1)",
       share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME, table_id, tablet_id.id(), task_id,
       share::OB_ALL_KV_TTL_TASK_TNAME, table_id, tablet_id.id(), task_id))) {
     LOG_WARN("sql assign fmt failed", K(ret));
@@ -1163,23 +1172,71 @@ int ObTTLUtil::check_ttl_task_exists(uint64_t tenant_id, common::ObISQLClient& p
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("error unexpected, query result must not be NULL", K(ret));
       } else if (OB_FAIL(result->next())) {
-        LOG_WARN("fail to get next row", K(ret));
+        if (OB_ITER_END == ret) {
+          // not exist, refresh ret
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get next row", K(ret));
+        }
       } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "cnt", result_cnt, uint64_t);
+        int64_t temp_status = 0;
+        EXTRACT_INT_FIELD_MYSQL(*result, "STATUS", temp_status, int64_t);
+        status = EVAL_TASK_PURE_STATUS(temp_status);
+        if (OB_SUCCESS == result->next()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected ttl task record count", KR(ret), K(tenant_id), K(task_id), K(table_id), K(tablet_id));
+        }
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (result_cnt > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected ttl task record count", KR(ret), K(tenant_id), K(task_id), K(table_id), K(tablet_id));
-    } else {
-      is_exists = (result_cnt > 0);
-    }
+    is_exists = (status != ObTTLTaskStatus::OB_TTL_TASK_INVALID);
+    is_end_state = ObTTLUtil::is_ttl_task_status_end_state(status);
   }
 
   return ret;
+}
+
+
+bool ObTTLUtil::is_enable_ttl(uint64_t tenant_id)
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  return tenant_config.is_valid() && tenant_config->enable_kv_ttl;
+}
+
+const char * ObTTLUtil::get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status)
+{
+  const char *status_cstr = NULL;
+
+  switch (status) {
+    case OB_RS_TTL_TASK_CREATE: {
+      status_cstr = "RUNNING";
+      break;
+    }
+    case OB_RS_TTL_TASK_SUSPEND: {
+      status_cstr = "PENDING";
+      break;
+    }
+    case OB_RS_TTL_TASK_CANCEL: {
+      status_cstr = "CANCELING";
+      break;
+    }
+    case OB_RS_TTL_TASK_MOVE: {
+      status_cstr = "MOVING";
+      break;
+    }
+    case OB_TTL_TASK_FINISH: { // wait
+      status_cstr = "FINISHED";
+      break;
+    }
+    default: {
+      status_cstr = "UNKNOWN";
+      break;
+    }
+  }
+
+  return status_cstr;
 }
 
 

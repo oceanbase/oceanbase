@@ -38,6 +38,18 @@ const char *const ACCESS_KEY = "access_key=";
 const char *const HOST = "host=";
 const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
+const char *const REGION = "s3_region=";
+
+const char *const CHECKSUM_TYPE = "checksum_type=";
+const char *const CHECKSUM_TYPE_MD5 = "md5";
+const char *const CHECKSUM_TYPE_CRC32 = "crc32";
+
+enum ObStorageChecksumType
+{
+  OB_NO_CHECKSUM_ALGO = 0,
+  OB_MD5_ALGO = 1,
+  OB_CRC32_ALGO = 2,
+};
 
 class ObObjectStorageInfo
 {
@@ -51,6 +63,7 @@ public:
   virtual int assign(const ObObjectStorageInfo &storage_info);
   ObStorageType get_type() const;
   const char *get_type_str() const;
+  ObStorageChecksumType get_checksum_type() const;
   int get_storage_info_str(char *storage_info, const int64_t info_len) const;
 
   bool is_valid() const;
@@ -68,6 +81,11 @@ protected:
 
 public:
   common::ObStorageType device_type_;
+  // Optional parameter. If not provided, the default value OB_NO_CHECKSUM_ALGO will be used.
+  // For OSS/COS, OB_NO_CHECKSUM_ALGO indicates that no checksum algorithm will be used.
+  // For Object Storage Services accessed via the S3 protocol,
+  // OB_NO_CHECKSUM_ALGO indicates that the md5 checksum algorithm will be used.
+  ObStorageChecksumType checksum_type_;
   char endpoint_[OB_MAX_BACKUP_ENDPOINT_LENGTH];
   char access_id_[OB_MAX_BACKUP_ACCESSID_LENGTH];
   char access_key_[OB_MAX_BACKUP_ACCESSKEY_LENGTH];

@@ -44,10 +44,11 @@ public:
                                 const std::vector<share::ObLSID> &participants,
                                 ObTxCommitMsg &msg);
   static int build_scheduler_mailbox(ObMailBoxMgr<ObTxMsg>* mailbox_mgr);
-  /* static int check_mail(ObMailBox<ObTxMsg> mailbox, */
-  /*                       int64_t from, */
-  /*                       int64_t to, */
-  /*                       int64_t type); */
+  static int check_mail(ObMailBox<ObTxMsg> mailbox,
+                        int64_t from,
+                        int64_t to,
+                        int64_t type);
+  bool check_status_valid(const bool should_commit);
   void destroy();
   void set_exiting_();
   virtual int register_timeout_task_(const int64_t interval_us);
@@ -56,7 +57,7 @@ public:
                        K_(addr), K_(mailbox), K_(log_queue), K_(collected));
 public:
   int64_t scheduler_addr_ = 0;
-  /* static ObMailBox<ObTxMsg> scheduler_mailbox_; */
+  static ObMailBox<ObTxMsg> scheduler_mailbox_;
 protected:
   virtual int post_msg_(const share::ObLSID &receiver, ObTxMsg &msg) override;
   virtual int post_msg_(const ObAddr &receiver, ObTxMsg &msg) override;

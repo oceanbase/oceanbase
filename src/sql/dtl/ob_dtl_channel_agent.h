@@ -77,6 +77,9 @@ private:
   ObDtlControlMsgWriter ctl_msg_writer_;
   ObDtlRowMsgWriter row_msg_writer_;
   ObDtlDatumMsgWriter datum_msg_writer_;
+  ObDtlVectorRowMsgWriter vector_row_msg_writer_;
+  ObDtlVectorMsgWriter vector_msg_writer_;
+  ObDtlVectorFixedMsgWriter vector_fixed_msg_writer_;
   ObDtlChannelEncoder *msg_writer_;
 };
 

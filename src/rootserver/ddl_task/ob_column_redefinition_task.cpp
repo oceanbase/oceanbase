@@ -41,24 +41,24 @@ ObColumnRedefinitionTask::~ObColumnRedefinitionTask()
 
 int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
     const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism, const int64_t consumer_group_id,
-    const int32_t sub_task_trace_id, const obrpc::ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
+    const int32_t sub_task_trace_id, const obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_format_version = 0;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObColumnRedefinitionTask has already been inited", K(ret));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id || schema_version <= 0 || task_status < ObDDLTaskStatus::PREPARE
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id || OB_INVALID_ID == dest_table_id || schema_version <= 0
+      || tenant_data_version <= 0 || task_status < ObDDLTaskStatus::PREPARE
       || task_status > ObDDLTaskStatus::SUCCESS || snapshot_version < 0 || (snapshot_version > 0 && task_status < ObDDLTaskStatus::WAIT_TRANS_END))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(dest_table_id), K(schema_version), K(task_status), K(snapshot_version));
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(data_table_id), K(dest_table_id), K(schema_version),
+      K(tenant_data_version), K(task_status), K(snapshot_version));
     LOG_WARN("fail to init task table operator", K(ret));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, alter_table_arg, alter_table_arg_))) {
     LOG_WARN("deep copy alter table arg failed", K(ret));
   } else if (OB_FAIL(set_ddl_stmt_str(alter_table_arg_.ddl_stmt_str_))) {
     LOG_WARN("set ddl stmt str failed", K(ret));
-  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(tenant_id));
   } else {
     set_gmt_create(ObTimeUtility::current_time());
     task_type_ = ddl_type;
@@ -83,7 +83,7 @@ int ObColumnRedefinitionTask::init(const uint64_t tenant_id, const int64_t task_
       alter_table_arg_.alter_table_schema_.set_tenant_id(tenant_id_);
       alter_table_arg_.alter_table_schema_.set_schema_version(schema_version_);
       alter_table_arg_.exec_tenant_id_ = dst_tenant_id_;
-      data_format_version_ = tenant_data_format_version;
+      data_format_version_ = tenant_data_version;
       is_inited_ = true;
       ddl_tracing_.open();
     }
@@ -284,6 +284,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
                                          &create_index_arg,
                                          task_id_);
               param.sub_task_trace_id_ = sub_task_trace_id_;
+              param.tenant_data_version_ = data_format_version_;
               if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param,
                                                                                        *GCTX.sql_proxy_,
                                                                                        task_record))) {

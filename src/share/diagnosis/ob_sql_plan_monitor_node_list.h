@@ -81,7 +81,8 @@ public:
       otherstat_3_id_(0),
       otherstat_4_id_(0),
       otherstat_5_id_(0),
-      otherstat_6_id_(0)
+      otherstat_6_id_(0),
+      enable_rich_format_(false)
   {
     TraceId* trace_id = common::ObCurTraceId::get_trace_id();
     if (NULL != trace_id) {
@@ -101,7 +102,7 @@ public:
   void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
   void set_plan_depth(int64_t plan_depth) { plan_depth_ = plan_depth; }
   void set_rt_node_id(int64_t id) { rt_node_id_ = id; }
-  const char *get_operator_name() const { return get_phy_op_name(op_type_); }
+  const char *get_operator_name() const { return get_phy_op_name(op_type_, enable_rich_format_); }
   ObPhyOperatorType get_operator_type() const { return op_type_; }
   int64_t get_op_id() const { return op_id_; }
   int64_t get_tenant_id() const { return tenant_id_; }
@@ -109,6 +110,7 @@ public:
   int64_t get_thread_id() { return thread_id_; }
   int64_t get_rt_node_id() { return rt_node_id_;}
   int add_rt_monitor_node(ObMonitorNode *node);
+  void set_rich_format(bool v) { enable_rich_format_ = v; }
   TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
 public:
   int64_t tenant_id_;
@@ -146,6 +148,7 @@ public:
   int16_t otherstat_4_id_;
   int16_t otherstat_5_id_;
   int16_t otherstat_6_id_;
+  bool enable_rich_format_;
 };
 
 
@@ -195,7 +198,7 @@ public:
 public:
   typedef hash::ObHashMap<ObMonitorNodeKey, ObMonitorNode *,
       hash::SpinReadWriteDefendMode> MonitorNodeMap;
-  static const int64_t MONITOR_NODE_PAGE_SIZE = (1LL << 21) - (1LL << 13); // 2M - 8k
+  static const int64_t MONITOR_NODE_PAGE_SIZE = (128LL << 10); // 128K
   static const int64_t EVICT_INTERVAL = 1000000; //1s
   static const char *MOD_LABEL;
   typedef common::ObRaQueue::Ref Ref;

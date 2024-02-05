@@ -86,9 +86,16 @@ public:
                       ObTsCbTask *task,
                       share::SCN &scn,
                       MonotonicTs &receive_gts_ts) = 0;
+  virtual int get_gts_sync(const uint64_t tenant_id,
+                           const MonotonicTs stc,
+                           const int64_t timeout_us,
+                           share::SCN &scn,
+                           MonotonicTs &receive_gts_ts) = 0;
+
   virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn) = 0;
   virtual int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
       share::SCN &scn, bool &is_external_consistent) = 0;
+  virtual int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts, share::SCN &scn) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
                               bool &need_wait) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn) = 0;
@@ -284,6 +291,64 @@ private:
   bool need_revert_;
 };
 
+class ObTsSyncGetTsCbTask : public ObTsCbTask
+{
+public:
+  friend class ObTsSyncGetTsCbTaskPool;
+  ObTsSyncGetTsCbTask()
+      :is_inited_(false), task_id_(0), is_occupied_(false), is_finished_(false),
+       is_early_exit_(false), stc_(0), tenant_id_(0), errcode_(OB_SUCCESS) {}
+  ~ObTsSyncGetTsCbTask() {}
+  int init(uint64_t task_id);
+  int config(MonotonicTs stc, uint64_t tenant_id);
+  int gts_callback_interrupted(const int errcode) override;
+  int get_gts_callback(const MonotonicTs srr, const share::SCN &gts,
+      const MonotonicTs receive_gts_ts) override;
+  int gts_elapse_callback(const MonotonicTs srr, const share::SCN &gts) override;
+  MonotonicTs get_stc() const override;
+  uint64_t hash() const override;
+  uint64_t get_tenant_id() const override;
+  int wait(const int64_t timeout_us, share::SCN &scn, bool &need_recycle_task);
+private:
+  bool is_inited_;
+  uint64_t task_id_;
+  // whether this callback task is being used
+  bool is_occupied_ __attribute__((aligned(8)));
+  // whether the callback has been invoked
+  bool is_finished_;
+  // whether the caller exits (due to timeout) before the callback is invoked
+  bool is_early_exit_;
+  share::SCN gts_result_;
+  ObThreadCond cond_;
+  MonotonicTs stc_;
+  uint64_t tenant_id_;
+  int errcode_;
+};
+
+STATIC_ASSERT(sizeof(ObTsSyncGetTsCbTask) <= 256, "ObTsSyncGetTsCbTask is too large");
+/**
+ * The resource pool of ObTsSyncGetTsCbTask. The pool has a fixed size of cbtasks, and the cbtasks
+ * can be reused.
+ */
+class ObTsSyncGetTsCbTaskPool
+{
+public:
+  static constexpr int64_t POOL_SIZE = 8000;
+  ObTsSyncGetTsCbTaskPool() {}
+  ~ObTsSyncGetTsCbTaskPool() {}
+  static ObTsSyncGetTsCbTaskPool& get_instance()
+  {
+    static ObTsSyncGetTsCbTaskPool pool;
+    return pool;
+  }
+  int init();
+  int get_task(MonotonicTs stc, uint64_t tenant_id, ObTsSyncGetTsCbTask *&task);
+  int recycle_task(ObTsSyncGetTsCbTask *task);
+private:
+  bool is_inited_;
+  ObTsSyncGetTsCbTask tasks_[POOL_SIZE];
+};
+
 typedef common::ObLinkHashMap<ObTsTenantInfo, ObTsSourceInfo, ObTsSourceInfoAlloc> ObTsSourceInfoMap;
 class ObTsMgr : public share::ObThreadPool, public ObITsMgr
 {
@@ -314,12 +379,27 @@ public:
               ObTsCbTask *task,
               share::SCN &scn,
               MonotonicTs &receive_gts_ts);
+  /**
+   * 与`get_gts`相对应的同步接口，用于同步获取合适的GTS时间戳，可传入超时时间以避免长时间等待。
+   * 相较于原有同步接口`get_ts_sync`，本接口的性能更好
+   * @param[in] tenant_id
+   * @param[in] stc: 需要获取GTS的时间点，一般取current time
+   * @param[in] timeout_us: 超时时长，单位us
+   * @param[out] scn: 获取到的GTS时间戳结果
+   * @param[out] receive_gts_ts: 收到GTS response的时间点
+   */
+  int get_gts_sync(const uint64_t tenant_id,
+                   const MonotonicTs stc,
+                   const int64_t timeout_us,
+                   share::SCN &scn,
+                   MonotonicTs &receive_gts_ts);
   //仅仅获取本地gts cache的最新值，但可能会失败，失败之后处理逻辑如下:
   //1. 如果task == NULL，说明调用者不需要异步回调，直接返回报错，由调用者处理
   //2. 如果task != NULL，需要注册异步回调任务
   int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn);
-  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us,
       share::SCN &scn, bool &is_external_consistent);
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us, share::SCN &scn);
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
       bool &need_wait);
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);

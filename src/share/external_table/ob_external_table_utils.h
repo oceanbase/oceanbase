@@ -14,6 +14,8 @@
 #define _OB_EXTERNAL_TABLE_UTILS_H_
 
 #include "lib/container/ob_iarray.h"
+#include "lib/string/ob_string.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {
@@ -22,6 +24,7 @@ namespace common
 {
 class ObObj;
 class ObNewRange;
+class ObAddr;
 }
 
 namespace sql
@@ -30,10 +33,24 @@ class ObDASTabletLoc;
 class ObExecContext;
 class ObExternalTableAccessService;
 class ObQueryRange;
+class ObExprRegexContext;
+class ObExprRegexpSessionVariables;
 }
 
 namespace share
 {
+
+struct ObExternalPathFilter {
+  ObExternalPathFilter(sql::ObExprRegexContext &regex_ctx, common::ObIAllocator &allocator)
+    : regex_ctx_(regex_ctx), allocator_(allocator) {}
+  int init(const common::ObString &pattern, const sql::ObExprRegexpSessionVariables &regexp_vars);
+  bool is_inited();
+  int is_filtered(const common::ObString &path, bool &is_filtered);
+  sql::ObExprRegexContext &regex_ctx_;
+  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator temp_allocator_;
+};
+
 class ObExternalTableUtils {
  public:
   enum ExternalTableRangeColumn {
@@ -78,13 +95,13 @@ class ObExternalTableUtils {
                                        common::ObIArray<common::ObNewRange *> &new_range,
                                        bool is_file_on_disk);
 
-  static int filter_external_table_files(const common::ObString &pattern,
-                                         sql::ObExecContext &exec_ctx,
-                                         common::ObIArray<common::ObString> &file_urls);
   static int calc_assigned_files_to_sqcs(
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObIArray<int64_t> &assigned_idx,
     int64_t sqc_count);
+
+  static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
+                                       common::ObIArray<common::ObAddr> &locations);
  private:
   static bool is_left_edge(const common::ObObj &value);
   static bool is_right_edge(const common::ObObj &value);
@@ -96,6 +113,7 @@ class ObExternalTableUtils {
                                             const int64_t last_lineno,
                                             common::ObIAllocator &allocator,
                                             common::ObNewRange &new_range);
+
 };
 }
 }

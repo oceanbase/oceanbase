@@ -6483,6 +6483,9 @@ int ObPartitionUtils::check_param_valid_(
               index_exist = true;
             }
           } // end for simple_index_infos
+          if (OB_SUCC(ret) && !finded && table_schema.has_mlog_table()) {
+            finded = (related_tid == table_schema.get_mlog_tid());
+          }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("local index not exist", KR(ret), K(table_id));
@@ -7147,20 +7150,23 @@ int ObPartitionUtils::get_hash_tablet_and_part_id_(
 {
   int ret = OB_SUCCESS;
   indexes.reset();
+   const ObObj *obj = NULL;
   if (OB_UNLIKELY(
       OB_ISNULL(partition_array)
       || partition_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition_array is null or partition_num is invalid",
              KR(ret), KP(partition_array), K(partition_num));
-  } else if (OB_UNLIKELY(
-             1 != row.get_count()
-             || (!row.get_cell(0).is_int() && !row.get_cell(0).is_null()))) {
+  } else if (OB_UNLIKELY(1 != row.get_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is invalid", K(row), KR(ret));
+  } else if (FALSE_IT(obj = &(row.get_cell(0)))) {
+  } else if (OB_UNLIKELY(!obj->is_int() && !obj->is_null())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is invalid", K(row), KR(ret));
   } else {
     // Hash the null value to partition 0
-    int64_t val = row.get_cell(0).is_int() ? row.get_cell(0).get_int() : 0;
+    int64_t val = obj->is_int() ? obj->get_int() : 0;
     int64_t part_idx = OB_INVALID_INDEX;
     const ObPartition *partition = NULL;
     if (OB_UNLIKELY(val < 0)) {
@@ -8015,6 +8021,14 @@ int ObPartitionUtils::check_interval_partition_table(
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
+    refresh_method_,
+    refresh_mode_,
+    start_time_,
+    next_time_expr_,
+    exec_env_,
+    parallel_);
+
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObViewSchema-------------------------------------------
  ----------------------------------------------------------------------------------------------------*/
@@ -8025,7 +8039,8 @@ ObViewSchema::ObViewSchema()
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID)
 {
 }
 
@@ -8036,7 +8051,8 @@ ObViewSchema::ObViewSchema(ObIAllocator *allocator)
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID)
 {
 }
 
@@ -8051,7 +8067,9 @@ ObViewSchema::ObViewSchema(const ObViewSchema &src_schema)
       view_is_updatable_(false),
       materialized_(false),
       character_set_client_(CHARSET_INVALID),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      container_table_id_(OB_INVALID_ID),
+      mv_refresh_info_(nullptr)
 {
   *this = src_schema;
 }
@@ -8067,6 +8085,8 @@ ObViewSchema &ObViewSchema::operator =(const ObViewSchema &src_schema)
     materialized_ = src_schema.materialized_;
     character_set_client_ = src_schema.character_set_client_;
     collation_connection_ = src_schema.collation_connection_;
+    container_table_id_ = src_schema.container_table_id_;
+    mv_refresh_info_ = src_schema.mv_refresh_info_;
 
     if (OB_FAIL(deep_copy_str(src_schema.view_definition_, view_definition_))) {
       LOG_WARN("Fail to deep copy view definition, ", K(ret));
@@ -8087,7 +8107,9 @@ bool ObViewSchema::operator==(const ObViewSchema &other) const
       && view_is_updatable_ == other.view_is_updatable_
       && materialized_ == other.materialized_
       && character_set_client_ == other.character_set_client_
-      && collation_connection_ == other.collation_connection_;
+      && collation_connection_ == other.collation_connection_
+      && container_table_id_ == other.container_table_id_
+      && mv_refresh_info_ == other.mv_refresh_info_;
 }
 
 bool ObViewSchema::operator!=(const ObViewSchema &other) const
@@ -8118,6 +8140,8 @@ void ObViewSchema::reset()
   materialized_ = false;
   character_set_client_ = CHARSET_INVALID;
   collation_connection_ = CS_TYPE_INVALID;
+  container_table_id_ = OB_INVALID_ID;
+  mv_refresh_info_ = nullptr;
   ObSchema::reset();
 }
 
@@ -8131,7 +8155,8 @@ OB_DEF_SERIALIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
   return ret;
 }
 
@@ -8146,7 +8171,8 @@ OB_DEF_DESERIALIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
 
   if (!OB_SUCC(ret)) {
     LOG_WARN("Fail to deserialize data, ", K(ret));
@@ -8166,7 +8192,8 @@ OB_DEF_SERIALIZE_SIZE(ObViewSchema)
               view_is_updatable_,
               materialized_,
               character_set_client_,
-              collation_connection_);
+              collation_connection_,
+              container_table_id_);
   return len;
 }
 
@@ -9206,6 +9233,10 @@ const char *ob_table_type_str(ObTableType type)
       type_ptr = "EXTERNAL TABLE";
       break;
     }
+  case MATERIALIZED_VIEW_LOG: {
+      type_ptr = "MATERIALIZED VIEW LOG";
+      break;
+    }
   default: {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "unkonw table type", K(type));
       break;
@@ -9292,6 +9323,11 @@ bool is_aux_lob_piece_table(const ObTableType table_type)
 bool is_aux_lob_table(const ObTableType table_type)
 {
   return is_aux_lob_meta_table(table_type) || is_aux_lob_piece_table(table_type);
+}
+
+bool is_mlog_table(const ObTableType table_type)
+{
+  return (ObTableType::MATERIALIZED_VIEW_LOG == table_type);
 }
 
 const char *schema_type_str(const ObSchemaType schema_type)
@@ -13879,6 +13915,30 @@ int ObColumnGroupSchema::remove_column_id(const uint64_t column_id)
   return ret;
 }
 
+void ObColumnGroupSchema::remove_all_cols() {
+  column_id_cnt_ = 0;
+  MEMSET(column_id_arr_, 0, sizeof(uint64_t) * column_id_arr_capacity_);
+}
+
+int ObColumnGroupSchema::get_column_group_type_name(ObString &readable_cg_name) const
+{
+  int ret = OB_SUCCESS;
+  if (column_group_type_ >=  ObColumnGroupType::NORMAL_COLUMN_GROUP ||
+      column_group_type_ < ObColumnGroupType::DEFAULT_COLUMN_GROUP) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("receive not suppoted column group type", K(ret), K(column_group_type_));
+  } else {
+    /* use column group type as index, and check whether out of range*/
+    const char* readable_name = OB_COLUMN_GROUP_TYPE_NAME[column_group_type_];
+    const int32_t readable_name_len = static_cast<int32_t>(strlen(readable_name));
+    if (readable_name_len != readable_cg_name.write(readable_name, readable_name_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to wriet column group name, check whether buffer size enough", K(ret), K(readable_cg_name));
+    }
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObSkipIndexColumnAttr)
 {
   int ret = OB_SUCCESS;
@@ -14193,6 +14253,11 @@ int ObLocalSessionVar::remove_vars_same_with_session(const sql::ObBasicSessionIn
       if (OB_ISNULL(local_var)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), KP(local_var));
+      } else if (SYS_VAR_SQL_MODE == local_var->type_) {
+        if (local_var->val_.get_uint64() != session->get_sql_mode()
+            && OB_FAIL(new_var_array.push_back(local_var))) {
+          LOG_WARN("fail to push into new var array", K(ret));
+        }
       } else if (OB_FAIL(session->get_sys_variable(local_var->type_, session_val))) {
         LOG_WARN("fail to get session variable", K(ret));
       } else if (!local_var->is_equal(session_val) &&

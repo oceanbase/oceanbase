@@ -162,14 +162,16 @@ int ObRawExprResolverImpl::try_negate_const(ObRawExpr *&expr,
         ObObj new_val;
         if (const_expr->get_value().is_decimal_int()) {
           ObDecimalInt *neg_dec = nullptr;
+          int32_t out_prec =
+            const_expr->get_accuracy().get_precision() + (lib::is_oracle_mode() ? 0 : 1);
+          int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
           if (!is_odd) {// do nothing
           } else if (OB_FAIL(wide::negate(const_expr->get_value().get_decimal_int(),
                                           const_expr->get_value().get_int_bytes(), neg_dec,
-                                          ctx_.expr_factory_.get_allocator()))) {
+                                          out_bytes, ctx_.expr_factory_.get_allocator()))) {
             LOG_WARN("negate decimal int failed", K(ret));
           } else {
-            new_val.set_decimal_int(const_expr->get_value().get_int_bytes(),
-                                    const_expr->get_value().get_scale(), neg_dec);
+            new_val.set_decimal_int(out_bytes, const_expr->get_value().get_scale(), neg_dec);
             negated = true;
           }
         } else {
@@ -2052,6 +2054,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       ObObjAccessIdent &access_ident = q_name.access_idents_.at(q_name.access_idents_.count() - 1);
 
       AccessNameType name_type = UNKNOWN;
+      access_ident.has_brackets_ = (1 == left_node.int16_values_[0]);
       if (!q_name.is_unknown()) {
         if (0 == access_ident.access_name_.case_compare("NEXT")
             || 0 == access_ident.access_name_.case_compare("PRIOR")
@@ -2230,6 +2233,9 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_XMLPARSE == left_node.type_
              || T_FUN_ORA_XMLAGG == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name));
+  } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
+    ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
+    LOG_WARN("input invalid arguments", K(ret));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("left node of obj access ref node not T_IDENT/T_QUESTIONMARK/T_FUN_SYS", K(ret), K(left_node.type_));
@@ -2590,15 +2596,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             /*dynamic and dbms sql already prepare question mark in parse stage.*/
             bool need_save = true;
             for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.external_param_info_->count(); ++i) {
-              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).first));
+              CK (OB_NOT_NULL(ctx_.external_param_info_->at(i).element<0>()));
               if (OB_SUCC(ret)
-                  && ctx_.external_param_info_->at(i).first->same_as(*c_expr)) {
+                  && ctx_.external_param_info_->at(i).element<0>()->same_as(*c_expr)) {
                 need_save = false;
                 break;
               }
             }
             if (OB_SUCC(ret) && need_save) {
-              OZ (ctx_.external_param_info_->push_back(std::make_pair(c_expr, c_expr)));
+              OZ (ctx_.external_param_info_->push_back(ExternalParamInfo(c_expr, c_expr, 1)));
               OX (ctx_.prepare_param_count_++);
             }
           } else {
@@ -4144,10 +4150,11 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
       ObSysFunRawExpr *window_size_expr = NULL;
       ObRawExpr *div_expr = NULL;
       ObConstRawExpr *one_expr = NULL;
+      ObRawExpr *max_disuse_expr = NULL;
       if (OB_ISNULL(ctx_.session_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(ctx_.session_info_));
-      } else if (OB_UNLIKELY(3 != node->num_child_)) {
+      } else if (OB_UNLIKELY(4 != node->num_child_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(node->num_child_));
       } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], error_expr)))) {
@@ -4190,6 +4197,14 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("get invalid item_size_expr", K(ret), K(item_size_expr));
       } else if (OB_FAIL(agg_expr->add_real_param_expr(item_size_expr))) {
+        LOG_WARN("fail to add param expr to agg expr", K(ret));
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[3], max_disuse_expr)))) {
+        LOG_WARN("fail to recursive resolve expr item", K(ret));
+      } else if (OB_ISNULL(max_disuse_expr) ||
+                 OB_UNLIKELY(ObRawExpr::EXPR_CONST != max_disuse_expr->get_expr_class())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("get invalid item_size_expr", K(ret), K(max_disuse_expr));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(max_disuse_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));
       } else {/*do nothing*/}
     } else if (T_FUN_HYBRID_HIST == node->type_ || T_FUN_JSON_OBJECTAGG == node->type_) {
@@ -5689,7 +5704,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   ObSysFunRawExpr *func_expr = NULL;
   if (OB_SUCC(ret)) {
     num = node->num_child_;
-    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS, func_expr);
+    ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_JSON_QUERY, func_expr);
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_func_name(ObString::make_string("json_query")));
   }
@@ -5707,7 +5722,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   }
   // pre check default returning type with item method
   if (OB_SUCC(ret)) {
-    if (returning_type->type_ == T_NULL) {
+    if (returning_type->type_ == T_NULL || returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
       ObString path_str(node->children_[1]->text_len_, node->children_[1]->raw_text_);
       if (OB_FAIL(ObJsonPath::change_json_expr_res_type_if_need(ctx_.expr_factory_.get_allocator(), path_str, const_cast<ParseNode&>(*returning_type), OPT_JSON_QUERY))) {
         LOG_WARN("set return type by path item method fail", K(ret), K(path_str));
@@ -7873,7 +7888,8 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool exist = false;
   bool is_internal = false;
   if (OB_FAIL(ret)) {
-  } else if (ctx_.session_info_->is_inner()) {
+  } else if (ctx_.session_info_->is_inner()
+             || is_sys_view(ctx_.view_ref_id_)) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {
   } else if (exist && is_internal) {

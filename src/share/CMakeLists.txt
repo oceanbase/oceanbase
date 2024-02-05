@@ -4,6 +4,10 @@ ob_set_subtarget(ob_share ALONE
   datum/ob_datum_funcs.cpp
   schema/ob_schema_service_sql_impl.cpp
   parameter/ob_parameter_attr.cpp
+  vector/expr_cmp_func.cpp
+  aggregate/sum.cpp
+  aggregate/processor.cpp
+  aggregate/single_row.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -13,11 +17,13 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
 
 ob_set_subtarget(ob_share allocator
   allocator/ob_fifo_arena.cpp
-  allocator/ob_gmemstore_allocator.cpp
+  allocator/ob_memstore_allocator.cpp
   allocator/ob_handle_list.cpp
-  allocator/ob_memstore_allocator_mgr.cpp
+  allocator/ob_mds_allocator.cpp
+  allocator/ob_shared_memory_allocator_mgr.cpp
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
+  allocator/ob_tx_data_allocator.cpp
 )
 
 ob_set_subtarget(ob_share backup
@@ -59,19 +65,6 @@ ob_set_subtarget(ob_share cache
   cache/ob_working_set_mgr.cpp
   cache/ob_kvcache_hazard_version.cpp
   cache/ob_kvcache_pre_warmer.cpp
-)
-
-ob_set_subtarget(ob_share scheduler
-  scheduler/ob_tenant_dag_scheduler.cpp
-  scheduler/ob_sys_task_stat.cpp
-  scheduler/ob_dag_warning_history_mgr.cpp
-)
-
-ob_set_subtarget(ob_share compaction
-  compaction/ob_compaction_locality_cache.cpp
-  compaction/ob_table_ckm_items.cpp
-  compaction/ob_compaction_time_guard.cpp
-  compaction/ob_schedule_batch_size_mgr.cpp
 )
 
 ob_set_subtarget(ob_share common
@@ -268,8 +261,29 @@ ob_set_subtarget(ob_share common_mixed
   detect/ob_detect_rpc_processor.cpp
   detect/ob_detect_manager_utils.cpp
   table/ob_table_load_sql_statistics.cpp
+  tenant_snapshot/ob_tenant_snapshot_id.cpp
+  tenant_snapshot/ob_tenant_snapshot_table_operator.cpp
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
+  restore/ob_tenant_clone_table_operator.cpp
+  index_usage/ob_index_usage_info_mgr.cpp
+  index_usage/ob_index_usage_report_task.cpp
+  table/ob_table_util.cpp
+  scheduler/ob_tenant_dag_scheduler.cpp
+  scheduler/ob_sys_task_stat.cpp
+  scheduler/ob_dag_warning_history_mgr.cpp
+  compaction/ob_compaction_locality_cache.cpp
+  compaction/ob_table_ckm_items.cpp
+  compaction/ob_compaction_time_guard.cpp
+  compaction/ob_schedule_batch_size_mgr.cpp
+  partition_table/ob_partition_location.cpp
+  longops_mgr/ob_ddl_longops.cpp
+  longops_mgr/ob_i_longops.cpp
+  longops_mgr/ob_longops_mgr.cpp
+  ash/ob_active_sess_hist_list.cpp
+  ash/ob_active_sess_hist_task.cpp
+  throttle/ob_share_throttle_define.cpp
+  throttle/ob_throttle_common.cpp
 )
 
 ob_set_subtarget(ob_share tablet
@@ -307,16 +321,6 @@ ob_set_subtarget(ob_share deadlock
   deadlock/ob_lcl_scheme/ob_lcl_utils.cpp
 )
 
-ob_set_subtarget(ob_share partition_table
-  partition_table/ob_partition_location.cpp
-)
-
-ob_set_subtarget(ob_share longops_mgr
-  longops_mgr/ob_ddl_longops.cpp
-  longops_mgr/ob_i_longops.cpp
-  longops_mgr/ob_longops_mgr.cpp
-)
-
 ob_set_subtarget(ob_share ls
   ls/ob_inmemory_ls_table.cpp
   ls/ob_ls_info.cpp
@@ -333,11 +337,6 @@ ob_set_subtarget(ob_share ls
   ls/ob_ls_creator.cpp
   ls/ob_ls_election_reference_info_operator.cpp
   ls/ob_ls_log_stat_info.cpp
-)
-
-ob_set_subtarget(ob_share ash
-  ash/ob_active_sess_hist_list.cpp
-  ash/ob_active_sess_hist_task.cpp
 )
 
 ob_set_subtarget(ob_share redolog
@@ -447,11 +446,16 @@ ob_set_subtarget(ob_share schema
   schema/ob_server_schema_service.cpp
   schema/ob_table_schema.cpp
   schema/ob_latest_schema_guard.cpp
+  schema/ob_mlog_info.cpp
+  schema/ob_mview_info.cpp
+  schema/ob_mview_refresh_stats_params.cpp
+  schema/ob_mview_refresh_stats.cpp
 )
 
 ob_set_subtarget(ob_share stat
   stat/ob_basic_stats_estimator.cpp
   stat/ob_opt_stat_monitor_manager.cpp
+  stat/ob_dbms_stats_copy_table_stats.cpp
   stat/ob_dbms_stats_executor.cpp
   stat/ob_dbms_stats_export_import.cpp
   stat/ob_dbms_stats_history_manager.cpp
@@ -477,6 +481,7 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_stat_gather_stat.cpp
   stat/ob_opt_ds_stat.cpp
   stat/ob_opt_ds_stat_cache.cpp
+  stat/ob_dbms_stats_gather.cpp
   stat/ob_opt_system_stat.cpp
   stat/ob_opt_system_stat_cache.cpp
 )
@@ -517,15 +522,29 @@ if (OB_ERRSIM)
  )
 endif()
 
-ob_set_subtarget(ob_share throttle
-  throttle/ob_throttle_common.cpp
-)
-
 ob_set_subtarget(ob_share wr
   wr/ob_wr_service.cpp
   wr/ob_wr_task.cpp
   wr/ob_wr_snapshot_rpc_processor.cpp
   wr/ob_wr_collector.cpp
+)
+
+ob_set_subtarget(ob_share vector
+  vector/ob_vector_base.cpp
+  vector/ob_fixed_length_vector.cpp
+  vector/ob_continuous_vector.cpp
+  vector/ob_discrete_vector.cpp
+  vector/ob_uniform_vector.cpp
+  vector/ob_uniform_base.cpp
+  vector/ob_fixed_length_base.cpp
+  vector/ob_discrete_base.cpp
+  vector/ob_continuous_base.cpp
+)
+
+ob_set_subtarget(ob_share aggregate
+  aggregate/iaggregate.cpp
+  aggregate/count.cpp
+  aggregate/min_max.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

@@ -26,9 +26,10 @@
 #include "common/ob_role.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
-#include "ob_trans_hashmap.h"
+#include "share/ob_light_hashmap.h"
 #include "storage/tx/ob_trans_define.h"
 #include "common/ob_simple_iterator.h"
+#include "share/ob_common_id.h"
 
 namespace oceanbase
 {
@@ -269,11 +270,12 @@ struct ObTxReadSnapshot
   void init_ls_read(const share::ObLSID &ls_id, const ObTxSnapshot &core);
   void specify_snapshot_scn(const share::SCN snapshot);
   void wait_consistency();
-  ObString get_source_name() const;
+  const char* get_source_name() const;
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
   bool is_ls_snapshot() const { return SRC::LS == source_; }
+  int format_source_for_display(char *buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObTxReadSnapshot &);
   ObTxReadSnapshot();
@@ -362,7 +364,55 @@ public:
   const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return cflict_txs_; }
 };
 
-class ObTxDesc final : public ObTransHashLink<ObTxDesc>
+class RollbackMaskSet
+{
+public:
+  RollbackMaskSet() : rollback_parts_(NULL) {}
+  int init(share::ObCommonID tx_msg_id, ObTxRollbackParts &parts) {
+    ObSpinLockGuard guard(lock_);
+    tx_msg_id_ = tx_msg_id;
+    rollback_parts_ = &parts;
+    return mask_set_.init(&parts);
+  }
+  int get_not_mask(ObTxRollbackParts &remain) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.get_not_mask(remain);
+  }
+  bool is_mask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.is_mask(part);
+  }
+  int mask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.mask(part);
+  }
+  bool is_all_mask() {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.is_all_mask();
+  }
+  share::ObCommonID get_tx_msg_id() const {
+    return tx_msg_id_;
+  }
+  void reset() {
+    ObSpinLockGuard guard(lock_);
+    tx_msg_id_.reset();
+    rollback_parts_ = NULL;
+    mask_set_.reset();
+  }
+  int merge_part(const share::ObLSID add_ls_id,
+                 const int64_t exec_epoch,
+                 const int64_t transfer_epoch);
+  int find_part(const share::ObLSID ls_id,
+                const int64_t orig_epoch,
+                ObTxExecPart &part);
+private:
+  ObSpinLock lock_;
+  share::ObCommonID tx_msg_id_;
+  ObTxRollbackParts *rollback_parts_;
+  common::ObMaskSet2<ObTxExecPart> mask_set_;
+};
+
+class ObTxDesc final : public share::ObLightHashLink<ObTxDesc>
 {
   static constexpr const char *OP_LABEL = "TX_DESC_VALUE";
   static constexpr int64_t MAX_RESERVED_CONFLICT_TX_NUM = 30;
@@ -373,7 +423,6 @@ class ObTxDesc final : public ObTransHashLink<ObTxDesc>
   friend class ObTxStmtInfo;
   friend class IterateTxSchedulerFunctor;
   friend class ObTxnFreeRouteCtx;
-  typedef common::ObMaskSet2<ObTxLSEpochPair> MaskSet;
   OB_UNIS_VERSION(1);
 protected:
   uint64_t tenant_id_;        // FIXME: removable
@@ -382,7 +431,7 @@ protected:
   int64_t cluster_id_;
   ObTraceInfo trace_info_;
   uint64_t cluster_version_;  // compatible handle when upgrade
-
+  int64_t seq_base_;          // tx_seq's base value, use to calculate absolute value of tx_seq
   ObTxConsistencyType tx_consistency_type_; // transaction level consistency_type : strong or bounded read
 
   common::ObAddr addr_;                // where we site
@@ -439,6 +488,7 @@ protected:
     struct COMPAT_FOR_EXEC {
       uint64_t v_;
       uint64_t get_serialize_v_() const;
+      TO_STRING_KV(K_(v));
       NEED_SERIALIZE_AND_DESERIALIZE;
     } compat_for_exec_;
     struct
@@ -483,6 +533,7 @@ protected:
 
   ObTxSEQ active_scn_;               // logical time of ACTIVE | IMPLICIT_ACTIVE
   ObTxSEQ min_implicit_savepoint_;   // mininum of implicit savepoints
+  int16_t last_branch_id_;           // branch_id allocator, reset when stmt start
   ObTxPartList parts_;               // participant list
   ObTxSavePointList savepoints_;     // savepoints established
   // cflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
@@ -495,7 +546,7 @@ protected:
   // used during commit
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
-  share::ObLSArray commit_parts_;    // participants to do commit
+  ObTxCommitParts commit_parts_;    // participants to do commit
   share::SCN commit_version_;        // Tx commit version
   int commit_out_;                   // the commit result
   int commit_times_;                 // times of sent commit request
@@ -509,8 +560,9 @@ private:
   mutable ObSpinLock lock_;
   ObSpinLock commit_cb_lock_;       // protect commit_cb_ field
   ObITxCallback *commit_cb_;        // async commit callback
+  int64_t cb_tid_;                  // commit callback thread id
   int64_t exec_info_reap_ts_;       // the time reaping incremental tx exec info
-  MaskSet brpc_mask_set_;           // used in message driven savepoint rollback
+  RollbackMaskSet brpc_mask_set_;   // used in message driven savepoint rollback
   ObTransCond rpc_cond_;            // used in message driven savepoint rollback
 
   ObTxTimeoutTask commit_task_;     // commit retry task
@@ -534,6 +586,7 @@ private:
     DLink *prev_;
   } alloc_link_;
 #endif
+  static constexpr int16_t MAX_BRANCH_ID_VALUE = ~(1 << 15) & 0xFFFF; // 15bits
 private:
   /* these routine should be called by txn-service only to avoid corrupted state */
   void reset();
@@ -553,6 +606,7 @@ private:
   int add_conflict_tx_(const ObTransIDAndAddr &conflict_tx);
   int merge_conflict_txs_(const ObIArray<ObTransIDAndAddr> &conflict_ids);
   int update_parts_(const ObTxPartList &list);
+  void post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
   bool has_extra_state_() const;
@@ -594,6 +648,7 @@ public:
                KP_(commit_cb),
                K_(cluster_id),
                K_(cluster_version),
+               K_(seq_base),
                K_(flags_.SHADOW),
                K_(flags_.INTERRUPTED),
                K_(flags_.BLOCK),
@@ -604,7 +659,11 @@ public:
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
                K_(ref));
-
+  bool support_branch() const { return seq_base_ > 0; }
+  // used by SQL alloc branch_id refer the min branch_id allowed
+  // because branch_id bellow this is reserved for internal use
+  int branch_id_offset() const { return MAX_CALLBACK_LIST_COUNT; }
+  int alloc_branch_id(const int64_t count, int16_t &branch_id);
   int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
   void reset_conflict_txs()
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
@@ -629,7 +688,7 @@ public:
   void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
   bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }
   int64_t get_op_sn() const { return op_sn_; }
-  void inc_op_sn() { state_change_flags_.DYNAMIC_CHANGED_ = true; ++op_sn_; }
+  void inc_op_sn(const uint64_t num = 1) { state_change_flags_.DYNAMIC_CHANGED_ = true; ATOMIC_AAF(&op_sn_, num); }
   share::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
@@ -728,19 +787,22 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   int64_t estimate_state_size();
   bool is_static_changed() { return state_change_flags_.STATIC_CHANGED_; }
   bool is_dynamic_changed() { return state_ > State::IDLE && state_change_flags_.DYNAMIC_CHANGED_; }
-  bool is_parts_changed() { return state_change_flags_.PARTS_CHANGED_; };
+  bool is_parts_changed() { return state_ > State::IDLE && state_change_flags_.PARTS_CHANGED_; };
   bool is_extra_changed() { return state_change_flags_.EXTRA_CHANGED_; };
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
   void mark_part_abort(const ObTransID tx_id, const int abort_cause);
+  int64_t get_coord_epoch() const;
   ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
+  ObTxSEQ get_min_tx_seq() const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
 typedef common::ObSimpleIterator<ObTxSchedulerStat,
         ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxSchedulerStatIterator;
+
 
 class ObTxDescMgr final
 {
@@ -764,7 +826,6 @@ public:
   int64_t get_alloc_count() const { return map_.alloc_cnt(); }
   int64_t get_total_count() const { return map_.count(); }
   int iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter);
-private:
   struct {
     bool inited_: 1;
     bool stoped_: 1;
@@ -773,34 +834,34 @@ private:
   {
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
-#ifndef NDEBUG
+  #ifndef NDEBUG
                    , lk_()
                    , list_()
-#endif
-    {}
-    ObTxDesc* alloc_value()
-    {
-      ATOMIC_INC(&alloc_cnt_);
-      ObTxDesc *it = op_alloc(ObTxDesc);
-#ifndef NDEBUG
+  #endif
+   {}
+   ObTxDesc* alloc_value()
+   {
+     ATOMIC_INC(&alloc_cnt_);
+     ObTxDesc *it = op_alloc(ObTxDesc);
+  #ifndef NDEBUG
       ObSpinLockGuard guard(lk_);
       list_.insert(it->alloc_link_);
-#endif
+  #endif
       return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
-#ifndef NDEBUG
+  #ifndef NDEBUG
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
-#endif
+  #endif
         op_free(v);
       }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
-#ifndef NDEBUG
+  #ifndef NDEBUG
     template<typename Function>
     int for_each(Function &fn)
     {
@@ -814,15 +875,15 @@ private:
       }
       return ret;
     }
-#endif
-  private:
-    int64_t alloc_cnt_;
-#ifndef NDEBUG
-    ObSpinLock lk_;
-    ObTxDesc::DLink list_;
-#endif
+  #endif
+    private:
+      int64_t alloc_cnt_;
+  #ifndef NDEBUG
+      ObSpinLock lk_;
+      ObTxDesc::DLink list_;
+  #endif
   };
-  ObTransHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
+  share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;
 };
@@ -836,6 +897,7 @@ protected:
   uint64_t tenant_id_;
   int64_t cluster_id_;
   uint64_t cluster_version_;
+  int64_t seq_base_;
   common::ObAddr addr_;
   ObTransID tx_id_;
   ObTxIsolationLevel isolation_;
@@ -853,6 +915,7 @@ protected:
   uint32_t session_id_ = 0;
   ObTxSavePointList savepoints_;
 public:
+  ObTxInfo(): seq_base_(0) {}
   TO_STRING_KV(K_(tenant_id),
                K_(session_id),
                K_(tx_id),
@@ -865,6 +928,7 @@ public:
                K_(active_ts),
                K_(timeout_us),
                K_(expire_ts),
+               K_(seq_base),
                K_(parts),
                K_(cluster_id),
                K_(cluster_version),
@@ -956,6 +1020,48 @@ typedef lib::ObLockGuardWithTimeout<ObSpinLock> ObSpinLockGuardWithTimeout;
   }                                                                    \
 } while (0)
 
+inline ObTxSEQ ObTxDesc::get_tx_seq(int64_t seq_abs) const
+{
+  int64_t seq = seq_abs > 0 ? seq_abs : ObSequence::get_max_seq_no();
+  if (OB_LIKELY(support_branch())) {
+    if (seq < seq_base_) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "seq_abs is less seq_base_", K(seq_abs), K(tx_id_), K(seq_base_));
+      return ObTxSEQ::INVL();
+    }
+    return ObTxSEQ(seq - seq_base_, 0);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::get_min_tx_seq() const
+{
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(1, 0);
+  } else {
+    return ObTxSEQ::mk_v0(1);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
+{
+  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
+
+inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
+{
+  int64_t seq = ObSequence::inc_and_get_max_seq_no();
+  if (OB_LIKELY(support_branch())) {
+    return ObTxSEQ(seq - seq_base_, branch);
+  } else {
+    return ObTxSEQ::mk_v0(seq);
+  }
+}
 } // transaction
 } // oceanbase
 

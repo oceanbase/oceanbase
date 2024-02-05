@@ -100,7 +100,6 @@ public:
 
 public:
   // Overloading thread handling functions
-  // virtual int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
   virtual void handle(void *data, volatile bool &stop_flag) override;
 
 public:

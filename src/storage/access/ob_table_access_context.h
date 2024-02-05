@@ -104,6 +104,11 @@ struct ObTableAccessContext
       lob_allocator_.reset();
     }
   }
+  inline void reuse_lob_locator_helper() {
+    if (OB_NOT_NULL(lob_locator_helper_)) {
+      lob_locator_helper_->reuse();
+    }
+  }
   // used for query
   int init(ObTableScanParam &scan_param,
            ObStoreCtx &ctx,

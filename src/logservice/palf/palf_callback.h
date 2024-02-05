@@ -31,7 +31,7 @@ class PalfFSCb
 {
 public:
   // end_lsn返回的是最后一条已确认日志的下一位置
-  virtual int update_end_lsn(int64_t id, const LSN &end_lsn, const int64_t proposal_id) = 0;
+  virtual int update_end_lsn(int64_t id, const LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id) = 0;
 };
 
 class PalfRoleChangeCb

@@ -34,14 +34,17 @@ public:
   void reset();
   void destroy();
 
-  int init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id);
+  int init(const int64_t abs_expire_time, ObLSTxCtxMgr *ctx_mgr, int64_t tx_id);
 
   bool is_read_only() const { return read_only_; }
+  bool has_recovered_from_tx_table() const { return recovered_from_tx_table_; }
+  bool is_decided() const;
+  share::SCN get_max_replayed_rollback_scn() const { return max_replayed_rollback_scn_; }
+  void set_max_replayed_rollback_scn(const share::SCN &scn) { max_replayed_rollback_scn_ = scn; }
   int insert_into_tx_table();
-  int recover_tx_data(storage::ObTxDataGuard &rhs);
-  int replace_tx_data(storage::ObTxData *tmp_tx_data);
+  int recover_tx_data(storage::ObTxData *tmp_tx_data);
   int deep_copy_tx_data_out(storage::ObTxDataGuard &tmp_tx_data_guard);
-  int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
+  // int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
   int free_tmp_tx_data(storage::ObTxData *&tmp_tx_data);
   int insert_tmp_tx_data(storage::ObTxData *tmp_tx_data);
 
@@ -108,6 +111,18 @@ private:
   ObLSTxCtxMgr *ctx_mgr_;
   storage::ObTxDataGuard tx_data_guard_;
   bool read_only_;
+  bool recovered_from_tx_table_;
+  // record the max replayed rollback to end_scn
+  // used in replay of RollbackToLog
+  // when replay multiple RollbackToLog in parallell, tx-data inserted into
+  // tx-data-table with end_scn out of order, in order to ensure the invariant
+  // of tx-data with larger end_scn contains the tx-data with smaller end_scn
+  // we rewrite the tx-data by delete and insert the tx-data with same end_scn
+  //
+  // this is a temporary solution for the problem, in the comming refine names as
+  // `shared contents of tx-data`, which can ensure the tx-data has been inserted
+  // into tx-data memtable was refresh with the latest content replayed out.
+  share::SCN max_replayed_rollback_scn_;
   // lock for tx_data_ pointer
   RWLock lock_;
 };

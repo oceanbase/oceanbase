@@ -22,7 +22,8 @@
 
 namespace oceanbase
 {
-namespace transaction {
+namespace transaction
+{
 class ObLockForReadArg;
 class ObTransID;
 }
@@ -40,40 +41,37 @@ class ObCleanoutNothingOperation;
 class ObReCheckNothingOperation;
 class ObCleanoutOp;
 class ObReCheckOp;
+
 class ObTxTableGuards
 {
 public:
   ObTxTableGuards()
    : tx_table_guard_(),
-     src_tx_table_guard_(),
-     transfer_start_scn_(share::SCN::invalid_scn()) {}
+     src_tx_table_guard_() {}
+
   ~ObTxTableGuards() { reset(); }
+
   void reset()
   {
     tx_table_guard_.reset();
     src_tx_table_guard_.reset();
-    transfer_start_scn_.reset();
   }
+
   void reuse()
   {
     tx_table_guard_.reuse();
     src_tx_table_guard_.reuse();
   }
-  bool is_valid() const { return tx_table_guard_.is_valid() && (src_tx_table_guard_.is_valid() == transfer_start_scn_.is_valid()); }
-  /**
-   * @brief check whether the row key is locked by tx id
-   *
-   * @param[in] read_trans_id
-   * @param[in] data_trans_id
-   * @param[in] sql_sequence
-   * @param[out] lock_state
-   */
+
+  bool is_valid() const { return tx_table_guard_.is_valid(); }
+
   int check_row_locked(
       const transaction::ObTransID &read_tx_id,
       const transaction::ObTransID &data_tx_id,
       const transaction::ObTxSEQ &sql_sequence,
       const share::SCN &scn,
       storage::ObStoreRowLockState &lock_state);
+
   /**
    * @brief check whether transaction data_tx_id with sql_sequence is readable. (sql_sequence may be unreadable for txn or stmt rollback)
    *
@@ -87,6 +85,7 @@ public:
       const transaction::ObTxSEQ &sql_sequence,
       const share::SCN &scn,
       bool &can_read);
+
   /**
    * @brief fetch the state of txn DATA_TRANS_ID when replaying to LOG_TS the requirement can be seen from
    *
@@ -101,28 +100,27 @@ public:
       const share::SCN scn,
       int64_t &state,
       share::SCN &trans_version);
+
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn
    *
    * @param[in] lock_for_read_arg
    * @param[out] can_read
    * @param[out] trans_version
-   * @param[out] is_determined_state
    * @param[in] op
    */
   int lock_for_read(
       const transaction::ObLockForReadArg &lock_for_read_arg,
       bool &can_read,
       share::SCN &trans_version,
-      bool &is_determined_state,
       ObCleanoutOp &cleanout_op,
       ObReCheckOp &recheck_op);
 
   int lock_for_read(
       const transaction::ObLockForReadArg &lock_for_read_arg,
       bool &can_read,
-      share::SCN &trans_version,
-      bool &is_determined_state);
+      share::SCN &trans_version);
+
   /**
    * @brief cleanout the tx state when encountering the uncommitted node. The node will be cleaned out if the state of
    * the txn is decided or prepared. You neeed notice that txn commit or abort is pereformed both on mvcc row and mvcc
@@ -138,16 +136,26 @@ public:
       memtable::ObMvccRow &value,
       memtable::ObMvccTransNode &tnode,
       const bool need_row_latch);
+
+  int check_with_tx_data(
+    const transaction::ObTransID &data_tx_id,
+    ObITxDataCheckFunctor &dst_functor,
+    ObITxDataCheckFunctor &src_functor,
+    bool &use_dst);
+
+  int check_with_tx_data(
+    const transaction::ObTransID &data_tx_id,
+    ObITxDataCheckFunctor &functor);
+
   bool check_ls_offline();
-  bool is_need_read_src(const share::SCN scn) const;
-  bool during_transfer() const;
-  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard), K_(transfer_start_scn));
+
+  TO_STRING_KV(K_(tx_table_guard), K_(src_tx_table_guard));
+
 public:
   storage::ObTxTableGuard tx_table_guard_;
-  // transfer_start_scn_ and src_tx_table_guard_ need to be valid at the same time.
+
   // dml executed during transfer, src_tx_table_guard_ will be valid.
   storage::ObTxTableGuard src_tx_table_guard_;
-  share::SCN transfer_start_scn_; // Use transfer_start_scn to judge whether you need to read src_tx_table_guard
 };
 
 }  // namespace storage

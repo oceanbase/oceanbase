@@ -173,7 +173,7 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
   int ret = OB_SUCCESS;
   ObTabletTableOperator op;
   ObTabletReplica tablet_replica;
-  if (OB_FAIL(op.init(sql_client))) {
+  if (OB_FAIL(op.init(share::OBCG_STORAGE, sql_client))) {
     LOG_WARN("failed to init operator", K(ret));
   } else if (OB_FAIL(op.get(tenant_id, tablet_id, ls_id, src_addr, tablet_replica))) {
     LOG_WARN("failed to get tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
@@ -190,11 +190,13 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   ObArray<ObTabletReplicaChecksumItem> items;
   ObArray<ObTabletLSPair> pairs;
   ObTabletLSPair pair;
+  int64_t tablet_items_cnt = 0;
   if (OB_FAIL(pair.init(tablet_id, ls_id))) {
     LOG_WARN("failed to init pair", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn, sql_client, items))) {
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn,
+      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
@@ -411,6 +413,27 @@ int ObStorageHAUtils::check_ls_is_leader(
     is_leader = true;
   } else {
     is_leader = false;
+  }
+  return ret;
+}
+
+int ObStorageHAUtils::check_tenant_will_be_deleted(
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  is_deleted = false;
+
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
+  ObUnitInfoGetter::ObUnitStatus unit_status;
+  if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
+  } else if (FALSE_IT(unit_status = tenant->get_unit_status())) {
+  } else if (ObUnitInfoGetter::is_unit_will_be_deleted_in_observer(unit_status)) {
+    is_deleted = true;
+    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant->id()), K(unit_status));
   }
   return ret;
 }

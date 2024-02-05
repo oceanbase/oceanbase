@@ -98,7 +98,7 @@ public:
   }
   bool can_be_reused(const uint32_t cg_idx, const common::ObIArray<sql::ObExpr*> &exprs, const bool is_aggregate)
   {
-    bool can_reuse = cg_idx == cg_idx && enable_pd_aggregate() == is_aggregate
+    bool can_reuse = cg_idx == cg_idx_ && enable_pd_aggregate() == is_aggregate
                       && nullptr != output_exprs_ && output_exprs_->count() == exprs.count() ;
     if (can_reuse) {
       for (int64_t i = 0; i < exprs.count(); ++i) {
@@ -141,6 +141,19 @@ public:
   { return pd_storage_flag_.set_use_column_store(true); }
   OB_INLINE void set_not_use_column_store()
   { return pd_storage_flag_.set_use_column_store(false); }
+  OB_INLINE void set_tablet_handle(const ObTabletHandle *tablet_handle)
+  { tablet_handle_ = tablet_handle; }
+  OB_INLINE bool use_uniform_format() const
+  {
+    return op_->enable_rich_format_ &&
+        (pd_storage_flag_.is_group_by_pushdown() || pd_storage_flag_.is_aggregate_pushdown());
+  }
+  OB_INLINE bool use_new_format() const
+  {
+    return op_->enable_rich_format_ &&
+        !pd_storage_flag_.is_group_by_pushdown() &&
+        !pd_storage_flag_.is_aggregate_pushdown();
+  }
   DECLARE_TO_STRING;
 public:
   uint64_t table_id_;
@@ -148,6 +161,7 @@ public:
   uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;
+  const ObTabletHandle *tablet_handle_; //for ddl merge_query
   ObCGReadInfoHandle cg_read_info_handle_;
   //TODO(huronghui.hrh):temp solution
   const ObColumnParam *cg_col_param_;

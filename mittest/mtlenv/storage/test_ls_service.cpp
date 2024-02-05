@@ -144,16 +144,16 @@ TEST_F(TestLSService, basic)
   // 1. remove not exist.
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(not_exist_id, exist));
   EXPECT_FALSE(exist);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(not_exist_id, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(not_exist_id));
 
   // 2. remove exist.
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_100, exist));
   EXPECT_TRUE(exist);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_100, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_100));
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_100, exist));
   EXPECT_FALSE(exist);
 
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_102, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_102));
 
   // 3. check empty iter.
   iter.reset();
@@ -221,7 +221,7 @@ TEST_F(TestLSService, tablet_test)
   remove_tablet_arg.tablet_ids_.push_back(tablet_id);
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::remove_tablet(handle, tablet_id));
 
-  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id, true));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(ls_id));
 }
 
 TEST_F(TestLSService, ls_safe_destroy)
@@ -256,7 +256,7 @@ TEST_F(TestLSService, ls_safe_destroy)
 
   // 3. remove ls
   LOG_INFO("TestLSService::ls_safe_destroy 1.3");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104, true));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104));
   ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_104, exist));
   ASSERT_FALSE(exist);
 
@@ -287,9 +287,140 @@ TEST_F(TestLSService, ls_safe_destroy)
 
   // 7. remove ls
   LOG_INFO("TestLSService::ls_safe_destroy 1.7");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104, true));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_104));
   ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_104, exist));
   ASSERT_FALSE(exist);
+}
+
+TEST_F(TestLSService, create_and_clean)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  ObCreateLSArg arg;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  bool exist = false;
+  bool waiting = false;
+  ObLSID id_105(105);
+  int64_t MAX_CREATE_STEP = 100;
+  int cnt = 0;
+
+  LOG_INFO("TestLSService::create_and_clean");
+  ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_105, arg));
+  for (int64_t i = 1; i < MAX_CREATE_STEP; i++) {
+    LOG_INFO("create ls break point", K(i));
+    ls_svr->break_point = i;
+    if (OB_FAIL(ls_svr->create_ls(arg)) && OB_BREAK_BY_TEST == ret) {
+      // check exist
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_FALSE(exist);
+      // wait safe destroy
+      cnt = 0;
+      while (cnt++ < 20) {
+        ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+        if (waiting) {
+          ::sleep(1);
+        } else {
+          break;
+        }
+      }
+      ASSERT_FALSE(waiting);
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("create failed but not break by test", K(ret), K(id_105));
+    } else {
+      // create success and finish the break test
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_TRUE(exist);
+      ASSERT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_105));
+      ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_105, exist));
+      ASSERT_FALSE(exist);
+      break;
+    }
+  }
+  cnt = 0;
+  while (cnt++ < 20) {
+    ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_105, waiting));
+    if (waiting) {
+      ::sleep(1);
+    } else {
+      break;
+    }
+  }
+  ASSERT_FALSE(waiting);
+}
+
+TEST_F(TestLSService, check_ls_iter_cnt)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = 0;
+  int64_t end_time = 0;
+  EventItem item;
+  item.trigger_freq_ = 1;
+  item.error_code_ = 4013;
+  EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item);
+
+  LOG_INFO("TestLSService::check_ls_iter_cnt");
+  ObLS *ls = NULL;
+  ObLSService* ls_svr = MTL(ObLSService*);
+  common::ObSharedGuard<ObLSIterator> guard;
+  // 1. get ls iter 100 times.
+  for (int i = 0; i < 100; i++) {
+    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("get ls iter failed");
+    }
+  }
+  // 2. check the iter cnt, it should smaller than 100.
+  ASSERT_EQ(0, ls_svr->iter_cnt_);
+
+  // 3. get success 100 times.
+  item.trigger_freq_ = 0;
+  EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item);
+  for (int i = 0; i < 100; i++) {
+    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+      LOG_WARN("get ls iter failed again");
+    }
+  }
+  // 4. check the iter cnt, it should smaller than 100.
+  ASSERT_EQ(1, ls_svr->iter_cnt_);
+
+  // 5. iter the ls.
+  ObLSIterator *iter = NULL;
+  if (OB_ISNULL(iter = guard.get_ptr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iter is NULL", K(ret), K(iter));
+  } else {
+    LOG_INFO("iter cnt", K(ls_svr->iter_cnt_));
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter->get_next(ls))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next log stream failed", K(ret));
+        }
+      } else if (OB_ISNULL(ls)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ls in null");
+      } else {
+        LOG_INFO("there is a ls", KPC(ls));
+      }
+    }
+  }
+
+  // 6. check ls service is empty
+  ASSERT_EQ(true, ls_svr->is_empty());
+
+  // 7. stop ls service
+  ls_svr->stop();
+  ASSERT_EQ(OB_NOT_RUNNING, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD));
+
+  ls_svr->is_inited_ = false;
+  // 8. get iter failed.
+  ASSERT_EQ(OB_NOT_INIT, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD));
+
+  // 9. destroy immediately
+  guard.reset();
+  start_time = ObTimeUtil::current_time();
+  ls_svr->wait();
+  ls_svr->destroy();
+  end_time = ObTimeUtil::current_time();
+  ASSERT_TRUE(end_time - start_time <= 60 * 1000 * 1000);
 }
 
 } // namespace storage

@@ -462,6 +462,7 @@ int ObTransformQueryPushDown::check_set_op_expr_reference(ObSelectStmt *select_s
   } else {
     ObSEArray<ObRawExpr*, 4> relation_exprs;
     ObSEArray<ObRawExpr*, 4> set_op_exprs;
+    ObSEArray<ObRawExpr*, 4> column_exprs;
     ObBitSet<> selected_set_op_idx;
     ObStmtExprGetter visitor;
     visitor.set_relation_scope();
@@ -470,7 +471,13 @@ int ObTransformQueryPushDown::check_set_op_expr_reference(ObSelectStmt *select_s
       LOG_WARN("failed to get relation exprs", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::extract_set_op_exprs(relation_exprs,
                                                             set_op_exprs))) {
-      LOG_WARN("failed to extract column ids", K(ret));
+      LOG_WARN("failed to extract set op exprs", K(ret));
+    } else if (FALSE_IT(relation_exprs.reuse())) {
+    } else if (OB_FAIL(select_stmt->get_relation_exprs(relation_exprs, visitor))) {
+      LOG_WARN("failed to get relation exprs", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(relation_exprs,
+                                                            column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < select_offset.count(); ++i) {
       if (select_offset.at(i) != -1) {
@@ -483,6 +490,15 @@ int ObTransformQueryPushDown::check_set_op_expr_reference(ObSelectStmt *select_s
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null expr", K(ret), KPC(set_op_exprs.at(i)));
       } else if (!selected_set_op_idx.has_member(expr->get_idx())) {
+        is_valid = false;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < column_exprs.count(); ++i) {
+      ObColumnRefRawExpr *expr = static_cast<ObColumnRefRawExpr*>(column_exprs.at(i));
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr", K(ret), KPC(column_exprs.at(i)));
+      } else if (!selected_set_op_idx.has_member(expr->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
         is_valid = false;
       }
     }
@@ -870,6 +886,9 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt *select_stmt,
   } else if (OB_FAIL(append(view_stmt->get_window_func_exprs(),
                             select_stmt->get_window_func_exprs()))) {
     LOG_WARN("append select_stmt window func exprs to view stmt window func exprs failed", K(ret));
+  } else if (OB_FAIL(append(view_stmt->get_qualify_filters(),
+                            select_stmt->get_qualify_filters()))) {
+    LOG_WARN("append select_stmt window func filters to view stmt window func filters failed", K(ret));
   } else {
     if (!view_stmt->is_from_pivot()) {
       view_stmt->set_from_pivot(select_stmt->is_from_pivot());

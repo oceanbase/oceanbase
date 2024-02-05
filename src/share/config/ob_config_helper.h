@@ -103,6 +103,39 @@ private:
   static int64_t get_write_throttle_trigger_percentage_(const uint64_t tenant_id);
   DISALLOW_COPY_AND_ASSIGN(ObConfigFreezeTriggerIntChecker);
 };
+class ObConfigTxShareMemoryLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTxShareMemoryLimitChecker);
+};
+class ObConfigMemstoreLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMemstoreLimitChecker);
+};
+
+class ObConfigTxDataLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTxDataLimitChecker);
+};
+class ObConfigMdsLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMdsLimitChecker);
+};
 
 class ObConfigWriteThrottleTriggerIntChecker
 {
@@ -678,6 +711,24 @@ public:
   static const int8_t MODE_ON = 0b01;
   static const int8_t MODE_OFF = 0b10;
   DISALLOW_COPY_AND_ASSIGN(ObKvFeatureModeParser);
+};
+
+class ObConfigIndexStatsModeChecker : public ObConfigChecker {
+public:
+  ObConfigIndexStatsModeChecker(){}
+  virtual ~ObConfigIndexStatsModeChecker(){}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigIndexStatsModeChecker);
+};
+
+class ObConfigTableStoreFormatChecker: public ObConfigChecker {
+public:
+  ObConfigTableStoreFormatChecker(){}
+  virtual ~ObConfigTableStoreFormatChecker(){}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTableStoreFormatChecker);
 };
 
 typedef __ObConfigContainer<ObConfigStringKey,

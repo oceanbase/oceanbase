@@ -22,7 +22,6 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
-#include "sql/resolver/expr/ob_raw_expr_canonicalizer_impl.h"
 #include "sql/resolver/dml/ob_aggr_expr_push_up_analyzer.h"
 #include "sql/resolver/dml/ob_group_by_checker.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
@@ -35,6 +34,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1213,11 +1213,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       }
     }
   }
-  
-  // add table_name for anonymous view(view in from)
-  if (OB_SUCC(ret) && OB_FAIL(add_name_for_anonymous_view())) {
-    LOG_WARN("fail to add name for anonymous view", K(ret));
-  }
   return ret;
 }
 
@@ -1422,6 +1417,27 @@ int ObSelectResolver::resolve_for_update_clause_oracle(const ParseNode &node)
         // nowait  wait_us = 0;
         wait_us = wait_or_skip_node->value_ * 1000000LL;
         skip_locked = false;
+      } else if (wait_or_skip_node->type_ == T_SFU_DECIMAL) {
+        // "select * from t1 for update wait 1.0;" is same as "wait 1"
+        // "select * from t1 for update wait 1.5;" throw OB_ERR_REQUIRE_INTEGER
+        ObNumber value;
+        ObString time_str(wait_or_skip_node->str_len_, wait_or_skip_node->str_value_);
+        if (OB_ISNULL(allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("allocator is null", K(ret));
+        } else if (OB_FAIL(value.from(wait_or_skip_node->str_value_,
+                                      wait_or_skip_node->str_len_,
+                                      *allocator_))) {
+          LOG_WARN("from number failed", K(ret));
+        } else if (OB_UNLIKELY(!value.is_valid_int())) {
+          ret = OB_ERR_REQUIRE_INTEGER;
+          LOG_WARN("wait time not a integer value", K(ret), K(value));
+        } else if (OB_FAIL(ObTimeUtility2::str_to_time(
+                      time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
+          LOG_WARN("str to time failed", K(ret));
+        } else {
+          skip_locked = false;
+        }
       }
     } else {
       wait_us = -1;
@@ -2104,6 +2120,9 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
           ObString string_name(ptr_name);
           select_item.alias_name_ = string_name;
           select_item.is_real_alias_ = true;
+        } else if (T_FUN_SYS_JSON_QUERY == sel_expr->get_expr_type()
+            && OB_FAIL(add_alias_from_dot_notation(sel_expr, select_item))) {  // deal dot notation without alias
+          LOG_WARN("fail to resolve alias in dot notation", K(ret));
         } else {
           if (params_.is_prepare_protocol_
               || !session_info_->get_local_ob_enable_plan_cache()
@@ -2239,6 +2258,44 @@ inline bool ObSelectResolver::is_colum_without_alias(ParseNode *project_node) {
     }
   }
   return bret;
+}
+
+int ObSelectResolver::add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item)
+{
+  INIT_SUCC(ret);
+  int64_t pos = -1;
+  int64_t len = 0;
+  ObString path_str;
+  ObConstRawExpr* path_expr = NULL;
+  // whether is dot notation
+  if (OB_NOT_NULL(sel_expr->get_param_expr(JSN_QUE_MISMATCH))
+      && JSN_QUERY_MISMATCH_DOT == static_cast<ObConstRawExpr*>(sel_expr->get_param_expr(JSN_QUE_MISMATCH))->get_value().get_int()) {
+    if (!select_item.alias_name_.empty()) {
+      select_item.is_real_alias_ = true;
+    } else if (OB_NOT_NULL(sel_expr->get_param_expr(JSN_QUE_PATH))
+               && T_CHAR == sel_expr->get_param_expr(JSN_QUE_PATH)->get_expr_type()) {
+      path_expr = static_cast<ObConstRawExpr*>(sel_expr->get_param_expr(JSN_QUE_PATH));
+      path_str = path_expr->get_value().get_string();
+      pos = path_str.length() - 1;
+      len = 0;
+      char *buf = NULL;
+      while (pos >= 0 && path_str[pos] != '.') {
+        pos --;
+      }
+      len = path_str.length() - (pos + 1);
+      if (pos < 0) {
+      } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(len)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(buf));
+      } else {
+        MEMCPY(buf, path_str.ptr() + (pos + 1), len);
+        ObString alias_name(len, buf);
+        select_item.alias_name_ = alias_name;
+        select_item.is_real_alias_ = true;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObSelectResolver::expand_target_list(
@@ -2574,11 +2631,11 @@ int ObSelectResolver::resolve_all_generated_table_columns(
     // else we should set the skip_join_dup parameter to true. 
     if (OB_FAIL(is_need_check_col_dup(select_item.expr_, need_check_col_dup))) {
       LOG_WARN("failed to check if need to check col duplicate", K(ret));
-    } else if (FALSE_IT(is_skip = is_skip ? is_skip : !need_check_col_dup)) {
-    } else if (!is_skip && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
-                                                              select_item.alias_name_,
-                                                              is_exists, // the return value of is_exists is unused.
-                                                              !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
+    } else if ((!is_skip || need_check_col_dup)
+      && OB_FAIL(column_namespace_checker_.check_column_exists(table_item,
+                                                               select_item.alias_name_,
+                                                               is_exists, // the return value of is_exists is unused.
+                                                               !table_ref->is_view_stmt()))) { //if is a view stmt, do not pass the duplicated column.
       LOG_WARN("failed to check column exists", K(ret));
     } else if (OB_FAIL(resolve_generated_table_column_item(table_item,
                                                            select_item.alias_name_,
@@ -3651,8 +3708,7 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
                                                                         types.count(),
                                                                         coll_type,
                                                                         true,
-                                                                        default_ls,
-                                                                        session_info_))) {
+                                                                        default_ls))) {
               LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
             }
           }
@@ -5616,6 +5672,10 @@ int ObSelectResolver::add_aggr_expr(ObAggFunRawExpr *&final_aggr_expr)
     LOG_WARN("failed to check and get same aggr item.", K(ret));
   } else if (same_aggr_expr != NULL) {
     final_aggr_expr = same_aggr_expr;
+  } else if (lib::is_oracle_mode() &&
+             final_aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT &&
+             OB_FAIL(check_listagg_aggr_param_valid(final_aggr_expr))) {
+    LOG_WARN("failed to check list agg param valid", K(ret));
   } else if (OB_FAIL(select_stmt->add_agg_item(*final_aggr_expr))) {
     LOG_WARN("add new aggregate function failed", K(ret));
   }
@@ -5955,7 +6015,7 @@ int ObSelectResolver::check_window_exprs()
         //do nothing...
       } else if (T_FUN_GROUP_CONCAT == win_expr->get_func_type() && NULL != win_expr->get_agg_expr() && is_oracle_mode()) {
         if (win_expr->get_agg_expr()->get_real_param_exprs().count() > 2) {
-          ret = OB_INVALID_ARGUMENT_NUM;
+          ret = OB_ERR_PARAM_SIZE;
           LOG_WARN("incorrect argument number to call listagg", K(win_expr->get_agg_expr()->get_real_param_exprs().count()));
         } else if (win_expr->get_agg_expr()->get_real_param_exprs().count() == 2) {
           if (OB_FAIL(arg_exprs.push_back(win_expr->get_agg_expr()->get_real_param_exprs().at(1)))) {
@@ -6471,6 +6531,118 @@ int ObSelectResolver::resolve_check_option_clause(const ParseNode *node)
   return ret;
 }
 
+/* ObSelectResolver::check_auto_gen_column_names()
+ *
+ * For a long expr with no alias
+ * MySQL will rename the overlong auto generated alias to "Name_exp_x",
+ * but Oracle will throw "identifier is too long" error.
+ */
+int ObSelectResolver::check_auto_gen_column_names() {
+  int ret = OB_SUCCESS;
+  ObSelectStmt *select_stmt = get_select_stmt();
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  } else if (OB_FAIL(recursive_check_auto_gen_column_names(select_stmt, true))) {
+    LOG_WARN("fail to check auto gen column names", K(ret));
+  }
+  return ret;
+}
+
+int ObSelectResolver::recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt,
+                                                            bool in_outer_stmt) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(allocator_));
+  } else if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("fail to get child stmts", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); i++) {
+    ObSelectStmt *child_stmt = child_stmts.at(i);
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child select stmt is null", K(ret), K(i));
+    } else if (OB_FAIL(SMART_CALL(recursive_check_auto_gen_column_names(child_stmt, false)))) {
+      LOG_WARN("fail to check child stmt", K(ret), K(i));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
+    SelectItem *select_item = &(select_stmt->get_select_item(i));
+    if (OB_ISNULL(select_item) || OB_ISNULL(select_item->expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item expr is null", K(ret), K(select_item));
+    } else if (OB_FAIL(recursive_update_column_name(select_stmt, select_item->expr_))) {
+      LOG_WARN("fail to update column name", K(ret), KPC(select_item));
+    } else if (select_item->alias_name_.length() > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
+      if (lib::is_oracle_mode() && in_outer_stmt) {
+        ret = OB_ERR_TOO_LONG_IDENT;
+        LOG_WARN("auto generated alias is too long", K(ret), K(select_item->alias_name_.length()), K(select_item->alias_name_));
+      } else {
+        char temp_str_buf[OB_MAX_COLUMN_NAME_BUF_LENGTH] = { 0 };
+        if (snprintf(temp_str_buf, sizeof(temp_str_buf), SYNTHETIC_FIELD_NAME "%ld", auto_name_id_++) < 0) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("failed to generate buffer for temp_str_buf", K(ret));
+        } else {
+          ObString tmp_col_name = ObString::make_string(temp_str_buf);
+          ObString col_name;
+          if (OB_FAIL(ob_write_string(*allocator_, tmp_col_name, col_name))) {
+            LOG_WARN("Can not malloc space for constraint name", K(ret));
+          } else {
+            select_item->alias_name_.assign_ptr(col_name.ptr(), col_name.length());
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::recursive_update_column_name(ObSelectStmt *select_stmt,
+                                                   ObRawExpr *expr) {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(expr) || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(expr), K(allocator_));
+  } else if (expr->is_column_ref_expr()) {
+    ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr*>(expr);
+    TableItem *table_item = NULL;
+    ObSelectStmt *ref_stmt = NULL;
+    SelectItem *ref_select_item = NULL;
+    int64_t select_item_idx = col_ref_expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
+    ObString col_name;
+    if (OB_ISNULL(table_item = select_stmt->get_table_item_by_id(col_ref_expr->get_table_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (!table_item->is_generated_table()) {
+      // do nothing
+    } else if (OB_ISNULL(ref_stmt = table_item->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ref query stmt is null", K(ret));
+    } else if (select_item_idx < 0 || select_item_idx >= ref_stmt->get_select_item_size()) {
+      // do nothing, maybe col_ref_expr is ROWID or other pseudo column
+    } else if (OB_ISNULL(ref_select_item = &ref_stmt->get_select_item(select_item_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item is null", K(ret));
+    } else if (OB_FAIL(ob_write_string(*allocator_, ref_select_item->alias_name_, col_name))) {
+      LOG_WARN("Can not malloc space for constraint name", K(ret));
+    } else if (col_name.length() > 0) {
+      // some columns such as ROWID in oracle mode may not have alias name, hence only
+      // replace column name when the ref column's alias name (col_name) is not empty.
+      col_ref_expr->get_column_name().assign_ptr(col_name.ptr(), col_name.length());
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(recursive_update_column_name(select_stmt, expr->get_param_expr(i))))) {
+        LOG_WARN("fail to update child column name", K(ret), K(i), KPC(expr));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSelectResolver::check_rollup_items_valid(const ObIArray<ObRollupItem> &rollup_items)
 {
   int ret = OB_SUCCESS;
@@ -6591,34 +6763,6 @@ int ObSelectResolver::recursive_check_grouping_columns(ObSelectStmt *stmt, ObRaw
   return ret;
 }
 
-
-int ObSelectResolver::add_name_for_anonymous_view()
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *stmt = get_select_stmt();
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null pointer", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); i++) {
-      TableItem *tmp_table = stmt->get_table_item(i);
-      if (OB_ISNULL(tmp_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null pointer", K(ret));
-      } else if (tmp_table->is_generated_table()
-                && tmp_table->alias_name_.empty()
-                && tmp_table->table_name_.empty()) {
-        // found anonymous view, generate new name.
-        if (OB_FAIL(stmt->generate_anonymous_view_name(*params_.allocator_, tmp_table->table_name_))) {
-          LOG_WARN("fail to generate view name", K(ret));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt)
 {
   int ret = OB_SUCCESS;
@@ -6698,6 +6842,38 @@ int ObSelectResolver::adjust_recursive_cte_table_columns(const ObSelectStmt* par
           column_expr->set_accuracy(sel_expr->get_accuracy());
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()) {
+    ObSEArray<ObRawExpr*, 4> check_separator_exprs;
+    ObSEArray<ObRawExpr*, 4> all_group_by_exprs;
+    if (OB_ISNULL(aggr_expr) || OB_ISNULL(get_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (aggr_expr->get_expr_type() != T_FUN_GROUP_CONCAT ||
+               aggr_expr->get_real_param_count() < 2) {
+      //do nothing
+    } else if (OB_UNLIKELY(aggr_expr->get_real_param_count() > 2)) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_WARN("invalid number of arguments", K(ret), KPC(aggr_expr));
+    } else if (aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)->is_const_expr()) {
+      //do nothing
+    } else if (OB_FAIL(check_separator_exprs.push_back(aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1)))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (get_select_stmt()->get_all_group_by_exprs(all_group_by_exprs)) {
+      LOG_WARN("failed to get all group by exprs", K(ret));
+    } else if (OB_FAIL(ObGroupByChecker::check_by_expr(params_.param_list_,
+                                                       get_select_stmt(),
+                                                       all_group_by_exprs,
+                                                       check_separator_exprs,
+                                                       OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR))) {
+      LOG_WARN("fail to check by expr", K(ret));
     }
   }
   return ret;

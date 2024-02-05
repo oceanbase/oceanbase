@@ -664,6 +664,35 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckStartTransferTabletsRes);
 };
 
+struct ObStorageBlockTxArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageBlockTxArg();
+  ~ObStorageBlockTxArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(gts));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN gts_;
+};
+
+struct ObStorageTransferCommonArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStorageTransferCommonArg();
+  ~ObStorageTransferCommonArg() {}
+  bool is_valid() const;
+  void reset();
+
+  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+};
+
 struct ObStorageKillTxArg final
 {
   OB_UNIS_VERSION(1);
@@ -754,6 +783,8 @@ public:
   RPC_S(PR5 update_ls_meta, OB_HA_UPDATE_LS_META, (ObRestoreUpdateLSMetaArg));
   RPC_S(PR5 get_ls_active_trans_count, OB_GET_LS_ACTIVE_TRANSACTION_COUNT, (ObGetLSActiveTransCountArg), ObGetLSActiveTransCountRes);
   RPC_S(PR5 get_transfer_start_scn, OB_GET_TRANSFER_START_SCN, (ObGetTransferStartScnArg), ObGetTransferStartScnRes);
+  RPC_S(PR5 submit_tx_log, OB_HA_SUBMIT_TX_LOG, (ObStorageTransferCommonArg), share::SCN);
+  RPC_S(PR5 get_transfer_dest_prepare_scn, OB_HA_GET_TRANSFER_DEST_PREPARE_SCN, (ObStorageTransferCommonArg), share::SCN);
   RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
@@ -1060,6 +1091,28 @@ protected:
   int64_t max_tablet_num_;
 };
 
+class ObStorageSubmitTxLogP:
+    public ObStorageStreamRpcP<OB_HA_SUBMIT_TX_LOG>
+{
+public:
+  explicit ObStorageSubmitTxLogP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageSubmitTxLogP() {}
+protected:
+  int process();
+private:
+};
+
+class ObStorageGetTransferDestPrepareSCNP:
+    public ObStorageStreamRpcP<OB_HA_GET_TRANSFER_DEST_PREPARE_SCN>
+{
+public:
+  explicit ObStorageGetTransferDestPrepareSCNP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
+  virtual ~ObStorageGetTransferDestPrepareSCNP() {}
+protected:
+  int process();
+private:
+};
+
 class ObStorageLockConfigChangeP:
     public ObStorageStreamRpcP<OB_HA_LOCK_CONFIG_CHANGE>
 {
@@ -1170,6 +1223,19 @@ public:
       const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn) = 0;
+
+  virtual int submit_tx_log(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    SCN &data_end_scn) = 0;
+
+  virtual int get_transfer_dest_prepare_scn(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    SCN &scn) = 0;
+
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1258,6 +1324,19 @@ public:
       const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn);
+
+  virtual int submit_tx_log(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      SCN &data_end_scn);
+
+  virtual int get_transfer_dest_prepare_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      SCN &scn);
+
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,

@@ -17,6 +17,7 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "storage/access/ob_dml_param.h"
 namespace oceanbase
 {
 namespace sql
@@ -273,6 +274,31 @@ int ObDASDMLIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
         rows = cur_rows_;
         ret = OB_SUCCESS;
       }
+    }
+  }
+  return ret;
+}
+
+int ObDASMLogDMLIterator::get_next_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(row_iter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dml iterator cannot be null", KR(ret), K_(row_iter));
+  } else if (OB_FAIL(row_iter_->get_next_row(row))) {
+    LOG_WARN("failed to get next row from dml iterator", KR(ret));
+  } else if (OB_ISNULL(row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row cannot be null", KR(ret), KP(row));
+  } else {
+    if (OB_FAIL(ObDASUtils::generate_mlog_row(tablet_id_,
+                                              dml_param_,
+                                              *row,
+                                              op_type_,
+                                              is_old_row_))) {
+      LOG_WARN("failed to generate mlog rows", KR(ret));
+    } else if (DAS_OP_TABLE_UPDATE == op_type_) {
+      is_old_row_ = !is_old_row_;
     }
   }
   return ret;

@@ -34,6 +34,8 @@
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "src/storage/lob/ob_lob_manager.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
 #include "lib/xml/ob_xml_parser.h"
@@ -6093,14 +6095,18 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       j_base = &j_null;
     } else if (!is_oracle && CS_TYPE_BINARY == in.get_collation_type()) {
       j_base = &j_opaque;
-    } else if (!is_oracle
-                && CM_IS_IMPLICIT_CAST(cast_mode)
-                && !CM_IS_COLUMN_CONVERT(cast_mode)
-                && !CM_IS_JSON_VALUE(cast_mode)
-                && is_convert_jstr_type) {
+    } else if (!is_oracle  && (
+                (CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type))
+                || (CM_IS_IMPLICIT_CAST(cast_mode)
+                    && !CM_IS_COLUMN_CONVERT(cast_mode)
+                    && !CM_IS_JSON_VALUE(cast_mode)
+                    && is_convert_jstr_type))) {
       // consistent with mysql: TINYTEXT, TEXT, MEDIUMTEXT, and LONGTEXT. We want to treat them like strings
       ret = OB_SUCCESS;
       j_base = &j_string;
+      if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
+        j_base = &j_null;
+      }
     } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
       if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
@@ -13271,11 +13277,16 @@ int datetime_scale_check_only(const ObAccuracy &accuracy, const ObObj &obj)
   if (OB_UNLIKELY(scale > MAX_SCALE_FOR_TEMPORAL)) {
     ret = OB_ERR_TOO_BIG_PRECISION;
     LOG_USER_ERROR(OB_ERR_TOO_BIG_PRECISION, scale, "CAST", static_cast<int64_t>(MAX_SCALE_FOR_TEMPORAL));
-  } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+  } else {
     int64_t value = obj.get_datetime();
-    if (!ObTimeConverter::is_valid_datetime(value)) {
-      ret = OB_INVALID_DATA;
-      LOG_WARN("invalid datetime value", K(ret), K(value));
+    ObCastMode cast_mode = CM_ERROR_ON_SCALE_OVER;
+    if (OB_FAIL(time_usec_scale_check(cast_mode, accuracy, value))) {
+      LOG_WARN("check usec scale fail.", K(ret), K(value), K(accuracy));
+    } else if (OB_UNLIKELY(0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL)) {
+      if (!ObTimeConverter::is_valid_datetime(value)) {
+        ret = OB_INVALID_DATA;
+        LOG_WARN("invalid datetime value", K(ret), K(value));
+      }
     }
   }
   return ret;
@@ -14341,34 +14352,23 @@ int ObObjCaster::to_type(const ObExpectType &expect_type,
   return ret;
 }
 
-const char OB_JSON_NULL[2] = {'\0', '\0'}; // binary json null
+const ObJsonZeroVal OB_JSON_ZERO = ObJsonZeroVal(); // binary json null
 
-int ObObjCaster::get_zero_value(const ObObjType expect_type,
-                                ObCollationType expect_cs_type,
-                                int64_t data_len,
-                                ObIAllocator &alloc,
-                                ObObj &zero_obj)
+int ObObjCaster::get_zero_value(const ObObjType expect_type, ObCollationType expect_cs_type, ObObj &zero_obj)
 {
   int ret = OB_SUCCESS;
   ObObjCastParams params; //构造一个空的cast_param对象，适配SET_RES_XXX宏定义
   ObCastMode cast_mode = CM_WARN_ON_FAIL;
   params.warning_ = 1; //将warning code设置为1，避免SET_RES_XXX宏将其当做真实的warning处理
   if (ob_is_string_tc(expect_type)) {
-    //zero_obj.set_string(expect_type, "");
-    ObString padding_res;
-    if (ObVarcharType == expect_type) {
-      zero_obj.set_string(expect_type, "");
-    } else if (0 > data_len) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("The length of fix-len string is less than zero", K(ret), K(data_len));
-    } else if (OB_FAIL(sql::padding_char_for_cast(data_len, expect_cs_type, alloc,
-                                      padding_res))) {
-      LOG_WARN("padding char failed", K(ret), K(data_len), K(expect_cs_type));
-    } else {
-      zero_obj.set_string(expect_type, padding_res);
-    }
+    zero_obj.set_string(expect_type, "");
   } else if (ob_is_text_tc(expect_type)) {
-    zero_obj.set_lob_value(expect_type, static_cast<const char *>(NULL), 0);
+    if (ob_is_large_text(expect_type)) {
+      zero_obj.set_lob_value(expect_type, reinterpret_cast<const char *>(&ObLobManager::ZERO_LOB), sizeof(ObLobCommon));
+      zero_obj.set_has_lob_header();
+    } else { // tinytext
+      zero_obj.set_string(expect_type, "");
+    }
   } else if (ob_is_int_tc(expect_type)) {
     int64_t value = 0;
     SET_RES_INT(zero_obj);
@@ -14419,7 +14419,8 @@ int ObObjCaster::get_zero_value(const ObObjType expect_type,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("urowid with default value not supported");
   } else if (expect_type == ObJsonType) {
-    zero_obj.set_json_value(expect_type, OB_JSON_NULL, 2);
+    zero_obj.set_json_value(expect_type, reinterpret_cast<const char *>(&OB_JSON_ZERO), ObJsonZeroVal::OB_JSON_ZERO_VAL_LENGTH);
+    zero_obj.set_has_lob_header();
   } else if (expect_type == ObDecimalIntType) {
     zero_obj.set_decimal_int(0, 0, nullptr);
   } else if (ob_is_user_defined_sql_type(expect_type)) {

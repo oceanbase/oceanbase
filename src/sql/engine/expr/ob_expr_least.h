@@ -66,6 +66,7 @@ public:
     }
     return ret_bool;
   }
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprLeastGreatest);

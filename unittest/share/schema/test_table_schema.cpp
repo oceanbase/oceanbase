@@ -627,7 +627,7 @@ void test_ob_table_schema_index_tid(void)
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = table.add_simple_index_info(ObAuxTableMetaInfo(4001, USER_TABLE, OB_INVALID_VERSION));
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = table.get_simple_index_infos(simple_index_infos_array, true);
+  ret = table.get_simple_index_infos(simple_index_infos_array);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(2, simple_index_infos_array.count());
   ASSERT_EQ(static_cast<uint64_t>(4001), simple_index_infos_array.at(0));

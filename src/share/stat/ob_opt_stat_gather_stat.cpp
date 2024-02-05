@@ -13,14 +13,14 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "share/stat/ob_opt_stat_gather_stat.h"
 #include "lib/string/ob_sql_string.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
 int ObOptStatTaskInfo::init(common::ObIAllocator &allocator,
-                            uint64_t tenant_id,
-                            uint64_t session_id,
-                            const common::ObCurTraceId::TraceId &trace_id,
+                            sql::ObSQLSessionInfo *session,
                             ObString &task_id,
                             ObOptStatGatherType type,
                             uint64_t task_start_time,
@@ -29,18 +29,22 @@ int ObOptStatTaskInfo::init(common::ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   char *trace_id_buf = NULL;
   const int32_t max_trace_id_len = 64;
-  if (OB_ISNULL(trace_id_buf = static_cast<char*>(allocator.alloc(max_trace_id_len)))) {
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(session));
+  } else if (OB_ISNULL(trace_id_buf = static_cast<char*>(allocator.alloc(max_trace_id_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret), K(trace_id_buf));
   } else {
-    tenant_id_ = tenant_id;
-    session_id_ = session_id;
-    int64_t len = trace_id.to_string(trace_id_buf, max_trace_id_len);
+    tenant_id_ = session->get_effective_tenant_id();
+    session_id_ = session->get_sessid();
+    int64_t len = session->get_current_trace_id().to_string(trace_id_buf, max_trace_id_len);
     trace_id_.assign_ptr(trace_id_buf, static_cast<int32_t>(len));
     task_id_ = task_id;
     type_ = type;
     task_start_time_ = task_start_time;
     task_table_count_ = task_table_cnt;
+    session_ = session;
   }
   return ret;
 }
@@ -81,7 +85,8 @@ ObOptStatGatherStat::ObOptStatGatherStat() :
   end_time_(0),
   memory_used_(0),
   stat_refresh_failed_list_(),
-  properties_()
+  properties_(),
+  table_gather_progress_()
 {
 }
 
@@ -95,7 +100,8 @@ ObOptStatGatherStat::ObOptStatGatherStat(ObOptStatTaskInfo &task_info) :
   end_time_(0),
   memory_used_(0),
   stat_refresh_failed_list_(),
-  properties_()
+  properties_(),
+  table_gather_progress_()
 {
 }
 
@@ -116,6 +122,7 @@ int ObOptStatGatherStat::assign(const ObOptStatGatherStat &other)
   memory_used_ = other.memory_used_;
   stat_refresh_failed_list_ = other.stat_refresh_failed_list_;
   properties_ = other.properties_;
+  table_gather_progress_ = other.table_gather_progress_;
   return ret;
 }
 
@@ -127,6 +134,7 @@ int64_t ObOptStatGatherStat::size() const
   base_size += table_name_.length();
   base_size += stat_refresh_failed_list_.length();
   base_size += properties_.length();
+  base_size += table_gather_progress_.length();
   return base_size;
 }
 
@@ -163,14 +171,18 @@ int ObOptStatGatherStat::deep_copy(common::ObIAllocator &allocator, ObOptStatGat
       new_stat->set_end_time(end_time_);
       //set memory_used_
       new_stat->set_memory_used(memory_used_);
-      ////set stat_refresh_failed_list_
+      //set stat_refresh_failed_list_
       MEMCPY(buf + pos, stat_refresh_failed_list_.ptr(), stat_refresh_failed_list_.length());
       new_stat->set_stat_refresh_failed_list(buf + pos, stat_refresh_failed_list_.length());
       pos += stat_refresh_failed_list_.length();
-      ////set properties_
+      //set properties_
       MEMCPY(buf + pos, properties_.ptr(), properties_.length());
       new_stat->set_properties(buf + pos, properties_.length());
       pos += properties_.length();
+      //set table_gather_progress_
+      MEMCPY(buf + pos, table_gather_progress_.ptr(), table_gather_progress_.length());
+      new_stat->set_table_gather_progress(buf + pos, table_gather_progress_.length());
+      pos += table_gather_progress_.length();
       if (OB_UNLIKELY(pos != buf_len)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(pos), K(buf_len));
@@ -222,43 +234,40 @@ int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_para
   return ret;
 }
 
-// int ObOptStatRunningMonitor::add_monitor_info(ObOptStatRunningPhase current_phase,
-//                                               int64_t current_memory_used)
-// {
-//   int ret = OB_SUCCESS;
-//   if (current_phase > ObOptStatRunningPhase::GATHER_BEGIN &&
-//       current_phase <= ObOptStatRunningPhase::GATHER_END) {
-//     int64_t current_time = ObTimeUtility::current_time();
-//     ObSqlString tmp_str;
-//     if (current_phase != ObOptStatRunningPhase::GATHER_END &&
-//         OB_FAIL(tmp_str.append_fmt("%s:cost_time=%ldus,cost_memory=%ldbyte;", running_phase_name[current_phase],
-//                                                                               current_time - last_start_time_,
-//                                                                               current_memory_used - last_memory_used_))) {
-//       LOG_WARN("failed to append fmt", K(ret));
-//     } else if (current_phase == ObOptStatRunningPhase::GATHER_END &&
-//                OB_FAIL(tmp_str.append_fmt("%s;", running_phase_name[current_phase]))) {
-//       LOG_WARN("failed to append fmt", K(ret));
-//     } else {
-//       char *buf = NULL;
-//       ObString &running_detailed = opt_stat_gather_stat_.get_running_detailed();
-//       opt_stat_gather_stat_.add_memory_used(current_memory_used - last_memory_used_);
-//       opt_stat_gather_stat_.add_duration_time(current_time - last_start_time_);
-//       int32_t buf_len = static_cast<int32_t>(tmp_str.length() + running_detailed.length());
-//       if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(tmp_str.length() + running_detailed.length())))) {
-//         ret = OB_ALLOCATE_MEMORY_FAILED;
-//         LOG_WARN("memory is not enough", K(ret), K(buf));
-//       } else {
-//         MEMCPY(buf, running_detailed.ptr(), running_detailed.length());
-//         MEMCPY(buf + running_detailed.length() , tmp_str.ptr(), tmp_str.length());
-//         running_detailed.assign_ptr(buf, buf_len);
-//         running_phase_ = current_phase;
-//         last_start_time_ = current_time;
-//         last_memory_used_ = current_memory_used;
-//       }
-//     }
-//   }
-//   return ret;
-// }
+int ObOptStatRunningMonitor::add_monitor_info(ObOptStatRunningPhase current_phase,
+                                              double extra_progress_ratio/*default 0*/)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString tmp_str;
+  if (OB_FAIL(tmp_str.append_fmt("%.2f%%(%s)", running_progress_ratio[current_phase] + extra_progress_ratio,
+                                              running_phase_name[current_phase]))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    char *buf = NULL;
+    if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(tmp_str.length())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("memory is not enough", K(ret), K(buf));
+    } else {
+      ObString tmp_tab_gather_progress;
+      MEMCPY(buf , tmp_str.ptr(), tmp_str.length());
+      tmp_tab_gather_progress.assign_ptr(buf, tmp_str.length());
+      ObOptStatGatherStatList::instance().update_table_gather_progress(tmp_tab_gather_progress,
+                                                                       opt_stat_gather_stat_);
+    }
+  }
+  return ret;
+}
+
+double ObOptStatRunningMonitor::get_monitor_extra_progress_ratio(ObOptStatRunningPhase current_phase,
+                                                                 ObOptStatRunningPhase next_phase,
+                                                                 int64_t total_split_cnt)
+{
+  double res = 0.0;
+  if (total_split_cnt > 0) {
+    res = (running_progress_ratio[next_phase] - running_progress_ratio[current_phase]) * 1.0 / total_split_cnt;
+  }
+  return res > 0.0 ? res : 0.0;
+}
 
 void ObOptStatRunningMonitor::set_monitor_result(int ret_code,
                                                  int64_t end_time,
@@ -317,6 +326,13 @@ void ObOptStatGatherStatList::update_gather_stat_info(ObString &db_name,
   stat_value.set_properties(properties.ptr(), properties.length());
 }
 
+void ObOptStatGatherStatList::update_table_gather_progress(ObString &table_gather_progress,
+                                                           ObOptStatGatherStat &stat_value)
+{
+  ObSpinLockGuard guard(lock_);
+  stat_value.set_table_gather_progress(table_gather_progress.ptr(), table_gather_progress.length());
+}
+
 void ObOptStatGatherStatList::update_gather_stat_refresh_failed_list(ObString &failed_list,
                                                                      ObOptStatGatherStat &stat_value)
 {
@@ -346,6 +362,34 @@ int ObOptStatGatherStatList::list_to_array(common::ObIAllocator &allocator,
     } else if (OB_FAIL(stat_array.push_back(*tmp_stat))) {
       LOG_WARN("failed to push back", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObOptStatGatherStatList::cancel_gather_stats(const uint64_t tenant_id,
+                                                 const ObString &task_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  bool is_cancel = false;
+  DLIST_FOREACH(cur, stat_list_) {
+    // sys tenant list all tenant stat
+    // non-sys tennat list self tenant stat
+    ObOptStatGatherStat *tmp_stat = NULL;
+    if (!is_sys_tenant(tenant_id) && cur->get_tenant_id() != tenant_id) {
+      //do nothing
+    } else if (0 != cur->get_task_id().case_compare(task_id) || OB_ISNULL(cur->get_session())) {
+      //do nothing
+    } else if (OB_FAIL(sql::ObSQLSessionMgr::kill_query(*cur->get_session(), ObSQLSessionState::QUERY_KILLED))) {
+      LOG_WARN("kill query failed", K(ret));
+    } else {
+      is_cancel = true;
+    }
+  }
+  if (OB_SUCC(ret) && !is_cancel) {
+    ret = OB_ERR_DBMS_STATS_PL;
+    LOG_WARN("The optimizer stats gather task has ended or the task doesn't exist", K(ret));
+    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "The optimizer stats gather task has ended or the task doesn't exist");
   }
   return ret;
 }

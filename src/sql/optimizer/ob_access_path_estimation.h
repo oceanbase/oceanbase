@@ -42,14 +42,54 @@ public:
                                common::ObIArray<AccessPath*> &paths,
                                const bool is_inner_path,
                                const ObIArray<ObRawExpr*> &filter_exprs,
-                               bool &is_use_ds);
+                               ObBaseTableEstMethod &method);
 
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);
 
   static bool is_retry_ret(int ret);
+  static int is_storage_estimation_enabled(const ObLogPlan* log_plan,
+                                          ObOptimizerContext &ctx,
+                                          uint64_t table_id,
+                                          uint64_t ref_table_id,
+                                          bool &can_use);
 private:
+  static inline uint64_t choose_one_est_method(ObBaseTableEstMethod valid_methods, const ObBaseTableEstMethod est_priority[], uint64_t cnt)
+  {
+    ObBaseTableEstMethod ret = EST_INVALID;
+    for (int64_t i = 0; EST_INVALID == ret && i < cnt; i ++) {
+      if ((valid_methods & est_priority[i]) == est_priority[i]) {
+        ret = est_priority[i];
+      }
+    }
+    return ret;
+  }
+
+  static int get_valid_est_methods(ObOptimizerContext &ctx,
+                                   common::ObIArray<AccessPath*> &paths,
+                                   const ObIArray<ObRawExpr*> &filter_exprs,
+                                   bool is_inner_path,
+                                   ObBaseTableEstMethod &valid_methods);
+
+  static int check_can_use_dynamic_sampling(ObOptimizerContext &ctx,
+                                            const ObLogPlan &log_plan,
+                                            const OptTableMeta &table_meta,
+                                            const ObIArray<ObRawExpr*> &filter_exprs,
+                                            ObBaseTableEstMethod &valid_methods,
+                                            ObBaseTableEstMethod &specify_methods);
+
+  static int choose_best_est_method(ObOptimizerContext &ctx,
+                                    common::ObIArray<AccessPath*> &paths,
+                                    const ObIArray<ObRawExpr*> &filter_exprs,
+                                    const ObBaseTableEstMethod &valid_methods,
+                                    ObBaseTableEstMethod& method);
+
+  static int do_estimate_rowcount(ObOptimizerContext &ctx,
+                                  common::ObIArray<AccessPath*> &paths,
+                                  const bool is_inner_path,
+                                  const ObIArray<ObRawExpr*> &filter_exprs,
+                                  ObBaseTableEstMethod &method);
 
   static int process_common_estimate_rowcount(ObOptimizerContext &ctx,
                                               common::ObIArray<AccessPath *> &paths);
@@ -58,35 +98,37 @@ private:
 
   static int64_t get_scan_range_count(const ObIArray<ObNewRange> &ranges);
 
-  static int choose_best_estimation_method(const AccessPath *path,
-                                           const ObTableMetaInfo &meta,
-                                           bool &use_storage_stat,
-                                           bool &use_default_vt);
-
-  static int check_path_can_use_stroage_estimate(const AccessPath *path, bool &can_use);
+  static int check_path_can_use_storage_estimation(const AccessPath *path,
+                                                   bool &can_use,
+                                                   ObOptimizerContext &ctx);
 
   static int choose_leader_replica(const ObCandiTabletLoc &part_loc_info,
                                    const bool can_use_remote,
                                    const ObAddr &local_addr,
                                    EstimatedPartition &best_partition);
 
-  static int process_external_table_estimation(AccessPath *path);
+  static int process_external_table_default_estimation(AccessPath *path);
   static int process_vtable_default_estimation(AccessPath *path);
 
-  static int process_table_default_estimation(AccessPath *path);
+  static int process_table_force_default_estimation(AccessPath *path);
+  static int process_table_default_estimation(ObOptimizerContext &ctx, ObIArray<AccessPath *> &path);
 
   /// following functions are mainly uesd by statistics estimation
   static int process_statistics_estimation(AccessPath *path);
 
+  static int process_statistics_estimation(ObIArray<AccessPath *> &paths);
+
   /// following functions are mainly used by storage estimation
   static int process_storage_estimation(ObOptimizerContext &ctx,
-                                        ObIArray<AccessPath *> &paths);
+                                        ObIArray<AccessPath *> &paths,
+                                        bool &is_success);
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
                                                  const bool is_inner_path,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
-                                                 common::ObIArray<AccessPath *> &no_ds_paths);
+                                                 bool only_ds_basic_stat,
+                                                 bool &is_success);
 
   static int calc_skip_scan_prefix_ndv(AccessPath &ap, double &prefix_ndv);
 
@@ -134,8 +176,7 @@ private:
       const obrpc::ObEstPartResElement &result,
       ObCostTableScanInfo &est_cost_info);
 
-  static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info,
-                                       const RowCountEstMethod est_method);
+  static int fill_cost_table_scan_info(ObCostTableScanInfo &est_cost_info);
 
   static int get_key_ranges(ObOptimizerContext &ctx,
                             ObIAllocator &allocator,
@@ -184,25 +225,18 @@ private:
                                  const ObIArray<ObRawExpr*> &filter_exprs,
                                  const bool specify_ds,
                                  ObIArray<ObDSResultItem> &ds_result_items,
-                                 bool &only_ds_basic_stat,
-                                 common::ObIArray<AccessPath *> &ds_paths,
-                                 common::ObIArray<AccessPath *> &no_ds_paths);
+                                 bool only_ds_basic_stat);
 
   static int update_table_stat_info_by_dynamic_sampling(AccessPath *path,
                                                         int64_t ds_level,
                                                         ObIArray<ObDSResultItem> &ds_result_items,
                                                         bool &no_ds_data);
+  static int update_table_stat_info_by_default(AccessPath *path);
 
   static int estimate_path_rowcount_by_dynamic_sampling(const uint64_t table_id,
                                                         ObIArray<AccessPath *> &paths,
                                                         const bool is_inner_path,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
-
-  static int get_valid_ds_path(ObIArray<AccessPath *> &paths,
-                               const bool specify_ds,
-                               common::ObIArray<AccessPath *> &ds_paths,
-                               common::ObIArray<AccessPath *> &no_ds_paths,
-                               bool &all_path_is_get);
 };
 
 }

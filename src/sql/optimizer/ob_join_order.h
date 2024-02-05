@@ -679,6 +679,10 @@ struct EstimateCostInfo {
     }
     // compute current path is inner path and contribute query ranges
     int compute_valid_inner_path();
+    inline bool is_false_range()
+    {
+      return 1 == est_cost_info_.ranges_.count() && est_cost_info_.ranges_.at(0).is_false_range();
+    }
 
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
@@ -1258,7 +1262,8 @@ struct NullAwareAntiJoinInfo {
         filters_(),
         subquery_exprs_(),
         inner_paths_(),
-        table_opt_info_(NULL)
+        table_opt_info_(NULL),
+        est_method_(EST_INVALID)
       {}
 
       bool is_inner_path_;
@@ -1277,6 +1282,7 @@ struct NullAwareAntiJoinInfo {
       ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
 
       ObSEArray<ObExprConstraint, 4> expr_constraints_;
+      ObBaseTableEstMethod est_method_;
     };
 
     struct DeducedExprInfo {
@@ -1554,7 +1560,23 @@ struct NullAwareAntiJoinInfo {
 
     int init_filter_selectivity(ObCostTableScanInfo &est_cost_info);
 
-    int init_column_store_est_info(const uint64_t table_id, ObCostTableScanInfo &est_cost_info);
+    int init_column_store_est_info(const uint64_t table_id,
+                                   const uint64_t ref_id,
+                                   ObCostTableScanInfo &est_cost_info);
+
+    int init_column_store_est_info_with_filter(const uint64_t table_id,
+                                                    ObCostTableScanInfo &est_cost_info,
+                                                    const OptTableMetas& table_opt_meta,
+                                                    ObIArray<ObRawExpr*> &filters,
+                                                    ObIArray<ObCostColumnGroupInfo> &column_group_infos,
+                                                    ObSqlBitSet<> &used_column_ids,
+                                                    FilterCompare &filter_compare,
+                                                    const bool use_filter_sel);
+
+    int init_column_store_est_info_with_other_column(const uint64_t table_id,
+                                                    ObCostTableScanInfo &est_cost_info,
+                                                    const OptTableMetas& table_opt_meta,
+                                                    ObSqlBitSet<> &used_column_ids);
 
     int will_use_das(const uint64_t table_id,
                      const uint64_t ref_id,
@@ -1757,6 +1779,7 @@ struct NullAwareAntiJoinInfo {
                                               const ObIArray<ObRawExpr*> &filters,
                                               double &output_card);
 
+    int estimate_size_and_width_for_fake_cte(uint64_t table_id, ObSelectLogPlan *nonrecursive_plan);
     int create_one_cte_table_path(const TableItem* table_item,
                                   ObShardingInfo * sharding);
     int generate_cte_table_paths();
@@ -1778,7 +1801,7 @@ struct NullAwareAntiJoinInfo {
     int get_base_path_table_dop(uint64_t index_id, int64_t &parallel);
     int compute_access_path_parallel(ObIArray<AccessPath *> &access_paths,
                                      int64_t &parallel);
-    int get_random_parallel(const ObIArray<AccessPath *> &access_paths, int64_t &parallel);
+    int get_random_parallel(const int64_t parallel_degree_limit, int64_t &parallel);
     int get_parallel_from_available_access_paths(int64_t &parallel) const;
     int compute_base_table_parallel_and_server_info(const OpParallelRule op_parallel_rule,
                                                     const int64_t parallel,
@@ -2183,7 +2206,7 @@ struct NullAwareAntiJoinInfo {
                              QueryRangeInfo &range_info,
                              PathHelper &helper);
 
-    int check_has_exec_param(ObQueryRange &query_range,
+    int check_has_exec_param(const ObQueryRange &query_range,
                              bool &has_exec_param);
 
     int get_preliminary_prefix_info(ObQueryRange &query_range,QueryRangeInfo &range_info);
@@ -2315,8 +2338,6 @@ struct NullAwareAntiJoinInfo {
     int compute_fd_item_set_for_subquery(const uint64_t table_id,
                                          ObLogicalOperator *subplan_root);
 
-    int compute_one_row_info_for_table_scan(ObIArray<AccessPath *> &access_paths);
-
     int compute_one_row_info_for_join(const ObJoinOrder *left_tree,
                                       const ObJoinOrder *right_tree,
                                       const ObIArray<ObRawExpr*> &join_condition,
@@ -2349,7 +2370,8 @@ struct NullAwareAntiJoinInfo {
 
     int estimate_rowcount_for_access_path(ObIArray<AccessPath*> &all_paths,
                                           const bool is_inner_path,
-                                          common::ObIArray<ObRawExpr*> &filter_exprs);
+                                          common::ObIArray<ObRawExpr*> &filter_exprs,
+                                          ObBaseTableEstMethod &method);
 
     inline bool can_use_remote_estimate(OptimizationMethod method)
     {
@@ -2474,12 +2496,12 @@ struct NullAwareAntiJoinInfo {
                                 ObRawExpr *escape_expr,
                                 const TableItem *table_item,
                                 ObItemType type,
-                                ObRawExpr *&new_expr,
+                                ObIArray<ObRawExpr*> &new_exprs,
                                 PathHelper &helper);
 
     int deduce_prefix_str_idx_exprs(ObRawExpr *expr,
                                     const TableItem *table_item,
-                                    ObRawExpr *&new_expr,
+                                    ObIArray<ObRawExpr*> &new_exprs,
                                     PathHelper &helper);
 
     int deduce_common_gen_col_index_expr(ObRawExpr *qual,

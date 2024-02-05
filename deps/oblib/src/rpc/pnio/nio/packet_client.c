@@ -13,6 +13,7 @@
 typedef struct pktc_msg_t {
   int64_t sz;
   char* payload;
+  int64_t ctime_us;
 } pktc_msg_t;
 static int64_t pktc_decode(char* b, int64_t s) { return eh_decode(b, s); }
 static uint64_t pktc_get_id(pktc_msg_t* m) { return eh_packet_id(m->payload); }

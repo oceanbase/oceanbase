@@ -3539,7 +3539,11 @@ int ObNumber::to_sci_str_(ObString &num_str, char *buf,
           }
           buf[digit_start_pos] = '1';
           buf[digit_start_pos + 1] = '.';
-          ++pow_size;
+          if ('-' == pow_str[1]) {
+            --pow_size;
+          } else {
+            ++pow_size;
+          }
         }
       }
     }
@@ -6081,7 +6085,7 @@ int ObNumber::sqrt(ObNumber &value, ObIAllocator &allocator, const bool do_round
 
       bool guess_is_answer = false;
       while (OB_SUCC(ret) && !guess_is_answer) {
-        if (OB_FAIL(div(guess, quotient, loop_allocator_current, OB_MAX_DECIMAL_DIGIT, false))) {
+        if (OB_FAIL(div_v3(guess, quotient, loop_allocator_current, OB_MAX_DECIMAL_DIGIT, false))) {
           LOG_WARN("failed: quotient = this / guess", KPC(this), K(guess), K(ret));
         } else if (OB_FAIL(guess.add_v3(quotient, new_guess, loop_allocator_current, true, false))) {
           // new guess is the average of current guess and quotient

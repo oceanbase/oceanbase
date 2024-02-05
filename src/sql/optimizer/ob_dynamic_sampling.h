@@ -13,7 +13,7 @@
 #ifndef _OB_DYNAMIC_SAMPLING_H_
 #define _OB_DYNAMIC_SAMPLING_H_
 #include "sql/resolver/expr/ob_raw_expr.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/stat/ob_stat_define.h"
@@ -349,7 +349,6 @@ public:
   static int get_valid_dynamic_sampling_level(const ObSQLSessionInfo *session_info,
                                               const ObTableDynamicSamplingHint *table_ds_hint,
                                               const int64_t global_ds_level,
-                                              bool has_opt_stat,
                                               int64_t &ds_level,
                                               int64_t &sample_block_cnt,
                                               bool &specify_ds);
@@ -357,7 +356,6 @@ public:
   static int get_ds_table_param(ObOptimizerContext &ctx,
                                 const ObLogPlan *log_plan,
                                 const OptTableMeta *table_meta,
-                                bool ignore_opt_stat,
                                 ObDSTableParam &ds_table_param,
                                 bool &specify_ds);
 
@@ -368,7 +366,8 @@ public:
                                                   uint64_t index_id,
                                                   const ObIArray<ObDSResultItem> &ds_result_items);
 
-  static int64_t get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx);
+  static int get_dynamic_sampling_max_timeout(ObOptimizerContext &ctx,
+                                              int64_t &max_ds_timeout);
 
   static int add_failed_ds_table_list(const uint64_t table_id,
                                       const common::ObIArray<int64_t> &used_part_id,
@@ -382,6 +381,10 @@ public:
                                  const uint64_t ref_table_id,
                                  int64_t &degree);
 
+  static bool check_is_failed_ds_table(const uint64_t table_id,
+                                       const common::ObIArray<int64_t> &used_part_id,
+                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
+
 private:
   static int check_ds_can_use_filter(const ObRawExpr *filter,
                                      bool &no_use,
@@ -393,9 +396,6 @@ private:
                                     bool &need_specify_partition,
                                     ObIArray<PartInfo> &partition_infos);
 
-  static bool check_is_failed_ds_table(const uint64_t table_id,
-                                       const common::ObIArray<int64_t> &used_part_id,
-                                       const common::ObIArray<ObDSFailTabInfo> &failed_list);
 }
 ;
 

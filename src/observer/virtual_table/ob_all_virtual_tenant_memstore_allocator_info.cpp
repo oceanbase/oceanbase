@@ -13,7 +13,7 @@
 #include "ob_all_virtual_tenant_memstore_allocator_info.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_utils.h"
-#include "share/allocator/ob_memstore_allocator_mgr.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/memtable/ob_memtable.h"
 
 namespace oceanbase
@@ -28,7 +28,7 @@ class MemstoreInfoFill
 public:
   typedef ObMemstoreAllocatorInfo Item;
   typedef ObArray<Item> ItemArray;
-  typedef ObGMemstoreAllocator::AllocHandle Handle;
+  typedef ObMemstoreAllocator::AllocHandle Handle;
   MemstoreInfoFill(ItemArray& array): array_(array) {}
   ~MemstoreInfoFill() {}
   int operator()(ObDLink* link) {
@@ -48,7 +48,6 @@ public:
 
 ObAllVirtualTenantMemstoreAllocatorInfo::ObAllVirtualTenantMemstoreAllocatorInfo()
     : ObVirtualTableIterator(),
-      allocator_mgr_(ObMemstoreAllocatorMgr::get_instance()),
       tenant_ids_(),
       memstore_infos_(),
       memstore_infos_idx_(0),
@@ -114,25 +113,24 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::fill_tenant_ids()
 int ObAllVirtualTenantMemstoreAllocatorInfo::fill_memstore_infos(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObGMemstoreAllocator *ta = NULL;
   memstore_infos_.reset();
   if (tenant_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid tenant_id", K(tenant_id), K(ret));
-  } else if (OB_FAIL(allocator_mgr_.get_tenant_memstore_allocator(tenant_id, ta))) {
-    SERVER_LOG(WARN, "failed to get tenant memstore allocator", K(tenant_id), K(ret));
-  } else if (OB_ISNULL(ta)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "got tenant memstore allocator is NULL", K(tenant_id), K(ret));
   } else {
-    MemstoreInfoFill fill_func(memstore_infos_);
-    if (OB_FAIL(ta->for_each(fill_func))) {
-      SERVER_LOG(WARN, "fill memstore info fail", K(ret));
-    } else {
-      retire_clock_ = ta->get_retire_clock();
-      memstore_infos_idx_ = 0;
+    MTL_SWITCH(tenant_id)
+    {
+      ObMemstoreAllocator &memstore_allocator = MTL(ObSharedMemAllocMgr *)->memstore_allocator();
+      MemstoreInfoFill fill_func(memstore_infos_);
+      if (OB_FAIL(memstore_allocator.for_each(fill_func))) {
+        SERVER_LOG(WARN, "fill memstore info fail", K(ret));
+      } else {
+        retire_clock_ = memstore_allocator.get_retire_clock();
+        memstore_infos_idx_ = 0;
+      }
     }
   }
+
   return ret;
 }
 
@@ -144,9 +142,13 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow *&row)
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(ret));
   } else {
     while (OB_SUCC(ret) && memstore_infos_idx_ >= memstore_infos_.count()) {
+      int64_t tenant_id = 0;
       if (tenant_ids_idx_ >= tenant_ids_.count() - 1) {
         ret = OB_ITER_END;
-      } else if (OB_FAIL(fill_memstore_infos(tenant_ids_.at(++tenant_ids_idx_)))) {
+      } else if (FALSE_IT(tenant_id = tenant_ids_.at(++tenant_ids_idx_))) {
+      } else if (is_virtual_tenant_id(tenant_id)) {
+        // do nothing
+      } else if (OB_FAIL(fill_memstore_infos(tenant_id))) {
         SERVER_LOG(WARN, "fail to fill_memstore_infos", K(ret));
       } else {/*do nothing*/}
     }

@@ -345,6 +345,8 @@ public:
   inline void set_enable_append(const bool enable_append) { enable_append_ = enable_append; }
   inline bool get_enable_append() const { return enable_append_; }
   inline void set_append_table_id(const uint64_t append_table_id) { append_table_id_ = append_table_id; }
+  inline void set_use_rich_format(const bool v) { use_rich_format_ = v; }
+  inline bool get_use_rich_format() const { return use_rich_format_; }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
@@ -476,6 +478,8 @@ public:
       min_cluster_version_ = curr_cluster_version;
     }
   }
+  inline bool is_disable_auto_memory_mgr() const { return disable_auto_memory_mgr_; }
+  inline void disable_auto_memory_mgr() { disable_auto_memory_mgr_ = true; }
 
   int set_logical_plan(ObLogicalPlanRawData &logical_plan);
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }
@@ -484,6 +488,8 @@ public:
 
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
+  int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
+  ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -660,7 +666,11 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  bool use_rich_format_;
   ObSubSchemaCtx subschema_ctx_;
+  bool disable_auto_memory_mgr_;
+private:
+  common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

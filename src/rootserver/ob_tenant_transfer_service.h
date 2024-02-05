@@ -91,7 +91,7 @@ public:
    * if task is already cleared, return OB_SUCCESS and related info recorded in history
    *
    * @param[in] task_id:               transfer task id
-   * @param[out] all_part_list:        all partitons of the transfer task
+   * @param[out] all_part_list:        all partitions of the transfer task
    * @param[out] finished_part_list:   successfully transferred partitions + needless transferred (not exist or not in src LS) partitions
    * @return
    * - OB_SUCCESS:         clear task successfully
@@ -228,6 +228,9 @@ private:
       const share::ObTransferTaskID &task_id,
       const share::ObTransferTaskComment &result_comment);
   int64_t get_tablet_count_threshold_() const;
+  int construct_ls_member_list_(
+      common::sqlclient::ObMySQLResult &res,
+      share::ObLSReplica::MemberList &ls_member_list);
 private:
   static const int64_t IDLE_TIME_US = 10 * 1000 * 1000L; // 10s
   static const int64_t BUSY_IDLE_TIME_US = 100 * 1000L; // 100ms

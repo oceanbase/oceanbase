@@ -61,6 +61,7 @@
 #include "observer/table/ob_table_service.h"
 #include "observer/dbms_job/ob_dbms_job_rpc_proxy.h"
 #include "observer/ob_inner_sql_rpc_proxy.h"
+#include "observer/ob_startup_accel_task_handler.h"
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
 #include "storage/ob_locality_manager.h"
 #include "storage/ob_partition_component_factory.h"
@@ -182,6 +183,21 @@ public:
     bool is_inited_;
   };
 
+  class ObRefreshIOCalibrationTimeTask: public common::ObTimerTask
+  {
+  public:
+    ObRefreshIOCalibrationTimeTask();
+    virtual ~ObRefreshIOCalibrationTimeTask() {}
+    int init(ObServer *observer, int tg_id);
+    void destroy();
+    virtual void runTimerTask() override;
+  private:
+    const static int64_t REFRESH_INTERVAL = 10 * 1000L * 1000L;//10s
+    ObServer *obs_;
+    int tg_id_;
+    bool is_inited_;
+  };
+
   class ObRefreshTime {
   public:
     explicit ObRefreshTime(ObServer *obs): obs_(obs){}
@@ -253,6 +269,7 @@ private:
   int init_pre_setting();
   int init_network();
   int init_interrupt();
+  int init_zlib_lite_compressor();
   int init_multi_tenant();
   int init_sql_proxy();
   int init_io();
@@ -286,6 +303,7 @@ private:
   int get_network_speed_from_config_file(int64_t &network_speed);
   int refresh_network_speed();
   int refresh_cpu_frequency();
+  int refresh_io_calibration();
   int clean_up_invalid_tables();
   int clean_up_invalid_tables_by_tenant(const uint64_t tenant_id);
   int init_ctas_clean_up_task(); //Regularly clean up the residuals related to querying and building tables and temporary tables
@@ -295,11 +313,16 @@ private:
   int init_refresh_active_time_task(); //Regularly update the sess_active_time of the temporary table created by the proxy connection sess
   int init_refresh_network_speed_task();
   int init_refresh_cpu_frequency();
+  int init_refresh_io_calibration();
   int set_running_mode();
   void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   int try_update_hidden_sys();
+  int check_if_multi_tenant_synced();
+  int check_if_schema_ready();
+  int check_if_timezone_usable();
   int parse_mode();
+  void deinit_zlib_lite_compressor();
 
   // ------------------------------- arb server start ------------------------------------
   int start_sig_worker_and_handle();
@@ -437,6 +460,7 @@ private:
   ObRefreshTimeTask refresh_active_time_task_; // repeat & no retry
   ObRefreshNetworkSpeedTask refresh_network_speed_task_; // repeat & no retry
   ObRefreshCpuFreqTimeTask refresh_cpu_frequency_task_;
+  ObRefreshIOCalibrationTimeTask refresh_io_calibration_task_; // retry to success & no repeat
   blocksstable::ObStorageEnv storage_env_;
   share::ObSchemaStatusProxy schema_status_proxy_;
 
@@ -454,6 +478,11 @@ private:
   arbserver::ObArbServerTimer arb_timer_;
 #endif
   share::ObWorkloadRepositoryService wr_service_;
+
+  // This handler is used to process tasks during startup. it can speed up the startup process.
+  // If you have tasks that need to be processed in parallel, you can use this handler,
+  // but please note that this handler will be destroyed after observer startup.
+  ObStartupAccelTaskHandler startup_accel_handler_;
 }; // end of class ObServer
 
 inline ObServer &ObServer::get_instance()

@@ -6,17 +6,27 @@
 // SQL层错误码值域[-5000, -6000)，含各种schema相关错误
 // 事务层错误码值域[-6000, -7000),含clog，memtable等
 // Election错误码值域[-7000, -7100)
-// GIS错误码值域  [-7201, -7300)
+// 负载均衡(Transfer)错误码值域[-7100, -7200)
+// GIS错误码值域  [-7201, -7400)
+// XML错误码值域  [-7400, -7600)
 // 致命错误[-8000, -9000)，客户端收到8xxx错误，需要关闭SQL连接
-// backup [-9000, -9500)
-// pl [-9500, -10000)
+// Storage错误码值域 [-9000, -9500)
+// PL/SQL错误码值域 [-9500, -10000)
 // OBProxy整体通用错误码，针对公共模块的代码抛出的错误，值域：[-10000, -10100)
-// OBProxy业务错误码，值域：[-10100, -10300)
-// OBSharding错误码，值域：[-10300, -10500)
-// OBKV错误码，值域：[-10500, -10700)
+// OBProxy业务错误码值域：[-10100, -10300)
+// OBSharding错误码值域：[-10300, -10500)
+// OBKV错误码值域：[-10500, -10700)
 // 富客户端错误码，值域：[-10700, -10900)
 // SQL扩展区段1：[-11000, -12000)
-// 租户快照和克隆：[-12000, -12100)
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
 //error code -1~-999 are reserved
@@ -94,7 +104,7 @@
 DEFINE_ERROR_DEP(OB_SUCCESS, 0, 0, "00000", "Success");
 
 ////////////////////////////////////////////////////////////////
-//error code for common -4000 ---- -4500
+// 通用错误码值域[-4000, -4500)，含sstable等
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR_DEP(OB_ERROR, -4000, -1, "HY000", "Common error");
 DEFINE_ERROR_DEP(OB_OBJ_TYPE_ERROR, -4001, -1, "HY004", "Object type error");
@@ -253,7 +263,7 @@ DEFINE_ERROR_DEP(OB_ERR_ALREADY_EXISTS, -4181, -1, "42S01", "Already exist");
 DEFINE_ERROR_DEP(OB_SEARCH_NOT_FOUND, -4182, -1, "HY000", "Value not found");
 DEFINE_ERROR(OB_BEYOND_THE_RANGE, -4183, -1, "HY000", "Key out of range");
 DEFINE_ERROR(OB_SERVER_OUTOF_DISK_SPACE, -4184, -1, "53100", "Server out of disk space");
-DEFINE_ERROR(OB_COLUMN_GROUP_NOT_FOUND, -4185, -1, "HY000", "Column group not found");
+DEFINE_ERROR(OB_COLUMN_GROUP_NOT_FOUND, -4185, -1, "HY000", "Column group \'%.*s\' not found");
 DEFINE_ERROR(OB_CS_COMPRESS_LIB_ERROR, -4186, -1, "HY000", "Server failed to get compress library");
 DEFINE_ERROR_DEP(OB_ITEM_NOT_MATCH, -4187, -1, "HY000", "Item not match");
 DEFINE_ERROR(OB_SCHEDULER_TASK_CNT_MISMATCH, -4188, -1, "HY000", "Running task cnt and unfinished task cnt not consistent");
@@ -332,7 +342,6 @@ DEFINE_ERROR(OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT, -4268, -1, "HY000",
 DEFINE_ERROR(OB_WORKING_PARTITION_EXIST, -4269, -1, "HY000", "Working partition entry already exists");
 DEFINE_ERROR(OB_WORKING_PARTITION_NOT_EXIST, -4270, -1, "HY000", "Working partition entry does not exists");
 DEFINE_ERROR(OB_LIBEASY_REACH_MEM_LIMIT, -4271, -1, "HY000", "LIBEASY reach memory limit");
-DEFINE_ERROR_EXT(OB_MISS_ARGUMENT, -4272, ER_WRONG_ARGUMENTS, "HY000", "Miss argument", "Miss argument for %s");
 DEFINE_ERROR_DEP(OB_CACHE_FREE_BLOCK_NOT_ENOUGH, -4273, -1, "HY000", "free memblock in cache is not enough");
 DEFINE_ERROR(OB_SYNC_WASH_MB_TIMEOUT, -4274, -1, "HY000", "sync wash memblock timeout");
 DEFINE_ERROR(OB_NOT_ALLOW_MIGRATE_IN, -4275, -1, "HY000", "not allow migrate in");
@@ -460,11 +469,26 @@ DEFINE_ERROR(OB_ENCODING_EST_SIZE_OVERFLOW, -4397, -1, "HY000", "Encoding estima
 DEFINE_ORACLE_ERROR(OB_INVALID_SUB_PARTITION_TYPE, -4398, 1500, "HY000", "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning", 14020, "this physical attribute may not be specified for a table partition");
 DEFINE_ERROR(OB_ERR_UNEXPECTED_UNIT_STATUS, -4399, -1, "HY000", "Unit status is not expected");
 DEFINE_ERROR(OB_AUTOINC_CACHE_NOT_EQUAL, -4400, -1, "HY000", "Autoinc cache's autoinc version is not equal to request's autoinc version");
-// DEFINE_ERROR(OB_ERR_KILL_CLIENT_SESSION, -4401, -1, "HY000", "Client Session need be killed");
-// DEFINE_ERROR(OB_ERR_KILL_CLIENT_SESSION_FAILED, -4402, -1, "HY000", "Kill Client Session failed");
+DEFINE_ORACLE_ERROR(OB_ERR_KILL_CLIENT_SESSION, -4401, 4401, "HY000", "Client Session need be killed", 4401, "Client Session need be killed");
+DEFINE_ERROR(OB_ERR_KILL_CLIENT_SESSION_FAILED, -4402, -1, "HY000", "Kill Client Session failed");
 DEFINE_ERROR(OB_IMPROPER_OS_PARAM, -4403, -1, "HY000", "OS params check failed, because the operating system has improper parameter configurations");
+
+// 余留位置
 ////////////////////////////////////////////////////////////////
-//error code for root server & server management -4500 ---- -5000
+// 通用错误码值域[-4000, -4500)，含sstable等
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////
+// RootServer错误码值域[-4500, -5000)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_IMPORT_NOT_IN_SERVER, -4505, -1, "HY000", "Import not in service");
 DEFINE_ERROR(OB_CONVERT_ERROR, -4507, -1, "42000", "Convert error");
@@ -670,10 +694,25 @@ DEFINE_ERROR_EXT_DEP(OB_LS_WAITING_SAFE_DESTROY, -4766, -1, "HY000", "ls waiting
 DEFINE_ERROR(OB_LS_NOT_LEADER, -4767, -1, "HY000", "log stream is not leader log stream");
 DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict", "ls lock conflict, %s");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ROOT_KEY, -4769, -1, "HY000", "invalid root key", "%s");
-DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %.*s procedure, %.*s not allowed now");
+DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %s procedure, %s not allowed now");
+DEFINE_ERROR(OB_BREAK_BY_TEST, -4771, -1, "HY000", "process is breaked by test case");
+
+// 余留位置
+////////////////////////////////////////////////////////////////
+// RootServer错误码值域[-4500, -5000)
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
-// SQL & Schema specific error code, -5000 ~ -6000
+// SQL层错误码值域[-5000, -6000)，含各种schema相关错误
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_PARSER_INIT, -5000, ER_PARSE_ERROR, "0B000", "Failed to init SQL parser");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_PARSE_SQL, -5001, ER_PARSE_ERROR, "42000", "Parse error", "%s near \'%.*s\' at line %d", 900, "invalid SQL statement", "%s near \'%.*s\' at line %d");
@@ -1043,8 +1082,7 @@ DEFINE_ORACLE_ERROR(OB_TABLE_DEFINITION_CHANGED, -5386, ER_TABLE_DEF_CHANGED, "H
 DEFINE_ERROR_EXT(OB_ERR_NO_ROUTINE_PRIVILEGE, -5387, ER_PROCACCESS_DENIED_ERROR, "42000", "Command denied to user for routine", "%.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_USER_REFFERD_AS_DEFINER, -5388, ER_USER_REFERRED_AS_DEFINER, "HY000", "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine.", "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine.");
 DEFINE_ERROR_EXT(OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER, -5389, ER_OPERATION_ON_USER_REFERRED_AS_DEFINER, "HY000", "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine.", "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine.");
-
-// DEFINE_ERROR_EXT(OB_ERR_NO_COLUMN_PRIVILEGE, -5390, ER_COLUMNACCESS_DENIED_ERROR, "42000", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_NO_COLUMN_PRIVILEGE, -5390, ER_COLUMNACCESS_DENIED_ERROR, "42000", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'");
 
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_OBJECT_STRING_DOES_NOT_EXIST, -5400, -1, "HY000", "object string does not exist", "object %.*s does not exist", 4043, "object string does not exist", "object %.*s does not exist");
 DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED, -5401, -1, "HY000", "resultant data type of virtual column is not supported", 54004, "resultant data type of virtual column is not supported");
@@ -1176,6 +1214,7 @@ DEFINE_ERROR(OB_ERR_TABLE_WITHOUT_ALIAS, -5515, ER_TF_MUST_HAVE_ALIAS, "42000", 
 
 DEFINE_ERROR_EXT(OB_ERR_DEPRECATED_SYNTAX, -5516, ER_WARN_DEPRECATED_SYNTAX, "HY000", "This syntax is deprecated and will be removed in a future release", "%s is deprecated and will be removed in a future release. Please use \'%s\' instead");
 DEFINE_ERROR(OB_ERR_NON_STRING_NOT_SUPPORT, -5517, ER_NOT_SUPPORTED_YET, "42000", "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'");
+DEFINE_ERROR_EXT(OB_ERR_DEPRECATED_SYNTAX_NO_REP, -5518, ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT, "HY000", "This syntax is deprecated and will be removed in a future release", "%s is deprecated and will be removed in a future release");
 
 //for changed solidify session vars of generated cols
 DEFINE_ERROR_EXT_DEP(OB_ERR_SESSION_VAR_CHANGED, -5540, -1, "HY000", "System variables are different from the old values solidified.", "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s).");
@@ -1245,7 +1284,6 @@ DEFINE_ERROR(OB_ERR_COLLECT_HISTOGRAM, -5602, -1, "HY000", "Should collect histo
 DEFINE_ERROR(OB_ER_TEMP_TABLE_IN_USE, -5603, -1, "0A000", "Attempt to create, alter or drop an index on temporary table already in use");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_NLS_PARAMETER_STRING, -5604, -1, "HY000", "invalid NLS parameter string used in SQL function", 12702, "invalid NLS parameter string used in SQL function");
 DEFINE_ORACLE_ERROR(OB_ERR_DATETIME_INTERVAL_PRECISION_OUT_OF_RANGE, -5605, -1, "HY000", "datetime/interval precision is out of range", 30088, "datetime/interval precision is out of range");
-DEFINE_ORACLE_ERROR(OB_ERR_INVALID_NUMBER_FORMAT_MODEL, -5606, -1, "42000", "Invalid number format model", 1481, "invalid number format model");
 DEFINE_ORACLE_ERROR(OB_ERR_CMD_NOT_PROPERLY_ENDED, -5607, -1, "HY000", "SQL command not properly ended", 933, "SQL command not properly ended");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_NUMBER_FORMAT_MODEL, -5608, -1, "42000", "invalid number format model", 1481, "invalid number format model");
 DEFINE_ERROR(OB_WARN_NON_ASCII_SEPARATOR_NOT_IMPLEMENTED, -5609, ER_WRONG_FIELD_TERMINATORS, "HY000", "Non-ASCII separator arguments are not fully supported");
@@ -1628,7 +1666,7 @@ DEFINE_ERROR_EXT(OB_ERR_CHECK_OPTION_ON_NONUPDATABLE_VIEW, -5972, ER_VIEW_NONUPD
 DEFINE_ORACLE_ERROR(OB_ERR_NO_DESC_FOR_POS, -5973, -1, "HY000", "no descriptor for this position", 24334, "no descriptor for this position");
 DEFINE_ORACLE_ERROR(OB_ERR_ILL_OBJ_FLAG, -5974, -1, "HY000", "object specified is incompatible with the flag specified", 4047, "object specified is incompatible with the flag specified");
 DEFINE_ERROR_DEP(OB_ERR_DBLINK_REMOTE_ECODE, -5975, -1, "HY000", "\ndblink remote error code: %d,\nremote error msg: %.*s", "\ndblink remote error code: %d,\nremote error msg: %.*s");
-DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "oci lib not founded");
+DEFINE_ERROR_DEP(OB_ERR_DBLINK_NO_LIB, -5976, -1, "HY000", "can not find the expected version of OCI LIB: %.*s", "can not find the expected version of OCI LIB: %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_PARTITION_EXTENDED_ON_VIEW, -5977, -1, "HY000", "partition-extended object names may only be used with tables and editioning views", 14109, "partition-extended object names may only be used with tables and editioning views");
 DEFINE_ORACLE_ERROR(OB_ERR_NOT_ALL_VARIABLE_BIND, -5978, -1, "HY000", "not all variables bound", 1008, "not all variables bound");
 DEFINE_ORACLE_ERROR(OB_ERR_BIND_VARIABLE_NOT_EXIST, -5979, -1, "HY000", "bind variable does not exist", 1006, "bind variable does not exist");
@@ -1656,8 +1694,22 @@ DEFINE_ORACLE_ERROR(OB_ERR_INVALID_DATA_TYPE_INTERVAL_TABLE, -5998, -1, "HY000",
 DEFINE_ORACLE_ERROR(OB_ERR_INTERVAL_EXPR_NOT_CORRECT_TYPE, -5999, -1, "HY000", "Interval expression is not a constant of the correct type", 14752, "Interval expression is not a constant of the correct type");
 DEFINE_ORACLE_ERROR(OB_ERR_TABLE_IS_ALREADY_A_RANGE_PARTITIONED_TABLE, -6000, -1, "HY000", "Table is already a range partitioned table", 14757, "Table is already a range partitioned table");
 
+// 余留位置，该区间已经用完
+//////////////////////////// 结束 //////////////////////////////
+// SQL层错误码值域[-5000, -6000)，含各种schema相关错误
 ////////////////////////////////////////////////////////////////
-//error code for transaction, mvcc and commitlog -6001 ---- -7000
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////
+// 事务层错误码值域[-6000, -7000),含clog，memtable等
 ////////////////////////////////////////////////////////////////
 
 DEFINE_ERROR(OB_TRANSACTION_SET_VIOLATION, -6001, -1, "25000", "Transaction set changed during the execution");
@@ -1784,12 +1836,27 @@ DEFINE_ERROR(OB_CLOG_SLIDE_TIMEOUT, -6322, -1, "HY000", "ob clog slide timeout")
 DEFINE_ERROR(OB_LOG_REPLAY_ERROR, -6323, -1, "HY000", "log replay error");
 DEFINE_ERROR(OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT, -6324, -1, "HY000", "ob trying to lock config change conflicts");
 DEFINE_ERROR(OB_CLOG_DISK_HANG, -6325, -1, "HY000", "ob clog disk hang");
+DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_TWICE, -6326, -1, "HY000", "table lock has been splitted before, can not be splitted again")
+DEFINE_ERROR(OB_TABLE_LOCK_IS_SPLITTING, -6327, -1, "HY000", "table lock is being splitted, can not be splitted again")
+DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_FAIL, -6328, -1, "HY000", "table lock splitting failed")
+DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need retry under sequence number reorder")
 
-// for freeze
-// DEFINE_ERROR(OB_TABLET_FREEZE_TIMEOUT, -6400, -1, "HY000", "tablet_freeze timeout");
+// 余留位置
+////////////////////////////////////////////////////////////////
+// 事务层错误码值域[-6000, -7000),含clog，memtable等
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
-//error code for election -7000 ---- -7100
+// Election错误码值域[-7000, -7100)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ELECTION_WARN_LOGBUF_FULL, -7000, -1, "HY000", "The log buffer is full");
 DEFINE_ERROR(OB_ELECTION_WARN_LOGBUF_EMPTY, -7001, -1, "HY000", "The log buffer is empty");
@@ -1825,8 +1892,22 @@ DEFINE_ERROR(OB_ELECTION_BELOW_MAJORITY, -7039, -1, "HY000", "not reach majority
 DEFINE_ERROR(OB_ELECTION_OVER_MAJORITY, -7040, -1, "HY000", "over majority");
 DEFINE_ERROR(OB_ELECTION_DURING_UPGRADING, -7041, -1, "HY000", "election priority mechanism changed, maybe during upgrading");
 
+// 余留位置
 ////////////////////////////////////////////////////////////////
-//error code for replication group -7100 ---- -7200
+// Election错误码值域[-7000, -7100)
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////
+// 负载均衡(Transfer)错误码值域[-7100, -7200)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_TRANSFER_TASK_COMPLETED, -7100, -1, "HY000", "transfer task completed");
 DEFINE_ERROR(OB_TOO_MANY_TRANSFER_TASK, -7101, -1, "HY000", "too many transfer tasks");
@@ -1852,8 +1933,23 @@ DEFINE_ERROR(OB_TABLET_GC_LOCK_CONFLICT, -7120, -1, "HY000", "tablet GC lock con
 DEFINE_ERROR(OB_SEQUENCE_NOT_MATCH, -7121, -1, "HY000", "compare sequence not match");
 DEFINE_ERROR(OB_SEQUENCE_TOO_SMALL, -7122, -1, "HY000", "compare sequence too small");
 DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot start");
+
+// 余留位置
+////////////////////////////////////////////////////////////////
+// 负载均衡(Transfer)错误码值域[-7100, -7200)
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//error code for gis  -7201 ---- -7300
+// GIS错误码值域  [-7201, -7400)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_DIFFERENT_SRIDS, -7201, ER_GIS_DIFFERENT_SRIDS, "HY000", "Binary geometry function given two geometries of different srids.", "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical.", 600, "Binary geometry function given two geometries of different srids.", "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GIS_UNSUPPORTED_ARGUMENT, -7202, ER_GIS_UNSUPPORTED_ARGUMENT, "HY000", "Calling geometry function with unsupported types of arguments.", "Calling geometry function %s with unsupported types of arguments.", 600, "Calling geometry function with unsupported types of arguments.", "Calling geometry function %s with unsupported types of arguments.");
@@ -1899,7 +1995,6 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_ATTRIBUTE_STRING_TOO_LONG, -7241, ER_SRS_
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_NOT_GEOGRAPHIC, -7242, ER_SRS_NOT_GEOGRAPHIC, "22S00", "Function is only defined for geographic spatial reference systems, but one of its arguments is in SRID, which is not geographic.", "Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic.", 600, "Function is only defined for geographic spatial reference systems, but one of its arguments is in SRID, which is not geographic.", "Function %s is only defined for geographic spatial reference systems, but one of its arguments is in SRID %u, which is not geographic.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_POLYGON_TOO_LARGE, -7243, ER_POLYGON_TOO_LARGE, "22023", "Function encountered a polygon that was too large. Polygons must cover less than half the planet.", "Function %s encountered a polygon that was too large. Polygons must cover less than half the planet.", 600, "Function encountered a polygon that was too large. Polygons must cover less than half the planet.", "Function %s encountered a polygon that was too large. Polygons must cover less than half the planet.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_UNIQUE_INDEX, -7244, ER_SPATIAL_UNIQUE_INDEX, "HY000", "Spatial indexes can\'t be primary or unique indexes.", "Spatial indexes can\'t be primary or unique indexes.", 600, "Spatial indexes can\'t be primary or unique indexes.", "Spatial indexes can\'t be primary or unique indexes.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, -7245, ER_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, "HY000", "The index type is not supported for spatial indexes.", "The index type %.20s is not supported for spatial indexes.", 600, "The index type is not supported for spatial indexes.", "The index type %.20s is not supported for spatial indexes.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE, -7246, ER_GEOMETRY_PARAM_LONGITUDE_OUT_OF_RANGE, "22S02", "A parameter of function contains a geometry with longitude, which is out of range.", "A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f].", 600, "A parameter of function contains a geometry with longitude, which is out of range.", "A parameter of function %.192s contains a geometry with longitude %f, which is out of range. It must be within (%f, %f].");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE, -7247, ER_GEOMETRY_PARAM_LATITUDE_OUT_OF_RANGE, "22S03", "A parameter of function contains a geometry with latitude, which is out of range.", "A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f].", 600, "A parameter of function contains a geometry with latitude, which is out of range.", "A parameter of function %.192s contains a geometry with latitude %f, which is out of range. It must be within [%f, %f].");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRS_GEOGCS_INVALID_AXES, -7248, ER_SRS_GEOGCS_INVALID_AXES, "SR002", "The spatial reference system definition for SRID specifies invalid geographic axes. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", "The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", 600, "The spatial reference system definition for SRID specifies invalid geographic axes. One axis must be NORTH or SOUTH and the other must be EAST or WEST.", "The spatial reference system definition for SRID %u specifies invalid geographic axes \'%.20s\' and \'%.20s\'. One axis must be NORTH or SOUTH and the other must be EAST or WEST.");
@@ -1952,6 +2047,25 @@ DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_NULL_SDO_GEOMETRY, -7294, -1, "HY000", "I
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY, -7295, -1, "HY000", "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object", 13033, "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY, -7296, -1, "HY000", "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object", 13034, "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_VALUE_NOT_ALLOWED, -7297, -1, "HY000", "value not allowed", 24323, "value not allowed");
+
+// 余留位置
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GIS错误码值域  [-7201, -7400)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// XML错误码值域  [-7400, -7600)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_INVALID_XML_DATATYPE, -7402, -1, "22000", "Invalid data type for the operation", "inconsistent datatypes: expected %s got %s", 932, "inconsistent datatypes", "inconsistent datatypes: expected %s got %s");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_MISSING_COMMA, -7403, -1, "42000", "missing comma", 917, "missing comma");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, ER_UNKNOWN_ERROR, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
@@ -1970,7 +2084,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_NULL_FOR_XML_CONSTRUCTOR, -7416, -1, "42000", "Expect
 DEFINE_ORACLE_ERROR(OB_ERR_XML_INDEX, -7417, -1, "42000", "cannot create index on expression with datatype ADT '%.*s'", 2327 ,"cannot create index on expression with datatype ADT '%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_UPDATE_XML_WITH_INVALID_NODE, -7418, -1, "42000", "XML nodes must be updated with valid nodes and of the same type'", 31067 ,"XML nodes must be updated with valid nodes and of the same type");
 DEFINE_ORACLE_ERROR(OB_LOB_VALUE_NOT_EXIST, -7419, -1, "42000", "LOB value does not exist", 22922 ,"LOB value does not exist");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7420, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
+DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7420, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
 DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_MULTI_VALUE, -7421, -1, "42000", "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence", 19279, "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_PARSE_XQUERY_EXPR, -7422, -1, "42000", "XPST0003 - error during parsing the XQuery expression", "XPST0003 - error during parsing the XQuery expression : %.*s", 19114, "XPST0003 - error during parsing the XQuery expression", "XPST0003 - error during parsing the XQuery expression : %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_LACK_XQUERY_LITERAL, -7423, -1, "42000", "XQuery string literal expected", 19102, "XQuery string literal expected");
@@ -1981,12 +2095,26 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_XPATH_NO_NODE, -7427, -1, "42000", "XPST0005 
 DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_UNSUPPORTED, -7428, -1, "42000", "unsupported XQuery expression", 19110, "unsupported XQuery expression");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XML_CHILD_NAME, -7429, -1, "42000", "The document being inserted does not conform to specified child name", 31056, "The document being inserted does not conform to specified child name");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML node '' (type=%s) does not support this operation", 31195, "XML node '' (type=%s) does not support this operation");
-DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7431, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7431, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
 DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %.*s", 31003, "Parent %.*s already contains child entry %.*s");
 
+// 余留位置
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// XML错误码值域  [-7400, -7600)
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
 ////////////////////////////////////////////////////////////////
-// !!! Fatal errors and the client should close the connection, -8000 ~ -8999
+// 致命错误[-8000, -9000)，客户端收到8xxx错误，需要关闭SQL连接
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_SERVER_IS_INIT, -8001, -1, "08004", "Server is initializing");
 DEFINE_ERROR(OB_SERVER_IS_STOPPING, -8002, -1, "08004", "Server is stopping");
@@ -1994,8 +2122,22 @@ DEFINE_ERROR(OB_PACKET_CHECKSUM_ERROR, -8003, -1, "08004", "Packet checksum erro
 DEFINE_ERROR_DEP(OB_PACKET_CLUSTER_ID_NOT_MATCH, -8004, -1, "08004", "Packet cluster_id not match");
 DEFINE_ERROR_DEP(OB_TENANT_ID_NOT_MATCH, -8005, -1, "08005", "Tenant id not match");
 
+// 余留位置
 ////////////////////////////////////////////////////////////////
-// backup and restore error codes 9000 - 9099
+// 致命错误[-8000, -9000)，客户端收到8xxx错误，需要关闭SQL连接
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////
+// Storage错误码值域 [-9000, -9500)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR_DEP(OB_URI_ERROR, -9001, -1, "HY000", "URI error");
 DEFINE_ERROR_DEP(OB_FINAL_MD5_ERROR, -9002, -1, "HY000", "OSS file MD5 error");
@@ -2100,26 +2242,50 @@ DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby bi
 DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 DEFINE_ERROR_DEP(OB_CLOUD_OBJECT_NOT_APPENDABLE, -9098, -1, "HY000", "normal object in object_storage(oss,cos,etc.) can't be appended content");
 DEFINE_ERROR_EXT_DEP(OB_RESTORE_TENANT_FAILED, -9099, -1, "HY000", "restore tenant failed", "%s restore failed, %s");
-// end of backup and restore error codes 9001 ~ 9099
 
-////////////////////////////////////////////////////////////////
-//error code for STORAGE3.0 -9100 ~
-////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_NO_SUCH_FILE_OR_DIRECTORY, -9100, -1, "HY000", "no such file or directory");
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory already exist");
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, -9102, -1, "HY000", "file or directory permission denied");
 DEFINE_ERROR(OB_TOO_MANY_OPEN_FILES, -9103, -1, "HY000", "too many open files");
 DEFINE_ERROR(OB_DIRECT_LOAD_COMMIT_ERROR, -9104, -1, "HY000", "fail to commit direct load");
+DEFINE_ERROR_DEP(OB_S3_ERROR, -9105, -1, "HY000", "S3 error");
+
+// For tenant snapshot
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -9106, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_EXIST, -9107, -1, "HY000", "Tenant snapshot already exist", "Tenant snapshot \'%.*s\' already exist");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_TIMEOUT, -9108, -1, "HY000", "Tenant snapshot task timeout", "Tenant snapshot task timeout. %.*s");
+DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -9109, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
+DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -9110, -1, "HY000", "Tenant clone job failed", "%.*s");
+DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -9111, -1, "HY000", "Tenant snapshot task failed", "%.*s");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -9112, -1, "HY000", "Tenant snapshot lock conflict", "%s");
+
+// 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
-//error code for storage auto extend file
+// error code for storage auto extend file
+// 这一段是被错误在中间占位的错误码，不是一个完整区间
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_RESIZE_FILE_TO_SMALLER, -9200, -1, "HY000", "Extend ssblock file to smaller is not allowed");
 DEFINE_ERROR(OB_MARK_BLOCK_INFO_TIMEOUT, -9201, -1, "HY000", "Mark blocks timeout(5s) in auto extend process when alloc block fail");
 DEFINE_ERROR(OB_NOT_READY_TO_EXTEND_FILE, -9202, -1, "HY000", "Auto extend param is not ready to start extending file");
+////////////////////////////////////////////////////////////////
+
+// 余留位置
+////////////////////////////////////////////////////////////////
+// Storage错误码值域 [-9000, -9500)
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
-//error code for PL/SQL  -9500 ~ -10000
+// PL/SQL错误码值域 [-9500, -10000)
 //!!! -20000/-21000/-32491 should not in here. but we can not remove it now because of compat. ONLY PL SQL ERROR PUT HERE!!!
 ////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR_V2_EXT(OB_SP_RAISE_APPLICATION_ERROR, -20000, -1, "HY000", "The stored procedure 'raise_application_error' was called which causes this error to be generated", "%.*s", 20000, "ORA-20000: The stored procedure 'raise_application_error' was called which causes this error to be generated", "ORA%06ld: %.*s");
@@ -2388,9 +2554,26 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH, -9760, -1, "HY000", "
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_MVIEW_NEVER_REFRESH, -9761, -1, "HY000", "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (`%s`)", 23538, "cannot explicitly refresh a NEVER REFRESH materialized view", "cannot explicitly refresh a NEVER REFRESH materialized view (%s)");
 DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
 DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output parameter not a bind variable", 6577, "output parameter not a bind variable");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_TIME_EARLIER_THAN_SYSDATE, -9764, -1, "HY000", "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future", 23420, "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future");
+DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way", 224, "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way");
+
+// 余留位置
+////////////////////////////////////////////////////////////////
+// PL/SQL错误码值域 [-9500, -10000)
+//!!! -20000/-21000/-32491 should not in here. but we can not remove it now because of compat. ONLY PL SQL ERROR PUT HERE!!!
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
-//error code for OBKV [-10500, -10700)
+// OBKV错误码值域：[-10500, -10700)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_KV_GLOBAL_INDEX_ROUTE, -10500, -1, "HY000", "incorrect route for obkv global index, client router should refresh.");
 DEFINE_ERROR(OB_TTL_NOT_ENABLE, -10501, -1, "HY000", "TTL feature is not enabled");
@@ -2401,34 +2584,67 @@ DEFINE_ERROR(OB_TTL_NO_TASK_RUNNING, -10505, -1, "HY000", "No TTL task is runnin
 DEFINE_ERROR(OB_TTL_TENANT_IS_RESTORE, -10506, -1, "HY000", "Cannot execute TTL task during tenant is restore");
 DEFINE_ERROR(OB_TTL_INVALID_HBASE_TTL, -10507, -1, "HY000", "Time to live of hbase table must be greater than 0");
 DEFINE_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS, -10508, -1, "HY000", "MaxVersions of hbase table must be greater than 0");
+DEFINE_ERROR_EXT(OB_KV_CREDENTIAL_NOT_MATCH, -10509, -1, "HY000", "OBKV credential not match", "Access denied, credential '%.*s' not match '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_ROWKEY_COUNT_NOT_MATCH, -10510, -1, "HY000", "OBKV rowkey column count not match", "Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'");
+DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column type not match", "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
+DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
+
+// 余留位置
+////////////////////////////////////////////////////////////////
+// OBKV错误码值域：[-10500, -10700)
+////////////////////////////////////////////////////////////////
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
-//error code for SQL [-11000 ---- -12000)
+// SQL扩展区段1：[-11000, -12000)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN, -11000, ER_VALUES_CLAUSE_NEED_HAVE_COLUMN, "HY000", "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement.");
 DEFINE_ERROR(OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, -11001, ER_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES, "HY000", "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement.");
-DEFINE_ERROR_EXT(OB_WRONG_PARTITION_NAME, -11002, ER_WRONG_PARTITION_NAME, "HY000", "Incorrect partition name", "Incorrect partition name '%.*s'");
+DEFINE_ORACLE_ERROR_EXT(OB_WRONG_PARTITION_NAME, -11002, ER_WRONG_PARTITION_NAME, "HY000", "Incorrect partition name", "Incorrect partition name '%.*s'", 20000, "invalid partition name", "'%.*s' invalid partition name");
 DEFINE_ERROR_EXT(OB_ERR_PLUGIN_IS_NOT_LOADED, -11003, ER_PLUGIN_IS_NOT_LOADED, "HY000", "Plugin is not loaded", "Plugin '%.*s' is not loaded");
-//11004 : OB_EST_DEVIA_TOO_LARGE
+DEFINE_ERROR_EXT(OB_EST_DEVIA_TOO_LARGE, -11004, -1, "HY000", "Optimizer estimate deviation is too large", "Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'");
 DEFINE_ORACLE_ERROR(OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT, -11005, -1, "HY000", "cannot drop or replace a type with type or table dependents", 2303, "cannot drop or replace a type with type or table dependents");
 DEFINE_ORACLE_ERROR(OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT, -11006, -1, "HY000", "cannot replace a type with table dependents", 22866, "cannot replace a type with table dependents");
 DEFINE_ERROR_EXT(OB_ERR_UNKNOWN_AUTHID, -11007, ER_UNKNOWN_AUTHID, "HY000", "Unknown authorization ID", "Unknown authorization ID `%.*s`@`%.*s`");
 DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT, "42000", "There is no such grant defined for user", "There is no such grant defined for user '%.*s' on host '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
+DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
+DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query range memory exhausted");
+DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY000", "User operation failed", "User %.*s does not exist");
 
+
+DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
+DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
+DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND, "HY000", "Can't find FULLTEXT index matching the column list");
+
+// 余留位置
 ////////////////////////////////////////////////////////////////
-// tenant snapshot and tenant clone error codes [-12000 ~ -12100)
+// SQL扩展区段1：[-11000, -12000)
 ////////////////////////////////////////////////////////////////
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -12000, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_EXIST, -12001, -1, "HY000", "Tenant snapshot already exist", "Tenant snapshot \'%.*s\' already exist");
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_TIMEOUT, -12002, -1, "HY000", "Tenant snapshot task timeout", "Tenant snapshot task timeout. %.*s");
-//DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -12003, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
-//DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -12004, -1, "HY000", "Tenant clone job failed", "Tenant clone job failed during the %.*s stage");
-//DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -12005, -1, "HY000", "Tenant snapshot task failed", "%.*s");
+
+//////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
+// 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
+// 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
+// 3. 不同的错误码区间有不同含义，请在合理区间内顺序定义错误码。区间定义见文件头。
+//    每个区间内，请在“余留位置”行之前定义新错误码
+//    如果没有合适区间，请联系 @修铭 定义一个新的区间
+// 4. 本文件修改完成后，需要调用gen_errno.pl，生成ob_errno.h文件
+////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
 // for compat we cant not remove this errno!!!!
+// 这不是一个正常的区间，不要在这里新增错误码
 ////////////////////////////////////////////////////////////////
 DEFINE_ORACLE_ERROR(OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN, -22998, -1, "HY000", "CLOB or NCLOB in multibyte character set not supported", 22998, "CLOB or NCLOB in multibyte character set not supported");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_UPDATE_ON_EXPR, -38104, -1, "HY000", "Columns referenced in the ON Clause cannot be updated", "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'", 38104, "Columns referenced in the ON Clause cannot be updated", "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'");

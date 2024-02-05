@@ -443,20 +443,15 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
       LOG_WARN("table node is null");
     } else if (OB_FAIL(ObDMLResolver::resolve_table(*table_node, table_item))) {
       LOG_WARN("failed to resolve table", K(ret));
-    } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-      LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
         LOG_WARN("add reference table to namespace checker failed", K(ret));
       } else if (OB_FAIL(update_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()))) {
         LOG_WARN("failed to add from item", K(ret));
+      } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+        LOG_WARN("failed to check need fired trigger", K(ret));
       } else {
-        if (is_oracle_mode() && table_item->is_view_table_) {
-          bool has_tg = false;
-          OZ (has_need_fired_trigger_on_view(table_item, has_tg));
-          OX (update_stmt->set_has_instead_of_trigger(has_tg));
-        }
       /*
         In order to share the same logic with 'select' to generate access path costly, we
         add the table in the udpate stmt in the from_item list as well.
@@ -483,68 +478,6 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObUpdateResolver::is_table_has_unique_key(const ObTableSchema *table_schema,
-                                              bool &is_has_uk) const
-{
-  int ret = OB_SUCCESS;
-  is_has_uk = false;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  CK (OB_NOT_NULL(schema_checker_));
-  CK (OB_NOT_NULL(schema_guard = schema_checker_->get_schema_guard()));
-  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-  if (NULL == table_schema) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table schema", K(table_schema));
-  } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
-    LOG_WARN("get simple_index_infos failed", K(ret));
-  } else {
-    const uint64_t tenant_id = table_schema->get_tenant_id();
-    for (int64_t i = 0; OB_SUCC(ret) && !is_has_uk && i < simple_index_infos.count(); ++i) {
-      const ObTableSchema *index_table_schema = NULL;
-      if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
-          simple_index_infos.at(i).table_id_, index_table_schema))) {
-        LOG_WARN("fail to get table schema", K(tenant_id),
-                K(simple_index_infos.at(i).table_id_), K(ret));
-      } else if (OB_ISNULL(index_table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("index table schema must not be NULL", K(ret));
-      } else if (index_table_schema->is_unique_index()) {
-        is_has_uk = true;
-      } else {
-        // not unique index, skip
-      }
-    }
-  }
-  return ret;
-}
-
-int ObUpdateResolver::check_unique_key_is_updated(const ObTableSchema *table_schema,
-                                                  const common::ObIArray<ObAssignment> &assigns,
-                                                  bool &is_updated) const
-{
-  int ret = OB_SUCCESS;
-  is_updated = false;
-  ObSchemaGetterGuard *schema_guard = NULL;
-  if (OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_updated && i < assigns.count(); i++) {
-      // We cannot use col_expr->is_unique_key_column_ here, which may be false for a unique index column.
-      ObColumnRefRawExpr *col_expr = assigns.at(i).column_expr_;
-      bool is_unique_col = false;
-      if (OB_ISNULL(col_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(table_schema->is_real_unique_index_column(*schema_guard, col_expr->get_column_id(), is_unique_col))) {
-        LOG_WARN("is_unique_key_column failed", K(ret));
-      } else if (is_unique_col) {
-        is_updated = true;
-        break;
-      } else { /*do nothing*/ }
-    }
-  }
-  return ret;
-}
-
 int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign)
 {
   int ret = OB_SUCCESS;
@@ -556,7 +489,6 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
   uint64_t index_tid[OB_MAX_INDEX_PER_TABLE];
   int64_t gindex_cnt = OB_MAX_INDEX_PER_TABLE;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
-  bool is_need_all_columns = false;
   if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.session_info_) ||
       OB_ISNULL(allocator_) || OB_ISNULL(update_stmt)) {
     ret = OB_ERR_UNEXPECTED;
@@ -589,35 +521,13 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
     } else if (OB_FAIL(table_info->part_ids_.assign(table_item->get_base_table_item().part_ids_))) {
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!update_stmt->has_instead_of_trigger()) {
-      const bool is_binlog_full_mode = (ObBinlogRowImage::FULL == binlog_row_image) ? true : false;
-      is_need_all_columns = is_binlog_full_mode;
-      bool is_has_uk = false;
-      bool is_uk_updated = false;
       if (OB_FAIL(add_all_rowkey_columns_to_stmt(*table_item, table_info->column_exprs_))) {
         LOG_WARN("add all rowkey columns to stmt failed", K(ret));
-      } else if (!is_need_all_columns &&
-                 OB_FAIL(is_table_has_unique_key(table_schema, is_has_uk))) {
-        LOG_WARN("is_table_has_unique_key failed", K(ret));
-      } else if (!is_need_all_columns &&
-                 is_has_uk &&
-                 OB_FAIL(check_unique_key_is_updated(table_schema, table_assign.assignments_, is_uk_updated))) {
-        // Check whether UK is updated only when binlog_row_image is not FULL.
-        LOG_WARN("check_unique_key_is_updated failed", K(ret));
-      } else if (!is_need_all_columns &&
-                 OB_FAIL(need_all_columns(*table_schema, binlog_row_image, is_has_uk, is_need_all_columns))) {
-        LOG_WARN("call need_all_columns failed", K(ret), K(binlog_row_image));
-      } else if (is_need_all_columns ||
-                 update_stmt->is_error_logging() ||
-                 is_uk_updated) {
+      } else if (need_all_columns(*table_schema, binlog_row_image) ||
+                 update_stmt->is_error_logging()) {
         if (OB_FAIL(add_all_columns_to_stmt(*table_item, table_info->column_exprs_))) {
           LOG_WARN("fail to add all column to stmt", K(ret), K(*table_item));
         }
-      } else if (is_has_uk &&
-                 OB_FAIL(add_all_unique_key_columns_to_stmt(*table_item, table_info->column_exprs_))) {
-        LOG_WARN("add all unique columns to stmt failed", K(ret));
-      } else if (!is_binlog_full_mode &&
-                 OB_FAIL(add_necessary_columns_for_minimal_mode(*table_item, table_info->column_exprs_))) {
-        LOG_WARN("fail to add necessary columns for minimal mode", K(ret), K(*table_item));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < table_assign.assignments_.count(); ++i) {
           ObAssignment &assign = table_assign.assignments_.at(i);
@@ -626,9 +536,6 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
           } else if (OB_FAIL(add_index_related_columns_to_stmt(*table_item,
                              assign.column_expr_->get_column_id(), table_info->column_exprs_))) {
             LOG_WARN("failed to add index columns", K(ret));
-          } else if (OB_FAIL(add_udt_hidden_columns_for_minimal_mode(*table_item,
-                             table_schema, assign.column_expr_, table_info->column_exprs_))) {
-            LOG_WARN("failed to add udt hidden columns", K(ret));
           } else { /*do nothing*/ }
         }
       }

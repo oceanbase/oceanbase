@@ -14,6 +14,7 @@
 
 #include "common/row/ob_row.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/blocksstable/ob_data_store_desc.h"
 #include "ob_index_block_row_struct.h"
 
 
@@ -151,6 +152,9 @@ int ObIndexBlockRowBuilder::build_row(const ObIndexBlockRowDesc &desc, const ObD
   } else if (OB_UNLIKELY(!desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Index block description is not valid", K(ret));
+  } else if (OB_UNLIKELY(desc.row_offset_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected row offset", K(ret), K(desc));
   } else if (OB_FAIL(row_.reserve(rowkey_column_count_ + 1))) {
     STORAGE_LOG(WARN, "Failed to reserve index row", K(ret), K(rowkey_column_count_));
   } else if (OB_FAIL(set_rowkey(desc))) {
@@ -220,10 +224,10 @@ int ObIndexBlockRowBuilder::calc_data_size(
     LOG_WARN("Invalid index block row description", K(ret), K(desc));
   } else if (desc.is_secondary_meta_) {
     size = sizeof(ObIndexBlockRowHeader);
-    if (desc.data_store_desc_->is_major_merge_type()) {
+    if (desc.data_store_desc_->is_major_or_meta_merge_type()) {
       size += sizeof(int64_t); // add row offset for major sstable
     }
-  } else if (desc.data_store_desc_->is_major_merge_type()) {
+  } else if (desc.data_store_desc_->is_major_or_meta_merge_type()) {
     size = sizeof(ObIndexBlockRowHeader);
     size += sizeof(int64_t); // add row offset for major sstable
     if (nullptr != desc.aggregated_row_) {
@@ -262,7 +266,7 @@ int ObIndexBlockRowBuilder::append_header_and_meta(const ObIndexBlockRowDesc &de
     header_->is_data_block_ = desc.is_data_block_;
     header_->is_leaf_block_ = desc.is_macro_node_;
     header_->is_macro_node_ = desc.is_macro_node_;
-    header_->is_major_node_ = desc.data_store_desc_->is_major_merge_type();
+    header_->is_major_node_ = desc.data_store_desc_->is_major_or_meta_merge_type();
     header_->has_string_out_row_ = desc.has_string_out_row_;
     header_->all_lob_in_row_ = !desc.has_lob_out_row_;
     header_->is_pre_aggregated_ = nullptr != desc.aggregated_row_;

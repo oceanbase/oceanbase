@@ -25,13 +25,12 @@ ObIndexStatsEstimator::ObIndexStatsEstimator(ObExecContext &ctx, ObIAllocator &a
   : ObBasicStatsEstimator(ctx, allocator)
 {}
 
-int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
-                                    const ObExtraParam &extra,
+int ObIndexStatsEstimator::estimate(const ObOptStatGatherParam &param,
                                     ObIArray<ObOptStat> &dst_opt_stats)
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObColumnStatParam> &column_params = param.column_params_;
-  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS");
+  ObString no_rewrite("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
   ObString calc_part_id_str;
   ObOptTableStat tab_stat;
   ObOptStat src_opt_stat;
@@ -63,20 +62,19 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(ctx_.get_allocator(), param.degree_))) {
     LOG_WARN("failed to add query sql parallel info", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(extra.start_time_,
-                                                               param.duration_time_,
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
+                                                               param.max_duration_time_,
                                                                duration_time))) {
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(ctx_.get_allocator(), duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
   } else if (dst_opt_stats.count() > 1 &&
-             OB_FAIL(fill_index_group_by_info(ctx_.get_allocator(), param,
-                                              extra, calc_part_id_str))) {
+             OB_FAIL(fill_index_group_by_info(ctx_.get_allocator(), param, calc_part_id_str))) {
     LOG_WARN("failed to group by info", K(ret));
-  } else if (OB_FAIL(add_stat_item(ObStatRowCount(&param, src_tab_stat)))) {
+  } else if (OB_FAIL(add_stat_item(ObStatRowCount(src_tab_stat)))) {
     LOG_WARN("failed to add row count", K(ret));
   } else if (calc_part_id_str.empty()) {
-    if (OB_FAIL(fill_partition_condition(ctx_.get_allocator(), param, extra,
+    if (OB_FAIL(fill_partition_condition(ctx_.get_allocator(), param,
                                          dst_opt_stats.at(0).table_stat_->get_partition_id()))) {
       LOG_WARN("failed to add fill partition condition", K(ret));
     } else if (OB_UNLIKELY(dst_opt_stats.count() != 1) ||
@@ -86,7 +84,7 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
     } else {
       src_tab_stat->set_partition_id(dst_opt_stats.at(0).table_stat_->get_partition_id());
     }
-  } else if (OB_FAIL(add_stat_item(ObPartitionId(&param, src_tab_stat, calc_part_id_str, -1)))) {
+  } else if (OB_FAIL(add_stat_item(ObPartitionId(src_tab_stat, calc_part_id_str, -1)))) {
     LOG_WARN("failed to add partition id", K(ret));
   } else {/*do nothing*/}
   for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
@@ -96,12 +94,11 @@ int ObIndexStatsEstimator::estimate(const ObTableStatParam &param,
     } else {/*do nothing*/}
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(add_stat_item(ObStatAvgRowLen(&param, src_tab_stat, src_col_stats)))) {
+    if (OB_FAIL(add_stat_item(ObStatAvgRowLen(src_tab_stat, src_col_stats)))) {
       LOG_WARN("failed to add avg row size estimator", K(ret));
     } else if (OB_FAIL(pack(raw_sql))) {
       LOG_WARN("failed to pack raw sql", K(ret));
-    } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), COPY_ALL_STAT,
-                                   src_opt_stat, dst_opt_stats))) {
+    } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), true, src_opt_stat, dst_opt_stats))) {
       LOG_WARN("failed to evaluate basic stats", K(ret));
     } else {
       LOG_TRACE("index stats is collected", K(dst_opt_stats.count()));
@@ -147,8 +144,7 @@ int ObIndexStatsEstimator::fill_index_info(common::ObIAllocator &alloc,
 
 //Specify the partition name or non-partition table don't use group by.
 int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
-                                                    const ObTableStatParam &param,
-                                                    const ObExtraParam &extra,
+                                                    const ObOptStatGatherParam &param,
                                                     ObString &calc_part_id_str)
 {
   int ret = OB_SUCCESS;
@@ -156,13 +152,13 @@ int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
                                                 : "GROUP BY CALC_PARTITION_ID(`%.*s`, `%.*s`, %.*s)";
   char *buf = NULL;
   ObString type_str;
-  if (extra.type_ == PARTITION_LEVEL) {
+  if (param.stat_level_ == PARTITION_LEVEL) {
     type_str = ObString(4, "PART");
-  } else if (extra.type_ == SUBPARTITION_LEVEL) {
+  } else if (param.stat_level_ == SUBPARTITION_LEVEL) {
     type_str = ObString(7, "SUBPART");
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected type", K(extra.type_), K(ret));
+    LOG_WARN("get unexpected type", K(param.stat_level_), K(ret));
   }
   if (OB_SUCC(ret)) {
     const int64_t len = strlen(fmt_str) +
@@ -195,19 +191,18 @@ int ObIndexStatsEstimator::fill_index_group_by_info(ObIAllocator &allocator,
 
 //Specify the partition name need add filter.
 int ObIndexStatsEstimator::fill_partition_condition(ObIAllocator &allocator,
-                                                    const ObTableStatParam &param,
-                                                    const ObExtraParam &extra,
+                                                    const ObOptStatGatherParam &param,
                                                     const int64_t dst_partition_id)
 {
   int ret = OB_SUCCESS;
-  if (extra.type_ == PARTITION_LEVEL || extra.type_ == SUBPARTITION_LEVEL) {
+  if (param.stat_level_ == PARTITION_LEVEL || param.stat_level_ == SUBPARTITION_LEVEL) {
     const char *fmt_str = lib::is_oracle_mode() ? "WHERE CALC_PARTITION_ID(\"%.*s\", \"%.*s\", %.*s) = %ld"
                                                   : "WHERE CALC_PARTITION_ID(`%.*s`, `%.*s`, %.*s) = %ld";
     char *buf = NULL;
     ObString type_str;
-    if (extra.type_ == PARTITION_LEVEL) {
+    if (param.stat_level_ == PARTITION_LEVEL) {
       type_str = ObString(4, "PART");
-    } else if (extra.type_ == SUBPARTITION_LEVEL) {
+    } else if (param.stat_level_ == SUBPARTITION_LEVEL) {
       type_str = ObString(7, "SUBPART");
     }
     const int64_t len = strlen(fmt_str) +
@@ -264,7 +259,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    index_param.tenant_id_))) {
     LOG_WARN("failed to create hash map", K(ret));
-  } else if (OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param, partition_id_block_map))) {
+  } else if (index_param.need_estimate_block_ &&
+             OB_FAIL(ObBasicStatsEstimator::estimate_block_count(ctx, index_param, partition_id_block_map))) {
     LOG_WARN("failed to estimate block count", K(ret));
   } else {
     bool is_continued = true;
@@ -331,7 +327,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
       if (OB_FAIL(trans.start(ctx.get_sql_proxy(), index_param.tenant_id_))) {
           LOG_WARN("fail to start transaction", K(ret));
       } else if (OB_FAIL(mgr.update_table_stat(index_param.tenant_id_,
-                                               trans,
+                                               trans.get_connection(),
                                                index_table_stats,
                                                index_param.is_index_stat_))) {
         LOG_WARN("failed to update table stats", K(ret));
@@ -431,6 +427,11 @@ int ObIndexStatsEstimator::get_all_need_gather_partition_ids(const ObTableStatPa
   if (OB_SUCC(ret) && index_param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < data_param.part_infos_.count(); ++i) {
       if (OB_FAIL(gather_part_ids.push_back(data_param.part_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < data_param.approx_part_infos_.count(); ++i) {
+      if (OB_FAIL(gather_part_ids.push_back(data_param.approx_part_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }

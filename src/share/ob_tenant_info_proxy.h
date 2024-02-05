@@ -85,6 +85,7 @@ public:
  bool is_standby() const { return tenant_role_.is_standby(); }
  bool is_primary() const { return tenant_role_.is_primary(); }
  bool is_restore() const { return tenant_role_.is_restore(); }
+ bool is_clone() const { return tenant_role_.is_clone(); }
 
  /**
   * @description:
@@ -282,12 +283,37 @@ private:
      *   OB_SUCCESS update tenant role successfully
      *   OB_NEED_RETRY old_switchover_epoch not match, need retry
      */
-    static int update_tenant_role(const uint64_t tenant_id, ObISQLClient *proxy,
+    static int update_tenant_role(
+      const uint64_t tenant_id,
+      common::ObMySQLProxy *proxy,
       int64_t old_switchover_epoch,
       const ObTenantRole &new_role,
       const ObTenantSwitchoverStatus &old_status,
       const ObTenantSwitchoverStatus &new_status,
       int64_t &new_switchover_epoch);
+
+    /**
+     * @description: update tenant role of __all_tenant_info in trans, make sure conflict with clone
+     * @param[in] tenant_id
+     * @param[in] trans
+     * @param[in] old_switchover_epoch, for operator concurrency
+     * @param[in] new_role : target tenant role to be update
+     * @param[in] old_status : old switchover status
+     * @param[in] new_status : target switchover status to be update
+     * @param[out] new_switchover_epoch, for operator concurrency
+     * return :
+     *   OB_SUCCESS update tenant role successfully
+     *   OB_NEED_RETRY old_switchover_epoch not match, need retry
+     */
+    static int update_tenant_role_in_trans(
+      const uint64_t tenant_id,
+      ObMySQLTransaction &trans,
+      int64_t old_switchover_epoch,
+      const ObTenantRole &new_role,
+      const ObTenantSwitchoverStatus &old_status,
+      const ObTenantSwitchoverStatus &new_status,
+      int64_t &new_switchover_epoch);
+
     static int fill_cell(common::sqlclient::ObMySQLResult *result, ObAllTenantInfo &tenant_info, int64_t &ora_rowscn);
      /**
      * @description: update tenant max ls id while create ls or upgrade, in upgrade from 4100 to 4200,

@@ -34,15 +34,19 @@ public:
 
   virtual int is_exist(const common::ObString &uri, bool &exist);
   virtual int get_file_length(const common::ObString &uri, int64_t &file_length);
+  virtual int head_object_meta(const common::ObString &uri, ObStorageObjectMetaBase &obj_meta);
   virtual int del_file(const common::ObString &uri);
   virtual int write_single_file(const common::ObString &uri, const char *buf, const int64_t size);
   virtual int mkdir(const common::ObString &uri);
   virtual int list_files(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
+  virtual int list_files(const common::ObString &uri, ObStorageListCtxBase &list_ctx);
   virtual int del_dir(const common::ObString &uri);
   virtual int list_directories(const common::ObString &uri, common::ObBaseDirEntryOperator &op);
   virtual int is_tagging(const common::ObString &uri, bool &is_tagging);
+  virtual int del_unmerged_parts(const ObString &uri) override;
 private:
   int get_tmp_file_format_timestamp(const char *file_name, bool &is_tmp_file, int64_t &timestamp);
+  int check_is_appendable(const common::ObString &uri, struct dirent &entry, bool &is_appendable_file);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileUtil);
@@ -53,11 +57,13 @@ class ObStorageFileReader: public ObIStorageReader
 public:
   ObStorageFileReader();
   virtual ~ObStorageFileReader();
-  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
-  virtual int pread(char *buf,const int64_t buf_size, int64_t offset, int64_t &read_size);
-  virtual int close();
-  virtual int64_t get_length() const { return file_length_; }
-  virtual bool is_opened() const { return is_opened_; }
+  virtual int open(const common::ObString &uri,
+      common::ObObjectStorageInfo *storage_info = NULL, const bool head_meta = true) override;
+  virtual int pread(char *buf,
+      const int64_t buf_size, const int64_t offset, int64_t &read_size) override;
+  virtual int close() override;
+  virtual int64_t get_length() const override { return file_length_; }
+  virtual bool is_opened() const override { return is_opened_; }
 private:
   int fd_;
   bool is_opened_;
@@ -97,8 +103,9 @@ public:
   virtual ~ObStorageFileWriter();
   virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info = NULL);
   virtual int close() override;
-private:
+protected:
   char real_path_[OB_MAX_URI_LENGTH];
+private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileWriter);
 };
 
@@ -119,6 +126,38 @@ private:
   bool need_unlock_;
   StorageOpenMode open_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageFileAppender);
+};
+
+class ObStorageFileMultiPartWriter : public ObStorageFileWriter, public ObIStorageMultiPartWriter
+{
+public:
+  ObStorageFileMultiPartWriter() {}
+  virtual ~ObStorageFileMultiPartWriter() {}
+
+  virtual int open(const common::ObString &uri, common::ObObjectStorageInfo *storage_info) override
+  {
+    return ObStorageFileWriter::open(uri, storage_info);
+  }
+  virtual int write(const char *buf, const int64_t size) override
+  {
+    return ObStorageFileWriter::write(buf, size);
+  }
+  virtual int64_t get_length() const override
+  {
+    return ObStorageFileWriter::get_length();
+  }
+  virtual bool is_opened() const override
+  {
+    return ObStorageFileWriter::is_opened();
+  }
+
+  virtual int pwrite(const char *buf, const int64_t size, const int64_t offset) override;
+  virtual int complete() override;
+  virtual int abort() override;
+  virtual int close() override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObStorageFileMultiPartWriter);
 };
 
 

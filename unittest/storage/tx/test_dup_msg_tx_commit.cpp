@@ -12,7 +12,12 @@
 
 #include <gtest/gtest.h>
 #include <vector>
+
+#define private public
+#define protected public
 #include "ob_mock_2pc_ctx.h"
+#include "lib/random/ob_random.h"
+#include "lib/function/ob_function.h"
 
 // You can grep [DUP_MSG] to find all duplicated msg for testing
 
@@ -520,7 +525,6 @@ TEST_F(TestDupMsgMockOb2pcCtx, test_dup_2pc_commit_response2)
   // // [DUP_MSG]: ctx1 handle duplicated commit response
   // EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_commit_mail, &ctx1));
 
-  TRANS_LOG(INFO, "qc debug");
   // [DUP_MSG]: ctx1 handle duplicated abort response
   EXPECT_EQ(OB_SUCCESS, dup_and_handle_msg(dup_abort_mail, &ctx1));
 
@@ -609,6 +613,219 @@ TEST_F(TestDupMsgMockOb2pcCtx, test_dup_2pc_clear_request)
   EXPECT_EQ(true, ctx1.check_status_valid(true/*should commit*/));
   EXPECT_EQ(true, ctx2.check_status_valid(true/*should commit*/));
 }
+
+TEST_F(TestDupMsgMockOb2pcCtx, test_random_dup_tree_commit)
+{
+  // root coordinator
+  MockOb2pcCtx root_ctx;
+  root_ctx.init(&mailbox_mgr_);
+  int64_t root_addr = root_ctx.get_addr();
+
+  // normal participants
+  MockOb2pcCtx ctx1;
+  MockOb2pcCtx ctx2;
+  ctx1.init(&mailbox_mgr_);
+  ctx2.init(&mailbox_mgr_);
+  int64_t addr1 = ctx1.get_addr();
+  int64_t addr2 = ctx2.get_addr();
+
+  // incremental participants
+  const int64_t MAX_INC_CTX_COUNT = 100;
+  MockOb2pcCtx inc_ctx[MAX_INC_CTX_COUNT];
+  int64_t inc_addr[MAX_INC_CTX_COUNT];
+  int64_t inc_index = 0;
+  for (int i = 0; i < MAX_INC_CTX_COUNT; i++) {
+    inc_ctx[i].init(&mailbox_mgr_);
+    inc_addr[i] = inc_ctx[i].get_addr();
+  }
+
+  ObFunction<MockOb2pcCtx *(const int64_t participant)> get_ctx_op =
+    [&](const int64_t participant) -> MockOb2pcCtx * {
+      if (participant == root_addr) {
+        return &root_ctx;
+      } else if (participant == addr1) {
+        return &ctx1;
+      } else if (participant == addr2) {
+        return &ctx2;
+      } else {
+        for (int64_t i = 0; i < inc_index; i++) {
+          if (participant == inc_addr[i]) {
+            return &inc_ctx[i];
+          }
+        }
+      }
+
+      return NULL;
+    };
+
+  ObFunction<bool()> transfer_op =
+    [&]() -> bool {
+      if (inc_index >= MAX_INC_CTX_COUNT) {
+        TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Transfer Op Limited", K(inc_index));
+        return false;
+      }
+
+      int64_t src_ctx_idx = ObRandom::rand(0, inc_index + 2);
+      int64_t dst_ctx_idx = inc_index;
+      MockOb2pcCtx *ctx;
+
+      if (src_ctx_idx == 0) {
+        ctx = &root_ctx;
+      } else if (src_ctx_idx == 1) {
+        ctx = &ctx1;
+      } else if (src_ctx_idx == 2) {
+        ctx = &ctx2;
+      } else {
+        ctx = &inc_ctx[src_ctx_idx - 3];
+      }
+
+      if (ctx->is_2pc_logging()) {
+        TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Transfer Op Failed", K(src_ctx_idx), K(dst_ctx_idx), KPC(ctx));
+        return false;
+      }
+
+      inc_ctx[dst_ctx_idx].downstream_state_ = ctx->downstream_state_;
+      inc_ctx[dst_ctx_idx].upstream_state_ = ctx->upstream_state_;
+      inc_ctx[dst_ctx_idx].tx_state_ = ctx->tx_state_;
+      inc_ctx[dst_ctx_idx].coordinator_ = ctx->get_addr();
+      ctx->add_intermediate_participants(inc_addr[dst_ctx_idx]);
+      inc_index++;
+
+      TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Transfer Op Succeed", K(src_ctx_idx), K(dst_ctx_idx), KPC(ctx), K(inc_ctx[dst_ctx_idx]));
+
+      return true;
+    };
+
+  ObFunction<bool()> dup_msg_op =
+    [&]() -> bool {
+      bool ret = mailbox_mgr_.random_dup_and_send();
+      TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Dup Op Succeed", K(ret));
+      return ret;
+    };
+
+  ObFunction<bool()> drive_op =
+    [&]() -> bool {
+      int64_t ctx_idx = ObRandom::rand(0, inc_index + 2);
+      MockOb2pcCtx *ctx;
+
+      if (ctx_idx == 0) {
+        ctx = &root_ctx;
+      } else if (ctx_idx == 1) {
+        ctx = &ctx1;
+      } else if (ctx_idx == 2) {
+        ctx = &ctx2;
+      } else {
+        ctx = &inc_ctx[ctx_idx - 3];
+      }
+
+      bool is_mail_empty = ctx->mailbox_.empty();
+      bool is_log_empty = ctx->log_queue_.empty();
+      int64_t job = 0;
+      if (is_mail_empty && is_log_empty) {
+        TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Drive Op Failed", KPC(ctx));
+        return false;
+      } else if (!is_mail_empty && !is_log_empty) {
+        job = ObRandom::rand(0, 1);
+      } else if (!is_mail_empty) {
+        job = 0;
+      } else if (!is_log_empty) {
+        job = 1;
+      }
+
+      if (job == 0) {
+        // has mail to drive
+        ctx->handle();
+        TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Drive Mail Op Succeed", KPC(ctx));
+        return true;
+      } else if (job == 1) {
+        // has log to drive
+        ctx->apply();
+        TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Drive Log Op Succeed", KPC(ctx));
+        return true;
+      }
+
+      ob_abort();
+      return false;
+    };
+
+  ObFunction<bool()> is_all_released =
+    [&]() -> bool {
+      if (root_ctx.downstream_state_ != ObTxState::CLEAR) {
+        return false;
+      } else if (ctx1.downstream_state_ != ObTxState::CLEAR) {
+        return false;
+      } else if (ctx2.downstream_state_ != ObTxState::CLEAR) {
+        return false;
+      }
+
+      for (int i = 0; i < inc_index; i++) {
+        if (inc_ctx[i].downstream_state_ != ObTxState::CLEAR) {
+          return false;
+        }
+      }
+
+      return true;
+    };
+
+
+  ObFunction<bool()> print_tree =
+    [&]() -> bool {
+      root_ctx.print_downstream();
+      ctx1.print_downstream();
+      ctx2.print_downstream();
+
+      for (int i = 0; i < inc_index; i++) {
+        inc_ctx[i].print_downstream();
+      }
+
+      return true;
+    };
+
+  ObFunction<bool()> validate_tree =
+    [&]() -> bool {
+      for (int i = 0; i < inc_index; i++) {
+        for (int j = 0; j < inc_ctx[i].participants_.size(); j++) {
+          int64_t participant = inc_ctx[i].participants_[j];
+          EXPECT_EQ(inc_ctx[i].addr_, get_ctx_op(participant)->get_coordinator());
+        }
+      }
+
+      return true;
+    };
+
+  MockObParticipants participants;
+  participants.push_back(addr1);
+  participants.push_back(addr2);
+  participants.push_back(root_addr);
+
+  // ctx start to commit
+  root_ctx.commit(participants);
+
+  while (!is_all_released()) {
+    bool enable = false;
+    int64_t job = ObRandom::rand(0, 4);
+    TRANS_LOG(INFO, "[TREE_COMMIT_GEAR] Decide Job", K(job));
+    if (0 == job || 1 == job) {
+      transfer_op();
+    } else if (2 == job || 3 == job) {
+      drive_op();
+    } else {
+      dup_msg_op();
+    }
+  }
+
+  // ========== Check Test Valid ==========
+  EXPECT_EQ(true, root_ctx.check_status_valid(true/*should commit*/));
+  EXPECT_EQ(true, ctx1.check_status_valid(true/*should commit*/));
+  EXPECT_EQ(true, ctx2.check_status_valid(true/*should commit*/));
+
+  EXPECT_EQ(Ob2PCRole::ROOT, root_ctx.get_2pc_role());
+
+  print_tree();
+
+  validate_tree();
+}
+
 
 }
 }

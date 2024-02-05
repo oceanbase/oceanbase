@@ -28,7 +28,7 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/ob_sql_utils.h"
 #include "pl/ob_pl_resolver.h"
@@ -727,6 +727,14 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
       LOG_WARN("PLS-00382: expression is of wrong type",
                K(ret), K(src_type_id), K(dst_pl_type), K(dst_type), K(src_type));
+    }
+  } else if (lib::is_oracle_mode() &&
+            ob_is_oracle_datetime_tc(src_type) &&
+            ob_is_oracle_datetime_tc(dst_type)) {
+    if (dst_type == src_type) {
+      OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
+    } else {
+      OX (match_info = (ObRoutineMatchInfo::MatchInfo(true, src_type, dst_type)));
     }
   // Case2: 处理TypeClass相同的情形
   } else if (OBJ_TO_TYPE_CLASS(src_type) == OBJ_TO_TYPE_CLASS(dst_type)) {
@@ -2547,7 +2555,9 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       int16_t len = 0;
       ObString tmp_string(static_cast<int32_t>(node->str_len_), node->str_value_);
       bool use_decimalint_as_result = false;
-      if (enable_decimal_int_type && !is_from_pl) {
+      int tmp_ret = OB_E(EventTable::EN_ENABLE_ORA_DECINT_CONST) OB_SUCCESS;
+
+      if (enable_decimal_int_type && !is_from_pl && OB_SUCC(tmp_ret)) {
         // 如果开启decimal int类型，T_NUMBER解析成decimal int
         int32_t val_len = 0;
         ret = wide::from_string(node->str_value_, node->str_len_, allocator, scale, precision,
@@ -3787,7 +3797,7 @@ int ObResolverUtils::check_expr_valid_for_partition(ObRawExpr &expr,
       part_expr = &expr;
     }
   } else if (is_range_part(part_type) || is_list_part(part_type) || is_key_part(part_type)) {
-    //对于partiton by range(xx) 这里的expr是xx
+    //对于partition by range(xx) 这里的expr是xx
     part_expr = &expr;
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -4325,7 +4335,7 @@ int ObResolverUtils::resolve_partition_expr(ObResolverParams &params,
       ret = OB_ERR_PARTITION_FUNCTION_IS_NOT_ALLOWED;
 
     } else if (columns.size() <= 0) {
-      //处理partiton中为常量表达式的情况 partition by hash(1+1+1) /partition by range (1+1+1)
+      //处理partition中为常量表达式的情况 partition by hash(1+1+1) /partition by range (1+1+1)
       //用于限制 partition by hash(1)
       ret = OB_ERR_WRONG_EXPR_IN_PARTITION_FUNC_ERROR;
       LOG_WARN("const expr is invalid for thie type of partitioning", K(ret));
@@ -4404,7 +4414,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   const ParseNode *expr_node = NULL;
@@ -4422,7 +4433,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    resolved_cols,
                                                    generated_column,
                                                    expr,
-                                                   check_status))) {
+                                                   check_status,
+                                                   coltype_not_defined))) {
     LOG_WARN("resolve generated column expr failed", K(ret), K(expr_str));
   }
   return ret;
@@ -4562,7 +4574,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *col_schema = NULL;
@@ -4688,19 +4701,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
-    if (OB_SUCC(ret) &&
-        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
-         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
-        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
-                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
-          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
-        } else {
-          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
-        }
-      }
-    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
@@ -4807,6 +4807,57 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(expr->get_result_type().get_type()));
+      }
+    }
+    if (OB_SUCC(ret) && generated_column.is_generated_column()) {
+      //set local session info for generate columns
+      ObExprResType cast_dst_type;
+      cast_dst_type.set_meta(generated_column.get_meta_type());
+      cast_dst_type.set_accuracy(generated_column.get_accuracy());
+      ObRawExpr *expr_with_implicit_cast = NULL;
+      //only formalize once
+      if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+        LOG_WARN("fail to remove implicit cast", K(ret));
+      } else if (coltype_not_defined) {
+        expr_with_implicit_cast = expr;
+        if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+          LOG_WARN("fail to formalize with local session info", K(ret));
+        }
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
+                          *expr, cast_dst_type, expr_with_implicit_cast))) {
+        LOG_WARN("try add cast above failed", K(ret));
+      } else if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+        LOG_WARN("fail to formalize with local session info", K(ret));
+      }
+      if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+        if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr_with_implicit_cast, expr_factory->get_allocator()))) {
+          if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                  && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+            LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+          } else {
+            LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+          //do nothing
+        } else if (OB_ISNULL(expr_with_implicit_cast)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), KP(expr_with_implicit_cast));
+        } else {
+          if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(expr_with_implicit_cast,
+                                                                    session_info->get_sql_mode(),
+                                                                    generated_column))) {
+            LOG_WARN("fail to set local sysvars", K(ret));
+          }
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -6858,7 +6909,8 @@ int ObResolverUtils::set_parallel_info(sql::ObSQLSessionInfo &session_info,
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(routine_info)) {
-      if (routine_info->is_modifies_sql_data() ||
+      if (!routine_info->is_valid() ||
+          routine_info->is_modifies_sql_data() ||
           routine_info->is_wps() ||
           routine_info->is_rps() ||
           routine_info->is_has_sequence() ||
@@ -6939,23 +6991,39 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
   return ret;
 }
 
-int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExpr *expr)
+int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObRawExprFactory &expr_factory, ObRawExpr *expr)
 {
   int ret = OB_SUCCESS;
   if (NULL == expr) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
   } else {
-    for (int64_t i = 0; i < expr->get_param_count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
       ObRawExpr *&child = expr->get_param_expr(i);
-      for (int64_t j = 0; j < param_infos.count(); ++j) {
-        if (child == param_infos.at(j).second) {
-          child = param_infos.at(j).first;
+      for (int64_t j = 0; OB_SUCC(ret) && j < param_infos.count(); ++j) {
+        if (child == param_infos.at(j).element<1>()) {
+          child = param_infos.at(j).element<0>();
+          param_infos.at(j).element<2>()--;
+          if (0 == param_infos.at(j).element<2>()) {
+            ObConstRawExpr *null_expr = nullptr;
+            if (OB_FAIL(expr_factory.create_raw_expr(T_NULL, null_expr))) {
+              LOG_WARN("fail to create null expr", K(ret));
+            } else {
+              ObObjParam null_val;
+              null_val.set_null();
+              null_val.set_param_meta();
+              null_expr->set_param(null_val);
+              null_expr->set_value(null_val);
+              param_infos.at(j).element<0>() = null_expr;
+            }
+          }
           break;
         }
       }
-      if (OB_FAIL(revert_external_param_info(param_infos, child))) {
-        LOG_WARN("failed to revert external param info", K(ret));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(revert_external_param_info(param_infos, expr_factory, child))) {
+          LOG_WARN("failed to revert external param info", K(ret));
+        }
       }
     }
   }
@@ -6973,7 +7041,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
     for (int64_t i = 0;
         OB_SUCC(ret) && OB_INVALID_INDEX == same_idx && i < param_infos.count();
         ++i) {
-      ObRawExpr *original_expr = param_infos.at(i).first;
+      ObRawExpr *original_expr = param_infos.at(i).element<0>();
       if (OB_ISNULL(original_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
@@ -6982,43 +7050,71 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
       } else { /*do nothing*/ }
     }
   }
+#define SET_RESULT_TYPE(encode_num)  \
+  do {   \
+    if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, encode_num, expr))) {   \
+      LOG_WARN("create param expr failed", K(ret));   \
+    } else if (OB_ISNULL(expr)) {   \
+      ret = OB_ERR_UNEXPECTED;  \
+      LOG_WARN("access idxs is empty", K(ret));  \
+    } else {  \
+      sql::ObExprResType result_type = expr->get_result_type();  \
+      if (result_type.get_length() == -1) {   \
+        if (result_type.is_varchar() || result_type.is_nvarchar2()) {  \
+          result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);   \
+        } else if (result_type.is_char() || result_type.is_nchar()) {  \
+          result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
+        }  \
+      }  \
+      expr->set_result_type(result_type); \
+      param_expr = static_cast<ObConstRawExpr*>(expr); \
+      const_cast<sql::ObExprResType &>(param_expr->get_result_type()).set_param(param_expr->get_value());  \
+    }  \
+  } while (0)
+
   if (OB_SUCC(ret)) {
+    ObRawExpr *original_ref = expr;
+    ObConstRawExpr *param_expr = nullptr;
     if (OB_INVALID_INDEX != same_idx) {
-      expr = param_infos.at(same_idx).second;
-    } else {
-      /*
-       * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
-       * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
-       * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
-       */
-      std::pair<ObRawExpr*, ObConstRawExpr*> param_info;
-      ObRawExpr *original_ref = expr;
-      if (OB_FAIL(ObRawExprUtils::create_param_expr(expr_factory, prepare_param_count++, expr))) {
-        LOG_WARN("create param expr failed", K(ret));
-      } else if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("access idxs is empty", K(ret));
+      if (param_infos.at(same_idx).element<2>() > 0) {
+        expr = param_infos.at(same_idx).element<1>();
+        param_infos.at(same_idx).element<2>()++;
       } else {
-        sql::ObExprResType result_type = expr->get_result_type();
-        if (result_type.get_length() == -1) {
-          if (result_type.is_varchar() || result_type.is_nvarchar2()) {
-            result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
-          } else if (result_type.is_char() || result_type.is_nchar()) {
-            result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
-          }
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref count unexpected", K(ret));
+      }
+    } else {
+      int64_t available_idx = OB_INVALID_INDEX;
+      for (int64_t i = 0;
+          OB_SUCC(ret) && OB_INVALID_INDEX == available_idx && i < param_infos.count();
+          ++i) {
+        if (0 == param_infos.at(i).element<2>()) {
+          available_idx = i;
         }
-        expr->set_result_type(result_type);
-        ObConstRawExpr *param_expr = static_cast<ObConstRawExpr*>(expr);
-        const_cast<sql::ObExprResType &>(param_expr->get_result_type())
-                                          .set_param(param_expr->get_value());
-        param_info.first = original_ref;
-        param_info.second = param_expr;
-        if (OB_FAIL(param_infos.push_back(param_info))) {
-          LOG_WARN("push_back error", K(ret));
+      }
+      if (OB_INVALID_INDEX != available_idx) {
+        int64_t encode_num = param_infos.at(available_idx).element<1>()->get_value().get_unknown();
+        SET_RESULT_TYPE(encode_num);
+        if (OB_SUCC(ret)) {
+          param_infos.at(available_idx) = ExternalParamInfo(original_ref, param_expr, 1);
+        }
+      } else {
+        /*
+        * 把Stmt里的替换成QuestionMark，以便reconstruct_sql的时候会被打印成？，按prepare_param_count_编号
+        * 如果原本就是QuestionMark，也需要重新生成一个按照prepare_param_count_从0开始编号的QuestionMark，
+        * 以此保证传递给PL的参数顺序和prepare出来的参数化语句里的编号一致
+        */
+        SET_RESULT_TYPE(prepare_param_count++);
+        if (OB_SUCC(ret)) {
+          ExternalParamInfo param_info(original_ref, param_expr, 1);
+          if (OB_FAIL(param_infos.push_back(param_info))) {
+            LOG_WARN("push_back error", K(ret));
+          }
         }
       }
     }
   }
+#undef SET_RESULT_TYPE
   return ret;
 }
 
@@ -7739,9 +7835,12 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
 {
   int ret = OB_SUCCESS;
 
+  const char *access_denied_notice_message = 
+    "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'";
+  
   if (secure_file_priv.empty() || 0 == secure_file_priv.case_compare(N_NULL)) {
     ret = OB_ERR_NO_PRIVILEGE;
-    FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
+    FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
     LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
   } else if (OB_UNLIKELY(secure_file_priv.length() >= DEFAULT_BUF_LENGTH)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7755,7 +7854,7 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
     stat(buf, &path_stat);
     if (0 == S_ISDIR(path_stat.st_mode)) {
       ret = OB_ERR_NO_PRIVILEGE;
-      FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
+      FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
       LOG_WARN("no priv", K(ret), K(secure_file_priv), K(full_path));
     } else {
       MEMSET(buf, 0, sizeof(buf));
@@ -7767,16 +7866,16 @@ int ObResolverUtils::check_secure_path(const common::ObString &secure_file_priv,
         const int64_t pos = secure_file_priv_tmp.length();
         if (full_path.length() < secure_file_priv_tmp.length()) {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
+          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (!full_path.prefix_match(secure_file_priv_tmp)) {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
+          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         } else if (full_path.length() > secure_file_priv_tmp.length()
                    && secure_file_priv_tmp != "/" && full_path[pos] != '/') {
           ret = OB_ERR_NO_PRIVILEGE;
-          FORWARD_USER_ERROR_MSG(ret, "Access denied, please set suitable variable 'secure-file-priv' first, such as: SET GLOBAL secure_file_priv = '/'");
+          FORWARD_USER_ERROR_MSG(ret, "%s", access_denied_notice_message);
           LOG_WARN("no priv", K(ret), K(secure_file_priv), K(secure_file_priv_tmp), K(full_path));
         }
       }
@@ -8418,6 +8517,136 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
   return ret;
 }
 
+int ObResolverUtils::check_allowed_alter_operations_for_mlog(
+    const uint64_t tenant_id,
+    const obrpc::ObAlterTableArg &arg,
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    SQL_RESV_LOG(WARN, "failed to get data version", K(ret));
+  } else if (tenant_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview before 4.3 is");
+  } else if (table_schema.is_mlog_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter materialized view log is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view log is");
+  } else if (table_schema.has_mlog_table()) {
+    bool is_alter_pk = false;
+    ObIndexArg::IndexActionType pk_action_type;
+    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.index_arg_list_.count()); ++i) {
+      const ObIndexArg *index_arg = arg.index_arg_list_.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index arg is null", KR(ret));
+      } else if ((ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::DROP_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_)) {
+        is_alter_pk = true;
+        pk_action_type = index_arg->index_action_type_;
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if ((arg.is_alter_indexs_ && !is_alter_pk)
+        || (arg.is_update_global_indexes_ && !arg.is_alter_partitions_)
+        || (arg.is_alter_options_ // the following allowed options change does not affect mlog
+            && (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_DOP)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::CHARSET_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COLLATION_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COMMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::EXPIRE_INFO)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::PRIMARY_ZONE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::REPLICA_NUM)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SEQUENCE_COLUMN_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::USE_BLOOM_FILTER)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ACTIVE_TIME)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENABLE_ROW_MOVEMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::FORCE_LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
+      // supported operations
+    } else {
+      // unsupported operations
+      ret = OB_NOT_SUPPORTED;
+
+      // generate more specific error messages
+      if (is_alter_pk) {
+        if (ObIndexArg::ADD_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("add primary key to table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "add primary key to table with materialized view log is");
+        } else if (ObIndexArg::DROP_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("drop the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the primary key of table with materialized view log is");
+        } else {
+          LOG_WARN("alter the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the primary key of table with materialized view log is");
+        }
+      } else if (arg.is_alter_columns_) {
+        LOG_WARN("alter column of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter column of table with materialized view log is");
+      } else if (arg.is_alter_partitions_) {
+        LOG_WARN("alter partition of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of table with materialized view log is");
+      } else if (arg.is_alter_options_) {
+        if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
+          LOG_WARN("alter name of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter name of table with materialized view log is");
+        } else {
+          LOG_WARN("alter option of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter option of table with materialized view log is");
+        }
+      } else {
+        LOG_WARN("alter table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()), K(arg));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObResolverUtils::get_mysql_max_partition_num(const uint64_t tenant_id)
+{
+  int64_t max_partition_num = OB_MAX_PARTITION_NUM_MYSQL;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    max_partition_num = tenant_config->max_partition_num;
+  }
+  return max_partition_num;
+}
+
+int ObResolverUtils::check_schema_valid_for_mview(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < table_schema.get_column_count()); ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_ISNULL(column_schema = table_schema.get_column_schema_by_idx(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column schema is null", KR(ret));
+    } else if (column_schema->is_xmltype()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("create materialized view on xmltype columns is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          "create materialized view on xmltype columns is");
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

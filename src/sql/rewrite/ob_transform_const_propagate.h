@@ -91,10 +91,10 @@ private:
 
   struct ConstInfoContext {
     ConstInfoContext(const ObSharedExprChecker &shared_expr_checker,
-                     bool hint_allowed_trans) : active_const_infos_(),
+                     bool allow_trans) : active_const_infos_(),
                          expired_const_infos_(),
                          extra_excluded_exprs_(),
-                         hint_allowed_trans_(hint_allowed_trans),
+                         allow_trans_(allow_trans),
                          shared_expr_checker_(shared_expr_checker)
     {
     }
@@ -109,13 +109,13 @@ private:
     common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
     common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
     common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
-    bool hint_allowed_trans_;
+    bool allow_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
     TO_STRING_KV(K_(active_const_infos),
                  K_(expired_const_infos),
                  K_(extra_excluded_exprs),
-                 K_(hint_allowed_trans));
+                 K_(allow_trans));
   };
 
   struct PullupConstInfo {
@@ -138,6 +138,8 @@ private:
                  K_(equal_infos),
                  K_(need_add_constraint));
   };
+
+  int check_allow_trans(ObDMLStmt *stmt, bool &allow_trans);
 
   int recursive_collect_const_info_from_table(ObDMLStmt *stmt,
                                               TableItem *table_item,
@@ -273,6 +275,7 @@ private:
                                  bool &trans_happened);
 
   int check_need_cast_when_replace(ObRawExpr *expr,
+                                   ObRawExpr *const_expr,
                                    ObIArray<ObRawExpr *> &parent_exprs,
                                    bool &need_cast);
 
@@ -333,14 +336,17 @@ private:
                                        ObRawExpr *part_column_expr,
                                        ObIArray<ObRawExpr*> &old_column_exprs,
                                        ObIArray<ObRawExpr*> &new_const_exprs,
-                                       int64_t &complex_cst_info_idx);
+                                       int64_t &complex_cst_info_idx,
+                                       bool &trans_happened);
 
   int build_new_in_condition_expr(ObRawExpr *check_constraint_expr,
                                   ExprConstInfo &expr_const_info,
                                   ObRawExpr *part_column_expr,
                                   ObIArray<ObRawExpr*> &old_column_exprs,
                                   ObIArray<ObRawExpr*> &new_const_exprs,
-                                  ObRawExpr *&new_condititon_expr);
+                                  ObRawExpr *&new_condititon_expr,
+                                  ObIArray<ObRawExpr*> &not_null_values,
+                                  bool &reject);
 
   int batch_mark_expr_const_infos_used(ObIArray<ObRawExpr*> &column_exprs,
                                        ObIArray<ExprConstInfo> &expr_const_infos);
@@ -355,6 +361,12 @@ private:
   int collect_from_pullup_const_infos(ObDMLStmt *stmt,
                                       ObRawExpr *expr,
                                       ExprConstInfo &equal_info);
+
+  int check_constraint_value_validity(ObRawExpr *value_expr, bool &reject);
+
+  int check_can_replace_child_of_row(ConstInfoContext &const_ctx,
+                                     ObRawExpr *&cur_expr,
+                                     bool &can_replace_child);
 
 private:
   typedef ObSEArray<PullupConstInfo, 2> PullupConstInfos;

@@ -85,6 +85,8 @@ class ObExchangeInfo;
 class ObDmlTableInfo;
 struct IndexDMLInfo;
 class ValuesTablePath;
+class ObSelectLogPlan;
+class ObThreeStageAggrInfo;
 
 struct FunctionTableDependInfo {
   TO_STRING_KV(
@@ -459,6 +461,8 @@ public:
                                          ObExchangeInfo &right_exch_info);
   void set_insert_stmt(const ObInsertStmt *insert_stmt) { insert_stmt_ = insert_stmt; }
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
+  void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
+  ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
 public:
 
   struct All_Candidate_Plans
@@ -545,7 +549,13 @@ public:
                  K_(force_use_merge),
                  K_(is_scalar_group_by),
                  K_(distinct_exprs),
-                 K_(pushdown_groupby_columns));
+                 K_(pushdown_groupby_columns),
+                 K_(group_ndv),
+                 K_(group_distinct_ndv),
+                 K_(distinct_params),
+                 K_(distinct_aggr_batch),
+                 K_(distinct_aggr_items),
+                 K_(non_distinct_aggr_items));
   };
 
   /**
@@ -669,7 +679,8 @@ public:
                            const ObIArray<ObRawExpr*> &src_keys,
                            const ObIArray<ObRawExpr*> &target_keys,
                            const ObIArray<ObRawExpr*> &target_part_keys,
-                           ObIArray<ObRawExpr *> &src_part_keys);
+                           ObIArray<ObRawExpr *> &src_part_keys,
+                           const bool ignore_no_match = false);
 
   /** @brief Allcoate operator for subquery path */
   int allocate_subquery_path(SubQueryPath *subpath,
@@ -756,6 +767,8 @@ public:
                           const ObIArray<ObAggFunRawExpr*> &aggr_items,
                           const bool is_from_povit,
                           GroupingOpHelper &groupby_helper);
+
+  int calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_rollup_exprs, GroupingOpHelper &groupby_helper);
 
   int init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
                            GroupingOpHelper &distinct_helper);
@@ -917,7 +930,9 @@ public:
                                const bool is_partition_wise = false,
                                const bool is_push_down = false,
                                const bool is_partition_gi = false,
-                               const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP);
+                               const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP,
+                               bool force_use_scalar = false,
+                               const ObThreeStageAggrInfo *three_stage_info = NULL);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 
@@ -1003,8 +1018,6 @@ public:
 
   int candi_allocate_subplan_filter_for_where();
 
-  int candi_allocate_subplan_filter_for_exprs(ObIArray<ObRawExpr*> &exprs);
-
   int candi_allocate_subplan_filter(const ObIArray<ObRawExpr *> &subquery_exprs,
                                     const ObIArray<ObRawExpr *> *filters = NULL,
                                     const bool is_update_set = false,
@@ -1016,9 +1029,31 @@ public:
                                           ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                           ObBitSet<> &initplan_idxs,
                                           ObBitSet<> &onetime_idxs,
-                                          const ObIArray<ObRawExpr *> *filters,
+                                          const ObIArray<ObRawExpr *> &filters,
                                           const bool or_cursor_expr,
                                           const bool is_update_set);
+
+  int inner_candi_allocate_subplan_filter(ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
+                                          ObIArray<ObSEArray<CandidatePlan, 4>> &dist_best_list,
+                                          ObIArray<ObQueryRefRawExpr *> &query_refs,
+                                          ObIArray<ObExecParamRawExpr *> &params,
+                                          ObIArray<ObExecParamRawExpr *> &onetime_exprs,
+                                          ObBitSet<> &initplan_idxs,
+                                          ObBitSet<> &onetime_idxs,
+                                          const ObIArray<ObRawExpr *> &filters,
+                                          const bool for_cursor_expr,
+                                          const bool is_update_set,
+                                          const int64_t dist_methods,
+                                          ObIArray<CandidatePlan> &subquery_plans);
+
+  int prepare_subplan_candidate_list(ObIArray<ObLogPlan*> &subplans,
+                                     ObIArray<ObExecParamRawExpr *> &params,
+                                     ObIArray<ObSEArray<CandidatePlan, 4>> &best_list,
+                                     ObIArray<ObSEArray<CandidatePlan, 4>> &dist_best_list);
+  int get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subplans,
+                                           const bool for_cursor_expr,
+                                           const bool ignore_hint,
+                                           int64_t &dist_methods);
 
   int generate_subplan_filter_info(const ObIArray<ObRawExpr*> &subquery_exprs,
                                    ObIArray<ObLogPlan*> &subquery_ops,
@@ -1037,6 +1072,12 @@ public:
 
   int adjust_exprs_with_onetime(ObIArray<ObRawExpr *> &exprs);
 
+  int get_subplan_filter_distributed_method(ObLogicalOperator *&top,
+                                            const ObIArray<ObLogicalOperator*> &subquery_ops,
+                                            const ObIArray<ObExecParamRawExpr *> &params,
+                                            const bool for_cursor_expr,
+                                            const bool has_onetime,
+                                            int64_t &distributed_methods);
   int create_subplan_filter_plan(ObLogicalOperator *&top,
                                  const ObIArray<ObLogicalOperator*> &subquery_ops,
                                  const ObIArray<ObLogicalOperator*> &dist_subquery_ops,
@@ -1045,8 +1086,8 @@ public:
                                  const ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                  const ObBitSet<> &initplan_idxs,
                                  const ObBitSet<> &onetime_idxs,
-                                 const bool for_cursor_expr,
-                                 const ObIArray<ObRawExpr*> *filters,
+                                 const int64_t dist_methods,
+                                 const ObIArray<ObRawExpr*> &filters,
                                  const bool is_update_set);
 
   int check_contains_recursive_cte(ObIArray<ObLogicalOperator*> &child_ops,
@@ -1094,7 +1135,7 @@ public:
                                      const ObIArray<ObExecParamRawExpr *> &onetime_exprs,
                                      const ObBitSet<> &initplan_idxs,
                                      const ObBitSet<> &onetime_idxs,
-                                     const ObIArray<ObRawExpr*> *filters,
+                                     const ObIArray<ObRawExpr*> &filters,
                                      const DistAlgo dist_algo,
                                      const bool is_update_set);
   int allocate_subplan_filter_as_top(ObLogicalOperator *&old_top,
@@ -1201,7 +1242,8 @@ public:
 
   int extract_onetime_subquery(ObRawExpr *expr,
                                ObIArray<ObRawExpr *> &onetime_list,
-                               bool &is_valid);
+                               bool &is_valid,
+                               bool &has_shared_subquery);
 
   int create_onetime_param(ObRawExpr *expr, const ObIArray<ObRawExpr *> &onetime_list);
 
@@ -1919,6 +1961,8 @@ private:
   common::ObSEArray<std::pair<ObRawExpr *, ObRawExpr *>, 4,
                     common::ModulePageAllocator, true > onetime_replaced_exprs_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
+
+  ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

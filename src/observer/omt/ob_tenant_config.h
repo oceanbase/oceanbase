@@ -52,7 +52,6 @@ public:
     virtual ~TenantConfigUpdateTask() {}
     TenantConfigUpdateTask(const TenantConfigUpdateTask &) = delete;
     TenantConfigUpdateTask &operator=(const TenantConfigUpdateTask &) = delete;
-    void set_tenant_config(ObTenantConfig *config) { tenant_config_ = config; }
     void runTimerTask(void) override;
     ObTenantConfigMgr *config_mgr_;
     ObTenantConfig *tenant_config_;
@@ -82,7 +81,7 @@ public:
 
   int read_config();
   int publish_special_config_after_dump();
-  uint64_t get_tenant_id() const { return tenant_id_; }
+  virtual uint64_t get_tenant_id() const override { return tenant_id_; }
   int64_t get_current_version() const { return current_version_; }
   const TenantConfigUpdateTask &get_update_task() const { return  update_task_; }
   int64_t get_create_timestamp() const { return create_timestamp_; }

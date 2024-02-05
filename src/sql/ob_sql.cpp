@@ -30,6 +30,10 @@
 #include "share/ob_rs_mgr.h"
 #include "share/config/ob_server_config.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
+#include "share/vector/ob_fixed_length_vector.h"
+#include "share/vector/ob_continuous_vector.h"
+#include "share/vector/ob_uniform_vector.h"
+#include "share/vector/ob_discrete_vector.h"
 #include "sql/ob_sql_context.h"
 #include "sql/ob_result_set.h"
 #include "sql/optimizer/ob_log_plan_factory.h"
@@ -68,7 +72,7 @@
 #include "observer/omt/ob_th_worker.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/code_generator/ob_code_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
@@ -1567,7 +1571,8 @@ int ObSql::handle_pl_execute(const ObString &sql,
 #endif
   if (OB_SUCC(ret) && session.get_in_transaction()) {
     if (ObStmt::is_dml_write_stmt(result.get_stmt_type()) ||
-        ObStmt::is_savepoint_stmt(result.get_stmt_type())) {
+        ObStmt::is_savepoint_stmt(result.get_stmt_type()) ||
+        (ObStmt::is_select_stmt(result.get_stmt_type()) && OB_NOT_NULL(result.get_physical_plan()) && result.get_physical_plan()->has_for_update())) {
       session.set_has_exec_inner_dml(true);
     }
   }
@@ -2506,7 +2511,7 @@ OB_INLINE int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, 
       LOG_WARN("Failed to get database id", K(ret));
     } else if (FALSE_IT(context.spm_ctx_.bl_key_.db_id_ =
                                   (database_id == OB_INVALID_ID) ?
-                                      OB_OUTLINE_DEFAULT_DATABASE_ID:
+                                      OB_MOCK_DEFAULT_DATABASE_ID:
                                       database_id)) {
       // do nothing
     } else if (!use_plan_cache) {
@@ -2595,7 +2600,7 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
         exec_times = plan->stat_.get_execute_count();
         total_process_time = plan->stat_.total_process_time_;
         if (exec_times > 0
-            && (total_process_time / exec_times) > lqt) {
+            && (0 != lqt && (total_process_time / exec_times) > lqt)) {
           plan->inc_large_querys();
           is_large_query = true;
           lq_from_plan = true;
@@ -2605,7 +2610,7 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
     //实际编译时间判断是否为大请求
     if (OB_SUCC(ret) && is_large_query == false) {
       if (OB_PC_LOCK_CONFLICT == tmp_ret
-          || elapsed_time > lqt) {
+          || (0 != lqt && elapsed_time > lqt)) {
         is_large_query = true;
         lq_from_plan = false;
       }
@@ -2784,6 +2789,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.all_expr_constraints_ = &(resolver_ctx.query_ctx_->all_expr_constraints_);
       context.all_priv_constraints_ = &(resolver_ctx.query_ctx_->all_priv_constraints_);
       context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
+      context.all_local_session_vars_ = &(resolver_ctx.query_ctx_->all_local_session_vars_);
       context.cur_stmt_ = stmt;
       context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
       context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
@@ -2800,6 +2806,17 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         result.get_session().set_group_id_not_expected(false);
       }
       NG_TRACE(resolve_end);
+      if (OB_SUCC(ret)) {
+        // move init datum param store here
+        // if `opt_param("enable_rich_vector_format", "false")` is used in hints, use_rich_format will
+        // be off, we need reset value in pctx and initialize param frame accordingly.
+        if (NULL != pc_ctx && NULL != pc_ctx->exec_ctx_.get_physical_plan_ctx()) {
+          pc_ctx->exec_ctx_.get_physical_plan_ctx()->set_rich_format(context.session_info_->use_rich_format());
+          if (OB_FAIL(pc_ctx->exec_ctx_.get_physical_plan_ctx()->init_datum_param_store())) {
+            LOG_WARN("init datum param store failed", K(ret));
+          }
+        }
+      }
       //add ref obj schema version to PL and ps info
       if (OB_SUCC(ret)) {
         if (OB_FAIL(result.get_ref_objects().assign(resolver_ctx.query_ctx_->global_dependency_tables_))) {
@@ -3110,6 +3127,7 @@ int ObSql::generate_plan(ParseResult &parse_result,
       LOG_ERROR("Failed to alloc physical plan from tc factory", K(ret));
     } else {
       // update is_use_jit flag
+      phy_plan->set_use_rich_format(sql_ctx.session_info_->use_rich_format());
       phy_plan->stat_.is_use_jit_ = use_jit;
       phy_plan->stat_.enable_early_lock_release_ = sql_ctx.session_info_->get_early_lock_release();
       // if phy_plan's tenant id, which refers the tenant who create this plan,
@@ -3595,6 +3613,12 @@ int ObSql::code_generate(
       last_mem_usage = phy_plan->get_mem_size();
     }
   }
+  //add local_session_var array to phy_plan_ctx
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(phy_plan->set_all_local_session_vars(sql_ctx.all_local_session_vars_))) {
+      LOG_WARN("set all local sesson vars failed", K(ret));
+    }
+  }
   NG_TRACE(cg_end);
 
   // set phy table location in task_exec_ctx, query_timeout in exec_context
@@ -3746,6 +3770,8 @@ OB_INLINE int ObSql::init_exec_context(const ObSqlCtx &context, ObExecContext &e
       context.session_info_->get_query_timeout(query_timeout);
       exec_ctx.get_physical_plan_ctx()->set_timeout_timestamp(
         context.session_info_->get_query_start_time() + query_timeout);
+      exec_ctx.get_physical_plan_ctx()->set_rich_format(
+         context.session_info_->use_rich_format());
     }
   }
   return ret;
@@ -3848,7 +3874,16 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       //inner sql不能丢入大查询队列, 因为有可能上层查询已有数据返回客户端
     } else {
       get_plan_err = ret;
-      ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
+      if (OB_SUCCESS != tmp_ret) {
+         // do nothing
+        if (OB_SQL_PC_NOT_EXIST == ret || OB_REACH_MEMORY_LIMIT == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      }
     }
   } else { //get plan 成功
     plan_cache->inc_hit_and_access_cnt();
@@ -4178,7 +4213,7 @@ int ObSql::parser_and_check(const ObString &outlined_stmt,
 
   if (OB_SUCC(ret)) {
     //租户级别的read only检查
-    if ((session->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_) || pc_ctx.is_begin_commit_stmt()) {
+    if (session->is_inner() || pc_ctx.is_begin_commit_stmt()) {
       // FIXME:
       // schema拆分后，为了避免建租户时获取不到租户read only属性导致建租户失败，对于inner sql
       // 暂时跳过read only检查。实际上，对于tenant space系统表，不应该检查read only属性。
@@ -4314,6 +4349,8 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
     phy_plan->stat_.enable_udr_ = enable_udr;
 
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+      // pc_key_ may be modified elsewhere, so reset it before adding plan
+      pc_ctx.fp_result_.pc_key_.key_id_ = pc_ctx.sql_ctx_.statement_id_;
       //远程SQL第二次进入plan，将raw_sql作为pc_key存入plan cache中，
       //然后使用ps接口直接用参数化后的sql作为key来查plan cache，可以节省一次对SQL fast parse的代价
       if (pc_ctx.sql_ctx_.is_remote_sql_) {
@@ -4329,7 +4366,12 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = plan_cache->add_plan(phy_plan, pc_ctx);
     }
     plan_added = (OB_SUCCESS == ret);
+    if (pc_ctx.is_max_curr_limit_) {
+      ret = OB_REACH_MAX_CONCURRENT_NUM;
+    }
 
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
     if (is_batch_exec) {
       // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
       if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
@@ -4357,9 +4399,13 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  K(phy_plan));
     } else if (OB_FAIL(ret)) {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
-        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
-        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+      if (OB_SUCCESS != tmp_ret) {
+
+      } else {
+        if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+          ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
+          LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+        }
       }
     } else {
       pc_ctx.sql_ctx_.self_add_plan_ = true;
@@ -4581,6 +4627,11 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
                                                phy_plan->get_gtt_trans_scope_ids()))) {
           LOG_WARN("fail to append array", K(ret));
         }
+      }
+    }
+    if (OB_SUCC(ret) && NULL != phy_plan && !phy_plan->is_remote_plan()) {
+      if (OB_FAIL(pctx->set_all_local_session_vars(phy_plan->get_all_local_session_vars()))) {
+        LOG_WARN("fail to set all local session vars", K(ret));
       }
     }
   } else {
@@ -4919,9 +4970,6 @@ int ObSql::handle_parser(const ObString &sql,
     }
     if (OB_SUCC(ret)) {
       pctx->set_original_param_cnt(pctx->get_param_store().count());
-      if (OB_FAIL(pctx->init_datum_param_store())) {
-        LOG_WARN("fail to init datum param store", K(ret));
-      }
     }
   }
   LOG_DEBUG("SQL MEM USAGE", K(parser_mem_usage), K(last_mem_usage));

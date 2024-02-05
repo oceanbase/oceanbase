@@ -161,6 +161,8 @@ int ObTransService::init(const ObAddr &self,
                                                 &dup_table_scan_timer_,
                                                 &dup_table_loop_worker_))) {
     TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
+  } else if (OB_FAIL(rollback_sp_msg_mgr_.init(lib::ObMemAttr(tenant_id, "RollbackSPMgr")))) {
+    TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -172,6 +174,7 @@ int ObTransService::init(const ObAddr &self,
     schema_service_ = schema_service;
     ts_mgr_ = ts_mgr;
     server_tracer_ = server_tracer;
+    rollback_sp_msg_sequence_ = ObTimeUtil::current_time();
     is_inited_ = true;
     TRANS_LOG(INFO, "transaction service inited success", KP(this), K(tenant_memory_limit));
   }
@@ -528,6 +531,12 @@ void ObTransService::handle(void *task)
         mtl_free(standby_cleanup_task);
         standby_cleanup_task = nullptr;
       }
+    } else if(ObTransRetryTaskType::DUP_TABLE_TX_REDO_SYNC_RETRY_TASK == trans_task->get_task_type()) {
+      ObTxRedoSyncRetryTask *redo_sync_task = static_cast<ObTxRedoSyncRetryTask *>(trans_task);
+      redo_sync_task->clear_in_thread_pool_flag();
+      if (OB_FAIL(redo_sync_task->iter_tx_retry_redo_sync())) {
+        TRANS_LOG(WARN, "execute redo sync task failed", K(ret));
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected trans task type!!!", KR(ret), K(*trans_task));
@@ -641,6 +650,21 @@ int ObTransService::check_dup_table_lease_valid(const ObLSID ls_id,
     is_dup_ls = true;
     is_lease_valid = true;
     ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
+int ObTransService::retry_redo_sync_by_task(ObTransID tx_id, share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t redo_sync_index = (ls_id.hash() + tx_id.hash()) % MAX_REDO_SYNC_TASK_COUNT;
+
+  if (OB_FAIL(redo_sync_task_array_[redo_sync_index].push_back_redo_sync_object(tx_id, ls_id))) {
+    TRANS_LOG(WARN, "retry redo sync task failed", K(ret), K(tx_id), K(ls_id), K(redo_sync_index));
+  } else {
+    TRANS_LOG(DEBUG, "start to retry redo sync task successfully", K(ret), K(tx_id), K(ls_id),
+              K(redo_sync_index));
   }
 
   return ret;
@@ -910,6 +934,7 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
     ObPartTransCtx *ctx = store_ctx.mvcc_acc_ctx_.tx_ctx_;
+    ObMdsThrottleGuard mds_throttle_guard(false/* for_replay */, ctx->get_trans_expired_time());
     if (OB_ISNULL(ctx)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected null ptr", KR(ret), K(tx_desc), K(ls_id), K(type));

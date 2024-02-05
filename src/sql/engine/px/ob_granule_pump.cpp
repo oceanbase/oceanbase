@@ -666,10 +666,10 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
   can_randomize = (need_start_ddl || need_start_pdml)
                   && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_)
                         || ObGranuleUtil::desc_order(args.gi_attri_flag_)
-                        || ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)));
+                        || ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)));
   LOG_DEBUG("scan order is ", K(ObGranuleUtil::asc_order(args.gi_attri_flag_)),
             K(ObGranuleUtil::desc_order(args.gi_attri_flag_)),
-            K(ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)), K(can_randomize),
+            K(ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)), K(can_randomize),
             K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
@@ -741,8 +741,13 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
   } else if (tablets.count() <= 0 || OB_ISNULL(args.ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty tablets", K(ret), K(tablets));
-  } else if (OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
-      table_id, op_id, partition_granule, ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
+  } else if (!args.query_range_by_runtime_filter_.empty()
+             && OB_FAIL(ranges.assign(args.query_range_by_runtime_filter_))) {
+    LOG_WARN("failed to assign query range", K(ret), K(tablets));
+  } else if (args.query_range_by_runtime_filter_.empty()
+             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
+                                        table_id, op_id, partition_granule,
+                                        ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
   } else if (ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;

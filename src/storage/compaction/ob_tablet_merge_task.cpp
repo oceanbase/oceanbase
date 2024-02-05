@@ -45,16 +45,6 @@ using namespace blocksstable;
 namespace compaction
 {
 
-bool is_merge_dag(ObDagType::ObDagTypeEnum dag_type)
-{
-  return dag_type == ObDagType::DAG_TYPE_MAJOR_MERGE
-    || dag_type == ObDagType::DAG_TYPE_MERGE_EXECUTE
-    || dag_type == ObDagType::DAG_TYPE_MINI_MERGE
-    || dag_type == ObDagType::DAG_TYPE_TX_TABLE_MERGE
-    || dag_type == ObDagType::DAG_TYPE_MDS_TABLE_MERGE;
-}
-
-
 /*
  *  ----------------------------------------------ObCompactionTimeGuard--------------------------------------------------
  */
@@ -266,6 +256,7 @@ int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
 ObCompactionParam::ObCompactionParam()
   : score_(0),
     occupy_size_(0),
+    estimate_phy_size_(0),
     replay_interval_(0),
     add_time_(0),
     last_end_scn_(),
@@ -808,7 +799,7 @@ int ObTabletMergePrepareTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not null", K(ret));
-  } else if (OB_UNLIKELY(!is_merge_dag(dag_->get_type()))) {
+  } else if (OB_UNLIKELY(!is_compaction_dag(dag_->get_type()))) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
@@ -963,7 +954,7 @@ int ObTabletMergeFinishTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not null", K(ret));
-  } else if (!is_merge_dag(dag_->get_type())) {
+  } else if (!is_compaction_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
@@ -1071,7 +1062,7 @@ int ObTabletMergeTask::generate_next_task(ObITask *&next_task)
     LOG_WARN("not init", K(ret));
   } else if (idx_ + 1 == ctx_->get_concurrent_cnt()) {
     ret = OB_ITER_END;
-  } else if (!is_merge_dag(dag_->get_type())) {
+  } else if (!is_compaction_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {

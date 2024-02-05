@@ -172,16 +172,17 @@ int ObCDCPartTransResolver::read(
   int pos = pos_after_log_header;
   bool is_cluster_id_served = false;
   transaction::ObTxLogBlock tx_log_block;
-  transaction::ObTxLogBlockHeader tx_log_block_header;
+  transaction::ObTxLogBlockHeader *tx_log_block_header = NULL;
 
-  if (OB_FAIL(tx_log_block.init(buf, buf_len, pos, tx_log_block_header))) {
+  if (OB_FAIL(tx_log_block.init_for_replay(buf, buf_len, pos))) {
     LOG_ERROR("failed to init tx_log_block with header",
-        KR(ret), K(buf_len), K_(tls_id), K(tx_log_block), K(tx_log_block_header));
-  } else if (OB_UNLIKELY(!tx_log_block_header.is_valid())) {
+        KR(ret), K(buf_len), K_(tls_id), K(tx_log_block), KPC(tx_log_block_header));
+  } else if (FALSE_IT(tx_log_block_header = &tx_log_block.get_header())) {
+  } else if (OB_UNLIKELY(!tx_log_block_header->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid ObTxLogBlockHeader found in LogEntry", KR(ret), K_(tls_id), K(lsn), K(tx_log_block_header));
-  } else if (cluster_id_filter_.check_is_served(tx_log_block_header.get_org_cluster_id(), is_cluster_id_served)) {
-    LOG_ERROR("check_cluster_id_served failed", KR(ret), K_(tls_id), K(lsn), K(tx_log_block_header));
+    LOG_ERROR("invalid ObTxLogBlockHeader found in LogEntry", KR(ret), K_(tls_id), K(lsn), K(pos), KPC(tx_log_block_header), KPHEX(buf, MIN(buf_len, 512)));
+  } else if (cluster_id_filter_.check_is_served(tx_log_block_header->get_org_cluster_id(), is_cluster_id_served)) {
+    LOG_ERROR("check_cluster_id_served failed", KR(ret), K_(tls_id), K(lsn), KPC(tx_log_block_header));
   } else if (OB_UNLIKELY(!is_cluster_id_served)) {
     LOG_DEBUG("[STAT] [FETCHER] [TRANS_NOT_SERVE]", K_(tls_id), K(is_cluster_id_served), K(lsn));
   } else {
@@ -196,7 +197,7 @@ int ObCDCPartTransResolver::read(
 
       if (OB_FAIL(read_trans_header_(
           lsn,
-          tx_log_block_header.get_tx_id(),
+          tx_log_block_header->get_tx_id(),
           missing_info.is_resolving_miss_log(),
           tx_log_block,
           tx_header,
@@ -204,11 +205,11 @@ int ObCDCPartTransResolver::read(
           has_redo_in_cur_entry))) {
         if (OB_ITER_END != ret) {
           LOG_ERROR("read_trans_header_ from tx_log_block failed", KR(ret), K_(tls_id), K(lsn),
-            K(tx_log_block_header), K(tx_log_block), K(tx_header), K(has_redo_in_cur_entry), K(tx_log_idx_in_entry));
+            KPC(tx_log_block_header), K(tx_log_block), K(tx_header), K(has_redo_in_cur_entry), K(tx_log_idx_in_entry));
         }
       } else if (need_ignore_trans_log_(
           lsn,
-          tx_log_block_header.get_tx_id(),
+          tx_log_block_header->get_tx_id(),
           tx_header,
           missing_info,
           tx_log_idx_in_entry,
@@ -217,7 +218,7 @@ int ObCDCPartTransResolver::read(
           ret = OB_ITER_END;
         }
       } else if (OB_FAIL(read_trans_log_(
-          tx_log_block_header,
+          *tx_log_block_header,
           tx_log_block,
           tx_header,
           lsn,
@@ -226,7 +227,7 @@ int ObCDCPartTransResolver::read(
           missing_info,
           has_redo_in_cur_entry))) {
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("read_trans_log_ fail", KR(ret), K_(tls_id), K(tx_log_block_header),
+          LOG_ERROR("read_trans_log_ fail", KR(ret), K_(tls_id), KPC(tx_log_block_header),
               K(tx_header), K(has_redo_in_cur_entry));
         }
       }

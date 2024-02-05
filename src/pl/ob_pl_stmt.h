@@ -475,7 +475,8 @@ public:
     row_desc_(NULL),
     rowid_table_id_(OB_INVALID_ID),
     ps_sql_(),
-    is_link_table_(false) {}
+    is_link_table_(false),
+    is_skip_locked_(false) {}
   virtual ~ObPLSql() {}
 
   inline const common::ObString &get_sql() const { return sql_; }
@@ -506,7 +507,10 @@ public:
   inline void set_link_table(bool is_link_table) { is_link_table_ = is_link_table; }
   inline bool has_link_table() const { return is_link_table_; }
 
-  TO_STRING_KV(K_(sql), K_(params), K_(ps_sql), K_(stmt_type), K_(ref_objects), K_(rowid_table_id));
+  inline void set_skip_locked(bool is_skip_locked) { is_skip_locked_ = is_skip_locked; }
+  inline bool is_skip_locked() const { return is_skip_locked_; }
+
+  TO_STRING_KV(K_(sql), K_(params), K_(ps_sql), K_(stmt_type), K_(ref_objects), K_(rowid_table_id), K_(is_skip_locked));
 
 protected:
   bool forall_sql_;
@@ -521,6 +525,7 @@ protected:
   uint64_t rowid_table_id_;
   common::ObString ps_sql_;
   bool is_link_table_;
+  bool is_skip_locked_;
 };
 
 class ObPLCursor
@@ -572,6 +577,8 @@ public:
   inline bool is_for_update() const { return value_.is_for_update(); }
   inline void set_hidden_rowid(bool has_hidden_rowid) { value_.set_hidden_rowid(has_hidden_rowid); }
   inline bool has_hidden_rowid() const { return value_.has_hidden_rowid(); }
+  inline void set_skip_locked(bool is_skip_locked) { value_.set_skip_locked(is_skip_locked); }
+  inline bool is_skip_locked() { return value_.is_skip_locked(); }
   inline const common::ObIArray<share::schema::ObSchemaObjVersion> &get_ref_objects() const { return value_.get_ref_objects(); }
   inline int set_ref_objects(const common::ObIArray<share::schema::ObSchemaObjVersion> &ref_objects) { return value_.set_ref_objects(ref_objects); }
   inline void set_row_desc(const ObRecordType* row_desc) { value_.set_row_desc(row_desc); }
@@ -644,7 +651,8 @@ public:
                  const ObPLDataType &cursor_type,
                  const common::ObIArray<int64_t> &formal_params,
                  ObPLCursor::CursorState state = ObPLCursor::DEFINED,
-                 bool has_dup_column_name = false);
+                 bool has_dup_column_name = false,
+                 bool skip_locked = false);
 
   TO_STRING_KV(K_(cursors));
 
@@ -1351,7 +1359,8 @@ public:
                  const common::ObIArray<int64_t> &formal_params,
                  ObPLCursor::CursorState state,
                  bool has_dup_column_name,
-                 int64_t &index);
+                 int64_t &index,
+                 bool skip_locked = false);
   int add_questionmark_cursor(const int64_t symbol_idx);
   inline const common::ObIArray<sql::ObRawExpr*> *get_exprs() const { return exprs_; }
   inline void set_exprs(common::ObIArray<sql::ObRawExpr*> *exprs) { exprs_ = exprs; }
@@ -3022,7 +3031,7 @@ private:
   uint64_t invoker_id_;
   uint64_t package_id_;
   uint64_t proc_id_;
-  uint64_t is_object_udf_; // 1: true, why use uint64_t but not bool, for the convinence with llvm cg
+  uint64_t is_object_udf_; // 1: true, why use uint64_t but not bool, for the convenience with llvm cg
   ObPLSEArray<int64_t> subprogram_path_;
   ObPLSEArray<InOutParam> params_;
   ObPLSEArray<int64_t> nocopy_params_;

@@ -23,10 +23,13 @@ class ObCGPrefetcher : public ObIndexTreeMultiPassPrefetcher<>
 public:
   ObCGPrefetcher() :
       is_reverse_scan_(false),
+      is_project_without_filter_(false),
+      cg_iter_type_(-1),
       query_index_range_(),
       query_range_(),
       leaf_query_range_(),
       filter_bitmap_(nullptr),
+      micro_data_prewarm_idx_(0),
       cur_micro_data_read_idx_(-1),
       cg_agg_cells_(nullptr),
       sstable_index_filter_(nullptr)
@@ -35,13 +38,18 @@ public:
   {}
   virtual void reset() override final;
   virtual void reuse() override final;
-  int init(ObSSTable &sstable,
-           const ObTableIterParam &iter_param,
-           ObTableAccessContext &access_ctx);
-  int switch_context(ObSSTable &sstable,
-                     const ObTableIterParam &iter_param,
-                     ObTableAccessContext &access_ctx);
+  int init(
+      const int cg_iter_type,
+      ObSSTable &sstable,
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx);
+  int switch_context(
+      const int cg_iter_type,
+      ObSSTable &sstable,
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx);
   int locate(const ObCSRange &range, const ObCGBitmap *bitmap);
+  virtual int prefetch() override final;
   OB_INLINE bool is_empty_range() const
   { return 0 == micro_data_prefetch_idx_ && is_prefetch_end_; }
   virtual bool read_wait() override final
@@ -62,13 +70,16 @@ public:
   }
   void recycle_block_data();
   void set_cg_agg_cells(ObCGAggCells &cg_agg_cells) { cg_agg_cells_ = &cg_agg_cells; }
+  void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }
   INHERIT_TO_STRING_KV("ObCGPrefetcher", ObIndexTreeMultiPassPrefetcher,
-                       K_(query_index_range), K_(query_range),
-                       K_(cur_micro_data_read_idx), KP_(filter_bitmap),
+                       K_(is_reverse_scan), K_(is_project_without_filter),
+                       K_(query_index_range), K_(query_range), K_(cg_iter_type),
+                       K_(micro_data_prewarm_idx), K_(cur_micro_data_read_idx), KP_(filter_bitmap),
                        KP_(cg_agg_cells), KP_(sstable_index_filter));
 protected:
-  virtual int get_prefetch_depth(int64_t &depth) override;
+  int get_prefetch_depth(int64_t &depth, const int64_t prefetching_idx);
 private:
+  int prewarm();
   struct ObCSIndexTreeLevelHandle : public ObIndexTreeLevelHandle {
   public:
     int prefetch(const int64_t level, ObCGPrefetcher &prefetcher);
@@ -91,15 +102,18 @@ private:
   int compare_range(const ObCSRange &index_range);
   bool contain_rows(const ObCSRange &index_range);
   bool locate_back(const ObCSRange &locate_range);
-  bool can_agg_micro_index(const blocksstable::ObMicroIndexInfo &index_info);
+  int can_agg_micro_index(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg);
 
 private:
   bool is_reverse_scan_;
+  bool is_project_without_filter_;
+  int16_t cg_iter_type_;
   ObStorageDatum datums_[2];
   ObCSRange query_index_range_;
   ObDatumRange query_range_;
   ObDatumRange leaf_query_range_;
   const ObCGBitmap *filter_bitmap_;
+  int64_t micro_data_prewarm_idx_;
 public:
   int64_t cur_micro_data_read_idx_;
   ObCGAggCells *cg_agg_cells_;

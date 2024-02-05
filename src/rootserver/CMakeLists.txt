@@ -24,6 +24,7 @@ ob_set_subtarget(ob_rootserver backup
 
 ob_set_subtarget(ob_rootserver common
   ob_bootstrap.cpp
+  ob_admin_drtask_util.cpp
   ob_disaster_recovery_task_table_updater.cpp
   ob_balance_group_ls_stat_operator.cpp
   ob_disaster_recovery_info.cpp
@@ -42,6 +43,7 @@ ob_set_subtarget(ob_rootserver common
   ob_ddl_operator.cpp
   ob_ddl_sql_generator.cpp
   ob_index_builder.cpp
+  ob_mlog_builder.cpp
   ob_locality_util.cpp
   ob_resource_weight_parser.cpp
   ob_root_balancer.cpp
@@ -110,7 +112,6 @@ ob_set_subtarget(ob_rootserver balance
 ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_column_redefinition_task.cpp
   ddl_task/ob_constraint_task.cpp
-
   ddl_task/ob_ddl_retry_task.cpp
   ddl_task/ob_ddl_scheduler.cpp
   ddl_task/ob_ddl_single_replica_executor.cpp
@@ -118,6 +119,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_drop_index_task.cpp
   ddl_task/ob_drop_primary_key_task.cpp
   ddl_task/ob_index_build_task.cpp
+  ddl_task/ob_build_mview_task.cpp
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
@@ -158,6 +160,9 @@ ob_set_subtarget(ob_rootserver restore
   restore/ob_restore_service.cpp
   restore/ob_restore_scheduler.cpp
   restore/ob_restore_util.cpp
+  restore/ob_tenant_clone_util.cpp
+  restore/ob_clone_scheduler.cpp
+  restore/ob_restore_common_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver virtual_table
@@ -165,6 +170,19 @@ ob_set_subtarget(ob_rootserver virtual_table
   virtual_table/ob_virtual_core_inner_table.cpp
   virtual_table/ob_all_virtual_backup_task_scheduler_stat.cpp
   virtual_table/ob_all_virtual_ls_replica_task_plan.cpp
+)
+
+ob_set_subtarget(ob_rootserver tenant_snapshot
+  tenant_snapshot/ob_tenant_snapshot_scheduler.cpp
+  tenant_snapshot/ob_tenant_snapshot_util.cpp
+)
+
+ob_set_subtarget(ob_rootserver mview
+  mview/ob_mview_maintenance_service.cpp
+  mview/ob_mlog_maintenance_task.cpp
+  mview/ob_mview_maintenance_task.cpp
+  mview/ob_mview_refresh_stats_maintenance_task.cpp
+  mview/ob_mview_timer_task.cpp
 )
 
 ob_server_add_target(ob_rootserver)

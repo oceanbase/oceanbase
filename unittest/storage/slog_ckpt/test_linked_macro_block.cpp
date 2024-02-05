@@ -116,7 +116,8 @@ void TestLinkedMacroBlock::build_item_buf(ObArray<ItemInfo> &item_arr)
 void TestLinkedMacroBlock::write_items(ObArray<ItemInfo> &item_arr)
 {
   ObLinkedMacroBlockItemWriter item_writer;
-  ASSERT_EQ(OB_SUCCESS, item_writer.init(true));
+  ObMemAttr mem_attr(MTL_ID(), "test");
+  ASSERT_EQ(OB_SUCCESS, item_writer.init(true, mem_attr));
   for (int64_t i = 0; i < item_arr.count(); i++) {
     ASSERT_EQ(OB_SUCCESS,
       item_writer.write_item(item_arr.at(i).buf_, item_arr.at(i).buf_len_, &item_arr.at(i).idx_));
@@ -138,7 +139,8 @@ void TestLinkedMacroBlock::write_items(ObArray<ItemInfo> &item_arr)
 void TestLinkedMacroBlock::iter_read_items(const ObArray<ItemInfo> &item_arr)
 {
   ObLinkedMacroBlockItemReader item_reader;
-  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_));
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "test");
+  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_, mem_attr));
   char *item_buf = nullptr;
   int64_t item_buf_len = 0;
   ObMetaDiskAddr addr;
@@ -164,7 +166,8 @@ void TestLinkedMacroBlock::iter_read_items(const ObArray<ItemInfo> &item_arr)
 void TestLinkedMacroBlock::read_items(const ObArray<ItemInfo> &item_arr)
 {
   ObLinkedMacroBlockItemReader item_reader;
-  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_));
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "test");
+  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_, mem_attr));
   char *item_buf = nullptr;
   int64_t item_buf_len = 0;
   for (int64_t i = 0; i < item_arr.count(); i++) {
@@ -191,7 +194,8 @@ TEST_F(TestLinkedMacroBlock, empty_read_test)
   entry_block_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   ASSERT_TRUE(entry_block_.is_valid());
   ObLinkedMacroBlockItemReader item_reader;
-  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_));
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, "test");
+  ASSERT_EQ(OB_SUCCESS, item_reader.init(entry_block_, mem_attr));
   char *item_buf = nullptr;
   int64_t item_buf_len = 0;
   ObMetaDiskAddr addr;

@@ -414,7 +414,7 @@ int ObStorageHADagUtils::check_self_is_valid_member(
     bool &is_valid_member)
 {
   int ret = OB_SUCCESS;
-  is_valid_member = false;
+  is_valid_member = true;
   const uint64_t tenant_id = MTL_ID();
   share::ObLocationService *location_service = nullptr;
   const bool force_renew = true;
@@ -692,8 +692,7 @@ int ObStorageHATaskUtils::check_major_sstable_need_copy_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  const ObSSTable *sstable = nullptr;
-  ObITable *table = nullptr;
+  ObSSTableWrapper sstable_wrapper;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObSSTableMetaHandle sst_meta_hdl;
 
@@ -709,15 +708,14 @@ int ObStorageHATaskUtils::check_major_sstable_need_copy_(
     const ObSSTableArray &major_sstable_array = table_store_wrapper.get_member()->get_major_sstables();
     if (major_sstable_array.empty()) {
       need_copy = true;
-    } else if (OB_FAIL(major_sstable_array.get_table(param.table_key_, table))) {
+    } else if (OB_FAIL(major_sstable_array.get_table(param.table_key_, sstable_wrapper))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(major_sstable_array));
-    } else if (nullptr == table) {
+    } else if (nullptr == sstable_wrapper.get_sstable()) {
       need_copy = true;
-    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
-    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+    } else if (OB_FAIL(sstable_wrapper.get_sstable()->get_meta(sst_meta_hdl))) {
       LOG_WARN("failed to get sstable meta handle", K(ret));
     } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sst_meta_hdl.get_sstable_meta()))) {
-      LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
+      LOG_WARN("failed to check sstable meta", K(ret), K(param), K(sstable_wrapper));
     } else {
       need_copy = false;
     }
@@ -781,8 +779,7 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  ObITable *table = nullptr;
-  const ObSSTable *sstable = nullptr;
+  ObSSTableWrapper sstable_wrapper;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObSSTableMetaHandle sst_meta_hdl;
 
@@ -802,9 +799,9 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
       need_copy = false;
     } else if (ddl_sstable_array.empty()) {
       need_copy = true;
-    } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, table))) {
+    } else if (OB_FAIL(ddl_sstable_array.get_table(param.table_key_, sstable_wrapper))) {
       LOG_WARN("failed to get table", K(ret), K(param), K(ddl_sstable_array));
-    } else if (nullptr == table) {
+    } else if (nullptr == sstable_wrapper.get_sstable()) {
       const SCN start_scn = ddl_sstable_array.get_boundary_table(false)->get_start_scn();
       const SCN end_scn = ddl_sstable_array.get_boundary_table(true)->get_end_scn();
       if (param.table_key_.scn_range_.start_scn_ >= start_scn
@@ -813,11 +810,10 @@ int ObStorageHATaskUtils::check_ddl_sstable_need_copy_(
       } else {
         need_copy = true;
       }
-    } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
-    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+    } else if (OB_FAIL(sstable_wrapper.get_sstable()->get_meta(sst_meta_hdl))) {
       LOG_WARN("failed to get sstable meta handle", K(ret));
     } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sst_meta_hdl.get_sstable_meta()))) {
-      LOG_WARN("failed to check sstable meta", K(ret), K(param), KPC(sstable));
+      LOG_WARN("failed to check sstable meta", K(ret), K(param), K(sstable_wrapper));
     } else {
       need_copy = false;
     }

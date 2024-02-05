@@ -206,6 +206,7 @@ public:
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level);
   static int end_stmt(ObExecContext &exec_ctx, const bool is_rollback);
+  static int alloc_branch_id(ObExecContext &exec_ctx, const int64_t count, int16_t &branch_id);
   static int kill_query_session(ObSQLSessionInfo &session, const ObSQLSessionState &status);
   static int kill_tx(ObSQLSessionInfo *session, int cause);
   static int kill_idle_timeout_tx(ObSQLSessionInfo *session);

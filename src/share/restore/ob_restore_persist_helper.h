@@ -407,7 +407,7 @@ public:
 
   uint64_t get_exec_tenant_id() const override;
 
-  int init(const uint64_t tenant_id);
+  int init(const uint64_t tenant_id, const int32_t group_id);
 
   int insert_initial_restore_progress(
       common::ObISQLClient &proxy, const ObRestoreProgressPersistInfo &persist_info) const;
@@ -474,6 +474,7 @@ private:
 
   bool is_inited_;
   uint64_t tenant_id_; // sys or user tenant id
+  int32_t group_id_;
 };
 
 

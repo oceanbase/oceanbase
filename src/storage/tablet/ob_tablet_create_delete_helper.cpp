@@ -628,22 +628,6 @@ bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
 }
 
-int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-    const ObCreateTabletSchema &create_table_schema,
-    bool &need_create_sstable)
-{
-  int ret = OB_SUCCESS;
-  need_create_sstable = false;
-  if (OB_UNLIKELY(!create_table_schema.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(create_table_schema));
-  } else {
-    need_create_sstable = !(create_table_schema.is_user_hidden_table()
-        || (create_table_schema.is_index_table() && !create_table_schema.can_read_index()));
-  }
-  return ret;
-}
-
 int ObTabletCreateDeleteHelper::build_create_sstable_param(
     const ObStorageSchema &storage_schema,
     const ObTabletID &tablet_id,

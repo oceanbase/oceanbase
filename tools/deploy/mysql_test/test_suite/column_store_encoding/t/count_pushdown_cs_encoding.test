@@ -10,6 +10,7 @@ connection default;
 set @@recyclebin = off;
 set ob_query_timeout=1000000000;
 set ob_trx_timeout=1000000000;
+set session _enable_rich_vector_format = true;
 
 --disable_warnings
 drop table if exists t1,t2,t3,t4,nn1,nn2,t_default_value,t_empty,pt1,pt2,pt3;
@@ -57,7 +58,7 @@ explain select a,count(b) from t3 group by a;
 explain select count(*) from t3 for update;
 
 # minor&major freeze
-create table t4 (a bigint auto_increment primary key, b bigint, c char(100), d varchar(100), e bigint not null) row_format = compressed block_size = 2048 with column group for all columns, each column;
+create table t4 (a bigint auto_increment primary key, b bigint, c char(100), d varchar(100), e bigint not null) row_format = compressed block_size = 2048 with column group (all columns, each column);
 insert into t4 (a, b, c, d, e) values(1, 9, "a", repeat('a', 10),1);
 insert into t4 (a, b, c, d, e) values(2, 2, "ab", repeat("ab", 10),1);
 insert into t4 (a, b, c, d, e) values(3, 5, "abcd", repeat("ab", 10),1);

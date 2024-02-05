@@ -71,6 +71,7 @@ PalfHandleImpl::PalfHandleImpl()
     palf_env_impl_(NULL),
     append_cost_stat_("[PALF STAT WRITE LOG COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     flush_cb_cost_stat_("[PALF STAT FLUSH CB COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    handle_submit_log_cost_stat_("[PALF STAT HANDLE SUBMIT LOG COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     last_accum_write_statistic_time_(OB_INVALID_TIMESTAMP),
     accum_write_log_size_(0),
     last_accum_fetch_statistic_time_(OB_INVALID_TIMESTAMP),
@@ -109,6 +110,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
                          LogIOWorker *log_io_worker,
+                         LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
@@ -131,6 +133,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
              || NULL == log_block_pool
              || NULL == log_rpc
              || NULL == log_io_worker
+             || NULL == log_shared_queue_th
              || NULL == palf_env_impl
              || false == self.is_valid()
              || NULL == election_timer
@@ -138,16 +141,16 @@ int PalfHandleImpl::init(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
-        K(log_io_worker), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
+        K(log_io_worker), K(log_shared_queue_th), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
   } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, replica_type))) {
     PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(replica_type));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &hot_cache_, \
-          log_rpc, log_io_worker, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+          log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker));
+        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
           alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
@@ -175,6 +178,7 @@ int PalfHandleImpl::load(const int64_t palf_id,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
                          LogIOWorker *log_io_worker,
+                         LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
@@ -194,12 +198,14 @@ int PalfHandleImpl::load(const int64_t palf_id,
              || NULL == alloc_mgr
              || NULL == log_rpc
              || NULL == log_io_worker
+             || NULL == log_shared_queue_th
              || false == self.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker));
+        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &hot_cache_, log_rpc,
-        log_io_worker, &plugins_, entry_header, palf_epoch, is_integrity, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
+        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, is_integrity,
+        PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
     //     to 'base_lsn_', we will generate default PalfBaseInfo or get it from LogSnapshotMeta(rebuild).
@@ -1230,8 +1236,9 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
                                       TimeoutChecker &not_timeout)
 {
   int ret = OB_SUCCESS;
+  bool has_renew_barrier = false;
   while (OB_SUCC(ret) && OB_SUCC(not_timeout())) {
-    bool need_wlock = (false == state_mgr_.is_changing_config_with_arb());
+    bool need_wlock = !has_renew_barrier;
     bool need_rlock = !need_wlock;
     if (DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
         true == ATOMIC_LOAD(&has_higher_prio_config_change_)) {
@@ -1242,10 +1249,17 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
     }
     if (true == need_wlock) {
       WLockGuard guard(lock_);
+      // if the reconfiguration request do not change memberlist or replica_num,
+      // it's safe to commit logs after the reconfiguration barrier before the
+      // reconfiguration log is committed.
+      const bool do_not_change_quorum = is_must_not_change_replica_num(args.type_);
       if (OB_FAIL(config_mgr_.renew_config_change_barrier())) {
         PALF_LOG(WARN, "renew_config_change_barrier failed", KR(ret), KPC(this), K(args));
-      } else if (OB_FAIL(state_mgr_.set_changing_config_with_arb())) {
+      } else if (false == do_not_change_quorum &&
+          OB_FAIL(state_mgr_.set_changing_config_with_arb())) {
         PALF_LOG(WARN, "set_changing_config_with_arb failed", KR(ret), KPC(this), K(args));
+      } else {
+        has_renew_barrier = true;
       }
     } else if (true == need_rlock) {
       RLockGuard guard(lock_);
@@ -1253,10 +1267,12 @@ int PalfHandleImpl::wait_log_barrier_(const LogConfigChangeArgs &args,
         PALF_LOG(WARN, "wait_log_barrier_ failed", KR(ret), KPC(this), K(args));
       } else if (OB_EAGAIN == ret) {
         ret = OB_SUCCESS;
-        ob_usleep(10 * 1000);
       } else {
         break;
       }
+    }
+    if (OB_SUCC(ret) && true == need_rlock) {
+      ob_usleep(10 * 1000);
     }
   }
   return ret;
@@ -1351,12 +1367,30 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       }
     }
     time_guard.click("precheck");
-    // step 3: waiting for log barrier if a arbitration member exists
+    // step 3: check whether the new config info can be set to the election module
+    while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
+      {
+        RLockGuard guard(lock_);
+        LogConfigVersion config_version;
+        if (OB_FAIL(config_mgr_.get_config_version(config_version))) {
+          PALF_LOG(WARN, "get_config_version failed", KR(ret), KPC(this), K(config_version));
+        } else if (OB_FAIL(config_version.inc_update_version(proposal_id))) {
+          PALF_LOG(WARN, "inc_update_version failed", KR(ret), KPC(this), K(config_version));
+        } else if (OB_FAIL(election_.can_set_memberlist(config_version))) {
+          ret = (OB_OP_NOT_ALLOW == ret)? OB_SUCCESS: ret;
+        } else {
+          break;
+        }
+      }
+      ob_usleep(50 * 1000);
+    }
+    time_guard.click("wait_ele");
+    // step 4: waiting for log barrier if a arbitration member exists
     if (OB_SUCC(ret) && true == new_config_info.config_.arbitration_member_.is_valid()) {
       ret = wait_log_barrier_(args, new_config_info, not_timeout);
     }
     time_guard.click("wait_barrier");
-    // step 4: motivate reconfiguration
+    // step 5: motivate reconfiguration
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       bool need_wlock = false;
       bool need_rlock = false;
@@ -1381,7 +1415,7 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
         break;
       }
       if (false == need_rlock && false == need_wlock) {
-        const int64_t SLEEP_US = (state_mgr_.is_changing_config_with_arb())? 10 * 1000: 50 * 1000;
+        const int64_t SLEEP_US = (state_mgr_.is_changing_config_with_arb())? 1 * 1000: 50 * 1000;
         ob_usleep(SLEEP_US);
       }
       if (true == need_wlock) {
@@ -2588,6 +2622,7 @@ int PalfHandleImpl::check_and_switch_state()
       } else if (OB_FAIL(mode_mgr_.leader_do_loop_work())) {
         PALF_LOG(WARN, "LogModeMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
       }
+      (void) config_mgr_.forward_initial_config_meta_to_arb();
     } while (0);
     if (OB_UNLIKELY(config_state_changed)) {
       WLockGuard guard(lock_);
@@ -4043,22 +4078,29 @@ int PalfHandleImpl::ack_config_log(const common::ObAddr &server,
                                    const LogConfigVersion &config_version)
 {
   int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-  const int64_t &curr_proposal_id = state_mgr_.get_proposal_id();
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
-  } else if (msg_proposal_id != curr_proposal_id) {
-    PALF_LOG(WARN, "proposal_id does not match", KR(ret), KPC(this), K(msg_proposal_id),
-        K(server), K(curr_proposal_id));
-  } else if (self_ != state_mgr_.get_leader()) {
-    ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "self is not leader, state not match", KR(ret), KPC(this),
-        K(server), K(msg_proposal_id), K(curr_proposal_id));
-  } else if (OB_FAIL(config_mgr_.ack_config_log(server, msg_proposal_id, config_version))) {
-    PALF_LOG(WARN, "ObLogConfigMgr ack_config_log failed", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
-  } else {
-    PALF_LOG(INFO, "ack_config_log success", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+  bool is_majority = false;
+  do {
+    RLockGuard guard(lock_);
+    const int64_t &curr_proposal_id = state_mgr_.get_proposal_id();
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret));
+    } else if (msg_proposal_id != curr_proposal_id) {
+      PALF_LOG(WARN, "proposal_id does not match", KR(ret), KPC(this), K(msg_proposal_id),
+          K(server), K(curr_proposal_id));
+    } else if (self_ != state_mgr_.get_leader()) {
+      ret = OB_STATE_NOT_MATCH;
+      PALF_LOG(WARN, "self is not leader, state not match", KR(ret), KPC(this),
+          K(server), K(msg_proposal_id), K(curr_proposal_id));
+    } else if (OB_FAIL(config_mgr_.ack_config_log(server, msg_proposal_id, config_version, is_majority))) {
+      PALF_LOG(WARN, "ObLogConfigMgr ack_config_log failed", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+    } else {
+      PALF_LOG(INFO, "ack_config_log success", KR(ret), KPC(this), K(server), K(msg_proposal_id), K(config_version));
+    }
+  } while (0);
+  if (is_majority) {
+    WLockGuard guard(lock_);
+    (void) config_mgr_.after_config_log_majority(msg_proposal_id, config_version);
   }
   return ret;
 }
@@ -4084,6 +4126,24 @@ int PalfHandleImpl::advance_reuse_lsn(const LSN &flush_log_end_lsn)
     PALF_LOG(WARN, "sw_.advance_reuse_lsn failed", K(ret), K(flush_log_end_lsn));
   } else {
     PALF_LOG(TRACE, "advance_reuse_lsn success", K(ret), K(flush_log_end_lsn));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::try_handle_next_submit_log()
+{
+  int ret = OB_SUCCESS;
+  PALF_LOG(TRACE, "try_handle_next_submit_log begin", KPC(this));
+  const int64_t begin_ts = ObTimeUtility::current_time();
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(sw_.try_handle_next_submit_log())) {
+    PALF_LOG(WARN, "sw_.try_handle_next_submit_log failed", K(ret), KPC(this));
+  } else {
+    const int64_t time_cost = ObTimeUtility::current_time() - begin_ts;
+    handle_submit_log_cost_stat_.stat(time_cost);
+    PALF_LOG(TRACE, "try_handle_next_submit_log success", K(ret), KPC(this));
   }
   return ret;
 }
@@ -4190,7 +4250,8 @@ int PalfHandleImpl::after_flush_config_change_meta_(const int64_t proposal_id, c
     PALF_LOG(WARN, "LogConfigMgr after_flush_config_log failed", K(ret), KPC(this), K(proposal_id),
         K(config_version));
   } else if (self_ == leader) {
-    if (OB_FAIL(config_mgr_.ack_config_log(self_, proposal_id, config_version))) {
+    bool unused_bool = false;
+    if (OB_FAIL(config_mgr_.ack_config_log(self_, proposal_id, config_version, unused_bool))) {
       PALF_LOG(WARN, "ack_config_log failed", K(ret), KPC(this), K(config_version));
     }
   } else if (false == leader.is_valid()) {

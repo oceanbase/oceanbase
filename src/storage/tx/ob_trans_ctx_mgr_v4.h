@@ -37,6 +37,8 @@ namespace storage
 class ObLSTxService;
 class ObTransSubmitLogFunctor;
 class ObTxCtxTable;
+struct ObTxCtxMoveArg;
+struct ObTransferMoveTxParam;
 }
 
 namespace memtable
@@ -82,7 +84,7 @@ typedef common::ObSimpleIterator<ObLSTxCtxMgrStat,
 typedef common::ObSimpleIterator<ObTxLockStat,
         ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxLockStatIterator;
 
-typedef ObTransHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock, 1 << 14 /*bucket_num*/> ObLSTxCtxMap;
+typedef share::ObLightHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock, 1 << 14 /*bucket_num*/> ObLSTxCtxMap;
 
 typedef common::LinkHashNode<share::ObLSID> ObLSTxCtxMgrHashNode;
 typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
@@ -90,7 +92,7 @@ typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
 struct ObTxCreateArg
 {
   ObTxCreateArg(const bool for_replay,
-                const bool for_special_tx,
+                const PartCtxSource ctx_source,
                 const uint64_t tenant_id,
                 const ObTransID &trans_id,
                 const share::ObLSID &ls_id,
@@ -99,9 +101,12 @@ struct ObTxCreateArg
                 const uint32_t session_id,
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
-                ObTransService *trans_service)
+                ObTransService *trans_service,
+                ObXATransID xid = ObXATransID(),
+                int64_t epoch = -1,
+                const ObTxCtxMoveArg *move_arg = NULL)
       : for_replay_(for_replay),
-        for_special_tx_(for_special_tx),
+        ctx_source_(ctx_source),
         tenant_id_(tenant_id),
         tx_id_(trans_id),
         ls_id_(ls_id),
@@ -110,7 +115,10 @@ struct ObTxCreateArg
         session_id_(session_id),
         scheduler_(scheduler),
         trans_expired_time_(trans_expired_time),
-        trans_service_(trans_service) {}
+        trans_service_(trans_service),
+        xid_(xid),
+        epoch_(epoch),
+        move_arg_(move_arg) {}
   bool is_valid() const
   {
     return ls_id_.is_valid()
@@ -118,12 +126,13 @@ struct ObTxCreateArg
         && trans_expired_time_ > 0
         && NULL != trans_service_;
   }
-  TO_STRING_KV(K_(for_replay), K_(for_special_tx),
+  TO_STRING_KV(K_(for_replay), "ctx_source_", to_str(ctx_source_),
                  K_(tenant_id), K_(tx_id),
                  K_(ls_id), K_(cluster_id), K_(cluster_version),
-                 K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service));
+                 K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service),
+                 K_(epoch), K_(xid));
   bool for_replay_;
-  bool for_special_tx_;
+  PartCtxSource ctx_source_;
   uint64_t tenant_id_;
   ObTransID tx_id_;
   share::ObLSID ls_id_;
@@ -133,6 +142,9 @@ struct ObTxCreateArg
   const common::ObAddr &scheduler_;
   int64_t trans_expired_time_;
   ObTransService *trans_service_;
+  ObXATransID xid_;
+  int64_t epoch_;
+  const ObTxCtxMoveArg *move_arg_;
 };
 
 // Is used to store and traverse ObTxID
@@ -140,7 +152,7 @@ const static char OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID[] = "ObTxCtxMgr";
 typedef common::ObSimpleIterator<ObTransID, OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID, 16> ObTxIDIterator;
 
 // LogStream Transaction Context Manager
-class ObLSTxCtxMgr: public ObTransHashLink<ObLSTxCtxMgr>
+class ObLSTxCtxMgr: public share::ObLightHashLink<ObLSTxCtxMgr>
 {
 // ut
   friend class unittest::TestTxCtxTable;
@@ -189,6 +201,25 @@ public:
 
   // Offline the in-memory state of the ObLSTxCtxMgr
   int offline();
+
+  int transfer_out_tx_op(int64_t except_tx_id,
+                         const SCN data_end_scn,
+                         const SCN op_scn,
+                         NotifyType op_type,
+                         bool is_replay,
+                         ObLSID dest_ls_id,
+                         int64_t transfer_epoch,
+                         int64_t& active_tx_count,
+                         int64_t &op_tx_count);
+  int wait_tx_write_end(ObTimeoutCtx &timeout_ctx);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const SCN log_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     int64_t &tx_count,
+                     int64_t &colllect_count,
+                     ObIArray<ObTxCtxMoveArg> &res);
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObIArray<ObTxCtxMoveArg> &args);
 public:
   // Create a TxCtx whose tx_id is specified
   // @param [in] tx_id: transaction ID
@@ -213,6 +244,11 @@ public:
   // @return OB_TRANS_CTX_NOT_EXIST, if the specified TxCtx is not found;
   int get_tx_ctx(const ObTransID &tx_id, const bool for_replay, ObPartTransCtx *&tx_ctx);
 
+  int get_tx_ctx_with_timeout(const ObTransID &tx_id,
+                              const bool for_replay,
+                              ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout);
+
   // Find specified TxCtx directly from the ObLSTxCtxMgr's hash_map
   // @param [in] tx_id: transaction ID
   // @param [out] tx_ctx: context found through ObLSTxCtxMgr's hash table
@@ -233,7 +269,8 @@ public:
   int del_tx_ctx(ObTransCtx *ctx);
 
   // Freeze process needs to traverse TxCtx to submit log
-  int traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id);
+  // @param[in] freeze_clock, the freeze clock after which will not be traversaled
+  int traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const uint32_t freeze_clock = UINT32_MAX);
   int traverse_tx_to_submit_next_log();
 
   // Get the min prepare version of transaction module of current observer for slave read
@@ -366,6 +403,11 @@ public:
   }
   int64_t get_total_active_readonly_request_count() { return ATOMIC_LOAD(&total_active_readonly_request_count_); }
 
+  void inc_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, 1); }
+  void dec_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, -1); }
+  int64_t get_total_request_by_transfer_dest() {
+    return total_request_by_transfer_dest_;
+  }
   // Get all tx obj lock information in this ObLSTxCtxMgr
   // @param [out] iter: all tx obj lock op information
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter);
@@ -517,6 +559,9 @@ public:
   // check is blocked
   bool is_tx_blocked() const { return is_tx_blocked_(); }
 
+  // check all blocked
+  bool is_all_blocked() const { return is_all_blocked_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 
@@ -535,7 +580,6 @@ public:
                State::state_str(state_),
                K_(total_tx_ctx_count),
                K_(active_tx_count),
-               K_(total_active_readonly_request_count),
                K_(ls_retain_ctx_mgr),
                K_(aggre_rec_scn),
                K_(prev_aggre_rec_scn),
@@ -551,7 +595,7 @@ private:
   static const int64_t RETRY_INTERVAL_US = 10 *1000;
 
 private:
-  int process_callback_(ObIArray<ObTxCommitCallback> &cb_array) const;
+  int process_callback_(ObTxCommitCallback *&cb_list) const;
   void print_all_tx_ctx_(const int64_t max_print, const bool verbose);
   int64_t get_tx_ctx_count_() const { return ATOMIC_LOAD(&total_tx_ctx_count_); }
   int create_tx_ctx_(const ObTxCreateArg &arg,
@@ -645,7 +689,6 @@ private:
     static const int64_t ONLINE = 10;
     static const int64_t UNBLOCK_NORMAL = 11;
     static const int64_t MAX = 12;
-
   public:
     static bool is_valid(const int64_t op)
     { return op > INVALID && op < MAX; }
@@ -816,6 +859,9 @@ private:
 
   int64_t active_tx_count_;
 
+  // for transfer dest_ls depend src_ls
+  int64_t total_request_by_transfer_dest_;
+
   // It is used to record the time point of leader takeover
   // gts must be refreshed to the newest before the leader provides services
   MonotonicTs leader_takeover_ts_;
@@ -907,7 +953,7 @@ public:
   }
 };
 
-typedef transaction::ObTransHashMap<share::ObLSID, ObLSTxCtxMgr,
+typedef share::ObLightHashMap<share::ObLSID, ObLSTxCtxMgr,
         ObLSTxCtxMgrAlloc, common::ObQSyncLock> ObLSTxCtxMgrMap;
 
 class ObTxCtxMgr
@@ -1075,6 +1121,8 @@ public:
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
 
   int do_all_ls_standby_cleanup(ObTimeGuard &cleanup_timeguard);
+
+  int check_ls_status(const share::ObLSID &ls_id);
 private:
   int create_ls_(const int64_t tenant_id,
                  const share::ObLSID &ls_id,

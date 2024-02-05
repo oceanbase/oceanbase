@@ -1147,6 +1147,128 @@ OB_INLINE ObObjType ob_obj_default_type(const ObObjTypeClass tc)
   return OB_LIKELY(tc < ObActualMaxTC) ? OBJ_DEFAULT_TYPE[tc] : ObMaxType;
 }
 
+enum VecValueTypeClass: uint16_t {
+  VEC_TC_NULL = 0,
+  VEC_TC_INTEGER,
+  VEC_TC_UINTEGER,
+  VEC_TC_FLOAT,
+  VEC_TC_DOUBLE,
+  VEC_TC_FIXED_DOUBLE,
+  VEC_TC_NUMBER,
+  VEC_TC_DATETIME,
+  VEC_TC_DATE,
+  VEC_TC_TIME,
+  VEC_TC_YEAR,
+  VEC_TC_EXTEND,
+  VEC_TC_UNKNOWN,
+  VEC_TC_STRING,
+  VEC_TC_BIT,
+  VEC_TC_ENUM_SET,
+  VEC_TC_ENUM_SET_INNER,
+  VEC_TC_TIMESTAMP_TZ,   // ObTimestampTZType
+  VEC_TC_TIMESTAMP_TINY, // ObTimestampNanoType, ObTimestampLTZType
+  VEC_TC_RAW,
+  VEC_TC_INTERVAL_YM,
+  VEC_TC_INTERVAL_DS,
+  VEC_TC_ROWID,
+  VEC_TC_LOB,
+  VEC_TC_JSON,
+  VEC_TC_GEO,
+  //TODO shengle give a doc for how to add a new type
+  VEC_TC_UDT,
+  VEC_TC_DEC_INT32,
+  VEC_TC_DEC_INT64,
+  VEC_TC_DEC_INT128,
+  VEC_TC_DEC_INT256,
+  VEC_TC_DEC_INT512,
+  MAX_VEC_TC
+};
+
+inline bool ob_is_double_type(ObObjType);
+inline bool ob_is_decimal_int(ObObjType);
+
+OB_INLINE VecValueTypeClass get_vec_value_tc(const ObObjType type, const int16_t scale,
+                                             const int16_t precision)
+{
+  UNUSED(precision);
+  const static VecValueTypeClass maps[] = {
+    VEC_TC_NULL,              // ObNullType
+    VEC_TC_INTEGER,           // ObTinyIntType
+    VEC_TC_INTEGER,           // ObSmallIntType
+    VEC_TC_INTEGER,           // ObMediumIntType
+    VEC_TC_INTEGER,           // ObInt32Type
+    VEC_TC_INTEGER,           // ObIntType
+    VEC_TC_UINTEGER,          // ObUTinyIntType
+    VEC_TC_UINTEGER,          // ObUSmallIntType
+    VEC_TC_UINTEGER,          // ObUMediumIntType
+    VEC_TC_UINTEGER,          // ObUInt32Type
+    VEC_TC_UINTEGER,          // ObUInt64Type
+    VEC_TC_FLOAT,             // ObFloatType
+    VEC_TC_DOUBLE,            // ObDoubleType
+    VEC_TC_FLOAT,             // ObUFloatType
+    VEC_TC_DOUBLE,            // ObUDoubleType
+    VEC_TC_NUMBER,            // ObNumberType
+    VEC_TC_NUMBER,            // ObUNumberType
+    VEC_TC_DATETIME,          // ObDateTimeType
+    VEC_TC_DATETIME,          // ObTimestampType
+    VEC_TC_DATE,              // ObDateType
+    VEC_TC_TIME,              // ObTimeType
+    VEC_TC_YEAR,              // ObYearType
+    VEC_TC_STRING,            // ObVarcharType
+    VEC_TC_STRING,            // ObCharType
+    VEC_TC_STRING,            // ObHexStringType
+    VEC_TC_EXTEND,            // ObExtendType
+    VEC_TC_UNKNOWN,           // ObUnknownType
+    VEC_TC_STRING,            // ObTinyTextType
+    VEC_TC_LOB,               // ObTextType
+    VEC_TC_LOB,               // ObMediumTextType
+    VEC_TC_LOB,               // ObLongTextType
+    VEC_TC_BIT,               // ObBitType
+    VEC_TC_ENUM_SET,          // ObEnumType
+    VEC_TC_ENUM_SET,          // ObSetType
+    VEC_TC_ENUM_SET_INNER,    // ObEnumInnerType
+    VEC_TC_ENUM_SET_INNER,    // ObSetInnerType
+    VEC_TC_TIMESTAMP_TZ,      // ObTimestampTZType
+    VEC_TC_TIMESTAMP_TINY,    // ObTimestampLTZType
+    VEC_TC_TIMESTAMP_TINY,    // ObTimestampNanoType
+    VEC_TC_RAW,               // ObRawType
+    VEC_TC_INTERVAL_YM,       // ObIntervalYMType
+    VEC_TC_INTERVAL_DS,       // ObIntervalDSType
+    VEC_TC_NUMBER,            // ObNumberFloatType
+    VEC_TC_STRING,            // ObNVarchar2Type
+    VEC_TC_STRING,            // ObNCharType
+    VEC_TC_ROWID,             // ObURowID
+    VEC_TC_LOB,               // ObLobType
+    VEC_TC_JSON,              // ObJsonType
+    VEC_TC_GEO,               // ObGeometryType
+    VEC_TC_UDT                // ObUserDefinedSQLType
+  };
+  VecValueTypeClass t = MAX_VEC_TC;
+  if (type < 0 || type >= ObMaxType) {
+    OB_ASSERT(false);
+  } else {
+    if (ob_is_double_type(type) && scale > SCALE_UNKNOWN_YET
+        && scale <= OB_MAX_DOUBLE_FLOAT_SCALE) {
+      t = VEC_TC_FIXED_DOUBLE;
+    } else if (ob_is_decimal_int(type)) {
+      if (precision <= MAX_PRECISION_DECIMAL_INT_32) {
+        t = VEC_TC_DEC_INT32;
+      } else if (precision <= MAX_PRECISION_DECIMAL_INT_64) {
+        t = VEC_TC_DEC_INT64;
+      } else if (precision <= MAX_PRECISION_DECIMAL_INT_128) {
+        t = VEC_TC_DEC_INT128;
+      } else if (precision <= MAX_PRECISION_DECIMAL_INT_256) {
+        t = VEC_TC_DEC_INT256;
+      } else if (precision <= MAX_PRECISION_DECIMAL_INT_512) {
+        t = VEC_TC_DEC_INT512;
+      }
+    } else {
+      t = maps[type];
+    }
+  }
+  return t;
+}
+
 extern const int64_t INT_MIN_VAL[ObMaxType];
 extern const int64_t INT_MAX_VAL[ObMaxType];
 extern const uint64_t UINT_MAX_VAL[ObMaxType];
@@ -1167,6 +1289,12 @@ OB_INLINE bool ob_is_castable_type_class(ObObjTypeClass tc)
 OB_INLINE bool ob_is_int_uint(ObObjTypeClass left_tc, ObObjTypeClass right_tc)
 {
   return (ObIntTC == left_tc && ObUIntTC == right_tc) || (ObIntTC == right_tc && ObUIntTC == left_tc);
+}
+
+OB_INLINE bool ob_is_int_less_than_64(ObObjType type)
+{
+  return (ObTinyIntType <= type && type <= ObInt32Type)
+         || (ObUTinyIntType <= type && type <= ObUInt32Type);
 }
 
 // print obj type string
@@ -1269,7 +1397,12 @@ inline bool ob_is_unsigned_type(ObObjType type)
           || ObUDoubleType == type
           || ObUNumberType == type;
 }
-
+bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
+                                                    const common::ObObjMeta& dst_meta);
+bool is_match_alter_string_column_online_ddl_rules(const common::ObObjMeta& src_meta,
+                                                   const common::ObObjMeta& dst_meta,
+                                                   const int32_t src_len,
+                                                   const int32_t dst_len);
 inline void convert_unsigned_type_to_signed(ObObjType &type)
 {
   switch(type) {

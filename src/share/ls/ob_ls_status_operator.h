@@ -365,7 +365,8 @@ public:
   // @return OB_ENTRY_NOT_EXIST if duplicate log stream not exist
   int get_duplicate_ls_status_info(const uint64_t tenant_id,
                                    ObISQLClient &client,
-                                   share::ObLSStatusInfo &status_info);
+                                   share::ObLSStatusInfo &status_info,
+                                   const int32_t group_id);
   /**
    * @description:
    *    get ls list from all_ls_status order by tenant_id, ls_id for switchover tenant
@@ -398,7 +399,8 @@ public:
                               ObMember &arb_member,
                               common::GlobalLearnerList &learner_list);
   int get_ls_status_info(const uint64_t tenant_id, const ObLSID &id,
-                         ObLSStatusInfo &status_info, ObISQLClient &client);
+                         ObLSStatusInfo &status_info, ObISQLClient &client,
+                         const int32_t group_id = 0);
   int fill_cell(common::sqlclient::ObMySQLResult *result,
                 share::ObLSStatusInfo &status_info);
   int fill_cell(common::sqlclient::ObMySQLResult *result,
@@ -508,12 +510,14 @@ private:
   int inner_get_ls_status_(const ObSqlString &sql, const uint64_t exec_tenant_id,
                            const bool need_member_list, ObISQLClient &client,
                            ObMemberList &member_list, share::ObLSStatusInfo &status_info,
-                           ObMember &arb_member, common::GlobalLearnerList &learner_list);
+                           ObMember &arb_member, common::GlobalLearnerList &learner_list,
+                           const int32_t group_id);
 
   int get_ls_status_(const uint64_t tenant_id, const ObLSID &id, const bool need_member_list,
                      ObMemberList &member_list,
                      ObLSStatusInfo &status_info, ObISQLClient &client,
-                     ObMember &arb_member, common::GlobalLearnerList &learner_list);
+                     ObMember &arb_member, common::GlobalLearnerList &learner_list,
+                     const int32_t group_id);
 
   int construct_ls_primary_info_sql_(common::ObSqlString &sql);
 

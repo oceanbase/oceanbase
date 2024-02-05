@@ -17,7 +17,8 @@ namespace storage
 {
 
 ObCGGroupByScanner::ObCGGroupByScanner()
-  : ObCGRowScanner(),
+    : ObCGRowScanner(),
+    output_exprs_(nullptr),
     group_by_agg_idxs_(),
     group_by_cell_(nullptr)
 {}
@@ -38,7 +39,7 @@ void ObCGGroupByScanner::reset()
 int ObCGGroupByScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCGRowScanner::init(iter_param, access_ctx, wrapper))) {

@@ -316,7 +316,8 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
                                 const ObPLDataType& cursor_type, // cursor返回值类型(record)
                                 const common::ObIArray<int64_t> &formal_params, //cursor的形参
                                 ObPLCursor::CursorState state,
-                                bool has_dup_column_name)
+                                bool has_dup_column_name,
+                                bool skip_locked)
 {
   int ret = OB_SUCCESS;
   // CK (OB_LIKELY(cursors_.count() < FUNC_MAX_CURSORS));
@@ -339,6 +340,7 @@ int ObPLCursorTable::add_cursor(uint64_t pkg_id,
       cursor->set_cursor_type(cursor_type);
       cursor->set_state(state);
       cursor->set_rowid_table_id(rowid_table_id);
+      cursor->set_skip_locked(skip_locked);
       if (has_dup_column_name) {
         cursor->set_dup_column();
       }
@@ -1138,7 +1140,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                             const common::ObIArray<int64_t> &formal_params,
                             ObPLCursor::CursorState state,
                             bool has_dup_column_name,
-                            int64_t &index)
+                            int64_t &index,
+                            bool skip_locked)
 {
   int ret = OB_SUCCESS;
   bool is_dup = false;
@@ -1170,7 +1173,8 @@ int ObPLBlockNS::add_cursor(const ObString &name,
                                                       cursor_type,
                                                       formal_params,
                                                       state,
-                                                      has_dup_column_name))) {
+                                                      has_dup_column_name,
+                                                      skip_locked))) {
       LOG_WARN("failed to add condition to condition table", K(ret));
     } else {
       index = cursors_.at(cursors_.count() - 1);
@@ -2332,6 +2336,9 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
       if (OB_ISNULL(record_type.get_record_member_type(member_index))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type is invalid", K(ret));
+      } else if (access_ident.has_brackets_ && 0 == access_ident.params_.count()) {
+        ret = OB_ERR_NOT_FUNC_NAME;
+        LOG_USER_ERROR(OB_ERR_NOT_FUNC_NAME, attr_name.length(), attr_name.ptr());
       } else {
         new(&access_idx)ObObjAccessIdx(*record_type.get_record_member_type(member_index),
             ObObjAccessIdx::IS_CONST, attr_name, *record_type.get_record_member_type(member_index),
@@ -3047,10 +3054,12 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
     }
     if (OB_SUCC(ret) && routine_infos.empty()) {
       if (OB_NOT_NULL(external_ns_)) {
-        bool need_clear = false;
-        if (OB_ISNULL(external_ns_->get_resolve_ctx().params_.secondary_namespace_)
-            && OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_)) {
-          need_clear = true;
+        bool need_restore = false;
+        pl::ObPLBlockNS *second_ns = nullptr;
+        if (OB_NOT_NULL(resolve_ctx.params_.secondary_namespace_) &&
+            external_ns_->get_resolve_ctx().params_.secondary_namespace_ != resolve_ctx.params_.secondary_namespace_) {
+          need_restore = true;
+          second_ns = external_ns_->get_resolve_ctx().params_.secondary_namespace_;
           (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_
           = resolve_ctx.params_.secondary_namespace_;
         }
@@ -3064,8 +3073,8 @@ int ObPLBlockNS::resolve_routine(const ObPLResolveCtx &resolve_ctx,
           LOG_WARN("resolve routine failed", K(db_name), K(package_name), K(routine_name),
                    K(expr_params), K(ret));
         }
-        if (need_clear) {
-          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = NULL;
+        if (need_restore) {
+          (const_cast<ObPLResolveCtx &>(external_ns_->get_resolve_ctx())).params_.secondary_namespace_ = second_ns;
         }
       }
     }

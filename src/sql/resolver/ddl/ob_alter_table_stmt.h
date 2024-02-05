@@ -83,6 +83,7 @@ public:
   inline int set_nls_formats(const common::ObString &nls_date_format,
                              const common::ObString &nls_timestamp_format,
                              const common::ObString &nls_timestamp_tz_format);
+  int fill_session_vars(const ObBasicSessionInfo &session);
   inline const common::ObTimeZoneInfoWrap &get_tz_info_wrap()
   { return alter_table_arg_.tz_info_wrap_; }
   void set_tenant_id(const uint64_t tenant_id)

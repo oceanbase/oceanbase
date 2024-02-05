@@ -106,7 +106,8 @@ void ObLSRecoveryReportor::wait()
 
 void ObLSRecoveryReportor::wakeup()
 {
-   if (OB_NOT_INIT) {
+   if (IS_NOT_INIT) {
+     LOG_WARN_RET(OB_NOT_INIT, "not init no need wakeup");
    } else {
      ObThreadCondGuard guard(get_cond());
      get_cond().broadcast();

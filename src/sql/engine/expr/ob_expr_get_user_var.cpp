@@ -70,8 +70,7 @@ int ObExprGetUserVar::calc_result_type1(ObExprResType &type,
         }
       }
       if (session_var.meta_.is_decimal_int()) {
-        type.set_precision(wide::ObDecimalIntConstValue::get_max_precision_by_int_bytes(
-          session_var.value_.get_int_bytes()));
+        type.set_precision(static_cast<ObPrecision>(OB_MAX_DECIMAL_POSSIBLE_PRECISION));
       }
       type.set_collation_level(session_var.meta_.get_collation_level());
       type.set_collation_type(session_var.meta_.get_collation_type());
@@ -137,6 +136,11 @@ int ObExprGetUserVar::eval_get_user_var(const ObExpr &expr, ObEvalCtx &ctx, ObDa
           if (is_lob_storage(res_obj.get_type())) {
             OZ(ob_adjust_lob_datum(res_obj, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), res));
           }
+        } else if (sess_obj.is_decimal_int() && sess_obj.get_int_bytes() != sizeof(int512_t)) {
+          ObDecimalIntBuilder res_builder;
+          res_builder.from(sess_obj.get_decimal_int(), sess_obj.get_int_bytes());
+          res_builder.extend(sizeof(int512_t));
+          res.set_decimal_int(res_builder.get_decimal_int(), res_builder.get_int_bytes());
         } else {
           OZ(res.from_obj(sess_obj));
           if (is_lob_storage(sess_obj.get_type())) {

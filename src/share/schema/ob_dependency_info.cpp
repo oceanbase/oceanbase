@@ -236,6 +236,28 @@ int ObDependencyInfo::get_object_create_time(ObISQLClient &sql_client,
   return ret;
 }
 
+int ObDependencyInfo::parse_from(common::sqlclient::ObMySQLResult &result)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  ObDependencyInfo &dep = *this;
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, tenant_id, dep, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, dep_obj_id, dep, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, dep_obj_type, dep, ObObjectType);
+  EXTRACT_INT_FIELD_TO_CLASS_VALUE_MYSQL(result, dep_order, order, dep, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, dep, int64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, dep_timestamp, dep, int64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, ref_obj_type, dep, ObObjectType);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, ref_obj_id, dep, uint64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, ref_timestamp, dep, int64_t);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, dep_obj_owner_id, dep, uint64_t, true, false, OB_INVALID_ID);
+  EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, property, dep, uint64_t);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, dep_attrs, dep);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, dep_reason, dep);
+  EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, ref_obj_name, dep);
+  return ret;
+}
+
 int ObDependencyInfo::delete_schema_object_dependency(common::ObISQLClient &trans,
                                                       uint64_t tenant_id,
                                                       uint64_t dep_obj_id,
@@ -397,6 +419,145 @@ int ObDependencyInfo::collect_dep_infos(ObReferenceObjTable &ref_objs,
     }
   }
 
+  return ret;
+}
+
+int ObDependencyInfo::collect_dep_infos(
+    const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
+    ObIArray<ObDependencyInfo> &deps,
+    const uint64_t tenant_id,
+    const ObObjectType dep_obj_type,
+    const uint64_t dep_obj_id,
+    const uint64_t dep_obj_owner_id,
+    const uint64_t property,
+    const ObString &dep_attrs,
+    const ObString &dep_reason,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t order = 0;
+  deps.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < based_schema_object_infos.count(); ++i) {
+    const ObBasedSchemaObjectInfo &base_info = based_schema_object_infos.at(i);
+    if (OB_UNLIKELY((OB_INVALID_TENANT_ID != base_info.schema_tenant_id_ &&
+                     tenant_id != base_info.schema_tenant_id_) ||
+                    TABLE_SCHEMA != base_info.schema_type_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid based schema object", KR(ret), K(base_info));
+    } else {
+      ObDependencyInfo dep;
+      dep.set_tenant_id(tenant_id);
+      dep.set_dep_obj_type(dep_obj_type);
+      dep.set_dep_obj_id(dep_obj_id);
+      dep.set_order(order++);
+      dep.set_schema_version(schema_version);
+      dep.set_dep_timestamp(-1);
+      dep.set_ref_obj_type(ObObjectType::TABLE);
+      dep.set_ref_obj_id(base_info.schema_id_);
+      dep.set_ref_timestamp(base_info.schema_version_);
+      dep.set_dep_obj_owner_id(dep_obj_owner_id);
+      dep.set_property(property);
+      if (!dep_attrs.empty() && OB_FAIL(dep.set_dep_attrs(dep_attrs))) {
+        LOG_WARN("fail to set dep attrs", KR(ret), K(dep_attrs));
+      } else if (!dep_reason.empty() && OB_FAIL(dep.set_dep_reason(dep_reason))) {
+        LOG_WARN("fail to set dep reason", KR(ret), K(dep_attrs));
+      } else if (OB_FAIL(deps.push_back(dep))) {
+        LOG_WARN("fail to push back dep", KR(ret), K(dep));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDependencyInfo::collect_ref_infos(uint64_t tenant_id,
+                                        uint64_t dep_obj_id,
+                                        common::ObISQLClient &sql_proxy,
+                                        common::ObIArray<ObDependencyInfo> &deps)
+{
+  int ret = OB_SUCCESS;
+  deps.reset();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  SMART_VAR(common::ObMySQLProxy::MySQLResult, res)
+  {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = %lu AND dep_obj_id = %lu ORDER BY dep_order",
+                               OB_ALL_TENANT_DEPENDENCY_TNAME,
+                               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                               dep_obj_id))) {
+      LOG_WARN("failed to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("fail to get next", KR(ret));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          ObDependencyInfo dep;
+          if (OB_FAIL(dep.parse_from(*result))) {
+            LOG_WARN("fail to parse dependency", K(ret));
+          } else if (FALSE_IT(dep.set_tenant_id(tenant_id))) {
+          } else if (OB_FAIL(deps.push_back(dep))) {
+            LOG_WARN("failed to push back obj", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDependencyInfo::collect_dep_infos(uint64_t tenant_id,
+                                        uint64_t ref_obj_id,
+                                        common::ObISQLClient &sql_proxy,
+                                        common::ObIArray<ObDependencyInfo> &deps)
+{
+  int ret = OB_SUCCESS;
+  deps.reset();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  SMART_VAR(common::ObMySQLProxy::MySQLResult, res)
+  {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE tenant_id = %lu AND ref_obj_id = %lu",
+                               OB_ALL_TENANT_DEPENDENCY_TNAME,
+                               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                               ref_obj_id))) {
+      LOG_WARN("failed to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("fail to get next", KR(ret));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else {
+          ObDependencyInfo dep;
+          if (OB_FAIL(dep.parse_from(*result))) {
+            LOG_WARN("fail to parse dependency", K(ret));
+          } else if (FALSE_IT(dep.set_tenant_id(tenant_id))) {
+          } else if (OB_FAIL(deps.push_back(dep))) {
+            LOG_WARN("failed to push back obj", K(ret));
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
 

@@ -17,16 +17,22 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/oblog/ob_log.h"
 #include "share/datum/ob_datum.h"
+#include "share/vector/ob_fixed_length_base.h"
+#include "share/vector/ob_vector_define.h"
 #include "sql/engine/ob_serializable_function.h"
 #include "objit/common/ob_item_type.h"
-#include "sql/engine/ob_bit_vector.h"
+#include "sql/engine/ob_batch_rows.h"
 #include "common/ob_common_utility.h"
+#include "sql/ob_eval_bound.h"
+#include "share/schema/ob_schema_struct.h"
 
 namespace oceanbase
 {
 namespace common
 {
  class ObObjParam;
+ class ObIVector;
+ class ObFixedLengthBase;
 }
 
 namespace storage
@@ -46,6 +52,7 @@ struct ObSqlDatumArray;
 class ObDatumCaster;
 using common::ObDatum;
 using common::ObDatumVector;
+class ObBatchRows;
 
 typedef ObItemType ObExprOperatorType;
 
@@ -124,7 +131,10 @@ struct ObEvalInfo
   }
   DECLARE_TO_STRING;
 
-  inline bool in_frame_notnull() const { return notnull_ && point_to_frame_; }
+  // if want to use this interface to opt in vectorization 1.0,
+  // When converting the new format to the old format in vectorization 2.0,
+  // the notnull_ and point_to_frame_ tags need to be maintained
+  inline bool in_frame_notnull() const { return false; }
 
 	union {
 		struct {
@@ -277,6 +287,14 @@ typedef void (*ObBatchDatumHashFunc)(uint64_t *hash_values,
                                      const bool is_batch_seed);
 
 typedef int (*ObExprCmpFuncType)(const common::ObDatum &datum1, const common::ObDatum &datum2, int& cmp_ret);
+typedef int (*NullSafeRowCmpFunc) (const ObObjMeta &l_meta, const ObObjMeta &r_meta,
+                                   const void *l_data, const int32_t l_len, const bool l_null,
+                                   const void *r_data, const int32_t r_len, const bool r_null,
+                                   int &cmp_ret);
+typedef int (*RowCmpFunc) (const ObObjMeta &l_meta, const ObObjMeta &r_meta,
+                           const void *l_data, const int32_t l_len,
+                           const void *r_data, const int32_t r_len,
+                           int &cmp_ret);
 struct ObExprBasicFuncs
 {
   // Default hash method:
@@ -316,6 +334,11 @@ struct ObExprBasicFuncs
   */
   ObExprHashFuncType murmur_hash_v2_;
   ObBatchDatumHashFunc murmur_hash_v2_batch_;
+
+  // null first/last cmp funcs for vector engine 2.0
+  NullSafeRowCmpFunc row_null_first_cmp_;
+  NullSafeRowCmpFunc row_null_last_cmp_;
+  RowCmpFunc row_cmp_;
 };
 
 
@@ -349,6 +372,10 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
   const ObBitVector &skip, const int64_t size
 #define BATCH_EVAL_FUNC_ARG_LIST expr, ctx, skip, size
 
+#define VECTOR_EVAL_FUNC_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, \
+  const ObBitVector &skip, const EvalBound &bound
+#define VECTOR_EVAL_FUNC_ARG_LIST expr, ctx, skip, bound
+
 #define EVAL_FUNC_ARG_DECL const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
 #define EVAL_FUNC_ARG_LIST expr, ctx, expr_datum
 
@@ -366,11 +393,35 @@ typedef common::ObFixedArray<common::ObString, common::ObIAllocator> ObStrValues
 
 // default evaluate batch function which call eval() for every datum of batch.
 extern int expr_default_eval_batch_func(BATCH_EVAL_FUNC_ARG_DECL);
+extern int expr_default_eval_vector_func(VECTOR_EVAL_FUNC_ARG_DECL);
+
+
+struct VectorHeader {
+  VectorHeader() : format_(VEC_INVALID) {}
+  void set_format(const VectorFormat &format) { format_ = format; }
+  VectorFormat get_format() const { return format_; }
+  int init_uniform_const_vector(VecValueTypeClass vec_value_tc,
+                                ObDatum *datum,
+                                ObEvalInfo *eval_info);
+  ObIVector *get_vector() { return reinterpret_cast<ObIVector *>(vector_buf_); }
+  int assign(const VectorHeader &other)
+  {
+    int ret = OB_SUCCESS;
+    format_ = other.format_;
+    MEMCPY(vector_buf_, other.vector_buf_, common::ObIVector::MAX_VECTOR_STRUCT_SIZE);
+    return ret;
+  }
+
+public:
+  VectorFormat format_;
+  char vector_buf_[common::ObIVector::MAX_VECTOR_STRUCT_SIZE];
+};
 
 struct ObExpr
 {
   OB_UNIS_VERSION(1);
 public:
+  friend class ObOperator;
 
   const static uint32_t INVALID_EXP_CTX_ID = UINT32_MAX;
 
@@ -385,6 +436,79 @@ public:
                            const ObBitVector &skip,
                            const int64_t size) const;
 
+  OB_INLINE int eval_vector(ObEvalCtx &ctx,
+                            const ObBitVector &skip,
+                            const int64_t size,
+                            const bool all_rows_active) const;
+
+  OB_INLINE int eval_vector(ObEvalCtx &ctx, const ObBatchRows &brs) const;
+
+  int eval_vector(ObEvalCtx &ctx,
+                  const ObBitVector &skip,
+                  const EvalBound &bound) const;
+
+  //init vector by default format, and not reset ptr to reserve buf for UNIFORM & DISCREBE Vector
+  inline int init_vector_default(ObEvalCtx &ctx,
+                                 const int64_t size) const {
+    return init_vector(ctx, get_default_res_format(), size);
+  }
+
+  //init vector by default format, and reset ptr to reserve buf for UNIFORM & DISCREBE Vector
+  inline int init_vector_for_write(ObEvalCtx &ctx,
+                                   const VectorFormat format,
+                                   const int64_t size) const
+  {
+    return init_vector(ctx, format, size, true/*use_reserve_buf*/);
+  }
+
+  //init vector by format
+  //@param[in] ctx
+  //@param[in] format: format of vector
+  //@param[in] size: batch size
+  //@param[in] use_reserve_buf: if true, reset ptr to reserve buf for UNIFORM & DISCREBE Vector
+  int init_vector(ObEvalCtx &ctx,
+                  const VectorFormat format,
+                  const int64_t size,
+                  const bool use_reserve_buf = false) const;
+
+  OB_INLINE VectorHeader &get_vector_header(ObEvalCtx &ctx) const {
+    return *(reinterpret_cast<VectorHeader *>(ctx.frames_[frame_idx_] + vector_header_off_));
+  }
+  OB_INLINE common::ObIVector *get_vector(ObEvalCtx &ctx) const {
+    return reinterpret_cast<common::ObIVector *>(get_vector_buf(ctx));
+  }
+  OB_INLINE VecValueTypeClass get_vec_value_tc() const { return vec_value_tc_; };
+  OB_INLINE VectorFormat get_format(ObEvalCtx &ctx) const {
+    return get_vector_header(ctx).format_;
+  };
+  OB_INLINE char *get_vector_buf(ObEvalCtx &ctx) const {
+    return get_vector_header(ctx).vector_buf_;
+  }
+  OB_INLINE VectorFormat get_default_res_format() const;
+  OB_INLINE VectorFormat get_temp_column_store_res_format() const;
+
+  // this interface used to visitor fixed vector data directly,
+  // If it is used to write data into vector, you need to consider
+  // the maintenance of null bitmaps and has_null tags in vector
+  template<typename T>
+  inline T *get_fixed_vector_data(ObEvalCtx &ctx) const {
+    OB_ASSERT(res_buf_len_ == sizeof(T));
+    OB_ASSERT(is_fixed_length_data_);
+    return reinterpret_cast<T *>((static_cast<ObFixedLengthBase *>(get_vector(ctx)))->get_data());
+  }
+
+  OB_INLINE bool enable_rich_format() const
+  {
+    return UINT32_MAX != vector_header_off_
+           && expr_default_eval_vector_func != eval_vector_func_;
+  }
+  int cast_to_uniform(const int64_t size, ObEvalCtx &ctx) const;
+  uint64_t get_batch_idx_mask(ObEvalCtx &ctx) {
+    return batch_idx_mask_;
+  }
+  OB_INLINE uint32_t get_fixed_length() const {
+    return len_;
+  }
   void reset() { new (this) ObExpr(); }
   ObDatum &locate_expr_datum(ObEvalCtx &ctx) const
   {
@@ -443,6 +567,28 @@ public:
   // locate batch datums and reset datum ptr_ to reserved buf
   inline ObDatum *locate_datums_for_update(ObEvalCtx &ctx, const int64_t size) const;
 
+  inline char *locate_discrete_ptr_for_write(ObEvalCtx &ctx) const
+  {
+    char *frame = ctx.frames_[frame_idx_];
+    OB_ASSERT(frame != NULL);
+    const int64_t idx = ctx.get_batch_idx();
+    char *data_ptr = frame + res_buf_off_ + idx * res_buf_len_;
+    char **discrete_ptrs = get_discrete_vector_ptrs(ctx);
+    if (data_ptr != discrete_ptrs[idx]) {
+      discrete_ptrs[idx] = data_ptr;
+    }
+    return data_ptr;
+  }
+
+  inline void reset_discrete_ptrs_for_write(ObEvalCtx &ctx, const int64_t batch_size) const
+  {
+    char *frame = ctx.frames_[frame_idx_];
+    OB_ASSERT(frame != NULL);
+    char **discrete_ptrs = get_discrete_vector_ptrs(ctx);
+    OB_ASSERT(discrete_ptrs != NULL);
+    reset_discretes_ptr(frame, batch_size, discrete_ptrs);
+  }
+
   // reset ptr in ObDatum to reserved buf
   OB_INLINE void reset_ptr_in_datum(ObEvalCtx &ctx, const int64_t datum_idx) const;
 
@@ -460,6 +606,7 @@ public:
 
   char *get_str_res_mem(ObEvalCtx &ctx, const int64_t size, const int64_t datum_idx) const
   {
+    //TODO shengle handle continuous format memory
     return OB_LIKELY(size <= res_buf_len_)
         ? ctx.frames_[frame_idx_] + res_buf_off_ + res_buf_len_ * (batch_idx_mask_ & datum_idx)
         : alloc_str_res_mem(ctx, size, datum_idx);
@@ -519,6 +666,9 @@ public:
   template <typename ...TS>
   OB_INLINE int eval_batch_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
                                        const int64_t size, TS &...args) const;
+
+  OB_INLINE int eval_vector_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
+                                       const EvalBound bound) const;
 
   OB_INLINE int deep_copy_self_datum(ObEvalCtx &ctx) const;
 
@@ -583,6 +733,10 @@ public:
     return g_expr_ser_array;
   }
 
+  OB_INLINE void unset_null(ObEvalCtx &ctx, int64_t batch_idx) {
+    get_nulls(ctx).unset(batch_idx);
+  }
+
   TO_STRING_KV("type", get_type_name(type_),
               K_(datum_meta),
               K_(obj_meta),
@@ -604,6 +758,9 @@ public:
               K_(expr_ctx_id),
               K_(extra),
               K_(batch_idx_mask),
+              K_(vector_header_off),
+              K_(eval_vector_func),
+              K_(local_session_var_id),
               KP(this));
 
 private:
@@ -611,11 +768,32 @@ private:
   // reset datums pointer to reserved buffer.
   void reset_datums_ptr(char *frame, const int64_t size) const;
   void reset_datum_ptr(char *frame, const int64_t size, const int64_t idx) const;
+
+  void reset_discretes_ptr(char *frame, const int64_t size, char** ptrs) const;
   int eval_one_datum_of_batch(ObEvalCtx &ctx, common::ObDatum *&datum) const;
   int do_eval_batch(ObEvalCtx &ctx, const ObBitVector &skip, const int64_t size) const;
-
+  void set_all_null(ObEvalCtx &ctx, const int64_t size) const;
 
 public:
+  // those interface can only used for init vector and col result holder
+  OB_INLINE ObBitVector &get_nulls(ObEvalCtx &ctx) const {
+    return *to_bit_vector(ctx.frames_[frame_idx_] + null_bitmap_off_);
+  };
+  OB_INLINE char *get_res_buf(ObEvalCtx &ctx) const {
+    return ctx.frames_[frame_idx_] + res_buf_off_;
+  };
+  OB_INLINE char *get_continuous_vector_data(ObEvalCtx &ctx) const {
+    return ctx.frames_[frame_idx_] + cont_buf_off_;
+  };
+  OB_INLINE uint32_t *get_continuous_vector_offsets(ObEvalCtx &ctx) const {
+    return reinterpret_cast<uint32_t *>(ctx.frames_[frame_idx_] + offset_off_);
+  };
+  OB_INLINE char **get_discrete_vector_ptrs(ObEvalCtx &ctx) const {
+    return reinterpret_cast<char **>(ctx.frames_[frame_idx_] + ptr_arr_off_);
+  };
+  OB_INLINE int32_t *get_discrete_vector_lens(ObEvalCtx &ctx) const {
+    return reinterpret_cast<int32_t *>(ctx.frames_[frame_idx_] + len_arr_off_);
+  };
   typedef int (*EvalFunc) (const ObExpr &expr,
                            ObEvalCtx &ctx,
                            ObDatum &expr_datum);
@@ -623,6 +801,10 @@ public:
                                 ObEvalCtx &ctx,
                                 const ObBitVector &skip,
                                 const int64_t size);
+  typedef int (*EvalVectorFunc) (const ObExpr &expr,
+                                 ObEvalCtx &ctx,
+                                 const ObBitVector &skip,
+                                 const EvalBound &bound);
   typedef int (*EvalEnumSetFunc) (const ObExpr &expr,
                                   const common::ObIArray<common::ObString> &str_values,
                                   const uint64_t cast_mode,
@@ -650,6 +832,8 @@ public:
       uint64_t is_boolean_:1; // to distinguish result of this expr between and int tc
       uint64_t is_dynamic_const_:1; // is const during the subplan execution, including exec param
       uint64_t need_stack_check_:1; // the expression tree depth needs to check whether the stack overflows
+      uint64_t is_fixed_length_data_:1; // wether data of this expr is fixed length
+      uint64_t nullable_:1;
     };
     uint64_t flag_;
   };
@@ -662,6 +846,10 @@ public:
   union {
     EvalBatchFunc eval_batch_func_;
     sql::ser_eval_batch_function ser_eval_batch_func_;
+  };
+  union {
+    EvalVectorFunc eval_vector_func_;
+    sql::ser_eval_vector_function ser_eval_vector_func_;
   };
   // aux evaluate functions for eval_func_, array of any function pointers, which interpreted
   // by eval_func_.
@@ -704,12 +892,26 @@ public:
     struct {
       int64_t div_calc_scale_          :   16;
       int64_t is_error_div_by_zero_    :    1;
-      int64_t reserved_                :   47;
+      int64_t may_not_need_raw_check_          :    1;
+      int64_t reserved_                :   46;
     };
   };
   ObExprBasicFuncs *basic_funcs_;
   uint64_t batch_idx_mask_;
   ObIExprExtraInfo *extra_info_;
+  uint32_t vector_header_off_;
+  union {
+    uint32_t offset_off_;
+    uint32_t ptr_arr_off_;
+  };
+  union {
+    uint32_t len_;
+    uint32_t len_arr_off_;
+  };
+  uint32_t cont_buf_off_;
+  uint32_t null_bitmap_off_;
+  VecValueTypeClass vec_value_tc_;
+  int64_t local_session_var_id_;
 };
 
 // helper template to access ObExpr::extra_
@@ -944,6 +1146,35 @@ struct ObToStringExprRow
 };
 typedef ObToStringExprRow ROWEXPR2STR;
 
+struct ObExprArrayVecStringer
+{
+  ObExprArrayVecStringer(ObEvalCtx &ctx, const common::ObIArray<ObExpr *> &exprs) :
+    ctx_(ctx), exprs_(exprs) {}
+  DECLARE_TO_STRING;
+private:
+  ObEvalCtx &ctx_;
+  const common::ObIArray<ObExpr *> &exprs_;
+};
+
+typedef ObExprArrayVecStringer VEC_ROWEXPR2STR;
+
+struct ToStrVectorHeader
+{
+  ToStrVectorHeader(const VectorHeader &header, const ObExpr &expr, const ObBitVector *skip,
+                    const EvalBound &bound) :
+    header_(header), expr_(expr), skip_(skip), bound_(bound)
+  {}
+  DECLARE_TO_STRING;
+private:
+  const VectorHeader &header_;
+  const ObExpr &expr_;
+  const ObBitVector *skip_;
+  const EvalBound &bound_;
+
+  template <typename VectorType>
+  int to_string_helper(char *buf, const int64_t buf_len) const;
+};
+
 OB_INLINE ObDatum &ObExpr::locate_datum_for_write(ObEvalCtx &ctx) const
 {
   // performance critical, do not check pointer validity.
@@ -1020,6 +1251,17 @@ OB_INLINE int ObExpr::eval_batch_param_value(ObEvalCtx &ctx, const ObBitVector &
   return ret;
 }
 
+OB_INLINE int ObExpr::eval_vector_param_value(ObEvalCtx &ctx, const ObBitVector &skip,
+                                       const EvalBound bound) const
+{
+  int ret = common::OB_SUCCESS;
+  for (int param_index = 0; OB_SUCC(ret) && param_index < arg_cnt_; param_index++) {
+    if (OB_FAIL(args_[param_index]->eval_vector(ctx, skip, bound))) {
+      SQL_LOG(WARN, "evaluate parameter failed", K(ret), K(param_index));
+    }
+  }
+  return ret;
+}
 
 OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
 {
@@ -1031,6 +1273,9 @@ OB_INLINE int ObExpr::eval(ObEvalCtx &ctx, common::ObDatum *&datum) const
   ObEvalInfo *eval_info = (ObEvalInfo *)(frame + eval_info_off_);
   if (is_batch_result()) {
     if (NULL == eval_func_ || eval_info->projected_) {
+      if (UINT32_MAX != vector_header_off_) {
+        ret = cast_to_uniform(ctx.get_batch_size(), ctx);
+      }
       datum = datum + ctx.get_batch_idx();
     } else {
       ret = eval_one_datum_of_batch(ctx, datum);
@@ -1070,10 +1315,39 @@ OB_INLINE int ObExpr::eval_batch(ObEvalCtx &ctx,
     }
   } else if (info.projected_ || NULL == eval_batch_func_) {
     // expr values is projected by child or has no evaluate func, do nothing.
+    if (UINT32_MAX != vector_header_off_) {
+      ret = cast_to_uniform(size, ctx);
+    }
   } else if (size > 0) {
     ret = do_eval_batch(ctx, skip, size);
   }
   return ret;
+}
+
+OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx, const ObBatchRows &brs) const
+{
+  return eval_vector(ctx, *brs.skip_, brs.size_, brs.all_rows_active_);
+}
+
+OB_INLINE int ObExpr::eval_vector(ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const int64_t size,
+                                  const bool all_rows_active) const
+{
+  return eval_vector(ctx, skip, EvalBound(size, all_rows_active));
+}
+
+OB_INLINE VectorFormat ObExpr::get_default_res_format() const {
+  return !batch_result_ ? VEC_UNIFORM_CONST
+         : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
+         : (is_fixed_length_data_ ? VEC_FIXED : VEC_DISCRETE));
+}
+
+OB_INLINE VectorFormat ObExpr::get_temp_column_store_res_format() const
+{
+  return !batch_result_ ? VEC_UNIFORM_CONST
+         : (datum_meta_.type_ == ObNullType ? VEC_UNIFORM
+         : (is_fixed_length_data_ ? VEC_FIXED : VEC_CONTINUOUS));
 }
 
 OB_INLINE int ObExpr::deep_copy_self_datum(ObEvalCtx &ctx) const
@@ -1136,7 +1410,7 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
   return buffer;
 }
 
-#define PRINT_VECTORIZED_ROWS(parMod, level, eval_ctx, exprs, batch_size, args...)       \
+#define PRINT_VECTORIZED_ROWS(parMod, level, eval_ctx, exprs, batch_size, skip, args...)       \
     do { if (IS_LOG_ENABLED(level)) {                                                            \
     [&](const char *_fun_name_) __attribute__((GET_LOG_FUNC_ATTR(level))) {                      \
     if (OB_UNLIKELY(OB_LOGGER.need_to_print(::oceanbase::common::OB_LOG_ROOT::M_##parMod,        \
@@ -1146,6 +1420,9 @@ inline const char *get_vectorized_row_str(ObEvalCtx &eval_ctx,
       ObEvalCtx::BatchInfoScopeGuard _batch_info_guard(eval_ctx);                                \
       _batch_info_guard.set_batch_size(_batch_size);                                             \
       for (int64_t i = 0; i < _batch_size; ++i) {                                                \
+        if (NULL != skip && skip->at(i)) {                                                       \
+          continue;                                                                              \
+        }                                                                                        \
         _batch_info_guard.set_batch_idx(i);                                                      \
         ::oceanbase::common::OB_PRINT("["#parMod"] ", OB_LOG_LEVEL(level),                       \
                                       get_vectorized_row_str(eval_ctx, exprs, i),                \
@@ -1298,6 +1575,7 @@ inline int decode(const char *buf, const int64_t data_len, int64_t &pos,
   }
   return ret;
 }
+
 } // end namespace serialization
 } // end namespace common
 } // end namespace oceanbase

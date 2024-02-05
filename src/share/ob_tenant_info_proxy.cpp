@@ -15,6 +15,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "share/ob_cluster_role.h"//ObClusterTYPE
 #include "share/ob_share_util.h"//ObShareUtil
+#include "share/ob_tenant_info_proxy.h" //ObAllTenantInfo
 #include "share/config/ob_server_config.h"//GCONF
 #include "share/inner_table/ob_inner_table_schema.h"//ALL_TENANT_INFO_TNAME
 #include "share/ls/ob_ls_i_life_manager.h"//TODO SCN VALUE
@@ -29,10 +30,12 @@
 #include "common/ob_timeout_ctx.h"//ObTimeoutCtx
 #include "rootserver/ob_root_utils.h"//ObRootUtils
 #include "rootserver/ob_rs_event_history_table_operator.h" // ROOTSERVICE_EVENT_ADD
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // ObTenantSnapshotUtil
 #include "share/restore/ob_log_restore_source_mgr.h"  // ObLogRestoreSourceMgr
 
 using namespace oceanbase;
 using namespace oceanbase::common;
+using namespace rootserver;
 namespace oceanbase
 {
 namespace share
@@ -579,7 +582,47 @@ int ObAllTenantInfoProxy::update_tenant_max_ls_id(
 
 int ObAllTenantInfoProxy::update_tenant_role(
     const uint64_t tenant_id,
-    ObISQLClient *proxy,
+    common::ObMySQLProxy *proxy,
+    int64_t old_switchover_epoch,
+    const ObTenantRole &new_role,
+    const ObTenantSwitchoverStatus &old_status,
+    const ObTenantSwitchoverStatus &new_status,
+    int64_t &new_switchover_ts)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id)
+    || OB_INVALID_VERSION == old_switchover_epoch
+    || !new_role.is_valid()
+    || !old_status.is_valid()
+    || !new_status.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id),
+             K(old_switchover_epoch), K(old_status), K(new_role), K(new_status));
+  } else if (OB_ISNULL(proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret));
+  } else if (OB_FAIL(trans.start(proxy, exec_tenant_id))) {
+    LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id), K(tenant_id));
+  } else if (OB_FAIL(update_tenant_role_in_trans(tenant_id, trans, old_switchover_epoch,
+                         new_role, old_status, new_status, new_switchover_ts))) {
+    LOG_WARN("fail to update tenant role in trans", KR(ret), K(tenant_id), K(old_switchover_epoch),
+             K(new_role), K(old_status), K(new_status), K(new_switchover_ts));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::update_tenant_role_in_trans(
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans,
     int64_t old_switchover_epoch,
     const ObTenantRole &new_role,
     const ObTenantSwitchoverStatus &old_status,
@@ -592,6 +635,8 @@ int ObAllTenantInfoProxy::update_tenant_role(
   ObSqlString sql;
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
+  ObAllTenantInfo cur_tenant_info;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS);
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
     || OB_INVALID_VERSION == old_switchover_epoch
@@ -601,9 +646,10 @@ int ObAllTenantInfoProxy::update_tenant_role(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(old_switchover_epoch), K(old_status),
                                        K(new_role), K(new_status));
-  } else if (OB_ISNULL(proxy)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("proxy is null", KR(ret), KP(proxy));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, cur_tenant_info))) {
+    LOG_WARN("failed to load all tenant info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_new_switchover_epoch_(old_switchover_epoch, old_status, new_status,
                                                new_switchover_ts))) {
     LOG_WARN("fail to get_new_switchover_epoch_", KR(ret), K(old_switchover_epoch), K(old_status),
@@ -622,7 +668,7 @@ int ObAllTenantInfoProxy::update_tenant_role(
           new_switchover_ts, tenant_id, old_switchover_epoch, old_status.to_str()))) {
     LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(old_switchover_epoch),
              K(new_role), K(old_status), K(sql));
-  } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+  } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
   } else if (0 == affected_rows) {
     ret = OB_NEED_RETRY;
@@ -770,6 +816,7 @@ int ObAllTenantInfoProxy::update_tenant_status(
   ObTimeoutCtx ctx;
   int64_t new_switchover_epoch = OB_INVALID_VERSION;
   ObLogRestoreSourceMgr restore_source_mgr;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_TENANT_ROLE_OR_SWITCHOVER_STATUS);
 
   if (OB_UNLIKELY(!is_user_tenant(tenant_id)
     || !new_role.is_valid()
@@ -785,6 +832,8 @@ int ObAllTenantInfoProxy::update_tenant_status(
     LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_id), K(new_role), K(old_status),
                 K(new_status), K(sync_scn), K(replayable_scn), K(readable_scn), K(recovery_until_scn),
                 K(old_switchover_epoch));
+  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+    LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret), K(tenant_id));
   } else if (OB_FAIL(get_new_switchover_epoch_(old_switchover_epoch, old_status, new_status,
                                                new_switchover_epoch))) {
     LOG_WARN("fail to get_new_switchover_epoch_", KR(ret), K(old_switchover_epoch), K(old_status),

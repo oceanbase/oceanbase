@@ -18,10 +18,6 @@
 
 namespace oceanbase
 {
-namespace common
-{
-class ObMemstoreAllocatorMgr;
-}
 namespace observer
 {
 struct ObMemstoreAllocatorInfo
@@ -65,7 +61,6 @@ private:
   };
   int fill_tenant_ids();
   int fill_memstore_infos(const uint64_t tenant_id);
-  common::ObMemstoreAllocatorMgr &allocator_mgr_;
   common::ObArray<uint64_t> tenant_ids_;
   common::ObArray<MemstoreInfo> memstore_infos_;
   int64_t memstore_infos_idx_;

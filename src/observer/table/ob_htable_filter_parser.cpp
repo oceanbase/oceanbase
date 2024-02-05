@@ -88,13 +88,9 @@ int ObHTableFilterParser::parse_filter(const ObString &filter_string, hfilter::F
     filter = result_filter_;
   } else {
     if (1 == ret) {  // syntax error
-      if (OB_SUCCESS != error_code_) {
-        ret = error_code_;
-      } else {
-        ret = OB_ERR_PARSER_SYNTAX;
-      }
+      ret = OB_ERR_PARSER_SYNTAX;
     }
-    LOG_WARN("failed to parse filter", K(ret), K_(error_msg), K(filter_string));
+    LOG_WARN("failed to parse filter", K(ret), K_(error_msg), K(filter_string), K_(error_code));
   }
   ob_hfilter__delete_buffer(bp, scanner_);
   return ret;
@@ -124,6 +120,7 @@ int ObHTableFilterParser::create_comparator(const SimpleString &bytes, hfilter::
       //comparator = OB_NEWx(hfilter::RegexStringComparator, allocator_, comparator_value);
       LOG_WARN("regexstring comparator not supported yet", K(ret));
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "regexstring comparator");
     } else if (comparator_type == SUB_STRING_TYPE) {
       comparator = OB_NEWx(hfilter::SubStringComparator, allocator_, comparator_value);
     } else {

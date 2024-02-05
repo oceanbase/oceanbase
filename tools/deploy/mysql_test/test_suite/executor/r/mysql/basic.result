@@ -1551,7 +1551,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |7       |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -1593,7 +1593,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |10      |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -1635,7 +1635,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -1816,7 +1816,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |7       |41          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -1858,7 +1858,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |10      |41          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -1900,7 +1900,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |40          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -2733,9 +2733,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |42          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |37          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |39          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |35          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t2      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -2775,9 +2775,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |43          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |38          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |40          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |36          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t2      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -2817,7 +2817,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |34          |
+|0 |HASH JOIN                  |        |4       |33          |
 |1 |├─PX COORDINATOR           |        |4       |16          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|4       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |4       |9           |
@@ -2860,9 +2860,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |42          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |37          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |39          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |35          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -3033,9 +3033,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |43          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |38          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |40          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |36          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -3344,7 +3344,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |7       |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -3386,7 +3386,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |10      |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -3428,7 +3428,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |43          |
+|0 |HASH JOIN                  |        |4       |43          |
 |1 |├─PX COORDINATOR           |        |5       |19          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |17          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |11          |
@@ -3609,7 +3609,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |7       |41          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -3651,7 +3651,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |10      |41          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -3693,7 +3693,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |40          |
+|0 |HASH JOIN                  |        |4       |40          |
 |1 |├─PX COORDINATOR           |        |5       |17          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|5       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |5       |9           |
@@ -4320,9 +4320,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |2       |31          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |29          |
-|2 |  └─HASH JOIN                    |        |2       |24          |
+|0 |PX COORDINATOR                   |        |1       |29          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |28          |
+|2 |  └─HASH JOIN                    |        |1       |24          |
 |3 |    ├─EXCHANGE IN DISTR          |        |4       |16          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|4       |14          |
 |5 |    │   └─PX PARTITION ITERATOR  |        |4       |9           |
@@ -4362,9 +4362,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |2       |35          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|2       |31          |
-|2 |  └─HASH JOIN                    |        |2       |24          |
+|0 |PX COORDINATOR                   |        |1       |29          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |28          |
+|2 |  └─HASH JOIN                    |        |1       |24          |
 |3 |    ├─EXCHANGE IN DISTR          |        |4       |16          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|4       |14          |
 |5 |    │   └─PX PARTITION ITERATOR  |        |4       |9           |
@@ -4404,9 +4404,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |1       |29          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|1       |28          |
-|2 |  └─HASH JOIN                    |        |1       |24          |
+|0 |PX COORDINATOR                   |        |4       |46          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |39          |
+|2 |  └─HASH JOIN                    |        |4       |24          |
 |3 |    ├─EXCHANGE IN DISTR          |        |4       |16          |
 |4 |    │ └─EXCHANGE OUT DISTR (PKEY)|:EX10000|4       |14          |
 |5 |    │   └─PX PARTITION ITERATOR  |        |4       |9           |
@@ -4791,9 +4791,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |42          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |37          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |39          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |35          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t2      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -4833,9 +4833,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |43          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |38          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |40          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |36          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t2      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -4875,7 +4875,7 @@ Query Plan
 ===============================================================
 |ID|OPERATOR                   |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------
-|0 |HASH JOIN                  |        |5       |34          |
+|0 |HASH JOIN                  |        |4       |33          |
 |1 |├─PX COORDINATOR           |        |4       |16          |
 |2 |│ └─EXCHANGE OUT DISTR     |:EX10000|4       |14          |
 |3 |│   └─PX PARTITION ITERATOR|        |4       |9           |
@@ -4918,9 +4918,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |42          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |37          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |39          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |35          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |
@@ -5091,9 +5091,9 @@ Query Plan
 =====================================================================
 |ID|OPERATOR                         |NAME    |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------
-|0 |PX COORDINATOR                   |        |5       |43          |
-|1 |└─EXCHANGE OUT DISTR             |:EX10001|5       |38          |
-|2 |  └─HASH JOIN                    |        |5       |27          |
+|0 |PX COORDINATOR                   |        |4       |40          |
+|1 |└─EXCHANGE OUT DISTR             |:EX10001|4       |36          |
+|2 |  └─HASH JOIN                    |        |4       |27          |
 |3 |    ├─PX PARTITION ITERATOR      |        |4       |9           |
 |4 |    │ └─TABLE FULL SCAN          |t1      |4       |9           |
 |5 |    └─EXCHANGE IN DISTR          |        |5       |17          |

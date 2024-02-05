@@ -243,36 +243,38 @@ public:
                                       int64_t check_size)
   {
     SQL_LOG(TRACE, "enable datum ptr check", K(exprs), K(check_size));
-    auto expr_idx = 0;
-    FOREACH_CNT(e, exprs) {
-      if (OB_ISNULL((*e)->eval_func_) &&
-          OB_ISNULL((*e)->eval_batch_func_) && ((*e)->arg_cnt_ == 0) &&
-          !((*e)->is_variable_res_buf() || ob_is_decimal_int((*e)->datum_meta_.type_))) {
-        // exclude generated column, string type column
-        auto datum = (*e)->locate_batch_datums(eval_ctx);
-        if ((*e)->is_batch_result()) {
-          for (auto idx = 0; idx < check_size; idx++) {
-            const char *datum_ptr = datum[idx].ptr_;
-            const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
-                            + (*e)->res_buf_len_ * idx;
-            if (datum_ptr != res_ptr) {
-              SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
-                                     KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
-              abort();
-            }
-          }
-        } else {
-          const char *datum_ptr = datum->ptr_;
-          const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
-          if (datum_ptr != res_ptr) {
-            SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
-                     K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
-            abort();
-          }
-        }
-      }
-      expr_idx++;
-    }
+    // TODO: add sanity check for vector formats
+
+    // auto expr_idx = 0;
+    // FOREACH_CNT(e, exprs) {
+    //   if (OB_ISNULL((*e)->eval_func_) &&
+    //       OB_ISNULL((*e)->eval_batch_func_) && ((*e)->arg_cnt_ == 0) &&
+    //       !((*e)->is_variable_res_buf() || ob_is_decimal_int((*e)->datum_meta_.type_))) {
+    //     // exclude generated column, string type column
+    //     auto datum = (*e)->locate_batch_datums(eval_ctx);
+    //     if ((*e)->is_batch_result()) {
+    //       for (auto idx = 0; idx < check_size; idx++) {
+    //         const char *datum_ptr = datum[idx].ptr_;
+    //         const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_
+    //                         + (*e)->res_buf_len_ * idx;
+    //         if (datum_ptr != res_ptr) {
+    //           SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index", K(expr_idx), K(idx),
+    //                                  KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
+    //           abort();
+    //         }
+    //       }
+    //     } else {
+    //       const char *datum_ptr = datum->ptr_;
+    //       const char *res_ptr = eval_ctx.frames_[(*e)->frame_idx_] + (*e)->res_buf_off_;
+    //       if (datum_ptr != res_ptr) {
+    //         SQL_LOG_RET(WARN, OB_ERR_UNEXPECTED, "sanity check failure, column index",
+    //                  K(expr_idx), KP(datum_ptr), KP(res_ptr), KP(*e), K(eval_ctx));
+    //         abort();
+    //       }
+    //     }
+    //   }
+    //   expr_idx++;
+    // }
   }
   static int is_charset_data_version_valid(ObCharsetType charset_type, const int64_t tenant_id);
   static int is_collation_data_version_valid(ObCollationType collation_type, const int64_t tenant_id);
@@ -362,12 +364,23 @@ public:
                                    const ObSQLSessionInfo *session,
                                    common::ObCastMode &cast_mode);
   static int get_default_cast_mode(const ObSQLSessionInfo *session, common::ObCastMode &cast_mode);
+  static void get_default_cast_mode(const ObSQLMode sql_mode, ObCastMode &cast_mode);
   // 比上面三个方法多了一些cast mode的设置，例如:
   // CM_EXPLICIT_CAST, CM_ZERO_FILL, CM_STRICT_MODE
   static int get_default_cast_mode(const bool is_explicit_cast,
                                     const uint32_t result_flag,
                                     const ObSQLSessionInfo *session,
                                     common::ObCastMode &cast_mode);
+  static void get_default_cast_mode(const bool is_explicit_cast,
+                                   const uint32_t result_flag,
+                                   const stmt::StmtType &stmt_type,
+                                   bool is_ignore_stmt,
+                                   ObSQLMode sql_mode,
+                                   ObCastMode &cast_mode);
+  static void get_default_cast_mode(const stmt::StmtType &stmt_type,
+                                    bool is_ignore_stmt,
+                                    ObSQLMode sql_mode,
+                                    ObCastMode &cast_mode);
   static int check_well_formed_str(const ObString &src_str, const ObCollationType cs_type,
                                    ObString &dst_str, bool &is_null,
                                    const bool is_strict_mode,
@@ -379,6 +392,7 @@ public:
   static void set_insert_update_scope(common::ObCastMode &cast_mode);
   static bool is_insert_update_scope(common::ObCastMode &cast_mode);
   static int get_cast_mode_for_replace(const ObRawExpr *expr,
+                                       const ObExprResType &dst_type,
                                        const ObSQLSessionInfo *session,
                                        ObCastMode &cast_mode);
   static common::ObCollationLevel transform_cs_level(const common::ObCollationLevel cs_level);
@@ -497,6 +511,17 @@ public:
   static int wrap_column_convert_ctx(const common::ObExprCtx &expr_ctx, common::ObCastCtx &column_conv_ctx);
 
   static void init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx);
+  static int merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
+                                                 const share::schema::ObLocalSessionVar &session_vars_snapshot);
+  static int merge_solidified_var_into_dtc_params(const share::schema::ObLocalSessionVar *local_vars,
+                                            const ObTimeZoneInfo *local_timezone,
+                                            ObDataTypeCastParams &dtc_param);
+  static int merge_solidified_var_into_sql_mode(const share::schema::ObLocalSessionVar *local_vars,
+                                                ObSQLMode &sql_mode);
+  static int merge_solidified_var_into_collation(const share::schema::ObLocalSessionVar &session_vars_snapshot,
+                                                  ObCollationType &cs_type);
+  static int merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
+                                                          int64_t &max_allowed_packet);
 
   static bool is_oracle_sys_view(const ObString &table_name);
 
@@ -580,6 +605,7 @@ public:
   static bool is_support_batch_exec(ObItemType type);
   static bool is_pl_nested_sql(ObExecContext *cur_ctx);
   static bool is_fk_nested_sql(ObExecContext *cur_ctx);
+  static bool is_online_stat_gathering_nested_sql(ObExecContext *cur_ctx);
   static bool is_iter_uncommitted_row(ObExecContext *cur_ctx);
   static bool is_nested_sql(ObExecContext *cur_ctx);
   static bool is_in_autonomous_block(ObExecContext *cur_ctx);
@@ -644,6 +670,7 @@ public:
                                   share::schema::ObObjectType &obj_type,
                                   uint64_t &schema_version);
   static bool check_need_disconnect_parser_err(const int ret_code);
+  static bool check_json_expr(ObItemType type);
 
   static int print_identifier_require_quotes(ObCollationType collation_type,
                                              const ObString &ident,

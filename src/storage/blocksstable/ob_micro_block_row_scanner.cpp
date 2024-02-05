@@ -36,7 +36,6 @@ ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator
     reverse_scan_(false),
     is_left_border_(false),
     is_right_border_(false),
-    has_lob_out_row_(false),
     current_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     start_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     last_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
@@ -80,7 +79,6 @@ void ObIMicroBlockRowScanner::reuse()
   reverse_scan_ = false;
   is_left_border_ = false;
   is_right_border_ = false;
-  has_lob_out_row_ = false;
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
@@ -193,7 +191,6 @@ int ObIMicroBlockRowScanner::open(
     is_left_border_ = is_left_border;
     is_right_border_ = is_right_border;
     macro_id_ = macro_id;
-    has_lob_out_row_ = param_->has_lob_column_out() && reinterpret_cast<const ObMicroBlockHeader *>(block_data.buf_)->has_lob_out_row();
   }
   return ret;
 }
@@ -218,7 +215,6 @@ int ObIMicroBlockRowScanner::open_column_block(
   } else {
     reverse_scan_ = context_->query_flag_.is_reverse_scan();
     macro_id_ = macro_id;
-    has_lob_out_row_ = param_->has_lob_column_out() && reinterpret_cast<const ObMicroBlockHeader *>(block_data.buf_)->has_lob_out_row();
 
     int64_t begin;
     int64_t end;
@@ -281,7 +277,7 @@ int ObIMicroBlockRowScanner::get_next_rows()
       LOG_WARN("Failed to get pushdown filter result bitmap", K(ret));
     } else if (OB_FAIL(batch_store->fill_rows(
                 range_->get_group_idx(),
-                reader_,
+                this,
                 current_,
                 last_ + step_,
                 res))) {
@@ -566,8 +562,8 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   int64_t *row_ids = pd_filter_info.row_ids_;
   int64_t row_cap = 0;
   int64_t bitmap_offset = 0;
-  ObSEArray<ObSqlDatumInfo, 16> datum_infos;
   const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
+  ObSEArray<ObSqlDatumInfo, 16> datum_infos;
   bool filter_applied_directly = false;
   if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
       ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
@@ -584,7 +580,7 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
 
   if (OB_FAIL(ret) || filter_applied_directly) {
   } else if (OB_FAIL(filter.get_datums_from_column(datum_infos))) {
-    LOG_WARN("failed to get filter column datum_infos", K(ret));
+    LOG_WARN("Failed to get filter column datum_infos", K(ret));
   } else {
     while (OB_SUCC(ret) && cur_row_index < end_row_index) {
       row_cap = MIN(pd_filter_info.batch_size_, end_row_index - cur_row_index);
@@ -592,40 +588,28 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
         row_ids[i] = cur_row_index + i;
       }
       if (0 == filter.get_col_count()) {
-      } else if (ObIMicroBlockReader::Reader == reader_->get_type()) {
-        //TODO hanlin remove the ugly interface for get rows
-        sql::ObEvalCtx &eval_ctx = filter.get_op().get_eval_ctx();
-        if (row_.is_valid() && OB_FAIL(row_.reserve(datum_infos.count()))) {
-          STORAGE_LOG(WARN, "Failed to reserve datum row", K(ret), K(datum_infos));
-          // cg scanner use major sstable only, no need default row
-        } else if (OB_FAIL(flat_reader_->get_rows(
-                    col_offsets,
-                    filter.get_col_params(),
-                    nullptr,
-                    row_ids,
-                    row_cap,
-                    row_,
-                    datum_infos,
-                    0,
-                    filter.get_filter_node().column_exprs_,
-                    eval_ctx))) {
-          LOG_WARN("fail to copy rows", K(ret), K(row_cap),
-                   "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+      } else if (param_->use_new_format()) {
+        if (OB_FAIL(get_rows_for_rich_format(col_offsets,
+                                             filter.get_col_params(),
+                                             row_ids,
+                                             row_cap,
+                                             0,
+                                             pd_filter_info.cell_data_ptrs_,
+                                             pd_filter_info.len_array_,
+                                             filter.get_filter_node().column_exprs_,
+                                             nullptr))) {
+          LOG_WARN("Failed to get rows for rich format", K(ret), K(cur_row_index));
         }
-      } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-          ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-        if (OB_FAIL(decoder_->get_rows(
-              col_offsets,
-              filter.get_col_params(),
-              row_ids,
-              pd_filter_info.cell_data_ptrs_,
-              row_cap,
-              datum_infos))) {
-          LOG_WARN("failed to get rows", K(ret), K(cur_row_index), K(row_cap));
-        }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected micro block reader", K(ret), K(reader_->get_type()));
+      } else if (OB_FAIL(get_rows_for_old_format(col_offsets,
+                                                 filter.get_col_params(),
+                                                 row_ids,
+                                                 row_cap,
+                                                 0,
+                                                 pd_filter_info.cell_data_ptrs_,
+                                                 filter.get_filter_node().column_exprs_,
+                                                 datum_infos,
+                                                 nullptr))) {
+        LOG_WARN("Failed to get rows for old format", K(ret), K(cur_row_index));
       }
 
       if (OB_FAIL(ret)) {
@@ -643,6 +627,135 @@ int ObIMicroBlockRowScanner::apply_black_filter_batch(
   return ret;
 }
 
+int ObIMicroBlockRowScanner::get_rows_for_old_format(
+    const common::ObIArray<int32_t> &col_offsets,
+    const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+    const int64_t *row_ids,
+    const int64_t row_cap,
+    const int64_t vector_offset,
+    const char **cell_datas,
+    sql::ObExprPtrIArray &exprs,
+    common::ObIArray<ObSqlDatumInfo> &datum_infos,
+    blocksstable::ObDatumRow *default_row)
+{
+  int ret = OB_SUCCESS;
+  sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
+  if (0 == vector_offset &&
+      param_->use_uniform_format() &&
+      OB_FAIL(init_exprs_uniform_header(&exprs, eval_ctx, eval_ctx.max_batch_size_))) {
+    LOG_WARN("Fail to init uniform header", K(ret));
+  } else if (ObIMicroBlockReader::Reader == reader_->get_type()) {
+    ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
+    if (OB_FAIL(flat_reader->get_rows(col_offsets,
+                                      col_params,
+                                      default_row,
+                                      row_ids,
+                                      row_cap,
+                                      row_,
+                                      datum_infos,
+                                      vector_offset,
+                                      exprs,
+                                      eval_ctx))) {
+      LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
+               "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+    }
+  } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
+             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+    if (OB_FAIL(decoder->get_rows(col_offsets,
+                                  col_params,
+                                  row_ids,
+                                  cell_datas,
+                                  row_cap,
+                                  datum_infos,
+                                  vector_offset))) {
+      LOG_WARN("Failed to get rows", K(ret), K(row_cap), K(vector_offset));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected micro block reader", K(ret), K(reader_->get_type()));
+  }
+
+  if (OB_SUCC(ret) && param_->has_lob_column_out() && reader_->has_lob_out_row()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_offsets.count(); i++) {
+      if (nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_lob_storage()) {
+        if (OB_FAIL(fill_datums_lob_locator(*param_,
+                                            *context_,
+                                            *col_params.at(i),
+                                            row_cap,
+                                            datum_infos.at(i).datum_ptr_ + vector_offset,
+                                            false))) {
+          LOG_WARN("Fail to fill lob locator", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIMicroBlockRowScanner::get_rows_for_rich_format(
+    const common::ObIArray<int32_t> &col_offsets,
+    const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+    const int64_t *row_ids,
+    const int64_t row_cap,
+    const int64_t vector_offset,
+    const char **cell_datas,
+    uint32_t *len_array,
+    sql::ObExprPtrIArray &exprs,
+    blocksstable::ObDatumRow *default_row)
+{
+  int ret = OB_SUCCESS;
+  sql::ObEvalCtx &eval_ctx = param_->op_->get_eval_ctx();
+  if (ObIMicroBlockReader::Reader == reader_->get_type()) {
+    ObMicroBlockReader *flat_reader = static_cast<ObMicroBlockReader *>(reader_);
+    if (OB_FAIL(flat_reader->get_rows(col_offsets,
+                                      col_params,
+                                      default_row,
+                                      row_ids,
+                                      vector_offset,
+                                      row_cap,
+                                      row_,
+                                      exprs,
+                                      eval_ctx))) {
+      LOG_WARN("Failed to copy rows", K(ret), K(row_cap),
+               "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+    }
+  } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
+             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+    ObIMicroBlockDecoder *decoder = static_cast<ObIMicroBlockDecoder *>(reader_);
+    if (OB_FAIL(decoder->get_rows(col_offsets,
+                                  col_params,
+                                  row_ids,
+                                  row_cap,
+                                  cell_datas,
+                                  vector_offset,
+                                  len_array,
+                                  eval_ctx,
+                                  exprs))) {
+      LOG_WARN("Failed to get rows", K(ret), K(row_cap));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected micro block reader", K(ret), K(reader_->get_type()));
+  }
+
+  if (OB_SUCC(ret) && param_->has_lob_column_out() && reader_->has_lob_out_row()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_offsets.count(); i++) {
+      if (nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_lob_storage() &&
+          OB_FAIL(fill_exprs_lob_locator(*param_,
+                                         *context_,
+                                         *col_params.at(i),
+                                         *(exprs.at(i)),
+                                         eval_ctx,
+                                         vector_offset,
+                                         row_cap))) {
+        LOG_WARN("Fail to fill lob locator", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIMicroBlockRowScanner::filter_pushdown_filter(
     sql::ObPushdownFilterExecutor *parent,
     sql::ObPushdownFilterExecutor *filter,
@@ -654,9 +767,17 @@ int ObIMicroBlockRowScanner::filter_pushdown_filter(
   if (OB_UNLIKELY(nullptr == reader_ || nullptr == filter || !filter->is_filter_node())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), KP(reader_), KPC(filter));
+  // use uniform base currently, support new format later
+  // TODO(hanling): If the new vectorization format does not start counting from the 0th row, it can be computed in batches.
+  } else if (can_use_vectorize &&
+             filter->get_op().enable_rich_format_ &&
+             OB_FAIL(init_exprs_uniform_header(filter->get_cg_col_exprs(),
+                                               filter->get_op().get_eval_ctx(),
+                                               filter->get_op().get_eval_ctx().max_batch_size_))) {
+    LOG_WARN("Failed to init exprs vector header", K(ret));
   } else if (ObIMicroBlockReader::Decoder == reader_->get_type() ||
-      ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
-    if (has_lob_out_row_) {
+             ObIMicroBlockReader::CSDecoder == reader_->get_type()) {
+    if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
       sql::ObPhysicalFilterExecutor *physical_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
       if (OB_FAIL(decoder_->filter_pushdown_filter(parent,
                                                    *physical_filter,
@@ -721,9 +842,6 @@ int ObIMicroBlockRowScanner::filter_micro_block_in_blockscan(sql::PushdownFilter
     pd_filter_info.is_pd_to_cg_ = false;
     pd_filter_info.param_ = param_;
     pd_filter_info.context_ = context_;
-    if (nullptr != context_->lob_locator_helper_) {
-      context_->lob_locator_helper_->reuse();
-    }
     if (pd_filter_info.filter_->is_filter_constant()) {
       common::ObBitmap *result = nullptr;
       if (OB_FAIL(pd_filter_info.filter_->init_bitmap(pd_filter_info.count_, result))) {
@@ -795,48 +913,37 @@ int ObIMicroBlockRowScanner::get_next_rows(
     const int64_t row_cap,
     common::ObIArray<ObSqlDatumInfo> &datum_infos,
     const int64_t datum_offset,
-    const ObTableIterParam &iter_param)
+    uint32_t *len_array)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == row_ids || nullptr == cell_datas ||
-                  0 == row_cap || cols_projector.count() != datum_infos.count())) {
+  sql::ObExprPtrIArray &exprs = *(const_cast<sql::ObExprPtrIArray *>(param_->output_exprs_));
+  if (OB_UNLIKELY(nullptr == row_ids || nullptr == cell_datas || 0 == row_cap)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(row_ids), KP(cell_datas),
              K(row_cap), K(cols_projector.count()), K(datum_infos.count()));
-  } else if (ObIMicroBlockReader::Reader == reader_->get_type()) {
-    //TODO @hanlin remove this ugly iterface for get rows
-    sql::ObEvalCtx &eval_ctx = iter_param.op_->get_eval_ctx();
-    if (row_.is_valid() && OB_FAIL(row_.reserve(datum_infos.count()))) {
-      STORAGE_LOG(WARN, "Failed to reserve datum row", K(ret), K(datum_infos));
-      // cg scanner use major sstable only, no need default row
-    } else if (OB_FAIL(flat_reader_->get_rows(cols_projector, col_params, nullptr, row_ids, row_cap, row_, datum_infos, datum_offset,
-            *(const_cast<sql::ObExprPtrIArray *>(iter_param.output_exprs_)), eval_ctx))) {
-      LOG_WARN("fail to copy rows", K(ret), K(cols_projector), K(row_cap),
-          "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
+  } else if (param_->use_new_format()) {
+    if (OB_FAIL(get_rows_for_rich_format(cols_projector,
+                                         col_params,
+                                         row_ids,
+                                         row_cap,
+                                         datum_offset,
+                                         cell_datas,
+                                         len_array,
+                                         exprs,
+                                         nullptr))) {
+      LOG_WARN("Failed to get rows for rich format", K(ret));
     }
-  } else if (ObIMicroBlockReader::Decoder != reader_->get_type() &&
-      ObIMicroBlockReader::CSDecoder != reader_->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected micro block reader", K(ret), K(reader_->get_type()));
-  } else if (OB_FAIL(decoder_->get_rows(cols_projector, col_params, row_ids, cell_datas, row_cap, datum_infos, datum_offset))) {
-    LOG_WARN("fail to copy rows", K(ret), K(cols_projector), K(row_cap),
-             "row_ids", common::ObArrayWrap<const int64_t>(row_ids, row_cap));
-  }
-  if (OB_SUCC(ret) && has_lob_out_row_) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); i++) {
-      if (nullptr != col_params.at(i) && col_params.at(i)->get_meta_type().is_lob_storage()) {
-        common::ObDatum *col_datums = datum_infos.at(i).datum_ptr_ + datum_offset;
-        const ObColumnParam &col_param = *col_params.at(i);
-        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cap; ++row_idx) {
-          ObDatum &datum = col_datums[row_idx];
-          if (!datum.is_null() && !datum.get_lob_data().in_row_) {
-            if (OB_FAIL(context_->lob_locator_helper_->fill_lob_locator_v2(datum, col_param, *param_, *context_))) {
-              LOG_WARN("Failed to fill lob loactor", K(ret), K(row_idx), K(datum), KPC_(context), KPC_(param));
-            }
-          }
-        }
-      }
-    }
+  // cg scanner use major sstable only, no need default row
+  } else if (OB_FAIL(get_rows_for_old_format(cols_projector,
+                                             col_params,
+                                             row_ids,
+                                             row_cap,
+                                             datum_offset,
+                                             cell_datas,
+                                             exprs,
+                                             datum_infos,
+                                             nullptr))) {
+    LOG_WARN("Failed to get rows for old format", K(ret));
   }
   return ret;
 }
@@ -848,7 +955,10 @@ int ObIMicroBlockRowScanner::get_aggregate_result(
     ObCGAggCells &cg_agg_cells)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(cg_agg_cells.process(col_idx, reader_, row_ids, row_cap))) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), KP_(range), K_(is_inited));
+  } else if (OB_FAIL(cg_agg_cells.process(*param_, *context_, col_idx, reader_, row_ids, row_cap))) {
     LOG_WARN("Fail to process agg cells", K(ret));
   }
   return ret;
@@ -902,7 +1012,9 @@ int ObIMicroBlockRowScanner::check_can_group_by(
   int ret = OB_SUCCESS;
   row_cnt = reader_->row_count();
   read_cnt = last_ - current_ + 1;
-  if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
+  if (param_->has_lob_column_out() && reader_->has_lob_out_row()) {
+    can_group_by = false;
+  } else if (OB_FAIL(reader_->get_distinct_count(group_by_col, distinct_cnt))) {
     if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
       LOG_WARN("Failed to get distinct cnt", K(ret));
     } else {
@@ -1461,19 +1573,14 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
     }
   } else {
     ObMultiVersionRowFlag flag;
-    int64_t trans_version = 0;
     const ObRowHeader *row_header = nullptr;
+    int64_t trans_version = 0;
     int64_t sql_sequence = 0;
-    bool can_read = true;
-    bool is_determined_state = false;
-    bool read_uncommitted_row = false;
     bool is_ghost_row_flag = false;
     const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
     memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
 
-    if (OB_UNLIKELY(context_->query_flag_.is_ignore_trans_stat())) {
-      version_fit = true;
-    } else if (OB_FAIL(reader_->get_multi_version_info(
+    if (OB_FAIL(reader_->get_multi_version_info(
                 current_,
                 read_info_->get_schema_rowkey_count(),
                 row_header,
@@ -1485,28 +1592,72 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("row header is null", K(ret));
     } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
-    } else if (flag.is_uncommitted_row()) {
-      have_uncommited_row = true;  // TODO @lvling check transaction status instead
-      compaction::ObMergeCachedTransState trans_state;
-      transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
-      if (OB_NOT_NULL(context_->trans_state_mgr_) &&
-        OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
-          transaction::ObTransID(row_header->get_trans_id()), tx_sequence, trans_state)) {
-        can_read = trans_state.can_read_;
-        trans_version = trans_state.trans_version_;
-        is_determined_state = trans_state.is_determined_state_;
-      } else {
-        transaction::ObLockForReadArg lock_for_read_arg(acc_ctx,
-                                                        transaction::ObTransID(row_header->get_trans_id()),
-                                                        tx_sequence,
-                                                        context_->query_flag_.read_latest_,
-                                                        sstable_->get_end_scn());
+    } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(flag, is_ghost_row_flag))) {
+      LOG_WARN("fail to check ghost row", K(ret), K_(current), KPC(row_header),
+               K(trans_version), K(sql_sequence), K_(macro_id));
+    } else {
+      is_last_multi_version_row_ = flag.is_last_multi_version_row();
+      final_result = is_last_multi_version_row_;
 
-        if (OB_FAIL(lock_for_read(lock_for_read_arg,
-                                  can_read,
-                                  trans_version,
-                                  is_determined_state))) {
-          STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
+      if (OB_UNLIKELY(is_ghost_row_flag)) {
+        // Case1: Data is ghost row, and it means no valid value for the row, so
+        //        we can skip it
+        version_fit = false;
+        LOG_DEBUG("is ghost row", K(ret), K(current_), K(flag));
+      } else if (flag.is_uncommitted_row()) {
+        have_uncommited_row = true;  // TODO @lvling check transaction status instead
+        transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
+        // Case2: Data is uncommitted, so we use the txn state cache or txn
+        //        table to decide whether uncommitted txns are readable
+        compaction::ObMergeCachedTransState trans_state;
+        if (OB_NOT_NULL(context_->trans_state_mgr_) &&
+            OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
+              transaction::ObTransID(row_header->get_trans_id()), tx_sequence, trans_state)) {
+          version_fit = trans_state.can_read_;
+          trans_version = trans_state.trans_version_;
+
+          if (transaction::is_effective_trans_version(trans_version)
+              && trans_version <= version_range_.base_version_) {
+            version_fit = false;
+            // filter multi version row whose trans version is smaller than base_version
+            final_result = true;
+          }
+        } else {
+          transaction::ObLockForReadArg lock_for_read_arg(
+            acc_ctx,
+            transaction::ObTransID(row_header->get_trans_id()),
+            tx_sequence,
+            context_->query_flag_.read_latest_,
+            context_->query_flag_.iter_uncommitted_row(),
+            // TODO(handora.qc): remove it in the future
+            sstable_->get_end_scn());
+
+          if (OB_FAIL(lock_for_read(lock_for_read_arg,
+                                    version_fit,
+                                    trans_version))) {
+            STORAGE_LOG(WARN, "fail to check transaction status",
+                        K(ret), KPC(row_header), K_(macro_id));
+          } else if (transaction::is_effective_trans_version(trans_version)
+                     && trans_version <= version_range_.base_version_) {
+            version_fit = false;
+            // filter multi version row whose trans version is smaller than base_version
+            final_result = true;
+          }
+        }
+      } else {
+        // Case3: Data is committed, so we use the version on the data to decide
+        //        whether uncommitted txns are readable
+        if (context_->query_flag_.iter_uncommitted_row()) {
+          version_fit = true;
+        } else if (trans_version <= version_range_.base_version_) {
+          // filter multi version row whose trans version is smaller than base_version
+          version_fit = false;
+          final_result = true;
+        } else if (trans_version > snapshot_version) {
+          // filter multi version row whose trans version is larger than snapshot_version
+          version_fit = false;
+        } else {
+          version_fit = true;
         }
       }
     }
@@ -1543,43 +1694,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(flag, is_ghost_row_flag))) {
-      LOG_WARN("fail to check ghost row", K(ret), K_(current), KPC(row_header),
-               K(trans_version), K(sql_sequence), K_(macro_id));
-    } else if (OB_UNLIKELY(is_ghost_row_flag)) {
-      can_read = false;
-      is_determined_state = true;
-      LOG_DEBUG("is ghost row", K(ret), K(current_), K(flag));
-    }
-
-    if (OB_SUCC(ret)) {
-      is_last_multi_version_row_ = flag.is_last_multi_version_row();
-      final_result = is_last_multi_version_row_;
-      if (OB_UNLIKELY(context_->query_flag_.is_ignore_trans_stat())) {
-        // do nothing
-      } else if (!can_read) {
-        if (!is_determined_state && context_->query_flag_.iter_uncommitted_row()) { // for mark deletion
-          version_fit = true;
-          read_uncommitted_row = true;
-        } else {
-          version_fit = false;
-        }
-      } else if (!flag.is_uncommitted_row() || is_determined_state) { // committed
-        if (trans_version <= version_range_.base_version_) {
-          version_fit = false;
-          // filter multi version row whose trans version is smaller than base_version
-          final_result = true;
-        } else if (trans_version > snapshot_version) { // filter multi version row whose trans version is larger than snapshot_version
-          version_fit = false;
-        } else {
-          version_fit = true;
-        }
-      } else {
-        // read rows in current transaction
-        version_fit = true;
-      }
-    }
     if (OB_SUCC(ret)) {
       if (version_fit) {
         ObDatumRow *row = nullptr;
@@ -1602,7 +1716,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           }
         }
         if (OB_SUCC(ret) && version_fit) {
-          if (OB_INVALID_INDEX != read_info_->get_trans_col_index() && is_determined_state) {
+          if (OB_INVALID_INDEX != read_info_->get_trans_col_index()
+              && transaction::is_effective_trans_version(trans_version)) {
             // only uncommitted row need to be set, committed row set in row reader
             int64_t trans_idx = read_info_->get_trans_col_index();
             if (OB_UNLIKELY(trans_idx >= row->count_ || 0 >= trans_version)) {
@@ -1614,7 +1729,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
             }
           }
           if (OB_SUCC(ret)) {
-            if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
+            if (!row->mvcc_row_flag_.is_uncommitted_row()
+                || transaction::is_effective_trans_version(trans_version)) {
               row->snapshot_version_ = 0;
               row->trans_id_.reset();
             } else { // uncommitted row
@@ -1762,23 +1878,23 @@ int ObMultiVersionMicroBlockRowScanner::do_compact(
 int ObMultiVersionMicroBlockRowScanner::lock_for_read(
     const transaction::ObLockForReadArg &lock_for_read_arg,
     bool &can_read,
-    int64_t &trans_version,
-    bool &is_determined_state)
+    int64_t &trans_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   SCN scn_trans_version = SCN::invalid_scn();
   auto &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
 
-  if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_read, scn_trans_version,
-      is_determined_state))) {
+  if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg,
+                                            can_read,
+                                            scn_trans_version))) {
     LOG_WARN("failed to check transaction status", K(ret));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(
         lock_for_read_arg.data_trans_id_, lock_for_read_arg.data_sql_sequence_,
-        trans_version, ObTxData::MAX_STATE_CNT, can_read, is_determined_state))) {
+        trans_version, ObTxData::MAX_STATE_CNT, can_read))) {
       LOG_WARN("failed to add trans state to cache", K(tmp_ret),
         "trans_id", lock_for_read_arg.data_trans_id_,
         "sql_seq", lock_for_read_arg.data_sql_sequence_);
@@ -2693,7 +2809,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
       LOG_WARN("check sql sequence can read failed", K(ret), K(can_read), K(trans_id), K(sql_seq));
     } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(trans_id, sql_seq,
-        committed_trans_version_, last_trans_state_, can_read, 0))) {
+        committed_trans_version_, last_trans_state_, can_read))) {
       LOG_WARN("failed to add minor trans state", K(tmp_ret), K(trans_id), K(sql_seq), K(can_read));
     }
   }

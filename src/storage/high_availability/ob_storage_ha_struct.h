@@ -81,6 +81,7 @@ public:
       const ObMigrationStatus &cur_status,
       bool &allow_gc);
   // Check the migration status. The LS in the XXX_FAIL state is considered to be an abandoned LS, which can be judged to be directly GC when restarting
+  static bool need_online(const ObMigrationStatus &cur_status);
   static bool check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status);
   static bool check_can_migrate_out(const ObMigrationStatus &cur_status);
   static int check_can_change_status(
@@ -92,11 +93,14 @@ public:
       const ObMigrationStatus &cur_status,
       const bool is_in_member_list,
       const bool is_ls_deleted,
+      const bool is_tenant_dropped,
       ObMigrationStatus &fail_status);
   static int check_migration_in_final_state(
       const ObMigrationStatus &status,
       bool &in_final_state);
   static bool check_is_running_migration(const ObMigrationStatus &cur_status);
+  static bool can_gc_ls_without_check_dependency(
+      const ObMigrationStatus &cur_status);
 private:
   static int check_ls_transfer_tablet_(
       const share::ObLSID &ls_id,

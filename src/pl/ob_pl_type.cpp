@@ -614,7 +614,7 @@ int ObPLDataType::get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& 
 }
 
 int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
-                                            const ObPLBlockNS &ns,
+                                            const ObPLINS &ns,
                                             jit::ObLLVMValue &allocator,
                                             jit::ObLLVMValue &dest) const
 {
@@ -624,7 +624,7 @@ int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
     LOG_WARN("unexpected type to assign NULL", K(*this), K(ret));
   } else {
     const ObUserDefinedType *user_type = NULL;
-    if (OB_FAIL(ns.get_pl_data_type_by_id(get_user_type_id(), user_type))) {
+    if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type))) {
       LOG_WARN("failed to get user type", K(*this), K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1554,7 +1554,6 @@ void ObObjAccessIdx::reset()
 
 bool ObObjAccessIdx::operator==(const ObObjAccessIdx &other) const
 {
-  int ret = OB_SUCCESS;
   // udf deterministic default value is false, we need display setting check_ctx.need_check_deterministic_
   ObExprEqualCheckContext check_ctx;
   check_ctx.need_check_deterministic_ = false;
@@ -1897,6 +1896,24 @@ int ObObjAccessIdx::get_package_id(
   if (OB_INVALID_ID == package_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get package id", K(ret), K(package_id), KPC(expr));
+  }
+  return ret;
+}
+
+bool ObObjAccessIdx::has_same_collection_access(const ObRawExpr *expr, const ObObjAccessRawExpr *access_expr)
+{
+  bool ret = false;
+  if (expr->is_obj_access_expr()) {
+    const ObIArray<ObObjAccessIdx> &left = static_cast<const ObObjAccessRawExpr *>(expr)->get_access_idxs();
+    const ObIArray<ObObjAccessIdx> &right= access_expr->get_access_idxs();
+    for (int64_t i = 0; i < left.count() && i < right.count(); ++i) {
+      if (!(left.at(i) == right.at(i))) {
+        break;
+      } else if (left.at(i).elem_type_.is_collection_type()) {
+        ret = true;
+        break;
+      }
+    }
   }
   return ret;
 }

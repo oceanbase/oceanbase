@@ -535,7 +535,7 @@ int ObExprAlignDate4Cmp::set_zero_res(ObDatum &res, ObTime &ob_time,
       if (is_no_zero_date) {
         res.set_null();
       } else {
-        res.set_datetime(ObTimeConverter::ZERO_DATETIME + ob_time.parts_[DT_USEC]);
+        res.set_datetime(ObTimeConverter::ZERO_DATETIME);
       }
       break;
     }

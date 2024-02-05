@@ -23,6 +23,8 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "share/ob_tablet_autoincrement_service.h"
+#include "storage/access/ob_dml_param.h"
 namespace oceanbase
 {
 using namespace common;
@@ -257,8 +259,21 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
                                       ObObj &value)
 {
   int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(value));
+    value.set_null();
+  } else if (OB_FAIL(padding_fixed_string_value(col_accuracy.get_length(), allocator, value))) {
+    LOG_WARN("padding char value failed", K(ret), K(col_accuracy), K(value));
+  }
+  return ret;
+}
+
+int ObDASUtils::padding_fixed_string_value(int64_t max_len, ObIAllocator &allocator, ObObj &value)
+{
+  int ret = OB_SUCCESS;
   if (value.is_binary()) {
-    int32_t binary_len = col_accuracy.get_length();
+    int32_t binary_len = max_len;
     int32_t len = value.get_string_len();
     if (binary_len > len) {
       char *dest_str = NULL;
@@ -273,10 +288,6 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
         value.set_binary(ObString(binary_len, dest_str));
       }
     }
-  } else if (lib::is_oracle_mode() && value.is_character_type() && value.get_string_len() == 0) {
-    // Oracle compatibility mode: '' as null
-    LOG_DEBUG("reshape empty string to null", K(value));
-    value.set_null();
   } else if (value.is_fixed_len_char_type()) {
     const char *str = value.get_string_ptr();
     int32_t len = value.get_string_len();
@@ -289,6 +300,47 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
     // need to set collation type
     value.set_string(value.get_type(), ObString(len, str));
     value.set_collation_type(value.get_collation_type());
+  }
+  return ret;
+}
+
+int ObDASUtils::reshape_datum_value(const ObObjMeta &col_type,
+                                    const ObAccuracy &col_accuracy,
+                                    const bool enable_oracle_empty_char_reshape_to_null,
+                                    ObIAllocator &allocator,
+                                    blocksstable::ObStorageDatum &datum_value)
+{
+  int ret = OB_SUCCESS;
+  if (col_type.is_binary()) {
+    int32_t binary_len = col_accuracy.get_length();
+    int32_t len = datum_value.len_;
+    if (binary_len > len) {
+      char *dest_str = NULL;
+      const char *str = datum_value.ptr_;
+      if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+      } else {
+        char pad_char = '\0';
+        MEMCPY(dest_str, str, len);
+        MEMSET(dest_str + len, pad_char, binary_len - len);
+        datum_value.set_string(ObString(binary_len, dest_str));
+      }
+    }
+  } else if (lib::is_oracle_mode() && !enable_oracle_empty_char_reshape_to_null && col_type.is_character_type() && datum_value.len_ == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(datum_value));
+    datum_value.set_null();
+  } else if (col_type.is_fixed_len_char_type()) {
+    const char *str = datum_value.ptr_;
+    int32_t len = datum_value.len_;
+    ObString space_pattern = ObCharsetUtils::get_const_str(col_type.get_collation_type(), ' ');
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+        break;
+      }
+    }
+    datum_value.set_string(ObString(len, str));
   }
   return ret;
 }
@@ -407,5 +459,62 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
   return ret;
 }
 
+int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
+                                  const storage::ObDMLBaseParam &dml_param,
+                                  ObNewRow &row,
+                                  ObDASOpType op_type,
+                                  bool is_old_row)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t autoinc_seq = 0;
+  ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
+  if (OB_ISNULL(dml_param.table_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table param is null", KR(ret));
+  } else if (!dml_param.table_param_->get_data_table().is_mlog_table()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table is not materialized view log",
+        KR(ret), K(dml_param.table_param_->get_data_table()));
+  } else if (row.count_ < 4) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("each mlog row should at least contain 4 columns", KR(ret), K(row.count_));
+  } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
+  } else {
+    // sequence_col is the first primary key
+    int sequence_col = 0;
+    int dmltype_col = row.count_ - 2;
+    int old_new_col = row.count_ - 1;
+    const ObTableDMLParam::ObColDescArray &col_descs = dml_param.table_param_->get_col_descs();
+    bool is_heap_base_table = (OB_MLOG_ROWID_COLUMN_ID == col_descs.at(row.count_ - 1).col_id_);
+    // if the base table is heap table, then the last column is mlog_rowid,
+    // therefore, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col | rowid_col |
+    // otherwise, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col |
+    if (is_heap_base_table) {
+      dmltype_col = dmltype_col - 1;
+      old_new_col = old_new_col - 1;
+    }
+
+    row.cells_[sequence_col].set_int(ObObjType::ObIntType, static_cast<int64_t>(autoinc_seq));
+    if (sql::DAS_OP_TABLE_DELETE == op_type) {
+      row.cells_[dmltype_col].set_varchar("D");
+      row.cells_[old_new_col].set_varchar("O");
+    } else if (sql::DAS_OP_TABLE_UPDATE == op_type) {
+      row.cells_[dmltype_col].set_varchar("U");
+      if (is_old_row) {
+        row.cells_[old_new_col].set_varchar("O");
+      } else {
+        row.cells_[old_new_col].set_varchar("N");
+      }
+    } else {
+      row.cells_[dmltype_col].set_varchar("I");
+      row.cells_[old_new_col].set_varchar("N");
+    }
+    row.cells_[dmltype_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+    row.cells_[old_new_col].set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
+  }
+  return ret;
+}
 }  // namespace sql
 }  // namespace oceanbase

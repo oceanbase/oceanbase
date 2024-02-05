@@ -187,6 +187,7 @@ protected:
 
 private:
   int update_tenant_freezer_config_();
+  int update_throttle_config_(const uint64_t tenant_id);
 protected:
       static const int DEL_TRY_TIMES = 30;
       enum class ObTenantCreateStep {

@@ -23,6 +23,7 @@
 #include "optimizer/ob_mock_opt_stat_manager.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "share/ob_simple_mem_limit_getter.h"
 #define CLUSTER_VERSION_2100 (oceanbase::common::cal_version(2, 1, 0, 0))
 #define CLUSTER_VERSION_2200 (oceanbase::common::cal_version(2, 2, 0, 0))
 using namespace oceanbase::observer;
@@ -172,7 +173,15 @@ TestSqlUtils::TestSqlUtils()
 {
     memset(schema_file_path_, '\0', 128);
     exec_ctx_.set_sql_ctx(&sql_ctx_);
-    (oceanbase::common::ObClusterVersion::get_instance().init(CLUSTER_VERSION_2200));
+
+    static ObTenantBase tenant_ctx(sys_tenant_id_);
+    ObTenantEnv::set_tenant(&tenant_ctx);
+
+    auto& cluster_version = ObClusterVersion::get_instance();
+    cluster_version.init(&common::ObServerConfig::get_instance(), &oceanbase::omt::ObTenantConfigMgr::get_instance());
+    oceanbase::omt::ObTenantConfigMgr::get_instance().add_tenant_config(sys_tenant_id_);
+    cluster_version.refresh_cluster_version("4.2.0.0");
+
     ObServer &observer = ObServer::get_instance();
     int ret = OB_SUCCESS;
     if (OB_FAIL(observer.init_tz_info_mgr())) {
@@ -192,6 +201,16 @@ void TestSqlUtils::init()
   ObVirtualTenantManager::get_instance().init();
   ObVirtualTenantManager::get_instance().add_tenant(sys_tenant_id_);
   ObVirtualTenantManager::get_instance().set_tenant_mem_limit(sys_tenant_id_, 1024L * 1024L * 1024L, 1024L * 1024L * 1024L);
+
+  GCTX.schema_service_ = schema_service_;
+  oceanbase::transaction::ObBLService::get_instance().init();
+
+  const int64_t max_cache_size = 1024L * 1024L * 512;
+  static ObSimpleMemLimitGetter mem_limit_getter;
+  mem_limit_getter.add_tenant(OB_SYS_TENANT_ID, 0, max_cache_size);
+  mem_limit_getter.add_tenant(OB_SERVER_TENANT_ID, 0, INT64_MAX);
+  ObKVGlobalCache::get_instance().init(&mem_limit_getter);
+
   if (OB_SUCCESS != (ret = ObPreProcessSysVars::init_sys_var())) {
     _OB_LOG(WARN, "PreProcessing system value init failed, ret=%ld", ret);
     ASSERT_TRUE(0);
@@ -203,6 +222,7 @@ void TestSqlUtils::init()
     ASSERT_TRUE(0);
   } else {
     sql_schema_guard_.set_schema_guard(&schema_guard_);
+    sql_ctx_.schema_guard_ = &schema_guard_;
     ObString tenant("sql_test");
     ASSERT_TRUE(OB_SUCCESS == session_info_.init_tenant(tenant, sys_tenant_id_));
 

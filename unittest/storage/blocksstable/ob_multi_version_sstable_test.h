@@ -237,9 +237,6 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
   //OK(init_io_device("multi_version_test"));
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      tenant_id_, ObTenantIOConfig::default_instance());
-
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(tenant_id_, ObLSID(ls_id_), ls_handle);
@@ -248,7 +245,7 @@ void ObMultiVersionSSTableTest::SetUpTestCase()
 
 void ObMultiVersionSSTableTest::TearDownTestCase()
 {
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_), false));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ObLSID(ls_id_)));
   ObKVGlobalCache::get_instance().destroy();
   //ObIODeviceWrapper::get_instance().destroy();
   OB_STORE_CACHE.destroy();
@@ -298,7 +295,7 @@ ObITable::TableType ObMultiVersionSSTableTest::get_merged_table_type() const
   } else if (META_MAJOR_MERGE == merge_type_) {
     table_type = ObITable::TableType::META_MAJOR_SSTABLE;
   } else if (DDL_KV_MERGE == merge_type_) {
-    table_type = ObITable::TableType::DDL_DUMP_SSTABLE;
+    table_type = ObITable::TableType::DDL_MERGE_CO_SSTABLE;
   } else { // MINOR_MERGE
     table_type = ObITable::TableType::MINOR_SSTABLE;
   }
@@ -501,8 +498,8 @@ void ObMultiVersionSSTableTest::prepare_data_end(
 
   ObTabletCreateSSTableParam param;
   table_key_.table_type_ = table_type;
-  param.data_block_ids_ = res.data_block_ids_;
-  param.other_block_ids_ = res.other_block_ids_;
+  ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
+  ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
   param.table_key_ = table_key_;
   param.schema_version_ = SCHEMA_VERSION;
   param.create_snapshot_version_ = 0;

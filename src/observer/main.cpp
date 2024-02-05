@@ -433,6 +433,9 @@ static void print_all_thread(const char* desc)
 
 int main(int argc, char *argv[])
 {
+  // temporarily unlimited memory before init config
+  set_memory_limit(INT_MAX64);
+
 #ifdef ENABLE_SANITY
   backtrace_symbolize_func = oceanbase::common::backtrace_symbolize;
 #endif
@@ -508,7 +511,7 @@ int main(int argc, char *argv[])
   opts.log_level_ = OB_LOG_LEVEL_WARN;
   parse_opts(argc, argv, opts);
 
-  if (OB_FAIL(check_uid_before_start(CONF_DIR))) {
+  if (OB_SUCC(ret) && OB_FAIL(check_uid_before_start(CONF_DIR))) {
     MPRINT("Fail check_uid_before_start, please use the initial user to start observer!");
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(PID_DIR))) {
     MPRINT("create pid dir fail: ./run/");
@@ -581,8 +584,10 @@ int main(int argc, char *argv[])
       ATOMIC_STORE(&palf::election::INIT_TS, palf::election::get_monotonic_ts());
       if (OB_FAIL(observer.init(opts, log_cfg))) {
         LOG_ERROR("observer init fail", K(ret));
+        raise(SIGKILL); // force stop when fail
       } else if (OB_FAIL(observer.start())) {
         LOG_ERROR("observer start fail", K(ret));
+        raise(SIGKILL); // force stop when fail
       } else if (OB_FAIL(observer.wait())) {
         LOG_ERROR("observer wait fail", K(ret));
       }

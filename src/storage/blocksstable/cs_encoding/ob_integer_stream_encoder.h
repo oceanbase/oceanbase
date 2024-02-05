@@ -225,7 +225,7 @@ private:
     const int64_t orig_pos = buf_writer.length();
     const int64_t raw_encoding_len = sizeof(T) * arr_count;
     int64_t curr_encoding_len = 0;
-    const int64_t test_seed = GCONF.encoding_test_seed;
+    const int64_t test_seed = 0;
     const int64_t remain_size = buf_writer.remain_buffer_size();
     bool need_encode_with_raw = false;
     if (OB_UNLIKELY(remain_size < raw_encoding_len)) {

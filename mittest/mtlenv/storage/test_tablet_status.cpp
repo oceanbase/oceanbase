@@ -118,7 +118,7 @@ void TestTabletStatus::TearDownTestCase()
   ret = t3m->init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MockTenantModuleEnv::get_instance().destroy();
@@ -189,7 +189,10 @@ TEST_F(TestTabletStatus, misc)
       share::SCN::base_scn(), snapshot_version, table_schema, compat_mode, store_flag, nullptr, freezer);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle);
+  ObUpdateTabletPointerParam param;
+  ret = tablet_handle.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = t3m->compare_and_swap_tablet(key, tablet_handle, tablet_handle, param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   // set tx data

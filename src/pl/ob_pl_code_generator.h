@@ -225,7 +225,8 @@ public:
                    jit::ObLLVMValue &for_update,
                    jit::ObLLVMValue &hidden_rowid,
                    jit::ObLLVMValue &params,
-                   jit::ObLLVMValue &count);
+                   jit::ObLLVMValue &count,
+                   jit::ObLLVMValue &skip_locked);
   int generate_into(const ObPLInto &into,
                     jit::ObLLVMValue &into_array_value,
                     jit::ObLLVMValue &into_count_value,
@@ -246,7 +247,7 @@ public:
                          bool in_notfound,
                          bool in_warning,
                          bool signal);
-  int clean_for_loop_cursor(bool is_from_exception);
+  int generate_close_loop_cursor(bool is_from_exception, int64_t dest_level);
   int raise_exception(jit::ObLLVMValue &exception,
                       jit::ObLLVMValue &error_code,
                       jit::ObLLVMValue &sql_staten,

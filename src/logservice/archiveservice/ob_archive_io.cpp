@@ -32,7 +32,8 @@ int ObArchiveIO::push_log(const ObString &uri,
     char *data,
     const int64_t data_len,
     const int64_t offset,
-    const bool is_full_file)
+    const bool is_full_file,
+    const bool is_can_seal)
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
@@ -71,9 +72,12 @@ int ObArchiveIO::push_log(const ObString &uri,
         ARCHIVE_LOG(ERROR, "device_handle is NULL", K(ret), K(device_handle), K(uri));
       } else if (OB_FAIL(device_handle->pwrite(fd, offset, data_len, data, write_size))) {
         ARCHIVE_LOG(WARN, "fail to write file", K(ret), K(uri), KP(storage_info), K(data), K(data_len));
+      }  else if (is_can_seal && OB_FAIL(device_handle->seal_file(fd))) {
+        ARCHIVE_LOG(WARN, "fail to seal file", K(ret), K(uri), KP(storage_info));
       }
     }
   }
+
 
   int tmp_ret = OB_SUCCESS;
   if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
@@ -108,7 +112,7 @@ int ObArchiveIO::check_context_match_in_normal_file_(const ObString &uri,
   ObBackupIoAdapter reader;
   ObArenaAllocator allocator;
 
-  if (OB_FAIL(reader.get_file_length(uri, storage_info, length))) {
+  if (OB_FAIL(reader.adaptively_get_file_length(uri, storage_info, length))) {
     ARCHIVE_LOG(WARN, "get file_length failed", K(uri));
   } else if (OB_UNLIKELY(length <= offset)) {
     ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;
@@ -119,7 +123,7 @@ int ObArchiveIO::check_context_match_in_normal_file_(const ObString &uri,
   } else if (OB_ISNULL(read_buffer = static_cast<char*>(allocator.alloc(data_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     ARCHIVE_LOG(WARN, "allocate memory failed", K(uri), K(data_len));
-  } else if (OB_FAIL(reader.read_part_file(uri, storage_info, read_buffer, data_len, offset, read_size))) {
+  } else if (OB_FAIL(reader.adaptively_read_part_file(uri, storage_info, read_buffer, data_len, offset, read_size))) {
     ARCHIVE_LOG(WARN, "pread failed", K(uri), K(read_buffer), K(data_len), K(offset));
   } else if (read_size < data_len) {
     ret = OB_BACKUP_PWRITE_CONTENT_NOT_MATCH;

@@ -129,6 +129,12 @@ public:
                                         const int32_t escape_wc,
                                         const common::ObString &pattern_val,
                                         const InstrInfo instr_info);
+template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
+  static int match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
+                                        const common::ObCollationType coll_type,
+                                        const int32_t escape_wc,
+                                        const common::ObString &pattern_val,
+                                        const InstrInfo instr_info);
   template <bool percent_sign_start, bool percent_sign_end>
   static int64_t match_with_instr_mode(const common::ObString &text_val,
                                        const InstrInfo instr_info);
@@ -152,11 +158,21 @@ public:
 
   static int like_varchar(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DECL);
+  template <typename TextVec, typename ResVec>
+  static int vector_like(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip,
+                         const EvalBound &bound);
+  static int eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_DECL);
   static int like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum &expr_datum,
                                 ObDatum &text, ObDatum &pattern, ObDatum &escape);
   static int like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
                                         const ObBitVector &skip, const int64_t size,
                                         ObExpr &text, ObDatum *pattern_datum, ObDatum *escape_datum);
+  template <typename TextVec, typename ResVec>
+  static int like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &ctx,
+                                             const ObBitVector &skip, const EvalBound &bound,
+                                             ObExpr &text, ObDatum *pattern_datum);
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   static int set_instr_info(common::ObIAllocator *exec_allocator,
                             const common::ObCollationType cs_type,

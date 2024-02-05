@@ -16,6 +16,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/ob_get_compat_mode.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_table_param.h"
 #include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::share;
@@ -103,7 +104,7 @@ int ObDDLErrorMessageTableOperator::get_index_task_info(
 }
 
 int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index_schema,
-    const ObStoreRowkey &index_key, char *buffer, const int64_t buffer_len)
+    const blocksstable::ObDatumRowkey &index_key, char *buffer, const int64_t buffer_len)
 {
   int ret = OB_SUCCESS;
   if (!index_schema.is_valid() || !index_key.is_valid() || OB_ISNULL(buffer) || buffer_len <= 0) {
@@ -112,33 +113,33 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
   } else {
     const int64_t index_size = index_schema.get_index_column_num();
     int64_t pos = 0;
-    int64_t valid_index_size = 0;
-    uint64_t column_id = OB_INVALID_ID;
     MEMSET(buffer, 0, buffer_len);
-
     for (int64_t i = 0; OB_SUCC(ret) && i < index_size; i++) {
-      if (OB_FAIL(index_schema.get_index_info().get_column_id(i, column_id))) {
+      const ObRowkeyColumn *column = index_schema.get_index_info().get_column(i);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Failed to get index column description", K(i), K(ret));
-      } else if (column_id <= OB_MIN_SHADOW_COLUMN_ID) {
-        valid_index_size ++;
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_size; ++i) {
-      const ObObj &obj  = index_key.get_obj_ptr()[i];
-      if (OB_FAIL(obj.print_plain_str_literal(buffer, buffer_len, pos))) {
-        LOG_WARN("fail to print_plain_str_literal", K(ret), KP(buffer));
-      } else if (i < valid_index_size - 1) {
-        if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
+      } else if (IS_SHADOW_COLUMN(column->column_id_)) {
+        break;
+      } else {
+        const blocksstable::ObStorageDatum &datum = index_key.get_datum(i);
+        ObObj obj;
+        if (OB_FAIL(datum.to_obj(obj, column->get_meta_type()))) {
+          LOG_WARN("convert datum to obj failed", K(ret));
+        } else if (OB_FAIL(obj.print_plain_str_literal(buffer, buffer_len, pos))) {
+          LOG_WARN("fail to print_plain_str_literal", K(ret), KP(buffer));
+        } else if (OB_FAIL(databuff_printf(buffer,  buffer_len, pos, "-"))) {
           LOG_WARN("databuff print failed", K(ret));
         }
       }
     }
-    if (buffer != nullptr) {
-      buffer[pos++] = '\0';
-      if (OB_SIZE_OVERFLOW == ret) {
-        LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
-        ret = OB_SUCCESS;
-      }
+    if (OB_SUCC(ret) && pos > 0) {
+      buffer[pos - 1] = '\0'; // overwrite the tail '-'
+    }
+    if (OB_SIZE_OVERFLOW == ret) {
+      buffer[buffer_len - 1] = '\0';
+      LOG_WARN("the index key length is larger than OB_TMP_BUF_SIZE_256", K(index_key), KP(buffer));
+      ret = OB_SUCCESS;
     }
   }
 

@@ -47,6 +47,7 @@ namespace sql
 {
 class ObPsCache;
 class ObSQLSessionInfo;
+class ObAlterRoutineResolver;
 }
 namespace jit
 {
@@ -91,6 +92,11 @@ struct PLCacheObjStat
     sql_id_[0] = '\0';
   }
 
+  inline bool is_updated() const
+  {
+    return last_active_time_ != 0;
+  }
+
   void reset()
   {
     sql_id_[0] = '\0';
@@ -133,7 +139,7 @@ public:
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
-                               bool set_record_null = true) const;
+                               bool set_null = true) const;
 };
 
 class ObPLFunctionBase
@@ -770,7 +776,7 @@ public:
   int execute();
   int final(int ret);
   int deep_copy_result_if_need();
-  int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj);
+  int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }
   inline const sql::ObPhysicalPlanCtx &get_physical_plan_ctx() const { return phy_plan_ctx_; }
@@ -1078,6 +1084,7 @@ struct PlTransformTreeCtx
 
 class ObPL
 {
+  friend class sql::ObAlterRoutineResolver;
 public:
   ObPL() :
     sql_proxy_(NULL),

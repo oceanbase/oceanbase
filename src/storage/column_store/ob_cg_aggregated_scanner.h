@@ -27,7 +27,7 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override final;
+      ObSSTableWrapper &wrapper) override final;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override final;

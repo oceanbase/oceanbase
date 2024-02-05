@@ -308,6 +308,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService*);
+  ObCurTraceId::init(GCONF.self_addr_);
   if (OB_ISNULL(ls_svr)) {
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
@@ -340,6 +341,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
       }
     }
   }
+  ObCurTraceId::reset();
 }
 
 void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()

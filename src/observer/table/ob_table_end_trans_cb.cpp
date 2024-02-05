@@ -80,7 +80,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
   CHECK_BALANCE("[table async callback]");
   if (cb_param != OB_SUCCESS) {
     // commit failed
-    result_.set_errno(cb_param);
+    result_.set_err(cb_param);
     result_.set_affected_rows(0);
     result_entity_.reset();
   }
@@ -143,7 +143,7 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
     // same result for all
     ObTableOperationResult single_op_result;
     single_op_result.set_entity(result_entity_);
-    single_op_result.set_errno(cb_param);
+    single_op_result.set_err(cb_param);
     single_op_result.set_type(table_operation_type_);
     if (OB_FAIL(result_.push_back(single_op_result))) {
       LOG_WARN("failed to add result", K(ret));  // @todo reset the connection

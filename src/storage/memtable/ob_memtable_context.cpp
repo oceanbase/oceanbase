@@ -23,6 +23,7 @@
 #include "storage/tx/ob_trans_ctx_mgr.h"
 #include "share/ob_force_print_log.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "lib/container/ob_array_helper.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_table/ob_tx_table.h"
 #include "storage/tablelock/ob_lock_memtable.h"
@@ -54,7 +55,6 @@ ObMemtableCtx::ObMemtableCtx()
       lock_for_read_retry_count_(0),
       lock_for_read_elapse_(0),
       trans_mem_total_size_(0),
-      unsynced_cnt_(0),
       unsubmitted_cnt_(0),
       callback_mem_used_(0),
       callback_alloc_count_(0),
@@ -113,19 +113,21 @@ void ObMemtableCtx::reset()
 {
   if (IS_INIT) {
     if ((ATOMIC_LOAD(&callback_mem_used_) > 8 * 1024 * 1024) && REACH_TIME_INTERVAL(200000)) {
-      TRANS_LOG(INFO, "memtable callback used", K(*this));
+      TRANS_LOG(INFO, "memtable callback memory used > 8MB", K(callback_mem_used_), K(*this));
     }
     if (OB_UNLIKELY(callback_alloc_count_ != callback_free_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", K(*this));
     }
-    if (OB_UNLIKELY(unsynced_cnt_ != 0)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsynced cnt not zero", K(*this),
-                K(unsynced_cnt_), K(unsubmitted_cnt_));
+    if (OB_UNLIKELY(unsubmitted_cnt_ != 0)) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsubmitted cnt not zero", K(*this), K(unsubmitted_cnt_));
       ob_abort();
     }
-    if (OB_UNLIKELY(unsubmitted_cnt_ != 0)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsubmitted cnt not zero", K(*this),
-                K(unsynced_cnt_), K(unsubmitted_cnt_));
+    const int64_t fill = log_gen_.get_redo_filled_count();
+    const int64_t sync_succ = log_gen_.get_redo_sync_succ_count();
+    const int64_t sync_fail = log_gen_.get_redo_sync_fail_count();
+    if (OB_UNLIKELY(fill != sync_succ + sync_fail)) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "redo filled_count != sync_succ + sync_fail", KPC(this),
+                    K(fill), K(sync_succ), K(sync_fail));
       ob_abort();
     }
     is_inited_ = false;
@@ -137,7 +139,6 @@ void ObMemtableCtx::reset()
     lock_for_read_retry_count_ = 0;
     lock_for_read_elapse_ = 0;
     truncate_cnt_ = 0;
-    unsynced_cnt_ = 0;
     unsubmitted_cnt_ = 0;
     lock_mem_ctx_.reset();
     retry_info_.reset();
@@ -169,33 +170,19 @@ int64_t ObMemtableCtx::to_string(char *buf, const int64_t buf_len) const
   common::databuff_printf(buf, buf_len, pos,
                           " end_code=%d tx_status=%ld is_readonly=%s "
                           "ref=%ld trans_id=%s ls_id=%ld "
-                          "callback_alloc_count=%ld callback_free_count=%ld "
-                          "checksum=%lu tmp_checksum=%lu checksum_scn=%s "
-                          "redo_filled_count=%ld redo_sync_succ_count=%ld "
-                          "redo_sync_fail_count=%ld main_list_length=%ld "
-                          "unsynced_cnt=%ld unsubmitted_cnt_=%ld "
-                          "cb_statistics:[main=%ld, slave=%ld, merge=%ld, "
-                          "tx_end=%ld, rollback_to=%ld, "
-                          "fast_commit=%ld, remove_memtable=%ld]",
+                          "row_callback[alloc:%ld, free:%ld, unsubmit:%ld] "
+                          "redo[fill:%ld,sync_succ:%ld, sync_fail:%ld] "
+                          "main_list_len=%ld pending_log_size=%ld ",
                           end_code_, tx_status_, STR_BOOL(is_read_only_), ref_,
                           NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
                           NULL == ctx_ ? -1 : ctx_->get_ls_id().id(),
-                          callback_alloc_count_, callback_free_count_,
-                          trans_mgr_.get_checksum(),
-                          trans_mgr_.get_tmp_checksum(),
-                          to_cstring(trans_mgr_.get_checksum_scn()),
+                          callback_alloc_count_, callback_free_count_, unsubmitted_cnt_,
                           log_gen_.get_redo_filled_count(),
                           log_gen_.get_redo_sync_succ_count(),
                           log_gen_.get_redo_sync_fail_count(),
                           trans_mgr_.get_main_list_length(),
-                          unsynced_cnt_, unsubmitted_cnt_,
-                          trans_mgr_.get_callback_main_list_append_count(),
-                          trans_mgr_.get_callback_slave_list_append_count(),
-                          trans_mgr_.get_callback_slave_list_merge_count(),
-                          trans_mgr_.get_callback_remove_for_trans_end_count(),
-                          trans_mgr_.get_callback_remove_for_rollback_to_count(),
-                          trans_mgr_.get_callback_remove_for_fast_commit_count(),
-                          trans_mgr_.get_callback_remove_for_remove_memtable_count());
+                          trans_mgr_.get_pending_log_size());
+  trans_mgr_.print_statistics(buf, buf_len, pos);
   common::databuff_printf(buf, buf_len, pos, "}");
   return pos;
 }
@@ -223,6 +210,11 @@ void ObMemtableCtx::dec_ref()
 void ObMemtableCtx::wait_pending_write()
 {
   ATOMIC_STORE(&is_master_, false);
+  WRLockGuard wrguard(rwlock_);
+}
+
+void ObMemtableCtx::wait_write_end()
+{
   WRLockGuard wrguard(rwlock_);
 }
 
@@ -410,36 +402,37 @@ int ObMemtableCtx::trans_begin()
   return ret;
 }
 
-int ObMemtableCtx::replay_begin(const SCN scn)
+int ObMemtableCtx::replay_begin(const bool parallel_replay, const SCN scn)
 {
-  ObByteLockGuard guard(lock_);
-
-  set_redo_scn(scn);
-
+  // UNUSED(scn);
+  trans_mgr_.replay_begin(parallel_replay, scn);
   return OB_SUCCESS;
 }
 
+// callback_list_idx:
+// -1 means all callback-list should do commit/rollback
 int ObMemtableCtx::replay_end(const bool is_replay_succ,
+                              const int16_t callback_list_idx,
                               const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
 
   if (!is_replay_succ) {
-    ret = trans_mgr_.replay_fail(scn);
+    ret = trans_mgr_.replay_fail(callback_list_idx, scn);
   } else {
-    ret = trans_mgr_.replay_succ(scn);
+    ret = trans_mgr_.replay_succ(callback_list_idx, scn);
   }
 
   return ret;
 }
 
-int ObMemtableCtx::rollback_redo_callbacks(const SCN scn)
+int ObMemtableCtx::rollback_redo_callbacks(const int16_t callback_list_idx, const SCN scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
 
-  ret = trans_mgr_.replay_fail(scn);
+  ret = trans_mgr_.replay_fail(callback_list_idx, scn);
 
   return ret;
 }
@@ -498,6 +491,7 @@ int ObMemtableCtx::do_trans_end(
     // and check memory leakage
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
+      ob_abort(); // for easy debug, remove later
     }
     // release durable table lock
     if (OB_FAIL(ret)) {
@@ -548,20 +542,31 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
   // We must calculate the checksum and generate the checksum_scn even when
   // the checksum verification is unnecessary. This because the trans table
   // merge may be triggered after clear state in which the callback has already
-
   if (commit
-      && 0 != checksum
+      && 0 != checksum // if leader's checksum is skipped, follow skip check
       && log_cluster_version >= CLUSTER_VERSION_3100
       && !ObServerConfig::get_instance().ignore_replay_checksum_error) {
-    const uint64_t checksum4 = calc_checksum_all();
-    if (checksum != checksum4) {
-      cs_ret = OB_CHECKSUM_ERROR;
-      TRANS_LOG(ERROR, "MT_CTX: replay checksum error", K(ret), K(*this),
-                K(commit), K(checksum), K(checksum4));
+    ObSEArray<uint64_t, 1> replay_checksum;
+    if (OB_FAIL(calc_checksum_all(replay_checksum))) {
+      TRANS_LOG(WARN, "calc checksum fail", K(ret));
+    } else {
+      uint64_t checksum_collapsed = 0;
+      uint8_t _sig[replay_checksum.count()];
+      ObArrayHelper<uint8_t> checksum_signature(replay_checksum.count(), _sig);
+      convert_checksum_for_commit_log(replay_checksum, checksum_collapsed, checksum_signature);
+      if (checksum != checksum_collapsed) {
+        cs_ret = OB_CHECKSUM_ERROR;
+        TRANS_LOG(ERROR, "MT_CTX: replay checksum error", K(cs_ret),
+                  "checksum_in_commit_log", checksum,
+                  "checksum_replayed", checksum_collapsed,
+                  "checksum_before_collapse", replay_checksum,
+                  K(checksum_signature), KPC(this));
+        ob_abort();
+      }
     }
   }
-
-  if (OB_FAIL(do_trans_end(commit,
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(do_trans_end(commit,
                            trans_version,
                            final_scn,
                            commit ? OB_TRANS_COMMITED : OB_TRANS_ROLLBACKED))) {
@@ -603,106 +608,73 @@ int ObMemtableCtx::commit_to_replay()
   return OB_SUCCESS;
 }
 
-int ObMemtableCtx::fill_redo_log(char *buf,
-                                 const int64_t buf_len,
-                                 int64_t &buf_pos,
-                                 ObRedoLogSubmitHelper &helper,
-                                 const bool log_for_lock_node)
+int ObMemtableCtx::fill_redo_log(ObTxFillRedoCtx &ctx)
 {
   int ret = OB_SUCCESS;
-
-  if (NULL == buf
-      || 0 >= buf_len
-      || buf_len <= buf_pos) {
-    TRANS_LOG(WARN, "invalid param");
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    if (OB_FAIL(log_gen_.fill_redo_log(buf,
-                                       buf_len,
-                                       buf_pos,
-                                       helper,
-                                       log_for_lock_node))) {
-      // When redo log data is greater than or equal to 1.875M, or participant has
-      // no redo log data at all, this branch would be reached. Don't print log here
-    }
-    if (OB_FAIL(ret)) {
-      if (buf_pos > buf_len) {
-        TRANS_LOG(ERROR, "unexpected buf pos", KP(buf), K(buf_len), K(buf_pos));
-        ret = OB_ERR_UNEXPECTED;
-      }
-    }
-  }
-  if (OB_SUCCESS != ret && OB_EAGAIN != ret && OB_ENTRY_NOT_EXIST != ret) {
-    TRANS_LOG(WARN, "fill_redo_log fail", "ret", ret, "trans_id",
-              NULL == ctx_ ? "" : S(ctx_->get_trans_id()),
-              KP(buf),
-              "buf_len", buf_len,
-              "buf_pos", buf_pos,
-              "pending_log_size", trans_mgr_.get_pending_log_size(),
-              K(*this));
-  }
-
+  ret = log_gen_.fill_redo_log(ctx);
   return ret;
 }
 
+int ObMemtableCtx::get_log_guard(const transaction::ObTxSEQ &write_seq,
+                                 ObCallbackListLogGuard &log_guard,
+                                 int& cb_list_idx)
+{
+  return trans_mgr_.get_log_guard(write_seq, log_guard, cb_list_idx);
+}
 
 int ObMemtableCtx::log_submitted(const ObRedoLogSubmitHelper &helper)
 {
   inc_pending_log_size(-1 * helper.data_size_);
   inc_flushed_log_size(helper.data_size_);
-  return log_gen_.log_submitted(helper.callbacks_);
+  return log_gen_.log_submitted(helper.callbacks_, helper.log_scn_);
 }
 
-int ObMemtableCtx::sync_log_succ(const SCN scn, const ObCallbackScope &callbacks)
+int ObMemtableCtx::sync_log_succ(const SCN scn, const ObCallbackScopeArray &callbacks)
 {
-  int ret = OB_SUCCESS;
-
-  if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
-    if (OB_FAIL(log_gen_.sync_log_succ(scn, callbacks))) {
-      TRANS_LOG(WARN, "sync log failed", K(ret));
-    }
-  } else {
-    if (!callbacks.is_empty()) {
-      TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), K(scn),
-                KPC(ctx_));
-    }
-  }
-
-  return ret;
+  lock_mem_ctx_.sync_log_succ(scn);
+  log_gen_.sync_log_succ(callbacks, scn);
+  return OB_SUCCESS;
 }
 
-void ObMemtableCtx::sync_log_fail(const ObCallbackScope &callbacks)
+void ObMemtableCtx::sync_log_fail(const ObCallbackScopeArray &callbacks,
+                                  const share::SCN &max_applied_scn)
 {
   int ret = OB_SUCCESS;
-  if (!callbacks.is_empty()) {
+  if (callbacks.count() > 0) {
     set_partial_rollbacked();
   }
   if (OB_SUCCESS == ATOMIC_LOAD(&end_code_)) {
     if (OB_FAIL(reuse_log_generator_())) {
       TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
     } else {
-      log_gen_.sync_log_fail(callbacks);
+      log_gen_.sync_log_fail(callbacks, max_applied_scn);
     }
   } else {
-    if (!callbacks.is_empty()) {
-      TRANS_LOG(INFO, "No memtable callbacks because of trans_end", K(end_code_), KPC(ctx_));
+    if (callbacks.count() > 0) {
+      TRANS_LOG(INFO, "skip do callbacks because of trans_end", K(end_code_), KPC(ctx_));
+      int fail_cnt = 0;
+      ARRAY_FOREACH(callbacks, i) {
+        fail_cnt += callbacks.at(i).cnt_;
+      }
+      log_gen_.inc_sync_log_fail_cnt(fail_cnt);
     }
   }
   return;
 }
 
-uint64_t ObMemtableCtx::calc_checksum_all()
+int ObMemtableCtx::calc_checksum_all(ObIArray<uint64_t> &checksum)
 {
   ObByteLockGuard guard(lock_);
-  if (0 == trans_mgr_.get_checksum()) {
-    trans_mgr_.calc_checksum_all();
-  }
-  return trans_mgr_.get_checksum();
+  return trans_mgr_.calc_checksum_all(checksum);
 }
 
 void ObMemtableCtx::print_callbacks()
 {
   trans_mgr_.print_callbacks();
+}
+int ObMemtableCtx::get_callback_list_stat(ObIArray<ObTxCallbackListStat> &stats)
+{
+  return trans_mgr_.get_callback_list_stat(stats);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -817,14 +789,9 @@ uint64_t ObMemtableCtx::get_tenant_id() const
   return tenant_id;
 }
 
-void ObMemtableCtx::update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no)
-{
-  if (NULL != ATOMIC_LOAD(&ctx_)) {
-    static_cast<ObPartTransCtx *>(ctx_)->update_max_submitted_seq_no(seq_no);
-  }
-}
-
-int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no, const transaction::ObTxSEQ from_seq_no)
+int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
+                            const transaction::ObTxSEQ from_seq_no,
+                            const share::SCN replay_scn)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("remove callbacks for rollback to", 10 * 1000);
@@ -838,10 +805,10 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no, const transact
     TRANS_LOG(WARN, "ctx is NULL", K(ret));
   } else if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-  } else if (OB_FAIL(trans_mgr_.rollback_to(to_seq_no, from_seq_no))) {
+  } else if (OB_FAIL(trans_mgr_.rollback_to(to_seq_no, from_seq_no, replay_scn))) {
     TRANS_LOG(WARN, "rollback to failed", K(ret), K(*this));
   // rollback the table lock that with no tablelock callback
-  } else if (OB_FAIL(rollback_table_lock_(to_seq_no))) {
+  } else if (OB_FAIL(rollback_table_lock_(to_seq_no, from_seq_no))) {
     TRANS_LOG(WARN, "rollback table lock failed", K(ret), K(*this), K(to_seq_no));
   } else {
     TRANS_LOG(INFO, "memtable handle rollback to successfuly", K(from_seq_no), K(to_seq_no), K(*this));
@@ -849,33 +816,27 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no, const transact
   return ret;
 }
 
-bool ObMemtableCtx::is_all_redo_submitted()
-{
-  ObByteLockGuard guard(lock_);
-  return trans_mgr_.is_all_redo_submitted();
-}
-
-int ObMemtableCtx::remove_callbacks_for_fast_commit()
+int ObMemtableCtx::remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn)
 {
   int ret = OB_SUCCESS;
-  bool meet_generate_cursor = false;
   common::ObTimeGuard timeguard("remove callbacks for fast commit", 10 * 1000);
   ObByteLockGuard guard(lock_);
-
-  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(
-                log_gen_.get_generate_cursor(),
-                meet_generate_cursor))) {
-    TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), KPC(this));
-  } else if (meet_generate_cursor && OB_FAIL(reuse_log_generator_())) {
-    TRANS_LOG(ERROR, "fail to reset log generator", K(ret), KPC(this));
+  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(callback_list_idx, stop_scn))) {
+    TRANS_LOG(WARN, "fail to remove callback for fast commit", K(ret), KPC(this));
   }
-
+  return ret;
+}
+int ObMemtableCtx::remove_callbacks_for_fast_commit(const ObCallbackScopeArray &cb_scope_array)
+{
+  int ret = OB_SUCCESS;
+  common::ObTimeGuard timeguard("remove callbacks for fast commit", 10 * 1000);
+  if (OB_FAIL(trans_mgr_.remove_callbacks_for_fast_commit(cb_scope_array))) {
+    TRANS_LOG(WARN, "fail to remove callback for fast commit", K(ret));
+  }
   return ret;
 }
 
-int ObMemtableCtx::remove_callback_for_uncommited_txn(
-  const memtable::ObMemtableSet *memtable_set,
-  const share::SCN max_applied_scn)
+int ObMemtableCtx::remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set)
 {
   int ret = OB_SUCCESS;
   common::ObTimeGuard timeguard("remove callbacks for uncommitted txn", 10 * 1000);
@@ -886,8 +847,7 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(
     TRANS_LOG(WARN, "memtable is NULL", K(memtable_set));
   } else if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(memtable_set,
-                                                                   max_applied_scn))) {
+  } else if (OB_FAIL(trans_mgr_.remove_callback_for_uncommited_txn(memtable_set))) {
     TRANS_LOG(WARN, "fail to remove callback for uncommitted txn", K(ret), K(memtable_set));
   }
 
@@ -933,8 +893,8 @@ int ObMemtableCtx::reuse_log_generator_()
 }
 
 int ObMemtableCtx::calc_checksum_before_scn(const SCN scn,
-                                            uint64_t &checksum,
-                                            SCN &checksum_scn)
+                                            ObIArray<uint64_t> &checksum,
+                                            ObIArray<SCN> &checksum_scn)
 {
   int ret = OB_SUCCESS;
   ObByteLockGuard guard(lock_);
@@ -946,22 +906,22 @@ int ObMemtableCtx::calc_checksum_before_scn(const SCN scn,
   return ret;
 }
 
-void ObMemtableCtx::update_checksum(const uint64_t checksum,
-                                    const SCN checksum_scn)
+int ObMemtableCtx::update_checksum(const ObIArray<uint64_t> &checksum,
+                                   const ObIArray<SCN> &checksum_scn)
 {
   ObByteLockGuard guard(lock_);
 
-  trans_mgr_.update_checksum(checksum, checksum_scn);
+  return trans_mgr_.update_checksum(checksum, checksum_scn);
 }
 
-bool ObMemtableCtx::pending_log_size_too_large()
+bool ObMemtableCtx::pending_log_size_too_large(const ObTxSEQ &write_seq_no)
 {
   bool ret = true;
 
   if (0 == GCONF._private_buffer_size) {
     ret = false;
   } else {
-    ret = trans_mgr_.get_pending_log_size() > GCONF._private_buffer_size;
+    ret = trans_mgr_.pending_log_size_too_large(write_seq_no, GCONF._private_buffer_size);
   }
 
   return ret;
@@ -988,7 +948,17 @@ int ObMemtableCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
   return ret;
 }
 
-int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info)
+int ObMemtableCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_mem_ctx_.get_table_lock_for_transfer(table_lock_info, tablet_list))) {
+    TRANS_LOG(WARN, "get tablet lock for transfer failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info,
+                                                        const bool transfer_merge)
 {
   int ret = OB_SUCCESS;
   const int64_t op_cnt = table_lock_info.table_lock_ops_.count();
@@ -1005,15 +975,15 @@ int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &t
       // the tx ctx table may be copied from other ls replica we need fix the lockop's create timestamp.
     } else if (FALSE_IT(lock_op.create_timestamp_ = OB_MIN(curr_timestamp,
                                                            lock_op.create_timestamp_))) {
-    } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op, lock_op_node, true))) {
+    } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op, lock_op_node))) {
       TRANS_LOG(ERROR, "add_lock_record failed", K(ret), K(lock_op));
     } else if (OB_FAIL(lock_mem_ctx_.get_lock_memtable(lock_memtable))) {
       TRANS_LOG(ERROR, "get_lock_memtable failed", K(ret));
     } else if (OB_NOT_NULL(lock_memtable)
               && OB_FAIL(lock_memtable->recover_obj_lock(lock_op))) {
       TRANS_LOG(ERROR, "recover_obj_lock failed", K(ret), K(*lock_memtable));
-    } else {
-      lock_mem_ctx_.set_log_synced(lock_op_node, table_lock_info.max_durable_scn_);
+    } else if (!transfer_merge) {
+      lock_mem_ctx_.sync_log_succ(table_lock_info.max_durable_scn_);
     }
   }
 
@@ -1101,17 +1071,14 @@ int ObMemtableCtx::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
 int ObMemtableCtx::add_lock_record(const tablelock::ObTableLockOp &lock_op)
 {
   int ret = OB_SUCCESS;
-  const bool is_replay = false;
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
   ObLockMemtable *memtable = nullptr;
   if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(lock_op));
-  } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op,
-                                                   lock_op_node,
-                                                   is_replay))) {
+  } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op, lock_op_node))) {
     TRANS_LOG(WARN, "create lock record at memtable failed. ", K(ret), K(lock_op), K(*this));
-  } else if (OB_FAIL(register_multi_source_data_if_need_(lock_op, is_replay))) {
+  } else if (OB_FAIL(register_multi_source_data_if_need_(lock_op))) {
     TRANS_LOG(WARN, "register to multi source data failed", K(ret), K(lock_op));
   } else if (OB_UNLIKELY(!lock_op.need_register_callback())) {
     // do nothing
@@ -1133,15 +1100,12 @@ int ObMemtableCtx::replay_add_lock_record(
     const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  const bool is_replay = true;
   ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
   ObLockMemtable *memtable = nullptr;
   if (OB_UNLIKELY(!lock_op.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(lock_op));
-  } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op,
-                                                   lock_op_node,
-                                                   is_replay))) {
+  } else if (OB_FAIL(lock_mem_ctx_.add_lock_record(lock_op, lock_op_node))) {
     TRANS_LOG(WARN, "create lock record at memtable failed. ", K(ret), K(lock_op),
               K(*this));
   } else if (OB_UNLIKELY(!lock_op.need_register_callback())) {
@@ -1156,7 +1120,7 @@ int ObMemtableCtx::replay_add_lock_record(
   } else {
     // make sure the replayed tablelock will be minor merged.
     // and update the max durable log ts.
-    lock_mem_ctx_.set_log_synced(lock_op_node, scn);
+    lock_mem_ctx_.sync_log_succ(scn);
   }
   if (OB_FAIL(ret) && lock_op_node != NULL) {
     lock_mem_ctx_.remove_lock_record(lock_op_node);
@@ -1167,11 +1131,6 @@ int ObMemtableCtx::replay_add_lock_record(
 void ObMemtableCtx::remove_lock_record(ObMemCtxLockOpLinkNode *lock_op)
 {
   lock_mem_ctx_.remove_lock_record(lock_op);
-}
-
-void ObMemtableCtx::set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const SCN &scn)
-{
-  lock_mem_ctx_.set_log_synced(lock_op, scn);
 }
 
 int ObMemtableCtx::clear_table_lock_(const bool is_commit,
@@ -1190,12 +1149,13 @@ int ObMemtableCtx::clear_table_lock_(const bool is_commit,
   return ret;
 }
 
-int ObMemtableCtx::rollback_table_lock_(transaction::ObTxSEQ seq_no)
+int ObMemtableCtx::rollback_table_lock_(transaction::ObTxSEQ to_seq_no,
+                                        transaction::ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
   if (is_read_only_) {
     // read only trx no need deal with table lock.
-  } else if (OB_FAIL(lock_mem_ctx_.rollback_table_lock(seq_no))) {
+  } else if (OB_FAIL(lock_mem_ctx_.rollback_table_lock(to_seq_no, from_seq_no))) {
     TRANS_LOG(WARN, "clear table lock failed", KP(this));
   }
 
@@ -1203,16 +1163,12 @@ int ObMemtableCtx::rollback_table_lock_(transaction::ObTxSEQ seq_no)
 }
 
 int ObMemtableCtx::register_multi_source_data_if_need_(
-    const tablelock::ObTableLockOp &lock_op,
-    const bool is_replay)
+    const tablelock::ObTableLockOp &lock_op)
 {
   int ret = OB_SUCCESS;
   ObRegisterMdsFlag mds_flag;
   mds_flag.reset();
-  if (is_replay) {
-    // replay does not need register multi source data, it is dealt
-    // by multi source data itself.
-  } else if (!lock_op.need_multi_source_data()) {
+  if (!lock_op.need_multi_source_data()) {
     // do nothing
   } else if (OB_ISNULL(ATOMIC_LOAD(&ctx_))) {
     // if a trans need lock table, it must not a readonly trans.
@@ -1224,6 +1180,7 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
     int64_t pos = 0;
     ObTxDataSourceType type = ObTxDataSourceType::TABLE_LOCK;
     ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+
     if (serialize_size > tablelock::ObTableLockOp::MAX_SERIALIZE_SIZE) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "lock op serialize size if over flow", K(ret), K(serialize_size));
@@ -1283,16 +1240,6 @@ void ObMemtableCtx::dec_unsubmitted_cnt()
   ATOMIC_DEC(&unsubmitted_cnt_);
 }
 
-void ObMemtableCtx::inc_unsynced_cnt()
-{
-  ATOMIC_INC(&unsynced_cnt_);
-}
-
-void ObMemtableCtx::dec_unsynced_cnt()
-{
-  ATOMIC_DEC(&unsynced_cnt_);
-}
-
 int ObMemtableCtx::check_tx_mem_size_overflow(bool &is_overflow)
 {
   int ret = OB_SUCCESS;
@@ -1310,6 +1257,45 @@ int ObMemtableCtx::check_tx_mem_size_overflow(bool &is_overflow)
 void ObMemtableCtx::print_first_mvcc_callback()
 {
   log_gen_.print_first_mvcc_callback();
+}
+
+void ObMemtableCtx::convert_checksum_for_commit_log(const ObIArray<uint64_t> &arr,
+                                                    uint64_t &checksum,
+                                                    ObIArray<uint8_t> &sig)
+{
+  // NOTE:
+  // should skip empty callback-list, because it will not be replayed out on follower
+  if (arr.count() == 0) {
+    checksum = 0;
+    sig.reset();
+  } else if (arr.count() == 1) {
+    checksum = arr.at(0);
+    sig.reset();
+  } else {
+    int valid_cnt = 0;
+    for (int i = 0; i < arr.count(); i++) {
+      if (arr.at(i) && arr.at(i) != 1) { // skip empty list whose checksum is '1'
+        ++valid_cnt;
+        if (valid_cnt == 1) {
+          checksum = arr.at(i);
+        } else {
+          checksum = ob_crc64(checksum, (void*)&arr.at(i), sizeof(uint64_t));
+        }
+      }
+      sig.push_back((uint8_t)(arr.at(i) & 0xFF));
+    }
+    if (valid_cnt == 0) {
+      checksum = arr.at(0);
+      sig.reset();
+    } else if (valid_cnt == 1) {
+      sig.reset();
+    }
+  }
+}
+
+void ObMemtableCtx::check_all_redo_flushed()
+{
+  trans_mgr_.check_all_redo_flushed();
 }
 
 }

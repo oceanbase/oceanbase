@@ -194,8 +194,6 @@ protected:
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   const ObStorageDatumUtils *datum_utils_;
-  common::ObFixedArray<int32_t, common::ObIAllocator> agg_projector_;
-  common::ObFixedArray<share::schema::ObColumnSchemaV2, common::ObIAllocator> agg_column_schema_;
   static const int64_t DEFAULT_GET_MICRO_DATA_HANDLE_CNT = 2;
   ObIndexBlockRowScanner index_scanner_;
   ObMicroBlockDataHandle last_micro_block_handle_;
@@ -348,7 +346,7 @@ public:
       ObTableAccessContext &access_ctx,
       const void *query_range) override final;
   void inc_cur_micro_data_fetch_idx();
-  int prefetch();
+  virtual int prefetch();
   OB_INLINE ObSSTableReadHandle &current_read_handle()
   { return read_handles_[cur_range_fetch_idx_ % max_range_prefetching_cnt_]; }
   OB_INLINE ObMicroBlockDataHandle &current_micro_handle()
@@ -393,7 +391,7 @@ public:
                        K_(is_prefetch_end), K_(cur_range_fetch_idx), K_(cur_range_prefetch_idx), K_(max_range_prefetching_cnt),
                        K_(cur_micro_data_fetch_idx), K_(micro_data_prefetch_idx), K_(max_micro_handle_cnt),
                        K_(iter_type), K_(cur_level), K_(index_tree_height), K_(prefetch_depth),
-                       K_(total_micro_data_cnt), KP_(query_range), K_(border_rowkey), K_(tree_handle_cap),
+                       K_(total_micro_data_cnt), KP_(query_range), K_(tree_handle_cap),
                        K_(can_blockscan), K_(need_check_prefetch_depth),
                        K(ObArrayWrap<ObIndexTreeLevelHandle>(tree_handles_, index_tree_height_)));
 protected:
@@ -426,7 +424,7 @@ protected:
   }
   void reset_tree_handles();
   virtual int init_tree_handles(const int64_t count);
-  virtual int get_prefetch_depth(int64_t &depth);
+  int get_prefetch_depth(int64_t &depth);
 
   static const int32_t DEFAULT_SCAN_RANGE_PREFETCH_CNT = 4;
   static const int32_t DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT = DATA_PREFETCH_DEPTH;

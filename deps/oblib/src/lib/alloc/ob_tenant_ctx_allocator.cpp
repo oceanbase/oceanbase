@@ -14,7 +14,7 @@
 
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
-#include "lib/alloc/ob_free_log_printer.h"
+#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/utility/ob_print_utils.h"
@@ -137,7 +137,7 @@ void ObTenantCtxAllocator::print_usage() const
       if (l_item->count_ != 0) {
         ret = databuff_printf(
             buf, BUFLEN, pos,
-            "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld block_cnt=% '8ld chunk_cnt=% '8ld mod=%s\n",
+            "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld block_cnt=% '8d chunk_cnt=% '8d mod=%s\n",
             l_item->hold_, l_item->used_, l_item->count_, l_item->used_ / l_item->count_, l_item->block_cnt_, l_item->chunk_cnt_,
             label.str_);
       }
@@ -147,7 +147,7 @@ void ObTenantCtxAllocator::print_usage() const
     if (OB_SUCC(ret) && sum_item.count_ > 0) {
       ret = databuff_printf(
           buf, BUFLEN, pos,
-          "[MEMORY] hold=% '15ld used=% '15ld count=% '8ld avg_used=% '15ld mod=%s\n",
+          "[MEMORY] hold=% '15ld used=% '15ld count=% '8d avg_used=% '15ld mod=%s\n",
           sum_item.hold_, sum_item.used_, sum_item.count_,
           sum_item.used_ / sum_item.count_,
           "SUMMARY");
@@ -162,7 +162,8 @@ void ObTenantCtxAllocator::print_usage() const
       allow_next_syslog();
       _LOG_INFO("\n[MEMORY] tenant_id=%5ld ctx_id=%25s hold=% '15ld used=% '15ld limit=% '15ld"
                 "\n[MEMORY] idle_size=% '10ld free_size=% '10ld"
-                "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld\n%s",
+                "\n[MEMORY] wash_related_chunks=% '10ld washed_blocks=% '10ld washed_size=% '10ld"
+                "\n[MEMORY] request_cached_chunk_cnt=% '5ld\n%s",
           tenant_id_,
           get_global_ctx_info().get_ctx_name(ctx_id_),
           ctx_hold_bytes,
@@ -173,6 +174,7 @@ void ObTenantCtxAllocator::print_usage() const
           ATOMIC_LOAD(&wash_related_chunks_),
           ATOMIC_LOAD(&washed_blocks_),
           ATOMIC_LOAD(&washed_size_),
+          req_chunk_mgr_.n_chunks(),
           buf);
     }
   }
@@ -220,11 +222,7 @@ AChunk *ObTenantCtxAllocator::alloc_chunk(const int64_t size, const ObMemAttr &a
     }
   }
 
-  if (OB_ISNULL(chunk)) {
-    if (INTACT_ACHUNK_SIZE == AChunkMgr::hold(size) && get_ctx_id() != ObCtxIds::CO_STACK) {
-      chunk = ObPageManagerCenter::get_instance().alloc_from_thread_local_cache(tenant_id_, ctx_id_);
-    }
-  } else {
+  if (OB_NOT_NULL(chunk)) {
     ObDisableDiagnoseGuard disable_diagnose_guard;
     lib::ObMutexGuard guard(using_list_mutex_);
     chunk->prev2_ = &using_list_head_;
@@ -428,11 +426,13 @@ void* ObTenantCtxAllocator::common_alloc(const int64_t size, const ObMemAttr &at
 
   if (OB_UNLIKELY(is_errsim)) {
   } else {
+    ObMallocTimeMonitor::Guard guard(size, attr);
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.alloc_object(alloc_size, attr);
     if (OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
+      ObMallocTimeMonitor::click("SYNC_WASH_END");
       obj = allocator.alloc_object(alloc_size, attr);
     }
   }
@@ -500,11 +500,13 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
 
   if (OB_UNLIKELY(is_errsim)) {
   } else {
+    ObMallocTimeMonitor::Guard guard(size, attr);
     sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
     alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
     obj = allocator.realloc_object(obj, alloc_size, attr);
     if(OB_ISNULL(obj) && g_alloc_failed_ctx().need_wash()) {
       int64_t total_size = ta.sync_wash();
+      ObMallocTimeMonitor::click("SYNC_WASH_END");
       obj = allocator.realloc_object(obj, alloc_size, attr);
     }
   }

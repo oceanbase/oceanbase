@@ -226,7 +226,6 @@ void ObTenantMetaMemMgr::init_pool_arr()
   pool_arr_[static_cast<int>(ObITable::TableType::TX_DATA_MEMTABLE)] = &tx_data_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::TX_CTX_MEMTABLE)] = &tx_ctx_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::LOCK_MEMTABLE)] = &lock_memtable_pool_;
-  pool_arr_[static_cast<int>(ObITable::TableType::DDL_MEM_SSTABLE)] = &ddl_kv_pool_;
 }
 
 int ObTenantMetaMemMgr::start()
@@ -364,7 +363,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
   } else if (OB_UNLIKELY(!ObITable::is_table_type_valid(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid table key", K(ret), K(table_type), KPC(table));
-  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type) && ObITable::DDL_MEM_SSTABLE != table_type)) {
+  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("should not recycle sstable", K(ret), K(table_type), KPC(table));
   } else if (OB_ISNULL(item = (TableGCItem *)ob_malloc(size, attr))) {
@@ -639,7 +638,10 @@ int ObTenantMetaMemMgr::push_memtable_into_gc_map_(memtable::ObMemtable *memtabl
       } else if (OB_ISNULL(tmp_memtable_set = new (buf) ObMemtableSet())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory for hash set", K(ret));
-      } else if (OB_FAIL(tmp_memtable_set->create(1024))) {
+      } else if (OB_FAIL(tmp_memtable_set->create(1024,
+                                                  "MemtableSetBkt",
+                                                  "MemtableSetNode",
+                                                  MTL_ID()))) {
         LOG_WARN("fail to create", K(ret));
       } else if (OB_FAIL(gc_memtable_map_.set_refactored(ls_id, tmp_memtable_set))) {
         LOG_WARN("fail to set hash set", K(ret));
@@ -726,7 +728,9 @@ int ObTenantMetaMemMgr::gc_tablet(ObTablet *tablet)
   if (OB_SUCC(ret) && OB_FAIL(push_tablet_into_gc_queue(tablet))) {
     LOG_WARN("fail to push tablet into gc queue", K(ret), KPC(tablet));
   }
-  FLOG_INFO("gc tablet", K(ret), KP(tablet), K(common::lbt()));
+#ifndef OB_BUILD_RPM
+  FLOG_INFO("push tablet into gc queue", K(ret), KP(tablet), K(common::lbt()));
+#endif
   return ret;
 }
 
@@ -891,12 +895,38 @@ int ObTenantMetaMemMgr::get_min_end_scn_from_single_tablet(ObTablet *tablet,
                                                            SCN &min_end_scn)
 {
   int ret = OB_SUCCESS;
+  bool is_committed = false;
+  ObTabletCreateDeleteMdsUserData user_data;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tablet is nullptr.", K(ret), KP(this));
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+    if (OB_EMPTY_RESULT == ret) {
+      // When OB_EMPTY_RESULT is returned, there are two situations that need to be eaten, as follows:
+      // - The one is that transfer transaction is aborted.
+      // - The second is that the tablet is just been created and the tablet status has been also written.
+      //
+      // In the above two cases, the old version tablet is not allowed and will not exist, and it
+      // is not allowed to be read without being queried, so it is safe to return max scn here.
+      min_end_scn.set_max();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("get tablet status failed", KR(ret), KP(tablet));
+    }
+  } else if (ObTabletStatus::TRANSFER_IN == user_data.tablet_status_) {
+    /* when tablet transfer with active tx, dest_ls may recycle active transaction tx_data
+     * because no uncommitted data depend it, but src_ls's tablet may has uncommitted data depend this tx_data
+     * so we must concern src_ls's tablet boundary to stop recycle tx_data
+     */
+    if (!user_data.transfer_scn_.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer_scn is invalid", K(ret), K(user_data));
+    } else {
+      min_end_scn = SCN::scn_dec(user_data.transfer_scn_);
+    }
   } else {
     ObITable *first_minor_mini_sstable =
         table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(false /*is_last*/);
@@ -957,7 +987,7 @@ int ObTenantMetaMemMgr::get_min_mds_ckpt_scn(const ObTabletMapKey &key, share::S
   return ret;
 }
 
-int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
+int ObTenantMetaMemMgr::acquire_ddl_kv(ObDDLKVHandle &handle)
 {
   int ret = OB_SUCCESS;
   ObDDLKV *ddl_kv = nullptr;
@@ -967,7 +997,7 @@ int ObTenantMetaMemMgr::acquire_ddl_kv(ObTableHandleV2 &handle)
     LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
   } else if (OB_FAIL(ddl_kv_pool_.acquire(ddl_kv))) {
     LOG_WARN("fail to acquire ddl kv object", K(ret));
-  } else if (OB_FAIL(handle.set_table(ddl_kv, this, ObITable::TableType::DDL_MEM_SSTABLE))) {
+  } else if (OB_FAIL(handle.set_obj(ddl_kv))) {
     LOG_WARN("fail to set table", K(ret), KP(ddl_kv));
   } else {
     ddl_kv = nullptr;
@@ -1871,7 +1901,8 @@ int ObTenantMetaMemMgr::del_tablet(const ObTabletMapKey &key)
 int ObTenantMetaMemMgr::compare_and_swap_tablet(
     const ObTabletMapKey &key,
     const ObTabletHandle &old_handle,
-    ObTabletHandle &new_handle)
+    const ObTabletHandle &new_handle,
+    const ObUpdateTabletPointerParam &update_pointer_param)
 {
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
@@ -1891,19 +1922,18 @@ int ObTenantMetaMemMgr::compare_and_swap_tablet(
                       || !new_handle.is_valid()
                       || !old_handle.is_valid()
                       || new_handle.is_tmp_tablet()
-                      // TODO jingzhu : uncomment following code
-                      // || !(new_addr.is_memory() || new_addr.is_block())
+                      || !update_pointer_param.is_valid()
                       )) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    LOG_WARN("invalid argument", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle), K(update_pointer_param));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, new_addr, old_handle, new_handle))) {
-      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(new_addr), K(old_handle), K(new_handle));
+    if (CLICK_FAIL(tablet_map_.compare_and_swap_addr_and_object(key, old_handle, new_handle, update_pointer_param))) {
+      LOG_WARN("fail to compare and swap tablet", K(ret), K(key), K(old_handle), K(new_handle), K(update_pointer_param));
     } else if (CLICK_FAIL(update_tablet_buffer_header(old_handle.get_obj(), new_handle.get_obj()))) {
       LOG_WARN("fail to update tablet buffer header", K(ret), K(old_handle), K(new_handle));
     } else if (old_handle.get_obj() != new_handle.get_obj()) { // skip first init, old_handle == new_handle
-      // TODO zhouxinlan.zxl update min minor sstable by link
+      // TODO yunshan.tys update min minor sstable by link
       const ObTabletPointerHandle &ptr_hdl = old_handle.get_obj()->get_pointer_handle();
       ObTabletPointer *t_ptr = nullptr;
       if (OB_ISNULL(t_ptr = reinterpret_cast<ObTabletPointer *>(ptr_hdl.get_resource_ptr()))) {
@@ -2263,7 +2293,7 @@ int ObTenantMetaMemMgr::try_wash_tablet(const std::type_info &type_info, void *&
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init ObTenantMetaMemMgr", K(ret));
-  } else if (OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
+  } else if (!is_large && OB_FAIL(try_wash_tablet_from_gc_queue(buf_len, header, free_obj))) {
     LOG_WARN("fail to try wash tablet from gc queue", K(ret), K(buf_len), K(header));
   } else if (FALSE_IT(time_guard.click("wash_queue"))) {
   } else if (OB_NOT_NULL(free_obj)) {

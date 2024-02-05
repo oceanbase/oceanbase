@@ -28,6 +28,7 @@ TG_DEF(PartSerMigRetryQt, PartSerMigRetryQt, THREAD_POOL, 1)
 //        !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
 TG_DEF(TransMigrate, TransMigrate, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(24), 1), 10000)
 TG_DEF(StandbyTimestampService, StandbyTimestampService, THREAD_POOL, 1)
+TG_DEF(TSnapSvc, TSnapSvc, THREAD_POOL, 1)
 TG_DEF(WeakReadService, WeakRdSrv, THREAD_POOL, 1)
 TG_DEF(TransTaskWork, TransTaskWork, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(12), 1), transaction::ObThreadLocalTransCtx::MAX_BIG_TRANS_TASK)
 TG_DEF(DDLTaskExecutor3, DDLTaskExecutor3, THREAD_POOL, ThreadCountPair(8, 2))
@@ -98,6 +99,10 @@ TG_DEF(LogIOTaskCbThreadPool, LogIOCb, QUEUE_THREAD,
        ThreadCountPair(palf::LogIOTaskCbThreadPool::THREAD_NUM,
        palf::LogIOTaskCbThreadPool::MINI_MODE_THREAD_NUM),
        palf::LogIOTaskCbThreadPool::MAX_LOG_IO_CB_TASK_NUM)
+TG_DEF(LogSharedQueueTh, LogSharedQueueThread, QUEUE_THREAD,
+       ThreadCountPair(palf::LogSharedQueueTh::THREAD_NUM,
+       palf::LogSharedQueueTh::MINI_MODE_THREAD_NUM),
+       palf::LogSharedQueueTh::MAX_LOG_HANDLE_TASK_NUM)
 TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1, (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(LogRouteService, LogRouteSrv, QUEUE_THREAD, 1, (common::MAX_SERVER_COUNT) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(LogRouterTimer, LogRouterTimer, TIMER)
@@ -160,9 +165,7 @@ TG_DEF(InfoPoolResize, InfoPoolResize, TIMER)
 TG_DEF(TenantTransferService, TransferSrv, REENTRANT_THREAD_POOL, ThreadCountPair(4 ,1))
 TG_DEF(WR_TIMER_THREAD, WrTimer, TIMER)
 
-TG_DEF(SvrStartupHandler, SvrStartupHandler, QUEUE_THREAD,
-   ThreadCountPair(observer::ObServerStartupTaskHandler::get_thread_num(), observer::ObServerStartupTaskHandler::get_thread_num()),
-   observer::ObServerStartupTaskHandler::MAX_QUEUED_TASK_NUM)
+TG_DEF(StartupAccelHandler, StartupAccelHandler, QUEUE_THREAD, 1, observer::ObStartupAccelTaskHandler::MAX_QUEUED_TASK_NUM)
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)

@@ -714,7 +714,8 @@ private:
   int backup_complement_log_(const common::ObIArray<BackupPieceFile> &path);
   int inner_backup_complement_log_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
   int transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
-  int inner_transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path, int64_t &transfer_len);
+  int inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path,
+      ObIODevice *&device_handle, ObIOFd &fd, const int64_t dst_len, int64_t &transfer_len);
   int get_transfer_length_(const int64_t delta_len, int64_t &transfer_len);
   int get_file_length_(const common::ObString &path, const share::ObBackupStorageInfo *storage_info, int64_t &length);
   int get_copy_src_and_dest_(const BackupPieceFile &piece_file, share::ObBackupDest &src, share::ObBackupDest &dest);

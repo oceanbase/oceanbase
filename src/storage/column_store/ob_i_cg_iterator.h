@@ -23,7 +23,7 @@ struct PushdownFilterInfo;
 }
 namespace storage
 {
-struct ObCGTableWrapper;
+class ObSSTableWrapper;
 class ObGroupByCell;
 
 class ObICGIterator
@@ -36,6 +36,7 @@ public:
     OB_CG_SINGLE_ROW_SCANNER,
     OB_CG_AGGREGATED_SCANNER,
     OB_CG_GROUP_BY_SCANNER,
+    OB_CG_GROUP_BY_DEFAULT_SCANNER,
     OB_CG_VIRTUAL_SCANNER,
     OB_CG_DEFAULT_SCANNER,
     OB_CG_TILE_SCANNER,
@@ -50,6 +51,14 @@ public:
   {
     return project_single_row ? (OB_CG_SINGLE_ROW_SCANNER || OB_CG_DEFAULT_SCANNER) : (OB_CG_ROW_SCANNER <= cg_iter_type && cg_iter_type < OB_CG_TILE_SCANNER);
   }
+  static bool is_valid_cg_row_scanner(const int cg_iter_type)
+  {
+    return OB_CG_ROW_SCANNER == cg_iter_type || OB_CG_GROUP_BY_SCANNER == cg_iter_type;
+  }
+  static bool is_valid_group_by_cg_scanner(const int cg_iter_type)
+  {
+    return OB_CG_GROUP_BY_SCANNER == cg_iter_type || OB_CG_GROUP_BY_DEFAULT_SCANNER == cg_iter_type;
+  }
   ObICGIterator() : cg_idx_(OB_CS_INVALID_CG_IDX) {};
   virtual ~ObICGIterator() {};
   virtual void reset() = 0;
@@ -61,14 +70,14 @@ public:
   virtual int init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper) = 0;
+    ObSSTableWrapper &wrapper) = 0;
   /*
    * rescan interface
    */
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) = 0;
+      ObSSTableWrapper &wrapper) = 0;
   /*
    * range: locate row index range
    * bitmap: only used for projection when filter applied

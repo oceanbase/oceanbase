@@ -56,7 +56,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
         db_id_(common::OB_INVALID_ID),
         sessid_(0),
         mode_(PC_TEXT_MODE),
-        is_weak_read_(false) {}
+        flag_(0) {}
 
   inline void reset()
   {
@@ -67,7 +67,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     mode_ = PC_TEXT_MODE;
     sys_vars_str_.reset();
     config_str_.reset();
-    is_weak_read_ = false;
+    flag_ = 0;
     namespace_ = NS_INVALID;
   }
 
@@ -92,7 +92,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
       sessid_ = pc_key.sessid_;
       mode_ = pc_key.mode_;
       namespace_ = pc_key.namespace_;
-      is_weak_read_ = pc_key.is_weak_read_;
+      flag_ = pc_key.flag_;
     }
     return ret;
   }
@@ -116,6 +116,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
     hash_ret = common::murmurhash(&db_id_, sizeof(uint64_t), hash_ret);
     hash_ret = common::murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
     hash_ret = common::murmurhash(&mode_, sizeof(PlanCacheMode), hash_ret);
+    hash_ret = common::murmurhash(&flag_, sizeof(flag_), hash_ret);
     hash_ret = sys_vars_str_.hash(hash_ret);
     hash_ret = config_str_.hash(hash_ret);
     hash_ret = common::murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
@@ -133,7 +134,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
                    mode_ == pc_key.mode_ &&
                    sys_vars_str_ == pc_key.sys_vars_str_ &&
                    config_str_ == pc_key.config_str_ &&
-                   is_weak_read_ == pc_key.is_weak_read_ &&
+                   flag_ == pc_key.flag_ &&
                    namespace_ == pc_key.namespace_;
 
     return cmp_ret;
@@ -145,7 +146,7 @@ struct ObPlanCacheKey : public ObILibCacheKey
                K_(mode),
                K_(sys_vars_str),
                K_(config_str),
-               K_(is_weak_read),
+               K_(flag),
                K_(namespace));
   //通过name来进行查找，一般是shared sql/procedure
   //cursor用这种方式，对应的namespace是CRSR
@@ -158,7 +159,16 @@ struct ObPlanCacheKey : public ObILibCacheKey
   PlanCacheMode mode_;
   common::ObString sys_vars_str_;
   common::ObString config_str_;
-  bool is_weak_read_;
+  union
+  {
+    uint16_t flag_;
+    struct
+    {
+      uint16_t is_weak_read_ : 1;
+      uint16_t use_rich_vector_format_ : 1;
+      uint16_t reserved_ : 14; // reserved
+    };
+  };
 };
 
 //记录快速化参数后不需要扣参数的原始字符串及相关信息
@@ -386,7 +396,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       dynamic_param_info_list_(allocator),
       tpl_sql_const_cons_(allocator),
       need_retry_add_plan_(true),
-      insert_batch_opt_info_(allocator)
+      insert_batch_opt_info_(allocator),
+      is_max_curr_limit_(false)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -459,7 +470,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(is_original_ps_mode_),
     K(new_raw_sql_),
     K(need_retry_add_plan_),
-    K(insert_batch_opt_info_)
+    K(insert_batch_opt_info_),
+    K(is_max_curr_limit_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -521,6 +533,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   // when schema version of cache node is old, whether remove this node and retry add cache obj.
   bool need_retry_add_plan_;
   ObInsertBatchOptInfo insert_batch_opt_info_;
+  bool is_max_curr_limit_;
 };
 
 struct ObPlanCacheStat

@@ -116,6 +116,8 @@ public:
   static ObJsonPathCache* get_path_cache_ctx(const uint64_t& id, ObExecContext *exec_ctx);
 
   static int is_json_zero(const ObString& data, int& result);
+
+  static int is_json_true(const ObString& data, int& result);
   
   /*
   try to transfrom scalar data to jsonBase
@@ -247,6 +249,17 @@ public:
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
+};
+
+struct ObJsonZeroVal
+{
+  static const int32_t OB_JSON_ZERO_VAL_LENGTH = sizeof(ObLobCommon) + 2;
+  ObJsonZeroVal() : header_(), json_bin_() {
+    json_bin_[0] = '\0';
+    json_bin_[1] = '\0';
+  }
+  ObLobCommon header_;
+  char json_bin_[4];
 };
 
 } // sql

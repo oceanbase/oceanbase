@@ -324,9 +324,12 @@ int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const 
   ObMemtableMgrHandle memtable_mgr_handle;
   ObArenaAllocator arena_allocator;
   ObCreateTabletSchema create_tablet_schema;
+  uint64_t tenant_data_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get data version failed", K(ret));
   } else if (OB_FAIL(get_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get lock table schema failed", K(ret));
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
@@ -355,8 +358,12 @@ int ObLockTable::remove_tablet()
 {
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = parent_->get_ls_id();
-  if (OB_FAIL(parent_->remove_ls_inner_tablet(ls_id, LS_LOCK_TABLET))) {
+  if (IS_NOT_INIT) {
+    LOG_WARN("lock table does not inited, remove do nothing");
+  } else if (OB_FAIL(parent_->remove_ls_inner_tablet(ls_id, LS_LOCK_TABLET))) {
     LOG_WARN("failed to remove ls inner tablet", K(ret), K(ls_id), K(LS_LOCK_TABLET));
+    ob_usleep(1000 * 1000);
+    ob_abort();
   }
   return ret;
 }
@@ -524,10 +531,11 @@ int ObLockTable::lock(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid argument", K(ret), K(ctx), K(param), K(ctx.mvcc_acc_ctx_));
     ob_abort();
-  } else if (OB_FAIL(get_lock_memtable(handle))) {
+  } else if (OB_FAIL(ctx.mvcc_acc_ctx_.mem_ctx_->get_lock_mem_ctx().get_lock_memtable(memtable))) {
     LOG_WARN("get lock memtable failed", K(ret));
-  } else if (OB_FAIL(handle.get_lock_memtable(memtable))) {
-    LOG_ERROR("get lock memtable from lock handle failed", K(ret));
+  } else if (OB_ISNULL(memtable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lock memtable is null", K(ret), K(ctx));
   } else {
     const int64_t lock_timestamp = ObTimeUtility::current_time();
     ObTableLockOp lock_op(param.lock_id_,
@@ -728,6 +736,27 @@ int ObLockTable::switch_to_leader()
       LOG_WARN("collect obj lock garbage when switch to leader failed", K(ret),
                K(parent_->get_ls_id()));
     }
+  }
+  return ret;
+}
+
+int ObLockTable::enable_check_tablet_status(const bool need_check)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTable is not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    LOG_WARN("get lock memtable failed", K(ret));
+    // to disable check just skip when no active memtable
+    if (!need_check && OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(handle.get_lock_memtable(lock_memtable))) {
+    LOG_WARN("get lock memtable from lock handle failed", K(ret));
+  } else if (FALSE_IT(lock_memtable->enable_check_tablet_status(need_check))) {
   }
   return ret;
 }

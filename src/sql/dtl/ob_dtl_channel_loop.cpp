@@ -36,10 +36,9 @@ ObDtlChannelLoop::ObDtlChannelLoop()
       ignore_interrupt_(false),
       tenant_id_(UINT64_MAX),
       timeout_(INT64_MAX),
-      proxy_first_buffer_cache_(nullptr),
       spin_lock_(common::ObLatchIds::DTL_CHANNEL_LIST_LOCK),
       mock_addr_(),
-      sentinel_node_(1, 0, mock_addr_),
+      sentinel_node_(1, 0, mock_addr_, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL),
       n_first_no_data_(0),
       op_monitor_info_(default_op_monitor_info_),
       first_data_get_(false),
@@ -69,10 +68,9 @@ ObDtlChannelLoop::ObDtlChannelLoop(ObMonitorNode &op_monitor_info)
       ignore_interrupt_(false),
       tenant_id_(UINT64_MAX),
       timeout_(INT64_MAX),
-      proxy_first_buffer_cache_(nullptr),
       spin_lock_(common::ObLatchIds::DTL_CHANNEL_LIST_LOCK),
       mock_addr_(),
-      sentinel_node_(1, 0, mock_addr_),
+      sentinel_node_(1, 0, mock_addr_, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL),
       n_first_no_data_(0),
       op_monitor_info_(op_monitor_info),
       first_data_get_(false),
@@ -96,32 +94,6 @@ void ObDtlChannelLoop::notify(ObDtlChannel &chan)
   UNUSED(chan);
   add_last_data_list(&chan);
   cond_.signal();
-}
-
-int ObDtlChannelLoop::has_first_buffer(uint64_t chan_id, bool &has_first_buffer)
-{
-  int ret = OB_SUCCESS;
-  has_first_buffer = false;
-  if (nullptr != proxy_first_buffer_cache_) {
-    if (OB_FAIL(proxy_first_buffer_cache_->has_first_buffer(chan_id, has_first_buffer))) {
-      LOG_WARN("failed to get first buffer", K(ret));
-    } else {
-      LOG_DEBUG("trace has first buffer", K(chan_id), KP(chan_id), K(has_first_buffer),
-        KP(proxy_first_buffer_cache_), K(proxy_first_buffer_cache_->get_first_buffer_key()));
-    }
-  }
-  return ret;
-}
-
-int ObDtlChannelLoop::set_first_buffer(uint64_t chan_id)
-{
-  int ret = OB_SUCCESS;
-  if (nullptr != proxy_first_buffer_cache_) {
-    if (OB_FAIL(proxy_first_buffer_cache_->set_first_buffer(chan_id))) {
-      LOG_WARN("failed to get first buffer", K(ret));
-    }
-  }
-  return ret;
 }
 
 int ObDtlChannelLoop::unregister_channel(ObDtlChannel &chan)
@@ -278,7 +250,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
       int64_t curr_time = ::oceanbase::common::ObTimeUtility::current_time();
       if (OB_UNLIKELY(curr_time - last_dump_channel_time_ >= static_cast<int64_t> (100_s))) {
         last_dump_channel_time_ = curr_time;
-        LOG_WARN("dump channel loop info for query which active for more than 100 seconds", K(process_query_time_), K(curr_time), K(timeout), K(timeout_), K(query_timeout_ts_));
+        LOG_INFO("dump channel loop info for query which active for more than 100 seconds", K(process_query_time_), K(curr_time), K(timeout), K(timeout_), K(query_timeout_ts_));
         int64_t idx = -1;
         int64_t last_in_msg_time = INT64_MAX;
         // Find a channel that has not received data for the longest time
@@ -295,7 +267,7 @@ int ObDtlChannelLoop::process_base(ObIDltChannelLoopPred *pred, int64_t &hinted_
           LOG_WARN("no channel exists");
         } else {
           ObDtlBasicChannel *channel = static_cast<ObDtlBasicChannel *> (chans_.at(idx));
-          LOG_WARN("dump channel info for query which active for more than 100 seconds", K(idx), K(channel->get_id()), K(channel->get_peer_id()), K(channel->get_peer()), K(channel->get_op_metric()));
+          LOG_INFO("dump channel info for query which active for more than 100 seconds", K(idx), K(channel->get_id()), K(channel->get_peer_id()), K(channel->get_peer()), K(channel->get_op_metric()));
         }
       }
     }
@@ -413,10 +385,7 @@ int ObDtlChannelLoop::process_channel(int64_t &nth_channel)
   int ret = OB_EAGAIN;
   int64_t n_times = 0;
   bool last_row_in_buffer = false;
-  if (ret == OB_EAGAIN && (OB_ISNULL(proxy_first_buffer_cache_) ||
-      use_interm_result_ ||
-      (0 < proxy_first_buffer_cache_->get_first_buffer_cnt() &&
-      n_first_no_data_ < chans_.count()))) {
+  if (ret == OB_EAGAIN && use_interm_result_) {
     // less then chan_cnt, then probe first buffer
     ret = process_channels(nullptr, nth_channel);
   }

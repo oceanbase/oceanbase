@@ -34,6 +34,16 @@ public:
                        ObExpr &rt_expr) const override;
   static int eval_or_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
                                     const ObBitVector &skip, const int64_t batch_size);
+
+  static int eval_or_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                            const ObBitVector &skip, const EvalBound &bound);
+
+  enum EvalOrStage {
+    FIRST,
+    MIDDLE,
+    LAST
+  };
+
 private:
   static int calc_res_with_one_param_null(common::ObObj &res,
                                           const common::ObObj &left,

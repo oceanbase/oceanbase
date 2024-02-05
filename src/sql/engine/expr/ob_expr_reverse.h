@@ -33,6 +33,8 @@ public:
                  const common::ObCollationType &cs_type,
                  common::ObIAllocator *allocator,
                  common::ObString &res_str);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprReverse);
 };

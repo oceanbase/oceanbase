@@ -8,7 +8,7 @@ drop table if exists t1;
 --enable_warnings
 --enable_query_log
 
-create table t1(a int, b varchar(3048), primary key (a), c int) row_format = compressed with column group for all columns, each column;
+create table t1(a int, b varchar(3048), primary key (a), c int) row_format = compressed with column group (all columns, each column);
 
 sleep 10;
 

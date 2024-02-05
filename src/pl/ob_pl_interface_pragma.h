@@ -58,6 +58,8 @@
 #include "pl/sys_package/ob_dbms_rls.h"
 #include "pl/sys_package/ob_json_object_type.h"
 #include "pl/sys_package/ob_json_element_type.h"
+#include "pl/sys_package/ob_dbms_mview.h"
+#include "pl/sys_package/ob_dbms_mview_stats.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
 #ifdef OB_BUILD_ORACLE_XML
@@ -65,6 +67,9 @@
 #endif
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
+#include "pl/sys_package/ob_dbms_mview_mysql.h"
+#include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
+#include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -338,6 +343,8 @@
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_INDEX_STATS, "SET_INDEX_STATS", (ObDbmsStats::set_index_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_EXPORT_INDEX_STATS, "EXPORT_INDEX_STATS", (ObDbmsStats::export_index_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_IMPORT_INDEX_STATS, "IMPORT_INDEX_STATS", (ObDbmsStats::import_index_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_COPY_TABLE_STATS, "COPY_TABLE_STATS", (ObDbmsStats::copy_table_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_CNACEL_GATHER_STATS, "CANCEL_GATHER_STATS", (ObDbmsStats::cancel_gather_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_SYSTEM_STATS, "GATHER_SYSTEM_STATS", (ObDbmsStats::gather_system_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_DELETE_SYSTEM_STATS, "DELETE_SYSTEM_STATS", (ObDbmsStats::delete_system_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_SYSTEM_STATS, "SET_SYSTEM_STATS", (ObDbmsStats::set_system_stats))
@@ -517,6 +524,7 @@
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_DISABLE, ObDBMSSchedulerMysql::disable)
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_ENABLE, ObDBMSSchedulerMysql::enable)
   DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_SET_ATTRIBUTE, ObDBMSSchedulerMysql::set_attribute)
+  DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE(DBMS_SCHEDULER_MYSQL_GET_AND_INCREASE_JOB_ID, ObDBMSSchedulerMysql::get_and_increase_job_id)
 
 #undef DEFINE_DBMS_SCHEDULER_MYSQL_INTERFACE
   //end of dbms_scheduler_mysql
@@ -666,6 +674,51 @@
   INTERFACE_DEF(INTERFACE_JSON_OBJECT_CLONE, "JSON_OBJECT_CLONE", (ObPlJsonObject::clone))
   // end of json_object_t
 #endif
+
+#ifdef OB_BUILD_ORACLE_PL
+  // start of dbms_mview
+#define DEFINE_DBMS_MVIEW_INTERFACE(symbol, func) \
+  INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+  DEFINE_DBMS_MVIEW_INTERFACE(DBMS_MVIEW_PURGE_LOG, ObDBMSMView::purge_log)
+  DEFINE_DBMS_MVIEW_INTERFACE(DBMS_MVIEW_REFRESH, ObDBMSMView::refresh)
+
+#undef DEFINE_DBMS_MVIEW_INTERFACE
+  // end of dbms_mview
+
+  // start of dbms_mview_stats
+#define DEFINE_DBMS_MVIEW_STATS_INTERFACE(symbol, func) \
+  INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+  DEFINE_DBMS_MVIEW_STATS_INTERFACE(DBMS_MVIEW_STATS_SET_SYS_DEFAULT, ObDBMSMViewStats::set_system_default)
+  DEFINE_DBMS_MVIEW_STATS_INTERFACE(DBMS_MVIEW_STATS_SET_MVREF_STATS_PARAMS, ObDBMSMViewStats::set_mvref_stats_params)
+  DEFINE_DBMS_MVIEW_STATS_INTERFACE(DBMS_MVIEW_STATS_PURGE_REFRESH_STATS, ObDBMSMViewStats::purge_refresh_stats)
+
+#undef DEFINE_DBMS_MVIEW_STATS_INTERFACE
+  // end of dbms_mview_stats
+#endif
+
+  // start of dbms_mview_mysql
+#define DEFINE_DBMS_MVIEW_MYSQL_INTERFACE(symbol, func) \
+  INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+  DEFINE_DBMS_MVIEW_MYSQL_INTERFACE(DBMS_MVIEW_MYSQL_PURGE_LOG, ObDBMSMViewMysql::purge_log)
+  DEFINE_DBMS_MVIEW_MYSQL_INTERFACE(DBMS_MVIEW_MYSQL_REFRESH, ObDBMSMViewMysql::refresh)
+
+#undef DEFINE_DBMS_MVIEW_MYSQL_INTERFACE
+  // end of dbms_mview_mysql
+
+  // start of dbms_mview_stats_mysql
+#define DEFINE_DBMS_MVIEW_STATS_MYSQL_INTERFACE(symbol, func) \
+  INTERFACE_DEF(INTERFACE_##symbol, #symbol, (func))
+
+  DEFINE_DBMS_MVIEW_STATS_MYSQL_INTERFACE(DBMS_MVIEW_STATS_MYSQL_SET_SYS_DEFAULT, ObDBMSMViewStatsMysql::set_system_default)
+  DEFINE_DBMS_MVIEW_STATS_MYSQL_INTERFACE(DBMS_MVIEW_STATS_MYSQL_SET_MVREF_STATS_PARAMS, ObDBMSMViewStatsMysql::set_mvref_stats_params)
+  DEFINE_DBMS_MVIEW_STATS_MYSQL_INTERFACE(DBMS_MVIEW_STATS_MYSQL_PURGE_REFRESH_STATS, ObDBMSMViewStatsMysql::purge_refresh_stats)
+
+#undef DEFINE_DBMS_MVIEW_STATS_MYSQL_INTERFACE
+  // end of dbms_mview_stats_mysql
+
   // start of dbms_udr
   INTERFACE_DEF(INTERFACE_DBMS_UDR_CREATE_RULE, "CREATE_RULE", (ObDBMSUserDefineRule::create_rule))
   INTERFACE_DEF(INTERFACE_DBMS_UDR_REMOVE_RULE, "REMOVE_RULE", (ObDBMSUserDefineRule::remove_rule))
@@ -681,6 +734,11 @@
   // end of dbms_workload_repository
   /****************************************************************************/
 
+  // start of dbms_trusted_certificate_manager
+  INTERFACE_DEF(INTERFACE_DBMS_ADD_TRUSTED_CERTIFICATE, "ADD_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::add_trusted_certificate))
+  INTERFACE_DEF(INTERFACE_DBMS_DELETE_TRUSTED_CERTIFICATE, "DELETE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::delete_trusted_certificate))
+  INTERFACE_DEF(INTERFACE_DBMS_UPDATE_TRUSTED_CERTIFICATE, "UPDATE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::update_trusted_certificate))
+  // end of end of dbms_workload_repository
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 

@@ -116,7 +116,9 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_TRUNCATE_TABLE, = 59)                               \
   ACT(OB_DDL_RENAME_PARTITION, = 60)                             \
   ACT(OB_DDL_RENAME_SUB_PARTITION, = 61)                         \
-  ACT(OB_DDL_MODIFY_MATERIALIZED_VIEW_STATUS, = 62)          \
+  ACT(OB_DDL_MODIFY_MATERIALIZED_VIEW_STATUS, = 62)              \
+  ACT(OB_DDL_ADD_COLUMN_GROUP, = 63)                             \
+  ACT(OB_DDL_DROP_COLUMN_GROUP, = 64)                            \
   ACT(OB_DDL_TABLE_OPERATION_END, = 100)                         \
   ACT(OB_DDL_TENANT_OPERATION_BEGIN, = 101)                      \
   ACT(OB_DDL_ADD_TENANT,)                                        \
@@ -598,7 +600,7 @@ public:
   }
   inline const common::ObString &get_new_part_name() const { return new_part_name_; }
   inline int set_new_part_name(const common::ObString &new_part_name);
-  int assign_subpartiton_key_info(const common::ObPartitionKeyInfo& src_info);
+  int assign_subpartition_key_info(const common::ObPartitionKeyInfo& src_info);
 
   int add_alter_column(const AlterColumnSchema &column, const bool need_allocate);
   void reset();

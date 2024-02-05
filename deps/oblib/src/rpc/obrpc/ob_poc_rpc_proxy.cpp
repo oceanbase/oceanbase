@@ -14,6 +14,7 @@
 #include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_net_keepalive.h"
+#include "share/ob_errno.h"
 extern "C" {
 #include "rpc/pnio/r0/futex.h"
 }
@@ -42,6 +43,8 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
     send_ret_ = OB_TIMEOUT;
     RPC_LOG_RET(WARN, send_ret_, "response is null", KP(buf), K(sz), K(io_err));
   } else {
+    EVENT_INC(RPC_PACKET_IN);
+    EVENT_ADD(RPC_PACKET_IN_BYTES, sz);
     buf = buf + easy_head_size;
     sz = sz - easy_head_size; // skip easy header
     sz_ = sz;
@@ -58,10 +61,25 @@ int ObSyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   rk_futex_wake(&cond_, 1);
   return ret;
 }
-int ObSyncRespCallback::wait()
+int ObSyncRespCallback::wait(const int64_t wait_timeout_us, const int64_t pcode, const int64_t req_sz)
 {
+  ObWaitEventGuard wait_guard(ObWaitEventIds::SYNC_RPC, wait_timeout_us / 1000, pcode, req_sz);
+  const struct timespec ts = {1, 0};
+  bool has_terminated = false;
   while(ATOMIC_LOAD(&cond_) == 0) {
-    rk_futex_wait(&cond_, 0, NULL);
+    if (OB_UNLIKELY((obrpc::OB_REMOTE_SYNC_EXECUTE == pcode || obrpc::OB_REMOTE_EXECUTE == pcode)
+                    && !has_terminated
+                    && OB_ERR_SESSION_INTERRUPTED == THIS_WORKER.check_status())) {
+      RPC_LOG(INFO, "check session killed, will execute pn_terminate_pkt", K(gtid_), K(pkt_id_));
+      int err = 0;
+      if ((err = pn_terminate_pkt(gtid_, pkt_id_)) != 0) {
+        int tmp_ret = tranlate_to_ob_error(err);
+        RPC_LOG_RET(WARN, tmp_ret, "pn_terminate_pkt failed", K(err));
+      } else {
+        has_terminated = true;
+      }
+    }
+    rk_futex_wait(&cond_, 0, &ts);
   }
   return send_ret_;
 }
@@ -112,6 +130,8 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   ObRpcPacketCode pcode = OB_INVALID_RPC_CODE;
   ObRpcPacket* ret_pkt = NULL;
   if (buf != NULL && sz > easy_head_size) {
+    EVENT_INC(RPC_PACKET_IN);
+    EVENT_ADD(RPC_PACKET_IN_BYTES, sz);
     sz = sz - easy_head_size;
     buf = buf + easy_head_size;
   } else {
@@ -121,6 +141,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   if (ucb_ == NULL) {
     // do nothing
   } else {
+    ucb_->record_stat(buf == NULL);
     bool cb_cloned = ucb_->get_cloned();
     pcode = ucb_->get_pcode();
     if (0 != io_err) {
@@ -157,6 +178,7 @@ int ObAsyncRespCallback::handle_resp(int io_err, const char* buf, int64_t sz)
   }
   pool_.destroy();
   ObCurTraceId::reset();
+  THIS_WORKER.get_sql_arena_allocator().reset();
   const int64_t cur_time = ObTimeUtility::current_time();
   const int64_t total_time = cur_time  - start_time;
   const int64_t decode_time = after_decode_time - start_time;

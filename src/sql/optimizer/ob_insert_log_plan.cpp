@@ -95,8 +95,22 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
         LOG_WARN("failed to set is direct insert", K(ret));
-      } else if (OB_FAIL(check_need_online_stats_gather(need_osg))) {
-        LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        bool tmp_need_osg = false;
+        if (OB_FAIL(check_need_online_stats_gather(tmp_need_osg))) {
+          LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
+        } else {
+          if (is_direct_insert()) {
+            get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
+              .set_is_online_gather_statistics(tmp_need_osg);
+          } else {
+            need_osg = tmp_need_osg;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //pass
       } else if (need_osg && OB_FAIL(generate_osg_share_info(osg_info))) {
         LOG_WARN("failed to generate osg share info");
       } else if (need_osg && OB_ISNULL(osg_info)) {
@@ -325,6 +339,8 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
   ObObj online_sys_var_obj;
   const ObInsertStmt *insert_stmt = NULL;
   TableItem *ins_table = NULL;
+  bool disable_pdml = false;
+  bool is_pk_auto_inc = false;
   if (OB_ISNULL(insert_stmt = get_stmt()) ||
       OB_ISNULL(ins_table = insert_stmt->get_table_item_by_id(insert_stmt->get_insert_table_info().table_id_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -333,6 +349,11 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
              || insert_stmt->is_insert_up()
              || !insert_stmt->value_from_select()
              || (!get_optimizer_context().get_session_info()->is_user_session())) {
+    need_gathering = false;
+  } else if (OB_FAIL(insert_stmt->check_pdml_disabled(get_optimizer_context().is_online_ddl(),
+                                                      disable_pdml, is_pk_auto_inc))) {
+    LOG_WARN("fail to check pdml disable for insert stmt", K(ret));
+  } else if (disable_pdml) {
     need_gathering = false;
   }
 
@@ -725,11 +746,6 @@ int ObInsertLogPlan::check_insert_location_need_multi_partition_dml(ObLogicalOpe
     } else {
       is_multi_part_dml = true;
     }
-  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
-    // #issue/44052024
-    // force insert_up & replace use distribute op to avoid 4.0 branch rollback bug.
-    // should remove this condition in 4.1
-    is_multi_part_dml = true;
   } else if (OB_FAIL(check_if_match_partition_wise_insert(*insert_sharding,
                                                           top,
                                                           is_partition_wise))) {
@@ -799,6 +815,7 @@ int ObInsertLogPlan::check_if_match_partition_wise_insert(ObShardingInfo &target
   } else {
     is_partition_wise = is_match && !top.is_exchange_allocated();
   }
+  LOG_TRACE("check partition wise", K(is_match), K(top.is_exchange_allocated()));
   return ret;
 }
 

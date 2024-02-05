@@ -185,6 +185,7 @@ public:
   OB_INLINE ObJsonInType get_internal_type() const override { return ObJsonInType::JSON_BIN; }
   OB_INLINE uint64_t element_count() const override { return element_count_; }
   OB_INLINE uint64_t get_used_bytes() const { return bytes_; } // return acutal used bytes for curr iter
+  uint64_t get_serialize_size() const;
   OB_INLINE ObJsonNodeType json_type() const override
   {
     return static_cast<ObJsonNodeType>(ObJsonVerType::get_json_type(get_vertype()));
@@ -193,6 +194,7 @@ public:
   {
     return field_type_;
   }
+
   int get_array_element(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(uint64_t index, ObIJsonBase *&value) const override;
   int get_object_value(const ObString &key, ObIJsonBase *&value) const override;
@@ -379,6 +381,10 @@ public:
   */
   int rebuild();
 
+  int get_parent(ObIJsonBase *& parent) const override
+  {
+    return OB_NOT_SUPPORTED;
+  }
   /*
   Rebuild the json binary at iter position, and copy to string
   This function won't change the data itself.
@@ -396,6 +402,12 @@ public:
 
   // release resource
   void destroy();
+
+  virtual uint64_t member_count() const override
+  {
+    return (json_type() == ObJsonNodeType::J_ARRAY || json_type() == ObJsonNodeType::J_OBJECT) ?
+      element_count() : 1;
+  }
 
 private:
   // used as stack

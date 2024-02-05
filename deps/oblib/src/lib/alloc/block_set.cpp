@@ -21,21 +21,14 @@
 using namespace oceanbase;
 using namespace oceanbase::lib;
 
-void BlockSet::Lock::lock()
-{
-  int64_t tid = common::get_itid() + 1;
-  while (!ATOMIC_BCAS(&tid_, 0, tid)) {
-    sched_yield();
-  }
-}
-
 BlockSet::BlockSet()
-    : mutex_(common::ObLatchIds::ALLOC_BLOCK_LOCK), clist_(NULL),
+    : tallocator_(NULL),
+      locker_(NULL),
+      chunk_mgr_(NULL),
+      clist_(NULL),
       avail_bm_(BLOCKS_PER_CHUNK+1, avail_bm_buf_),
-      total_hold_(0), total_payload_(0), total_used_(0), tallocator_(NULL),
-      chunk_free_list_(false/*with_mutex*/), locker_(nullptr)
+      total_hold_(0), total_payload_(0), total_used_(0)
 {
-  chunk_free_list_.set_max_chunk_cache_size(0);
 }
 
 BlockSet::~BlockSet()
@@ -56,17 +49,6 @@ void BlockSet::reset()
   //MEMSET(block_list_, 0, sizeof(block_list_));
   clist_ = nullptr;
   avail_bm_.clear();
-  LockGuard lock(cache_shared_lock_);
-  for (AChunk *chunk = nullptr; (chunk = chunk_free_list_.pop()) != nullptr;) {
-    uint64_t payload = 0;
-    UNUSED(ATOMIC_FAA(&total_hold_, -chunk->hold(&payload)));
-    UNUSED(ATOMIC_FAA(&total_payload_, -payload));
-    if (chunk->washed_size_ != 0) {
-      tallocator_->update_wash_stat(-1, -chunk->washed_blks_, -chunk->washed_size_);
-    }
-    tallocator_->free_chunk(chunk, attr_);
-  }
-  cache_shared_lock_.reset();
 }
 
 void BlockSet::set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
@@ -293,17 +275,11 @@ AChunk *BlockSet::alloc_chunk(const uint64_t size, const ObMemAttr &attr)
   AChunk *chunk = NULL;
   if (OB_NOT_NULL(tallocator_)) {
     const uint64_t all_size = AChunkMgr::aligned(size);
-    if (INTACT_ACHUNK_SIZE == all_size && chunk_free_list_.count() > 0) {
-      LockGuard lock(cache_shared_lock_);
-      chunk = chunk_free_list_.pop();
-    }
-    if (nullptr == chunk) {
-      chunk = tallocator_->alloc_chunk(static_cast<int64_t>(size), attr);
-      if (chunk != nullptr) {
-        uint64_t payload = 0;
-        UNUSED(ATOMIC_FAA(&total_hold_, chunk->hold(&payload)));
-        UNUSED(ATOMIC_FAA(&total_payload_, payload));
-      }
+    chunk = chunk_mgr_->alloc_chunk(static_cast<int64_t>(size), attr);
+    if (chunk != nullptr) {
+      uint64_t payload = 0;
+      UNUSED(ATOMIC_FAA(&total_hold_, chunk->hold(&payload)));
+      UNUSED(ATOMIC_FAA(&total_payload_, payload));
     }
     if (NULL != chunk) {
       if (NULL != clist_) {
@@ -351,20 +327,13 @@ void BlockSet::free_chunk(AChunk *const chunk)
   }
   uint64_t payload = 0;
   const uint64_t hold = chunk->hold(&payload);
-  bool freed = false;
-  if (INTACT_ACHUNK_SIZE == hold) {
-    LockGuard lock(cache_shared_lock_);
-    freed = chunk_free_list_.push(chunk);
-  }
-  if (!freed) {
-    if (OB_NOT_NULL(tallocator_)) {
-      UNUSED(ATOMIC_FAA(&total_hold_, -hold));
-      UNUSED(ATOMIC_FAA(&total_payload_, -payload));
-      if (chunk->washed_size_ != 0) {
-        tallocator_->update_wash_stat(-1, -chunk->washed_blks_, -chunk->washed_size_);
-      }
-      tallocator_->free_chunk(chunk, attr_);
+  if (OB_NOT_NULL(tallocator_)) {
+    UNUSED(ATOMIC_FAA(&total_hold_, -hold));
+    UNUSED(ATOMIC_FAA(&total_payload_, -payload));
+    if (chunk->washed_size_ != 0) {
+      tallocator_->update_wash_stat(-1, -chunk->washed_blks_, -chunk->washed_size_);
     }
+    chunk_mgr_->free_chunk(chunk, attr_);
   }
 }
 

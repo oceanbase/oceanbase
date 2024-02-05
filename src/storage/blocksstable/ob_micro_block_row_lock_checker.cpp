@@ -25,9 +25,10 @@ using namespace share;
 
 ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &allocator)
     : ObMicroBlockRowScanner(allocator),
-      check_exist_(false),
-      snapshot_version_(),
-      lock_state_(nullptr)
+    check_exist_(false),
+    snapshot_version_(),
+    lock_state_(nullptr),
+    row_state_(nullptr)
 {
 }
 

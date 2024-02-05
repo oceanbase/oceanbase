@@ -26,7 +26,7 @@ public:
 
   int execute(ObExecContext &ctx, ObLoadDataStmt &stmt);
 private:
-  int check_is_direct_load(const ObLoadDataHint &load_hint, bool &check_ret);
+  int check_is_direct_load(ObTableDirectInsertCtx &ctx, const ObLoadDataHint &load_hint);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObLoadDataExecutor);

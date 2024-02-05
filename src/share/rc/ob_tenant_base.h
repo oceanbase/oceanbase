@@ -89,7 +89,9 @@ class ObTenantMdsService;
   class ObTransferService;
   class ObRebuildService;
   class ObTableScanIterator;
+  class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
+  class ObTenantDirectLoadMgr;
   class ObEmptyReadBucket;
   class ObTabletMemtableMgrPool;
 } // namespace storage
@@ -170,12 +172,16 @@ namespace rootserver
   class ObArbitrationService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
+  class ObTenantSnapshotScheduler;
+  class ObCloneScheduler;
+  class ObMViewMaintenanceService;
 }
 namespace observer
 {
   class ObTenantMetaChecker;
   class QueueThread;
   class ObTableLoadService;
+  class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
 }
 
@@ -203,6 +209,8 @@ class ObGlobalAutoIncService;
 class ObDagWarningHistoryManager;
 class ObTenantErrsimModuleMgr;
 class ObTenantErrsimEventMgr;
+class ObSharedMemAllocMgr;
+class ObIndexUsageInfoMgr;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -242,6 +250,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
+      share::ObSharedMemAllocMgr*,                   \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
       logservice::coordinator::ObFailureDetector*,   \
@@ -332,12 +341,18 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
       oceanbase::sql::ObTenantSQLSessionMgr*,       \
+      storage::ObTenantDirectLoadMgr*,              \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
-      storage::ObTabletMemtableMgrPool*             \
+      rootserver::ObTenantSnapshotScheduler*,       \
+      storage::ObTenantSnapshotService*,            \
+      rootserver::ObCloneScheduler*,                \
+      share::ObIndexUsageInfoMgr*,                  \
+      storage::ObTabletMemtableMgrPool*,            \
+      rootserver::ObMViewMaintenanceService*        \
   )
 
 
@@ -351,6 +366,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_TENANT_ROLE_CACHE_IS_INVALID() share::ObTenantEnv::get_tenant()->is_invalid_tenant()
 // 租户是否处于恢复中
 #define MTL_TENANT_ROLE_CACHE_IS_RESTORE() share::ObTenantEnv::get_tenant()->is_restore_tenant()
+// 租户是否处于克隆中
+#define MTL_TENANT_ROLE_CACHE_IS_CLONE() share::ObTenantEnv::get_tenant()->is_clone_tenant()
 // 更新租户role
 #define MTL_SET_TENANT_ROLE_CACHE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
 // 获取租户role
@@ -372,8 +389,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_MEM_SIZE() share::ObTenantEnv::get_tenant()->unit_memory_size()
 
 // 注意MTL_BIND调用需要在租户创建之前，否则会导致租户创建时无法调用到绑定的函数。
-#define MTL_BIND(INIT, DESTROY) \
-  share::ObTenantBase::mtl_bind_func(nullptr, INIT, nullptr, nullptr, nullptr, DESTROY);
 #define MTL_BIND2(NEW, INIT, START, STOP, WAIT, DESTROY) \
   share::ObTenantBase::mtl_bind_func(NEW, INIT, START, STOP, WAIT, DESTROY);
 
@@ -551,6 +566,11 @@ public:
   bool is_restore_tenant()
   {
     return share::is_restore_tenant(ATOMIC_LOAD(&tenant_role_value_));
+  }
+
+  bool is_clone_tenant()
+  {
+    return share::is_clone_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
   bool is_invalid_tenant()

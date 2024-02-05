@@ -557,8 +557,11 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
     // 2. Change the schema to WARN after the startup is complete
     OB_LOGGER.set_mod_log_levels(TCONF.init_log_level.str());
 
+    if (OB_FAIL(common::ObClockGenerator::init())) {
+      LOG_ERROR("failed to init ob clock generator", KR(ret));
+    }
     // 校验配置项是否满足期望
-    if (OB_FAIL(TCONF.check_all())) {
+    else if (OB_FAIL(TCONF.check_all())) {
       LOG_ERROR("check config fail", KR(ret));
     } else if (OB_FAIL(dump_config_())) {
       LOG_ERROR("dump_config_ fail", KR(ret));
@@ -750,13 +753,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     LOG_INFO("set working mode", K(working_mode_str), K(working_mode_), "working_mode", print_working_mode(working_mode_));
   }
 
-  // init ObClockGenerator
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(common::ObClockGenerator::init())) {
-      LOG_ERROR("failed to init ob clock generator", KR(ret));
-    }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(! is_refresh_mode_valid(refresh_mode))) {
       ret = OB_INVALID_CONFIG;
@@ -944,7 +940,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
       enable_output_hidden_primary_key);
 
   INIT(lob_data_merger_, ObCDCLobDataMerger, TCONF.lob_data_merger_thread_num,
-      CDC_CFG_MGR.get_lob_data_merger_queue_length(), *err_handler);
+      TCONF.lob_data_merger_queue_length, *err_handler);
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(lob_aux_meta_storager_.init(store_service_))) {
@@ -1232,7 +1228,7 @@ int ObLogInstance::start_tenant_service_()
       LOG_ERROR("update_data_start_schema_on_split_mode_ fail", KR(ret));
     }
   }
-  LOG_INFO("start_tenant_service_ success", K_(start_tstamp_ns), K_(sys_start_schema_version));
+  LOG_INFO("start_tenant_service_ done", KR(ret), K_(start_tstamp_ns), K_(sys_start_schema_version));
   return ret;
 }
 
@@ -1282,6 +1278,10 @@ int ObLogInstance::config_tenant_mgr_(const int64_t start_tstamp_ns,
           GET_SCHEMA_TIMEOUT_ON_START_UP,
           add_tenant_succ))) {
         LOG_ERROR("add_tenant fail", KR(ret), K(start_tstamp_ns), K(sys_schema_version));
+      } else if (! add_tenant_succ) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("[FATAL] [LAUNCH] ADD_TENANT WITH NO ALIVE SERVER MODE FAILED", KR(ret),
+            K(start_tstamp_ns), K_(refresh_mode), K_(fetching_mode));
       }
     } else {
       if (OB_FAIL(tenant_mgr_->add_all_tenants(
@@ -2346,12 +2346,11 @@ void ObLogInstance::reload_config_()
 {
   int ret = OB_SUCCESS;
   ObLogConfig &config = TCONF;
-  const char *default_config_fpath = DEFAULT_CONFIG_FPATN;
 
   _LOG_INFO("====================reload config begin====================");
 
-  if (OB_FAIL(config.load_from_file(default_config_fpath))) {
-    LOG_ERROR("load_from_file fail", KR(ret), K(default_config_fpath));
+  if (OB_FAIL(config.load_from_file(config.config_fpath))) {
+    LOG_ERROR("load_from_file fail", KR(ret), K(config.config_fpath));
   } else {
     CDC_CFG_MGR.configure(config);
     const int64_t max_log_file_count = config.max_log_file_count;
@@ -2770,7 +2769,7 @@ int ObLogInstance::get_task_count_(
   part_trans_task_resuable_count = 0;
 
   if (OB_ISNULL(fetcher_) || OB_ISNULL(dml_parser_) || OB_ISNULL(formatter_)
-      || OB_ISNULL(storager_)
+      || OB_ISNULL(storager_) || OB_ISNULL(lob_data_merger_)
       || OB_ISNULL(sequencer_) || OB_ISNULL(reader_) || OB_ISNULL(committer_)
       || OB_ISNULL(sys_ls_handler_) || OB_ISNULL(resource_collector_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2813,6 +2812,8 @@ int ObLogInstance::get_task_count_(
     //   (3) Tasks held by users that have not been returned
     //   (4) tasks held by resource_collector
     if (OB_SUCC(ret)) {
+      int64_t lob_data_list_task_count = 0;
+      lob_data_merger_->get_task_count(lob_data_list_task_count);
       int64_t committer_ddl_part_trans_task_count = 0;
       int64_t committer_dml_part_trans_task_count = 0;
 
@@ -2850,7 +2851,9 @@ int ObLogInstance::get_task_count_(
             seq_stat_info.ready_trans_count_, seq_stat_info.sequenced_trans_count_);
         _LOG_INFO("[TASK_COUNT_STAT] [READER] [ROW_TASK=%ld]", reader_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [DML_PARSER] [LOG_TASK=%ld]", dml_parser_log_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]", formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]",
+            formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [LOB_MERGER] [LOB_LIST_TASK=%ld]", lob_data_list_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [SORTER] [TRANS=%ld]", sorter_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [COMMITER] [DML_TRANS=%ld DDL_PART_TRANS_TASK=%ld DML_PART_TRANS_TASK=%ld]",
             committer_pending_dml_trans_count,
@@ -2990,6 +2993,8 @@ int ObLogInstance::init_ob_cluster_version_()
     LOG_ERROR("ObClusterVersion init fail", KR(ret), K(min_observer_version));
   } else {
     LOG_INFO("OceanBase cluster version init succ", "cluster_version", ObClusterVersion::get_instance());
+    global_info_.update_min_cluster_version(min_observer_version);
+
     if (min_observer_version < CLUSTER_VERSION_4_1_0_0) {
       // OB 4.0 only support online schema
       refresh_mode_ = RefreshMode::ONLINE;

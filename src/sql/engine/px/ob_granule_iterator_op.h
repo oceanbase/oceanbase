@@ -22,6 +22,8 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_share_info.h"
+#include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
+#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 namespace oceanbase
 {
 namespace sql
@@ -93,7 +95,8 @@ public:
   void set_tablet_size(int64_t tablet_size) { tablet_size_ = tablet_size; }
   int64_t get_tablet_size() { return tablet_size_; }
 
-
+  int set_px_rf_info(const ObPxRFStaticInfo &px_rf_info) { return px_rf_info_.assign(px_rf_info); }
+  ObPxRFStaticInfo &get_px_rf_info() { return px_rf_info_; }
 
   void set_gi_flags(uint64_t flags) {
     gi_attri_flag_ = flags;
@@ -134,6 +137,8 @@ public:
   ObExpr *tablet_id_expr_;
   // end for partition join filter
   int64_t repart_pruning_tsc_idx_;
+  // for runtime filter extract query range
+  ObPxRFStaticInfo px_rf_info_;
 };
 
 class ObGranuleIteratorOp : public ObOperator
@@ -214,10 +219,18 @@ private:
   bool enable_single_runtime_filter_pruning();
   int do_single_runtime_filter_pruning(const ObGranuleTaskInfo &gi_task_info, bool &partition_pruning);
   int do_parallel_runtime_filter_pruning();
-  int wait_runtime_ready(bool &partition_pruning);
+  int wait_partition_runtime_filter_ready(bool &partition_pruning);
   int do_join_filter_partition_pruning(int64_t tablet_id, bool &partition_pruning);
   int try_build_tablet2part_id_map();
   //---end----
+
+  // for runtime filter extract query_range
+  int wait_runtime_filter_ready(ObP2PDhKey &rf_key, ObP2PDatahubMsgBase *&rf_msg);
+  bool enable_single_runtime_filter_extract_query_range();
+  bool enable_parallel_runtime_filter_extract_query_range();
+  int do_single_runtime_filter_extract_query_range(ObGranuleTaskInfo &gi_task_info);
+  int do_parallel_runtime_filter_extract_query_range(bool need_regenerate_gi_task = true);
+  // ---end----
 private:
   typedef common::hash::ObHashMap<int64_t, int64_t,
       common::hash::NoPthreadDefendMode> ObPxTablet2PartIdMap;
@@ -249,6 +262,11 @@ private:
   ObPxTablet2PartIdMap tablet2part_id_map_;
   ObOperator *real_child_;
   bool is_parallel_runtime_filtered_;
+
+  // for runtime filter extract query range
+  bool is_parallel_rf_qr_extracted_; // parallel runtime filter query range extracted
+  ObSEArray<ObP2PDhKey, 2> query_range_rf_keys_;
+  ObSEArray<ObP2PDatahubMsgBase *, 2> query_range_rf_msgs_;
 };
 
 } // end namespace sql

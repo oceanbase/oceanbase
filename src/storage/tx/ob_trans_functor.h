@@ -31,6 +31,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
 #include "storage/tx/ob_xa_service.h"
+#include "storage/tablet/ob_tablet_transfer_tx_ctx.h"
 
 namespace oceanbase
 {
@@ -159,7 +160,7 @@ private:
 class SwitchToFollowerForcedlyFunctor
 {
 public:
-  SwitchToFollowerForcedlyFunctor(ObIArray<ObTxCommitCallback> &cb_array) : cb_array_(cb_array)
+  SwitchToFollowerForcedlyFunctor(ObTxCommitCallback *&cb_list) : cb_list_(cb_list)
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/)
   }
@@ -171,7 +172,7 @@ public:
     if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
       tmp_ret = common::OB_INVALID_ARGUMENT;
       TRANS_LOG_RET(WARN, tmp_ret, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
-    } else if (common::OB_SUCCESS != (tmp_ret = tx_ctx->switch_to_follower_forcedly(cb_array_))) {
+    } else if (common::OB_SUCCESS != (tmp_ret = tx_ctx->switch_to_follower_forcedly(cb_list_))) {
       TRANS_LOG_RET(ERROR, tmp_ret, "leader revoke failed", K(tx_id), K(*tx_ctx));
     }
 
@@ -179,7 +180,7 @@ public:
   }
 
 private:
-  ObIArray<ObTxCommitCallback> &cb_array_;
+  ObTxCommitCallback *&cb_list_;
 };
 
 class SwitchToLeaderFunctor
@@ -216,9 +217,8 @@ private:
 class SwitchToFollowerGracefullyFunctor
 {
 public:
-  SwitchToFollowerGracefullyFunctor(const int64_t abs_expired_time,
-                                    ObIArray<ObTxCommitCallback> &cb_array)
-      : abs_expired_time_(abs_expired_time), count_(0), ret_(OB_SUCCESS), cb_array_(cb_array)
+  SwitchToFollowerGracefullyFunctor(const int64_t abs_expired_time, ObTxCommitCallback *&cb_list)
+      : abs_expired_time_(abs_expired_time), count_(0), ret_(OB_SUCCESS), cb_list_(cb_list)
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -241,7 +241,7 @@ public:
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(tx_ctx->switch_to_follower_gracefully(cb_array_))) {
+      if (OB_FAIL(tx_ctx->switch_to_follower_gracefully(cb_list_))) {
         TRANS_LOG(WARN, "switch to follower gracefully failed", KR(ret), K(*tx_ctx));
         ret_ = ret;
       } else {
@@ -258,7 +258,7 @@ private:
   int64_t abs_expired_time_;
   int64_t count_;
   int ret_;
-  ObIArray<ObTxCommitCallback> &cb_array_;
+  ObTxCommitCallback *&cb_list_;
 };
 
 class ResumeLeaderFunctor
@@ -319,8 +319,8 @@ private:
 class KillTxCtxFunctor
 {
 public:
-  KillTxCtxFunctor(const KillTransArg &arg, ObIArray<ObTxCommitCallback> &cb_array)
-      : arg_(arg), release_audit_mgr_lock_(false), cb_array(cb_array)
+  KillTxCtxFunctor(const KillTransArg &arg, ObTxCommitCallback *&cb_list)
+      : arg_(arg), release_audit_mgr_lock_(false), cb_list_(cb_list)
   {
 
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
@@ -339,7 +339,7 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
       tmp_ret = common::OB_INVALID_ARGUMENT;
     } else {
-      if (OB_SUCC(tx_ctx->kill(arg_, cb_array))) {
+      if (OB_SUCC(tx_ctx->kill(arg_, cb_list_))) {
         TRANS_LOG(INFO, "kill transaction success", K(tx_id), K_(arg));
       } else if (common::OB_TRANS_CANNOT_BE_KILLED == ret) {
         TRANS_LOG(INFO, "transaction can not be killed", K(tx_id), "context", *tx_ctx);
@@ -354,7 +354,177 @@ public:
 private:
   KillTransArg arg_;
   bool release_audit_mgr_lock_;
-  ObIArray<ObTxCommitCallback> &cb_array;
+  ObTxCommitCallback *&cb_list_;
+};
+
+class TransferOutTxOpFunctor
+{
+public:
+  TransferOutTxOpFunctor(const int64_t abs_expired_time, int64_t except_tx_id, const SCN data_end_scn,
+      const SCN op_scn, NotifyType op_type, bool is_replay, ObLSID dest_ls_id, int64_t transfer_epoch)
+     : abs_expired_time_(abs_expired_time), except_tx_id_(except_tx_id), data_end_scn_(data_end_scn),
+       op_scn_(op_scn), op_type_(op_type), is_replay_(is_replay), dest_ls_id_(dest_ls_id),
+       transfer_epoch_(transfer_epoch), count_(0), op_tx_count_(0), ret_(OB_SUCCESS)
+  {
+
+    SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+  }
+  ~TransferOutTxOpFunctor() { PRINT_FUNC_STAT; }
+  OPERATOR_V4(TransferOutTxOpFunctor)
+  {
+    bool bool_ret = false;
+    int ret = OB_SUCCESS;
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret_ = ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+    } else {
+      ++count_;
+      if ((count_ % BATCH_CHECK_COUNT) == 0) {
+        const int64_t now = ObTimeUtility::current_time();
+        if (now >= abs_expired_time_) {
+          ret_ = ret = OB_TIMEOUT;
+          TRANS_LOG(WARN, "transfer block tx timeout", K(count_));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (tx_id.get_id() == except_tx_id_) {
+      bool_ret = true;
+    } else {
+      bool is_operated = false;
+      if (OB_FAIL(tx_ctx->do_transfer_out_tx_op(data_end_scn_, op_scn_, op_type_, is_replay_,
+              dest_ls_id_, transfer_epoch_, is_operated))) {
+        TRANS_LOG(WARN, "do_transfer_out_tx_op failed", KR(ret), K(*tx_ctx));
+        ret_ = ret;
+      } else {
+        if (is_operated) {
+          op_tx_count_++;
+        }
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+  int64_t get_count() const { return count_; }
+  int64_t get_op_tx_count() const { return op_tx_count_; }
+private:
+  static const int64_t BATCH_CHECK_COUNT = 100;
+  int64_t abs_expired_time_;
+  int64_t except_tx_id_;
+  const SCN data_end_scn_;
+  const SCN op_scn_;
+  NotifyType op_type_;
+  bool is_replay_;
+  ObLSID dest_ls_id_;
+  int64_t transfer_epoch_;
+  int64_t count_;
+  int64_t op_tx_count_;
+  int ret_;
+};
+
+class WaitTxWriteEndFunctor
+{
+public:
+  WaitTxWriteEndFunctor(const int64_t abs_expired_time)
+     : abs_expired_time_(abs_expired_time), count_(0), ret_(OB_SUCCESS)
+  {
+
+    SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+  }
+  ~WaitTxWriteEndFunctor() { PRINT_FUNC_STAT; }
+  OPERATOR_V4(WaitTxWriteEndFunctor)
+  {
+    bool bool_ret = false;
+    int ret = OB_SUCCESS;
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret_ = ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+    } else {
+      ++count_;
+      if ((count_ % BATCH_CHECK_COUNT) == 0) {
+        const int64_t now = ObTimeUtility::current_time();
+        if (now >= abs_expired_time_) {
+          ret_ = ret = OB_TIMEOUT;
+          TRANS_LOG(WARN, "wait tx write end timeout", K(count_));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else {
+      if (OB_FAIL(tx_ctx->wait_tx_write_end())) {
+        TRANS_LOG(WARN, "wait tx write end failed", KR(ret), K(*tx_ctx));
+        ret_ = ret;
+      } else {
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+  int64_t get_count() const { return count_; }
+private:
+  static const int64_t BATCH_CHECK_COUNT = 100;
+  int64_t abs_expired_time_;
+  int64_t count_;
+  int ret_;
+};
+
+class CollectTxCtxFunctor
+{
+public:
+  CollectTxCtxFunctor(const int64_t abs_expired_time,
+                      share::ObLSID dest_ls_id,
+                      SCN log_scn,
+                      const ObIArray<common::ObTabletID> &tablet_list,
+                      int64_t &tx_count,
+                      int64_t &collect_count,
+                      ObIArray<ObTxCtxMoveArg> &res)
+      : abs_expired_time_(abs_expired_time), dest_ls_id_(dest_ls_id), log_scn_(log_scn),
+        tablet_list_(tablet_list), tx_count_(tx_count), collect_count_(collect_count), res_(res), ret_(OB_SUCCESS)
+  {
+    SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+  }
+  ~CollectTxCtxFunctor() { PRINT_FUNC_STAT; }
+  OPERATOR_V4(CollectTxCtxFunctor)
+  {
+    bool bool_ret = false;
+    int ret = OB_SUCCESS;
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret_ = ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+    } else {
+      ++tx_count_;
+      ObTxCtxMoveArg arg;
+      bool is_collected = false;
+      if (OB_FAIL(tx_ctx->collect_tx_ctx(dest_ls_id_, log_scn_, tablet_list_, arg, is_collected))) {
+        TRANS_LOG(WARN, "collect_tx_ctx", KR(ret), K(*tx_ctx));
+        ret_ = ret;
+      } else if (is_collected && OB_FAIL(res_.push_back(arg))) {
+        TRANS_LOG(WARN, "push arg to array fail", KR(ret));
+        ret_ = ret;
+      } else {
+        bool_ret = true;
+        if (is_collected) {
+          collect_count_++;
+        }
+      }
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+  int64_t get_tx_count() const { return tx_count_; }
+  int64_t get_collect_count() const { return collect_count_; }
+private:
+  static const int64_t BATCH_CHECK_COUNT = 100;
+  int64_t abs_expired_time_;
+  share::ObLSID dest_ls_id_;
+  SCN log_scn_;
+  const ObIArray<common::ObTabletID> &tablet_list_;
+  int64_t &tx_count_;
+  int64_t &collect_count_;
+  ObIArray<ObTxCtxMoveArg> &res_;
+  int ret_;
 };
 
 class StopLSFunctor
@@ -784,33 +954,50 @@ public:
         tx_ctx->print_trace_log();
       }
       if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
         share::ObLSArray participants_arr;
-        if (OB_FAIL(tx_ctx->get_2pc_participants_copy(participants_arr))) {
-          TRANS_LOG_RET(WARN, ret, "ObTxStat get participants copy error", K(ret));
-        } else if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
-                                            tx_id,
-                                            tx_ctx->tenant_id_,
-                                            has_decided,
-                                            tx_ctx->ls_id_,
-                                            participants_arr,
-                                            tx_ctx->ctx_create_time_,
-                                            tx_ctx->trans_expired_time_,
-                                            tx_ctx->ref_,
-                                            tx_ctx->last_op_sn_,
-                                            tx_ctx->pending_write_,
-                                            (int64_t)tx_ctx->exec_info_.state_,
-                                            tx_ctx->exec_info_.trans_type_,
-                                            tx_ctx->part_trans_action_,
-                                            tx_ctx,
-                                            tx_ctx->get_pending_log_size(),
-                                            tx_ctx->get_flushed_log_size(),
-                                            tx_ctx->role_state_,
-                                            tx_ctx->session_id_,
-                                            tx_ctx->exec_info_.scheduler_,
-                                            tx_ctx->is_exiting_,
-                                            tx_ctx->exec_info_.xid_,
-                                            tx_ctx->exec_info_.upstream_,
-                                            tx_ctx->last_request_ts_))) {
+        ObTxData *tx_data = NULL;
+        int busy_cbs_cnt = -1;
+        tx_ctx->ctx_tx_data_.get_tx_data_ptr(tx_data);
+        if (OB_TMP_FAIL(tx_ctx->get_stat_for_virtual_table(participants_arr, busy_cbs_cnt))) {
+          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat get participants copy error", K(tmp_ret));
+          // push an invalid ls id to hint the failure
+          participants_arr.push_back(share::ObLSID());
+        }
+        if (OB_TMP_FAIL(tx_ctx->mt_ctx_.get_callback_list_stat(tx_stat.callback_list_stats_))) {
+          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat get callback lists stat error", K(tmp_ret));
+        }
+        if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
+                                 tx_id,
+                                 tx_ctx->tenant_id_,
+                                 has_decided,
+                                 tx_ctx->ls_id_,
+                                 participants_arr,
+                                 tx_ctx->ctx_create_time_,
+                                 tx_ctx->trans_expired_time_,
+                                 tx_ctx->ref_,
+                                 tx_ctx->last_op_sn_,
+                                 tx_ctx->pending_write_,
+                                 (int64_t)tx_ctx->exec_info_.state_,
+                                 tx_ctx->exec_info_.trans_type_,
+                                 tx_ctx->part_trans_action_,
+                                 tx_ctx,
+                                 tx_ctx->get_pending_log_size(),
+                                 tx_ctx->get_flushed_log_size(),
+                                 tx_ctx->role_state_,
+                                 tx_ctx->session_id_,
+                                 tx_ctx->exec_info_.scheduler_,
+                                 tx_ctx->is_exiting_,
+                                 tx_ctx->exec_info_.xid_,
+                                 tx_ctx->exec_info_.upstream_,
+                                 tx_ctx->last_request_ts_,
+                                 OB_NOT_NULL(tx_data) ? tx_data->start_scn_.atomic_load() : SCN::invalid_scn(),
+                                 OB_NOT_NULL(tx_data) ? tx_data->end_scn_.atomic_load() : SCN::invalid_scn(),
+                                 tx_ctx->get_rec_log_ts_(),
+                                 tx_ctx->sub_state_.is_transfer_blocking(),
+                                 busy_cbs_cnt,
+                                 (int)tx_ctx->replay_completeness_.complete_,
+                                 tx_ctx->exec_info_.serial_final_scn_))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStat init error", K(ret), KPC(tx_ctx));
         } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
@@ -860,7 +1047,6 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
       ret = OB_INVALID_ARGUMENT;
     } else {
-      ObTxCtxTableInfo ctx_info;
       rec_log_ts_ = share::SCN::min(rec_log_ts_, tx_ctx->get_rec_log_ts());
     }
     if (OB_SUCCESS == ret) {
@@ -1106,8 +1292,8 @@ private:
 class ObTxSubmitLogFunctor
 {
 public:
-  explicit ObTxSubmitLogFunctor(const int action)
-    : action_(action), result_(common::OB_SUCCESS), fail_tx_id_()
+  explicit ObTxSubmitLogFunctor(const int action, const uint32_t freeze_clock = UINT32_MAX)
+    : action_(action), freeze_clock_(freeze_clock), result_(common::OB_SUCCESS), fail_tx_id_()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -1126,7 +1312,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else if (ObTxSubmitLogFunctor::SUBMIT_REDO_LOG == action_) {
-      if (OB_FAIL(tx_ctx->submit_redo_log(true))) {
+      if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze(freeze_clock_))) {
         TRANS_LOG(WARN, "failed to submit redo log", K(ret), K(tx_id));
       }
     } else if (ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG == action_) {
@@ -1151,6 +1337,7 @@ public:
 
 private:
   int action_;
+  uint32_t freeze_clock_;
   int result_;
   ObTransID fail_tx_id_;
 };
@@ -1191,6 +1378,8 @@ public:
   IteratePartCtxAskSchedulerStatusFunctor()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
+    first_err_code_ = OB_SUCCESS;
+    has_start_scn_ctx_cnt_ = 0;
     min_start_scn_.set_max();
   }
 
@@ -1203,24 +1392,29 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
-      share::SCN ctx_start_scn = tx_ctx->get_start_log_ts();
-      if (!ctx_start_scn.is_valid()) {
-        ctx_start_scn.set_max();
+      // logic for get min_start_scn
+      if (tx_ctx->is_decided()) {
+        TRANS_LOG(DEBUG, "skip record committed tx", KPC(tx_ctx));
+      } else if (tx_ctx->get_start_log_ts().is_valid()) {
+        has_start_scn_ctx_cnt_++;
+        min_start_scn_ = MIN(min_start_scn_, tx_ctx->get_start_log_ts());
       }
 
-      if (OB_FALSE_IT(min_start_scn_ = MIN(min_start_scn_, ctx_start_scn))) {
-        // do nothing
-      } else if (OB_FAIL(tx_ctx->check_scheduler_status())) {
-        TRANS_LOG(WARN, "check scheduler status error", KR(ret), "ctx", *tx_ctx);
-      } else {
-        // do nothing
+      // logic for gc tx ctx
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(tx_ctx->check_scheduler_status())) {
+        TRANS_LOG(WARN, "check scheduler status error", KR(tmp_ret), "ctx", *tx_ctx);
       }
     }
 
     if (OB_FAIL(ret)) {
       min_start_scn_.reset();
+      has_start_scn_ctx_cnt_ = 0;
+      if (OB_SUCCESS == first_err_code_) {
+        // record first error code if exist
+        first_err_code_ = ret;
+      }
     }
-
     return true;
   }
 
@@ -1230,15 +1424,29 @@ public:
   {
     MinStartScnStatus start_status = MinStartScnStatus::HAS_CTX;
 
-    if (!min_start_scn_.is_valid()) {
+    if (OB_SUCCESS != first_err_code_) {
       start_status = MinStartScnStatus::UNKOWN;
-    } else if (min_start_scn_.is_max()) {
+    } else if (!min_start_scn_.is_valid()) {
+      start_status = MinStartScnStatus::UNKOWN;
+    } else if (0 == has_start_scn_ctx_cnt_ || min_start_scn_.is_max()) {
       start_status = MinStartScnStatus::NO_CTX;
+      if ((0 == has_start_scn_ctx_cnt_) && (!min_start_scn_.is_max())) {
+        TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "unexpected values pair", K(has_start_scn_ctx_cnt_), K(min_start_scn_));
+      }
     }
+
+    TRANS_LOG(DEBUG,
+              "get min start status",
+              K(first_err_code_),
+              K(has_start_scn_ctx_cnt_),
+              K(min_start_scn_),
+              K(start_status));
     return start_status;
   }
 
 private:
+  int first_err_code_;
+  int64_t has_start_scn_ctx_cnt_;
   share::SCN min_start_scn_;
 };
 

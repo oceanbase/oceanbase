@@ -1757,10 +1757,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1776,6 +1777,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -1786,7 +1788,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -1858,10 +1861,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1877,6 +1881,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -1887,7 +1892,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -1959,10 +1965,11 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1978,6 +1985,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -1989,6 +1997,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2067,11 +2076,12 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2087,6 +2097,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2097,7 +2108,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2108,7 +2120,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2187,11 +2200,12 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2207,6 +2221,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2217,7 +2232,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2228,7 +2244,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2307,11 +2324,12 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2327,6 +2345,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2337,7 +2356,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2348,7 +2368,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2427,11 +2448,12 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2447,6 +2469,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2457,7 +2480,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2468,7 +2492,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2554,13 +2579,14 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4") LOCAL LOCAL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       FULL(@"SEL$3" "t2"@"SEL$3")
       USE_DAS(@"SEL$3" "t2"@"SEL$3")
       FULL(@"SEL$4" "t2"@"SEL$4")
       USE_DAS(@"SEL$4" "t2"@"SEL$4")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2576,6 +2602,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2586,7 +2613,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2597,7 +2625,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2609,6 +2638,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2727,6 +2757,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2742,7 +2773,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2758,6 +2789,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2769,6 +2801,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2779,7 +2812,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2791,6 +2825,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2802,6 +2837,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2812,7 +2848,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2824,6 +2861,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2834,7 +2872,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2953,6 +2992,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -2968,7 +3008,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2984,6 +3024,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -2994,7 +3035,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3005,7 +3047,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3017,6 +3060,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3028,6 +3072,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3038,7 +3083,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3050,6 +3096,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3060,7 +3107,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -3179,6 +3227,7 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
+      PQ_SUBQUERY(@"SEL$1" ("SEL$2" "SEL$3" "SEL$4" "SEL$5" "SEL$6" "SEL$7" "SEL$8") NONE ALL)
       FULL(@"SEL$1" "test"."t1"@"SEL$1")
       FULL(@"SEL$2" "test"."t2"@"SEL$2")
       USE_DAS(@"SEL$2" "test"."t2"@"SEL$2")
@@ -3194,7 +3243,7 @@ Outline Data:
       USE_DAS(@"SEL$7" "t2"@"SEL$7")
       FULL(@"SEL$8" "t2"@"SEL$8")
       USE_DAS(@"SEL$8" "t2"@"SEL$8")
-      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
+      OPTIMIZER_FEATURES_ENABLE('')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3210,6 +3259,7 @@ Optimization Info:
       avaiable_index_name:[t1]
       stats version:0
       dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING FULL]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3220,7 +3270,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3231,7 +3282,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3243,6 +3295,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3254,6 +3307,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3264,7 +3318,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3276,6 +3331,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats version:0
       dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   t2:
       table_rows:22
       physical_range_rows:7
@@ -3286,7 +3342,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats version:0
-      dynamic sampling level:1
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       DISTRIBUTED
   Note:

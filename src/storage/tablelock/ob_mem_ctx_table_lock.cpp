@@ -78,7 +78,7 @@ void ObLockMemCtx::reset()
   callback_pool_.reset();
 }
 
-void ObLockMemCtx::rollback_table_lock_(const ObTxSEQ seq_no)
+int ObLockMemCtx::rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
   ObLockMemtable *memtable = nullptr;
@@ -86,8 +86,12 @@ void ObLockMemCtx::rollback_table_lock_(const ObTxSEQ seq_no)
     LOG_ERROR("get lock memtable failed", K(ret));
   } else {
     DLIST_FOREACH_REMOVESAFE_NORET(curr, lock_list_) {
-      if (curr->lock_op_.lock_seq_no_ <= seq_no) {
-        // do nothing
+      if (curr->lock_op_.lock_seq_no_ <= to_seq_no ||
+          curr->lock_op_.lock_seq_no_ > from_seq_no) {
+        // out of scope, do nothing
+      } else if (to_seq_no.get_branch() !=0 &&
+                 curr->lock_op_.lock_seq_no_.get_branch() != to_seq_no.get_branch()) {
+        // branch missmatch
       } else {
         memtable->remove_lock_record(curr->lock_op_);
         (void)lock_list_.remove(curr);
@@ -96,6 +100,7 @@ void ObLockMemCtx::rollback_table_lock_(const ObTxSEQ seq_no)
       }
     }
   }
+  return ret;
 }
 
 void ObLockMemCtx::abort_table_lock_()
@@ -153,7 +158,7 @@ int ObLockMemCtx::commit_table_lock_(const SCN &commit_version, const SCN &commi
   return ret;
 }
 
-int ObLockMemCtx::rollback_table_lock(const ObTxSEQ seq_no)
+int ObLockMemCtx::rollback_table_lock(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no)
 {
   int ret = OB_SUCCESS;
   if (lock_list_.is_empty()) {
@@ -163,9 +168,24 @@ int ObLockMemCtx::rollback_table_lock(const ObTxSEQ seq_no)
     LOG_WARN("memtable should not be null", K(ret), K(memtable_handle_));
   } else {
     WRLockGuard guard(list_rwlock_);
-    rollback_table_lock_(seq_no);
+    if (OB_FAIL(rollback_table_lock_(to_seq_no, from_seq_no))) {
+      LOG_WARN("rollback table lock failed", K(ret), K(to_seq_no), K(from_seq_no));
+    }
   }
-  LOG_DEBUG("ObLockMemCtx::rollback_table_lock ", K(ret), K(seq_no));
+  LOG_DEBUG("ObLockMemCtx::rollback_table_lock ", K(ret), K(to_seq_no), K(from_seq_no));
+  return ret;
+}
+
+int ObLockMemCtx::sync_log_succ(const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  // NOTE: the callback of sync log succ is ensured in asc order of SCN by TxCtx
+  if (max_durable_scn_ > scn) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("sync log succ is backoff", K(max_durable_scn_), K(scn));
+  } else {
+    max_durable_scn_ = scn;
+  }
   return ret;
 }
 
@@ -174,13 +194,40 @@ int ObLockMemCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
   int ret = OB_SUCCESS;
   RDLockGuard guard(list_rwlock_);
   DLIST_FOREACH(curr, lock_list_) {
-    if (OB_UNLIKELY(!curr->is_valid()) || !curr->is_logged()) {
+    if (OB_UNLIKELY(!curr->is_valid())) {
       // no need dump to avoid been restored even if rollback
-      LOG_WARN("the table lock op no should not dump",
-               K(curr->lock_op_), K(curr->is_logged()));
+      LOG_WARN("the table lock op no should not dump", K(curr->lock_op_));
     } else if (OB_FAIL(table_lock_info.table_lock_ops_.push_back(curr->lock_op_))) {
       LOG_WARN("fail to push back table_lock store info", K(ret));
       break;
+    }
+  }
+  table_lock_info.max_durable_scn_ = max_durable_scn_;
+  return ret;
+}
+
+int ObLockMemCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  RDLockGuard guard(list_rwlock_);
+  DLIST_FOREACH(curr, lock_list_) {
+    if (OB_UNLIKELY(!curr->is_valid())) {
+      // no need dump to avoid been restored even if rollback
+      LOG_WARN("the table lock op no should not dump", K(curr->lock_op_));
+    } else {
+      bool is_hit = false;
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < tablet_list.count(); idx++) {
+        if (curr->lock_op_.is_tablet_lock(tablet_list.at(idx))) {
+          is_hit = true;
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (!is_hit) {
+      } else if (OB_FAIL(table_lock_info.table_lock_ops_.push_back(curr->lock_op_))) {
+        LOG_WARN("fail to push back table_lock store info", K(ret));
+        break;
+      }
     }
   }
   table_lock_info.max_durable_scn_ = max_durable_scn_;
@@ -213,8 +260,7 @@ int ObLockMemCtx::clear_table_lock(
 
 int ObLockMemCtx::add_lock_record(
     const ObTableLockOp &lock_op,
-    ObMemCtxLockOpLinkNode *&lock_op_node,
-    const bool logged)
+    ObMemCtxLockOpLinkNode *&lock_op_node)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -234,8 +280,6 @@ int ObLockMemCtx::add_lock_record(
     if (!lock_list_.add_last(lock_op_node)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("add lock op info failed.", K(ret), K(lock_op));
-    } else if (logged) {
-      lock_op_node->set_logged();
     }
   }
   if (OB_FAIL(ret) && NULL != lock_op_node) {
@@ -281,19 +325,6 @@ void ObLockMemCtx::remove_lock_record(
     }
   }
   LOG_DEBUG("ObLockMemCtx::remove_lock_record ", K(lock_op));
-}
-
-void ObLockMemCtx::set_log_synced(
-    ObMemCtxLockOpLinkNode *lock_op,
-    const SCN &scn)
-{
-  if (OB_ISNULL(lock_op)) {
-    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument.", K(lock_op));
-  } else {
-    max_durable_scn_.inc_update(scn);
-    lock_op->logged_ = true;
-    LOG_DEBUG("ObLockMemCtx::set_log_synced ", KPC(lock_op), K(scn));
-  }
 }
 
 int ObLockMemCtx::check_lock_exist( //TODO(lihongqin):check it

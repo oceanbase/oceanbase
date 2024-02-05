@@ -38,6 +38,7 @@ ObDropIndexTask::~ObDropIndexTask()
 int ObDropIndexTask::init(
     const uint64_t tenant_id,
     const int64_t task_id,
+    const share::ObDDLType &ddl_type,
     const uint64_t data_table_id,
     const uint64_t index_table_id,
     const int64_t schema_version,
@@ -58,12 +59,12 @@ int ObDropIndexTask::init(
   } else if (OB_FAIL(deep_copy_index_arg(allocator_, drop_index_arg, drop_index_arg_))) {
     LOG_WARN("deep copy drop index arg failed", K(ret));
   } else {
-    set_gmt_create(ObTimeUtility::current_time());
     tenant_id_ = tenant_id;
     object_id_ = data_table_id;
     target_object_id_ = index_table_id;
     schema_version_ = schema_version;
     task_id_ = task_id;
+    task_type_ = ddl_type;
     parent_task_id_ = parent_task_id;
     consumer_group_id_ = consumer_group_id;
     sub_task_trace_id_ = sub_task_trace_id;
@@ -98,6 +99,7 @@ int ObDropIndexTask::init(
     ret_code_ = task_record.ret_code_;
     dst_tenant_id_ = tenant_id_;
     dst_schema_version_ = schema_version_;
+    task_type_ = task_record.ddl_type_; // could be drop index / mlog
     if (nullptr != task_record.message_.ptr()) {
       int64_t pos = 0;
       if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
@@ -212,6 +214,7 @@ int ObDropIndexTask::drop_index_impl()
   bool is_index_exist = false;
   ObString index_name;
   const ObTableSchema *index_schema = nullptr;
+  const bool is_mlog = (obrpc::ObIndexArg::DROP_MLOG == drop_index_arg_.index_action_type_);
   if (OB_ISNULL(root_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root_service is nullptr", K(ret));
@@ -226,7 +229,10 @@ int ObDropIndexTask::drop_index_impl()
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_SCHEMA_ERROR;
     LOG_WARN("index schema is null", K(ret), K(target_object_id_));
-  } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
+  } else if (is_mlog && OB_FAIL(index_schema->get_mlog_name(index_name))) {
+    LOG_WARN("failed to get materialized view log name",
+        KR(ret), K(index_schema->get_table_type()), KPC(index_schema));
+  } else if (!is_mlog && OB_FAIL(index_schema->get_index_name(index_name))) {
     LOG_WARN("get index name failed", K(ret), K(index_schema->get_table_type()), KPC(index_schema));
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
     LOG_WARN("get database schema failed", K(ret), K(index_schema->get_database_id()));
@@ -249,7 +255,7 @@ int ObDropIndexTask::drop_index_impl()
     drop_index_arg.index_name_        = index_name;
     drop_index_arg.table_name_        = data_table_schema->get_table_name();
     drop_index_arg.database_name_     = database_schema->get_database_name_str();
-    drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+    drop_index_arg.index_action_type_ = drop_index_arg_.index_action_type_;
     drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
     drop_index_arg.is_add_to_scheduler_ = false;
     drop_index_arg.task_id_           = task_id_;
@@ -396,6 +402,13 @@ int ObDropIndexTask::check_switch_succ()
     LOG_WARN("error sys", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service_->get_sql_proxy(), tenant_id_))) {
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
+      need_retry_ = false;
+      LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K(tenant_id_));
+    } else {
+      LOG_WARN("check tenant status failed", K(ret), K(tenant_id_));
+    }
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_index_exist))) {

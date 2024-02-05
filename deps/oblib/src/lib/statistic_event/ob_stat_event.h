@@ -88,6 +88,49 @@ STAT_EVENT_ADD_DEF(TX_DATA_HIT_KV_CACHE_COUNT, "tx data hit kv cache count", ObS
 STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_CTX_COUNT, "tx data read tx ctx count", ObStatClassIds::TRANS, 30084, false, true, true)
 STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_DATA_MEMTABLE_COUNT, "tx data read tx data memtable count", ObStatClassIds::TRANS, 30085, false, true, true)
 STAT_EVENT_ADD_DEF(TX_DATA_READ_TX_DATA_SSTABLE_COUNT, "tx data read tx data sstable count", ObStatClassIds::TRANS, 30086, false, true, true)
+// XA TRANS
+STAT_EVENT_ADD_DEF(XA_START_TOTAL_COUNT, "xa start total count", ObStatClassIds::TRANS, 30200, false, true, true)
+STAT_EVENT_ADD_DEF(XA_START_TOTAL_USED_TIME, "xa start total used time", ObStatClassIds::TRANS, 30201, false, true, true)
+STAT_EVENT_ADD_DEF(XA_START_REMOTE_COUNT, "xa start with rpc total count", ObStatClassIds::TRANS, 30202, false, true, true)
+STAT_EVENT_ADD_DEF(XA_START_FAIL_COUNT, "failed xa start total count", ObStatClassIds::TRANS, 30203, false, true, true)
+STAT_EVENT_ADD_DEF(XA_END_TOTAL_COUNT, "xa end total count", ObStatClassIds::TRANS, 30204, false, true, true)
+STAT_EVENT_ADD_DEF(XA_END_TOTAL_USED_TIME, "xa end total used count", ObStatClassIds::TRANS, 30205, false, true, true)
+STAT_EVENT_ADD_DEF(XA_END_REMOTE_COUNT, "xa end with rpc total count", ObStatClassIds::TRANS, 30206, false, true, true)
+STAT_EVENT_ADD_DEF(XA_END_FAIL_COUNT, "failed xa end total count", ObStatClassIds::TRANS, 30207, false, true, true)
+STAT_EVENT_ADD_DEF(XA_PREPARE_TOTAL_COUNT, "xa prepare total count", ObStatClassIds::TRANS, 30208, false, true, true)
+STAT_EVENT_ADD_DEF(XA_PREPARE_TOTAL_USED_TIME, "xa prepare total used time", ObStatClassIds::TRANS, 30209, false, true, true)
+STAT_EVENT_ADD_DEF(XA_PREPARE_REMOTE_COUNT, "xa prepare with rpc total count", ObStatClassIds::TRANS, 30210, false, true, true)
+STAT_EVENT_ADD_DEF(XA_PREPARE_FAIL_COUNT, "failed xa prepare total count", ObStatClassIds::TRANS, 30211, false, true, true)
+STAT_EVENT_ADD_DEF(XA_COMMIT_TOTAL_COUNT, "xa commit total count", ObStatClassIds::TRANS, 30212, false, true, true)
+STAT_EVENT_ADD_DEF(XA_COMMIT_TOTAL_USED_TIME, "xa commit total used time", ObStatClassIds::TRANS, 30213, false, true, true)
+STAT_EVENT_ADD_DEF(XA_COMMIT_REMOTE_COUNT, "xa commit with rpc total count", ObStatClassIds::TRANS, 30214, false, true, true)
+STAT_EVENT_ADD_DEF(XA_COMMIT_FAIL_COUNT, "failed xa commit total count", ObStatClassIds::TRANS, 30215, false, true, true)
+STAT_EVENT_ADD_DEF(XA_ROLLBACK_TOTAL_COUNT, "xa rollback total count", ObStatClassIds::TRANS, 30216, false, true, true)
+STAT_EVENT_ADD_DEF(XA_ROLLBACK_TOTAL_USED_TIME, "xa rollback total used time", ObStatClassIds::TRANS, 30217, false, true, true)
+STAT_EVENT_ADD_DEF(XA_ROLLBACK_REMOTE_COUNT, "xa rollback with rpc total count", ObStatClassIds::TRANS, 30218, false, true, true)
+STAT_EVENT_ADD_DEF(XA_ROLLBACK_FAIL_COUNT, "failed xa rollback total count", ObStatClassIds::TRANS, 30219, false, true, true)
+STAT_EVENT_ADD_DEF(XA_TRANS_START_COUNT, "started xa trans count", ObStatClassIds::TRANS, 30220, false, true, true)
+STAT_EVENT_ADD_DEF(XA_READ_ONLY_TRANS_TOTAL_COUNT, "read only xa trans total count", ObStatClassIds::TRANS, 30221, false, true, true)
+STAT_EVENT_ADD_DEF(XA_ONE_PHASE_COMMIT_TOTAL_COUNT, "xa trans with one phase commit total count", ObStatClassIds::TRANS, 30222, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_SQL_TOTAL_COUNT, "inner sql total count in xa statement", ObStatClassIds::TRANS, 30223, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_SQL_TEN_MS_COUNT, "total count of inner sql (latency >= 10ms) in xa statement", ObStatClassIds::TRANS, 30224, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_SQL_TWENTY_MS_COUNT, "total count of inner sql (latency >= 20ms) in xa statement", ObStatClassIds::TRANS, 30225, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_SQL_TOTAL_USED_TIME, "inner sql total used time in xa statement", ObStatClassIds::TRANS, 30226, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_RPC_TOTAL_COUNT, "inner rpc total count in xa statement", ObStatClassIds::TRANS, 30227, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_RPC_TEN_MS_COUNT, "total count of inner rpc (latency >= 10ms) in xa statement", ObStatClassIds::TRANS, 30228, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_RPC_TWENTY_MS_COUNT, "total count of inner rpc (latency >= 20ms) in xa statement", ObStatClassIds::TRANS, 30229, false, true, true)
+STAT_EVENT_ADD_DEF(XA_INNER_RPC_TOTAL_USED_TIME, "inner rpc total used time in xa statement", ObStatClassIds::TRANS, 30230, false, true, true)
+// DBLINK TRANS
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_COUNT, "dblink trans total count", ObStatClassIds::TRANS, 30231, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_FAIL_COUNT, "failed dblink trans total count", ObStatClassIds::TRANS, 30232, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_PROMOTION_COUNT, "dblink trans promotion total count", ObStatClassIds::TRANS, 30233, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_CALLBACK_COUNT, "dblink trans callback total count", ObStatClassIds::TRANS, 30234, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_COUNT, "dblink trans commit total count", ObStatClassIds::TRANS, 30235, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_USED_TIME, "dblink trans commit total used time", ObStatClassIds::TRANS, 30236, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_COMMIT_FAIL_COUNT, "failed dblink trans commit total count", ObStatClassIds::TRANS, 30237, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_COUNT, "dblink trans rollback total count", ObStatClassIds::TRANS, 30238, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_USED_TIME, "dblink trans rollback total count", ObStatClassIds::TRANS, 30239, false, true, true)
+STAT_EVENT_ADD_DEF(DBLINK_TRANS_ROLLBACK_FAIL_COUNT, "failed dblink trans rollback total count", ObStatClassIds::TRANS, 30240, false, true, true)
 
 // SQL
 STAT_EVENT_ADD_DEF(PLAN_CACHE_HIT, "PLAN_CACHE_HIT", SQL, "PLAN_CACHE_HIT", true, true, false)
@@ -460,6 +503,13 @@ STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_COUNT, "multi append execute count", Ob
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_TIME, "multi append execute time", ObStatClassIds::TABLEAPI, 191204, true, true, true)
 STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_APPEND_ROW, "multi append rows", ObStatClassIds::TABLEAPI, 191205, true, true, true)
 
+// -- table put 1913xx
+STAT_EVENT_ADD_DEF(TABLEAPI_PUT_COUNT, "single put execute count", ObStatClassIds::TABLEAPI, 191301, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_PUT_TIME, "single put execute time", ObStatClassIds::TABLEAPI, 191302, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_COUNT, "multi put execute count", ObStatClassIds::TABLEAPI, 191303, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_TIME, "multi put execute time", ObStatClassIds::TABLEAPI, 191304, true, true, true)
+STAT_EVENT_ADD_DEF(TABLEAPI_MULTI_PUT_ROW, "multi put rows", ObStatClassIds::TABLEAPI, 191305, true, true, true)
+
 // sys_time_model related (20xxxx)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_TIME, "DB time", ObStatClassIds::SYS, 200001, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_DB_CPU, "DB CPU", ObStatClassIds::SYS, 200002, false, true, true)
@@ -490,9 +540,11 @@ STAT_EVENT_ADD_DEF(ASH_SCHEDULAR_ELAPSE_TIME, "ash schedular elapse time", ObSta
 STAT_EVENT_ADD_DEF(ASH_SCHEDULAR_CPU_TIME, "ash schedular cpu time", ObStatClassIds::WR, 210011, false, true, true)
 
 // sqlstat relat (2200xx)
-STAT_EVENT_ADD_DEF(CCWAIT_TIME, "concurrency wait total time", ObStatClassIds::SYS, 220001, false, true, true)
-STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds::SYS, 220002, false, true, true)
-STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, false, true, true)
+STAT_EVENT_ADD_DEF(CCWAIT_TIME, "concurrency wait total time", ObStatClassIds::SYS, 220001, true, true, true)
+STAT_EVENT_ADD_DEF(USER_IO_WAIT_TIME, "user io wait total time", ObStatClassIds::SYS, 220002, true, true, true)
+STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::SYS, 220003, true, true, true)
+STAT_EVENT_ADD_DEF(SCHEDULE_WAIT_TIME, "schedule wait total time", ObStatClassIds::SYS, 220004, true, true, true)
+STAT_EVENT_ADD_DEF(NETWORK_WAIT_TIME, "network wait total time", ObStatClassIds::SYS, 220005, true, true, true)
 
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
@@ -586,6 +638,11 @@ STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_CORE_QUEUE_SIZE, "observer pa
 
 // rootservice
 STAT_EVENT_SET_DEF(RS_START_SERVICE_TIME, "rootservice start time", ObStatClassIds::RS, 180001, false, true, true)
+
+// das
+STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_MEMORY_USAGE, "the memory use of all DAS parallel task", ObStatClassIds::SQL, 230001, false, true, true)
+STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_TASK_CNT, "the count of DAS parallel task", ObStatClassIds::SQL, 230002, false, true, true)
+
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif

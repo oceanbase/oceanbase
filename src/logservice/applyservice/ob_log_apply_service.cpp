@@ -51,10 +51,11 @@ void ObApplyFsCb::destroy()
 
 int ObApplyFsCb::update_end_lsn(int64_t id,
                                 const LSN &end_lsn,
+                                const SCN &end_scn,
                                 const int64_t proposal_id)
 {
   UNUSED(id);
-  return apply_status_->update_palf_committed_end_lsn(end_lsn, proposal_id);
+  return apply_status_->update_palf_committed_end_lsn(end_lsn, end_scn, proposal_id);
 }
 
 //---------------ObApplyServiceTask---------------//
@@ -256,6 +257,7 @@ ObApplyStatus::ObApplyStatus()
       proposal_id_(-1),
       ap_sv_(NULL),
       palf_committed_end_lsn_(0),
+      palf_committed_end_scn_(),
       last_check_scn_(),
       max_applied_cb_scn_(),
       submit_task_(),
@@ -336,6 +338,7 @@ void ObApplyStatus::destroy()
   proposal_id_ = -1;
   role_ = FOLLOWER;
   fs_cb_.destroy();
+  palf_committed_end_scn_.reset();
   palf_committed_end_lsn_.reset();
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
@@ -609,6 +612,7 @@ int ObApplyStatus::switch_to_follower_()
 
 //单线程调用
 int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
+                                                 const SCN &end_scn,
                                                  const int64_t proposal_id)
 {
   int ret = OB_SUCCESS;
@@ -626,6 +630,7 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
         if (palf_committed_end_lsn_ >= end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
         } else {
+          palf_committed_end_scn_.atomic_store(end_scn);
           palf_committed_end_lsn_ = end_lsn;
           if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
@@ -644,6 +649,12 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
     CLOG_LOG(TRACE, "update_palf_committed_end_lsn", KPC(this), K(proposal_id), K(end_lsn), KR(ret));
   }
   return ret;
+}
+
+share::SCN ObApplyStatus::get_palf_committed_end_scn() const
+{
+  share::SCN scn = palf_committed_end_scn_.atomic_load();
+  return scn;
 }
 
 int ObApplyStatus::unregister_file_size_cb()
@@ -1253,6 +1264,26 @@ int ObLogApplyService::get_max_applied_scn(const share::ObLSID &id, SCN &scn)
     CLOG_LOG(WARN, "apply status get_max_applied_scn failed", K(ret), K(id));
   } else {
     CLOG_LOG(TRACE, "apply service get_max_applied_scn success", K(id));
+  }
+  return ret;
+}
+
+int ObLogApplyService::get_palf_committed_end_scn(const share::ObLSID &id, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  ObApplyStatus *apply_status = NULL;
+  ObApplyStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply service not init", K(ret));
+  } else if (OB_FAIL(get_apply_status(id, guard))) {
+    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
+  } else if (NULL == (apply_status = guard.get_apply_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
+  } else {
+    scn = apply_status->get_palf_committed_end_scn();
+    CLOG_LOG(TRACE, "apply service get palf_committed_end_lsn success", K(id), K(scn));
   }
   return ret;
 }

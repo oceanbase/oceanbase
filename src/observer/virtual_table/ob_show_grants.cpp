@@ -482,7 +482,7 @@ int ObShowGrants::print_privs_to_buff(
           ret = BUF_PRINTF(" SHOW VIEW,");
         }
         if ((priv_set & OB_PRIV_SHOW_DB) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" SHOW DB,");
+          ret = BUF_PRINTF(" SHOW DATABASES,");
         }
         if ((priv_set & OB_PRIV_SUPER) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" SUPER,");
@@ -767,7 +767,7 @@ int ObShowGrants::has_show_grants_priv(uint64_t show_user_id) const
     //FIXME@xiyu: schema_cache: master aad alloc, which is no need as we use arena for priv
     ObArenaAllocator alloc;
     ObStmtNeedPrivs stmt_need_privs(alloc);
-    ObNeedPriv need_priv("mysql", "", OB_PRIV_DB_LEVEL, OB_PRIV_SELECT, false);
+    ObNeedPriv need_priv("mysql", "user", OB_PRIV_TABLE_LEVEL, OB_PRIV_SELECT, false);
     if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
       SERVER_LOG(WARN, "fail to init need_privs", K(ret));
     } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {

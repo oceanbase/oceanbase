@@ -37,20 +37,30 @@ ObRecoverRestoreTableTask::~ObRecoverRestoreTableTask()
 {
 }
 
-int ObRecoverRestoreTableTask::init(const uint64_t src_tenant_id, const uint64_t dst_tenant_id, const int64_t task_id,
-    const share::ObDDLType &ddl_type, const int64_t data_table_id, const int64_t dest_table_id, const int64_t src_schema_version,
-    const int64_t dst_schema_version, const int64_t parallelism, const int64_t consumer_group_id, const int32_t sub_task_trace_id,
-    const ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
+int ObRecoverRestoreTableTask::init(
+    const ObTableSchema* src_table_schema, const ObTableSchema* dst_table_schema,
+    const int64_t task_id, const share::ObDDLType &ddl_type, const int64_t parallelism,
+    const int64_t consumer_group_id, const int32_t sub_task_trace_id,
+    const obrpc::ObAlterTableArg &alter_table_arg, const uint64_t tenant_data_version, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_ISNULL(src_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src schema should not be null", K(ret));
+  } else if (OB_ISNULL(dst_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dst_table schema should not be null", K(ret));
+  } else if ((!src_table_schema->is_valid()) || (!dst_table_schema->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("src_talbe or dst_table is invalid", K(ret), KPC(src_table_schema), KPC(dst_table_schema));
   } else if (OB_UNLIKELY(ObDDLType::DDL_TABLE_RESTORE != ddl_type)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(ddl_type), K(src_tenant_id), K(data_table_id));
-  } else if (OB_FAIL(ObTableRedefinitionTask::init(src_tenant_id, dst_tenant_id, task_id, ddl_type, data_table_id,
-      dest_table_id, src_schema_version, dst_schema_version, parallelism, consumer_group_id, sub_task_trace_id, alter_table_arg, task_status, 0/*snapshot*/))) {
+    LOG_WARN("invalid arg", K(ret), K(ddl_type), KPC(src_table_schema), KPC(dst_table_schema));
+  } else if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, 0, task_id, ddl_type, parallelism, consumer_group_id,
+                                                   sub_task_trace_id, alter_table_arg, tenant_data_version, task_status, 0/*snapshot*/))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
     execution_id_ = 1L;

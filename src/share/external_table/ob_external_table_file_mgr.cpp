@@ -41,6 +41,7 @@ namespace oceanbase
 {
 using namespace observer;
 using namespace common;
+using namespace sql;
 using namespace transaction::tablelock;
 namespace share
 {
@@ -243,17 +244,20 @@ int ObExternalTableFileManager::update_inner_table_file_list(
   return ret;
 }
 
-int ObExternalTableFileManager::get_external_file_list_on_device(const ObString &location,
-                                                 ObIArray<ObString> &file_urls,
-                                                 ObIArray<int64_t> &file_sizes,
-                                                 const ObString &access_info,
-                                                 ObIAllocator &allocator)
+int ObExternalTableFileManager::get_external_file_list_on_device(
+    const ObString &location,
+    const ObString &pattern,
+    const ObExprRegexpSessionVariables &regexp_vars,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes,
+    const ObString &access_info,
+    ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   sql::ObExternalDataAccessDriver driver;
   if (OB_FAIL(driver.init(location, access_info))) {
     LOG_WARN("init external data access driver failed", K(ret));
-  } else if (OB_FAIL(driver.get_file_list(location, file_urls, allocator))) {
+  } else if (OB_FAIL(driver.get_file_list(location, pattern, regexp_vars, file_urls, allocator))) {
     LOG_WARN("get file urls failed", K(ret));
   } else if (OB_FAIL(driver.get_file_sizes(location, file_urls, file_sizes))) {
     LOG_WARN("get file sizes failed", K(ret));

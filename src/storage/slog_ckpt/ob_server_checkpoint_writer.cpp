@@ -34,6 +34,7 @@ int ObServerCheckpointWriter::init()
   int ret = OB_SUCCESS;
   const int64_t MEM_LIMIT = 128 << 20;  // 128M
   const char *MEM_LABEL = "ObServerCheckpointWriter";
+  ObMemAttr mem_attr(OB_SERVER_TENANT_ID, MEM_LABEL);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -41,7 +42,7 @@ int ObServerCheckpointWriter::init()
   } else if (OB_FAIL(allocator_.init(
                common::OB_MALLOC_NORMAL_BLOCK_SIZE, MEM_LABEL, OB_SERVER_TENANT_ID, MEM_LIMIT))) {
     LOG_WARN("fail to init fifo allocator", K(ret));
-  } else if (OB_FAIL(tenant_meta_item_writer_.init(false))) {
+  } else if (OB_FAIL(tenant_meta_item_writer_.init(false /*whether need addr*/, mem_attr))) {
     LOG_WARN("fail to init tenant meta item writer", K(ret));
   } else {
     is_inited_ = true;

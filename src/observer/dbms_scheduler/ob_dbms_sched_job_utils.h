@@ -38,6 +38,20 @@ class ObMySQLResult;
 }
 
 }
+namespace sql
+{
+class ObExecEnv;
+class ObSQLSessionInfo;
+class ObFreeSessionCtx;
+}
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObUserInfo;
+}
+}
 
 namespace dbms_scheduler
 {
@@ -131,6 +145,9 @@ public:
   int64_t  get_last_modify() { return last_modify_; }
   int64_t  get_interval_ts() { return interval_ts_; }
   int64_t  get_max_run_duration() { return (max_run_duration_ == 0) ? 30 : max_run_duration_ ; } // 30s by default
+  int64_t  get_start_date() { return start_date_; }
+  int64_t  get_end_date() { return end_date_; }
+  int64_t  get_auto_drop() { return auto_drop_; }
 
   bool is_broken() { return 0x1 == (flag_ & 0x1); }
   bool is_running(){ return this_date_ != 0; }
@@ -139,6 +156,7 @@ public:
   common::ObString &get_what() { return what_; }
   common::ObString &get_exec_env() { return exec_env_; }
   common::ObString &get_lowner() { return lowner_; }
+  common::ObString &get_powner() { return powner_; }
   common::ObString &get_cowner() { return cowner_; }
   common::ObString &get_zone() { return field1_; }
   common::ObString &get_interval() { return interval_; }
@@ -147,6 +165,7 @@ public:
   common::ObString &get_job_class() { return job_class_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
+  bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
@@ -192,6 +211,9 @@ public:
   common::ObString destination_name_;
   int64_t interval_ts_;
   bool is_oracle_tenant_;
+
+public:
+  static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
 };
 
 class ObDBMSSchedJobClassInfo
@@ -238,6 +260,42 @@ public:
   bool is_oracle_tenant_;
 };
 
+class ObDBMSSchedJobUtils
+{
+public:
+  static int disable_dbms_sched_job(common::ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
+                                    const common::ObString &job_name,
+                                    const bool if_exists = false);
+  static int remove_dbms_sched_job(common::ObISQLClient &sql_client,
+                                  const uint64_t tenant_id,
+                                  const common::ObString &job_name,
+                                  const bool if_exists = false);
+  static int create_dbms_sched_job(common::ObISQLClient &sql_client,
+                                   const uint64_t tenant_id,
+                                   const int64_t job_id,
+                                   const ObDBMSSchedJobInfo &job_info);
+  static int add_dbms_sched_job(common::ObISQLClient &sql_client,
+                                const uint64_t tenant_id,
+                                const int64_t job_id,
+                                const ObDBMSSchedJobInfo &job_info);
+  static int init_session(
+      sql::ObSQLSessionInfo &session,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObString &tenant_name,
+      uint64_t tenant_id,
+      const common::ObString &database_name,
+      uint64_t database_id,
+      const share::schema::ObUserInfo* user_info,
+      const ObDBMSSchedJobInfo &job_info);
+  static int init_env(ObDBMSSchedJobInfo &job_info,
+                      sql::ObSQLSessionInfo &session);
+  static int create_session(const uint64_t tenant_id,
+                            sql::ObFreeSessionCtx &free_session_ctx,
+                            sql::ObSQLSessionInfo *&session_info);
+  static int destroy_session(sql::ObFreeSessionCtx &free_session_ctx,
+                             sql::ObSQLSessionInfo *session_info);
+};
 }
 }
 

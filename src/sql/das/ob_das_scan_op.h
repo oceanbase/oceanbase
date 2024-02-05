@@ -22,6 +22,8 @@ namespace sql
 {
 class ObDASExtraData;
 class ObLocalIndexLookupOp;
+struct ObDASIRCtDef;
+struct ObDASIRRtDef;
 
 struct ObDASScanCtDef : ObDASBaseCtDef
 {
@@ -44,7 +46,8 @@ public:
       external_file_location_(alloc),
       external_files_(alloc),
       external_file_format_str_(alloc),
-      trans_info_expr_(nullptr)
+      trans_info_expr_(nullptr),
+      ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -77,7 +80,8 @@ public:
                        K_(external_files),
                        K_(external_file_format_str),
                        K_(external_file_location),
-                       KPC_(trans_info_expr));
+                       KPC_(trans_info_expr),
+                       K_(ir_scan_type));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -97,6 +101,7 @@ public:
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
   ObExternalFileFormat::StringData external_file_format_str_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
+  ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -126,6 +131,7 @@ public:
       is_for_foreign_check_(false)
   { }
   virtual ~ObDASScanRtDef();
+  bool enable_rich_format() const { return scan_flag_.enable_rich_format_; }
   INHERIT_TO_STRING_KV("ObDASBaseRtDef", ObDASBaseRtDef,
                        K_(tenant_schema_version),
                        K_(limit_param),
@@ -165,6 +171,32 @@ private:
   union {
     ObPushdownOperator pd_expr_op_;
   };
+};
+
+struct ObDASIRParam
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASIRParam(ObIAllocator &alloc)
+    : allocator_(alloc),
+      ctdef_(nullptr),
+      rtdef_(nullptr),
+      ls_id_(OB_INVALID_ID),
+      inv_idx_tablet_id_(),
+      fwd_idx_tablet_id_(),
+      doc_id_idx_tablet_id_() {}
+  virtual ~ObDASIRParam() {}
+  inline bool is_ir_scan() const { return false; } // always false on master
+
+  TO_STRING_KV(K_(ls_id), K_(inv_idx_tablet_id), K_(fwd_idx_tablet_id),
+      K_(doc_id_idx_tablet_id), KP_(ctdef), KP_(rtdef));
+  ObIAllocator &allocator_;
+  ObDASIRCtDef *ctdef_;
+  ObDASIRRtDef *rtdef_;
+  share::ObLSID ls_id_;
+  ObTabletID inv_idx_tablet_id_;
+  ObTabletID fwd_idx_tablet_id_;
+  ObTabletID doc_id_idx_tablet_id_;
 };
 
 class ObDASScanOp : public ObIDASTaskOp
@@ -211,6 +243,7 @@ public:
   ObExpr *get_group_id_expr() { return scan_ctdef_->group_id_expr_; }
   bool is_group_scan() { return NULL != scan_ctdef_->group_id_expr_; }
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }
+  bool enable_rich_format() const { return scan_rtdef_->enable_rich_format(); }
   virtual bool need_all_output() { return false; }
   virtual int switch_scan_group() { return common::OB_SUCCESS; };
   virtual int set_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; };
@@ -218,7 +251,8 @@ public:
                        KPC_(scan_ctdef),
                        KPC_(scan_rtdef),
                        "scan_range", scan_param_.key_ranges_,
-                       KPC_(result));
+                       KPC_(result),
+                       "scan_flag", scan_param_.scan_flag_);
 protected:
   common::ObITabletScan &get_tsc_service();
   virtual int do_local_index_lookup();
@@ -250,6 +284,7 @@ protected:
   union {
     common::ObArenaAllocator retry_alloc_buf_;
   };
+  ObDASIRParam ir_param_;
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator
@@ -267,17 +302,24 @@ public:
   virtual int link_extra_result(ObDASExtraData &extra_result) override;
   int init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx);
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
+  ObTempRowStore &get_vec_row_store() { return vec_row_store_; }
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                        K_(datum_store),
-                       KPC_(output_exprs));
+                       KPC_(output_exprs),
+                       K_(enable_rich_format),
+                       K_(vec_row_store));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
+  ObTempRowStore vec_row_store_;
+  ObTempRowStore::Iterator vec_result_iter_;
   const ExprFixedArray *output_exprs_;
   ObEvalCtx *eval_ctx_;
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
+  bool enable_rich_format_;
 };
+
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl
 {
 public:

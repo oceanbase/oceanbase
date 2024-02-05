@@ -21,6 +21,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_ddl_common.h"
 #include "share/schema/ob_table_schema.h"
+#include "storage/blocksstable/ob_datum_rowkey.h"
 
 namespace oceanbase
 {
@@ -87,7 +88,7 @@ public:
   ObDDLErrorMessageTableOperator();
   virtual ~ObDDLErrorMessageTableOperator();
   static int get_index_task_info(ObMySQLProxy &sql_proxy, const share::schema::ObTableSchema &index_schema, ObDDLErrorInfo &info);
-  static int extract_index_key(const share::schema::ObTableSchema &index_schema, const common::ObStoreRowkey &index_key,
+  static int extract_index_key(const share::schema::ObTableSchema &index_schema, const blocksstable::ObDatumRowkey &index_key,
     char *buffer, const int64_t buffer_len);
   static int load_ddl_user_error(const uint64_t tenant_id, const int64_t task_id, const uint64_t table_id, 
       common::ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message);

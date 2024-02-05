@@ -317,16 +317,17 @@ ObAllVirtualIOQuota::~ObAllVirtualIOQuota()
 int ObAllVirtualIOQuota::init(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
+  ObVector<uint64_t> tenant_ids;
   if (OB_FAIL(init_addr(addr))) {
     LOG_WARN("init failed", K(ret), K(addr));
-  } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
-    LOG_WARN("get tenant id failed", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+    GCTX.omt_->get_tenant_ids(tenant_ids);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (is_virtual_tenant_id(cur_tenant_id)) {
+        // do nothing
+      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
         } else {
@@ -450,8 +451,8 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
             item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
             item.size_ = sys_avg_size.at(i).at(j);
             item.real_iops_ = sys_avg_iops.at(i).at(j);
-            item.min_iops_ = INT64_MAX;
-            item.max_iops_ = INT64_MAX;
+            item.min_iops_ = 0;
+            item.max_iops_ = 0;
             if (OB_FAIL(quota_infos_.push_back(item))) {
               LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
             }
@@ -584,20 +585,21 @@ ObAllVirtualIOScheduler::~ObAllVirtualIOScheduler()
 int ObAllVirtualIOScheduler::init(const common::ObAddr &addr)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
+  ObVector<uint64_t> tenant_ids;
   if (OB_FAIL(init_addr(addr))) {
     LOG_WARN("init failed", K(ret), K(addr));
-  } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
-    LOG_WARN("get tenant id failed", K(ret));
   } else {
+    GCTX.omt_->get_tenant_ids(tenant_ids);
     ObIOScheduler *io_scheduler = OB_IO_MANAGER.get_scheduler();
     int64_t thread_num = io_scheduler->get_senders_count();
     for (int64_t thread_id = 0; OB_SUCC(ret) && thread_id < thread_num; ++thread_id) {
       ObIOSender *cur_sender = io_scheduler->get_cur_sender(thread_id);
-      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
         const uint64_t cur_tenant_id = tenant_ids.at(i);
         ObRefHolder<ObTenantIOManager> tenant_holder;
-        if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+        if (is_virtual_tenant_id(cur_tenant_id)) {
+          // do nothing
+        } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
           if (OB_HASH_NOT_EXIST != ret) {
             LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
           } else {

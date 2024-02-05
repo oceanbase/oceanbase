@@ -35,22 +35,23 @@ static const double AGG_ROW_MODE_RATIO_THRESHOLD = 0.5;
 class ObCGAggCells
 {
 public:
-  ObCGAggCells() : can_use_index_info_(false), agg_cells_() {}
+  ObCGAggCells() : agg_cells_() {}
   ~ObCGAggCells() { reset(); }
   void reset();
   bool check_finished() const;
-  bool can_use_index_info();
+  int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, bool &can_agg);
   int add_agg_cell(ObAggCell *cell);
   int process(
+      const ObTableIterParam &iter_param,
+      const ObTableAccessContext &context,
       const int32_t col_idx,
       blocksstable::ObIMicroBlockReader *reader,
       const int64_t *row_ids,
       const int64_t row_count);
   int process(blocksstable::ObStorageDatum &datum, const uint64_t row_count);
   int process(const blocksstable::ObMicroIndexInfo &index_info);
-  TO_STRING_KV(K_(can_use_index_info), K_(agg_cells));
+  TO_STRING_KV(K_(agg_cells));
 private:
-  bool can_use_index_info_;
   common::ObSEArray<ObAggCell*, 1> agg_cells_;
 };
 
@@ -65,7 +66,6 @@ public:
   OB_INLINE int64_t get_agg_count() const { return agg_cells_.count(); }
   OB_INLINE int64_t get_dummy_agg_count() const { return dummy_agg_cells_.count(); }
   OB_INLINE bool has_lob_column_out() const { return has_lob_column_out_; }
-  bool can_use_index_info();
   bool check_need_access_data();
   OB_INLINE ObAggCell* at(int64_t idx) { return agg_cells_.at(idx); }
   OB_INLINE ObAggCell* at_dummy(int64_t idx) { return dummy_agg_cells_.at(idx); }
@@ -97,7 +97,7 @@ public:
   int fill_index_info(const blocksstable::ObMicroIndexInfo &index_info);
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockReader *reader,
+      blocksstable::ObIMicroBlockRowScanner *scanner,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) override;

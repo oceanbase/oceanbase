@@ -1,0 +1,15 @@
+oceanbase-ce:
+  depends:
+    - ob-configserver
+  servers:
+    - @OB_SERVER_IP@
+  global:
+    home_path: @OB_HOME_PATH@
+    mysql_port: @OB_MYSQL_PORT@
+    rpc_port: @OB_RPC_PORT@
+    datafile_size: 20G
+    log_disk_size: 20G
+    production_mode: false
+    appname: @OB_CLUSTER_NAME@
+    root_password: @OB_ROOT_PASSWORD@
+    enable_rich_error_msg: true

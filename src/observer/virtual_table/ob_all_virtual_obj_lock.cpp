@@ -12,6 +12,7 @@
 
 #include "observer/virtual_table/ob_all_virtual_obj_lock.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/tx/ob_trans_part_ctx.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -26,9 +27,10 @@ ObAllVirtualObjLock::ObAllVirtualObjLock()
       ls_id_(share::ObLSID::INVALID_LS_ID),
       ls_(nullptr),
       ls_iter_guard_(),
+      ls_tx_ctx_iter_(),
       obj_lock_iter_(),
       lock_op_iter_(),
-      is_iter_tx_(false)
+      is_iter_tx_(true)
 {
 }
 
@@ -48,10 +50,12 @@ void ObAllVirtualObjLock::release_last_tenant()
 {
   ls_id_ = share::ObLSID::INVALID_LS_ID;
   ls_ = nullptr;
-  is_iter_tx_ = false;
+  is_iter_tx_ = true;
   ls_iter_guard_.reset();
+  ls_tx_ctx_iter_.reset();
   obj_lock_iter_.reset();
   lock_op_iter_.reset();
+  start_to_read_ = false;
 }
 
 int ObAllVirtualObjLock::inner_get_next_row(ObNewRow *&row)
@@ -72,24 +76,48 @@ bool ObAllVirtualObjLock::is_need_process(uint64_t tenant_id)
   return false;
 }
 
-int ObAllVirtualObjLock::get_next_ls(ObLS *&ls)
+int ObAllVirtualObjLock::get_next_ls()
+{
+  int ret = OB_SUCCESS;
+
+  if (!ls_iter_guard_.get_ptr() || OB_FAIL(ls_iter_guard_->get_next(ls_))) {
+    if (OB_ITER_END != ret) {
+      SERVER_LOG(WARN, "fail to switch tenant", K(ret));
+    }
+    // switch to next tenant
+    ret = OB_ITER_END;
+    SERVER_LOG(DEBUG, "finish iterate this tenant, switch to next tenant then", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(ERROR, "ls is null", K(ret));
+  } else {
+    ls_id_ = ls_->get_ls_id().id();
+    is_iter_tx_ = true;  // iterate tx firstly, then iterate lock_memtable
+    ls_tx_ctx_iter_.reset();
+    obj_lock_iter_.reset();
+    lock_op_iter_.reset();
+  }
+
+  return ret;
+}
+
+int ObAllVirtualObjLock::get_next_tx_ctx(transaction::ObPartTransCtx *&tx_ctx)
 {
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret)) {
-    if (!ls_iter_guard_.get_ptr()
-        || OB_FAIL(ls_iter_guard_->get_next(ls))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to switch tenant", K(ret));
+    if (!ls_tx_ctx_iter_.is_ready()) {
+      if (OB_ISNULL(ls_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "ls is null", K(ret), K(ls_id_));
+      } else if (OB_FAIL(ls_->iterate_tx_ctx(ls_tx_ctx_iter_))) {
+        SERVER_LOG(WARN, "fail to get ls_tx_ctx_iter", K(ret), K(ls_id_));
       }
-      // switch to next tenant
-      ret = OB_ITER_END;
-    } else if (OB_ISNULL(ls)) {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(ERROR, "ls is null", K(ret));
+    } else if (OB_FAIL(ls_tx_ctx_iter_.get_next_tx_ctx(tx_ctx))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "ls_tx_ctx_iter_.get_next_tx_ctx failed", K(ret));
+      }
     } else {
-      ls_id_ = ls->get_ls_id().id();
-      is_iter_tx_ = false;
       break;
     }
   }
@@ -97,40 +125,21 @@ int ObAllVirtualObjLock::get_next_ls(ObLS *&ls)
   return ret;
 }
 
-int ObAllVirtualObjLock::get_next_obj_lock_or_iter_tx(ObLockID &lock_id)
+int ObAllVirtualObjLock::get_next_lock_id(ObLockID &lock_id)
 {
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret)) {
-    if (OB_FAIL(obj_lock_iter_.get_next(lock_id))) {
-      if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to get next obj lock", K(ret));
+    if (!obj_lock_iter_.is_ready()) {
+      if (OB_ISNULL(ls_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "ls is null", K(ret), K(ls_id_));
+      } else if (OB_FAIL(ls_->get_lock_id_iter(obj_lock_iter_))) {
+        SERVER_LOG(WARN, "fail to get obj_lock_iter", K(ret), K(ls_id_));
       }
-      ret = OB_SUCCESS; // continue to next ls
-      if (!is_iter_tx_ && OB_NOT_NULL(ls_)) {
-        is_iter_tx_ = true;
-        // iter the tx
-        lock_op_iter_.reset();
-        if (OB_FAIL(ls_->iterate_tx_obj_lock_op(lock_op_iter_))) {
-          SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(ls_->get_ls_id()));
-        }
-        // break because we have get a new lock_op_iter_
-        break;
-      } else if (OB_FAIL(get_next_ls(ls_))) {
-        if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "fail to get next ls", K(ret));
-        }
-      } else {
-        obj_lock_iter_.reset();
-        if (OB_FAIL(ls_->get_lock_id_iter(obj_lock_iter_))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            SERVER_LOG(WARN,
-                       "fail to get obj lock iter, try to get next ls",
-                       K(ret), K(ls_->get_ls_id()));
-            ret = OB_SUCCESS;  // continue
-          }
-          SERVER_LOG(WARN, "fail to get obj lock iter", K(ret), K(ls_->get_ls_id()));
-        }
+    } else if (OB_FAIL(obj_lock_iter_.get_next(lock_id))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "fail to get next lock_id", K(ret), K(ls_id_));
       }
     } else {
       break;
@@ -144,30 +153,16 @@ int ObAllVirtualObjLock::get_next_lock_op(transaction::tablelock::ObTableLockOp 
 {
   int ret = OB_SUCCESS;
 
+  // loop until get lock_op
   while (OB_SUCC(ret)) {
     if (OB_FAIL(lock_op_iter_.get_next(lock_op))) {
-      ObLockID lock_id;
       if (OB_ITER_END != ret) {
-        SERVER_LOG(WARN, "fail to get next lock op", K(ret));
+        SERVER_LOG(WARN, "fail to get next lock op", K(ret), K(is_iter_tx_), K(ls_id_));
       }
-      ret = OB_SUCCESS; // continue
-      if (OB_FAIL(get_next_obj_lock_or_iter_tx(lock_id))) {
+      lock_op_iter_.reset();  // clean lock_op_iter to save memory
+      if (OB_FAIL(get_next_lock_op_iter())) {
         if (OB_ITER_END != ret) {
-          SERVER_LOG(WARN, "fail to get next obj lock", K(ret));
-        }
-      } else if (is_iter_tx_) {
-        // will iterate tx first.
-        SERVER_LOG(INFO, "iter tx now");
-      } else {
-        lock_op_iter_.reset();
-        if (OB_FAIL(ls_->get_lock_op_iter(lock_id, lock_op_iter_))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
-            SERVER_LOG(WARN,
-                       "fail to get lock op iter, try to get next lock_id",
-                       K(ret), K(lock_id));
-            ret = OB_SUCCESS;  // continue
-          }
-          SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(lock_id));
+          SERVER_LOG(WARN, "fail to get next lock_op_iter", K(ret), K(is_iter_tx_), K(ls_id_));
         }
       }
     } else {
@@ -178,20 +173,130 @@ int ObAllVirtualObjLock::get_next_lock_op(transaction::tablelock::ObTableLockOp 
   return ret;
 }
 
+int ObAllVirtualObjLock::get_next_lock_op_iter()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t retry_times = 0;  // use it to avoid unexpected error code, and try to iterate next one
+
+  // loop until get valid lock_op_iter, or has iterated all ls
+  while (OB_SUCC(ret)) {
+    if (is_iter_tx_) {
+      if (OB_TMP_FAIL(get_next_lock_op_iter_from_tx_ctx())) {
+        if (OB_ITER_END != tmp_ret) {
+          retry_times++;
+          SERVER_LOG(WARN, "get next lock_op_iter from tx_ctx failed", K(tmp_ret), K(retry_times), K(ls_id_));
+        }
+        if (OB_ITER_END == tmp_ret || retry_times >= MAX_RETRY_TIMES) {
+          is_iter_tx_ = false;
+          ls_tx_ctx_iter_.reset();  // clean lx_tx_ctx_iter to save memory
+          SERVER_LOG(DEBUG, "iterate tx finish, iterate lock_memtable then", K(tmp_ret), K(ls_id_));
+        }
+      }
+    } else {
+      if (OB_TMP_FAIL(get_next_lock_op_iter_from_lock_memtable())) {
+        if (OB_ITER_END != tmp_ret) {
+          retry_times++;
+          SERVER_LOG(WARN, "get next lock_op_iter from lock_memtable failed", K(tmp_ret), K(retry_times), K(ls_id_));
+        }
+        if (OB_ITER_END == tmp_ret || retry_times >= MAX_RETRY_TIMES) {
+          if (OB_FAIL(get_next_ls())) {
+            // has iterated all ls
+            if (OB_ITER_END != ret) {
+              SERVER_LOG(WARN, "get next ls failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+    // get valid lock_op_iter
+    if (OB_SUCCESS == tmp_ret) {
+      break;
+    }
+  }
+
+  return ret;
+}
+
+int ObAllVirtualObjLock::get_next_lock_op_iter_from_tx_ctx()
+{
+  int ret = OB_SUCCESS;
+  transaction::ObPartTransCtx *tx_ctx = nullptr;
+
+  if (OB_FAIL(get_next_tx_ctx(tx_ctx))) {
+    if (OB_ITER_END != ret) {
+      SERVER_LOG(WARN, "fail to get next tx_ctx", K(ret));
+    }
+  } else if (OB_ISNULL(tx_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "tx_ctx is null", K(ret), K(ls_id_));
+  } else {
+    lock_op_iter_.reset();
+    if (OB_FAIL(tx_ctx->iterate_tx_obj_lock_op(lock_op_iter_))) {
+      SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(ls_id_));
+    } else if (OB_FAIL(lock_op_iter_.set_ready())) {
+      SERVER_LOG(WARN, "set lock_op_iter ready failed", K(ret), K(ls_id_));
+    }
+  }
+  if (OB_NOT_NULL(tx_ctx)) {
+    ls_tx_ctx_iter_.revert_tx_ctx(tx_ctx);
+  }
+  return ret;
+}
+
+int ObAllVirtualObjLock::get_next_lock_op_iter_from_lock_memtable()
+{
+  int ret = OB_SUCCESS;
+  ObLockID lock_id;
+
+  if (OB_FAIL(get_next_lock_id(lock_id))) {
+    if (OB_ITER_END != ret) {
+      SERVER_LOG(WARN, "fail to get next lock_id", K(ret), K(ls_id_));
+    }
+  } else {
+    lock_op_iter_.reset();
+    if (OB_FAIL(ls_->get_lock_op_iter(lock_id, lock_op_iter_))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        SERVER_LOG(WARN, "fail to get lock op iter, try to get next lock_id", K(ret), K(lock_id));
+        ret = OB_SUCCESS;  // continue
+      }
+      SERVER_LOG(WARN, "fail to get lock op iter", K(ret), K(lock_id));
+    }
+  }
+  return ret;
+}
+
+int ObAllVirtualObjLock::prepare_start_to_read()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
+  } else if (OB_ISNULL(ls_iter_guard_.get_ptr())
+             && OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
+    SERVER_LOG(WARN, "init ls_iter_guard_ failed", K(ret));
+  } else if (OB_FAIL(get_next_ls())) {
+    SERVER_LOG(WARN, "init ls_ failed", K(ret));
+  } else if (OB_FAIL(get_next_lock_op_iter())) {
+    SERVER_LOG(WARN, "init lock_op_iter_ failed", K(ret), K(ls_id_));
+  } else {
+    start_to_read_ = true;
+  }
+  return ret;
+}
+
 int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   transaction::tablelock::ObTableLockOp lock_op;
-  if (NULL == allocator_) {
-    ret = OB_NOT_INIT;
-    SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
-  } else if (FALSE_IT(start_to_read_ = true)) {
-  } else if (ls_iter_guard_.get_ptr() == nullptr && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
-    SERVER_LOG(WARN, "get_ls_iter fail", K(ret));
+  if (!start_to_read_ && OB_FAIL(prepare_start_to_read())) {
+    SERVER_LOG(WARN, "prepare start to read failed", K(ret));
+    ret = OB_ITER_END;  // to avoid throw error code to client
   } else if (OB_FAIL(get_next_lock_op(lock_op))) {
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "get_next_lock_op failed", K(ret));
     }
+    ret = OB_ITER_END;  // to avoid throw error code to client
   } else {
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -324,5 +429,5 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
   return ret;
 }
 
-} // observer
-} // oceanbase
+}  // namespace observer
+}  // namespace oceanbase

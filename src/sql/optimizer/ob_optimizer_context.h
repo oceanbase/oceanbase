@@ -224,7 +224,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     aggregation_optimization_settings_(0),
     query_ctx_(query_ctx),
     nested_sql_flags_(0),
-    has_for_update_(false),
+    has_no_skip_for_update_(false),
     has_var_assign_(false),
     is_var_assign_only_in_root_stmt_(false),
     failed_ds_tab_list_(),
@@ -232,7 +232,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
     nested_loop_join_enabled_(true),
-    system_stat_()
+    system_stat_(),
+    storage_estimation_enabled_(false)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -306,9 +307,13 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool is_pdml_heap_table() const { return is_pdml_heap_table_; }
   inline bool force_serial_set_order() const { return force_serial_set_order_; }
   void set_serial_set_order(bool force_serial_set_order) { force_serial_set_order_ = force_serial_set_order; }
+
+  inline bool is_storage_estimation_enabled() const { return storage_estimation_enabled_; }
+  void set_storage_estimation_enabled(bool storage_estimation_enabled) { storage_estimation_enabled_ = storage_estimation_enabled; }
   inline int64_t get_parallel() const { return parallel_; }
   inline int64_t get_max_parallel() const { return max_parallel_; }
   inline int64_t get_parallel_degree_limit(const int64_t server_cnt) const { return auto_dop_params_.get_parallel_degree_limit(server_cnt); }
+  inline int64_t get_session_parallel_degree_limit() const { return auto_dop_params_.parallel_degree_limit_; }
   inline int64_t get_parallel_min_scan_time_threshold() const { return auto_dop_params_.parallel_min_scan_time_threshold_; }
   inline bool force_disable_parallel() const  { return px_parallel_rule_ >= PL_UDF_DAS_FORCE_SERIALIZE
                                                         && px_parallel_rule_ < MAX_OPTION; }
@@ -572,8 +577,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool has_trigger() const { return has_trigger_; }
   void set_has_pl_udf(bool v) { has_pl_udf_ = v; }
   bool has_pl_udf() const { return has_pl_udf_; }
-  void set_allow_parallel_trigger(bool v) { is_allow_parallel_trigger_ = v; }
-  bool is_allow_parallel_trigger() const { return is_allow_parallel_trigger_; }
   void set_has_cursor_expression(bool v) { has_cursor_expression_ = v; }
   bool has_cursor_expression() const { return has_cursor_expression_; }
   void set_has_dblink(bool v) { has_dblink_ = v; }
@@ -583,8 +586,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   bool contain_nested_sql() const { return nested_sql_flags_ > 0; }
   //use nested sql can't in online DDL session
   bool contain_user_nested_sql() const { return nested_sql_flags_ > 0 && !is_online_ddl_; }
-  void set_for_update() { has_for_update_ = true; }
-  bool has_for_update() { return has_for_update_;};
+  inline void set_no_skip_for_update() { has_no_skip_for_update_ = true; }
+  inline bool has_no_skip_for_update() const { return has_no_skip_for_update_; }
   inline bool has_var_assign() { return has_var_assign_; }
   inline void set_has_var_assign(bool v) { has_var_assign_ = v; }
   inline bool is_var_assign_only_in_root_stmt() { return is_var_assign_only_in_root_stmt_; }
@@ -670,11 +673,10 @@ private:
       int8_t has_pl_udf_                       : 1; //this sql has pl user defined function
       int8_t has_subquery_in_function_table_   : 1; //this stmt has function table
       int8_t has_dblink_                       : 1; //this stmt has dblink table
-      int8_t is_allow_parallel_trigger_        : 1; //this sql linked trigger can parallel execute
       int8_t has_cursor_expression_            : 1; //this sql has cursor expression
     };
   };
-  bool has_for_update_;
+  bool has_no_skip_for_update_;
   bool has_var_assign_;
   bool is_var_assign_only_in_root_stmt_;
   //record the dynamic sampling falied table list, avoid repeated dynamic sampling.
@@ -684,6 +686,7 @@ private:
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
   OptSystemStat system_stat_;
+  bool storage_estimation_enabled_;
 };
 }
 }

@@ -33,14 +33,17 @@ class OptSelectivityCtx;
 class ObOptCostModelParameter;
 class OptSystemStat;
 
-enum RowCountEstMethod
+enum RowCountEstMethod { INVALID_METHOD = 0 }; // deprecated
+enum ObBaseTableEstBasicMethod
 {
-  INVALID_METHOD = 0,
-  DEFAULT_STAT,
-  BASIC_STAT,    //use min/max/ndv to estimate row count
-  STORAGE_STAT, //use storage layer to estimate row count
-  DYNAMIC_SAMPLING_STAT //use dynamic sampling to estimate row count
+  EST_INVALID   = 0,
+  EST_DEFAULT   = 1 << 0,
+  EST_STAT      = 1 << 1,
+  EST_STORAGE   = 1 << 2,
+  EST_DS_BASIC  = 1 << 3,
+  EST_DS_FULL   = 1 << 4,
 };
+typedef uint64_t ObBaseTableEstMethod;
 
 // all the table meta info need to compute cost
 struct ObTableMetaInfo
@@ -216,7 +219,7 @@ struct ObCostTableScanInfo
      table_filters_(),
      table_metas_(NULL),
      sel_ctx_(NULL),
-     row_est_method_(RowCountEstMethod::INVALID_METHOD),
+     est_method_(EST_INVALID),
      prefix_filter_sel_(1.0),
      pushdown_prefix_filter_sel_(1.0),
      postfix_filter_sel_(1.0),
@@ -229,7 +232,9 @@ struct ObCostTableScanInfo
      index_back_row_count_(0.0),
      output_row_count_(0.0),
      batch_type_(common::ObSimpleBatch::ObBatchType::T_NONE),
-     use_column_store_(false)
+     use_column_store_(false),
+     at_most_one_range_(false),
+     index_back_with_column_store_(false)
   { }
   virtual ~ObCostTableScanInfo()
   { }
@@ -240,12 +245,14 @@ struct ObCostTableScanInfo
                K_(table_meta_info), K_(index_meta_info),
                K_(access_column_items),
                K_(is_virtual_table), K_(is_unique),
-               K_(is_inner_path), K_(can_use_batch_nlj),
+               K_(is_inner_path), K_(can_use_batch_nlj), K_(est_method),
                K_(prefix_filter_sel), K_(pushdown_prefix_filter_sel),
                K_(postfix_filter_sel), K_(table_filter_sel),
                K_(ss_prefix_ndv), K_(ss_postfix_range_filters_sel),
                K_(use_column_store),
-               K_(column_group_infos));
+               K_(index_back_with_column_store),
+               K_(index_scan_column_group_infos),
+               K_(index_back_column_group_infos));
   // the following information need to be set before estimating cost
   uint64_t table_id_; // table id
   uint64_t ref_table_id_; // ref table id
@@ -274,7 +281,7 @@ struct ObCostTableScanInfo
   OptTableMetas *table_metas_;
   OptSelectivityCtx *sel_ctx_;
   // the following information are useful when estimating cost
-  RowCountEstMethod row_est_method_; // row_est_method
+  ObBaseTableEstMethod est_method_;
   double prefix_filter_sel_;
   double pushdown_prefix_filter_sel_;
   double postfix_filter_sel_;
@@ -289,7 +296,10 @@ struct ObCostTableScanInfo
   common::ObSimpleBatch::ObBatchType batch_type_;
   SampleInfo sample_info_;
   bool use_column_store_;
-  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> column_group_infos_;
+  bool at_most_one_range_;
+  bool index_back_with_column_store_;
+  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_scan_column_group_infos_;
+  common::ObSEArray<ObCostColumnGroupInfo, 4, common::ModulePageAllocator, true> index_back_column_group_infos_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCostTableScanInfo);
@@ -804,6 +814,10 @@ protected:
 											const ObIArray<ObRawExpr *> &order_exprs,
 											const ObIArray<ObExprResType> &order_col_types,
 											double &cost);
+  int cost_part_topn_sort(const ObSortCostInfo &cost_info,
+                          const ObIArray<ObRawExpr *> &order_exprs,
+                          const ObIArray<ObExprResType> &order_col_types,
+                          double &cost);
 
   int cost_prefix_sort(const ObSortCostInfo &cost_info,
 											const ObIArray<ObRawExpr *> &order_exprs,
@@ -837,21 +851,32 @@ protected:
                         const double part_cnt_per_dop,
 												double &cost);
 
-  int cost_row_store_basic_table(const ObCostTableScanInfo &est_cost_info,
-                                double row_count,
-                                double &cost);
-
-  int cost_column_store_basic_table(const ObCostTableScanInfo &est_cost_info,
-                                    double row_count,
-                                    double &cost);
-
   int cost_index_scan(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
+                      double &prefix_filter_sel,
                       double &cost);
 
   int cost_index_back(const ObCostTableScanInfo &est_cost_info,
                       double row_count,
+                      double &prefix_filter_sel,
                       double &cost);
+
+  int cost_column_store_index_scan(const ObCostTableScanInfo &est_cost_info,
+                                    double row_count,
+                                    double &prefix_filter_sel,
+                                    double &cost);
+
+  int cost_column_store_index_back(const ObCostTableScanInfo &est_cost_info,
+                                    double row_count,
+                                    double &prefix_filter_sel,
+                                    double &cost);
+  int cost_row_store_index_scan(const ObCostTableScanInfo &est_cost_info,
+                                double row_count,
+                                double &cost);
+
+  int cost_row_store_index_back(const ObCostTableScanInfo &est_cost_info,
+                                double row_count,
+                                double &cost);
   // estimate the network transform and rpc cost for global index
   int cost_global_index_back_with_rp(double row_count,
                                     const ObCostTableScanInfo &est_cost_info,

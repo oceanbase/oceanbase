@@ -100,6 +100,10 @@ obd demo
 
 See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-10000000000829647) or [Quick Start (Simplified Chinese)](https://open.oceanbase.com/quickStart) for more details.
 
+## ☸️ Start with Kubernetes
+
+You can deploy and manage OceanBase Database instance in kubernetes cluster with [ob-operator](https://github.com/oceanbase/ob-operator) quickly. Refer to the document [Quick Start for ob-operator](https://oceanbase.github.io/ob-operator) to see details.
+
 ## 👨‍💻 Start developing
 
 See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
@@ -110,7 +114,7 @@ For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issu
 
 # Case study
 
-OceanBase has been serving more than 400 customers and upgraded their database from different industries, including Financial Services, Telecom, Retail, Internet, and more.
+OceanBase has been serving more than 1000 customers and upgraded their database from different industries, including Financial Services, Telecom, Retail, Internet, and more.
 
 See also [success stories](https://en.oceanbase.com/customer/home) and [Who is using OceanBase](https://github.com/oceanbase/oceanbase/issues/1301) for more details.
 

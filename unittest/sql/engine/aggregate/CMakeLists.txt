@@ -7,3 +7,8 @@
 #aggr_unittest(test_merge_groupby)
 #aggr_unittest(test_scalar_aggregate)
 #aggr_unittest(test_merge_distinct)
+function(aggr_unittest2 case)
+ sql_unittest(${ARGV})
+ target_sources(${case} PRIVATE ../test_op_engine.cpp  ../ob_fake_table_scan_vec_op.cpp)
+endfunction()
+aggr_unittest2(test_hash_groupby2)

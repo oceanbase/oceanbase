@@ -163,6 +163,22 @@ bool ObBalanceTaskHelper::is_valid() const
   return operation_scn_.is_valid() && balance_task_helper_meta_.is_valid() && is_valid_tenant_id(tenant_id_);
 }
 
+int ObBalanceTaskHelper::assign(const ObBalanceTaskHelper &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    if (OB_FAIL(balance_task_helper_meta_.assign(other.balance_task_helper_meta_))) {
+      LOG_WARN("failed to assign balance task helper meta", KR(ret), K(other));
+    } else {
+      operation_scn_ = other.operation_scn_;
+      tenant_id_ = other.tenant_id_;
+    }
+  }
+  return ret;
+}
+
+
 void ObBalanceTaskHelper::reset()
 {
   operation_scn_.reset();
@@ -192,29 +208,32 @@ int ObBalanceTaskHelperTableOperator::insert_ls_balance_task(const ObBalanceTask
   return ret;
 }
 
-int ObBalanceTaskHelperTableOperator::pop_task(const uint64_t tenant_id,
+int ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(const uint64_t tenant_id,
                       ObISQLClient &client,
-                      ObBalanceTaskHelper &ls_balance_task)
+                      const share::SCN &max_operation_scn,
+                      ObIArray<ObBalanceTaskHelper> &ls_balance_task)
 {
   int ret = OB_SUCCESS;
   ls_balance_task.reset();
   ObSqlString sql;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+        || !max_operation_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("select * from %s order by operation_scn asc limit 1",
-                                    OB_ALL_BALANCE_TASK_HELPER_TNAME))) {
-    LOG_WARN("failed to assign sql", KR(ret), K(sql));
-  } else if (OB_FAIL(exec_get_single_row_(sql, tenant_id, client, ls_balance_task))) {
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(max_operation_scn));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where operation_scn <= %lu order by operation_scn",
+          OB_ALL_BALANCE_TASK_HELPER_TNAME,
+          max_operation_scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(max_operation_scn), K(sql));
+  } else if (OB_FAIL(exec_get_rows_(sql, tenant_id, client, ls_balance_task))) {
     LOG_WARN("failed to get row", KR(ret), K(sql), K(tenant_id));
   }
   return ret;
 }
 
-int ObBalanceTaskHelperTableOperator::exec_get_single_row_(const common::ObSqlString &sql,
+int ObBalanceTaskHelperTableOperator::exec_get_rows_(const common::ObSqlString &sql,
                              const uint64_t tenant_id,
                              ObISQLClient &client,
-                             ObBalanceTaskHelper &ls_balance_task)
+                             ObIArray<ObBalanceTaskHelper> &ls_balance_tasks)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || sql.empty())) {
@@ -229,34 +248,41 @@ int ObBalanceTaskHelperTableOperator::exec_get_single_row_(const common::ObSqlSt
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get sql result", KR(ret));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("empty ls_balance_task", KR(ret), K(sql));
-        } else {
-          LOG_WARN("failed to get ls_balance_task", KR(ret), K(sql));
-        }
       } else {
-        ObString task_op_str;
-        uint64_t op_scn_value = 0;
-        SCN op_scn;
-        int64_t src_ls = 0;
-        int64_t dest_ls = 0;
-        uint64_t ls_group_id = OB_INVALID_ID;
-        EXTRACT_UINT_FIELD_MYSQL(*result, "operation_scn", op_scn_value, uint64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "src_ls", src_ls, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "dest_ls", dest_ls, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "operation_type", task_op_str);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to get cell", KR(ret), K(task_op_str), K(op_scn), K(src_ls), K(dest_ls), K(ls_group_id));
-        } else if (OB_FAIL(op_scn.convert_for_inner_table_field(op_scn_value))) {
-          LOG_WARN("failed to convert for inner table", KR(ret), K(op_scn_value));
-        } else if (OB_FAIL(ls_balance_task.init(tenant_id, op_scn, ObBalanceTaskHelperOp(task_op_str), ObLSID(src_ls),
-                ObLSID(dest_ls), ls_group_id))) {
-          LOG_WARN("failed to init ls_balance_task", KR(ret), K(tenant_id), K(task_op_str), K(op_scn), K(src_ls), K(ls_group_id));
+        while(OB_SUCC(ret) && OB_SUCC(result->next())) {
+          ObBalanceTaskHelper task_help;
+          ObString task_op_str;
+          uint64_t op_scn_value = 0;
+          SCN op_scn;
+          int64_t src_ls = 0;
+          int64_t dest_ls = 0;
+          uint64_t ls_group_id = OB_INVALID_ID;
+          EXTRACT_UINT_FIELD_MYSQL(*result, "operation_scn", op_scn_value, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "src_ls", src_ls, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "dest_ls", dest_ls, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_group_id", ls_group_id, uint64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "operation_type", task_op_str);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get cell", KR(ret), K(task_op_str), K(op_scn), K(src_ls), K(dest_ls), K(ls_group_id));
+          } else if (OB_FAIL(op_scn.convert_for_inner_table_field(op_scn_value))) {
+            LOG_WARN("failed to convert for inner table", KR(ret), K(op_scn_value));
+          } else if (OB_FAIL(task_help.init(tenant_id, op_scn, ObBalanceTaskHelperOp(task_op_str), ObLSID(src_ls),
+                  ObLSID(dest_ls), ls_group_id))) {
+            LOG_WARN("failed to init ls_balance_task", KR(ret), K(tenant_id), K(task_op_str), K(op_scn), K(src_ls), K(ls_group_id));
+          } else if (OB_FAIL(ls_balance_tasks.push_back(task_help))) {
+            LOG_WARN("failed to push back task", KR(ret), K(task_help));
+          }
+        }//end while
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          if (0 == ls_balance_tasks.count()) {
+            ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("no balance task help", KR(ret), K(sql));
+          }
+        } else {
+          LOG_WARN("failed to get cell", KR(ret));
         }
-      }
+      }//end else
     }
   }
   return ret;
@@ -313,7 +339,6 @@ int ObBalanceTaskHelperTableOperator::try_find_transfer_end(const uint64_t tenan
   int ret = OB_SUCCESS;
   ObSqlString sql;
   ObBalanceTaskHelperOp op(ObBalanceTaskHelperOp::LS_BALANCE_TASK_OP_TRANSFER_END);
-  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !op_scn.is_valid()
         || !src_ls.is_valid() || !dest_ls.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -328,6 +353,28 @@ int ObBalanceTaskHelperTableOperator::try_find_transfer_end(const uint64_t tenan
   return ret;
 }
 
+int ObBalanceTaskHelperTableOperator::exec_get_single_row_(const common::ObSqlString &sql,
+      const uint64_t tenant_id, ObISQLClient &client,
+      ObBalanceTaskHelper &ls_balance_task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || sql.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(sql));
+  } else {
+    ObArray<ObBalanceTaskHelper> task_array;
+    if (OB_FAIL(exec_get_rows_(sql, tenant_id, client, task_array))) {
+      LOG_WARN("failed to get single row", KR(ret), K(sql), K(tenant_id));
+    } else if (1 != task_array.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task array count is not expected", KR(ret), K(sql), K(task_array));
+    } else if (OB_FAIL(ls_balance_task.assign(task_array.at(0)))) {
+      LOG_WARN("failed to assign balance task", KR(ret), K(task_array));
+    }
+
+  }
+  return ret;
+}
 
 }//end of share
 }//end of ob

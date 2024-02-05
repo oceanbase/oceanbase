@@ -264,8 +264,8 @@ int ObDelUpdLogPlan::check_table_rowkey_distinct(
       if (OB_ISNULL(index_dml_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
-      } else if (!use_pdml() && !index_dml_info->is_primary_index_) {
-        // for PDML, primary table & index table both need unique checker.
+      } else if (!index_dml_info->is_primary_index_) {
+        // only primary table need unique checker.
       } else if (OB_FAIL(index_dml_info->get_rowkey_exprs(rowkey_exprs))) {
         LOG_WARN("failed to get rowkey exprs", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(rowkey_exprs,
@@ -365,7 +365,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
     ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
     ObAddr &server = get_optimizer_context().get_local_server_addr();
-    table_partition_info->get_table_location().set_check_no_partiton(stmt.is_merge_stmt());
+    table_partition_info->get_table_location().set_check_no_partition(stmt.is_merge_stmt());
     if (OB_FAIL(calculate_table_location(stmt,
                                          filters,
                                          table_id,
@@ -1116,7 +1116,9 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
                           target_sharding->get_part_level() == share::schema::PARTITION_LEVEL_TWO;
       for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
         if (get_optimizer_context().is_online_ddl()) {
-          exch_info.sample_type_ = OBJECT_SAMPLE;
+          if (!get_optimizer_context().is_heap_table_ddl()) {
+            exch_info.sample_type_ = OBJECT_SAMPLE;
+          }
           if (OB_FAIL(create_online_ddl_plan(best_plans.at(i).plan_tree_,
                                              exch_info,
                                              target_table_partition,
@@ -1199,7 +1201,7 @@ int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     LOG_WARN("failed to allocate sequence operator", K(ret));
   } else {
     OSG_TYPE type = old_top->need_osg_merge() ? OSG_TYPE::MERGE_OSG :
-                    old_top->is_distributed() ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
+                    old_top->is_sharding() ? OSG_TYPE::GATHER_OSG : OSG_TYPE::NORMAL_OSG;
     osg->set_child(ObLogicalOperator::first_child, old_top);
     osg->set_osg_type(type);
     osg->set_table_id(info.table_id_);
@@ -1753,7 +1755,8 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
                                                              primary_dml_info.ref_table_id_,
                                                              index_tid_array,
                                                              index_tid_array_size,
-                                                             false /*only global*/))) {
+                                                             false /*only global*/,
+                                                             true /*with mlog*/))) {
     LOG_WARN("get can write index array failed", K(ret), K(primary_dml_info.ref_table_id_));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < primary_dml_info.assignments_.count(); ++i) {
@@ -1773,7 +1776,7 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   for (int64_t i = 0; OB_SUCC(ret) && i < index_tid_array_size; ++i) {
     if (OB_FAIL(schema_guard->get_table_schema(tenant_id, index_tid_array[i], index_schema))) {
       LOG_WARN("get index schema failed", K(ret), K(index_tid_array[i]), K(i));
-    } else if (index_schema->is_index_local_storage()) {
+    } else if (index_schema->is_index_local_storage() || index_schema->is_mlog_table()) {
       //only need to attach local index and primary index in the same DAS Task
       if (primary_dml_info.assignments_.empty()) {
         //is insert or delete, need to add to the related index ids
@@ -1784,7 +1787,12 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         bool found_col = false;
         //in update clause, need to check this local index whether been updated
         for (int64_t j = 0; OB_SUCC(ret) && !found_col && j < base_column_ids.count(); ++j) {
-          found_col = (index_schema->get_column_schema(base_column_ids.at(j)) != nullptr);
+          uint64_t base_column_id = base_column_ids.at(j);
+          if (index_schema->is_mlog_table()) {
+            uint64_t mlog_column_id = ObTableSchema::gen_mlog_col_id_from_ref_col_id(base_column_id);
+            base_column_id = mlog_column_id;
+          }
+          found_col = (index_schema->get_column_schema(base_column_id) != nullptr);
         }
         if (OB_SUCC(ret) && found_col) {
           //update clause will modify this local index, need to add it to related_index_ids_
@@ -2033,42 +2041,24 @@ int ObDelUpdLogPlan::generate_index_column_exprs(const uint64_t table_id,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_modify_key || ObBinlogRowImage::FULL == binlog_row_image) {
-        //modify rowkey, need add all columns in schema
-        ObTableSchema::const_column_iterator iter = index_schema.column_begin();
-        ObTableSchema::const_column_iterator end = index_schema.column_end();
-        for (; OB_SUCC(ret) && iter != end; ++iter) {
-          const ObColumnSchemaV2 *column = *iter;
-          // skip all rowkeys
-          if (OB_ISNULL(column)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column schema", K(column));
-          } else if (column->is_rowkey_column()) {
-            // do nothing
-          } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*stmt, table_id,
-                                                                                   column->get_column_id(),
-                                                                                   OB_INVALID_ID, true))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get column item by id failed", K(ret), K(table_id), K(column->get_column_id()));
-          } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
-            LOG_WARN("store column expr to column exprs failed", K(ret));
-          }
-        }
-      } else {
-        //没有修改主键，只添加自己被修改的列及主表的rowkey
-        for (int64_t i = 0; OB_SUCC(ret) && i < assignments.count(); ++i) {
-          col_expr = const_cast<ObColumnRefRawExpr*>(assignments.at(i).column_expr_);
-          if (OB_ISNULL(col_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("assignment column expr is null");
-          } else if (OB_ISNULL(index_schema.get_column_schema(col_expr->get_column_id()))) {
-            //该列不存在于该表的schema中，忽略掉
-          } else if (OB_FAIL(column_exprs.push_back(col_expr))) {
-            LOG_WARN("store column expr to column exprs failed", K(ret));
-          }
-        }
-        if (FAILEDx(append_array_no_dup(column_exprs, spk_related_columns))) {
-          LOG_WARN("failed to append array no dup", K(ret));
+      //modify rowkey, need add all columns in schema
+      ObTableSchema::const_column_iterator iter = index_schema.column_begin();
+      ObTableSchema::const_column_iterator end = index_schema.column_end();
+      for (; OB_SUCC(ret) && iter != end; ++iter) {
+        const ObColumnSchemaV2 *column = *iter;
+        // skip all rowkeys
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column schema", K(column));
+        } else if (column->is_rowkey_column()) {
+          // do nothing
+        } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*stmt, table_id,
+                                                                                 column->get_column_id(),
+                                                                                 OB_INVALID_ID, true))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get column item by id failed", K(ret), K(table_id), K(column->get_column_id()));
+        } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
+          LOG_WARN("store column expr to column exprs failed", K(ret));
         }
       }
     }

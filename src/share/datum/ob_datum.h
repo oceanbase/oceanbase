@@ -162,6 +162,11 @@ struct ObDatumDesc {
   bool is_ext() const { return flag_ == FlagType::EXT; }
   void set_outrow() { null_ = 0; flag_ = FlagType::OUTROW; }
   bool is_outrow() const { return flag_ == FlagType::OUTROW; }
+
+  void set_flag(const FlagType &flag_type) { flag_ = flag_type; }
+  void set_has_lob_header() { flag_ = FlagType::HAS_LOB_HEADER; }
+  bool has_lob_header() const { return flag_ == FlagType::HAS_LOB_HEADER; }
+  void set_flag_none() { flag_ = FlagType::NONE; }
 } __attribute__ ((packed)) ;
 
 // Datum structure, multiple inheritance from ObDatumPtr and ObDatumDesc makes
@@ -175,6 +180,11 @@ public:
   const ObDatumDesc &desc() const { return *this; };
 
   ObDatum() : ObDatumPtr(), ObDatumDesc() {}
+  ObDatum(const char *ptr, uint32_t len, bool null) {
+    ptr_ = ptr;
+    len_ = len;
+    null_ = null;
+  }
 
   inline void reset() { new (this) ObDatum(); }
   static bool binary_equal(const ObDatum &r, const ObDatum &l)
@@ -262,6 +272,7 @@ public:
     return res;
   }
   inline const ObString get_string() const { return ObString(len_, ptr_); }
+  inline const ObString get_json() const { return get_string(); }
   inline int get_enumset_inner(ObEnumSetInnerValue &inner_value) const
   {
     int64_t pos = 0;

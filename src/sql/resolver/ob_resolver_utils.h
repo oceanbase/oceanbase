@@ -311,6 +311,7 @@ public:
                                          ObRawExpr *&expr);
 
   static int revert_external_param_info(ExternalParams &param_info,
+                                        ObRawExprFactory &expr_factory,
                                         ObRawExpr *expr);
 
    /**
@@ -472,7 +473,8 @@ public:
                                            share::schema::ObColumnSchemaV2 &generated_column,
                                            ObRawExpr *&expr,
                                            const PureFunctionCheckStatus
-                                             check_status = DISABLE_CHECK);
+                                             check_status = DISABLE_CHECK,
+                                           bool coltype_not_defined = false);
   static int resolve_generated_column_expr(ObResolverParams &params,
                                            const ParseNode *node,
                                            share::schema::ObTableSchema &tbl_schema,
@@ -480,7 +482,8 @@ public:
                                            share::schema::ObColumnSchemaV2 &generated_column,
                                            ObRawExpr *&expr,
                                            const PureFunctionCheckStatus
-                                             check_status = DISABLE_CHECK);
+                                             check_status = DISABLE_CHECK,
+                                           bool coltype_not_defined = false);
   static int resolve_generated_column_info(const common::ObString &expr_str,
                                            ObIAllocator &allocator,
                                            ObItemType &root_expr_type,
@@ -780,6 +783,13 @@ public:
   static int check_keystore_status(const uint64_t tenant_id, ObSchemaChecker &schema_checker);
   static int check_encryption_name(common::ObString &encryption_name, bool &need_encrypt);
   static int check_not_supported_tenant_name(const common::ObString &tenant_name);
+  static int check_allowed_alter_operations_for_mlog(
+      const uint64_t tenant_id,
+      const obrpc::ObAlterTableArg &arg,
+      const share::schema::ObTableSchema &table_schema);
+
+  static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
+  static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

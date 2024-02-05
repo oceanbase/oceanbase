@@ -119,7 +119,8 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
         uint64_t col_id = output_column_ids_.at(i);
         switch(col_id) {
           case ID: {
-            cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(sess_info->get_sessid()));
+            cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(
+                                  sess_info->get_compatibility_sessid()));
             break;
           }
           case USER: {
@@ -128,7 +129,8 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
               // see
-              cur_row_->cells_[cell_idx].set_null();
+              cur_row_->cells_[cell_idx].set_varchar("");
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             } else {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_user_name());
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
@@ -297,7 +299,7 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             break;
           }
           case USER_CLIENT_PORT: {
-            cur_row_->cells_[cell_idx].set_int(0);
+            cur_row_->cells_[cell_idx].set_int(sess_info->get_client_addr_port());
             break;
           }
           default: {

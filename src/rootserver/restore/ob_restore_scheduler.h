@@ -17,6 +17,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_upgrade_utils.h"
+#include "ob_restore_common_util.h"
 
 namespace oceanbase
 {
@@ -43,25 +44,6 @@ public:
   void do_work();
   void destroy();
 public:
-  enum TenantRestoreStatus
-  {
-    IN_PROGRESS = 0,
-    SUCCESS,
-    FAILED
-  };
-  bool is_tenant_restore_finish(const TenantRestoreStatus tenant_restore_status) const
-  {
-    return SUCCESS == tenant_restore_status || FAILED == tenant_restore_status;
-  }
-  bool is_tenant_restore_success(const TenantRestoreStatus tenant_restore_status) const
-  {
-    return SUCCESS == tenant_restore_status;
-  }
-  bool is_tenant_restore_failed(const TenantRestoreStatus tenant_restore_status) const
-  {
-    return FAILED == tenant_restore_status;
-  }
-
   static int reset_schema_status(const uint64_t tenant_id, common::ObMySQLProxy *sql_proxy);
 
 public:
@@ -90,7 +72,7 @@ private:
   int fill_create_tenant_arg(const share::ObPhysicalRestoreJob &job_info,
                              const ObSqlString &pool_list,
                              obrpc::ObCreateTenantArg &arg);
-  int convert_parameters(const share::ObPhysicalRestoreJob &job_info);
+  int convert_tde_parameters(const share::ObPhysicalRestoreJob &job_info);
   int restore_root_key(const share::ObPhysicalRestoreJob &job_info);
   int restore_keystore(const share::ObPhysicalRestoreJob &job_info);
 

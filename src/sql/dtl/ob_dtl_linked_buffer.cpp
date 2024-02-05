@@ -15,6 +15,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/dtl/ob_dtl_vectors_buffer.h"
 
 using namespace oceanbase::common;
 
@@ -98,7 +99,17 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
     if (buf_len - pos < size_) {
       ret = OB_SIZE_OVERFLOW;
     } else {
-      MEMCPY(buf + pos, buf_, size_);
+      if (PX_VECTOR == msg_type_) {
+        if (OB_FAIL(serialize_vector(buf, pos, size_))) {
+          SQL_DTL_LOG(WARN, "serialize vector failed", K(ret));
+        }
+      } else if (PX_VECTOR_FIXED == msg_type_) {
+        if (OB_FAIL(serialize_fixed_vector(buf, pos, size_))) {
+          SQL_DTL_LOG(WARN, "serialize vector fixed failed", K(ret));
+        }
+      } else {
+        MEMCPY(buf + pos, buf_, size_);
+      }
       pos += size_;
       LST_DO_CODE(OB_UNIS_ENCODE,
         is_data_msg_,
@@ -123,6 +134,9 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer)
       }
       if (OB_SUCC(ret)) {
         LST_DO_CODE(OB_UNIS_ENCODE, register_dm_info_);
+      }
+      if (OB_SUCC(ret)) {
+        LST_DO_CODE(OB_UNIS_ENCODE, row_meta_);
       }
     }
   }
@@ -162,6 +176,9 @@ OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
     if (OB_SUCC(ret)) {
       LST_DO_CODE(OB_UNIS_DECODE, register_dm_info_);
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE, row_meta_);
+    }
   }
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
@@ -172,6 +189,19 @@ OB_DEF_DESERIALIZE(ObDtlLinkedBuffer)
 OB_DEF_SERIALIZE_SIZE(ObDtlLinkedBuffer)
 {
   int64_t len = 0;
+  if (PX_VECTOR == msg_type_) {
+    int64_t new_size  = get_serialize_vector_size();
+    if (OB_UNLIKELY(size_ < new_size)) {
+      SQL_DTL_LOG(TRACE, "unexpected encode leads size overflow", K(size_), K(new_size));
+    }
+    const_cast<int64_t &> (size_) = new_size;
+  } else if (PX_VECTOR_FIXED == msg_type_) {
+    int64_t new_size = get_serialize_fixed_vector_size();
+    if (OB_UNLIKELY(size_ < new_size)) {
+      SQL_DTL_LOG(TRACE, "unexpected encode leads size overflow", K(size_), K(new_size));
+    }
+    const_cast<int64_t &> (size_) = new_size;
+  }
   OB_UNIS_ADD_LEN(size_);
   len += size_;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
@@ -192,7 +222,218 @@ OB_DEF_SERIALIZE_SIZE(ObDtlLinkedBuffer)
     LST_DO_CODE(OB_UNIS_ADD_LEN, dfo_id_, sqc_id_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, enable_channel_sync_);
     LST_DO_CODE(OB_UNIS_ADD_LEN, register_dm_info_);
+    LST_DO_CODE(OB_UNIS_ADD_LEN, row_meta_);
   return len;
+}
+
+
+/*
+vector buf serialize
+magic_num : 4
+col_cnt : 4
+row_cnt : 4
+(format : 4 + nulls offset : 4 + fixed len : 4 + offsets offset : 4 + data offset : 4) * col_cnt
+(nulls : to_bit_vector(row_cnt) + offsets : 4 * (row_cnt + 1) + data)  * col_cnt
+*/
+/*struct VectorInfo {
+  VectorFormat format_;
+  int32_t nulls_offset_;
+  int32_t fixed_len_;
+  int32_t offsets_offset_;
+  int32_t data_offset_;
+};*/
+
+int64_t ObDtlLinkedBuffer::get_serialize_vector_size() const
+{
+  int64_t serialize_size = 0;
+  ObDtlVectorsBlock *vector_blk = reinterpret_cast<ObDtlVectorsBlock *> (buf_);
+  ObDtlVectorsBuffer *vector_buf = vector_blk->get_buffer();
+  int64_t col_cnt = vector_buf->get_col_cnt();
+  int64_t row_cnt = vector_blk->rows();
+  //magic, col cnt , row cnt
+  serialize_size += 3 * sizeof(int32_t);
+  if (row_cnt > 0 && col_cnt > 0) {
+    serialize_size += (col_cnt * sizeof(VectorInfo));
+    for (int64_t i = 0; i < col_cnt; ++i) {
+      ObVectorSegment *beg_seg = vector_buf->get_start_seg(i);
+      VectorFormat format = beg_seg->format_;
+      serialize_size += ObBitVector::memory_size(row_cnt);
+      ObVectorSegment *curr_seg = beg_seg;
+      if (VectorFormat::VEC_CONTINUOUS == format) {
+        serialize_size += (row_cnt + 1) * sizeof(uint32_t);
+      }
+      while (curr_seg) {
+        int64_t copy_size = curr_seg->data_pos_ - curr_seg->data_start_pos_;
+        serialize_size += copy_size;
+        curr_seg = curr_seg->next_;
+      }
+    }
+  }
+  return serialize_size;
+}
+
+int ObDtlLinkedBuffer::serialize_vector(char *buf, int64_t pos, int64_t size) const
+{
+  int ret = OB_SUCCESS;
+  ObDtlVectorsBlock *vector_blk = reinterpret_cast<ObDtlVectorsBlock *> (const_cast<char *> (buf_));
+  ObDtlVectorsBuffer *vector_buf = vector_blk->get_buffer();
+  int64_t col_cnt = vector_buf->get_col_cnt();
+  int64_t row_cnt = vector_blk->rows();
+  char *vector_head = buf + pos;
+  int64_t header_offset = 0;
+  //set magic
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = ObDtlVectorsBuffer::MAGIC;
+  header_offset += sizeof(int32_t);
+  //set col cnt
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = col_cnt;
+  header_offset += sizeof(int32_t);
+  //set row cnt
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = row_cnt;
+  header_offset += sizeof(int32_t);
+  if (row_cnt > 0 && col_cnt > 0) {
+    //set info
+    VectorInfo *infos = reinterpret_cast<VectorInfo *> (vector_head + header_offset);
+    header_offset += (col_cnt * sizeof(VectorInfo));
+    //set data
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      ObVectorSegment *beg_seg = vector_buf->get_start_seg(i);
+      infos[i].format_ = beg_seg->format_;
+      infos[i].fixed_len_ = beg_seg->fixed_len_;
+      //alloc nulls
+      infos[i].nulls_offset_ = header_offset;
+      ObBitVector *nulls = to_bit_vector(vector_head + header_offset);
+      nulls->reset(row_cnt);
+      header_offset += ObBitVector::memory_size(row_cnt);
+      //alloc offsets
+      infos[i].offsets_offset_ = header_offset;
+      if (VectorFormat::VEC_CONTINUOUS == infos[i].format_) {
+        header_offset += (row_cnt + 1) * sizeof(uint32_t);
+      }
+      //fill data
+      infos[i].data_offset_ = header_offset;
+      ObVectorSegment *curr_seg = beg_seg;
+      int32_t sum_rows = 0;
+      if (VectorFormat::VEC_CONTINUOUS == infos[i].format_) {
+        uint32_t *offsets_array = reinterpret_cast<uint32_t *> (vector_head + infos[i].offsets_offset_);
+        offsets_array[0] = header_offset;
+        while (nullptr != curr_seg) {
+          //fill nulls && fill offsets
+          for (int32_t j = 0; j < curr_seg->seg_rows_; ++j) {
+            if (curr_seg->nulls_->at(j)) {
+              nulls->set(sum_rows);
+            }
+            offsets_array[sum_rows + 1] = offsets_array[sum_rows] + curr_seg->get_length(j);
+            ++sum_rows;
+          }
+          //memcpy data
+          int64_t copy_size = curr_seg->data_pos_ - curr_seg->data_start_pos_;
+          memcpy(vector_head + header_offset, curr_seg->head(), copy_size);
+          header_offset += copy_size;
+          curr_seg = curr_seg->next_;
+        }
+      } else {
+        while (nullptr != curr_seg) {
+          //fill nulls && fill offsets
+          for (int32_t j = 0; j < curr_seg->seg_rows_; ++j) {
+            if (curr_seg->nulls_->at(j)) {
+              nulls->set(sum_rows);
+            }
+            ++sum_rows;
+          }
+          //memcpy data
+          int64_t copy_size = curr_seg->fixed_len_ * curr_seg->seg_rows_;
+          memcpy(vector_head + header_offset, curr_seg->head(), copy_size);
+          header_offset += copy_size;
+          curr_seg = curr_seg->next_;
+        }
+      }
+      if (sum_rows != row_cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_DTL_LOG(WARN, "check row cnt failed", K(ret), K(sum_rows), K(row_cnt), K(sum_rows));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && header_offset > size) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_DTL_LOG(WARN, "buffer is not enough", K(ret), K(pos), K(size), K(header_offset));
+  }
+  return ret;
+}
+
+int ObDtlLinkedBuffer::serialize_fixed_vector(char *buf, int64_t pos, int64_t size) const
+{
+  const int64_t MAGIC_OFFSET = 0;
+  const int64_t COL_CNT_OFFSET = sizeof(int32_t) /*skip MAGIC*/;
+  const int64_t ROW_CNT_OFFSET = COL_CNT_OFFSET + sizeof(int32_t);
+  const int64_t INFOS_OFFSET = ROW_CNT_OFFSET + sizeof(int32_t);
+
+  int64_t magic = *reinterpret_cast<int32_t *>(buf_ + MAGIC_OFFSET);
+  int64_t col_cnt = *reinterpret_cast<int32_t *> (buf_ + COL_CNT_OFFSET);
+  int64_t row_cnt = *reinterpret_cast<int32_t *> (buf_ + ROW_CNT_OFFSET);
+  int ret = OB_SUCCESS;
+  char *vector_head = buf + pos;
+  int64_t header_offset = 0;
+  //set magic
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = ObDtlVectorsBuffer::MAGIC;
+  header_offset += sizeof(int32_t);
+  //set col cnt
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = col_cnt;
+  header_offset += sizeof(int32_t);
+  //set row cnt
+  *reinterpret_cast<int32_t *> (vector_head + header_offset) = row_cnt;
+  header_offset += sizeof(int32_t);
+  if (col_cnt > 0 && row_cnt > 0) {
+    VectorInfo *orign_infos = reinterpret_cast<VectorInfo *> (buf_ + INFOS_OFFSET);
+    //set info
+    VectorInfo *infos = reinterpret_cast<VectorInfo *> (vector_head + header_offset);
+    for (int64_t i = 0; i < col_cnt; ++i) {
+      infos[i].format_ = orign_infos[i].format_;
+      infos[i].fixed_len_ = orign_infos[i].fixed_len_;
+    }
+    header_offset += (col_cnt * sizeof(VectorInfo));
+    //set data
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
+      //alloc nulls
+      infos[i].nulls_offset_ = header_offset;
+      ObBitVector *nulls = to_bit_vector(vector_head + header_offset);
+      nulls->reset(row_cnt);
+      header_offset += ObBitVector::memory_size(row_cnt);
+      //fill data
+      infos[i].data_offset_ = header_offset;
+      ObBitVector *orign_nulls = to_bit_vector(buf_ + orign_infos[i].nulls_offset_);
+      char *orign_data = buf_ + orign_infos[i].data_offset_;
+      nulls->deep_copy(*orign_nulls, row_cnt);
+      int64_t copy_size = infos[i].fixed_len_ * row_cnt;
+      memcpy(vector_head + header_offset, orign_data, copy_size);
+      header_offset += copy_size;
+    }
+  }
+  if (OB_SUCC(ret) && header_offset > size) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_DTL_LOG(WARN, "buffer is not enough", K(ret), K(pos), K(size), K(header_offset));
+  }
+  return ret;
+}
+
+int64_t ObDtlLinkedBuffer::get_serialize_fixed_vector_size() const
+{
+  const int64_t COL_CNT_OFFSET = sizeof(int32_t) /*skip MAGIC*/;
+  const int64_t ROW_CNT_OFFSET = COL_CNT_OFFSET + sizeof(int32_t);
+  const int64_t INFOS_OFFSET = ROW_CNT_OFFSET + sizeof(int32_t);
+  int64_t serialize_size = 0;
+  int64_t col_cnt = *reinterpret_cast<int32_t *> (buf_ + COL_CNT_OFFSET);
+  int64_t row_cnt = *reinterpret_cast<int32_t *> (buf_ + ROW_CNT_OFFSET);
+  //magic, col cnt , row cnt
+  serialize_size += INFOS_OFFSET;
+  if (col_cnt > 0 && row_cnt > 0) {
+    VectorInfo *infos = reinterpret_cast<VectorInfo *> (buf_ + INFOS_OFFSET);
+    serialize_size += (col_cnt * sizeof(VectorInfo));
+    for (int64_t i = 0; i < col_cnt; ++i) {
+      serialize_size += ObBitVector::memory_size(row_cnt);
+      serialize_size += infos[i].fixed_len_ * row_cnt;
+    }
+  }
+  return serialize_size;
 }
 
 }

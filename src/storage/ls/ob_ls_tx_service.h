@@ -32,6 +32,8 @@ class SCN;
 namespace storage
 {
 class ObLS;
+struct ObTxCtxMoveArg;
+struct ObTransferMoveTxParam;
 }
 
 namespace transaction
@@ -46,6 +48,7 @@ class ObTxLSLogWriter;
 class ObTxStartWorkingLog;
 class ObITxLogAdapter;
 class ObTxCreateArg;
+class ObLSTxCtxIterator;
 }
 
 namespace storage
@@ -87,6 +90,10 @@ public:
   int get_tx_ctx(const transaction::ObTransID &tx_id,
                  const bool for_replay,
                  transaction::ObPartTransCtx *&ctx) const;
+  int get_tx_ctx_with_timeout(const transaction::ObTransID &tx_id,
+                              const bool for_replay,
+                              transaction::ObPartTransCtx *&tx_ctx,
+                              const int64_t lock_timeout) const;
   int get_tx_scheduler(const transaction::ObTransID &tx_id,
                        ObAddr &scheduler) const;
   int revert_tx_ctx(transaction::ObTransCtx *ctx) const;
@@ -104,7 +111,8 @@ public:
                           const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL()) const;
   int revert_store_ctx(storage::ObStoreCtx &store_ctx) const;
   // Freeze process needs to traverse trans ctx to submit redo log
-  int traverse_trans_to_submit_redo_log(transaction::ObTransID &fail_tx_id);
+  int traverse_trans_to_submit_redo_log(transaction::ObTransID &fail_tx_id,
+                                        const uint32_t freeze_clock = UINT32_MAX);
   // submit next log when all trx in frozen memtable have submitted log
   int traverse_trans_to_submit_next_log();
   // check schduler status for gc
@@ -145,6 +153,7 @@ public:
                                 transaction::ObTransID &block_tx_id);
   // get the obj lock op iterator from tx of this ls.
   int iterate_tx_obj_lock_op(transaction::tablelock::ObLockOpIterator &iter) const;
+  int iterate_tx_ctx(transaction::ObLSTxCtxIterator &iter) const;
   int get_tx_ctx_count(int64_t &tx_ctx_count);
   int get_active_tx_count(int64_t &active_tx_count);
   int print_all_tx_ctx(const int64_t print_num);
@@ -165,6 +174,26 @@ public:
   int get_common_checkpoint_info(
     ObIArray<checkpoint::ObCommonCheckpointVTInfo> &common_checkpoint_array);
 
+  int transfer_out_tx_op(int64_t except_tx_id,
+                         const share::SCN data_end_scn,
+                         const share::SCN op_scn,
+                         transaction::NotifyType op_type,
+                         bool is_replay,
+                         share::ObLSID dest_ls_id,
+                         int64_t transfer_epoch,
+                         int64_t &active_tx_count,
+                         int64_t &op_tx_count);
+  int wait_tx_write_end(ObTimeoutCtx &timeout_ctx);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const share::SCN log_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     int64_t &tx_count,
+                     int64_t &collect_count,
+                     ObIArray<ObTxCtxMoveArg> &args);
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObIArray<ObTxCtxMoveArg> &arg);
+  int start_request_for_transfer();
+  int end_request_for_transfer();
 public:
   transaction::ObTransService *get_trans_service() { return trans_service_; }
 

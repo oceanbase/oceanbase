@@ -444,9 +444,13 @@ int ObTxTable::remove_tablet()
   if (OB_NOT_NULL(ls_)) {
     if (OB_FAIL(remove_tablet_(LS_TX_DATA_TABLET))) {
       LOG_WARN("remove tx data tablet failed", K(ret));
+      ob_usleep(1000 * 1000);
+      ob_abort();
     }
     if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
       LOG_WARN("remove tx ctx tablet failed", K(ret));
+      ob_usleep(1000 * 1000);
+      ob_abort();
     }
   }
   return ret;
@@ -592,13 +596,13 @@ void ObTxTable::destroy()
   is_inited_ = false;
 }
 
-int ObTxTable::alloc_tx_data(ObTxDataGuard &tx_data_guard)
+int ObTxTable::alloc_tx_data(ObTxDataGuard &tx_data_guard, const bool enable_throttle, const int64_t abs_expire_time)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data_guard))) {
+  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data_guard, enable_throttle, abs_expire_time))) {
     LOG_WARN("allocate tx data from tx data table fail.", KR(ret));
   }
   return ret;
@@ -840,7 +844,6 @@ int ObTxTable::check_row_locked(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckRowLockedFunctor fn(read_tx_id, read_tx_data_arg.tx_id_, sql_sequence, lock_state);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check row locked", K(read_tx_data_arg), K(read_tx_id), K(sql_sequence), K(lock_state));
   return ret;
 }
@@ -851,7 +854,6 @@ int ObTxTable::check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckSqlSequenceCanReadFunctor fn(sql_sequence, can_read);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check sql sequence can read", K(read_tx_data_arg), K(sql_sequence), K(can_read));
   return ret;
 }
@@ -863,7 +865,6 @@ int ObTxTable::get_tx_state_with_scn(ObReadTxDataArg &read_tx_data_arg,
 {
   GetTxStateWithSCNFunctor fn(scn, state, trans_version);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish get tx state with scn", K(read_tx_data_arg), K(scn), K(state), K(trans_version));
   return ret;
 }
@@ -875,6 +876,7 @@ int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg,
 {
   int ret = OB_SUCCESS;
   GetTxStateWithSCNFunctor fn(SCN::max_scn(), state, trans_version);
+  fn.set_may_exist_undecided_state_in_tx_data_table();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));
@@ -894,15 +896,17 @@ int ObTxTable::lock_for_read(ObReadTxDataArg &read_tx_data_arg,
                              const transaction::ObLockForReadArg &lock_for_read_arg,
                              bool &can_read,
                              SCN &trans_version,
-                             bool &is_determined_state,
                              ObCleanoutOp &cleanout_op,
                              ObReCheckOp &recheck_op)
 {
-  LockForReadFunctor fn(
-      lock_for_read_arg, can_read, trans_version, is_determined_state, ls_id_, cleanout_op, recheck_op);
+  LockForReadFunctor fn(lock_for_read_arg,
+                        can_read,
+                        trans_version,
+                        ls_id_,
+                        cleanout_op,
+                        recheck_op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
-  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version), K(is_determined_state));
+  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version));
   return ret;
 }
 
@@ -911,7 +915,7 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
   int ret = OB_SUCCESS;
   real_recycle_scn = SCN::min_scn();
 
-  int64_t current_time_us = ObClockGenerator::getCurrentTime();
+  int64_t current_time_us = ObClockGenerator::getClock();
   int64_t tx_result_retention = DEFAULT_TX_RESULT_RETENTION_S;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
@@ -957,7 +961,7 @@ int ObTxTable::get_recycle_scn(SCN &real_recycle_scn)
 
     // update cache
     recycle_scn_cache_.val_ = real_recycle_scn;
-    recycle_scn_cache_.update_ts_ = ObClockGenerator::getCurrentTime();
+    recycle_scn_cache_.update_ts_ = ObClockGenerator::getClock();
   }
 
   return ret;
@@ -983,12 +987,18 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
                                 const bool need_row_latch)
 {
   ObCleanoutTxNodeOperation op(value, tnode, need_row_latch);
-  CleanoutTxStateFunctor fn(op);
+  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   if (OB_TRANS_CTX_NOT_EXIST == ret) {
     if (tnode.is_committed() || tnode.is_aborted()) {
       // may be the concurrent case between cleanout and commit/abort
       ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (op.need_cleanout()) {
+      op(fn.get_tx_data_check_data());
     }
   }
   return ret;

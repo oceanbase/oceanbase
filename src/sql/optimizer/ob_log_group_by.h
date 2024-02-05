@@ -24,20 +24,38 @@ namespace sql
 class ObLogSort;
 struct ObThreeStageAggrInfo
 {
-  ObThreeStageAggrInfo() : distinct_aggr_count_(-1),
+  ObThreeStageAggrInfo() :
+    aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
+    distinct_aggr_count_(-1),
     aggr_code_idx_(-1),
     aggr_code_expr_(NULL),
     distinct_aggr_batch_(),
-    distinct_exprs_()
+    distinct_exprs_(),
+    aggr_code_ndv_(1.0)
   {}
 
+  ObThreeStageAggrStage aggr_stage_;
   int64_t distinct_aggr_count_;
   int64_t aggr_code_idx_;
   ObRawExpr *aggr_code_expr_;
   ObArray<ObDistinctAggrBatch, ModulePageAllocator, true> distinct_aggr_batch_;
   common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> distinct_exprs_;
+  double aggr_code_ndv_;
 
   int assign(const ObThreeStageAggrInfo &info);
+
+  void reuse() {
+    aggr_stage_ = ObThreeStageAggrStage::NONE_STAGE;
+    aggr_code_idx_ = -1;
+    aggr_code_expr_ = NULL;
+    distinct_aggr_batch_.reuse();
+    distinct_exprs_.reuse();
+    aggr_code_ndv_ = 1.0;
+  }
+
+  int set_first_stage_info(ObRawExpr *aggr_code_expr, ObIArray<ObDistinctAggrBatch> &batch, double aggr_code_ndv);
+  int set_second_stage_info(ObRawExpr *aggr_code_expr, ObIArray<ObDistinctAggrBatch> &batch, ObIArray<ObRawExpr *> &distinct_exprs);
+  int set_third_stage_info(ObRawExpr *aggr_code_expr, ObIArray<ObDistinctAggrBatch> &batch);
 };
 
 struct ObRollupAdaptiveInfo
@@ -75,13 +93,13 @@ public:
         is_partition_gi_(false),
         total_ndv_(-1.0),
         origin_child_card_(-1.0),
-        aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
         three_stage_info_(),
         rollup_adaptive_info_(),
         force_push_down_(false),
         use_hash_aggr_(false),
         has_push_down_(false),
-        use_part_sort_(false)
+        use_part_sort_(false),
+        is_pushdown_scalar_aggr_(false)
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -90,15 +108,7 @@ public:
   virtual int get_explain_name_internal(char *buf,
                                         const int64_t buf_len,
                                         int64_t &pos);
-  int set_first_stage_info(ObRawExpr *aggr_code_expr,
-                           ObIArray<ObDistinctAggrBatch> &batch);
-
-  int set_second_stage_info(ObRawExpr *aggr_code_expr,
-                            ObIArray<ObDistinctAggrBatch> &batch,
-                            ObIArray<ObRawExpr *> &distinct_exprs);
-
-  int set_third_stage_info(ObRawExpr *aggr_code_expr,
-                           ObIArray<ObDistinctAggrBatch> &batch);
+  int set_three_stage_info(const ObThreeStageAggrInfo &info);
 
   int set_rollup_info(const ObRollupStatus rollup_status,
                                ObRawExpr *rollup_id_expr);
@@ -174,16 +184,16 @@ public:
 
   int allocate_startup_expr_post()override;
 
-  inline ObThreeStageAggrStage get_aggr_stage() const { return aggr_stage_; }
+  inline ObThreeStageAggrStage get_aggr_stage() const { return three_stage_info_.aggr_stage_; }
   inline int64_t get_aggr_code_idx() const { return three_stage_info_.aggr_code_idx_; }
   inline ObRawExpr* get_aggr_code_expr() { return three_stage_info_.aggr_code_expr_; }
   inline int64_t get_distinct_aggr_count() const { return three_stage_info_.distinct_aggr_count_; }
   inline common::ObIArray<ObRawExpr *> &get_distinct_exprs() { return three_stage_info_.distinct_exprs_; }
 
-  inline bool is_three_stage_aggr() const { return ObThreeStageAggrStage::NONE_STAGE != aggr_stage_; }
-  inline bool is_first_stage() const { return ObThreeStageAggrStage::FIRST_STAGE == aggr_stage_; }
-  inline bool is_second_stage() const { return ObThreeStageAggrStage::SECOND_STAGE == aggr_stage_; }
-  inline bool is_third_stage() const { return ObThreeStageAggrStage::THIRD_STAGE == aggr_stage_; }
+  inline bool is_three_stage_aggr() const { return ObThreeStageAggrStage::NONE_STAGE != three_stage_info_.aggr_stage_; }
+  inline bool is_first_stage() const { return ObThreeStageAggrStage::FIRST_STAGE == three_stage_info_.aggr_stage_; }
+  inline bool is_second_stage() const { return ObThreeStageAggrStage::SECOND_STAGE == three_stage_info_.aggr_stage_; }
+  inline bool is_third_stage() const { return ObThreeStageAggrStage::THIRD_STAGE == three_stage_info_.aggr_stage_; }
   inline bool force_push_down() const { return force_push_down_; }
   inline bool is_adaptive_aggregate() const { return HASH_AGGREGATE == get_algo()
                                                      && !force_push_down()
@@ -215,6 +225,12 @@ public:
 
   virtual int compute_sharding_info() override;
 
+  // used for the rowcount estimation of the first stage
+  double get_number_of_copies() { return is_first_stage() ? three_stage_info_.aggr_code_ndv_ : 1.0; };
+
+  void set_pushdown_scalar_aggr() { is_pushdown_scalar_aggr_ = true; }
+  bool is_pushdown_scalar_aggr() { return is_pushdown_scalar_aggr_; }
+
   VIRTUAL_TO_STRING_KV(K_(group_exprs), K_(rollup_exprs), K_(aggr_exprs), K_(algo), K_(distinct_card),
       K_(is_push_down));
 private:
@@ -239,7 +255,6 @@ private:
   double total_ndv_;
   double origin_child_card_;
 
-  ObThreeStageAggrStage aggr_stage_;
   ObThreeStageAggrInfo three_stage_info_;
   // for rollup distributor and collector
   ObRollupAdaptiveInfo rollup_adaptive_info_;
@@ -248,6 +263,7 @@ private:
   bool use_hash_aggr_;
   bool has_push_down_;
   bool use_part_sort_;
+  bool is_pushdown_scalar_aggr_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

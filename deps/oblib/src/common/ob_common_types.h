@@ -50,9 +50,12 @@ struct ObQueryFlag
 #define OBSF_BIT_IS_SHOW_SEED         1
 #define OBSF_BIT_SKIP_READ_LOB        1
 #define OBSF_BIT_IS_LOOKUP_FOR_4377   1
-#define OBSF_BIT_FOR_FOREING_KEY_CHECK 1
+#define OBSF_BIT_FOREIGN_KEY_CHECK    1
 #define OBSF_BIT_IS_NEW_QUERY_RANGE   1
-#define OBSF_BIT_RESERVED             30
+#define OBSF_BIT_ENABLE_RICH_FORMAT   1
+#define OBSF_BIT_IS_MDS_QUERY         1
+#define OBSF_BIT_IS_SELECT_FOLLOWER   1
+#define OBSF_BIT_RESERVED             26
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -76,8 +79,11 @@ struct ObQueryFlag
   static const uint64_t OBSF_MASK_IS_LARGE_QUERY = (0x1UL << OBSF_BIT_IS_LARGE_QUERY) - 1;
   static const uint64_t OBSF_MASK_IS_SSTABLE_CUT = (0x1UL << OBSF_BIT_IS_SSTABLE_CUT) - 1;
   static const uint64_t OBSF_MASK_SKIP_READ_LOB = (0x1UL << OBSF_BIT_SKIP_READ_LOB) - 1;
-  static const uint64_t OBSF_MASK_FOR_FOREING_KEY_CHECK = (0x1UL << OBSF_BIT_FOR_FOREING_KEY_CHECK) - 1;
+  static const uint64_t OBSF_MASK_ENABLE_RICH_FORMAT = (0x1UL << OBSF_BIT_ENABLE_RICH_FORMAT) - 1;
+  static const uint64_t OBSF_MASK_FOR_FOREIGN_KEY_CHECK = (0x1UL << OBSF_BIT_FOREIGN_KEY_CHECK) - 1;
   static const uint64_t OBSF_MASK_IS_NEW_QUERY_RANGE = (0x1UL << OBSF_BIT_IS_NEW_QUERY_RANGE) - 1;
+  static const uint64_t OBSF_MASK_IS_MDS_QUERY = (0x1UL << OBSF_BIT_IS_MDS_QUERY) - 1;
+  static const uint64_t OBSF_MASK_IS_SELECT_FOLLOWER = (0x1UL << OBSF_BIT_IS_SELECT_FOLLOWER) - 1;
 
   enum ScanOrder
   {
@@ -138,8 +144,11 @@ struct ObQueryFlag
       uint64_t is_show_seed_   : OBSF_BIT_IS_SHOW_SEED;
       uint64_t skip_read_lob_   : OBSF_BIT_SKIP_READ_LOB;
       uint64_t is_lookup_for_4377_ : OBSF_BIT_IS_LOOKUP_FOR_4377;
-      uint64_t for_foreign_key_check_ : OBSF_BIT_FOR_FOREING_KEY_CHECK;
+      uint64_t for_foreign_key_check_ : OBSF_BIT_FOREIGN_KEY_CHECK;
       uint64_t is_new_query_range_ : OBSF_BIT_IS_NEW_QUERY_RANGE;
+      uint64_t is_select_follower_ : OBSF_BIT_IS_SELECT_FOLLOWER;
+      uint64_t enable_rich_format_ : OBSF_BIT_ENABLE_RICH_FORMAT;
+      uint64_t is_mds_query_ : OBSF_BIT_IS_MDS_QUERY;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -159,7 +168,8 @@ struct ObQueryFlag
               const bool multi_version_minor_merge = false,
               const bool need_feedback = false,
               const bool is_large_query = false,
-              const bool is_sstable_cut = false)
+              const bool is_sstable_cut = false,
+              const bool is_mds_query = false)
   {
     flag_ = 0;
     scan_order_ = order & OBSF_MASK_SCAN_ORDER;
@@ -179,6 +189,7 @@ struct ObQueryFlag
     is_need_feedback_ = need_feedback & OBSF_MASK_NEED_FEEDBACK;
     is_large_query_ = is_large_query & OBSF_MASK_IS_LARGE_QUERY;
     is_sstable_cut_ = is_sstable_cut & OBSF_MASK_IS_SSTABLE_CUT;
+    is_mds_query_ = is_mds_query & OBSF_MASK_IS_MDS_QUERY;
   }
   void reset() { flag_ = 0; }
   inline bool is_reverse_scan() const { return scan_order_ == Reverse; }
@@ -204,6 +215,8 @@ struct ObQueryFlag
   inline bool is_multi_version_minor_merge() const { return multi_version_minor_merge_; }
   inline bool is_need_feedback() const { return is_need_feedback_; }
   inline bool is_large_query() const { return is_large_query_; }
+  inline bool is_enable_rich_format() const { return enable_rich_format_; }
+  inline void set_enable_rich_format() { enable_rich_format_ = true; }
   inline void set_not_use_row_cache() { use_row_cache_ = DoNotUseCache; }
   inline void set_not_use_block_cache() { use_block_cache_ = DoNotUseCache; }
   inline void set_not_use_block_index_cache() { use_block_index_cache_ = DoNotUseCache; }
@@ -218,14 +231,14 @@ struct ObQueryFlag
   inline void set_use_fast_agg() { use_fast_agg_ = UseFastAgg; }
   inline void set_iter_uncommitted_row() { iter_uncommitted_row_ = true; }
   inline void set_not_iter_uncommitted_row() { iter_uncommitted_row_ = false; }
-  inline void set_for_foreign_key_check() { for_foreign_key_check_ = true; }
-  inline void set_ignore_trans_stat() { ignore_trans_stat_ = true; }
-  inline void set_not_ignore_trans_stat() { ignore_trans_stat_ = false; }
   inline bool iter_uncommitted_row() const { return iter_uncommitted_row_; }
+  inline void set_for_foreign_key_check() { for_foreign_key_check_ = true; }
   inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
-  inline bool is_ignore_trans_stat() const { return ignore_trans_stat_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
+  inline bool is_mds_query() const { return is_mds_query_; }
+  inline void set_is_select_follower() { is_select_follower_ = true; }
+  inline bool is_select_follower() const { return is_select_follower_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -258,10 +271,14 @@ struct ObQueryFlag
                "is_sstable_cut", is_sstable_cut_,
                "skip_read_lob", skip_read_lob_,
                "is_lookup_for_4377", is_lookup_for_4377_,
+               "enable_rich_format", enable_rich_format_,
                "is_for_foreign_key_check", for_foreign_key_check_,
+               "is_mds_query", is_mds_query_,
+               "is_select_follower", is_select_follower_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };
+static_assert(sizeof(ObQueryFlag) == sizeof(uint64_t), "ObQueryFlag should sizeof(uint64_t)");
 
 } // end namespace common
 } // end namespace oceanbase

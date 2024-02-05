@@ -91,6 +91,7 @@ private:
                                          ObTableColumnItem &item,
                                          const ObString &expr_str,
                                          sql::ObRawExpr *&expr,
+                                         const bool is_inc_or_append = false,
                                          sql::ObRawExpr *delta_expr = nullptr);
 
   static int generate_autoinc_nextval_expr(ObTableCtx &ctx,
@@ -184,6 +185,7 @@ private:
                                      sql::ObDASLockCtDef &das_lock_ctdef,
                                      const common::ObIArray<sql::ObRawExpr*> &old_row);
   static int generate_updated_column_ids(ObTableCtx &ctx,
+                                         const common::ObIArray<uint64_t> &column_ids,
                                          common::ObIArray<uint64_t> &updated_column_ids);
   static int generate_upd_assign_infos(ObTableCtx &ctx,
                                        ObIAllocator &allocator,
@@ -235,6 +237,9 @@ private:
                                         sql::ObRowkeyCstCtdefArray &cst_ctdefs);
   static int replace_exprs_with_dependant(ObTableCtx &ctx,
                                           common::ObIArray<sql::ObRawExpr *> &dst_exprs);
+  static int add_all_column_infos(ObTableCtx &ctx,
+                                  common::ObIAllocator &allocator,
+                                  sql::ColContentFixedArray &column_infos);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableDmlCgService);
 };

@@ -747,6 +747,9 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
       is_same = false;
     } else {
       is_same = (param.get_scale() == param_info.scale_);
+      if (is_same && param.is_number() && PL_INTEGER_TYPE == param_info.pl_type_) {
+        is_same = param.get_number().is_valid_int();
+      }
     }
   }
   if (is_same && param_info.flag_.need_to_check_bool_value_) {
@@ -992,7 +995,19 @@ int ObPLObjectSet::inner_add_cache_obj(ObILibCacheCtx &ctx,
       LOG_WARN("failed to init pl function", K(ret));
     } else {
       bool is_old_version = false;
-      if (pl_object_value->check_value_version(pc_ctx.schema_guard_,
+      if (cache_object->is_anon() ||
+          cache_object->is_call_stmt()) {
+        common::ObString sql_id_org(common::OB_MAX_SQL_ID_LENGTH, (const char*)&pc_ctx.sql_id_);
+        if (sql_id_.empty()) {
+          if (OB_FAIL(ob_write_string(allocator_, sql_id_org, sql_id_))) {
+            LOG_WARN("failed to deep copy sql_id_", K(sql_id_org), K(ret));
+          }
+        } else {
+          CK (sql_id_ == sql_id_org);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (pl_object_value->check_value_version(pc_ctx.schema_guard_,
                                                 true,
                                                 schema_array,
                                                 is_old_version)) {

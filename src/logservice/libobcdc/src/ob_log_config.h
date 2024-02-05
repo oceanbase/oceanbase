@@ -103,7 +103,8 @@ public:
   DEF_INT(sequencer_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "sequencer thread number");
   DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "sequencer queue length");
   DEF_INT(formatter_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "formatter thread number");
-  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "2", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "lob data merger thread number");
+  DEF_INT(lob_data_merger_queue_length, OB_CLUSTER_PARAMETER, "1000000", "[0,]", "lob data merger queue length");
   DEF_CAP(batch_buf_size, OB_CLUSTER_PARAMETER, "20MB", "[2MB,]", "batch buf size");
   DEF_INT(batch_buf_count, OB_CLUSTER_PARAMETER, "10", "[5,]", "batch buf count");
   DEF_INT(storager_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "storager thread number");
@@ -135,7 +136,7 @@ public:
       "part trans task prealloc page count");
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
   DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
-  DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
+  DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN;CLOG.*:WARN;STORAGE.*:WARN;ARCHIVE.*:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   // root server info for oblog, seperated by `;` between multi rootserver, a root server info format as `ip:rpc_port:sql_port`
   DEF_STR(rootserver_list, OB_CLUSTER_PARAMETER, "|", "OB RootServer list");
   DEF_STR(cluster_url, OB_CLUSTER_PARAMETER, "|", "OB configure url");
@@ -415,8 +416,18 @@ public:
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
   T_DEF_INT_INFT(msg_sorter_task_count_upper_limit, OB_CLUSTER_PARAMETER, 0, 0, "trans msg sorter task count per thread");
+
+  // ------------------------------------------------------------------------
+  // Emergency Mode, used to handle unexpected behavior of observer.
+  // NOTICE: Most configurations of emergency mode may have some side effects:
+  //    for example, increased memory usage by OBCDC, reduced data synchronization efficiency, and even unknown risks to data correctness.
+
   // ignore delete tablets
   T_DEF_BOOL(skip_delete_tablet_op, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
+  // lsn black list, using vertical line separation
+  DEF_STR(lsn_black_list, OB_CLUSTER_PARAMETER, "|", "lsn black list");
+  // ignore check if update of outrow lob is actually empty update to empty.
+  T_DEF_BOOL(skip_empty_outrow_lob_update, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
 
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios

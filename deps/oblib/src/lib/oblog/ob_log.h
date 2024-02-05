@@ -43,6 +43,7 @@
 #include "lib/utility/ob_defer.h"
 #include "lib/oblog/ob_syslog_rate_limiter.h"
 #include "lib/signal/ob_signal_handlers.h"
+#include "common/ob_common_utility.h"
 
 #define OB_LOG_MAX_PAR_MOD_SIZE 64
 #define OB_LOG_MAX_SUB_MOD_SIZE 64
@@ -57,53 +58,6 @@ namespace oceanbase
 {
 namespace common
 {
-
-inline int64_t log_cur_ts()
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  const int64_t us =
-            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
-  return us;
-}
-
-class ObSyslogTimeGuard
-{
-public:
-  explicit ObSyslogTimeGuard()
-  {
-    start_ts_ = log_cur_ts();
-    last_ts_ = start_ts_;
-    click_count_ = 0;
-  }
-  void click(const char *mod = NULL)
-  {
-    const int64_t cur_ts = log_cur_ts();
-    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
-      click_str_[click_count_] = mod;
-      click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
-      last_ts_ = cur_ts;
-    }
-  }
-  int64_t get_start_ts() const
-  {
-    return start_ts_;
-  }
-  int64_t get_diff() const
-  {
-    return log_cur_ts() - start_ts_;
-  }
-  int64_t to_string(char *buf, const int64_t buf_len) const;
-private:
-  static const int64_t MAX_CLICK_COUNT = 16;
-private:
-  int64_t start_ts_;
-  int64_t last_ts_;
-  int64_t click_count_;
-  int32_t click_[MAX_CLICK_COUNT];
-  const char *click_str_[MAX_CLICK_COUNT];
-};
-
 class ObVSliceAlloc;
 class ObBlockAllocMgr;
 class ObFIFOAllocator;
@@ -799,7 +753,9 @@ private:
   static ::oceanbase::lib::ObRateLimiter *default_log_limiter_;
   RLOCAL_STATIC(lib::ObRateLimiter*, tl_log_limiter_);
   static constexpr int N_LIMITER = 4096;
+  static constexpr int N_ERROR_LIMITER = 1024;
   static ObSyslogSampleRateLimiter per_log_limiters_[N_LIMITER];
+  static ObSyslogSampleRateLimiter per_error_log_limiters_[N_ERROR_LIMITER];
   RLOCAL_STATIC(int32_t, tl_type_);
   //used for stat logging time and log dropped
   RLOCAL_STATIC(uint64_t, curr_logging_seq_);
@@ -865,6 +821,8 @@ private:
   // This info will be logged when log file created.
   const char *new_file_info_;
   bool info_as_wdiag_;
+  std::deque<std::string> file_list_;//to store the names of log-files
+  std::deque<std::string> wf_file_list_;//to store the names of warning log-files
 };
 
 inline ObLogger& ObLogger::get_logger()
@@ -973,7 +931,7 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(log_cur_ts(), mod_name, level, file, line, function, errcode, buf, buf_len, pos);
+            ret = log_head(get_cur_ts(), mod_name, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }
@@ -1192,7 +1150,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   auto fd_type = get_fd_type(mod_name);
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
-  ObSyslogTimeGuard tg;
+  ObBasicTimeGuard tg;
   if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
           allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);

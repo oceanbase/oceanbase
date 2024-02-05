@@ -30,39 +30,76 @@ ObLSRestoreStatus &ObLSRestoreStatus::operator=(const ObLSRestoreStatus &restore
   return *this;
 }
 
+#define LS_RESTORE_STATUS_CASE_TO_TYPE \
+    LRS_CASE_TO_TYPE(NONE); \
+    LRS_CASE_TO_TYPE(RESTORE_START); \
+    LRS_CASE_TO_TYPE(RESTORE_SYS_TABLETS); \
+    LRS_CASE_TO_TYPE(WAIT_RESTORE_SYS_TABLETS); \
+    LRS_CASE_TO_TYPE(RESTORE_TABLETS_META); \
+    LRS_CASE_TO_TYPE(WAIT_RESTORE_TABLETS_META); \
+    LRS_CASE_TO_TYPE(RESTORE_TO_CONSISTENT_SCN); \
+    LRS_CASE_TO_TYPE(WAIT_RESTORE_TO_CONSISTENT_SCN); \
+    LRS_CASE_TO_TYPE(QUICK_RESTORE); \
+    LRS_CASE_TO_TYPE(WAIT_QUICK_RESTORE); \
+    LRS_CASE_TO_TYPE(QUICK_RESTORE_FINISH); \
+    LRS_CASE_TO_TYPE(RESTORE_MAJOR_DATA); \
+    LRS_CASE_TO_TYPE(WAIT_RESTORE_MAJOR_DATA); \
+    LRS_CASE_TO_TYPE(RESTORE_FAILED); \
+    LRS_CASE_TO_TYPE(CLONE_START); \
+    LRS_CASE_TO_TYPE(CLONE_COPY_ALL_TABLET_META); \
+    LRS_CASE_TO_TYPE(CLONE_COPY_LS_META); \
+    LRS_CASE_TO_TYPE(CLONE_CLOG_REPLAY); \
+    LRS_CASE_TO_TYPE(CLONE_FAILED);
+
 const char *ObLSRestoreStatus::get_restore_status_str(const ObLSRestoreStatus &status)
 {
-  const char *str = "UNKNOWN";
-  const char *restore_status_str[] = {
-      "RESTORE_NONE",
-      "RESTORE_START",
-      "RESTORE_SYS_TABLETS",
-      "WAIT_RESTORE_SYS_TABLETS",
-      "RESTORE_TABLETS_META",
-      "WAIT_RESTORE_TABLETS_META",
-      "RESTORE_TO_CONSISTENT_SCN",
-      "WAIT_RESTORE_TO_CONSISTENT_SCN",
-      "QUICK_RESTORE",
-      "WAIT_QUICK_RESTORE",
-      "QUICK_RESTORE_FINISH",
-      "RESTORE_MAJOR_DATA",
-      "WAIT_RESTORE_MAJOR_DATA",
-      "RESTORE_FAILED",
-  };
-  STATIC_ASSERT(LS_RESTORE_STATUS_MAX == ARRAYSIZEOF(restore_status_str), "status count mismatch");
-  if (status.status_ < 0 || status.status_ >= LS_RESTORE_STATUS_MAX) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid status", K(status));
-  } else {
-    str = restore_status_str[status.status_];
+#define LRS_CASE_TO_TYPE(state)        \
+  case state: {                       \
+    str = #state;                     \
+    break;                            \
   }
-  return str;
 
+  const char* str = "INVALID";
+  switch (status) {
+    LS_RESTORE_STATUS_CASE_TO_TYPE
+    default:
+      break;
+  }
+#undef LRS_CASE_TO_TYPE
+  return str;
+}
+
+bool ObLSRestoreStatus::is_valid_(int32_t status) const
+{
+#define LRS_CASE_TO_TYPE(state)       \
+  case state: {                       \
+    bool_ret = true;                  \
+    break;                            \
+  }
+
+  bool bool_ret = false;
+  switch (status) {
+    LS_RESTORE_STATUS_CASE_TO_TYPE
+    default:
+      break;
+  }
+#undef LRS_CASE_TO_TYPE
+  return bool_ret;
+}
+
+#undef LS_RESTORE_STATUS_CASE_TO_TYPE
+bool ObLSRestoreStatus::need_online() const
+{
+  return ((status_ >= WAIT_RESTORE_SYS_TABLETS
+           && status_ <= WAIT_RESTORE_MAJOR_DATA)
+          || status_ == NONE
+          || status_ == CLONE_CLOG_REPLAY);
 }
 
 int ObLSRestoreStatus::set_status(int32_t status)
 {
   int ret = OB_SUCCESS;
-  if (RESTORE_NONE > status || LS_RESTORE_STATUS_MAX <= status) {
+  if (!is_valid_(status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid status", K(ret), K(status));
   } else {

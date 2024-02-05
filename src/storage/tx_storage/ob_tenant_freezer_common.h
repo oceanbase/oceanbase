@@ -20,10 +20,6 @@
 
 namespace oceanbase
 {
-namespace common
-{
-class ObMemstoreAllocatorMgr;
-}
 namespace storage
 {
 struct ObTenantFreezeArg
@@ -72,7 +68,6 @@ public:
   // running data
   int64_t memstore_freeze_trigger_;
   int64_t max_mem_memstore_can_get_now_;
-  int64_t kvcache_mem_;
 
   int64_t active_memstore_used_;
   int64_t freezable_active_memstore_used_;
@@ -98,7 +93,6 @@ public:
   int64_t memstore_limit_;
   int64_t tenant_memory_limit_;
   int64_t tenant_memory_hold_;
-  int64_t kvcache_mem_;
   int64_t memstore_can_get_now_;
   int64_t max_cached_memstore_size_;
 
@@ -120,11 +114,10 @@ public:
   virtual ~ObTenantInfo() { reset(); }
   void reset();
   int update_frozen_scn(int64_t frozen_scn);
-  int64_t mem_memstore_left() const;
 
   void update_mem_limit(const int64_t lower_limit, const int64_t upper_limit);
   void get_mem_limit(int64_t &lower_limit, int64_t &upper_limit) const;
-  void update_memstore_limit(const int64_t memstore_limit_percentage);
+  void update_memstore_limit(const int64_t tenant_memstore_limit_percentage);
   int64_t get_memstore_limit() const;
   bool is_memstore_limit_changed(const int64_t curr_memstore_limit_percentage) const;
   void get_freeze_ctx(ObTenantFreezeCtx &ctx) const;
@@ -171,13 +164,11 @@ private:
 class ObTenantFreezeGuard
 {
 public:
-  ObTenantFreezeGuard(common::ObMemstoreAllocatorMgr *allocator_mgr,
-                      int &ret,
+  ObTenantFreezeGuard(int &ret,
                       const ObTenantInfo &tenant_info,
                       const int64_t warn_threshold = 60 * 1000 * 1000 /* 1 min */);
   ~ObTenantFreezeGuard();
 private:
-  common::ObMemstoreAllocatorMgr *allocator_mgr_;
   const ObTenantInfo &tenant_info_;
   int64_t pre_retire_pos_;
   int &error_code_;

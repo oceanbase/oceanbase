@@ -125,10 +125,8 @@ protected:
   virtual int process_values_function(ObRawExpr *&expr);
   virtual int recursive_values_expr(ObRawExpr *&expr);
 
-  int need_all_columns(const share::schema::ObTableSchema &table_schema,
-                       const int64_t binlog_row_image,
-                       const int64_t need_check_uk,
-                       bool &need_all_columns);
+  bool need_all_columns(const share::schema::ObTableSchema &table_schema,
+                        const int64_t binlog_row_image);
 
   int add_all_columns_to_stmt(const TableItem &table_item,
                               common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
@@ -136,8 +134,6 @@ protected:
                                           common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_all_rowkey_columns_to_stmt(const TableItem &table_item,
                                      common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
-  int add_all_unique_key_columns_to_stmt(const TableItem &table_item,
-                                         common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_index_related_columns_to_stmt(const TableItem &table_item,
                                         const uint64_t column_id,
                                         common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
@@ -153,12 +149,13 @@ protected:
   // check the update view is key preserved
   int uv_check_key_preserved(const TableItem &table_item, bool &key_preserved);
 
-  int has_need_fired_trigger_on_view(const TableItem* view_item, bool &has);
+  int check_need_fired_trigger(const TableItem* table_item);
 
   int view_pullup_special_column_exprs();
   int view_pullup_part_exprs();
   int expand_record_to_columns(const ParseNode &record_node,
                                               ObIArray<ObRawExpr *> &value_list);
+  bool is_fk_parent_table(const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos, const uint64_t table_id);
   int resolve_check_constraints(const TableItem* table_item,
                                 common::ObIArray<ObRawExpr*> &check_exprs);
   int resolve_view_check_exprs(uint64_t table_id,
@@ -228,11 +225,6 @@ protected:
   int add_select_items(ObSelectStmt &select_stmt, const ObIArray<SelectItem>& select_items);
   int add_select_list_for_set_stmt(ObSelectStmt &select_stmt);
   int add_all_lob_columns_to_stmt(const TableItem &table_item, ObIArray<ObColumnRefRawExpr*> &column_exprs);
-  int add_necessary_columns_for_minimal_mode(const TableItem &table_item, ObIArray<ObColumnRefRawExpr*> &column_exprs);
-  int add_udt_hidden_columns_for_minimal_mode(const TableItem &table_item,
-                                              const ObTableSchema *table_schema,
-                                              ObColumnRefRawExpr *col_expr,
-                                              ObIArray<ObColumnRefRawExpr *> &column_items);
 protected:
   int generate_insert_table_info(const TableItem &table_item,
                                  ObInsertTableInfo &table_info,

@@ -208,6 +208,7 @@ protected:
       const int64_t timeout,
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
+      const int16_t branch_id,
       const concurrent_control::ObWriteFlag write_flag,
       ObStoreCtxGuard &ctx_guard,
       const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
@@ -224,6 +225,7 @@ protected:
       const common::ObTabletID &tablet_id,
       const ObStoreAccessType access_type,
       const ObDMLBaseParam &dml_param,
+      const int64_t lock_wait_timeout_ts,
       transaction::ObTxDesc &tx_desc,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
@@ -242,6 +244,11 @@ protected:
       const share::SCN &snapshot,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
+  static OB_INLINE int64_t get_lock_wait_timeout_(const int64_t abs_lock_timeout, const int64_t stmt_timeout)
+  {
+    return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
+  }
+
 private:
   bool is_inited_;
   uint64_t tenant_id_;

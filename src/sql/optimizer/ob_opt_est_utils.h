@@ -93,7 +93,8 @@ public:
                                             const ObRawExpr *esp_expr,
                                             ObExecContext *exec_ctx,
                                             ObIAllocator &allocator,
-                                            bool &is_start_with);
+                                            bool &is_start_with,
+                                            bool &all_is_percent_sign);
 
 
   //whether the value of first_expr and second_expr is equal.

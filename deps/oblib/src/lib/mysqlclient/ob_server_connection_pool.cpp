@@ -88,17 +88,20 @@ int ObServerConnectionPool::acquire(ObMySQLConnection *&conn, uint32_t sessid)
   }
   if (OB_SUCC(ret)) {
     conn = connection;
-    conn->set_sessid(sessid);
     if (conn->connection_version() != connection_version_) {
       conn->set_connection_version(connection_version_);
+      conn->close();
+    } else if (sessid != conn->get_sessid()) {
+      LOG_TRACE("get connection from other session, close it", K(ret), K(sessid), K(conn->get_sessid()));
       conn->close();
     } else if (false == conn->is_closed()) {
       if (OB_SUCCESS != conn->ping()) {
         conn->close();
       }
     }
+    conn->set_sessid(sessid);
   }
-  LOG_TRACE("acquire connection from server conn pool", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(ret), K(lbt()));
+  LOG_TRACE("acquire connection from server conn pool", KP(this), K(busy_conn_count_), K(free_conn_count_), KP(connection), K(ret), K(sessid), K(lbt()));
   return ret;
 }
 
@@ -111,20 +114,27 @@ int ObServerConnectionPool::release(common::sqlclient::ObISQLConnection *conn, c
     LOG_WARN("invalid connection", K(connection), K(ret));
   } else {
     connection->set_busy(false);
-    ObSpinLockGuard lock(pool_lock_);
     if (succ) {
       connection->succ_times_++;
+      if (!get_dblink_reuse_connection_cfg()) {
+        connection->close();
+        LOG_TRACE("close dblink connection when release it", K(ret), K(succ), KP(conn));
+      }
     } else {
-      LOG_TRACE("release! err", K(succ));
+      LOG_TRACE("release oci connection, close it caused by err", K(succ));
       connection->error_times_++;
       connection->close();
     }
-    if (OB_FAIL(connection_pool_ptr_->put_cached(connection, connection->get_sessid()))) {
-      ATOMIC_DEC(&busy_conn_count_);
-      LOG_WARN("connection object failed to put to cache. destroyed", K(ret));
-    } else {
-      ATOMIC_DEC(&busy_conn_count_);
-      ATOMIC_INC(&free_conn_count_);
+    {
+      // Do not perform any operations on the network after thread holding a lock
+      ObSpinLockGuard lock(pool_lock_);
+      if (OB_FAIL(connection_pool_ptr_->put_cached(connection, connection->get_sessid()))) {
+        ATOMIC_DEC(&busy_conn_count_);
+        LOG_WARN("connection object failed to put to cache. destroyed", K(ret));
+      } else {
+        ATOMIC_DEC(&busy_conn_count_);
+        ATOMIC_INC(&free_conn_count_);
+      }
     }
   }
   LOG_TRACE("release connection to server conn pool", KP(this),

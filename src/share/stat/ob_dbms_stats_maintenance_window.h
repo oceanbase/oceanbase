@@ -32,6 +32,7 @@
 #define DEFAULT_NON_WORKING_DAY_DURATION_SEC (20 * 60 * 60)
 #define DEFAULT_NON_WORKING_DAY_DURATION_USEC (20 * 60 * 60 * 1000000LL)
 #define DEFAULT_DML_STATS_INTERVAL_USEC (15*60*1000000LL)
+#define DEFAULT_HISTORY_MANAGER_DURATION_SEC (12 * 60 * 60)
 
 namespace oceanbase {
 
@@ -55,6 +56,8 @@ public:
                                               share::ObDMLSqlSplicer &dml);
 
   static bool is_stats_job(const ObString &job_name);
+
+  static int reset_opt_stats_user_infos(ObIArray<const ObUserInfo *> &user_infos);
 
 private:
   static int get_window_job_info(const int64_t current_time,

@@ -210,6 +210,8 @@ int ObMPChangeUser::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
+  } else if (OB_FAIL(process_kill_client_session(*session))) {
+    LOG_WARN("client session has been killed", K(ret));
   } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
   } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
     LOG_WARN("fail get process extra info", K(ret));
@@ -343,8 +345,8 @@ int ObMPChangeUser::load_privilege_info(ObSQLSessionInfo *session)
         OB_LOG(WARN, "fail to set tenant", "tenant name", login_info.tenant_name_, K(ret));
       } else if (OB_FAIL(session->set_default_database(database_))) {
         OB_LOG(WARN, "failed to set default database", K(ret), K(database_));
-      } else if (OB_FAIL(session->set_real_client_ip(login_info.client_ip_))) {
-          LOG_WARN("failed to set_real_client_ip", K(ret));
+      } else if (OB_FAIL(session->set_real_client_ip_and_port(login_info.client_ip_, session->get_client_addr_port()))) {
+          LOG_WARN("failed to set_real_client_ip_and_port", K(ret));
       } else if (OB_FAIL(schema_guard.get_sys_variable_schema(session_priv.tenant_id_, sys_variable_schema))) {
         LOG_WARN("get sys variable schema failed", K(ret));
       } else if (OB_ISNULL(sys_variable_schema)) {

@@ -282,8 +282,6 @@ int ObMultiTableInsertResolver::resolve_multi_insert_subquey(const ParseNode &su
       LOG_WARN("add session id value to select item failed", K(ret));
     } else if (OB_FAIL(add_new_sel_item_for_oracle_label_security_table(*select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
-    } else if (OB_FAIL(insert_all_stmt->generate_anonymous_view_name(*allocator_, view_name))) {
-      LOG_WARN("failed to generate view name", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     } else if (OB_FAIL(resolve_all_generated_table_columns(*sub_select_table, column_items))) {
@@ -362,8 +360,8 @@ int ObMultiTableInsertResolver::resolve_insert_table_node(const ParseNode &inser
     LOG_WARN("a view is not appropriate here", K(ret));
   } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
     LOG_WARN("failed to resolve basic table");
-  } else if (OB_FAIL(resolve_foreign_key_constraint(table_item))) {
-    LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
+  } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+    LOG_WARN("failed to check has need fired trigger", K(ret), K(table_item->ref_id_));
   } else {
     //提前设置好解析参数，对于多表插入会出现相同的表的场景，因此检查时需要提前设置好参数
     if (OB_FAIL(generate_insert_all_table_info(*table_item, when_conds_idx, table_info))) {

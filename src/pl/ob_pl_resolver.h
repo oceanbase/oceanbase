@@ -451,7 +451,22 @@ public:
                                ObProcType &routine_type,
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
+  static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
+  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type);
 
+  static
+  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
+                                 ObRawExprFactory &expr_factory,
+                                 const sql::ObSQLSessionInfo *session_info,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 bool for_write,
+                                 ObString &result);
+  static
+  int set_write_property(ObRawExpr *obj_expr,
+                         ObRawExprFactory &expr_factory,
+                         const ObSQLSessionInfo *session_info,
+                         ObSchemaGetterGuard *schema_guard,
+                         bool for_write);
   int get_caller_accessor_item(
     const ObPLStmtBlock *caller, AccessorItem &caller_item);
   int check_package_accessible(
@@ -913,19 +928,6 @@ private:
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);
   static
-  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
-                                 ObRawExprFactory &expr_factory,
-                                 const sql::ObSQLSessionInfo *session_info,
-                                 ObSchemaGetterGuard *schema_guard,
-                                 bool for_write,
-                                 ObString &result);
-  static
-  int set_write_property(ObRawExpr *obj_expr,
-                         ObRawExprFactory &expr_factory,
-                         const ObSQLSessionInfo *session_info,
-                         ObSchemaGetterGuard *schema_guard,
-                         bool for_write);
-  static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
                            const sql::ObSQLSessionInfo *session_info,
@@ -1007,6 +1009,7 @@ private:
                                 int64_t table_idx);
   int check_forall_sql_and_modify_params(ObPLForAllStmt &stmt,
                                 ObPLFunctionAST &func);
+  int replace_record_member_default_expr(ObRawExpr *&expr);
   int check_param_default_expr_legal(ObRawExpr *expr, bool is_subprogram_expr = true);
   int check_params_legal_in_body_routine(ObPLFunctionAST &routine_ast,
                                          const ObPLRoutineInfo *parent_routine_info,
@@ -1060,8 +1063,6 @@ private:
   inline void set_item_type(ObItemType item_type) { item_type_ = item_type; }
 
   int resolve_question_mark_node(const ObStmtNodeTree *into_node, ObRawExpr *&into_expr);
-  bool is_question_mark_value(ObRawExpr *into_expr);
-  int set_question_mark_type(ObRawExpr *into_expr, const ObPLDataType *type);
 
   int check_cursor_formal_params(const ObIArray<int64_t>& formal_params,
                                  ObPLCursor &cursor,

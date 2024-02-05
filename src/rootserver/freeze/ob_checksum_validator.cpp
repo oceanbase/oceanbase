@@ -69,11 +69,11 @@ int ObChecksumValidator::set_basic_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(frozen_scn), K(expected_epoch));
   } else if (FALSE_IT(compaction_scn_ = frozen_scn)) {
+  } else if (FALSE_IT(major_merge_start_us_ = ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(set_need_validate())) { // init compaction_scn_ before call this func
     LOG_WARN("failed to set need_validate", K(ret), K_(tenant_id), K_(is_primary_service));
   } else {
     expected_epoch_ = expected_epoch;
-    major_merge_start_us_ = ObTimeUtility::fast_current_time();
     statistics_.reset();
   }
   return ret;
@@ -157,6 +157,7 @@ int ObChecksumValidator::get_table_compaction_info(
       ret = OB_SUCCESS;
       table_compaction_info.reset();
       table_compaction_info.table_id_ = table_id;
+      LOG_TRACE("return init table compaction info", KR(ret));
     } else {
       LOG_WARN("fail to get val from hashmap", KR(ret), K(table_id));
     }
@@ -267,10 +268,6 @@ int ObChecksumValidator::validate_checksum(
       LOG_WARN("failed to validate index checksum", K(ret));
     } else if (OB_FAIL(validate_cross_cluster_checksum())) {
       LOG_WARN("failed to validate cross cluster checksum", K(ret));
-    } else if (OB_FAIL(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
-      LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
-    } else {
-      LOG_TRACE("success to validate table", KR(ret), K_(table_id), K_(table_compaction_info));
     }
     if (OB_FAIL(ret)) {
     } else if (table_compaction_info_.unfinish_index_cnt_ <= 0
@@ -290,6 +287,11 @@ int ObChecksumValidator::validate_checksum(
       last_table_ckm_items_.clear();
     }
     cur_tablet_ls_pair_array_.reuse();
+  }
+  if (FAILEDx(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
+    LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
+  } else {
+    LOG_TRACE("success to validate table", KR(ret), K_(table_id), K_(table_compaction_info));
   }
   // do no clear table_compaction_info_ until validate next table
   replica_ckm_items_.reuse();
@@ -540,9 +542,11 @@ int ObChecksumValidator::check_tablet_checksum_sync_finish(const bool force_chec
     LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id),  K_(compaction_scn));
   } else if (is_exist) {
     cross_cluster_ckm_sync_finish_ = true;
+  } else if (is_primary_service_) {
+    cross_cluster_ckm_sync_finish_ = false;
   } else {
     cross_cluster_ckm_sync_finish_ = check_waiting_tablet_checksum_timeout();
-    if (!is_primary_service_ && TC_REACH_TIME_INTERVAL(PRINT_CROSS_CLUSTER_LOG_INVERVAL)) {
+    if (TC_REACH_TIME_INTERVAL(PRINT_CROSS_CLUSTER_LOG_INVERVAL)) {
       LOG_WARN("can not check cross-cluster checksum now, please wait until first tablet"
              "in sys ls exists", K_(tenant_id),  K_(compaction_scn), K_(major_merge_start_us),
              "fast_current_time_us", ObTimeUtil::fast_current_time(), K(is_exist), K_(is_primary_service));
@@ -623,7 +627,11 @@ bool ObChecksumValidator::check_waiting_tablet_checksum_timeout() const
 {
 
   const int64_t total_wait_time_us = (ObTimeUtil::fast_current_time() - major_merge_start_us_);
-  return (total_wait_time_us > MAX_TABLET_CHECKSUM_WAIT_TIME_US);
+  const bool is_timeout = (total_wait_time_us > MAX_TABLET_CHECKSUM_WAIT_TIME_US);
+  if (is_timeout) {
+    LOG_WARN_RET(OB_TIMEOUT, "check waiting tablet checksum timeout", K_(major_merge_start_us), K(total_wait_time_us));
+  }
+  return is_timeout;
 }
 
 int ObChecksumValidator::try_update_tablet_checksum_items()
@@ -798,7 +806,7 @@ int ObChecksumValidator::handle_index_table(
       LOG_WARN("failed to set", K(ret), K(data_compaction_info));
     }
   }
-  LOG_TRACE("handle index table", KR(ret), K_(table_id), K_(table_compaction_info));
+  LOG_TRACE("handle index table", KR(ret), K_(table_id), K_(table_compaction_info), K(data_compaction_info));
   return ret;
 }
 

@@ -34,8 +34,6 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 
 
-#define TO_TS(second) 1000000L * second
-
 namespace oceanbase
 {
 
@@ -43,12 +41,13 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 using namespace sqlclient;
+using namespace storage;
 
 namespace dbms_scheduler
 {
 
-int ObDBMSSchedTableOperator::update_for_start(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, bool update_nextdate)
+int ObDBMSSchedTableOperator::update_next_date(
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
 {
   int ret = OB_SUCCESS;
 
@@ -56,49 +55,67 @@ int ObDBMSSchedTableOperator::update_for_start(
   ObSqlString sql;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
-  int64_t delay = 0;
-  int64_t dummy_execute_at = 0;
 
   CK (OB_NOT_NULL(sql_proxy_));
   CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
   CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
 
-  OZ (calc_execute_at(
-    job_info, (update_nextdate ? job_info.next_date_ : dummy_execute_at), delay, true));
+  OZ (dml.add_gmt_modified(now));
+  OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+  OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
+  OZ (dml.add_time_column("next_date", next_date));
+  OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
+  return ret;
+}
+
+
+int ObDBMSSchedTableOperator::update_for_start(
+  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date)
+{
+  int ret = OB_SUCCESS;
+
+  ObDMLSqlSplicer dml;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
 
   OX (job_info.this_date_ = now);
   OZ (dml.add_gmt_modified(now));
   OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
   OZ (dml.add_pk_column("job", job_info.job_));
+  OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_time_column("this_date", job_info.this_date_));
+  OZ (dml.add_time_column("next_date", next_date));
   OZ (dml.add_column("state", "SCHEDULED"));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
+  OZ (sql.append_fmt(" and this_date is null"));
   OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-
+  CK (affected_rows == 1);
   return ret;
 }
 
-int ObDBMSSchedTableOperator::update_nextdate(
-  uint64_t tenant_id, ObDBMSSchedJobInfo &job_info)
+int ObDBMSSchedTableOperator::seperate_job_id_from_name(ObString &job_name, int64_t &job_id)
 {
   int ret = OB_SUCCESS;
-
-  ObDMLSqlSplicer dml;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  const int64_t now = ObTimeUtility::current_time();
-
-  CK (OB_NOT_NULL(sql_proxy_));
-  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
-  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
-
-  OZ (dml.add_gmt_modified(now));
-  OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  OZ (dml.add_pk_column("job", job_info.job_));
-  OZ (dml.add_time_column("next_date", job_info.next_date_));
-  OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
-  OZ (sql_proxy_->write(tenant_id, sql.ptr(), affected_rows));
-
+  const char* prefix = "JOB$_";
+  job_id = 0;
+  if (job_name.prefix_match(prefix)) {
+    char nptr[JOB_NAME_MAX_SIZE];
+    char *endptr = NULL;
+    snprintf(nptr, JOB_NAME_MAX_SIZE, "%.*s", job_name.length(), job_name.ptr());
+    job_id = strtoll(nptr + strlen(prefix), &endptr, 10);
+    if (job_id <= 0) {
+      LOG_WARN("job_id is not right", K(job_name), K(nptr), K(job_id));
+    } else if (*endptr != '\0' || job_id <= JOB_ID_OFFSET) {
+      job_id = 0; // use job_info.job_ when job_id is not formal
+    }
+  }
   return ret;
 }
 
@@ -115,8 +132,6 @@ int ObDBMSSchedTableOperator::update_for_end(
   ObSqlString sql2;
   int64_t affected_rows = 0;
   const int64_t now = ObTimeUtility::current_time();
-  int64_t next_date;
-  int64_t delay;
 
   UNUSED(errmsg);
 
@@ -134,7 +149,7 @@ int ObDBMSSchedTableOperator::update_for_end(
   }
 
   ObDBMSSchedJobClassInfo job_class_info;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("DBMSSchedTmp");
   if (MOCK_DATA_VERSION <= data_version) {
     OZ (get_dbms_sched_job_class_info(tenant_id, job_info.is_oracle_tenant(), job_info.get_job_class(), allocator, job_class_info));
   }
@@ -159,12 +174,13 @@ int ObDBMSSchedTableOperator::update_for_end(
       OZ (dml1.add_column("state", "COMPLETED"));
       OZ (dml1.add_column("enabled", job_info.enabled_));
     }
-    CK (job_info.this_date_ > 0);
-    OX (job_info.total_ += (now - job_info.this_date_));
+    CK (job_info.this_date_ > 0 || !errmsg.empty());
+    OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     OZ (dml1.add_gmt_modified(now));
     OZ (dml1.add_pk_column("tenant_id",
           ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
     OZ (dml1.add_pk_column("job", job_info.job_));
+    OZ (dml1.add_pk_column("job_name", job_info.job_name_));
     OZ (dml1.add_column(true, "this_date"));
     OZ (dml1.add_time_column("last_date", job_info.this_date_));
     OZ (dml1.add_time_column("next_date", job_info.next_date_));
@@ -194,7 +210,12 @@ int ObDBMSSchedTableOperator::update_for_end(
     OZ (dml2.add_gmt_create(now));
     OZ (dml2.add_gmt_modified(now));
     OZ (dml2.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-    OZ (dml2.add_pk_column("job", job_info.job_));
+    int64_t job_id = 0;
+    OZ (seperate_job_id_from_name(job_info.get_job_name(), job_id));
+    if (job_id <= 0) {
+      job_id = job_info.get_job_id();
+    }
+    OZ (dml2.add_pk_column("job", job_id));
     OZ (dml2.add_time_column("time", now));
     OZ (dml2.add_column("code", err));
     OZ (dml2.add_column(
@@ -223,32 +244,7 @@ int ObDBMSSchedTableOperator::update_for_end(
   return ret;
 }
 
-int ObDBMSSchedTableOperator::check_job_timeout(ObDBMSSchedJobInfo &job_info)
-{
-  int ret = OB_SUCCESS;
-  if ((!job_info.is_running()) || (job_info.get_max_run_duration() == 0)) {
-    //not running or not set timeout
-  } else if (ObTimeUtility::current_time() > (job_info.get_this_date() + TO_TS(job_info.get_max_run_duration()))) {
-    OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job timeout"));
-    LOG_WARN("job is timeout, force update for end", K(job_info), K(ObTimeUtility::current_time()));
-  }
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::check_auto_drop(ObDBMSSchedJobInfo &job_info)
-{
-  int ret = OB_SUCCESS;
-  if (job_info.is_running()) {
-    // running job not check
-  } else if (ObTimeUtility::current_time() > (job_info.end_date_) &&
-             (true == job_info.auto_drop_)) {
-    OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check auto drop expired job"));
-    LOG_WARN("auto drop miss out job", K(job_info), K(ObTimeUtility::current_time()));
-  }
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, bool &can_running)
+int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running)
 {
   int ret = OB_SUCCESS;
   uint64_t job_queue_processor = 0;
@@ -261,33 +257,40 @@ int ObDBMSSchedTableOperator::check_job_can_running(int64_t tenant_id, bool &can
   CK (tenant_config.is_valid());
   OX (job_queue_processor = tenant_config->job_queue_processes);
   // found current running job count
-  OZ (sql.append_fmt("select count(*) from %s where this_date is not null", OB_ALL_TENANT_SCHEDULER_JOB_TNAME));
+  if (OB_FAIL(ret)) {
+  } else if (alive_job_count <= job_queue_processor) {
+    can_running = true;
+  } else {
+    OZ (sql.append_fmt("select count(*) from %s where this_date is not null", OB_ALL_TENANT_SCHEDULER_JOB_TNAME));
 
-  CK (OB_NOT_NULL(GCTX.schema_service_));
-  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
-  OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
+    CK (OB_NOT_NULL(GCTX.schema_service_));
+    OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
+    OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
 
-  // job can not run in standy cluster and restore.
-  if (OB_SUCC(ret) && job_queue_processor > 0
-      && !GCTX.is_standby_cluster()
-      && !is_restore) {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
-        if (OB_SUCCESS == (ret = result.get_result()->next())) {
-          int64_t int_value = 0;
-          if (OB_FAIL(result.get_result()->get_int(static_cast<const int64_t>(0), int_value))) {
-            LOG_WARN("failed to get column in row. ", K(ret));
-          } else {
-            job_running_cnt = static_cast<uint64_t>(int_value);
-          }
+    // job can not run in standy cluster and restore.
+    if (OB_SUCC(ret) && job_queue_processor > 0
+        && !is_restore) {
+      SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+        if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id));
         } else {
-          LOG_WARN("failed to calc all running job, no row return", K(ret));
+          if (OB_SUCCESS == (ret = result.get_result()->next())) {
+            int64_t int_value = 0;
+            if (OB_FAIL(result.get_result()->get_int(static_cast<const int64_t>(0), int_value))) {
+              LOG_WARN("failed to get column in row. ", K(ret));
+            } else {
+              job_running_cnt = static_cast<uint64_t>(int_value);
+            }
+          } else {
+            LOG_WARN("failed to calc all running job, no row return", K(ret));
+          }
         }
       }
+      OX (can_running = (job_queue_processor > job_running_cnt));
     }
-    OX (can_running = (job_queue_processor > job_running_cnt));
   }
   return ret;
 }
@@ -339,6 +342,7 @@ do {                                                                  \
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "this_date", job_info_local.this_date_);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "next_date", job_info_local.next_date_);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "total", job_info_local.total_, uint64_t);
+  EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "start_date", job_info_local.start_date_);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "end_date", job_info_local.end_date_);
 
 #undef EXTRACT_NUMBER_FIELD_MYSQL_SKIP_RET
@@ -397,16 +401,24 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_info(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", K(ret), K(tenant_id), K(job_id));
+      } else {
         if (OB_SUCCESS == (ret = result.get_result()->next())) {
           OZ (extract_info(*(result.get_result()), tenant_id, is_oracle_tenant, allocator, job_info));
-          if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-            LOG_ERROR("got more than one row for dbms sched job!", K(ret), K(tenant_id), K(job_id));
-            ret = OB_ERR_UNEXPECTED;
+          if (OB_SUCC(ret)) {
+            int tmp_ret = result.get_result()->next();
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("got more than one row for dbms sched job!", K(ret), K(tenant_id), K(job_id));
+            } else if (tmp_ret != OB_ITER_END) {
+              ret = tmp_ret;
+              LOG_ERROR("got next row for dbms sched job failed", K(ret), K(tenant_id), K(job_id));
+            }
           }
         } else if (OB_ITER_END == ret) {
-          LOG_INFO("job not exists, may delete alreay!", K(ret), K(tenant_id), K(job_id));
-          ret = OB_SUCCESS; // job not exist, do nothing ...
+          LOG_WARN("job not exists, may delete alreay!", K(ret), K(tenant_id), K(job_id));
         } else {
           LOG_WARN("failed to get next", K(ret), K(tenant_id), K(job_id));
         }
@@ -435,7 +447,10 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_infos_in_tenant(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id));
+      } else {
         do {
           if (OB_FAIL(result.get_result()->next())) {
             LOG_INFO("failed to get result", K(ret));
@@ -490,12 +505,21 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_class_info(
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_class_name));
-      } else if (OB_NOT_NULL(result.get_result())) {
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get result failed", K(ret), K(sql), K(tenant_id), K(job_class_name));
+      } else {
         if (OB_SUCCESS == (ret = result.get_result()->next())) {
           OZ (extract_job_class_info(*(result.get_result()), tenant_id, is_oracle_tenant, allocator, job_class_info));
-          if (OB_SUCC(ret) && (result.get_result()->next()) != OB_ITER_END) {
-            LOG_ERROR("got more than one row for dbms sched job class!", K(ret), K(tenant_id), K(job_class_name));
-            ret = OB_ERR_UNEXPECTED;
+          if (OB_SUCC(ret)) {
+            int tmp_ret = result.get_result()->next();
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("got more than one row for dbms sched job class!", K(ret), K(tenant_id), K(job_class_name));
+            } else if (tmp_ret != OB_ITER_END) {
+              ret = tmp_ret;
+              LOG_ERROR("got next row for dbms sched job class failed", K(ret), K(tenant_id), K(job_class_name));
+            }
           }
         } else if (OB_ITER_END == ret) {
           LOG_INFO("job_class_name not exists, may delete alreay!", K(ret), K(tenant_id), K(job_class_name));
@@ -506,87 +530,6 @@ int ObDBMSSchedTableOperator::get_dbms_sched_job_class_info(
       }
     }
   }
-  return ret;
-}
-
-int ObDBMSSchedTableOperator::calc_execute_at(
-  ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate)
-{
-  int ret = OB_SUCCESS;
-
-  ObString &interval = job_info.get_interval();
-
-  const int64_t now = ObTimeUtility::current_time();
-  int64_t last_sub_next =
-    (job_info.get_last_modify() / 1000 / 1000) - (job_info.get_next_date() / 1000/ 1000);
-  if (job_info.get_next_date() != 0 && (!ignore_nextdate || job_info.get_next_date() != execute_at)) {
-    if (job_info.get_next_date() > now) {
-      execute_at = job_info.get_next_date();
-      delay = job_info.get_next_date() - now;
-    } else if (now - job_info.get_next_date() < TO_TS(job_info.get_max_run_duration())) {
-      LOG_WARN("job maybe missed, retry it", K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      execute_at = now;
-      delay = 0;
-    } else if (last_sub_next < 5 && last_sub_next >= -5) {
-      LOG_WARN("job maybe missed, retry it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      execute_at = now;
-      delay = 0;
-    } else {
-      LOG_WARN("job maybe missed, ignore it", K(last_sub_next), K(now), K(job_info), K(execute_at), K(delay), K(ignore_nextdate), K(lbt()));
-      OZ(update_for_end(job_info.get_tenant_id(), job_info, 0, "check job missed"));
-      delay = -1;
-    }
-  } else {
-    delay = -1;
-  }
-
-  if (delay < 0 && job_info.get_interval_ts() != 0) {
-    ObSqlString sql;
-    common::ObISQLClient *sql_proxy = sql_proxy_;
-    ObOracleSqlProxy oracle_proxy(*(static_cast<ObMySQLProxy *>(sql_proxy_)));
-    // NOTE: we need utc timestamp.
-    if (lib::is_mysql_mode()) {
-      OZ (sql.append_fmt("select utc_timestamp() from dual;"));
-    } else {
-      OZ (sql.append_fmt(
-        "select cast(to_timestamp(sys_extract_utc(to_timestamp(sysdate))) as date) from dual;"));
-      sql_proxy = &oracle_proxy;
-    }
-    
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      if (OB_FAIL(sql_proxy->read(result, job_info.get_tenant_id(), sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql), K(job_info));
-      } else if (OB_NOT_NULL(result.get_result())) {
-        if (OB_FAIL(result.get_result()->next())) {
-          LOG_WARN("failed to get result", K(ret));
-        } else {
-          int64_t sysdate = 0;
-          int64_t col_idx = 0;
-          OZ (result.get_result()->get_datetime(col_idx, sysdate));
-          if (OB_SUCC(ret)) {
-            execute_at = sysdate + job_info.get_interval_ts();
-          }
-          if (OB_FAIL(ret)) {
-          } else if (job_info.get_next_date() > execute_at) {
-            execute_at = job_info.get_next_date();
-            delay = execute_at - sysdate;
-          } else {
-            delay = execute_at - sysdate;
-          }
-          if (OB_SUCC(ret)) {
-            OX (job_info.next_date_ = execute_at);
-            OZ (update_nextdate(job_info.get_tenant_id(), job_info));
-          }
-        }
-      }
-    }
-    LOG_INFO("repeat job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
-  } else if (delay < 0 && job_info.get_interval_ts() == 0) {
-    OX (job_info.next_date_ = 64060560000000000); // 4000-01-01
-    OZ (update_nextdate(job_info.get_tenant_id(), job_info));
-    LOG_INFO("once job update nextdate", K(job_info), K(execute_at), K(delay), K(ignore_nextdate));
-  }
-
   return ret;
 }
 

@@ -20,7 +20,7 @@
 #include "sql/resolver/dml/ob_default_value_utils.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "common/sql_mode/ob_sql_mode.h"
-#include "sql/resolver/expr/ob_raw_expr_printer.h"
+#include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/resolver/ob_resolver.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "lib/json/ob_json.h"
@@ -92,92 +92,31 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
       case T_REMOTE_OSS:
         load_args.load_file_storage_ = ObLoadFileLocation::OSS;
         break;
-      case T_LOCAL:
-        //load_args.load_file_storage_ = ObLoadFileLocation::CLIENT_DISK;
-        //break;
-        //not support local
+      case T_LOCAL: {
+          bool enabled = false;
+          if (OB_FAIL(local_infile_enabled(enabled))) {
+            LOG_WARN("failed to check local_infile_enabled", K(ret));
+          } else if (!enabled) {
+            ret = OB_ERR_CLIENT_LOCAL_FILES_DISABLED;
+            LOG_USER_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED);
+          } else {
+            load_args.load_file_storage_ = ObLoadFileLocation::CLIENT_DISK;
+          }
+        }
+        break;
       default:
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "load data local");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "unknown location");
       }
     } else {
       load_args.load_file_storage_ = ObLoadFileLocation::SERVER_DISK;
     }
+    LOG_DEBUG("load data location", K(load_args.load_file_storage_));
   }
 
   if (OB_SUCC(ret)) {
     /* 1. file name */
-    ObLoadArgument &load_args = load_stmt->get_load_arguments();
-    ParseNode *file_name_node = node->children_[ENUM_FILE_NAME];
-    if (OB_ISNULL(file_name_node)
-        || OB_UNLIKELY(T_VARCHAR != file_name_node->type_ && T_CHAR != file_name_node->type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid node", "child", file_name_node);
-    } else {
-      ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
-      if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
-        load_args.file_name_ = file_name;
-        const char *p = nullptr;
-        ObString sub_file_name;
-        ObString cstyle_file_name; // ends with '\0'
-        char *full_path_buf = nullptr;
-        char *actual_path = nullptr;
-        if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(ret));
-        }
-        while (OB_SUCC(ret) && !file_name.empty()) {
-          p = file_name.find(',');
-          if (nullptr == p) {
-            sub_file_name = file_name;
-            cstyle_file_name = sub_file_name;
-            file_name.reset();
-          } else {
-            sub_file_name = file_name.split_on(p);
-            cstyle_file_name.reset();
-          }
-          if (!sub_file_name.empty()) {
-            if (cstyle_file_name.empty() &&
-                OB_FAIL(ob_write_string(*allocator_, sub_file_name, cstyle_file_name, true))) {
-              LOG_WARN("fail to write string", KR(ret));
-            } else if (OB_ISNULL(actual_path = realpath(cstyle_file_name.ptr(), full_path_buf))) {
-              ret = OB_FILE_NOT_EXIST;
-              LOG_WARN("file not exist", K(ret), K(cstyle_file_name));
-            }
-            if (OB_SUCC(ret)) {
-              ObString secure_file_priv;
-              if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
-                LOG_WARN("failed to get secure file priv", K(ret));
-              } else if (OB_FAIL(
-                           ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
-                LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv),
-                         K(actual_path));
-              }
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
-                LOG_WARN("fail to add files", KR(ret));
-              }
-            }
-          }
-        }
-      } else {
-        ObString temp_file_name = file_name.split_on('?');
-        ObString storage_info;
-        if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
-          LOG_WARN("fail to copy string", K(ret));
-        } else if (OB_FAIL(ob_write_string(*allocator_, file_name, storage_info, true))) {
-          LOG_WARN("fail to copy string", K(ret));
-        } else if (temp_file_name.length() <= 0 || storage_info.length() <= 0) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
-        } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
-          LOG_WARN("failed to set access info", K(ret));
-        } else if (OB_FAIL(load_args.file_iter_.add_files(&load_args.file_name_))) {
-          LOG_WARN("fail to add files", KR(ret));
-        }
-      }
-    }
+    ret = resolve_filename(load_stmt, node);
   }
 
   if (OB_SUCC(ret)) {
@@ -185,7 +124,10 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
     ObLoadDupActionType dupl_action = ObLoadDupActionType::LOAD_STOP_ON_DUP;
     if (NULL == node->children_[ENUM_DUPLICATE_ACTION]) {
-      if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_) {
+      if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_ &&
+          lib::is_mysql_mode()) {
+        // https://dev.mysql.com/doc/refman/8.0/en/load-data.html
+        // In MySQL, LOCAL modifier has the same effect as the IGNORE modifier.
         dupl_action = ObLoadDupActionType::LOAD_IGNORE;
       }
     } else if (T_IGNORE == node->children_[ENUM_DUPLICATE_ACTION]->type_) {
@@ -501,7 +443,7 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
         break;
       }
       case T_LOAD_BATCH_SIZE: {
-        if (1 != hint_node->num_child_) {
+        if (2 != hint_node->num_child_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("max concurrent node should have 1 child", K(ret));
         } else if (OB_ISNULL(hint_node->children_[0])) {
@@ -509,6 +451,11 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
           LOG_WARN("child of max concurrent node should not be NULL", K(ret));
         } else if (OB_FAIL(stmt_hints.set_value(
                         ObLoadDataHint::BATCH_SIZE, hint_node->children_[0]->value_))) {
+          LOG_WARN("fail to set concurrent value", K(ret));
+        } else if (OB_NOT_NULL(hint_node->children_[1])
+                   && OB_FAIL(stmt_hints.set_value(ObLoadDataHint::BATCH_BUFFER_SIZE,
+                                              ObString(hint_node->children_[1]->str_len_,
+                                                      hint_node->children_[1]->str_value_)))) {
           LOG_WARN("fail to set concurrent value", K(ret));
         }
         break;
@@ -553,6 +500,95 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
     }
   }
 
+  return ret;
+}
+
+int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+
+  ObLoadArgument &load_args = load_stmt->get_load_arguments();
+  ParseNode *file_name_node = node->children_[ENUM_FILE_NAME];
+  if (OB_ISNULL(file_name_node)
+      || OB_UNLIKELY(T_VARCHAR != file_name_node->type_ && T_CHAR != file_name_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid node", "child", file_name_node);
+  } else {
+    ObString file_name(file_name_node->str_len_, file_name_node->str_value_);
+    if (OB_UNLIKELY(file_name.empty())) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("file not exist", K(ret), K(file_name));
+    } else if (ObLoadFileLocation::OSS != load_args.load_file_storage_) {
+      load_args.file_name_ = file_name;
+      const char *p = nullptr;
+      ObString sub_file_name;
+      ObString cstyle_file_name; // ends with '\0'
+      char *full_path_buf = nullptr;
+      char *actual_path = nullptr;
+      if (OB_ISNULL(full_path_buf = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory", K(ret));
+      }
+      while (OB_SUCC(ret) && !file_name.empty()) {
+        p = file_name.find(',');
+        if (nullptr == p) {
+          sub_file_name = file_name;
+          cstyle_file_name = sub_file_name;
+          file_name.reset();
+        } else {
+          sub_file_name = file_name.split_on(p);
+          cstyle_file_name.reset();
+        }
+
+        if (!sub_file_name.empty()) {
+          if (cstyle_file_name.empty() &&
+              OB_FAIL(ob_write_string(*allocator_, sub_file_name, cstyle_file_name, true))) {
+            LOG_WARN("fail to write string", KR(ret));
+          } else if (ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_ &&
+                     OB_ISNULL(actual_path = realpath(cstyle_file_name.ptr(), full_path_buf))) {
+            ret = OB_FILE_NOT_EXIST;
+            LOG_WARN("file not exist", K(ret), K(cstyle_file_name));
+          }
+
+          //security check for mysql mode
+          if (OB_SUCC(ret) && ObLoadFileLocation::SERVER_DISK == load_args.load_file_storage_) {
+            ObString secure_file_priv;
+            if (OB_FAIL(session_info_->get_secure_file_priv(secure_file_priv))) {
+              LOG_WARN("failed to get secure file priv", K(ret));
+            } else if (OB_FAIL(
+                         ObResolverUtils::check_secure_path(secure_file_priv, actual_path))) {
+              LOG_WARN("failed to check secure path", K(ret), K(secure_file_priv),
+                       K(actual_path));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_ && load_args.file_iter_.count() != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "load multi files not supported");
+            } else if (OB_FAIL(load_args.file_iter_.add_files(&cstyle_file_name))) {
+              LOG_WARN("fail to add files", KR(ret));
+            }
+          }
+        }
+      }
+    } else {
+      ObString temp_file_name = file_name.split_on('?');
+      ObString storage_info;
+      if (OB_FAIL(ob_write_string(*allocator_, temp_file_name, load_args.file_name_, true))) {
+        LOG_WARN("fail to copy string", K(ret));
+      } else if (OB_FAIL(ob_write_string(*allocator_, file_name, storage_info, true))) {
+        LOG_WARN("fail to copy string", K(ret));
+      } else if (temp_file_name.length() <= 0 || storage_info.length() <= 0) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
+      } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
+        LOG_WARN("failed to set access info", K(ret));
+      } else if (OB_FAIL(load_args.file_iter_.add_files(&load_args.file_name_))) {
+        LOG_WARN("fail to add files", KR(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -1340,6 +1376,42 @@ int ObLoadDataResolver::resolve_char_node(const ParseNode &node, int32_t &single
   } else {
     ret = OB_WRONG_FIELD_TERMINATORS;
     LOG_WARN("closed str should be a character", K(ret), K(static_cast<int32_t>(node.str_value_[0])));
+  }
+  return ret;
+}
+
+int ObLoadDataResolver::local_infile_enabled(bool &enabled) const
+{
+  int ret = OB_SUCCESS;
+
+  // 1. let's check the system variable and the capability flag in the mysql handshake
+  enabled = false;
+  int64_t local_infile_sys_var = 0;
+  if (OB_ISNULL(session_info_)) {
+  } else if (OB_FAIL(session_info_->get_sys_variable(share::SYS_VAR_LOCAL_INFILE, local_infile_sys_var))) {
+    LOG_WARN("failed to get SYS_VAR_LOCAL_INFILE system variable.", KR(ret));
+  } else {
+    const int64_t local_infile_capability_flag = session_info_->get_capability().cap_flags_.OB_CLIENT_LOCAL_FILES;
+    enabled = (local_infile_sys_var != 0) && (local_infile_capability_flag != 0);
+    LOG_DEBUG("LOCAL_INFILE enabled by system variable and client capability",
+              K(enabled), K(local_infile_capability_flag), K(local_infile_sys_var));
+  }
+
+  // 2. let's check the client type.
+  // The obproxy set the capability flag but it does not support load local
+  if (OB_SUCC(ret) && enabled) {
+    if (session_info_->get_client_mode() > common::OB_MIN_CLIENT_MODE &&
+        session_info_->get_client_mode() < OB_MAX_CLIENT_MODE) {
+      // this is an ob client, such as obclient 2.x, objdbc, obproxy, obclient 1.x is not included
+      // check the proxy capability flags
+      obmysql::ObProxyCapabilityFlags proxy_cap = session_info_->get_proxy_cap_flags();
+      LOG_DEBUG("load local infile: get proxy capability flag",
+                K(proxy_cap.capability_), K(proxy_cap.is_load_local_support()));
+      if (!proxy_cap.is_load_local_support()) {
+        enabled = false;
+        LOG_INFO("load data local infile is disabled by client: the obclient proxy capability flag is not set");
+      }
+    }
   }
   return ret;
 }

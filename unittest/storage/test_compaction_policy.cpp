@@ -225,7 +225,7 @@ void TestCompactionPolicy::SetUpTestCase()
 void TestCompactionPolicy::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -367,10 +367,10 @@ int TestCompactionPolicy::mock_memtable(
     snapshot_scn.convert_for_tx(snapshot_version);
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
-    memtable->unsynced_cnt_ = 0;
+    memtable->unsubmitted_cnt_ = 0;
     memtable->is_tablet_freeze_ = true;
     memtable->state_ = ObMemtableState::MINOR_FROZEN;
-    memtable->set_resolve_active_memtable_left_boundary(true);
+    memtable->set_resolved_active_memtable_left_boundary(true);
     memtable->set_frozen();
     memtable->location_ = storage::checkpoint::ObFreezeCheckpointLocation::PREPARE;
   }
@@ -396,12 +396,12 @@ int TestCompactionPolicy::mock_tablet(
   ObTablet *tablet = nullptr;
 
   ObTableHandleV2 table_handle;
-  bool need_empty_major_table = false;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = nullptr;
 
   ObArenaAllocator arena_allocator;
   ObCreateTabletSchema create_tablet_schema;
+  bool need_empty_major_table = false;
 
   if (OB_ISNULL(t3m)) {
     ret = OB_ERR_UNEXPECTED;

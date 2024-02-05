@@ -1,0 +1,27 @@
+oceanbase-ce:
+  depends:
+    - ob-configserver
+  servers:
+    # Please don't use hostname, only IP can be supported
+    - @OB_SERVER_IP@
+  global:
+    #  The working directory for OceanBase Database. OceanBase Database is started under this directory. This is a required field.
+    home_path: @OB_HOME_PATH@
+    mysql_port: @OB_MYSQL_PORT@
+    rpc_port: @OB_RPC_PORT@
+    zone: zone1
+    cluster_id: 1
+    # please set memory limit to a suitable value which is matching resource.
+    memory_limit: @OB_MEMORY_LIMIT@ # The maximum running memory for an observer
+    system_memory: @OB_SYSTEM_MEMORY@ # The reserved system memory. system_memory is reserved for general tenants. The default value is 30G.
+    datafile_size: @OB_DATAFILE_SIZE@ # Size of the data file.
+    log_disk_size: @OB_LOG_DISK_SIZE@ # The size of disk space used by the clog files.
+    cpu_count: 16
+    production_mode: false
+    syslog_level: INFO # System log level. The default value is INFO.
+    enable_syslog_wf: false # Print system logs whose levels are higher than WARNING to a separate log file. The default value is true.
+    enable_syslog_recycle: true # Enable auto system log recycling or not. The default value is false.
+    max_syslog_file_count: 4 # The maximum number of reserved log files before enabling auto recycling. The default value is 0.
+    appname: @OB_CLUSTER_NAME@
+    root_password: @OB_ROOT_PASSWORD@
+    enable_rich_error_msg: true

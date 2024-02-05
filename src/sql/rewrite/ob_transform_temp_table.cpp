@@ -210,12 +210,18 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     bool is_oversize_stmt = false;
     int64_t stmt_size = 0;
     bool need_expand = false;
+    bool can_expand = true;
     OPT_TRACE("try to expand temp table:", helper.temp_table_query_);
     if (OB_ISNULL(helper.temp_table_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ref query", K(helper), K(ret));
     } else if (OB_FAIL(check_stmt_size(helper.temp_table_query_, stmt_size, is_oversize_stmt))) {
       LOG_WARN("check stmt size failed", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::check_expand_temp_table_valid(helper.temp_table_query_, can_expand))) {
+      LOG_WARN("failed to check expand temp table valid", K(ret));
+    } else if (!can_expand) {
+      // do nothing
+      OPT_TRACE("CTE can not be expanded");
     } else if (OB_FAIL(check_hint_allowed_trans(*helper.temp_table_query_,
                                                 force_inline,
                                                 force_materia))) {
@@ -1149,7 +1155,7 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
         if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*ctx_->stmt_factory_, *ctx_->expr_factory_,
                                                      table->ref_query_, temp_table_stmt))) {
           LOG_WARN("failed to deep copy stmt", K(ret));
-        } else if (OB_FAIL(temp_table_stmt->update_stmt_table_id(*table->ref_query_))) {
+        } else if (OB_FAIL(temp_table_stmt->update_stmt_table_id(ctx_->allocator_, *table->ref_query_))) {
           LOG_WARN("failed to update table id", K(ret));
         } else if (OB_FAIL(stmt->generate_view_name(*ctx_->allocator_,
                                             temp_table->table_name_,

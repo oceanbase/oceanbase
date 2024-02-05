@@ -44,9 +44,11 @@ class ObExprObjAccess;
 struct ObSPICursor
 {
   ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator)
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_()
   {
     row_desc_.set_tenant_id(MTL_ID());
+    complex_objs_.reset();
+    complex_objs_.set_tenant_id(MTL_ID());
   }
 
   ~ObSPICursor()
@@ -126,7 +128,8 @@ public:
       orign_session_value_(NULL),
       cursor_session_value_(NULL),
       nested_session_value_(NULL),
-      out_params_() {
+      out_params_(),
+      exec_params_str_() {
       }
   ~ObSPIResultSet() { reset(); }
   int init(sql::ObSQLSessionInfo &session_info);
@@ -157,8 +160,8 @@ public:
     cursor_session_value_ = NULL;
     nested_session_value_ = NULL;
     out_params_.reset();
+    exec_params_str_.reset();
     allocator_.reset();
-
     is_inited_ = false;
   }
   void reset_member_for_retry(sql::ObSQLSessionInfo &session_info)
@@ -167,6 +170,7 @@ public:
       result_set_->~ObResultSet();
     }
     sql_ctx_.reset();
+    exec_params_str_.reset();
     //allocator_.reset();
     mem_context_->get_arena_allocator().reset();
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
@@ -212,6 +216,7 @@ public:
   void end_cursor_stmt(pl::ObPLExecCtx *pl_ctx, int &result);
   int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update);
   void end_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, int &result);
+  ObString *get_exec_params_str_ptr() { return &exec_params_str_; }
 private:
   bool is_inited_;
   EndStmtType need_end_nested_stmt_;
@@ -232,6 +237,7 @@ private:
   sql::ObSQLSessionInfo::StmtSavedValue *cursor_session_value_;
   sql::ObSQLSessionInfo::StmtSavedValue *nested_session_value_;
   ObSPIOutParams out_params_; // 用于记录function的返回值
+  ObString exec_params_str_;
 };
 
 class ObSPIService
@@ -239,6 +245,23 @@ class ObSPIService
 public:
   struct ObSPIPrepareResult
   {
+    ObSPIPrepareResult() :
+    type_(stmt::T_NONE),
+    for_update_(false),
+    has_hidden_rowid_(false),
+    exec_params_(),
+    into_exprs_(),
+    ref_objects_(),
+    route_sql_(),
+    record_type_(nullptr),
+    tg_timing_event_(),
+    rowid_table_id_(OB_INVALID_ID),
+    ps_sql_(),
+    is_bulk_(false),
+    has_dup_column_name_(false),
+    has_link_table_(false),
+    is_skip_locked_(false)
+    {}
     stmt::StmtType type_; //prepare的语句类型
     bool for_update_;
     bool has_hidden_rowid_;
@@ -253,6 +276,7 @@ public:
     bool is_bulk_;
     bool has_dup_column_name_;
     bool has_link_table_;
+    bool is_skip_locked_;
   };
 
   struct PLPrepareCtx
@@ -479,7 +503,8 @@ public:
                              int64_t cursor_index,
                              const int64_t *formal_param_idxs,
                              const ObSqlExpression **actual_param_exprs,
-                             int64_t cursor_param_count);
+                             int64_t cursor_param_count,
+                             bool skip_locked);
   static int dbms_cursor_open(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               const ObString &ps_sql,
@@ -676,7 +701,8 @@ public:
                              stmt::StmtType &type,
                              bool &for_update,
                              bool &hidden_rowid,
-                             int64_t &into_cnt);
+                             int64_t &into_cnt,
+                             bool &skip_locked);
   static int prepare_dynamic(pl::ObPLExecCtx *ctx,
                              ObIAllocator &allocator,
                              bool is_returning,
@@ -688,6 +714,7 @@ public:
                              bool &for_update,
                              bool &hidden_rowid,
                              int64_t &into_cnt,
+                             bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
   static int force_refresh_schema(uint64_t tenant_id);
 

@@ -219,7 +219,6 @@ struct ObStmtHint
   int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int reset_explicit_trans_hint(ObItemType hint_type);
-  int get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const;
 
 
   bool has_enable_hint(ObItemType hint_type) const;
@@ -458,6 +457,11 @@ struct ObLogPlanHint
                            bool &force_use_merge,
                            bool &force_part_sort,
                            bool &force_normal_sort) const;
+  int get_valid_pq_subquery_hint(const ObIArray<ObString> &sub_qb_names,
+                                    const ObPQSubqueryHint *&explicit_hint,
+                                    const ObPQSubqueryHint *&implicit_hint) const;
+  DistAlgo get_valid_pq_subquery_dist_algo(const ObIArray<ObString> &sub_qb_names,
+                                           const bool implicit_allowed) const;
 
   bool use_late_material() const { return has_enable_hint(T_USE_LATE_MATERIALIZATION); }
   bool no_use_late_material() const { return has_disable_hint(T_USE_LATE_MATERIALIZATION); }

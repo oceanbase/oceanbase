@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include <random>
+#include <chrono>
+
 #include "ob_table_scan_op.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/executor/ob_task_spliter.h"
@@ -32,6 +35,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "lib/container/ob_array_wrap.h"
+#include "share/index_usage/ob_index_usage_info_mgr.h"
 
 namespace oceanbase
 {
@@ -126,6 +130,18 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   OB_UNIS_ENCODE(calc_part_id_expr_);
   OB_UNIS_ENCODE(global_index_rowkey_exprs_);
   OB_UNIS_ENCODE(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_ENCODE(has_aux_lookup);
+  if (OB_SUCC(ret) && has_aux_lookup) {
+    OB_UNIS_ENCODE(*aux_lookup_ctdef_);
+    OB_UNIS_ENCODE(*aux_lookup_loc_meta_);
+  }
+
+  bool has_text_ir = false;
+  OB_UNIS_ENCODE(has_text_ir);
+  if (OB_SUCC(ret) && has_text_ir) {
+    OB_UNIS_ENCODE(*text_ir_ctdef_);
+  }
   return ret;
 }
 
@@ -153,6 +169,17 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   OB_UNIS_ADD_LEN(calc_part_id_expr_);
   OB_UNIS_ADD_LEN(global_index_rowkey_exprs_);
   OB_UNIS_ADD_LEN(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_ADD_LEN(has_aux_lookup);
+  if (has_aux_lookup) {
+    OB_UNIS_ADD_LEN(*aux_lookup_ctdef_);
+    OB_UNIS_ADD_LEN(*aux_lookup_loc_meta_);
+  }
+  bool has_text_ir = false;
+  OB_UNIS_ADD_LEN(has_text_ir);
+  if (has_text_ir) {
+    OB_UNIS_ADD_LEN(*text_ir_ctdef_);
+  }
   return len;
 }
 
@@ -197,6 +224,30 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
   OB_UNIS_DECODE(calc_part_id_expr_);
   OB_UNIS_DECODE(global_index_rowkey_exprs_);
   OB_UNIS_DECODE(flashback_item_.fq_read_tx_uncommitted_);
+  bool has_aux_lookup = false;
+  OB_UNIS_DECODE(has_aux_lookup);
+  if (OB_SUCC(ret) && has_aux_lookup) {
+    if (OB_ISNULL(aux_lookup_ctdef_ = OB_NEWx(ObDASScanCtDef, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for aux lookup ctdef", K(ret));
+    } else if (OB_ISNULL(aux_lookup_loc_meta_ = OB_NEWx(ObDASTableLocMeta, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for aux lookup table location meta", K(ret));
+    } else {
+      OB_UNIS_DECODE(*aux_lookup_ctdef_);
+      OB_UNIS_DECODE(*aux_lookup_loc_meta_);
+    }
+  }
+  bool has_text_ir = false;
+  OB_UNIS_DECODE(has_text_ir);
+  if (OB_SUCC(ret) && has_text_ir) {
+    if (OB_ISNULL(text_ir_ctdef_ = OB_NEWx(ObDASIRCtDef, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for text ir ctdef", K(ret));
+    } else {
+      OB_UNIS_DECODE(*text_ir_ctdef_);
+    }
+  }
   return ret;
 }
 
@@ -828,6 +879,7 @@ int ObTableScanOp::init_table_scan_rtdef()
   das_ref_.set_mem_attr(mem_attr);
   das_ref_.set_expr_frame_info(&MY_SPEC.plan_->get_expr_frame_info());
   das_ref_.set_execute_directly(!MY_SPEC.use_dist_das_);
+  das_ref_.set_enable_rich_format(MY_SPEC.use_rich_format_);
   set_cache_stat(plan_ctx->get_phy_plan()->stat_);
   bool is_null_value = false;
   if (OB_SUCC(ret) && NULL != MY_SPEC.limit_) {
@@ -888,6 +940,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
+  LOG_DEBUG("scan flag", K(MY_CTDEF.scan_flags_));
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
   if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
@@ -1362,6 +1415,19 @@ int ObTableScanOp::inner_close()
   if (OB_SUCC(ret)) {
     fill_sql_plan_monitor_info();
   }
+
+  if (OB_SUCC(ret) && MY_SPEC.should_scan_index()) {
+    ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+    if (OB_NOT_NULL(session)) {
+      uint64_t tenant_id = session->get_effective_tenant_id();
+      uint64_t index_id = MY_CTDEF.scan_ctdef_.ref_table_id_;
+      oceanbase::share::ObIndexUsageInfoMgr* mgr = MTL(oceanbase::share::ObIndexUsageInfoMgr*);
+      if (OB_NOT_NULL(mgr)) {
+        mgr->update(tenant_id, index_id);
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     iter_end_ = false;
     need_init_before_get_row_ = true;
@@ -1391,9 +1457,9 @@ int ObTableScanOp::do_init_before_get_row()
 {
   int ret = OB_SUCCESS;
   if (need_init_before_get_row_) {
-    LOG_DEBUG("do init before get row", K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
+    LOG_DEBUG("do init before get row", K(MY_SPEC.id_), K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
     if (OB_UNLIKELY(iter_end_)) {
-      //do nothing
+      LOG_DEBUG("do init before get row meet iter end", K(MY_SPEC.id_));
     } else {
       if (MY_SPEC.gi_above_) {
         ObGranuleTaskInfo info;
@@ -1828,12 +1894,13 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
     } else {
       // We need do filter first before do the limit.
       // See the issue 47201028.
-      if(need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
+      if (need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
         bool all_filtered = false;
-        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
-                                      *brs_.skip_,
-                                      count,
-                                      all_filtered))) {
+        if (OB_FAIL(filter_rows(MY_SPEC.filters_,
+                                *brs_.skip_,
+                                count,
+                                all_filtered,
+                                brs_.all_rows_active_))) {
           LOG_WARN("filter batch failed in das get_next_batch", K(ret));
         } else if (all_filtered) {
           //Do nothing.
@@ -1865,6 +1932,7 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
     // It's hard to use, we split it into two calls here since get_next_rows() is reentrant
     // when got OB_ITER_END.
     ret = scan_result_.get_next_rows(count, batch_size);
+    brs_.all_rows_active_ = true;
     if (OB_ITER_END == ret && count > 0) {
       ret = OB_SUCCESS;
     }
@@ -1885,10 +1953,11 @@ int ObTableScanOp::get_next_batch_with_das(int64_t &count, int64_t capacity)
       // See the issue 47201028.
       if (need_final_limit_ && !MY_SPEC.filters_.empty() && count > 0) {
         bool all_filtered = false;
-        if (OB_FAIL(filter_batch_rows(MY_SPEC.filters_,
-                                      *brs_.skip_,
-                                      count,
-                                      all_filtered))) {
+        if (OB_FAIL(filter_rows(MY_SPEC.filters_,
+                                *brs_.skip_,
+                                count,
+                                all_filtered,
+                                brs_.all_rows_active_))) {
           LOG_WARN("filter batch failed in das get_next_batch", K(ret));
         } else if (all_filtered) {
           //Do nothing.
@@ -2005,6 +2074,14 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
 int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_E(EventTable::EN_ENABLE_RANDOM_TSC) OB_SUCCESS;
+  bool enable_random_output = (tmp_ret != OB_SUCCESS);
+
+  int64_t rand_row_cnt = max_row_cnt;
+  int64_t rand_append_bits = 0;
+  if (enable_random_output && max_row_cnt > 1) {
+    gen_rand_size_and_skip_bits(max_row_cnt, rand_row_cnt, rand_append_bits);
+  }
   if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
     int64_t count = 0;
     if (OB_ISNULL(global_index_lookup_op_)) {
@@ -2013,16 +2090,27 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       global_index_lookup_op_->get_brs().size_ = brs_.size_ ;
       global_index_lookup_op_->get_brs().end_ = brs_.end_;
-      if (OB_FAIL(global_index_lookup_op_->get_next_rows(count, max_row_cnt))) {
-        LOG_WARN("failed to get next rows",K(ret), K(max_row_cnt));
+      if (OB_FAIL(global_index_lookup_op_->get_next_rows(count, rand_row_cnt))) {
+        LOG_WARN("failed to get next rows",K(ret), K(rand_row_cnt));
       } else {
         brs_.size_ = global_index_lookup_op_->get_brs().size_;
         brs_.end_ = global_index_lookup_op_->get_brs().end_;
       }
     }
   } else {
-    if (OB_FAIL(inner_get_next_batch_for_tsc(max_row_cnt))) {
+    if (OB_FAIL(inner_get_next_batch_for_tsc(rand_row_cnt))) {
       LOG_WARN("failed to get next row",K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret) && enable_random_output && !brs_.end_
+      && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
+    if (OB_UNLIKELY(brs_.size_ > max_row_cnt || rand_append_bits + brs_.size_ > max_row_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("unexpected tsc output rows", K(brs_), K(rand_append_bits), K(max_row_cnt),
+                K(rand_row_cnt));
+    } else {
+      adjust_rand_output_brs(rand_append_bits);
     }
   }
   return ret;
@@ -2083,7 +2171,8 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
   if (OB_SUCC(ret)) {
     const ExprFixedArray &storage_output = MY_CTDEF.get_das_output_exprs();
     if (!MY_SPEC.is_global_index_back()) {
-      PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, storage_output, brs_.size_, K(MY_CTDEF.scan_ctdef_.ref_table_id_));
+      PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, storage_output, brs_.size_, brs_.skip_,
+                            K(MY_CTDEF.scan_ctdef_.ref_table_id_));
     }
     if (OB_FAIL(add_ddl_column_checksum_batch(brs_.size_))) {
       LOG_WARN("add ddl column checksum failed", K(ret));
@@ -2366,6 +2455,9 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
           end_row_key[i] = scan_range.end_key_.get_obj_ptr()[pos];
           sql::ObExpr *expr = part_dep_cols.at(i);
           sql::ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
+          if (get_spec().use_rich_format_) {
+            expr->init_vector_for_write(eval_ctx_, VEC_UNIFORM, 1);
+          }
           if (OB_FAIL(datum.from_obj(start_row_key[i], expr->obj_datum_map_))) {
             LOG_WARN("convert obj to datum failed", K(ret));
           } else if (is_lob_storage(start_row_key[i].get_type()) &&
@@ -2685,6 +2777,7 @@ int ObTableScanOp::report_ddl_column_checksum()
       item.execution_id_ = MY_SPEC.plan_->get_ddl_execution_id();
       item.tenant_id_ = MTL_ID();
       item.table_id_ = table_id;
+      item.tablet_id_ = tablet_id.id();
       item.ddl_task_id_ = MY_SPEC.plan_->get_ddl_task_id();
       item.column_id_ = MY_SPEC.ddl_output_cids_.at(i) & VIRTUAL_GEN_FIXED_LEN_MASK;
       item.task_id_ = ctx_.get_px_sqc_id() << ObDDLChecksumItem::PX_SQC_ID_OFFSET | ctx_.get_px_task_id() << ObDDLChecksumItem::PX_TASK_ID_OFFSET | curr_scan_task_id;
@@ -2704,7 +2797,13 @@ int ObTableScanOp::report_ddl_column_checksum()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObDDLChecksumOperator::update_checksum(checksum_items, *GCTX.sql_proxy_))) {
+      LOG_INFO("report ddl checksum table scan", K(tablet_id), K(checksum_items));
+      uint64_t data_format_version = 0;
+      int64_t snapshot_version = 0;
+      share::ObDDLTaskStatus unused_task_status = share::ObDDLTaskStatus::PREPARE;
+      if (OB_FAIL(ObDDLUtil::get_data_information(MTL_ID(), MY_SPEC.plan_->get_ddl_task_id(), data_format_version, snapshot_version, unused_task_status))) {
+        LOG_WARN("get ddl cluster version failed", K(ret));
+      } else if (OB_FAIL(ObDDLChecksumOperator::update_checksum(data_format_version, checksum_items, *GCTX.sql_proxy_))) {
         LOG_WARN("fail to update checksum", K(ret));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.ddl_output_cids_.count(); ++i) {
@@ -3017,12 +3116,38 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &m
   return ret;
 }
 
-ObGlobalIndexLookupOpImpl::ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op)
-  : ObIndexLookupOpImpl(GLOBAL_INDEX, 10000 /*default_batch_row_count*/),
-    table_scan_op_(table_scan_op),
-    das_ref_(table_scan_op_->get_eval_ctx(), table_scan_op_->get_exec_ctx()),
-    lookup_result_(),
-    lookup_memctx_()
+void ObTableScanOp::gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size,
+                                                int64_t &skip_bits)
+{
+  rand_size = batch_size;
+  skip_bits = 0;
+  if (batch_size > 1) {
+    std::default_random_engine rd;
+    rd.seed(std::random_device()());
+    std::uniform_int_distribution<int64_t> irand(0, batch_size/2);
+    skip_bits = irand(rd);
+    if (skip_bits <= 0) {
+      skip_bits = 1;
+    }
+    rand_size = batch_size - skip_bits;
+    LOG_TRACE("random batch size", K(rand_size), K(skip_bits));
+  }
+}
+
+void ObTableScanOp::adjust_rand_output_brs(const int64_t rand_append_bits)
+{
+  LOG_TRACE("random output", K(brs_.size_), K(rand_append_bits));
+  int64_t output_size = brs_.size_ + rand_append_bits;
+  brs_.skip_->set_all(brs_.size_, output_size);
+  brs_.size_ = output_size;
+  brs_.all_rows_active_ = false;
+}
+
+ObGlobalIndexLookupOpImpl::ObGlobalIndexLookupOpImpl(ObTableScanOp *table_scan_op) :
+  ObIndexLookupOpImpl(GLOBAL_INDEX, 10000 /*default_batch_row_count*/),
+  table_scan_op_(table_scan_op),
+  das_ref_(table_scan_op_->get_eval_ctx(), table_scan_op_->get_exec_ctx()), lookup_result_(),
+  lookup_memctx_()
 {
 }
 

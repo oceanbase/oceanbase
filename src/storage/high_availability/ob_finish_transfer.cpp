@@ -316,7 +316,7 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
       }
     }
   }
-  if (OB_TMP_FAIL(record_server_event_(ret, is_ready, tmp_round))) {
+  if (OB_TMP_FAIL(record_server_event_(ret, is_ready, tmp_round, start_scn))) {
     LOG_WARN("failed to record server event", K(tmp_ret), K(ret), K(is_ready));
   }
   return ret;
@@ -373,7 +373,7 @@ int ObTxFinishTransfer::get_transfer_tablet_info_from_inner_table_(
   if (!task_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(task_id));
-  } else if (OB_FAIL(ObTransferTaskOperator::get(*sql_proxy_, tenant_id, task_id, for_update, transfer_task, share::OBCG_STORAGE_HA_LEVEL2))) {
+  } else if (OB_FAIL(ObTransferTaskOperator::get(*sql_proxy_, tenant_id, task_id, for_update, transfer_task, share::OBCG_STORAGE))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(tablet_list.assign(transfer_task.get_tablet_list()))) {
     LOG_WARN("failed to assign tablet_list", KR(ret), K(transfer_task));
@@ -523,7 +523,7 @@ int ObTxFinishTransfer::inner_check_ls_logical_table_replaced_(const uint64_t te
       const common::ObAddr &server = *location;
       const int64_t timeout = GCONF.rpc_timeout;
       const int64_t cluster_id = GCONF.cluster_id;
-      const uint64_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+      const uint64_t group_id = share::OBCG_STORAGE;
       ObCheckTransferTabletBackfillArg arg;
       arg.tenant_id_ = tenant_id;
       arg.ls_id_ = dest_ls_id;
@@ -723,7 +723,7 @@ int ObTxFinishTransfer::check_all_ls_replica_replay_scn_(const ObTransferTaskID 
   int tmp_ret = OB_SUCCESS;
   int64_t cur_quorum = 0;
   common::ObArray<ObAddr> member_addr_list;
-  const int32_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
+  const int32_t group_id = share::OBCG_STORAGE;
   if (OB_FAIL(ObTransferUtils::get_need_check_member(total_addr_list, finished_addr_list, member_addr_list))) {
     LOG_WARN("failed to get need check member", K(ret), K(task_id), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(ObTransferUtils::check_ls_replay_scn(
@@ -797,7 +797,7 @@ int ObTxFinishTransfer::unlock_ls_member_list_(const uint64_t tenant_id, const s
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::unlock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE_HA_LEVEL2, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(tenant_id), K(ls_id), K_(task_id), K(status));
   }
   return ret;
@@ -808,7 +808,7 @@ int ObTxFinishTransfer::lock_ls_member_list_(const uint64_t tenant_id, const sha
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMemberListLockUtils::lock_ls_member_list(
-      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE_HA_LEVEL2, *sql_proxy_))) {
+      tenant_id, ls_id, task_id_.id(), member_list, status, share::OBCG_STORAGE, *sql_proxy_))) {
     LOG_WARN("failed to unlock ls member list", K(ret), K(ls_id), K(member_list));
   } else {
 #ifdef ERRSIM
@@ -897,16 +897,16 @@ int ObTxFinishTransfer::update_transfer_task_result_(const ObTransferTaskID &tas
     const bool for_update = true;
     ObTransferStatus next_status;
     next_status = OB_SUCCESS == result ? ObTransferStatus::COMPLETED : ObTransferStatus::DOING;
-    if (OB_FAIL(ObTransferTaskOperator::get(trans, tenant_id, task_id, for_update, transfer_task, share::OBCG_STORAGE_HA_LEVEL2))) {
+    if (OB_FAIL(ObTransferTaskOperator::get(trans, tenant_id, task_id, for_update, transfer_task, share::OBCG_STORAGE))) {
       LOG_WARN("failed to get transfer task", K(ret), K(task_id), K(tenant_id));
     } else if (transfer_task.get_start_scn() >= finish_scn) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("finish scn not expected", K(ret), K(transfer_task), K(finish_scn));
     } else if (OB_FAIL(ObTransferTaskOperator::update_finish_scn(
-                   trans, tenant_id, task_id, transfer_task.get_status(), finish_scn, share::OBCG_STORAGE_HA_LEVEL2))) {
+                   trans, tenant_id, task_id, transfer_task.get_status(), finish_scn, share::OBCG_STORAGE))) {
       LOG_WARN("failed to update finish scn", K(ret), K(tenant_id), K(task_id), K(finish_scn));
     } else if (OB_FAIL(ObTransferTaskOperator::finish_task(
-                   trans, tenant_id, task_id, transfer_task.get_status(), next_status, result, ObTransferTaskComment::EMPTY_COMMENT, share::OBCG_STORAGE_HA_LEVEL2))) {
+                   trans, tenant_id, task_id, transfer_task.get_status(), next_status, result, ObTransferTaskComment::EMPTY_COMMENT, share::OBCG_STORAGE))) {
       LOG_WARN("failed to finish task", K(ret), K(tenant_id), K(task_id));
     }
 #ifdef ERRSIM
@@ -986,7 +986,7 @@ int ObTxFinishTransfer::start_trans_(
     LOG_WARN("fail to set trx timeout", K(ret), K(stmt_timeout));
   } else if (OB_FAIL(timeout_ctx.set_timeout(stmt_timeout))) {
     LOG_WARN("set timeout context failed", K(ret));
-  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, false/*with_snapshot*/, share::OBCG_STORAGE_HA_LEVEL2))) {
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, false/*with_snapshot*/, share::OBCG_STORAGE))) {
     LOG_WARN("failed to start trans", K(ret), K(tenant_id));
   } else {
     LOG_INFO("start trans", K(tenant_id));
@@ -1027,7 +1027,7 @@ int ObTxFinishTransfer::select_transfer_task_for_update_(const ObTransferTaskID 
   if (!task_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arg", K(ret), K(task_id));
-  } else if (OB_FAIL(ObTransferTaskOperator::get(trans, tenant_id, task_id, for_update, task, share::OBCG_STORAGE_HA_LEVEL2))) {
+  } else if (OB_FAIL(ObTransferTaskOperator::get(trans, tenant_id, task_id, for_update, task, share::OBCG_STORAGE))) {
     LOG_WARN("failed to get transfer task", K(ret), K(tenant_id), K(task_id));
   } else if (!task.get_status().is_doing_status()) {
     ret = OB_STATE_NOT_MATCH;
@@ -1050,12 +1050,15 @@ int ObTxFinishTransfer::select_transfer_task_for_update_(const ObTransferTaskID 
 int ObTxFinishTransfer::record_server_event_(
     const int32_t result,
     const bool is_ready,
-    const int64_t round) const
+    const int64_t round,
+    const share::SCN &start_scn) const
 {
   int ret = OB_SUCCESS;
   ObSqlString extra_info_str;
   const share::ObTransferStatus doing_status(ObTransferStatus::DOING);
   const share::ObTransferStatus finish_status(ObTransferStatus::COMPLETED);
+  const int64_t start_scn_ts = start_scn.is_valid() ? start_scn.convert_to_ts() : 0;
+  const int64_t elapsed_us_from_start_scn = start_scn.is_valid() ? ObTimeUtility::current_time() - start_scn_ts : 0;
   if (OB_SUCCESS == result) {
     if (is_ready) {
       if (OB_FAIL(extra_info_str.append_fmt("msg:\"transfer doing success\";"))) {
@@ -1070,6 +1073,8 @@ int ObTxFinishTransfer::record_server_event_(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(extra_info_str.append_fmt("round:%ld;", round))) {
       LOG_WARN("fail to printf retry time", K(ret));
+    } else if (elapsed_us_from_start_scn > 0 && OB_FAIL(extra_info_str.append_fmt("elapsed_us_from_start_scn:%ld;", elapsed_us_from_start_scn))) {
+      LOG_WARN("fail to printf retry time", K(ret));
     } else {
       if (OB_SUCCESS == result && is_ready) {
         if (OB_FAIL(write_server_event_(result, extra_info_str, finish_status))) {
@@ -1079,6 +1084,9 @@ int ObTxFinishTransfer::record_server_event_(
         if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
           if (OB_FAIL(write_server_event_(result, extra_info_str, doing_status))) {
             LOG_WARN("fail to write server event", K(ret), K(result), K(extra_info_str));
+          } else if (elapsed_us_from_start_scn > TASK_EXECUTE_LONG_WARNING_THRESHOLD) {
+            LOG_ERROR("transfer task stuck at doing stage for too long, may be wait log replay or transfer backfill too slow",
+                K(start_scn), K(elapsed_us_from_start_scn), K_(task_id));
           }
         }
       }
@@ -1100,5 +1108,6 @@ int ObTxFinishTransfer::write_server_event_(const int32_t result, const ObSqlStr
       extra_info.ptr());
   return ret;
 }
+
 }  // namespace storage
 }  // namespace oceanbase

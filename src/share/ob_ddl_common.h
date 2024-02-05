@@ -31,6 +31,7 @@ struct ObDropTableArg;
 struct ObDropIndexArg;
 struct ObTruncateTableArg;
 struct ObCreateIndexArg;
+struct ObIndexArg;
 }
 namespace sql
 {
@@ -41,6 +42,8 @@ namespace storage
 {
 class ObTabletHandle;
 class ObLSHandle;
+struct ObStorageColumnGroupSchema;
+class ObCOSSTableV2;
 }
 namespace share
 {
@@ -60,6 +63,12 @@ enum ObDDLType
   DDL_CREATE_MLOG = 8,
   DDL_DROP_MLOG = 9,
   DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
+  DDL_DROP_LOB = 11,
+  ///< @note tablet split.
+  DDL_AUTO_SPLIT_BY_RANGE = 100,
+  DDL_AUTO_SPLIT_NON_RANGE = 101,
+  DDL_MANUAL_SPLIT_BY_RANGE = 102,
+  DDL_MANUAL_SPLIT_NON_RANGE = 103,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -88,11 +97,13 @@ enum ObDDLType
   DDL_TABLE_RESTORE = 1013, // table restore
   DDL_MVIEW_COMPLETE_REFRESH = 1014,
   DDL_CREATE_MVIEW = 1015,
+  DDL_ALTER_COLUMN_GROUP = 1016, // alter table add/drop column group
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
   DDL_ADD_COLUMN_ONLINE = 10002, // only add trailing columns
   DDL_CHANGE_COLUMN_NAME = 10003,
+  DDL_DROP_COLUMN_INSTANT = 10004,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
@@ -137,8 +148,23 @@ enum ObDDLTaskStatus {
   WAIT_CHILD_TASK_FINISH = 16,
   REPENDING = 17,
   START_REFRESH_MVIEW_TASK = 18,
+  WAIT_FROZE_END = 19,
+  WAIT_COMPACTION_END = 20,
+  WAIT_DATA_TABLE_SPLIT_END = 21,
+  WAIT_LOCAL_INDEX_SPLIT_END = 22,
+  WAIT_LOB_TABLE_SPLIT_END = 23,
   FAIL = 99,
   SUCCESS = 100
+};
+
+enum SortCompactLevel
+{
+  SORT_DEFAULT_LEVEL = 0,
+  SORT_COMPACT_LEVEL = 1,
+  SORT_ENCODE_LEVEL = 2,
+  SORT_COMPRESSION_LEVEL = 3,
+  SORT_COMPRESSION_COMPACT_LEVEL = 4,
+  SORT_COMPRESSION_ENCODE_LEVEL = 5
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
@@ -201,6 +227,21 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
     case ObDDLTaskStatus::START_REFRESH_MVIEW_TASK:
       str = "START_REFRESH_MVIEW_TASK";
       break;
+    case ObDDLTaskStatus::WAIT_FROZE_END:
+      str = "WAIT_FROZE_END";
+      break;
+    case ObDDLTaskStatus::WAIT_COMPACTION_END:
+      str = "WAIT_COMPACTION_END";
+      break;
+    case ObDDLTaskStatus::WAIT_DATA_TABLE_SPLIT_END:
+      str = "WAIT_DATA_TABLE_SPLIT_END";
+      break;
+    case ObDDLTaskStatus::WAIT_LOCAL_INDEX_SPLIT_END:
+      str = "WAIT_LOCAL_INDEX_SPLIT_END";
+      break;
+    case ObDDLTaskStatus::WAIT_LOB_TABLE_SPLIT_END:
+      str = "WAIT_LOB_TABLE_SPLIT_END";
+      break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
       break;
@@ -251,6 +292,15 @@ static inline bool is_ddl_stmt_packet_retry_err(const int ret)
       ;
 }
 
+static inline bool is_direct_load_retry_err(const int ret)
+{
+  return is_ddl_stmt_packet_retry_err(ret) || ret == OB_TABLET_NOT_EXIST || ret == OB_LS_NOT_EXIST
+    || ret == OB_NOT_MASTER
+    || ret == OB_TASK_EXPIRED
+    || ret == OB_REPLICA_NOT_READABLE
+    ;
+}
+
 enum ObCheckExistedDDLMode
 {
   INVALID_DDL_MODE          = 0,
@@ -281,7 +331,11 @@ public:
   ObColumnNameMap() {}
   ~ObColumnNameMap() {}
   int init(const schema::ObTableSchema &orig_table_schema,
+           const schema::ObTableSchema &new_table_schema,
            const schema::AlterTableSchema &alter_table_arg);
+  int init_xml_hidden_column_name_map(
+      const schema::ObTableSchema &orig_table_schema,
+      const schema::ObTableSchema &new_table_schema);
   int assign(const ObColumnNameMap &other);
   int set(const ObString &orig_column_name, const ObString &new_column_name);
   int get(const ObString &orig_column_name, ObString &new_column_name) const;
@@ -335,11 +389,6 @@ public:
                               const int64_t table_id,
                               int64_t &tablet_count);
 
-  // get all tablets of a table by table_schema
-  static int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      common::ObIArray<common::ObTabletID> &tablet_ids);
-
   // check if the major sstable of a table are exist in all needed replicas
   static int check_major_sstable_complete(
       const uint64_t data_table_id,
@@ -365,6 +414,20 @@ public:
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
+      ObSqlString &sql_string,
+      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL);
+
+  static int generate_build_mview_replica_sql(
+      const uint64_t tenant_id,
+      const int64_t mview_table_id,
+      const int64_t container_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const int64_t snapshot_version,
+      const int64_t execution_id,
+      const int64_t task_id,
+      const int64_t parallelism,
+      const bool use_schema_version_hint_for_src_table,
+      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
       ObSqlString &sql_string);
 
   static int get_tablet_leader_addr(
@@ -387,19 +450,22 @@ public:
       const bool is_oracle_mode,
       ObSqlString &sql_string);
 
+  static int generate_mview_ddl_schema_hint_str(
+      const uint64_t tenant_id,
+      const uint64_t mview_table_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
+      const bool is_oracle_mode,
+      ObSqlString &sql_string);
+
   static int ddl_get_tablet(
       storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
-      const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_READABLE_COMMITED);
+      const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
-  
-  static bool is_table_lock_retry_ret_code(int ret)
-  {
-    return OB_TRY_LOCK_ROW_CONFLICT == ret || OB_NOT_MASTER == ret || OB_TIMEOUT == ret
-           || OB_EAGAIN == ret || OB_LS_LOCATION_LEADER_NOT_EXIST == ret || OB_TRANS_CTX_NOT_EXIST == ret;
-  }
+
   static bool need_remote_write(const int ret_code);
 
   static int check_can_convert_character(const ObObjMeta &obj_meta)
@@ -436,10 +502,12 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
-  static int get_data_format_version(
+  static int get_data_information(
      const uint64_t tenant_id,
      const uint64_t task_id,
-     int64_t &data_format_version);
+     uint64_t &data_format_version,
+     int64_t &snapshot_version,
+     share::ObDDLTaskStatus &task_status);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
@@ -508,6 +576,9 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+
+  static bool reach_time_interval(const int64_t i, volatile int64_t &last_time);
+
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,
@@ -517,6 +588,28 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 };
+
+class ObCODDLUtil
+{
+public:
+  static int need_column_group_store(const storage::ObStorageSchema &table_schema, bool &need_column_group);
+  static int need_column_group_store(const schema::ObTableSchema &table_schema, bool &need_column_group);
+
+  static int get_base_cg_idx(
+      const storage::ObStorageSchema *storage_schema,
+      int64_t &base_cg_idx);
+
+  static int get_column_checksums(
+      const storage::ObCOSSTableV2 *co_sstable,
+      const storage::ObStorageSchema *storage_schema,
+      ObIArray<int64_t> &column_checksums);
+
+  static int is_rowkey_based_co_sstable(
+      const storage::ObCOSSTableV2 *co_sstable,
+      const storage::ObStorageSchema *storage_schema,
+      bool &is_rowkey_based);
+};
+
 
 
 class ObCheckTabletDataComplementOp
@@ -599,7 +692,7 @@ private:
       const uint64_t index_table_id,
       const uint64_t ddl_task_id,
       const int64_t execution_id,
-      ObIArray<ObTabletID> &tablet_ids,
+      const ObIArray<ObTabletID> &tablet_ids,
       bool &tablet_checksum_status);
 
 };

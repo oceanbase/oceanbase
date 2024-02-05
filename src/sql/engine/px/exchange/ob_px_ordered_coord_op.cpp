@@ -58,7 +58,9 @@ ObPxOrderedCoordOp::ObPxOrderedCoordOp(ObExecContext &exec_ctx, const ObOpSpec &
     reader_cnt_(0),
     channel_idx_(0),
     finish_ch_cnt_(0),
-    all_rows_finish_(false)
+    all_rows_finish_(false),
+    stored_rows_(NULL),
+    vector_rows_(nullptr)
   {}
 
 int ObPxOrderedCoordOp::ObPxOrderedCoordOpEventListener::on_root_data_channel_setup()
@@ -87,6 +89,23 @@ int ObPxOrderedCoordOp::inner_open()
       msg_proc_.set_scheduler(&parallel_scheduler_);
     }
     metric_.set_id(MY_SPEC.id_);
+    if (is_vectorized()) {
+      stored_rows_ = static_cast<const ObChunkDatumStore::StoredRow **>(
+          ctx_.get_allocator().alloc(spec_.max_batch_size_ * sizeof(*stored_rows_)));
+      if (NULL == stored_rows_) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc stored rows pointer failed", K(ret));
+      }
+      if (OB_SUCC(ret) && MY_SPEC.use_rich_format_) {
+        vector_rows_ = static_cast<const ObCompactRow **>(
+          ctx_.get_allocator().alloc(spec_.max_batch_size_ * sizeof(*vector_rows_)));
+        if (NULL == vector_rows_) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("alloc vector rows pointer failed", K(ret));
+        }
+      }
+
+    }
   }
   return ret;
 }
@@ -159,6 +178,8 @@ int ObPxOrderedCoordOp::inner_get_next_row()
       } else if (OB_FAIL(ctx_.fast_check_status())) {
         LOG_WARN("failed to check status", K(ret));
       } else {
+        // if reader has more data, call next_row to get next row
+        // if reader is empty and ch is eof, call next_row to move channel_idx_ to next one.
         if (reader->has_more() || ch->is_eof()) {
           ret = next_row(*reader, wait_next_msg);
           if (!first_row_sent_) {
@@ -169,7 +190,8 @@ int ObPxOrderedCoordOp::inner_get_next_row()
           }
           continue;
         } else {
-          // fetch row for writable index reader
+          // if reader is empty and channel is not eof,
+          // set reader and then get data from current channel and push into this reader.
           px_row_msg_proc_.set_reader(reader);
         }
       }
@@ -244,11 +266,6 @@ int ObPxOrderedCoordOp::inner_get_next_row()
   return ret;
 }
 
-int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
-{
-  return wrap_get_next_batch(max_row_cnt);
-}
-
 int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg)
 {
   int ret = OB_SUCCESS;
@@ -279,6 +296,180 @@ int ObPxOrderedCoordOp::next_row(ObReceiveRowReader &reader, bool &wait_next_msg
   } else if (OB_SUCCESS == ret) {
     wait_next_msg = false;
   }
+  return ret;
+}
+
+int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  clear_evaluated_flag();
+  clear_dynamic_const_parent_flag();
+  if (iter_end_) {
+    ret = OB_ITER_END;
+  } else if (OB_UNLIKELY(!first_row_fetched_)) {
+    // 驱动初始 DFO 的分发
+    if (OB_FAIL(msg_proc_.startup_msg_loop(ctx_))) {
+      LOG_WARN("initial dfos NOT dispatched successfully", K(ret));
+    }
+    first_row_fetched_ = true; // 控制不再主动调用 startup_msg_loop，后继 loop 都消息触发
+  }
+  int64_t read_rows = 0;
+  while (OB_SUCC(ret) && 0 == read_rows) {
+    // loop 中注册了 SQC-QC 控制通道，以及 TASKs-QC 数据通道
+    // 为了实现 orderly receive， TASKs-QC 通道需要逐个加入到 loop 中
+    int64_t timeout_us = 0;
+    int64_t nth_channel = OB_INVALID_INDEX_INT64;
+    if (channel_idx_ < task_ch_set_.count()) {
+      int64_t idx = channel_idx_;
+      ObReceiveRowReader *reader = (NULL != readers_ && idx < reader_cnt_) ? &readers_[idx] : NULL;
+      ObDtlChannel *ch = msg_loop_.get_channel(idx + receive_order_.get_data_channel_start_idx());
+      if (NULL == ch || NULL == reader) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("reader or channel is NULL");
+      } else if (OB_FAIL(ctx_.fast_check_status())) {
+        LOG_WARN("failed to check status", K(ret));
+      } else {
+        if (reader->has_more() || ch->is_eof()) {
+          // if ch is eof and there are not enough rows in the reader, we will also break the loop
+          // instead of get rows from next channel.
+          if (OB_FAIL(next_rows(*reader, max_row_cnt, read_rows))) {
+            LOG_WARN("next rows failed", K(ret));
+          }
+          LOG_DEBUG("[VEC2.0 PX] order coord get rows from channel", K(idx), K(reader), K(max_row_cnt), K(read_rows));
+          if (!first_row_sent_) {
+            first_row_sent_ = true;
+            LOG_TRACE("TIMERECORD ",
+                      "reserve:=1 name:=RQC dfoid:=-1 sqcid:=-1 taskid:=-1 start:",
+                      ObTimeUtility::current_time());
+          }
+          continue;
+        } else {
+          // fetch row for writable index reader
+          px_row_msg_proc_.set_reader(reader);
+        }
+      }
+    }
+
+    // process end condition:
+    // 1. all rows returned
+    // 2. all SQC report worker execution finish
+    if (OB_SUCC(ret)) {
+      if (all_rows_finish_ && coord_info_.all_threads_finish_) {
+        (void) msg_proc_.on_process_end(ctx_);
+        ret = OB_ITER_END;
+        LOG_TRACE("all rows received, all sqcs reported, qc says: byebye!", K(ret));
+        LOG_TRACE("TIMERECORD ",
+                 "reserve:=1 name:=RQC dfoid:=-1 sqcid:=-1 taskid:=-1 end:",
+                 ObTimeUtility::current_time());
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("fail check status, maybe px query timeout", K(ret));
+    } else if (OB_FAIL(msg_loop_.process_one_if(&receive_order_, nth_channel))) {
+      if (OB_EAGAIN == ret) {
+        LOG_TRACE("no message, try again", K(ret));
+        ret = OB_SUCCESS;
+        if (channel_idx_ < task_ch_set_.count() && first_row_sent_) {
+          if (OB_FAIL(msg_loop_.unblock_channel(receive_order_.get_data_channel_start_idx(),
+                                                channel_idx_))) {
+            LOG_WARN("failed to unblock channels", K(ret));
+          }
+        }
+      } else if (OB_ITER_END != ret) {
+        LOG_WARN("fail process message", K(ret));
+      }
+    } else {
+      ObDtlMsgType msg_type = msg_loop_.get_last_msg_type();
+      switch (msg_type) {
+        case ObDtlMsgType::PX_NEW_ROW:
+          // got rows
+          break;
+        case ObDtlMsgType::INIT_SQC_RESULT:
+        case ObDtlMsgType::FINISH_SQC_RESULT:
+        case ObDtlMsgType::DH_BARRIER_PIECE_MSG:
+        case ObDtlMsgType::DH_WINBUF_PIECE_MSG:
+        case ObDtlMsgType::DH_DYNAMIC_SAMPLE_PIECE_MSG:
+        case ObDtlMsgType::DH_ROLLUP_KEY_PIECE_MSG:
+        case ObDtlMsgType::DH_RANGE_DIST_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_INIT_CHANNEL_PIECE_MSG:
+        case ObDtlMsgType::DH_SECOND_STAGE_REPORTING_WF_PIECE_MSG:
+        case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
+          // 这几种消息都在 process 回调函数里处理了
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected msg type", K(msg_type));
+          break;
+      }
+    }
+  }
+  if (ret == OB_ITER_END) {
+    if (!iter_end_) {
+      iter_end_ = true;
+      LOG_TRACE("RECORDTIME", K(time_recorder_));
+    }
+    ret = OB_SUCCESS;
+  }
+  brs_.size_ = read_rows;
+  brs_.end_ = iter_end_;
+  brs_.skip_->reset(brs_.size_);
+  brs_.all_rows_active_ = true;
+  if (OB_UNLIKELY(OB_SUCCESS != ret)) {
+    int ret_terminate = terminate_running_dfos(coord_info_.dfo_mgr_);
+    LOG_WARN("QC get error code", K(ret), K(ret_terminate));
+    if (OB_ERR_SIGNALED_IN_PARALLEL_QUERY_SERVER == ret
+        && OB_SUCCESS != ret_terminate) {
+      ret = ret_terminate;
+    }
+  }
+  return ret;
+}
+
+int ObPxOrderedCoordOp::next_rows(ObReceiveRowReader &reader, int64_t max_row_cnt, int64_t &read_rows)
+{
+  int ret = OB_SUCCESS;
+  LOG_TRACE("Begin next_rows", K(max_row_cnt));
+  metric_.mark_interval_start();
+  read_rows = 0;
+  // TODO: shanting2.0 use get_next_batch_vec
+  ret = reader.get_next_row(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_, eval_ctx_);
+  metric_.mark_interval_end(&time_recorder_);
+  if (OB_SUCC(ret)) {
+    read_rows = 1;
+  } else if (OB_ITER_END == ret) {
+    finish_ch_cnt_++;
+    channel_idx_++;
+    if (OB_LIKELY(finish_ch_cnt_ < task_channels_.count())) {
+      receive_order_.set_current_ch_idx(channel_idx_);
+      ret = OB_SUCCESS;
+    } else if (OB_UNLIKELY(finish_ch_cnt_ > task_channels_.count())) {
+      // 本分支是一个防御分支
+      // 所有 channel 上的数据都收取成功
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("All data received. SHOULD NOT see more rows comming",
+               "finish_task_cnt", finish_ch_cnt_,
+               "total_task_chan_cnt", task_channels_.count(),
+               K(ret));
+    } else {
+      LOG_TRACE("All channel finish", "finish_ch_cnt", finish_ch_cnt_, K(ret));
+      all_rows_finish_ = true;
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(ret)) {
+    LOG_WARN("get next batch from row reader failed", K(ret));
+  }
+  return ret;
+}
+
+int ObPxOrderedCoordOp::inner_rescan()
+{
+  finish_ch_cnt_ = 0;
+  all_rows_finish_ = false;
+  destroy_readers();
+  int ret = ObPxCoordOp::inner_rescan();
   return ret;
 }
 
@@ -316,7 +507,7 @@ int ObPxOrderedCoordOp::setup_readers()
     } else {
       reader_cnt_ = task_channels_.count();
       for (int64_t i = 0; i < reader_cnt_; i++) {
-        new (&readers_[i]) ObReceiveRowReader();
+        new (&readers_[i]) ObReceiveRowReader(get_spec().id_);
       }
     }
   }

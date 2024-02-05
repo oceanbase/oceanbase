@@ -95,9 +95,6 @@ void TestLSTabletService::SetUpTestCase()
   ASSERT_EQ(OB_SUCCESS, ret);
   ObServerCheckpointSlogHandler::get_instance().is_started_ = true;
 
-  ObIOManager::get_instance().add_tenant_io_manager(
-      TestSchemaUtils::TEST_TENANT_ID, ObTenantIOConfig::default_instance());
-
   // create ls
   ObLSHandle ls_handle;
   ret = TestDmlCommon::create_ls(TestSchemaUtils::TEST_TENANT_ID, ObLSID(TEST_LS_ID), ls_handle);
@@ -132,7 +129,7 @@ void TestLSTabletService::SetUp()
 void TestLSTabletService::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MockTenantModuleEnv::get_instance().destroy();
@@ -185,15 +182,20 @@ void TestLSTabletService::construct_and_get_tablet_list(
   ObTabletHandle old_handle;
 
   ObTabletMapKey head_key(ls_id_, tablet_id);
+  ObUpdateTabletPointerParam param;
   ret = t3m->get_tablet(WashTabletPriority::WTP_LOW, head_key, old_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = t3m->compare_and_swap_tablet(head_key, old_handle, tablet_handle_head);
+  ret = tablet_handle_head.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = t3m->compare_and_swap_tablet(head_key, old_handle, tablet_handle_head, param);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletMapKey node_key(ls_id_, node_tablet_id);
   ret = t3m->get_tablet(WashTabletPriority::WTP_LOW, node_key, old_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = t3m->compare_and_swap_tablet(node_key, old_handle, tablet_handle_tail);
+  ret = tablet_handle_tail.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = t3m->compare_and_swap_tablet(node_key, old_handle, tablet_handle_tail, param);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -1104,8 +1106,11 @@ TEST_F(TestLSTabletService, update_tablet_ddl_commit_scn)
   ASSERT_EQ(OB_NOT_SUPPORTED, ls_handle.get_ls()->get_tablet_svr()->update_tablet_ddl_commit_scn(data_tablet_id, ddl_commit_scn));
 
   ObTabletHandle new_tablet_hdl;
+  ObUpdateTabletPointerParam param;
   ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet_handle.get_obj(), new_tablet_hdl));
-  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr *)->compare_and_swap_tablet(key, tablet_handle, new_tablet_hdl));
+  ret = new_tablet_hdl.get_obj()->get_updating_tablet_pointer_param(param);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr *)->compare_and_swap_tablet(key, tablet_handle, new_tablet_hdl, param));
 
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->update_tablet_ddl_commit_scn(data_tablet_id, ddl_commit_scn));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));

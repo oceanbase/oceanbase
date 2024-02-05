@@ -89,7 +89,7 @@ public:
   int cancel_task(const ObTimerTask &task);
   int wait_task(const ObTimerTask &task);
   void cancel_all();
-  int32_t get_tasks_num() const { return tasks_num_; }
+  int64_t get_tasks_num() const { return tasks_num_; }
   void dump() const;
 private:
   struct Token
@@ -100,7 +100,6 @@ private:
     TO_STRING_KV(K(scheduled_time), K(delay), KP(task), KPC(task));
     int64_t scheduled_time;
     int64_t delay;
-    bool canceled_;
     ObTimerTask *task;
   };
   int insert_token(const Token &token);
@@ -109,7 +108,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTimer);
 private:
   const static int64_t ELAPSED_TIME_LOG_THREASHOLD = 10 * 60 * 1000 * 1000; // 10 mins
-  int32_t tasks_num_;
+  int64_t tasks_num_;
   int64_t max_task_num_;
   int64_t wakeup_time_;
   bool is_inited_;

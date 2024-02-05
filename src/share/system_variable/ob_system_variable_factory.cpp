@@ -39,6 +39,11 @@ const char *ObSysVarBinlogFormat::BINLOG_FORMAT_NAMES[] = {
   "ROW",
   0
 };
+const char *ObSysVarProfiling::PROFILING_NAMES[] = {
+  "OFF",
+  "ON",
+  0
+};
 const char *ObSysVarObReadConsistency::OB_READ_CONSISTENCY_NAMES[] = {
   "",
   "FROZEN",
@@ -131,6 +136,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_enable_rich_vector_format",
   "_enable_storage_cardinality_estimation",
   "_force_order_preserve_set",
   "_force_parallel_ddl_dop",
@@ -300,6 +306,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "plsql_warnings",
   "plugin_dir",
   "privilege_features_enable",
+  "profiling",
+  "profiling_history_size",
   "protocol_version",
   "query_cache_limit",
   "query_cache_min_res_unit",
@@ -378,6 +386,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,
   SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION,
   SYS_VAR__FORCE_ORDER_PRESERVE_SET,
   SYS_VAR__FORCE_PARALLEL_DDL_DOP,
@@ -547,6 +556,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
   SYS_VAR_PRIVILEGE_FEATURES_ENABLE,
+  SYS_VAR_PROFILING,
+  SYS_VAR_PROFILING_HISTORY_SIZE,
   SYS_VAR_PROTOCOL_VERSION,
   SYS_VAR_QUERY_CACHE_LIMIT,
   SYS_VAR_QUERY_CACHE_MIN_RES_UNIT,
@@ -714,6 +725,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "cte_max_recursion_depth",
   "regexp_stack_limit",
   "regexp_time_limit",
+  "profiling",
+  "profiling_history_size",
   "ob_interm_result_mem_limit",
   "ob_proxy_partition_hit",
   "ob_log_level",
@@ -860,7 +873,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_default_lob_inrow_threshold",
   "_enable_storage_cardinality_estimation",
   "lc_time_names",
-  "activate_all_roles_on_login"
+  "activate_all_roles_on_login",
+  "_enable_rich_vector_format"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1126,6 +1140,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarCteMaxRecursionDepth)
         + sizeof(ObSysVarRegexpStackLimit)
         + sizeof(ObSysVarRegexpTimeLimit)
+        + sizeof(ObSysVarProfiling)
+        + sizeof(ObSysVarProfilingHistorySize)
         + sizeof(ObSysVarObIntermResultMemLimit)
         + sizeof(ObSysVarObProxyPartitionHit)
         + sizeof(ObSysVarObLogLevel)
@@ -1273,6 +1289,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarEnableStorageCardinalityEstimation)
         + sizeof(ObSysVarLcTimeNames)
         + sizeof(ObSysVarActivateAllRolesOnLogin)
+        + sizeof(ObSysVarEnableRichVectorFormat)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -2152,6 +2169,24 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_REGEXP_TIME_LIMIT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarRegexpTimeLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProfiling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProfiling", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PROFILING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarProfiling));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProfilingHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProfilingHistorySize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PROFILING_HISTORY_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarProfilingHistorySize));
       }
     }
     if (OB_SUCC(ret)) {
@@ -3477,6 +3512,15 @@ int ObSysVarFactory::create_all_sys_vars()
         ptr = (void *)((char *)ptr + sizeof(ObSysVarActivateAllRolesOnLogin));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableRichVectorFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableRichVectorFormat", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_RICH_VECTOR_FORMAT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableRichVectorFormat));
+      }
+    }
 
   }
   return ret;
@@ -4551,6 +4595,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarRegexpTimeLimit())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarRegexpTimeLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PROFILING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarProfiling)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarProfiling)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProfiling())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProfiling", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PROFILING_HISTORY_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarProfilingHistorySize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarProfilingHistorySize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarProfilingHistorySize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarProfilingHistorySize", K(ret));
       }
       break;
     }
@@ -6168,6 +6234,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarActivateAllRolesOnLogin())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarActivateAllRolesOnLogin", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ENABLE_RICH_VECTOR_FORMAT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableRichVectorFormat)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableRichVectorFormat)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableRichVectorFormat())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableRichVectorFormat", K(ret));
       }
       break;
     }

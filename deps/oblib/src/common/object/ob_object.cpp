@@ -299,6 +299,13 @@ DEF_TO_STRING(ObLobLocatorV2)
             J_KV(K(*location_info));
             J_COMMA();
           }
+          if (buf_len > pos && extern_header->flags_.has_retry_info_
+              && size_ >= offset + MEM_LOB_EXTERN_RETRYINFO_LEN) {
+            ObMemLobRetryInfo *retry_info = reinterpret_cast<ObMemLobRetryInfo *>(ptr_ + offset);
+            offset += MEM_LOB_EXTERN_RETRYINFO_LEN;
+            J_KV(K(*retry_info));
+            J_COMMA();
+          }
           if (buf_len > pos) {
             ObString rowkey_str(MIN(extern_header->rowkey_size_, buf_len - pos), ptr_ + offset);
             offset += extern_header->rowkey_size_;
@@ -345,6 +352,9 @@ uint32_t ObLobLocatorV2::calc_locator_full_len(const ObMemLobExternFlags &flags,
     }
     if (flags.has_location_info_) {
       loc_len += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (flags.has_retry_info_) {
+      loc_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
     }
     loc_len += MEM_LOB_ADDR_LEN; //ToDo:@gehao server address.
     loc_len += rowkey_size;
@@ -425,6 +435,10 @@ int ObLobLocatorV2::fill(ObMemLobType type,
         if (flags.has_location_info_) {
           offset += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
           *extern_len += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+        }
+        if (flags.has_retry_info_) {
+          offset += MEM_LOB_EXTERN_RETRYINFO_LEN;
+          *extern_len += MEM_LOB_EXTERN_RETRYINFO_LEN;
         }
 
         if ((offset + rowkey_str.length()) && OB_UNLIKELY(offset > size_)) {
@@ -571,7 +585,7 @@ int ObLobLocatorV2::get_disk_locator(ObString &disc_loc_buff) const
     int64_t handle_size = reinterpret_cast<intptr_t>(disk_loc) - reinterpret_cast<intptr_t>(ptr_);
     if (handle_size > size_) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_));
+      LOG_WARN("get invalid handle size", K(ret), K(size_), K(disk_loc), K(ptr_), K(handle_size));
     } else {
       if (disk_loc->in_row_) {
         handle_size = size_ - handle_size;
@@ -749,6 +763,28 @@ int ObLobLocatorV2::get_location_info(ObMemLobLocationInfo *&location_info) cons
   return ret;
 }
 
+int ObLobLocatorV2::get_retry_info(ObMemLobRetryInfo *&retry_info) const
+{
+  int ret =  OB_SUCCESS;
+  ObMemLobExternHeader *extern_header = NULL;
+  if (OB_SUCC(get_extern_header(extern_header))) {
+    char *cur_pos = extern_header->data_ + MEM_LOB_EXTERN_SIZE_LEN;
+    if (extern_header->flags_.has_tx_info_) {
+      cur_pos += MEM_LOB_EXTERN_TXINFO_LEN;
+    }
+    if (extern_header->flags_.has_location_info_) {
+      cur_pos += MEM_LOB_EXTERN_LOCATIONINFO_LEN;
+    }
+    if (extern_header->flags_.has_retry_info_) {
+      retry_info = reinterpret_cast<ObMemLobRetryInfo *>(cur_pos);
+    } else {
+      ret = OB_ERR_NULL_VALUE;
+      COMMON_LOG(WARN, "Lob: does not have retry info", K(this), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
 {
   int ret = OB_SUCCESS;
@@ -879,6 +915,17 @@ int ObLobLocatorV2::set_location_info(const ObMemLobLocationInfo &location_info)
   ObMemLobLocationInfo *loc_info_ptr = NULL;
   if (OB_SUCC(get_location_info(loc_info_ptr))) {
     *loc_info_ptr = location_info;
+  }
+  return ret;
+}
+
+int ObLobLocatorV2::set_retry_info(const ObMemLobRetryInfo &retry_info)
+{
+  validate_has_lob_header(has_lob_header_);
+  int ret = OB_SUCCESS;
+  ObMemLobRetryInfo *retry_info_ptr = NULL;
+  if (OB_SUCC(get_retry_info(retry_info_ptr))) {
+    *retry_info_ptr = retry_info;
   }
   return ret;
 }
@@ -2227,35 +2274,6 @@ DEFINE_SERIALIZE(ObObjParam)
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(accuracy_);
     OB_UNIS_ENCODE(res_flags_);
-    if (OB_SUCC(ret) && is_ext_sql_array()) {
-      const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
-      int64_t n = sizeof(ObSqlArrayObj);
-      if (OB_ISNULL(array_obj)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL ptr", K(ret), KP(array_obj));
-      } else if (buf_len - pos < n) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
-      } else {
-        MEMCPY(buf + pos, array_obj, n);
-        pos += n;
-        if (array_obj->count_ == 0) {
-          /* do nothing */
-        } else if (OB_ISNULL(array_obj->data_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("data is NULL ptr", K(ret), KP(array_obj->data_));
-        } else {
-          n = sizeof(array_obj->data_[0]) * array_obj->count_;
-          if (buf_len - pos < n) {
-            ret = OB_BUF_NOT_ENOUGH;
-            LOG_WARN("serialize buf not enough", K(ret), "remain", buf_len - pos, "needed", n);
-          } else {
-            MEMCPY(buf + pos, static_cast<const void*>(array_obj->data_), n);
-            pos += n;
-          }
-        }
-      }
-    }
   }
   return ret;
 }
@@ -2266,30 +2284,6 @@ DEFINE_DESERIALIZE(ObObjParam)
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(accuracy_);
     OB_UNIS_DECODE(res_flags_);
-    if (OB_SUCC(ret) && is_ext_sql_array()) {
-      ObSqlArrayObj *array_obj = NULL;
-      int64_t n = sizeof(ObSqlArrayObj);
-      if (data_len - pos < n) {
-        ret = OB_BUF_NOT_ENOUGH;
-        LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
-      } else {
-        array_obj = reinterpret_cast<ObSqlArrayObj *>(const_cast<char *>(buf + pos));
-        pos += n;
-      }
-      if (OB_SUCC(ret) && array_obj->count_ > 0) {
-        n = sizeof(ObObjParam) * array_obj->count_;
-        if (data_len - pos < n) {
-          ret = OB_BUF_NOT_ENOUGH;
-          LOG_WARN("deserialize buf not enough", K(ret), "remain", data_len - pos, "needed", n);
-        } else {
-          array_obj->data_ = reinterpret_cast<ObObjParam *>(const_cast<char *>(buf + pos));
-          pos += n;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        set_extend(reinterpret_cast<int64_t>(array_obj), T_EXT_SQL_ARRAY);
-      }
-    }
   }
   return ret;
 }
@@ -2299,18 +2293,6 @@ DEFINE_GET_SERIALIZE_SIZE(ObObjParam)
   int64_t len = ObObj::get_serialize_size();
   OB_UNIS_ADD_LEN(accuracy_);
   OB_UNIS_ADD_LEN(res_flags_);
-  if (is_ext_sql_array()) {
-    len += sizeof(ObSqlArrayObj);
-    const ObSqlArrayObj *array_obj = reinterpret_cast<const ObSqlArrayObj*>(get_ext());
-    if (NULL != array_obj) {
-      len += sizeof(ObSqlArrayObj);
-      if (array_obj->count_ == 0) {
-        /* do nothing */
-      } else if (NULL != array_obj->data_) {
-        len += sizeof(array_obj->data_[0]) * array_obj->count_;
-      }
-    }
-  }
   return len;
 }
 
@@ -2450,4 +2432,59 @@ int64_t ObHexEscapeSqlStr::get_extra_length() const
     }
   }
   return ret_length;
+}
+
+int ObSqlArrayObj::do_real_deserialize(common::ObIAllocator &allocator, char *buf, int64_t data_len,
+                                       ObSqlArrayObj *&array_obj)
+{
+  int ret = OB_SUCCESS;
+  int64_t n = sizeof(ObSqlArrayObj);
+  void *array_buf = allocator.alloc(n);
+  int64_t pos = 0;
+  if (OB_ISNULL(array_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    array_obj = new (array_buf) ObSqlArrayObj();
+    if (OB_FAIL(array_obj->deserialize(allocator, buf, data_len, pos))) {
+      LOG_WARN("failed to deserialize ObSqlArrayObj", K(ret));
+    }
+  }
+  return ret;
+}
+
+DEFINE_SERIALIZE(ObSqlArrayObj)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  OB_UNIS_ENCODE(element_);
+  OB_UNIS_ENCODE_ARRAY(data_, count_);
+  return ret;
+}
+
+int ObSqlArrayObj::deserialize(ObIAllocator &allocator, const char* buf, const int64_t data_len,
+                               int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_DECODE(element_);
+  OB_UNIS_DECODE(count_);
+  if (OB_SUCC(ret) && count_ > 0) {
+    void *data_buf = allocator.alloc(sizeof(ObObjParam) * count_);
+    if (OB_ISNULL(data_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      data_ = new (data_buf) common::ObObjParam[count_];
+      OB_UNIS_DECODE_ARRAY(data_, count_);
+    }
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObSqlArrayObj)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(element_);
+  OB_UNIS_ADD_LEN_ARRAY(data_, count_);
+  return len;
 }

@@ -175,16 +175,18 @@ void ObDtlRpcChannel::SendBCMsgCB::destroy()
 ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t tenant_id,
     const uint64_t id,
-    const ObAddr &peer)
-    : ObDtlBasicChannel(tenant_id, id, peer), recv_sqc_fin_res_(false)
+    const ObAddr &peer,
+    DtlChannelType type)
+    : ObDtlBasicChannel(tenant_id, id, peer, type), recv_sqc_fin_res_(false)
 {}
 
 ObDtlRpcChannel::ObDtlRpcChannel(
     const uint64_t tenant_id,
     const uint64_t id,
     const ObAddr &peer,
-    const int64_t hash_val)
-    : ObDtlBasicChannel(tenant_id, id, peer, hash_val), recv_sqc_fin_res_(false)
+    const int64_t hash_val,
+    DtlChannelType type)
+    : ObDtlBasicChannel(tenant_id, id, peer, hash_val, type), recv_sqc_fin_res_(false)
 {}
 
 ObDtlRpcChannel::~ObDtlRpcChannel()
@@ -214,7 +216,7 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
   ObDtlMsgHeader header;
   const bool keep_buffer_pos = true;
   MTL_SWITCH(tenant_id_) {
-    if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header, keep_buffer_pos))) {
+    if (!buffer->is_data_msg() && OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header, keep_buffer_pos))) {
       LOG_WARN("failed to deserialize msg", K(ret));
     } else if (header.is_drain()) {
       // drain msg
@@ -231,7 +233,6 @@ int ObDtlRpcChannel::feedup(ObDtlLinkedBuffer *&buffer)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate buffer", K(ret));
     } else {
-      LOG_TRACE("DTL feedup a new msg to msg loop", K(buffer->size()), KP(id_), K(peer_));
       ObDtlLinkedBuffer::assign(*buffer, linked_buffer);
       if (1 == linked_buffer->seq_no() && linked_buffer->is_data_msg()
           && 0 != get_recv_buffer_cnt()) {

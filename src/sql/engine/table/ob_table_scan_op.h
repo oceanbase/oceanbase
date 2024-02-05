@@ -24,6 +24,7 @@
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/das/ob_text_retrieval_op.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
 namespace oceanbase
@@ -139,7 +140,10 @@ public:
       das_dppr_tbl_(nullptr),
       allocator_(allocator),
       calc_part_id_expr_(NULL),
-      global_index_rowkey_exprs_(allocator)
+      global_index_rowkey_exprs_(allocator),
+      aux_lookup_ctdef_(nullptr),
+      aux_lookup_loc_meta_(nullptr),
+      text_ir_ctdef_(nullptr)
   { }
   const ExprFixedArray &get_das_output_exprs() const
   {
@@ -161,7 +165,10 @@ public:
                KPC_(lookup_loc_meta),
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
-               K_(global_index_rowkey_exprs));
+               K_(global_index_rowkey_exprs),
+               KPC_(aux_lookup_ctdef),
+               KPC_(aux_lookup_loc_meta),
+               KPC_(text_ir_ctdef));
   //the query range of index scan/table scan
   ObQueryRange pre_query_range_;
   FlashBackItem flashback_item_;
@@ -188,6 +195,11 @@ public:
   ObExpr *calc_part_id_expr_;
   ExprFixedArray global_index_rowkey_exprs_;
   // end for Global Index Lookup
+  // domain doc_id aux lookup
+  ObDASScanCtDef *aux_lookup_ctdef_;
+  ObDASTableLocMeta *aux_lookup_loc_meta_;
+  // text retrieval
+  ObDASIRCtDef *text_ir_ctdef_;
 };
 
 struct ObTableScanRtDef
@@ -584,6 +596,10 @@ private:
   int inner_get_next_row_for_tsc();
   int inner_get_next_batch_for_tsc(const int64_t max_row_cnt);
   int inner_rescan_for_tsc();
+
+  void gen_rand_size_and_skip_bits(const int64_t batch_size, int64_t &rand_size, int64_t &skip_bits);
+
+  void adjust_rand_output_brs(const int64_t rand_skip_bits);
 protected:
   ObDASRef das_ref_;
   DASOpResultIter scan_result_;

@@ -88,8 +88,12 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     table_id_ = schema->get_table_id();
     schema_version_ = schema->get_schema_version();
     table_type_ = schema->get_table_type();
-    use_cs = !schema->is_row_store();
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
+    if (OB_FAIL(schema->get_is_row_store(use_cs))) {
+      LOG_WARN("fail to get is row store", K(ret));
+    } else {
+      use_cs = !use_cs;
+    }
   }
 
   if (OB_SUCC(ret) && schema->is_user_table() && !schema->is_heap_table()) {
@@ -125,6 +129,17 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       LOG_WARN("fail to get index name", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
       LOG_WARN("fail to copy index name", K(ret), K(tmp_name));
+    }
+  }
+
+  if (OB_SUCC(ret) && schema->is_mlog_table()) {
+    index_type_ = schema->get_index_type();
+    index_status_ = schema->get_index_status();
+    ObString tmp_name;
+    if (OB_FAIL(schema->get_mlog_name(tmp_name))) {
+      LOG_WARN("fail to get materialized view log name", KR(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
+      LOG_WARN("fail to copy materialized view log name", KR(ret), K(tmp_name));
     }
   }
 

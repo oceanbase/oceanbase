@@ -117,7 +117,7 @@ public:
   ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0) {}
   ObDDLTaskSerializeField(const int64_t task_version,
                           const int64_t parallelism,
-                          const int64_t data_format_version,
+                          const uint64_t data_format_version,
                           const int64_t consumer_group_id,
                           const bool is_abort,
                           const int32_t sub_task_trace_id);
@@ -126,7 +126,7 @@ public:
 public:
   int64_t task_version_;
   int64_t parallelism_;
-  int64_t data_format_version_;
+  uint64_t data_format_version_;
   int64_t consumer_group_id_;
   bool is_abort_;
   int32_t sub_task_trace_id_;
@@ -151,8 +151,8 @@ public:
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
-  TO_STRING_KV(K_(sub_task_trace_id), K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
-               K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg));
+  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
+               K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version), K_(sub_task_trace_id));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -167,6 +167,7 @@ public:
   const ObTableSchema *dest_table_schema_;
   const obrpc::ObDDLArg *ddl_arg_;
   common::ObIAllocator *allocator_;
+  uint64_t tenant_data_version_;
 };
 
 class ObDDLTaskRecordOperator final
@@ -207,6 +208,13 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       const int64_t task_status,
+      ObString &message);
+
+  static int update_ret_code_and_message(
+      common::ObISQLClient &proxy,
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const int ret_code,
       ObString &message);
 
   static int delete_record(
@@ -516,7 +524,7 @@ public:
                                  obrpc::ObDDLArg &dest_arg);
   void set_longops_stat(share::ObDDLLongopsStat *longops_stat) { longops_stat_ = longops_stat; }
   share::ObDDLLongopsStat *get_longops_stat() const { return longops_stat_; }
-  int64_t get_data_format_version() const { return data_format_version_; }
+  uint64_t get_data_format_version() const { return data_format_version_; }
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, const uint64_t tenant_id, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const;
   virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos);
@@ -575,7 +583,8 @@ protected:
                                 ObMySQLProxy &sql_proxy,
                                 int64_t &row_scanned,
                                 int64_t &row_sorted,
-                                int64_t &row_inserted);
+                                int64_t &row_inserted_cg,
+                                int64_t &row_inserted_file);
   int gather_scanned_rows(
       const uint64_t tenant_id,
       const int64_t task_id,
@@ -590,7 +599,8 @@ protected:
       const uint64_t tenant_id,
       const int64_t task_id,
       ObMySQLProxy &sql_proxy,
-      int64_t &row_inserted);
+      int64_t &row_inserted_cg,
+      int64_t &row_inserted_file);
   int copy_longops_stat(share::ObLongopsValue &value);
   virtual bool is_error_need_retry(const int ret_code)
   {
@@ -636,7 +646,7 @@ protected:
   int64_t execution_id_; // guarded by lock_
   common::ObAddr sql_exec_addr_;
   int64_t start_time_;
-  int64_t data_format_version_;
+  uint64_t data_format_version_;
   int64_t consumer_group_id_;
 };
 

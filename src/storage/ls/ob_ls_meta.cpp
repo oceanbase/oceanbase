@@ -301,16 +301,19 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
     ObLSMeta tmp(*this);
     tmp.migration_status_ = migration_status;
     tmp.ls_persistent_state_ = (OB_MIGRATION_STATUS_NONE == migration_status &&
-                                ObLSRestoreStatus::RESTORE_NONE == restore_status_ ?
+                                ObLSRestoreStatus::NONE == restore_status_ ?
                                 ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
 
     if (write_slog && OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("migration_status write slog failed", K(ret));
-    } else if ((OB_MIGRATION_STATUS_NONE == migration_status && ObLSRestoreStatus::RESTORE_NONE == restore_status_)
+    } else if ((OB_MIGRATION_STATUS_NONE == migration_status && ObLSRestoreStatus::NONE == restore_status_)
                && OB_FAIL(set_finish_ha_state())) {
       LOG_WARN("set finish ha state failed", K(ret), K(ls_id_));
     } else {
+      ObMigrationStatus original_status = migration_status_;
       migration_status_ = migration_status;
+      FLOG_INFO("succeed to set ls migration status", K(ls_id_), "original status",
+          original_status, "current status", migration_status);
     }
   }
   return ret;
@@ -394,16 +397,19 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
   } else {
     ObLSMeta tmp(*this);
     tmp.restore_status_ = restore_status;
-    tmp.ls_persistent_state_ = (ObLSRestoreStatus::RESTORE_NONE == restore_status &&
+    tmp.ls_persistent_state_ = (ObLSRestoreStatus::NONE == restore_status &&
                                 OB_MIGRATION_STATUS_NONE == migration_status_ ?
                                 ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("restore_status write slog failed", K(ret));
-    } else if ((ObLSRestoreStatus::RESTORE_NONE == restore_status && OB_MIGRATION_STATUS_NONE == migration_status_)
+    } else if ((ObLSRestoreStatus::NONE == restore_status && OB_MIGRATION_STATUS_NONE == migration_status_)
                && OB_FAIL(set_finish_ha_state())) {
       LOG_WARN("set finish ha state failed", KR(ret), K(ls_id_));
     } else {
+      ObLSRestoreStatus original_status = restore_status_;
       restore_status_ = restore_status;
+      FLOG_INFO("succeed to set ls restore status", K(ls_id_), "original status",
+          original_status, "current status", restore_status);
     }
   }
   return ret;
@@ -547,6 +553,7 @@ int ObLSMeta::set_ls_rebuild()
       } else {
         migration_status_ = change_status;
         rebuild_seq_ = tmp.rebuild_seq_;
+        FLOG_INFO("succeed to set ls rebuild", "ls_id", ls_id_, KPC(this));
       }
     }
   }
@@ -560,7 +567,7 @@ int ObLSMeta::check_valid_for_backup() const
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid", K(ret), KPC(this));
-  } else if (!restore_status_.is_restore_none()) {
+  } else if (!restore_status_.is_none()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("restore status is not none", K(ret), KPC(this));
   } else if (OB_MIGRATION_STATUS_NONE != migration_status_) {
@@ -777,6 +784,7 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
       rebuild_info_ = rebuild_info;
+      FLOG_INFO("succeed to set rebuild info", K(ls_id_), K(rebuild_info));
     }
   }
   return ret;
@@ -805,15 +813,30 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get restore status", K(ret), K(*this));
-  // before 4.3
-  } else if (restore_status_.is_enable_for_restore()) {
-    create_type = ObLSCreateType::RESTORE;
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status_) {
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_) {
     create_type = ObLSCreateType::MIGRATE;
-  // before 4.3 end
-  // after 4.3
+  } else if (restore_status_.is_in_clone()) {
+    create_type = ObLSCreateType::CLONE;
+  } else if (restore_status_.is_in_restore()) {
+    create_type = ObLSCreateType::RESTORE;
   } else if (ls_persistent_state_.is_ha_state()) {
     create_type = ObLSCreateType::MIGRATE;
+  }
+  return ret;
+}
+
+int ObLSMeta::check_ls_need_online(bool &need_online) const
+{
+  int ret = OB_SUCCESS;
+  need_online = true;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream meta is not valid", K(ret), K(*this));
+  } else if (!ObMigrationStatusHelper::need_online(migration_status_)) {
+    need_online = false;
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status_ &&
+             !restore_status_.need_online()) {
+    need_online = false;
   }
   return ret;
 }
@@ -881,6 +904,13 @@ ObLSMeta::ObReentrantRLockGuard::ObReentrantRLockGuard(ObLatch &lock,
   }
 
   time_guard_.click("after lock");
+}
+
+void ObLSMeta::update_clog_checkpoint_in_ls_meta_package_(const share::SCN& clog_checkpoint_scn,
+                                                          const palf::LSN& clog_base_lsn)
+{
+  clog_checkpoint_scn_ = clog_checkpoint_scn;
+  clog_base_lsn_ = clog_base_lsn;
 }
 
 ObLSMeta::ObReentrantRLockGuard::~ObReentrantRLockGuard()

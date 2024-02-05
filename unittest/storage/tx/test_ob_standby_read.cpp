@@ -39,14 +39,12 @@ class MockLockForReadFunctor
 public :
   MockLockForReadFunctor(const int64_t snapshot) :
     snapshot(snapshot), can_read(false),
-    trans_version(OB_INVALID_TIMESTAMP),
-    is_determined_state(false)
+    trans_version(OB_INVALID_TIMESTAMP)
   {}
   ~MockLockForReadFunctor() {}
   int64_t snapshot;
   bool can_read;
   int64_t trans_version;
-  bool is_determined_state;
 };
 
 class MockObPartTransCtx : public transaction::ObPartTransCtx
@@ -61,8 +59,9 @@ public :
     is_inited_ = true;
   }
   ~MockObPartTransCtx() {}
-  int check_for_standby(const SCN &snapshot, bool &can_read,
-                        SCN &trans_version, bool &is_determined_state)
+  int check_for_standby(const SCN &snapshot,
+                        bool &can_read,
+                        SCN &trans_version)
   {
     int ret = OB_ERR_SHARED_LOCK_CONFLICT;
     SCN min_snapshot = SCN::max_scn();
@@ -86,7 +85,6 @@ public :
           if (tmp_state_info.version_ > snapshot) {
             can_read = false;
             trans_version.set_min();
-            is_determined_state = false;
             ret = OB_SUCCESS;
           } else {
             version = MAX(version, tmp_state_info.version_);
@@ -96,7 +94,6 @@ public :
         case ObTxState::ABORT: {
           can_read = false;
           trans_version.set_min();
-          is_determined_state = true;
           ret = OB_SUCCESS;
           break;
         }
@@ -108,7 +105,6 @@ public :
             can_read = false;
           }
           trans_version = tmp_state_info.version_;
-          is_determined_state = true;
           ret = OB_SUCCESS;
           break;
         }
@@ -119,7 +115,6 @@ public :
     if (count != 0 && OB_ERR_SHARED_LOCK_CONFLICT == ret && state == ObTxState::PREPARE && version <= snapshot) {
       can_read = true;
       trans_version = version;
-      is_determined_state = true;
       ret = OB_SUCCESS;
     }
     if (count == 0 || (OB_ERR_SHARED_LOCK_CONFLICT == ret && min_snapshot < snapshot)) {
@@ -237,7 +232,6 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   max_decided_scn.convert_for_tx(10);
   bool can_read = false;
   SCN trans_version = SCN::min_scn();
-  bool is_determined_state = false;
   ObStateInfo state_info;
   ObAskStateRespMsg resp;
   share::ObLSID coord_ls = share::ObLSID(1);
@@ -246,11 +240,11 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   share::ObLSID part3_ls = share::ObLSID(1003);
   MockObPartTransCtx coord(coord_ls);
   MockObPartTransCtx part1(part1_ls), part2(part2_ls), part3(part3_ls);
-  share::ObLSArray parts;
-  ASSERT_EQ(OB_SUCCESS, parts.push_back(coord_ls));
-  ASSERT_EQ(OB_SUCCESS, parts.push_back(part1_ls));
-  ASSERT_EQ(OB_SUCCESS, parts.push_back(part2_ls));
-  ASSERT_EQ(OB_SUCCESS, parts.push_back(part3_ls));
+  ObTxCommitParts parts;
+  ASSERT_EQ(OB_SUCCESS, parts.push_back(ObTxExecPart(coord_ls, coord.epoch_, 0)));
+  ASSERT_EQ(OB_SUCCESS, parts.push_back(ObTxExecPart(part1_ls, part1.epoch_, 0)));
+  ASSERT_EQ(OB_SUCCESS, parts.push_back(ObTxExecPart(part2_ls, part2.epoch_, 0)));
+  ASSERT_EQ(OB_SUCCESS, parts.push_back(ObTxExecPart(part3_ls, part3.epoch_, 0)));
   part1.set_2pc_upstream_(coord_ls);
   part2.set_2pc_upstream_(coord_ls);
   part3.set_2pc_upstream_(coord_ls);
@@ -265,10 +259,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part1.exec_info_.prepare_version_.set_min();
   part2.set_downstream_state(ObTxState::INIT);
   part3.set_downstream_state(ObTxState::UNKNOWN);
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -278,7 +272,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
 
   TRANS_LOG(INFO, "test2:can read = false with upper prepare version");
   coord.set_downstream_state(ObTxState::PREPARE);
@@ -290,10 +284,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   can_read = true;
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -303,7 +297,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(false, can_read);
 
   TRANS_LOG(INFO, "test3:can read = true with commit");
@@ -315,19 +309,19 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part1.exec_info_.prepare_version_.convert_for_tx(90);
   part2.set_downstream_state(ObTxState::COMMIT);
   ObTxData part2_tx_data;
-  ObSliceAlloc slice_allocator;
+  ObTenantTxDataAllocator tx_data_allocator;
   part2_tx_data.ref_cnt_ = 1000;
-  part2_tx_data.slice_allocator_ = &slice_allocator;
+  part2_tx_data.tx_data_allocator_ = &tx_data_allocator;
   part2.ctx_tx_data_.tx_data_guard_.init(&part2_tx_data);
   part2.ctx_tx_data_.tx_data_guard_.tx_data()->commit_version_.convert_for_tx(90);
   part3.set_downstream_state(ObTxState::UNKNOWN);
   can_read = false;
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -337,7 +331,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(true, can_read);
 
   TRANS_LOG(INFO, "test4:can read = false with commit");
@@ -353,10 +347,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   can_read = true;
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -366,7 +360,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(false, can_read);
 
   TRANS_LOG(INFO, "test5:can read = true with all prepare");
@@ -383,10 +377,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   can_read = false;
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
@@ -398,7 +392,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(true, can_read);
 
   TRANS_LOG(INFO, "test6:can read = false with all prepare");
@@ -415,10 +409,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   can_read = true;
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
@@ -430,7 +424,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(false, can_read);
 
   TRANS_LOG(INFO, "test7:OB_ERR_SHARED_LOCK_CONFLICT with unknown state");
@@ -445,10 +439,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part3.set_downstream_state(ObTxState::UNKNOWN);
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -458,7 +452,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
 
   TRANS_LOG(INFO, "test8:can read = false with abort");
   snapshot.convert_for_tx(300);
@@ -473,10 +467,10 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   part1.state_info_array_.reset();
   coord.state_info_array_.reset();
   can_read = true;
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_ERR_SHARED_LOCK_CONFLICT, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_collect_state(state_info, max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_collect_state_resp(state_info));
   ASSERT_EQ(OB_SUCCESS, part2.handle_trans_collect_state(state_info, max_decided_scn));
@@ -486,7 +480,7 @@ TEST_F(TestObStandbyRead, trans_check_for_standby)
   resp.state_info_array_.reset();
   ASSERT_EQ(OB_SUCCESS, coord.handle_trans_ask_state(snapshot, resp));
   ASSERT_EQ(OB_SUCCESS, part1.handle_trans_ask_state_resp(resp));
-  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version, is_determined_state));
+  ASSERT_EQ(OB_SUCCESS, part1.check_for_standby(snapshot, can_read, trans_version));
   ASSERT_EQ(false, can_read);
 }
 

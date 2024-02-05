@@ -1171,14 +1171,14 @@ int ObBackupStorageInfo::get_access_key_(char *key_buf, const int64_t key_buf_le
   return ret;
 }
 
-int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has_appid)
+int ObBackupStorageInfo::parse_storage_info_(const char *storage_info, bool &has_needed_extension)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("storage info is invalid", K(ret), K(storage_info), K(strlen(storage_info)));
-  } else if (OB_FAIL(ObObjectStorageInfo::parse_storage_info_(storage_info, has_appid))) {
-    LOG_WARN("failed to parse storage info", K(ret), K(storage_info));
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info), K(strlen(storage_info)));
+  } else if (OB_FAIL(ObObjectStorageInfo::parse_storage_info_(storage_info, has_needed_extension))) {
+    LOG_WARN("failed to parse storage info", K(ret), KP(storage_info));
   } else {
     char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
     char serialize_key[OB_MAX_BACKUP_SERIALIZEKEY_LENGTH] = { 0 };
@@ -1260,7 +1260,7 @@ int ObBackupStorageInfo::decrypt_access_key_(const char *buf)
   } else if (OB_FAIL(ObEncryptionUtil::decrypt_sys_data(OB_SYS_TENANT_ID,
       deserialize_buf, deserialize_size,
       decrypt_key, sizeof(decrypt_key), key_len))) {
-    LOG_WARN("failed to decrypt authorization key", K(ret), K(deserialize_buf), K(deserialize_size));
+    LOG_WARN("failed to decrypt authorization key", K(ret), KP(deserialize_buf), K(deserialize_size));
   } else if (key_len >= sizeof(decrypt_key) || (key_len + strlen(ACCESS_KEY)) >= sizeof(access_key_)) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("decrypt key size overflow", K(ret), K(key_len), K(sizeof(decrypt_key)));
@@ -2918,6 +2918,7 @@ const char* ObBackupStatus::get_str() const
     "CANCELED",
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_SYS",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
@@ -2946,6 +2947,7 @@ int ObBackupStatus::set_status(const char *str)
     "CANCELED",
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_SYS",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
@@ -3398,6 +3400,7 @@ const char* ObBackupDataTaskType::get_str() const
   const char *str = "UNKNOWN";
   const char *type_strs[] = {
     "BACKUP_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",
@@ -3417,6 +3420,7 @@ int ObBackupDataTaskType::set_type(const char *buf)
   ObString s(buf);
   const char *type_strs[] = {
     "BACKUP_META",
+    "BACKUP_META_FINISH",
     "BACKUP_DATA_MINOR",
     "BACKUP_DATA_MAJOR",
     "PLUS_ARCHIVE_LOG",

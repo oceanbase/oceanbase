@@ -126,12 +126,12 @@ private:
   int get_first_frozen_memtable_(ObTableHandleV2 &handle) const;
   void clean_tail_memtable_();
   int get_last_frozen_memtable_(ObTableHandleV2 &handle) const;
+  int try_resolve_boundary_on_create_memtable_for_leader_(memtable::ObMemtable *last_frozen_memtable,
+                                               memtable::ObMemtable *new_memtable);
   int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
                                                 share::SCN start_scn,
                                                 share::SCN snapshot_version);
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
-  void unlink_memtable_mgr_and_memtable_(memtable::ObMemtable *memtable);
-  void wait_memtable_mgr_op_cnt_(memtable::ObMemtable *memtable);
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMemtableMgr);
 

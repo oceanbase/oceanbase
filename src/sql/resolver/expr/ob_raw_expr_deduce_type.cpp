@@ -70,6 +70,18 @@ int ObRawExprDeduceType::visit(ObConstRawExpr &expr)
     break;
   }
   }
+  //add local vars to expr
+  if (OB_SUCC(ret)) {
+    if (solidify_session_vars_) {
+      if (OB_FAIL(expr.set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+        LOG_WARN("fail to set session vars", K(ret), K(expr));
+      }
+    } else if (NULL != my_local_vars_) {
+      if (OB_FAIL(expr.set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+        LOG_WARN("fail to set local vars", K(ret), K(expr));
+      }
+    }
+  }
   return ret;
 }
 
@@ -361,6 +373,10 @@ int ObRawExprDeduceType::push_back_types(const ObRawExpr *param_expr, ObExprResT
       const ObPrecision prec = MAX(types.at(idx).get_precision(), max_prec);
       types.at(idx).set_precision(prec);
       types.at(idx).set_scale(0);
+    } else if (is_mysql_mode && ob_is_decimal_int_tc(types.at(idx).get_type())) {
+      // for decimal int type in mysql, reset calc accuracy to itself to avoid accuracy reuse
+      // during type deduce
+      types.at(idx).set_calc_accuracy(types.at(idx).get_accuracy());
     } else if (!is_mysql_mode && (is_ddl_stmt || is_show_stmt) && types.at(idx).is_decimal_int()
                && param_expr->is_column_ref_expr()) {
       // If c1 and c2 are both ObDecimalIntType columns, result type of c1 + c2 is ObDecimalIntType.
@@ -399,9 +415,6 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("not implemented in sql static typing engine, ",
              K(ret), K(op->get_type()), K(op->get_name()));
-  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, 0,
-                                                       my_session_, cast_mode))) {
-    LOG_WARN("get_default_cast_mode failed", K(ret));
   } else if (expr.get_expr_type() == T_FUN_NORMAL_UDF
              && OB_FAIL(init_normal_udf_expr(expr, op))) {
     LOG_WARN("failed to init normal udf", K(ret));
@@ -434,11 +447,32 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
     op->set_real_param_num(static_cast<int32_t>(types.count()));
     op->set_is_called_in_sql(expr.is_called_in_sql());
     ObSQLUtils::init_type_ctx(my_session_, type_ctx);
+    if (OB_SUCC(ret) && !solidify_session_vars_) {
+      if (NULL != my_local_vars_) {
+        if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
+                                                                    *my_local_vars_))) {
+          LOG_WARN("fail to merge_solidified_vars_into_type_ctx", K(ret));
+        }
+      } else if (OB_FAIL(ObSQLUtils::merge_solidified_vars_into_type_ctx(type_ctx,
+                                                                  expr.get_local_session_var()))) {
+        LOG_WARN("fail to merge_solidified_vars_into_type_ctx", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSQLUtils::get_default_cast_mode(is_explicit_cast, 0,
+                                        my_session_->get_stmt_type(),
+                                        my_session_->is_ignore_stmt(),
+                                        type_ctx.get_sql_mode(),
+                                        cast_mode);
+    }
     type_ctx.set_cast_mode(cast_mode);
 //    type_ctx.my_session_ = this->my_session_;
     ObExprResType result_type(alloc_);
     if (op->get_result_type().has_result_flag(DECIMAL_INT_ADJUST_FLAG)) {
       result_type.set_result_flag(DECIMAL_INT_ADJUST_FLAG);
+    }
+    if (ob_is_decimal_int_tc(expr.get_result_type().get_type())) {
+      result_type.add_cast_mode(expr.get_result_type().get_cast_mode());
     }
 
     // 预先把所有参数的calc_type都设置成和type一致，
@@ -1817,7 +1851,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           if (OB_ISNULL(param_expr = expr.get_param_expr(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(param_expr), K(expr.get_param_count()));
-          } else if (i == 0 || i == 2) {
+          } else if (i == 0 || i == 2 || i == 3) {
             if (lib::is_oracle_mode()) {
               const_cast<ObExprResType&>(param_expr->get_result_type()).set_calc_type(ObNumberType);
             } else {
@@ -1891,17 +1925,23 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         expr.unset_result_flag(ZEROFILL_FLAG);
       }
     }
-
+    LOG_DEBUG("aggregate function deduced result type", K(result_type), K(need_add_cast), K(expr));
     if (OB_SUCC(ret) && need_add_cast) {
       result_type.set_calc_type(result_type.get_type());
       result_type.set_calc_accuracy(result_type.get_accuracy());
       if (T_FUN_AVG == expr.get_expr_type() && -2 != scale_increment_recover) {
         result_type.set_calc_scale(scale_increment_recover);
       }
-      if (T_FUN_SUM == expr.get_expr_type() &&
-            ob_is_bit_tc(expr.get_param_expr(0)->get_result_type().get_type())) {
-        // set calc precision as child precision for bit type.
-        result_type.set_calc_precision(expr.get_param_expr(0)->get_result_type().get_precision());
+      ObObjType child_type = expr.get_param_expr(0)->get_result_type().get_type();
+      if (T_FUN_SUM == expr.get_expr_type() && result_type.get_calc_meta().is_decimal_int()
+          && (!ob_is_integer_type(child_type) && !ob_is_decimal_int(child_type))) {
+        // set calc precision as child precision for types other than integers
+        ObPrecision child_prec = expr.get_param_expr(0)->get_result_type().get_precision();
+        if (child_prec == PRECISION_UNKNOWN_YET) {
+          // unknown precision, use default precision
+          child_prec = ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][child_type].get_precision();
+        }
+        result_type.set_calc_precision(child_prec);
       }
       expr.set_result_type(result_type);
       ObCastMode def_cast_mode = CM_NONE;
@@ -2374,6 +2414,18 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
         LOG_WARN("add_implicit_cast failed", K(ret));
       }
     }
+    //add local vars to expr
+    if (OB_SUCC(ret)) {
+      if (solidify_session_vars_) {
+        if (OB_FAIL(expr.set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+          LOG_WARN("fail to set session vars", K(ret), K(expr));
+        }
+      } else if (NULL != my_local_vars_) {
+        if (OB_FAIL(expr.set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+          LOG_WARN("fail to set local vars", K(ret), K(expr));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -2579,8 +2631,7 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
                                                                   types.count(),
                                                                   coll_type,
                                                                   false,
-                                                                  default_ls,
-                                                                  my_session_))) {
+                                                                  default_ls))) {
         LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
       } else {
         if (res_type.is_json()) {
@@ -2997,22 +3048,6 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
   ObArray<ObExprResType> types;
   expr.set_data_type(ObVarcharType);
   const ObIArray<ObRawExpr*> &real_parm_exprs = expr.get_real_param_exprs();
-  //listagg有效性检测
-  if (lib::is_oracle_mode()) {
-    if (expr.get_real_param_count() > 2) {
-      ret = OB_ERR_PARAM_SIZE;
-      LOG_WARN("listagg has 2 params at most", K(ret), K(expr.get_real_param_count()));
-    } else if (expr.get_real_param_count() == 2) {
-      ObRawExpr *param_expr = NULL;
-      if (OB_ISNULL(param_expr = expr.get_real_param_exprs().at(1))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(param_expr));
-      } else if (OB_UNLIKELY(!param_expr->is_const_expr())) {
-        ret = OB_ERR_ARGUMENT_SHOULD_CONSTANT;
-        LOG_WARN("separator expr should be const expr", K(ret), K(*param_expr));
-      } else {/*do nothing */}
-    }
-  }
   for (int64_t i = 0; OB_SUCC(ret) && i < real_parm_exprs.count(); ++i) {
     ObRawExpr *real_param_expr = real_parm_exprs.at(i);
     if (OB_ISNULL(real_param_expr)) {
@@ -3557,10 +3592,29 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
       }
+
+      // for consistent with mysql, if const cast as json, should regard as scalar, don't need parse
+      if (ObStringTC == ori_tc && ObJsonTC == expect_tc
+          && IS_BASIC_CMP_OP(parent.get_expr_type())) {
+        uint64_t extra = new_expr->get_extra();
+        new_expr->set_extra(CM_SET_SQL_AS_JSON_SCALAR(extra));
+      }
       OZ(parent.replace_param_expr(child_idx, new_expr));
       if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
         ret = OB_SUCCESS;
         LOG_DEBUG("ps prepare phase ignores type deduce error");
+      }
+      //add local vars to cast expr
+      if (OB_SUCC(ret)) {
+        if (solidify_session_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(NULL, my_session_, local_vars_id_))) {
+            LOG_WARN("fail to set session vars", K(ret), KPC(new_expr));
+          }
+        } else if (NULL != my_local_vars_) {
+          if (OB_FAIL(new_expr->set_local_session_vars(my_local_vars_, NULL, local_vars_id_))) {
+            LOG_WARN("fail to set local vars", K(ret), KPC(new_expr));
+          }
+        }
       }
     }
   }
@@ -3631,7 +3685,7 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
     cast_dst_type.set_length(child_res_type.get_length());
   }
   OZ(ObRawExprUtils::try_add_cast_expr_above(expr_factory_, my_session_, expr,
-                                             cast_dst_type, cm, new_expr));
+                                             cast_dst_type, cm, new_expr, my_local_vars_, local_vars_id_));
   ObRawExpr *e = new_expr;
   while (OB_SUCC(ret) && NULL != e &&
          e != &expr && T_FUN_SYS_CAST == e->get_expr_type()) {
@@ -3767,7 +3821,7 @@ int ObRawExprDeduceType::try_replace_casts_with_questionmarks_ora(ObRawExpr *row
   return ret;
 }
 
-int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx)
+int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int child_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cast_expr)) {
@@ -3786,14 +3840,24 @@ int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &paren
       bool is_nmb2decint = param_expr->get_result_type().is_number() && cast_expr->get_result_type().is_decimal_int();
       bool is_decint2decint = param_expr->get_result_type().is_decimal_int() && cast_expr->get_result_type().is_decimal_int();
       if (param_expr->is_static_const_expr() && param_expr->get_expr_type() == T_QUESTIONMARK
+          && !static_cast<ObConstRawExpr *>(param_expr)->is_dynamic_eval_questionmark() // already replaced
           && (is_decint2nmb || is_nmb2decint || is_decint2decint)) {
+        ObConstRawExpr *c_expr = static_cast<ObConstRawExpr *>(param_expr);
         ObExprResType res_type = cast_expr->get_result_type();
         res_type.add_cast_mode(cast_expr->get_extra());
-        ret = static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type);
-        if (OB_FAIL(ret)) {
+        int64_t param_idx = 0;
+        if (OB_ISNULL(expr_factory_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null raw expr", K(ret));
+        } else if (OB_FAIL(c_expr->get_value().get_unknown(param_idx))) {
+          LOG_WARN("get param idx failed", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::create_param_expr(*expr_factory_, param_idx, param_expr))) {
+          // create new param store to avoid unexpected problem
+          LOG_WARN("create param expr failed", K(ret));
+        } else if (OB_FAIL(static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type))){
           LOG_WARN("set dynamic eval question mark failed", K(ret));
         } else {
-          parent.get_param_expr(param_idx) = param_expr;
+          parent.get_param_expr(child_idx) = param_expr;
         }
       }
       LOG_DEBUG("replace cast with questionmark", K(*cast_expr), K(is_decint2nmb), K(is_nmb2decint),

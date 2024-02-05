@@ -503,14 +503,29 @@ int ObTransformDBlink::has_invalid_link_expr(ObDMLStmt &stmt, bool &has_invalid_
   has_invalid_expr = false;
   if (OB_FAIL(stmt.get_relation_exprs(exprs))) {
     LOG_WARN("failed to get relation exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !has_invalid_expr && i < exprs.count(); i++) {
-      bool is_valid = false;
-      if (OB_FAIL(check_link_expr_valid(exprs.at(i), is_valid))) {
-        LOG_WARN("failed to check link expr valid", KPC(exprs.at(i)), K(ret));
-      } else if (!is_valid) {
-        has_invalid_expr = true;
-      }
+  } else if (OB_FAIL(has_invalid_link_expr(exprs, has_invalid_expr))) {
+    LOG_WARN("failed to check has invalid link expr", K(ret));
+  } else if (has_invalid_expr) {
+    // do nothing
+  } else if (stmt.is_insert_stmt()) {
+    // get_relation_exprs can not get all exprs in values vector
+    if (OB_FAIL(has_invalid_link_expr(static_cast<ObInsertStmt &>(stmt).get_values_vector(), has_invalid_expr))) {
+      LOG_WARN("failed to check has invalid link expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformDBlink::has_invalid_link_expr(ObIArray<ObRawExpr *> &exprs, bool &has_invalid_expr)
+{
+  int ret = OB_SUCCESS;
+  has_invalid_expr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_invalid_expr && i < exprs.count(); i++) {
+    bool is_valid = false;
+    if (OB_FAIL(check_link_expr_valid(exprs.at(i), is_valid))) {
+      LOG_WARN("failed to check link expr valid", KPC(exprs.at(i)), K(ret));
+    } else if (!is_valid) {
+      has_invalid_expr = true;
     }
   }
   return ret;
@@ -735,7 +750,9 @@ int ObTransformDBlink::check_is_link_table(TableItem *table,
     is_link_table = true;
     dblink_id = table->dblink_id_;
     is_reverse_link = table->is_reverse_link_;
-  } else if (table->is_generated_table() || table->is_temp_table()) {
+  } else if (table->is_temp_table()) {
+    is_link_table = false;
+  } else if (table->is_generated_table()) {
     if (OB_ISNULL(table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null ref query", K(ret));

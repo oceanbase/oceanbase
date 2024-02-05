@@ -134,6 +134,8 @@ public:
                                   common::ObISQLClient &sql_client,
                                   const common::ObString *ddl_stmt_str);
 
+  virtual int update_mview_status(const ObTableSchema &mview_table_schema,
+                                 common::ObISQLClient &sql_client);
   // TODO: merge these two API
   int sync_aux_schema_version_for_history(common::ObISQLClient &sql_client,
                                           const ObTableSchema &index_schema1,
@@ -307,6 +309,8 @@ private:
                                const ObTableSchema &table);
   int add_interval_range_val(share::ObDMLSqlSplicer &dml,
                                const ObTableSchema &table);
+  int gen_mview_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
+                    share::ObDMLSqlSplicer &dml);
   int gen_table_dml(const uint64_t exec_tenant_id, const ObTableSchema &table,
                     const bool update_object_status_ignore_version, share::ObDMLSqlSplicer &dml);
   int gen_table_options_dml(const uint64_t exec_tenant_id,
@@ -391,6 +395,10 @@ public:
   int delete_from_all_temp_table(common::ObISQLClient &sql_client,
                                  const uint64_t tenant_id,
                                  const uint64_t table_id);
+  int update_single_column_group(ObISQLClient &sql_client,
+                                 const ObTableSchema &new_table_schema,
+                                 const ObColumnGroupSchema &ori_cg_schema,
+                                 const ObColumnGroupSchema &new_cg_schema);
 private:
   int log_operation_wrapper(
       ObSchemaOperation &opt,
@@ -430,12 +438,37 @@ private:
                                        const ObTableSchema &table,
 	                                   const int64_t schema_version,
                                        bool is_history);
-	int exec_insert_column_group_mapping(ObISQLClient &sql_client,
-                                         const ObTableSchema &table,
-                                         const int64_t schema_version,
-                                         const ObColumnGroupSchema &column_group,
-                                         const ObIArray<uint64_t> &column_ids,
-                                         const bool is_history);
+  int exec_insert_column_group_mapping(ObISQLClient &sql_client,
+                                       const ObTableSchema &table,
+                                       const int64_t schema_version,
+                                       const ObColumnGroupSchema &column_group,
+                                       const ObIArray<uint64_t> &column_ids,
+                                       const bool is_history);
+
+  int delete_column_group(ObISQLClient &sql_clinet,
+                          const ObTableSchema &table,
+                          const int64_t schema_version);
+  int gen_column_group_dml(const ObTableSchema &table_schema,
+                           const ObColumnGroupSchema &column_group_schema,
+                           const bool is_history,
+                           const bool is_deleted,
+                           const int64_t schema_verison,
+                           ObDMLSqlSplicer &dml);
+  int gen_column_group_mapping_dml(const ObTableSchema &table_schema,
+                                   const ObColumnGroupSchema &column_group_schema,
+                                   const int64_t column_id_index,
+                                   const bool is_history,
+                                   const bool is_deleted,
+                                   const int64_t schema_version,
+                                   ObDMLSqlSplicer &dml);
+  int delete_from_column_group(ObISQLClient &sql_client,
+                               const ObTableSchema &table_schema,
+                               const int64_t schema_version,
+                               const bool is_history = false);
+  int delete_from_column_group_mapping(ObISQLClient &sql_client,
+                                       const ObTableSchema &table_schema,
+                                       const int64_t schema_version,
+                                       const bool is_history = false);
 // MockFKParentTable begin
 public:
   int add_mock_fk_parent_table(

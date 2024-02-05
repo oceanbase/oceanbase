@@ -126,13 +126,6 @@ bool ObDRTaskTableUpdateTask::compare_without_version(
   return (*this == other);
 }
 
-int ObDRTaskTableUpdateTask::assign_when_equal(
-    const ObDRTaskTableUpdateTask &other)
-{
-  UNUSED(other);
-  return OB_NOT_SUPPORTED;
-}
-
 int ObDRTaskTableUpdater::init(
     common::ObMySQLProxy *sql_proxy,
     ObDRTaskMgr *task_mgr)

@@ -20,6 +20,7 @@
 #include "share/ob_thread_mgr.h" //OBTGDefIDEnum
 #include "share/ob_balance_define.h"  // ObBalanceJobID, ObBalanceTaskID
 #include "share/ls/ob_ls_i_life_manager.h"//ObLSStatus
+#include "rootserver/ob_rs_async_rpc_proxy.h"//get_offline_scn
 
 namespace oceanbase
 {
@@ -86,7 +87,8 @@ private:
                                    bool &skip_next_status);
   int cancel_current_task_status_(const share::ObBalanceTask &task, ObMySQLTransaction &trans, bool &skip_next_status);
   int cancel_other_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
-  int process_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
+  int process_init_task_(const share::ObBalanceTask &task, ObMySQLTransaction &trans,
+      bool &skip_next_status);
   int wait_ls_to_target_status_(const share::ObLSID &ls_id, const share::ObLSStatus ls_status, bool &skip_next_status);
   int wait_alter_ls_(const share::ObBalanceTask &task, bool &skip_next_status);
   int set_ls_to_merge_(const share::ObBalanceTask &task, ObMySQLTransaction &trans);
@@ -101,6 +103,11 @@ private:
   int wait_tenant_ready_();
   int try_update_task_comment_(const share::ObBalanceTask &task,
   const common::ObSqlString &comment, ObISQLClient &sql_client);
+  int wait_can_create_new_ls_(share::SCN &create_scn);
+  int get_max_offline_scn_(share::SCN &offline_scn, int64_t &offline_ls_count);
+  int get_ls_offline_scn_by_rpc_(ObGetLSReplayedScnProxy &proxy,
+                          int64_t &offline_ls_count,
+                          ObIArray<int> &return_code_array);
 private:
   bool inited_;
   uint64_t tenant_id_;

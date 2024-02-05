@@ -48,21 +48,27 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const common::ObCurTraceId::TraceId &trace_id,
     const int64_t parallelism,
     const bool use_heap_table_ddl_plan,
+    const bool is_mview_complete_refresh,
+    const int64_t mview_table_id,
     ObRootService *root_service,
-    const common::ObAddr &inner_sql_exec_addr)
+    const common::ObAddr &inner_sql_exec_addr,
+    const int64_t data_format_version)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
-    parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan), root_service_(root_service),
-    inner_sql_exec_addr_(inner_sql_exec_addr)
+    parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
+    is_mview_complete_refresh_(is_mview_complete_refresh), mview_table_id_(mview_table_id),
+    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0)
 {
   set_retry_times(0); // do not retry
 }
 
 int ObDDLRedefinitionSSTableBuildTask::init(
     const ObTableSchema &orig_table_schema,
+    const ObTableSchema &hidden_table_schema,
     const AlterTableSchema &alter_table_schema,
-    const ObTimeZoneInfoWrap &tz_info_wrap)
+    const ObTimeZoneInfoWrap &tz_info_wrap,
+    const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -72,8 +78,10 @@ int ObDDLRedefinitionSSTableBuildTask::init(
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(tz_info_wrap_.deep_copy(tz_info_wrap))) {
     LOG_WARN("fail to copy time zone info wrap", K(ret), K(tz_info_wrap));
-  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, alter_table_schema))) {
+  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, hidden_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
+  } else if (OB_FAIL(based_schema_object_infos_.assign(based_schema_object_infos))) {
+    LOG_WARN("fail to assign based schema object infos", K(ret), K(based_schema_object_infos));
   } else {
     is_inited_ = true;
   }
@@ -119,20 +127,37 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(tenant_id_), K(data_table_id_));
   } else {
-    if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
-                                                      data_table_id_,
-                                                      dest_table_id_,
-                                                      data_table_schema->get_schema_version(),
-                                                      snapshot_version_,
-                                                      execution_id_,
-                                                      task_id_,
-                                                      parallelism_,
-                                                      use_heap_table_ddl_plan_,
-                                                      true/*use_schema_version_hint_for_src_table*/,
-                                                      &col_name_map_,
-                                                      sql_string))) {
-      LOG_WARN("fail to generate build replica sql", K(ret));
+    if (is_mview_complete_refresh_) {
+      if (OB_FAIL(ObDDLUtil::generate_build_mview_replica_sql(tenant_id_,
+                                                              mview_table_id_,
+                                                              dest_table_id_,
+                                                              schema_guard,
+                                                              snapshot_version_,
+                                                              execution_id_,
+                                                              task_id_,
+                                                              parallelism_,
+                                                              true/*use_schema_version_hint_for_src_table*/,
+                                                              based_schema_object_infos_,
+                                                              sql_string))) {
+        LOG_WARN("fail to generate build mview replica sql", K(ret));
+      }
     } else {
+      if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_,
+                                                        data_table_id_,
+                                                        dest_table_id_,
+                                                        data_table_schema->get_schema_version(),
+                                                        snapshot_version_,
+                                                        execution_id_,
+                                                        task_id_,
+                                                        parallelism_,
+                                                        use_heap_table_ddl_plan_,
+                                                        true/*use_schema_version_hint_for_src_table*/,
+                                                        &col_name_map_,
+                                                        sql_string))) {
+        LOG_WARN("fail to generate build replica sql", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       ObTimeoutCtx timeout_ctx;
       common::ObCommonSqlProxy *user_sql_proxy = nullptr;
       int64_t affected_rows = 0;
@@ -146,6 +171,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       session_param.ddl_info_.set_source_table_hidden(false);
       session_param.ddl_info_.set_dest_table_hidden(true);
       session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
+      session_param.ddl_info_.set_mview_complete_refresh(is_mview_complete_refresh_);
       session_param.use_external_session_ = true;  // means session id dispatched by session mgr
       session_param.consumer_group_id_ = consumer_group_id_;
 
@@ -172,10 +198,41 @@ int ObDDLRedefinitionSSTableBuildTask::process()
           LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
         } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-        } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
-          LOG_WARN("fail to check sstable checksum_report_finish",
-            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+          if (ret == OB_SERVER_OUTOF_DISK_SPACE &&
+              data_format_version_ >= DATA_VERSION_4_3_0_0) {
+            // if version >= 4.3.0, would retry with compression.
+            int tmp_ret = OB_SUCCESS;
+            sql_string.reuse();
+            SortCompactLevel compress_level = SORT_COMPRESSION_LEVEL;
+            if (OB_SUCCESS != (tmp_ret = ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
+                                                            dest_table_id_,
+                                                            data_table_schema->get_schema_version(),
+                                                            snapshot_version_,
+                                                            execution_id_,
+                                                            task_id_,
+                                                            parallelism_,
+                                                            use_heap_table_ddl_plan_,
+                                                            true,
+                                                            &col_name_map_,
+                                                            sql_string,
+                                                            compress_level))) {
+              LOG_WARN("fail to generate build replica sql", K(tmp_ret));
+            } else if (OB_SUCCESS != (tmp_ret = user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE,
+                &session_param, sql_exec_addr))) {
+              LOG_WARN("fail to execute build replica sql", K(tmp_ret), K(tenant_id_));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+            LOG_WARN("fail to check sstable checksum_report_finish",
+              K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+          }
         }
       }
     }
@@ -224,12 +281,17 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         trace_id_,
         parallelism_,
         use_heap_table_ddl_plan_,
+        is_mview_complete_refresh_,
+        mview_table_id_,
         root_service_,
-        inner_sql_exec_addr_);
+        inner_sql_exec_addr_,
+        data_format_version_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {
       LOG_WARN("failed to assign column name map", K(ret));
+    } else if (OB_FAIL(new_task->based_schema_object_infos_.assign(based_schema_object_infos_))) {
+      LOG_WARN("failed to assign based schema object infos", K(ret));
     }
     if (OB_FAIL(ret)) {
       LOG_WARN("fail to init new task", K(ret));
@@ -552,7 +614,7 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
     ObColumnNameMap col_name_map;
     if (OB_FAIL(data_table_schema.get_column_ids(column_ids))) {
       LOG_WARN("get column ids failed", K(ret), K(object_id_));
-    } else if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_arg_.alter_table_schema_))) {
+    } else if (OB_FAIL(col_name_map.init(data_table_schema, dest_table_schema, alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("failed to build column name map", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
@@ -1211,7 +1273,7 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
     } else if (OB_ISNULL(orig_table_schema) || OB_ISNULL(new_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schemas should not be null", K(ret), K(orig_table_schema), K(new_table_schema));
-    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *new_table_schema, alter_table_schema))) {
       LOG_WARN("failed to init column name map", K(ret));
     } else if (!is_update_autoinc_end && update_autoinc_job_time_ == 0) {
       ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
@@ -1862,7 +1924,7 @@ int ObDDLRedefinitionTask::sync_part_stats_info_accross_tenant(common::ObMySQLTr
     }
 
     if (FAILEDx(stat_svr.update_table_stat(dst_tenant_id_,
-                                          trans,
+                                          trans.get_connection(),
                                           target_part_stats,
                                           ObTimeUtility::current_time(),
                                           new_table_schema.is_index_table()))) {
@@ -1949,7 +2011,7 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
     } else if (OB_FAIL(stat_svr.update_column_stat(dst_tenant_schema_guard,
                                                    dst_tenant_id_,
                                                    allocator,
-                                                   trans,
+                                                   trans.get_connection(),
                                                    target_column_stats,
                                                    ObTimeUtility::current_time(),
                                                    false /* need update histogram table */))) {
@@ -2062,7 +2124,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
   ObColumnNameMap col_name_map;
-  if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_schema))) {
+  if (OB_FAIL(col_name_map.init(data_table_schema, new_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     ObTableSchema::const_column_iterator iter = data_table_schema.column_begin();

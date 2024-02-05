@@ -23,6 +23,7 @@
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 namespace oceanbase
 {
@@ -288,10 +289,14 @@ public:
                               ObIJsonBase *j_base,
                               common::ObIAllocator *allocator,
                               const ObBasicSessionInfo *session,
+                              ObEvalCtx *ctx,
+                              const ObExpr *expr,
                               common::ObAccuracy &accuracy,
                               int64_t &val);
   static int cast_to_otimstamp(ObIJsonBase *j_base,
                                const ObBasicSessionInfo *session,
+                               ObEvalCtx *ctx,
+                               const ObExpr *expr,
                                common::ObAccuracy &accuracy,
                                ObObjType dst_type,
                                ObOTimestampData &out_val);

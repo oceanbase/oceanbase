@@ -98,15 +98,16 @@ int ElectionProposer::init(const int64_t restart_counter)
   #undef PRINT_WRAPPER
 }
 
-int ElectionProposer::set_member_list(const MemberList &new_member_list)
+int ElectionProposer::can_set_memberlist(const palf::LogConfigVersion &new_config_version) const
 {
-  ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER K(*this), K(new_member_list)
+  #define PRINT_WRAPPER K(*this), K(new_config_version)
   int ret = OB_SUCCESS;
-  // 检查旧的成员组的信息是否一致
   const MemberList &current_member_list = memberlist_with_states_.get_member_list();
-  if (current_member_list.is_valid()) {
-    if (new_member_list.get_membership_version() < current_member_list.get_membership_version()) {
+  if (false == new_config_version.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_SET_MEMBER(ERROR, "invalid config_version");
+  } else if (current_member_list.is_valid()) {
+    if (new_config_version < current_member_list.get_membership_version()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_SET_MEMBER(ERROR, "new memberlsit's membership version is not greater than current");
     } else if (check_leader()) {
@@ -116,7 +117,19 @@ int ElectionProposer::set_member_list(const MemberList &new_member_list)
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+int ElectionProposer::set_member_list(const MemberList &new_member_list)
+{
+  ELECT_TIME_GUARD(500_ms);
+  #define PRINT_WRAPPER K(*this), K(new_member_list)
+  int ret = OB_SUCCESS;
+  // 检查旧的成员组的信息是否一致
+  if (OB_FAIL(can_set_memberlist(new_member_list.get_membership_version()))) {
+    LOG_SET_MEMBER(WARN, "can_set_memberlist failed");
+  } else {
     MemberList old_list = memberlist_with_states_.get_member_list();
     if (CLICK_FAIL(memberlist_with_states_.set_member_list(new_member_list))) {
       LOG_SET_MEMBER(WARN, "set new member list failed");
@@ -223,13 +236,13 @@ int ElectionProposer::register_renew_lease_task_()
     int ret = OB_SUCCESS;
     LockGuard lock_guard(p_election_->lock_);
     // 周期性打印选举的状态
-    if (ObClockGenerator::getCurrentTime() > last_dump_proposer_info_ts_ + 3_s) {
-      last_dump_proposer_info_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_proposer_info_ts_ + 3_s) {
+      last_dump_proposer_info_ts_ = ObClockGenerator::getClock();
       ELECT_LOG(INFO, "dump proposer info", K(*this));
     }
     // 周期性打印选举的消息收发统计信息
-    if (ObClockGenerator::getCurrentTime() > last_dump_election_msg_count_state_ts_ + 10_s) {
-      last_dump_election_msg_count_state_ts_ = ObClockGenerator::getCurrentTime();
+    if (ObClockGenerator::getClock() > last_dump_election_msg_count_state_ts_ + 10_s) {
+      last_dump_election_msg_count_state_ts_ = ObClockGenerator::getClock();
       char ls_id_buffer[32] = {0};
       auto pretend_to_be_ls_id = [ls_id_buffer](const int64_t id) mutable {
         int64_t pos = 0;
@@ -329,7 +342,7 @@ void ElectionProposer::prepare(const ObRole role)
   ELECT_TIME_GUARD(500_ms);
   #define PRINT_WRAPPER KR(ret), K(role), K(*this)
   int ret = OB_SUCCESS;
-  int64_t cur_ts = ObClockGenerator::getCurrentTime();
+  int64_t cur_ts = ObClockGenerator::getClock();
   LogPhase phase = role == ObRole::LEADER ? LogPhase::RENEW_LEASE : LogPhase::ELECT_LEADER;
   if (memberlist_with_states_.get_member_list().get_addr_list().empty()) {
     LOG_PHASE(INFO, phase, "memberlist is empty, give up do prepare this time");
@@ -427,7 +440,7 @@ void ElectionProposer::on_prepare_request(const ElectionPrepareRequestMsg &prepa
                                                                            .get_addr_list()))) {
         LOG_ELECT_LEADER(ERROR, "broadcast prepare request failed");
       } else {
-        last_do_prepare_ts_ = ObClockGenerator::getCurrentTime();
+        last_do_prepare_ts_ = ObClockGenerator::getClock();
         if (role_ == ObRole::LEADER) {
           LOG_ELECT_LEADER(INFO, "join elect leader phase as leader");
         } else if (role_ == ObRole::FOLLOWER) {

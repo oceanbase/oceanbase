@@ -14,7 +14,7 @@ T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{}' partition by key(K) partitions 3;
-ERROR HY000: Invalid argument
+ERROR 0A000: kv attributes with wrong format not supported
 CREATE TABLE test_kv_attr(
 K varbinary(1024) NOT NULL,
 Q varbinary(256)  NOT NULL,
@@ -38,7 +38,7 @@ T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}' partition by key(K) partitions 3;
-ERROR HY000: Incorrect arguments to max versions, which should greater than 0
+ERROR HY000: MaxVersions of hbase table must be greater than 0
 CREATE TABLE test_kv_attr(
 K varbinary(1024) NOT NULL,
 Q varbinary(256)  NOT NULL,
@@ -46,7 +46,7 @@ T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}' partition by key(K) partitions 3;
-ERROR HY000: Incorrect arguments to time to live, which should greater than 0
+ERROR HY000: Time to live of hbase table must be greater than 0
 CREATE TABLE test_kv_attr(
 K varbinary(1024) NOT NULL,
 Q varbinary(256)  NOT NULL,
@@ -62,7 +62,7 @@ T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 0}, "Hbase": {"MaxVersions": 1}}' partition by key(K) partitions 3;
-ERROR HY000: Invalid argument
+ERROR 0A000: kv attributes with wrong format not supported
 CREATE TABLE test_kv_attr(
 K varbinary(1024) NOT NULL,
 Q varbinary(256)  NOT NULL,
@@ -73,15 +73,15 @@ PRIMARY KEY (K, Q, T)
 alter table test_kv_attr kv_attributes '{"HColumnDescriptor": {"TimeToLive": 5, "MaxVersions": 2}}';
 ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes '{}';
-ERROR HY000: Invalid argument
+ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 5, "MaxVersions": 2, "MinVersions": 1}}';
 ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes = '{"Hbase": {"MaxVersion": 2}}';
 ERROR 0A000: kv attributes with wrong format not supported
 alter table test_kv_attr kv_attributes = '{"Hbase": {"TimeToLive": 1, "MaxVersions": 0}}';
-ERROR HY000: Incorrect arguments to max versions, which should greater than 0
+ERROR HY000: MaxVersions of hbase table must be greater than 0
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 0, "MaxVersions": 1}}';
-ERROR HY000: Incorrect arguments to time to live, which should greater than 0
+ERROR HY000: Time to live of hbase table must be greater than 0
 alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {"TimeToLive": 10000000}}';
 alter table test_kv_attr kv_attributes ='{"Hbase": {"MaxVersions": 4, "TimeToLive": 10000000}}';
@@ -108,13 +108,15 @@ test_ttl	CREATE TABLE `test_ttl` (
 ) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (c + INTERVAL 1 hour)
 drop table test_ttl;
 create table test_ttl(a int primary key, b varchar(1024), c varchar(1024)) TTL(c + INTERVAL 1 hour);
-ERROR 0A000: Not supported feature or function
+ERROR HY000: Column type of 'c' is not supported for TTL definition
 create table test_ttl(a int primary key, b varchar(1024), c date) TTL(c + INTERVAL 1 hour);
-ERROR 0A000: Not supported feature or function
+ERROR HY000: Column type of 'c' is not supported for TTL definition
 create table test_ttl(a int primary key, b varchar(1024), c time) TTL(c + INTERVAL 1 hour);
-ERROR 0A000: Not supported feature or function
+ERROR HY000: Column type of 'c' is not supported for TTL definition
 create table test_ttl(a int primary key, b varchar(1024)) TTL(now() + INTERVAL 1 hour);
-ERROR 0A000: Not supported feature or function
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '() + INTERVAL 1 hour)' at line 1
+create table test_ttl(a int primary key, b varchar(1024)) TTL(c + INTERVAL 1 hour);
+ERROR HY000: TTL column 'c' not exists
 create table test_ttl(a int primary key, b varchar(1024), c timestamp, d datetime) TTL(c + INTERVAL 0 hour);
 show create table test_ttl;
 Table	Create Table
@@ -148,15 +150,17 @@ create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + I
 drop table test_ttl;
 create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 year);
 alter table test_ttl drop column c;
-ERROR 0A000: Not supported feature or function
+ERROR 0A000: Modify/Change TTL column not supported
 alter table test_ttl change column c c2 datetime;
-ERROR 0A000: Not supported feature or function
+ERROR 0A000: Modify/Change TTL column not supported
 alter table test_ttl modify column c bigint;
-ERROR 0A000: Not supported feature or function
+ERROR 0A000: Modify/Change TTL column not supported
 alter table test_ttl modify column c datetime;
-ERROR 0A000: Not supported feature or function
+ERROR 0A000: Modify/Change TTL column not supported
+alter table test_ttl ttl(d + INTERVAL 1 minute);
+ERROR HY000: TTL column 'd' not exists
 alter table test_ttl add column d datetime, ttl(d + INTERVAL 1 minute);
-ERROR 0A000: Not supported feature or function
+ERROR HY000: TTL column 'd' not exists
 alter table test_ttl remove ttl;
 show create table test_ttl;
 Table	Create Table
@@ -167,5 +171,35 @@ test_ttl	CREATE TABLE `test_ttl` (
   PRIMARY KEY (`a`)
 ) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
 alter table test_ttl drop column c;
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL -1 year);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '-1 year)' at line 1
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c +- INTERVAL -1 year);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '- INTERVAL -1 year)' at line 1
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVA L -1 year);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'INTERVA L -1 year)' at line 1
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL('c' + INTERVAL 1 year);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''c' + INTERVAL 1 year)' at line 1
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL '1' year);
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''1' year)' at line 1
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(         c       + INTERVAL 1 year  );
+drop table test_ttl;
+create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(         `c`       + INTERVAL 1 year  );
+alter table test_ttl TTL( c + INTERVAL 1 month  );
+alter table test_ttl TTL( c + INTERVAL 1 day  );
+alter table test_ttl TTL( c + INTERVAL 1 hour  );
+alter table test_ttl TTL( `c` + INTERVAL 1 minute  );
+alter table test_ttl TTL( `c` + INTERVAL 1 second  );
+alter table test_ttl add column d datetime;
+alter table test_ttl TTL( `d` + INTERVAL 1 second  );
+show create table test_ttl;
+Table	Create Table
+test_ttl	CREATE TABLE `test_ttl` (
+  `a` int(11) NOT NULL,
+  `b` varchar(1024) DEFAULT NULL,
+  `c` timestamp NULL DEFAULT NULL,
+  `d` datetime DEFAULT NULL,
+  PRIMARY KEY (`a`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (`d` + INTERVAL 1 second)
 drop table test_kv_attr;
 drop table test_ttl;

@@ -104,10 +104,9 @@ int ObExprTruncate::calc_result_type2(ObExprResType &type,
       ObArenaAllocator oballocator(ObModIds::BLOCK_ALLOC);
       ObCastMode cast_mode = CM_NONE;
       ObCollationType cast_coll_type = type_ctx.get_coll_type();
-      const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(session);
-      if (FAILEDx(ObSQLUtils::get_default_cast_mode(session, cast_mode))) {
-        LOG_WARN("failed to get default cast mode", K(ret));
+      const ObDataTypeCastParams dtc_params = type_ctx.get_dtc_params();
+      if (OB_SUCC(ret)) {
+        ObSQLUtils::get_default_cast_mode(type_ctx.get_sql_mode(), cast_mode);
       }
       ObCastCtx cast_ctx(&oballocator,
                          &dtc_params,
@@ -390,6 +389,18 @@ int ObExprTruncate::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   rt_expr.eval_func_ = calc_truncate_expr;
   return ret;
 }
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprTruncate, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(3);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase
 

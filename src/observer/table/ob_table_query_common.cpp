@@ -50,6 +50,7 @@ int ObTableQueryUtils::check_htable_query_args(const ObTableQuery &query,
       LOG_WARN("htable scan should not set Offset and Limit", K(ret), K(query));
     } else if (ObQueryFlag::Forward != query.get_scan_order() && ObQueryFlag::Reverse != query.get_scan_order()) {
       ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "scan order");
       LOG_WARN("TableQuery with htable_filter only support forward and reverse scan yet", K(ret));
     }
   }
@@ -68,8 +69,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
   const ObString &kv_attributes = tb_ctx.get_table_schema()->get_kv_attributes();
 
-  if (OB_FAIL(one_result.assign_property_names(tb_ctx.get_query_col_names()))) {
-    LOG_WARN("fail to assign property names to one result", K(ret), K(tb_ctx));
+  if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
+    LOG_WARN("fail to deep copy property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
       ObHTableFilterOperator *htable_result_iter = nullptr;
@@ -105,6 +106,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
                                                 one_result))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc table query result iterator", K(ret));
+      } else if (OB_FAIL(table_result_iter->init_full_column_name(tb_ctx.get_query_col_names()))) {
+        LOG_WARN("fail to int full column name", K(ret));
       } else if (OB_FAIL(table_result_iter->parse_filter_string(&allocator))) {
         LOG_WARN("fail to parse table filter string", K(ret));
       } else {

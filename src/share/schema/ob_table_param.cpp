@@ -621,7 +621,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_version_(ObURowIDData::INVALID_ROWID_VERSION),
     rowid_projector_(allocator),
     enable_lob_locator_v2_(false),
-    is_spatial_index_(false)
+    is_spatial_index_(false),
+    is_fts_index_(false)
 {
   reset();
 }
@@ -645,6 +646,7 @@ void ObTableParam::reset()
   main_read_info_.reset();
   enable_lob_locator_v2_ = false;
   is_spatial_index_ = false;
+  is_fts_index_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -664,7 +666,8 @@ OB_DEF_SERIALIZE(ObTableParam)
               main_read_info_,
               enable_lob_locator_v2_,
               is_spatial_index_,
-              group_by_projector_);
+              group_by_projector_,
+              is_fts_index_);
   return ret;
 }
 
@@ -697,6 +700,9 @@ OB_DEF_DESERIALIZE(ObTableParam)
       LOG_WARN("Fail to deserialize group by projector", K(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, is_fts_index_);
+  }
   return ret;
 }
 
@@ -718,7 +724,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               main_read_info_,
               enable_lob_locator_v2_,
               is_spatial_index_,
-              group_by_projector_);
+              group_by_projector_,
+              is_fts_index_);
   return len;
 }
 
@@ -819,10 +826,21 @@ int ObTableParam::construct_columns_and_projector(
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
+  bool is_cs = false;
   bool has_all_column_group = false;
-  bool is_cs = !table_schema.is_row_store();
   int64_t rowkey_count = 0;
-  if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+
+  if (OB_SUCC(ret)) {
+    bool is_table_row_store = false;
+    if (OB_FAIL(table_schema.get_is_row_store(is_table_row_store))) {
+      LOG_WARN("fail to get is talbe row store", K(ret));
+    } else {
+      is_cs = !is_table_row_store;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   }
 

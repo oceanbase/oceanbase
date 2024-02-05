@@ -119,6 +119,10 @@ int ObDASBaseAccessP<pcode>::process()
           (void)task_resp.store_warning_msg(*wb);
         }
       }
+      if (OB_FAIL(ret) && OB_NOT_NULL(op_result)) {
+        // accessing failed das task result is undefined behavior.
+        op_result->reuse();
+      }
       //因为end_task还有可能失败，需要通过RPC将end_task的返回值带回到scheduler上
       int tmp_ret = task_op->end_das_task();
       if (OB_SUCCESS != tmp_ret) {
@@ -283,8 +287,6 @@ int ObDASSyncFetchP::process()
   ObDataAccessService *das = NULL;
   const uint64_t tenant_id = req.get_tenant_id();
   const int64_t task_id = req.get_task_id();
-  ObChunkDatumStore &datum_store = res.get_datum_store();
-  bool has_more = false;
   if (tenant_id != MTL_ID()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("wrong tenant id", KR(ret), K(req));
@@ -293,9 +295,7 @@ int ObDASSyncFetchP::process()
   } else if (OB_ISNULL(das = MTL(ObDataAccessService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("das is null", KR(ret), KP(das));
-  } else if (OB_FAIL(das->get_task_res_mgr().iterator_task_result(task_id,
-                                                                  datum_store,
-                                                                  has_more))) {
+  } else if (OB_FAIL(das->get_task_res_mgr().iterator_task_result(res))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
       // After server reboot, the hash map containing task results was gone.
       // We need to retry for such cases.
@@ -304,8 +304,6 @@ int ObDASSyncFetchP::process()
     } else {
       LOG_WARN("get task result failed", KR(ret), K(res));
     }
-  } else {
-    res.set_has_more(has_more);
   }
   return ret;
 }

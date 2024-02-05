@@ -38,6 +38,8 @@ public:
 
   static int eval_treat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
     DISALLOW_COPY_AND_ASSIGN(ObExprTreat);
 };

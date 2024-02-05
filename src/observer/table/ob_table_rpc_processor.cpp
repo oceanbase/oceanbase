@@ -31,14 +31,15 @@
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "ob_table_move_response.h"
 #include "ob_table_connection_mgr.h"
+#include "share/table/ob_table_util.h"
+#include "observer/mysql/obmp_base.h"
+#include "lib/stat/ob_session_stat.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::obrpc;
-
-const ObString ObTableApiProcessorBase::OBKV_TRACE_INFO = ObString::make_string("OBKV Operation");
 
 int ObTableLoginP::process()
 {
@@ -133,6 +134,10 @@ int ObTableLoginP::get_ids()
     if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
       LOG_WARN("get_schema_guard failed", K(ret));
     } else if (OB_FAIL(guard.get_tenant_id(arg_.tenant_name_, result_.tenant_id_))) {
+      if (ret == OB_ERR_INVALID_TENANT_NAME) {
+        ret = OB_TENANT_NOT_EXIST;
+        LOG_USER_ERROR(OB_TENANT_NOT_EXIST, arg_.tenant_name_.length(), arg_.tenant_name_.ptr());
+      }
       LOG_WARN("get_tenant_id failed", K(ret), "tenant", arg_.tenant_name_);
     } else if (OB_INVALID_ID == result_.tenant_id_) {
       ret = OB_ERR_INVALID_TENANT_NAME;
@@ -143,14 +148,19 @@ int ObTableLoginP::get_ids()
                                              result_.database_id_))) {
       LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
     } else if (OB_INVALID_ID == result_.database_id_) {
-      ret = OB_WRONG_DB_NAME;
+      ret = OB_ERR_BAD_DATABASE;
+      LOG_USER_ERROR(OB_ERR_BAD_DATABASE, arg_.database_name_.length(), arg_.database_name_.ptr());
       LOG_WARN("failed to get database id", K(ret), "database", arg_.database_name_);
     } else if (OB_FAIL(guard.get_user_id(result_.tenant_id_, arg_.user_name_,
                                          ObString::make_string("%")/*assume there is no specific host*/,
                                          result_.user_id_))) {
+      if (ret == OB_ERR_USER_NOT_EXIST) {
+        LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
+      }
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     } else if (OB_INVALID_ID == result_.user_id_) {
       ret = OB_ERR_USER_NOT_EXIST;
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
       LOG_WARN("failed to get user id", K(ret), "user", arg_.user_name_);
     }
   }
@@ -184,6 +194,9 @@ int ObTableLoginP::verify_password(const ObString &tenant, const ObString &user,
     } else if (gctx_.schema_service_->get_tenant_schema_guard(tenant_id, guard)) {
       LOG_WARN("fail to get tenant guard", KR(ret), K(tenant_id));
     } else if (OB_FAIL(guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
+      if (ret == OB_PASSWORD_WRONG) {
+        LOG_USER_ERROR(OB_PASSWORD_WRONG, user.length(), user.ptr(), tenant.length(), tenant.ptr(), "YES"/*using password*/);
+      }
       LOG_WARN("User access denied", K(login_info), K(ret));
     } else if (OB_ISNULL(user_info)) {
       ret = OB_ERR_UNEXPECTED;
@@ -237,7 +250,8 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      retry_count_(0),
      trans_desc_(NULL),
      had_do_response_(false),
-     user_client_addr_()
+     user_client_addr_(),
+     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
 {
   need_audit_ = GCONF.enable_sql_audit;
   trans_state_ptr_ = &trans_state_;
@@ -274,7 +288,12 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (OB_FAIL(guard.get_credential(sess_credetial))) {
     LOG_WARN("fail to get credential", K(ret));
   } else if (sess_credetial->hash_val_ != credential_.hash_val_) {
-    ret = OB_ERR_NO_PRIVILEGE;
+    ret = OB_KV_CREDENTIAL_NOT_MATCH;
+    char user_cred_info[128];
+    char sess_cred_info[128];
+    int user_len = credential_.to_string(user_cred_info, 128);
+    int sess_len = sess_credetial->to_string(sess_cred_info, 128);
+    LOG_USER_ERROR(OB_KV_CREDENTIAL_NOT_MATCH, user_len, user_cred_info, sess_len, sess_cred_info);
     LOG_WARN("invalid credential", K(ret), K_(credential), K(*sess_credetial));
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
@@ -447,6 +466,7 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
   bool strong_read = ObTableConsistencyLevel::STRONG == consistency_level;
   if ((!is_readonly) && (ObTableConsistencyLevel::EVENTUAL == consistency_level)) {
     ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "consistency level");
     LOG_WARN("some options not supported yet", K(ret), K(is_readonly), K(consistency_level));
   }
   transaction::ObTransService *txs = MTL(transaction::ObTransService*);
@@ -522,7 +542,7 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
 
 int ObTableApiProcessorBase::sync_end_trans(bool is_rollback, int64_t timeout_ts, ObHTableLockHandle *lock_handle /*nullptr*/)
 {
-  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle, &OBKV_TRACE_INFO);
+  return sync_end_trans_(is_rollback, trans_desc_, timeout_ts, lock_handle, &ObTableUtils::get_kv_normal_trace_info());
 }
 
 int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTxDesc *&trans_desc,
@@ -581,7 +601,7 @@ int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t tim
     callback.set_tx_desc(trans_desc_);
     const int64_t stmt_timeout_ts = timeout_ts;
     // callback won't been called if any error occurred
-    if (OB_FAIL(txs->submit_commit_tx(*trans_desc_, stmt_timeout_ts, callback))) {
+    if (OB_FAIL(txs->submit_commit_tx(*trans_desc_, stmt_timeout_ts, callback, &ObTableUtils::get_kv_normal_trace_info()))) {
       LOG_WARN("fail end trans when session terminate", K(ret), KPC_(trans_desc), K(stmt_timeout_ts), KP(&callback));
       callback.callback(ret);
     }
@@ -608,7 +628,9 @@ void ObTableApiProcessorBase::start_audit(const rpc::ObRequest *req)
 {
 
   if (OB_LIKELY(NULL != req)) {
-    audit_record_.user_client_addr_ = RPC_REQ_OP.get_peer(req);
+    audit_record_.user_client_addr_ = ObCurTraceId::get_addr();
+    audit_record_.client_addr_ = RPC_REQ_OP.get_peer(req);
+
     audit_record_.trace_id_ = req->get_trace_id();
 
     save_request_string();
@@ -641,8 +663,6 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
 void ObTableApiProcessorBase::end_audit()
 {
   // credential info
-//  audit_record_.server_addr_; // not necessary, because gv_sql_audit_iterator use local addr automatically
-//  audit_record_.client_addr_; // not used for now
   audit_record_.tenant_id_ = credential_.tenant_id_;
   audit_record_.effective_tenant_id_ = credential_.tenant_id_;
   audit_record_.user_id_ = credential_.user_id_;
@@ -668,6 +688,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set user name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObUserInfo *user_info = NULL;
       if(OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
         SERVER_LOG(WARN, "fail to get user info", K(ret), K(credential_));
@@ -681,6 +702,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set database name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObSimpleDatabaseSchema *database_info = NULL;
       if(OB_FAIL(schema_guard.get_database_schema(credential_.tenant_id_, credential_.database_id_, database_info))) {
         SERVER_LOG(WARN, "fail to get database info", K(ret), K(credential_));
@@ -729,11 +751,19 @@ void ObTableApiProcessorBase::end_audit()
   audit_record_.seq_ = 0; // not used
   audit_record_.session_id_ = 0; // not used  for table api
 
+  // tx info
+  audit_record_.trans_id_ = tx_snapshot_.core_.tx_id_.get_id();
+  audit_record_.snapshot_.version_ = tx_snapshot_.core_.version_;
+  audit_record_.snapshot_.tx_id_ = tx_snapshot_.core_.tx_id_.get_id();
+  audit_record_.snapshot_.scn_ = tx_snapshot_.core_.scn_.cast_to_int();
+  audit_record_.snapshot_.source_ = tx_snapshot_.get_source_name();
+
   const int64_t elapsed_time = common::ObTimeUtility::current_time() - audit_record_.exec_timestamp_.receive_ts_;
   if (elapsed_time > GCONF.trace_log_slow_query_watermark) {
     FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
   }
 
+  ret = OB_SUCCESS;
   MTL_SWITCH(credential_.tenant_id_) {
     obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
     if (nullptr == req_manager) {
@@ -769,6 +799,8 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
     ObMaxWaitGuard max_wait_guard(&audit_record_.exec_record_.max_wait_event_);
     ObTotalWaitGuard total_wait_guard(&total_wait_desc);
     ObTenantStatEstGuard stat_guard(credential_.tenant_id_);
+    ObProcessMallocCallback pmcb(0, audit_record_.request_memory_used_);
+    ObMallocCallbackGuard malloc_guard_(pmcb);
     need_retry_in_queue_ = false;
     bool did_local_retry = false;
     do {
@@ -960,8 +992,7 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
   NG_TRACE(process_end); // print trace log if necessary
   // some statistics must be recorded for plan stat, even though sql audit disabled
   audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
-  audit_record_.exec_timestamp_.net_t_ =
-      audit_record_.exec_timestamp_.receive_ts_ - audit_record_.exec_timestamp_.rpc_send_ts_;
+  audit_record_.exec_timestamp_.net_t_ = 0;
   audit_record_.exec_timestamp_.net_wait_t_ =
       audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
   audit_record_.exec_timestamp_.update_stage_time();
