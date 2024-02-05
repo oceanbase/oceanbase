@@ -319,7 +319,7 @@ int ObBalanceTaskExecuteService::process_current_task_status_(
   }
   return ret;
 }
-
+ERRSIM_POINT_DEF(EN_SET_TASK_EXECUTE_TIMEOUT);
 int ObBalanceTaskExecuteService::execute_task_()
 {
   int ret = OB_SUCCESS;
@@ -340,7 +340,11 @@ int ObBalanceTaskExecuteService::execute_task_()
       const ObBalanceTaskID task_id = task.get_balance_task_id();
       ObBalanceTask task_in_trans;//for update
       ObTimeoutCtx timeout_ctx;
-      const int64_t balance_task_execute_timeout = GCONF.internal_sql_execute_timeout + 100 * 1000 * 1000L; // +100s
+      int64_t balance_task_execute_timeout = GCONF.internal_sql_execute_timeout + 100 * 1000 * 1000L; // +100s
+      if (EN_SET_TASK_EXECUTE_TIMEOUT) {
+        LOG_INFO("set task execute timout", K(balance_task_execute_timeout));
+        balance_task_execute_timeout = 10 * 1000 * 1000;
+      }
       DEBUG_SYNC(BEFORE_EXECUTE_BALANCE_TASK);
       if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, balance_task_execute_timeout))) {
         LOG_WARN("failed to get rs default timeout ctx", KR(ret));
