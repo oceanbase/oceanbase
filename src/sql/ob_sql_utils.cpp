@@ -59,6 +59,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/resolver/dcl/ob_dcl_resolver.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -1559,7 +1560,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_RECYCLEBIN == type
                || T_SHOW_TENANT == type
                || T_SHOW_RESTORE_PREVIEW == type
-               || T_SHOW_SEQUENCES == type) {
+               || T_SHOW_SEQUENCES == type
+               || (T_SET_ROLE == type && lib::is_mysql_mode())) {
       ret = true;
     }
   }
@@ -5522,4 +5524,13 @@ bool ObSQLUtils::check_json_expr(ObItemType type)
     }
   }
   return res;
+}
+
+int ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  OZ (GET_MIN_DATA_VERSION(tenant_id, data_version));
+  OV (DATA_VERSION_4_2_3_0 <= data_version, OB_NOT_SUPPORTED, data_version);
+  return ret;
 }

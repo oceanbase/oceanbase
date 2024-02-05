@@ -790,6 +790,7 @@ constexpr int OB_TABLE_DEFINITION_CHANGED = -5386;
 constexpr int OB_ERR_NO_ROUTINE_PRIVILEGE = -5387;
 constexpr int OB_ERR_USER_REFFERD_AS_DEFINER = -5388;
 constexpr int OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER = -5389;
+constexpr int OB_ERR_NO_COLUMN_PRIVILEGE = -5390;
 constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
@@ -1824,6 +1825,9 @@ constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
 constexpr int OB_EST_DEVIA_TOO_LARGE = -11004;
 constexpr int OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT = -11005;
 constexpr int OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT = -11006;
+constexpr int OB_ERR_UNKNOWN_AUTHID = -11007;
+constexpr int OB_ERR_NO_GRANT_DEFINED_FOR_USER = -11008;
+constexpr int OB_ERR_USER_ALREADY_EXISTS = -11009;
 constexpr int OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR = -11010;
 constexpr int OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED = -11011;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
@@ -2746,13 +2750,13 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_ON_KEYWORD__USER_ERROR_MSG "missing ON keyword"
 #define OB_ERR_NO_GRANT_OPTION__USER_ERROR_MSG "grant option does not exist for '%.*s.%.*s'"
 #define OB_ERR_ALTER_INDEX_AND_EXECUTE_NOT_ALLOWED_FOR_VIEWS__USER_ERROR_MSG "ALTER, INDEX and EXECUTE not allowed for views"
-#define OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED__USER_ERROR_MSG "circular role grant detected"
+#define OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED__USER_ERROR_MSG "User account `%.*s`@`%.*s` is directly or indirectly granted to the role `%.*s`@`%.*s`. The GRANT would create a loop"
 #define OB_ERR_INVALID_PRIVILEGE_ON_DIRECTORIES__USER_ERROR_MSG "invalid privilege on directories"
 #define OB_ERR_DIRECTORY_ACCESS_DENIED__USER_ERROR_MSG "directory access denied"
 #define OB_ERR_MISSING_OR_INVALID_ROLE_NAME__USER_ERROR_MSG "missing or invalid role name"
 #define OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST__USER_ERROR_MSG "role '%.*s' not granted or does not exist"
 #define OB_ERR_DEFAULT_ROLE_NOT_GRANTED_TO_USER__USER_ERROR_MSG "DEFAULT ROLE '%.*s' not granted to user"
-#define OB_ERR_ROLE_NOT_GRANTED_TO__USER_ERROR_MSG "ROLE '%.*s' not granted to '%.*s'"
+#define OB_ERR_ROLE_NOT_GRANTED_TO__USER_ERROR_MSG "`%.*s`@`%.*s` is not granted to `%.*s`@`%.*s`"
 #define OB_ERR_CANNOT_GRANT_TO_A_ROLE_WITH_GRANT_OPTION__USER_ERROR_MSG "cannot GRANT to a role WITH GRANT OPTION"
 #define OB_ERR_DUPLICATE_USERNAME_IN_LIST__USER_ERROR_MSG "duplicate username in list"
 #define OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE__USER_ERROR_MSG "cannot grant %.*s to a role"
@@ -2763,6 +2767,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__USER_ERROR_MSG "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__USER_ERROR_MSG "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
+#define OB_ERR_NO_COLUMN_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__USER_ERROR_MSG "object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
@@ -4014,6 +4019,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EST_DEVIA_TOO_LARGE__USER_ERROR_MSG "Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__USER_ERROR_MSG "cannot replace a type with table dependents"
+#define OB_ERR_UNKNOWN_AUTHID__USER_ERROR_MSG "Unknown authorization ID `%.*s`@`%.*s`"
+#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__USER_ERROR_MSG "There is no such grant defined for user '%.*s' on host '%.*s'"
+#define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__USER_ERROR_MSG "query range memory exhausted"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
@@ -4936,13 +4944,13 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MISSING_ON_KEYWORD__ORA_USER_ERROR_MSG "ORA-00969: missing ON keyword"
 #define OB_ERR_NO_GRANT_OPTION__ORA_USER_ERROR_MSG "ORA-01720: grant option does not exist for '%.*s.%.*s'"
 #define OB_ERR_ALTER_INDEX_AND_EXECUTE_NOT_ALLOWED_FOR_VIEWS__ORA_USER_ERROR_MSG "ORA-02204: ALTER, INDEX and EXECUTE not allowed for views"
-#define OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED__ORA_USER_ERROR_MSG "ORA-01934: circular role grant detected"
+#define OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED__ORA_USER_ERROR_MSG "ORA-01934: User account `%.*s`@`%.*s` is directly or indirectly granted to the role `%.*s`@`%.*s`. The GRANT would create a loop"
 #define OB_ERR_INVALID_PRIVILEGE_ON_DIRECTORIES__ORA_USER_ERROR_MSG "ORA-22928: invalid privilege on directories"
 #define OB_ERR_DIRECTORY_ACCESS_DENIED__ORA_USER_ERROR_MSG "ORA-29289: directory access denied"
 #define OB_ERR_MISSING_OR_INVALID_ROLE_NAME__ORA_USER_ERROR_MSG "ORA-01937: missing or invalid role name"
 #define OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-01924: role '%.*s' not granted or does not exist"
 #define OB_ERR_DEFAULT_ROLE_NOT_GRANTED_TO_USER__ORA_USER_ERROR_MSG "ORA-01955: DEFAULT ROLE '%.*s' not granted to user"
-#define OB_ERR_ROLE_NOT_GRANTED_TO__ORA_USER_ERROR_MSG "ORA-01951: ROLE '%.*s' not granted to '%.*s'"
+#define OB_ERR_ROLE_NOT_GRANTED_TO__ORA_USER_ERROR_MSG "ORA-01951: ROLE '%.*s%.*s' not granted to '%.*s%.*s'"
 #define OB_ERR_CANNOT_GRANT_TO_A_ROLE_WITH_GRANT_OPTION__ORA_USER_ERROR_MSG "ORA-01926: cannot GRANT to a role WITH GRANT OPTION"
 #define OB_ERR_DUPLICATE_USERNAME_IN_LIST__ORA_USER_ERROR_MSG "ORA-01700: duplicate username in list"
 #define OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE__ORA_USER_ERROR_MSG "ORA-01931: cannot grant %.*s to a role"
@@ -4953,6 +4961,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5387, %.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5388, User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5389, Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
+#define OB_ERR_NO_COLUMN_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5390, %.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-04043: object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
@@ -6204,6 +6213,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_EST_DEVIA_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11004, Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-02303: cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22866: cannot replace a type with table dependents"
+#define OB_ERR_UNKNOWN_AUTHID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11007, Unknown authorization ID `%.*s`@`%.*s`"
+#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11008, There is no such grant defined for user '%.*s' on host '%.*s'"
+#define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11011, query range memory exhausted"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
@@ -6216,7 +6228,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2186];
+extern int g_all_ob_errnos[2190];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

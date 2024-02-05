@@ -41,6 +41,8 @@ int ObCreateRoleExecutor::execute(ObExecContext &ctx, ObCreateRoleStmt &stmt)
   const uint64_t tenant_id = stmt.get_tenant_id();
   const ObString &role_name = stmt.get_role_name();
   const ObString &pwd = stmt.get_password();
+  ObCreateUserArg arg;
+
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -51,10 +53,12 @@ int ObCreateRoleExecutor::execute(ObExecContext &ctx, ObCreateRoleStmt &stmt)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get mysession", K(ret));
   } else {
-    ObCreateUserArg arg;
     arg.tenant_id_ = tenant_id;
     arg.exec_tenant_id_ = tenant_id;
     arg.creator_id_ = mysession->get_user_id();
+  }
+
+  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
     ObUserInfo user_info;
     user_info.set_tenant_id(tenant_id);
     user_info.set_type(OB_ROLE);
@@ -83,6 +87,23 @@ int ObCreateRoleExecutor::execute(ObExecContext &ctx, ObCreateRoleStmt &stmt)
       LOG_WARN("Create user error", K(ret));
     }
   }
+
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    ObSArray<int64_t> failed_index;
+    arg.if_not_exist_ = stmt.get_if_not_exists();
+    arg.is_create_role_ = true;
+    for (int i = 0; OB_SUCC(ret) && i < stmt.get_user_names().count(); i++) {
+      ObUserInfo user_info;
+      user_info.set_tenant_id(tenant_id);
+      user_info.set_type(OB_ROLE);
+      user_info.set_user_name(stmt.get_user_names().at(i));
+      user_info.set_host(stmt.get_host_names().at(i));
+      user_info.set_is_locked(true);
+      OZ (arg.user_infos_.push_back(user_info));
+    }
+    OZ (common_rpc_proxy->create_user(arg, failed_index));
+  }
+
   return ret;
 }
 
@@ -92,6 +113,7 @@ int ObDropRoleExecutor::execute(ObExecContext &ctx, ObDropRoleStmt &stmt)
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const uint64_t tenant_id = stmt.get_tenant_id();
+  ObDropUserArg &arg = static_cast<ObDropUserArg &>(stmt.get_ddl_arg());
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant is invalid", K(ret));
@@ -101,8 +123,7 @@ int ObDropRoleExecutor::execute(ObExecContext &ctx, ObDropRoleStmt &stmt)
   } else if (NULL == (common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(ret));
-  } else {
-    ObDropUserArg &arg = static_cast<ObDropUserArg &>(stmt.get_ddl_arg());
+  } else if (lib::is_oracle_mode()) {
     arg.tenant_id_ = tenant_id;
     arg.exec_tenant_id_ = tenant_id;
     arg.is_role_ = true;
@@ -118,6 +139,15 @@ int ObDropRoleExecutor::execute(ObExecContext &ctx, ObDropRoleStmt &stmt)
       //ret = OB_CANNOT_USER;
       //LOG_USER_ERROR(ret, strlen("DROP ROLE"), "DROP ROLE", role_name.length(), role_name.ptr());
     }
+  } else {
+    arg.tenant_id_ = tenant_id;
+    arg.exec_tenant_id_ = tenant_id;
+    arg.is_role_ = true;
+    for (int i = 0; OB_SUCC(ret) && i < stmt.get_user_names().count(); i++) {
+      OZ (arg.users_.push_back(stmt.get_user_names().at(i)));
+      OZ (arg.hosts_.push_back(stmt.get_host_names().at(i)));
+    }
+    OZ (ObDropUserExecutor::drop_user(common_rpc_proxy, arg));
   }
 
   return ret;

@@ -6464,6 +6464,33 @@ int ObDDLOperator::drop_db_table_privs(
     }
   }
 
+  // delete column privileges of this user MYSQL
+  if (OB_SUCC(ret)) {
+    ObArray<const ObColumnPriv *> column_privs;
+    if (OB_FAIL(schema_guard.get_column_priv_with_user_id(
+                                 tenant_id, user_id, column_privs))) {
+      LOG_WARN("Get table privileges of user to be deleted error",
+                K(tenant_id), K(user_id), K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_privs.count(); ++i) {
+        const ObColumnPriv *column_priv = column_privs.at(i);
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        ObPrivSet empty_priv = 0;
+        ObString dcl_stmt;
+        if (OB_ISNULL(column_priv)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table priv is NULL", K(ret), K(column_priv));
+        } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_column(
+            column_priv->get_sort_key(), column_priv->get_priv_id(), empty_priv,
+            new_schema_version, &dcl_stmt, trans, false))) {
+          LOG_WARN("Delete table privilege failed", K(column_priv), K(ret));
+        }
+      }
+    }
+  }
+
   // delete oracle table privileges of this user ORACLE
   if (OB_SUCC(ret)) {
     ObArray<const ObObjPriv *> obj_privs;
@@ -7336,6 +7363,77 @@ int ObDDLOperator::grant_routine(
   return ret;
 }
 
+int ObDDLOperator::grant_column(
+    ObSchemaGetterGuard &schema_guard,
+    const ObColumnPrivSortKey &column_priv_key,
+    const ObPrivSet priv_set,
+    const ObString *ddl_stmt_str,
+    common::ObMySQLTransaction &trans,
+    const bool is_grant)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = column_priv_key.tenant_id_;
+  ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_sql_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schama service_impl and schema manage must not null",
+        "schema_service_impl", schema_sql_service, K(ret));
+  } else if (!column_priv_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("column_priv_key is invalid", K(column_priv_key), K(ret));
+  } else if (0 == priv_set) {
+    //do nothing
+  } else {
+    ObPrivSet new_priv = OB_PRIV_SET_EMPTY;
+    ObPrivSet column_priv_set = OB_PRIV_SET_EMPTY;
+    uint64_t column_priv_id = OB_INVALID_ID;
+    if (OB_FAIL(schema_guard.get_column_priv_id(tenant_id, column_priv_key.user_id_, column_priv_key.db_,
+                                                column_priv_key.table_, column_priv_key.column_, column_priv_id))) {
+      LOG_WARN("get column priv id failed", K(ret));
+    } else if (column_priv_id == OB_INVALID_ID) {
+      if (!is_grant) {
+        ret = OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT;
+        LOG_WARN("revoke no such grant", K(ret), K(column_priv_key));
+      } else {
+        uint64_t new_column_priv_id = OB_INVALID_ID;
+        if (OB_FAIL(schema_sql_service->fetch_new_priv_id(tenant_id, new_column_priv_id))) {
+          LOG_WARN("fail to fetch new priv ids", KR(ret), K(tenant_id));
+        } else if (OB_UNLIKELY(OB_INVALID_ID == new_column_priv_id)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("object_id is invalid", KR(ret), K(tenant_id));
+        } else {
+          column_priv_id = new_column_priv_id;
+        }
+      }
+    } else if (OB_FAIL(schema_guard.get_column_priv_set(column_priv_key, column_priv_set))) {
+      LOG_WARN("get table priv set failed", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      bool need_flush = true;
+      if (is_grant) {
+        new_priv = column_priv_set | priv_set;
+      } else {
+        new_priv = column_priv_set & (~priv_set);
+      }
+      need_flush = (new_priv != column_priv_set);
+
+      if (need_flush) {
+        int64_t new_schema_version = OB_INVALID_VERSION;
+        if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+          LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_column(
+                              column_priv_key, column_priv_id, new_priv, new_schema_version,
+                              ddl_stmt_str, trans, is_grant))) {
+          LOG_WARN("grant column failed", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 /* in: grantor, grantee, obj_type, obj_id
    out: table_packed_privs
         array of col_id which has col privs
@@ -7632,14 +7730,23 @@ int ObDDLOperator::revoke_table(
     } else if (OB_PRIV_SET_EMPTY == table_priv_set
                && !revoke_all_ora
                && obj_priv_array.count() == 0) {
-      ret = OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT;
-      LOG_WARN("No such grant to revoke", K(table_priv_key), K(ret));
+      ObArray<const ObColumnPriv *> column_privs;
+      if (OB_FAIL(schema_guard.get_column_priv_in_table(table_priv_key, column_privs))) {
+        LOG_WARN("get column priv in table failed", K(ret));
+      } else {
+        if (column_privs.count() > 0) {
+          //do nothing here, and will revoke column priv behind.
+        } else {
+          ret = OB_ERR_CANNOT_REVOKE_PRIVILEGES_YOU_DID_NOT_GRANT;
+          LOG_WARN("No such grant to revoke", K(table_priv_key), K(ret));
+        }
+      }
     } else if (0 == priv_set && obj_priv_array.count() == 0) {
       // do-nothing
     } else {
       ObPrivSet new_priv = table_priv_set & (~priv_set);
       /* If there is an intersection between the existing permissions and the permissions that require revoke */
-      if (table_priv_set & priv_set) {
+      if (0 != (table_priv_set & priv_set)) {
         ObSqlString ddl_stmt_str;
         ObString ddl_sql;
         const ObUserInfo *user_info = NULL;
@@ -7672,10 +7779,10 @@ int ObDDLOperator::revoke_table(
                                            trans))) {
           LOG_WARN("drop fk cascase failed", K(table_priv_key), K(ret));
         } else if (OB_FAIL(ObDDLSqlGenerator::gen_table_priv_sql(
-            ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
-            need_priv,
-            false, /*is_grant*/
-            ddl_stmt_str))) {
+                ObAccountArg(user_info->get_user_name_str(), user_info->get_host_name_str()),
+                need_priv,
+                false, /*is_grant*/
+                ddl_stmt_str))) {
           LOG_WARN("gen_table_priv_sql failed", K(ret), K(need_priv));
         } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id,
@@ -7871,6 +7978,7 @@ int ObDDLOperator::grant_revoke_role(
   ObSchemaGetterGuard schema_guard;
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObString ddl_sql;
+  bool is_oracle_mode = false;
 
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_SYS;
@@ -7879,6 +7987,8 @@ int ObDDLOperator::grant_revoke_role(
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
   } else {
     common::ObSEArray<uint64_t, 8> role_ids;
     bool need_flush = false;
@@ -7912,13 +8022,21 @@ int ObDDLOperator::grant_revoke_role(
           } else if (NULL == role_info) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("role doesn't exist", K(ret), K(role_id));
-          } else if (OB_FAIL(sql_string.append_fmt("%s", role_info->get_user_name()))) {
+          } else if (is_oracle_mode ?
+                       OB_FAIL(sql_string.append_fmt("%s", role_info->get_user_name()))
+                     : OB_FAIL(sql_string.append_fmt("`%s`@`%s`",
+                                                     role_info->get_user_name(),
+                                                     role_info->get_host_name()))) {
             LOG_WARN("append sql failed", K(ret));
           }
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(sql_string.append_fmt(is_grant ? " TO %s": " FROM %s", user_info.get_user_name()))) {
+        if (is_oracle_mode ? OB_FAIL(sql_string.append_fmt(is_grant ? " TO %s": " FROM %s",
+                                                           user_info.get_user_name()))
+                           : OB_FAIL(sql_string.append_fmt(is_grant ? " TO `%s`@`%s`": " FROM `%s`@`%s`",
+                                                           user_info.get_user_name(),
+                                                           user_info.get_host_name()))) {
           LOG_WARN("append sql failed", K(ret));
         } else if (is_grant && option != NO_OPTION && OB_FAIL(sql_string.append_fmt(
                                                                           " WITH ADMIN OPTION"))) {

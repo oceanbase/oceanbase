@@ -5461,6 +5461,11 @@ int ObBasicSessionInfo::get_regexp_time_limit(int64_t &v) const
   return get_sys_variable(SYS_VAR_REGEXP_TIME_LIMIT, v);
 }
 
+int ObBasicSessionInfo::get_activate_all_role_on_login(bool &v) const
+{
+  return get_bool_sys_var(SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN, v);
+}
+
 void ObBasicSessionInfo::reset_tx_variable(bool reset_next_scope)
 {
   LOG_DEBUG("reset tx variable", K(lbt()));

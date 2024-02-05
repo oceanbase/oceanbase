@@ -782,8 +782,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                            share::schema::ObSchemaGetterGuard &schema_guard);
   int exists_role_grant_cycle(share::schema::ObSchemaGetterGuard &schema_guard,
                               const uint64_t tenant_id,
-                              uint64_t role_id,
-                              const share::schema::ObUserInfo *user_info);
+                              const ObUserInfo &role_info,
+                              const share::schema::ObUserInfo *user_info,
+                              const bool is_oracle_mode);
   virtual int grant(const obrpc::ObGrantArg &arg);
   int revoke(const obrpc::ObRevokeUserArg &arg);
   virtual int grant_priv_to_user(const uint64_t tenant_id,
@@ -811,6 +812,25 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                 const common::ObString *ddl_stmt_str,
                                 share::schema::ObSchemaGetterGuard &schema_guard);
 
+ int grant_or_revoke_column_priv_mysql(const uint64_t tenant_id,
+                                        const uint64_t table_id,
+                                        const uint64_t user_id,
+                                        const ObString& user_name,
+                                        const ObString& host_name,
+                                        const ObString& db,
+                                        const ObString& table,
+                                        const ObIArray<std::pair<ObString, ObPrivType>> &column_names_priv,
+                                        ObDDLOperator &ddl_operator,
+                                        ObDDLSQLTransaction &trans,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const bool is_grant);
+
+  int grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
+                                         uint64_t user_id,
+                                         const ObString &user_name,
+                                         const ObString &host_name,
+                                         const ObNeedPriv &need_priv,
+                                         share::schema::ObSchemaGetterGuard &schema_guard);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObIArray<int64_t> &failed_index);
   int standby_grant(const obrpc::ObStandbyGrantArg &arg);
 
@@ -860,11 +880,13 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   virtual int revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
     const ObPrivSet priv_set);
-  virtual int revoke_table(const share::schema::ObTablePrivSortKey &table_key,
+  virtual int revoke_table(const obrpc::ObRevokeTableArg &arg,
+                           const share::schema::ObTablePrivSortKey &table_key,
                            const ObPrivSet priv_set,
                            const share::schema::ObObjPrivSortKey &obj_key,
                            const share::ObRawObjPrivArray &obj_priv_array,
                            const bool revoke_all_ora);
+  virtual int revoke_table_and_column_mysql(const obrpc::ObRevokeTableArg& arg);
   //----End of functions for managing privileges----
   //----Functions for managing outlines----
   virtual int check_outline_exist(share::schema::ObOutlineInfo &Outline_info,
@@ -1982,6 +2004,9 @@ private:
                                 ObMySQLTransaction &trans);
 
 public:
+  int check_parallel_ddl_conflict(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const obrpc::ObDDLArg &arg);
   int construct_zone_region_list(
       common::ObIArray<share::schema::ObZoneRegion> &zone_region_list,
       const common::ObIArray<common::ObZone> &zone_list);
@@ -2167,6 +2192,10 @@ private:
                            uint64_t creator_id,
                            uint64_t &user_id,
                            share::schema::ObSchemaGetterGuard &schema_guard);
+
+  int create_mysql_roles_in_trans(const uint64_t tenant_id,
+                                  const bool if_not_exist,
+                                  common::ObIArray<share::schema::ObUserInfo> &user_infos);
   int replay_alter_user(const share::schema::ObUserInfo &user_info,
       share::schema::ObSchemaGetterGuard &schema_guard);
   int set_passwd_in_trans(const uint64_t tenant_id,
@@ -2196,7 +2225,7 @@ private:
                          const common::ObString *ddl_stmt_str,
                          share::schema::ObSchemaGetterGuard &schema_guard);
   int drop_user_in_trans(const uint64_t tenant_id,
-                         const uint64_t user_id,
+                         const common::ObIArray<uint64_t> &user_ids,
                          const ObString *ddl_stmt_str);
 
   //----End of Functions for managing privileges----

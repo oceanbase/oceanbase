@@ -272,6 +272,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 498	__all_transfer_partition_task	0	201001	1
 499	__all_transfer_partition_task_history	0	201001	1
 501	__wr_sqltext	0	201001	1
+505	__all_column_privilege	0	201001	1
+506	__all_column_privilege_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -691,6 +693,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12454	__all_virtual_wr_sqltext	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
+12462	__all_virtual_column_privilege	2	201001	1
+12463	__all_virtual_column_privilege_history	2	201001	1
+12466	ENABLED_ROLES	2	201002	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1085,7 +1090,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21506	CDB_WR_SQLTEXT	1	201001	1
 21507	GV$OB_ACTIVE_SESSION_HISTORY	1	201001	1
 21508	V$OB_ACTIVE_SESSION_HISTORY	1	201001	1
+21511	role_edges	1	201003	1
+21512	default_roles	1	201003	1
 21513	CDB_INDEX_USAGE	1	201001	1
+21516	columns_priv	1	201003	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

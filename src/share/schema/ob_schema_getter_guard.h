@@ -490,6 +490,18 @@ public:
                               const ObNeedPriv &table_need_priv);
   int check_single_table_priv_or(const ObSessionPrivInfo &session_priv,
                                  const ObNeedPriv &table_need_priv);
+
+  int check_priv_any_column_priv(const ObSessionPrivInfo &session_priv,
+                                 const common::ObString &db_name,
+                                 const common::ObString &table_name,
+                                 bool &pass);
+
+  int collect_all_priv_for_column(const ObSessionPrivInfo &session_priv,
+                                  const common::ObString &db_name,
+                                  const common::ObString &table_name,
+                                  const common::ObString &column_name,
+                                  ObPrivSet &column_priv_set);
+
   int get_session_priv_info(const uint64_t tenant_id,
                             const uint64_t user_id,
                             const ObString &database_name,
@@ -498,6 +510,27 @@ public:
                                     common::ObIArray<const ObUserInfo *> &user_infos);
   int get_db_priv_with_tenant_id(const uint64_t tenant_id,
                                  common::ObIArray<const ObDBPriv *> &db_privs);
+  int get_column_priv_in_table(const uint64_t tenant_id,
+                              const uint64_t user_id,
+                              const ObString &db,
+                              const ObString &table,
+                              ObIArray<const ObColumnPriv *> &column_privs);
+
+  int get_column_priv_in_table(const ObTablePrivSortKey &table_priv_key,
+                              ObIArray<const ObColumnPriv *> &column_privs);
+  int get_column_priv(const ObColumnPrivSortKey &column_priv_key,
+                          const ObColumnPriv *&column_priv);
+
+  int get_column_priv_id(const uint64_t tenant_id,
+                        const uint64_t user_id,
+                        const ObString &db,
+                        const ObString &table,
+                        const ObString &column,
+                        uint64_t &priv_id);
+  int get_column_priv_with_user_id(const uint64_t tenant_id,
+                                    const uint64_t user_id,
+                                    common::ObIArray<const ObColumnPriv*> &column_privs);
+  int get_column_priv_set(const ObColumnPrivSortKey &column_priv_key, ObPrivSet &priv_set);
   int get_db_priv_with_user_id(const uint64_t tenant_id,
                                const uint64_t user_id,
                                common::ObIArray<const ObDBPriv*> &db_privs);
@@ -1060,11 +1093,11 @@ private:
 
   int check_db_priv(const ObSessionPrivInfo &session_priv,
                     const common::ObString &db,
-                    const ObPrivSet need_priv,
+                    const ObPrivSet need_priv_set,
                     ObPrivSet &user_db_priv_set);
   int check_db_priv(const ObSessionPrivInfo &session_priv,
                     const common::ObString &db,
-                    const ObPrivSet need_priv);
+                    const ObPrivSet need_priv_set);
   int check_user_priv(const ObSessionPrivInfo &session_priv,
                       const ObPrivSet priv_set);
   int verify_db_read_only(const uint64_t tenant_id,
@@ -1161,7 +1194,8 @@ private:
                         const uint64_t tenant_id,
                         const uint64_t user_id,
                         bool& pass);
-  int check_priv_table_or_(const ObNeedPriv &need_priv,
+  int check_priv_table_or_(const ObSessionPrivInfo &session_priv,
+                           const ObNeedPriv &need_priv,
                            const ObPrivMgr &priv_mgr,
                            const uint64_t tenant_id,
                            const uint64_t user_id,
@@ -1172,6 +1206,7 @@ private:
   int check_single_table_priv_for_update_(const ObSessionPrivInfo &session_priv,
                                           const ObNeedPriv &table_need_priv,
                                           const ObPrivMgr &priv_mgr);
+  int check_activate_all_role_var(uint64_t tenant_id, bool &activate_all_role);
 private:
   common::ObArenaAllocator local_allocator_;
   ObMultiVersionSchemaService *schema_service_;

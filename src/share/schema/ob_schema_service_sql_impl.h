@@ -206,6 +206,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE(column_priv, ObColumnPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
@@ -313,7 +314,7 @@ public:
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id);
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id);
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id);
-
+  virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id);
 //  virtual int insert_sys_param(const ObSysParam &sys_param,
 //                               common::ObISQLClient *sql_client);
 
@@ -349,6 +350,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE(column_priv, ObColumnPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);
@@ -440,6 +442,7 @@ public:
   FETCH_SCHEMAS_FUNC_DECLARE(db_priv, ObDBPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(table_priv, ObTablePriv);
   FETCH_SCHEMAS_FUNC_DECLARE(routine_priv, ObRoutinePriv);
+  FETCH_SCHEMAS_FUNC_DECLARE(column_priv, ObColumnPriv);
   FETCH_SCHEMAS_FUNC_DECLARE(outline, ObSimpleOutlineSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(routine, ObSimpleRoutineSchema);
   FETCH_SCHEMAS_FUNC_DECLARE(synonym, ObSimpleSynonymSchema);

@@ -57,12 +57,14 @@ public:
   const common::ObString &get_masked_sql() const { return masked_sql_; }
   share::schema::ObPrivLevel get_grant_level() const {return grant_level_;}
   share::schema::ObObjectType get_object_type() const { return object_type_;}
-  const ObSEArray<uint64_t, 4> get_ins_col_ids() const { return ins_col_ids_; }
-  const ObSEArray<uint64_t, 4> get_upd_col_ids() const { return upd_col_ids_; }
-  const ObSEArray<uint64_t, 4> get_ref_col_ids() const { return ref_col_ids_; }
+  const ObIArray<uint64_t>& get_sel_col_ids() const { return sel_col_ids_; }
+  const ObIArray<uint64_t>& get_ins_col_ids() const { return ins_col_ids_; }
+  const ObIArray<uint64_t>& get_upd_col_ids() const { return upd_col_ids_; }
+  const ObIArray<uint64_t>& get_ref_col_ids() const { return ref_col_ids_; }
   void set_object_type(share::schema::ObObjectType object_type) { object_type_ = object_type; }
   uint64_t get_object_id() const { return object_id_;}
   void set_object_id(uint64_t object_id) { object_id_ = object_id; }
+  int set_sel_col_ids(ObSEArray<uint64_t, 4> &col_ids) { return sel_col_ids_.assign(col_ids); }
   int set_ins_col_ids(ObSEArray<uint64_t, 4> &col_ids) { return ins_col_ids_.assign(col_ids); }
   int set_upd_col_ids(ObSEArray<uint64_t, 4> &col_ids) { return upd_col_ids_.assign(col_ids); }
   int set_ref_col_ids(ObSEArray<uint64_t, 4> &col_ids) { return ref_col_ids_.assign(col_ids); }
@@ -83,6 +85,12 @@ public:
 
   virtual bool cause_implicit_commit() const { return true; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return grant_arg_; }
+  int add_column_privs(const ObString& column_name,const ObPrivSet priv_set) { return column_names_priv_.push_back(std::make_pair(column_name, priv_set)); }
+  const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }
+  void set_table_schema_version(int64_t schema_version) { table_schema_version_ = schema_version; }
+  int64_t get_table_schema_version() { return table_schema_version_; }
+
+  bool is_grant_stmt() const { return true; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
@@ -105,11 +113,16 @@ private:
   uint64_t option_;
   share::ObRawPrivArray sys_priv_array_;
   share::ObRawObjPrivArray obj_priv_array_;
-  ObSEArray<uint64_t, 4> ins_col_ids_;
-  ObSEArray<uint64_t, 4> upd_col_ids_;
-  ObSEArray<uint64_t, 4> ref_col_ids_;
+  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> sel_col_ids_;
+  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ins_col_ids_;
+  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> upd_col_ids_;
+  ObSEArray<uint64_t, 4, common::ModulePageAllocator, true> ref_col_ids_;
   ObSelectStmt *ref_query_; // 用于grant 视图时，对视图依赖的table,view等做递归权限check.
   bool is_grant_all_tab_priv_;
+
+  ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
+
+  int64_t table_schema_version_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGrantStmt);

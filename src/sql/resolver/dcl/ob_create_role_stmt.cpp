@@ -27,7 +27,8 @@ ObCreateRoleStmt::ObCreateRoleStmt(ObIAllocator *name_pool)
       tenant_id_(OB_INVALID_ID),
       role_name_(),
       password_(),
-      need_enc_(false)
+      need_enc_(false),
+      if_not_exists_(false)
 {
 }
 
@@ -36,7 +37,8 @@ ObCreateRoleStmt::ObCreateRoleStmt()
       tenant_id_(OB_INVALID_ID),
       role_name_(),
       password_(),
-      need_enc_(false)
+      need_enc_(false),
+      if_not_exists_(false)
 {
 }
 

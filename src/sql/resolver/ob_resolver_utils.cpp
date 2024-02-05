@@ -2379,6 +2379,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_LOCK_TABLE;
       }
       break;
+      case T_ALTER_USER_DEFAULT_ROLE: {
+        type = stmt::T_ALTER_USER_PROFILE;
+      }
+      break;
       default: {
         type = stmt::T_NONE;
       }

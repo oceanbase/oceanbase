@@ -82,13 +82,15 @@ public:
                                                         bool &nullable,
                                                         bool &has_default);
   static int deduce_column_attributes(const bool is_oracle_mode,
+                                      const ObTableSchema &table_schema,
                                       const sql::ObSelectStmt *select_stmt,
                                       const sql::SelectItem &select_item,
                                       share::schema::ObSchemaGetterGuard *schema_guard,
                                       sql::ObSQLSessionInfo *session,
                                       char *column_type_str,
                                       int64_t column_type_str_len,
-                                      ColumnAttributes &column_attributes);
+                                      ColumnAttributes &column_attributes,
+                                      ObIAllocator &allocator);
 private:
 
   enum DESC_COLUMN {
@@ -106,9 +108,9 @@ private:
   };
   int calc_show_table_id(uint64_t &show_table_id);
   int fill_row_cells(const share::schema::ObTableSchema &table_schema,
-                     const share::schema::ObColumnSchemaV2 &column_schema);
-  int fill_row_cells(const uint64_t tenant_id,
-                     const uint64_t table_id,
+                     const share::schema::ObColumnSchemaV2 &column_schema,
+                     bool &has_column_priv);
+  int fill_row_cells(const ObTableSchema &table_schema,
                      const sql::ObSelectStmt *select_stmt,
                      const sql::SelectItem &select_item);
   int set_null_and_default_according_binary_expr(const sql::ObSelectStmt *select_stmt,

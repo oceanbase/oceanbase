@@ -40,11 +40,13 @@ ObGrantStmt::ObGrantStmt(ObIAllocator *name_pool)
       option_(0),
       sys_priv_array_(),
       obj_priv_array_(),
+      sel_col_ids_(),
       ins_col_ids_(),
       upd_col_ids_(),
       ref_col_ids_(),
       ref_query_(NULL),
-      is_grant_all_tab_priv_(false)
+      is_grant_all_tab_priv_(false),
+      table_schema_version_(0)
 {
 }
 
@@ -66,11 +68,13 @@ ObGrantStmt::ObGrantStmt()
       option_(0),
       sys_priv_array_(),
       obj_priv_array_(),
+      sel_col_ids_(),
       ins_col_ids_(),
       upd_col_ids_(),
       ref_col_ids_(),
       ref_query_(NULL),
-      is_grant_all_tab_priv_(false)
+      is_grant_all_tab_priv_(false),
+      table_schema_version_(0)
 {
 }
 

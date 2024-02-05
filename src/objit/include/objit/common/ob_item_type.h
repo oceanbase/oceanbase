@@ -494,6 +494,7 @@ typedef enum ObItemType
   T_FUN_SYS_ICU_VERSION = 765,
 
   T_FUN_SYS_CURRENT_USER_PRIV = 766,
+  T_FUN_SYS_CURRENT_ROLE = 767,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
@@ -2389,6 +2390,9 @@ typedef enum ObItemType
   T_COALESCE_AGGR,
   T_NO_COALESCE_AGGR,
   T_AUTO_INCREMENT_CACHE_SIZE,
+
+  T_IGNORE_UNKNOWN_USER,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

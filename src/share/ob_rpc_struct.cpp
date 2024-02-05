@@ -4089,6 +4089,7 @@ int ObCreateUserArg::assign(const ObCreateUserArg &other)
   if_not_exist_ = other.if_not_exist_;
   creator_id_ = other.creator_id_;
   primary_zone_ = other.primary_zone_;
+  is_create_role_ = other.is_create_role_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(user_infos_.assign(other.user_infos_))) {
@@ -4102,7 +4103,8 @@ OB_SERIALIZE_MEMBER((ObCreateUserArg, ObDDLArg),
                     user_infos_,
                     if_not_exist_,
                     creator_id_,
-                    primary_zone_);
+                    primary_zone_,
+                    is_create_role_);
 
 bool ObDropUserArg::is_valid() const
 {
@@ -4409,6 +4411,8 @@ int ObAlterUserProfileArg::assign(const ObAlterUserProfileArg &other)
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(role_id_array_.assign(other.role_id_array_))) {
     SHARE_LOG(WARN, "fail to assign role_id_array", K(ret));
+  } else if (OB_FAIL(user_ids_.assign(other.user_ids_))) {
+    SHARE_LOG(WARN, "fail to assign user_ids", K(ret));
   }
   return ret;
 }
@@ -4418,7 +4422,8 @@ bool ObAlterUserProfileArg::is_valid() const
   return is_valid_tenant_id(tenant_id_)
       && ((user_name_.length() > 0
           && host_name_.length() > 0)
-         || is_valid_id(user_id_)) ;
+         || is_valid_id(user_id_)
+         || user_ids_.count() > 0) ;
 }
 
 OB_SERIALIZE_MEMBER((ObAlterUserProfileArg, ObDDLArg),
@@ -4428,7 +4433,8 @@ OB_SERIALIZE_MEMBER((ObAlterUserProfileArg, ObDDLArg),
                     profile_name_,
                     user_id_,
                     default_role_flag_,
-                    role_id_array_);
+                    role_id_array_,
+                    user_ids_);
 
 bool ObGrantArg::is_valid() const
 {
@@ -4480,6 +4486,10 @@ int ObGrantArg::assign(const ObGrantArg &other)
     SHARE_LOG(WARN, "fail to assign upd_col_ids_", K(ret));
   } else if (OB_FAIL(ref_col_ids_.assign(other.ref_col_ids_))) {
     SHARE_LOG(WARN, "fail to assign ref_col_ids_", K(ret));
+  } else if (OB_FAIL(sel_col_ids_.assign(other.sel_col_ids_))) {
+    SHARE_LOG(WARN, "fail to assign sel_col_ids_", K(ret));
+  } else if (OB_FAIL(column_names_priv_.assign(other.column_names_priv_))) {
+    SHARE_LOG(WARN, "fail to assign ref_col_ids_", K(ret));
   }
   return ret;
 }
@@ -4509,7 +4519,9 @@ OB_DEF_SERIALIZE(ObGrantArg)
               ref_col_ids_,
               grantor_id_,
               remain_roles_,
-              is_inner_
+              is_inner_,
+              sel_col_ids_,
+              column_names_priv_
               );
 return ret;
 }
@@ -4539,7 +4551,9 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               ref_col_ids_,
               grantor_id_,
               remain_roles_,
-              is_inner_);
+              is_inner_,
+              sel_col_ids_,
+              column_names_priv_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -4578,7 +4592,9 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               ref_col_ids_,
               grantor_id_,
               remain_roles_,
-              is_inner_);
+              is_inner_,
+              sel_col_ids_,
+              column_names_priv_);
   return len;
 }
 
@@ -4613,6 +4629,37 @@ bool ObRevokeTableArg::is_valid() const
       && !db_.empty() && !table_.empty();
 }
 
+int ObRevokeTableArg::assign(const ObRevokeTableArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  user_id_ = other.user_id_;
+  db_ = other.db_;
+  table_ = other.table_;
+  priv_set_ = other.priv_set_;
+  grant_ = other.grant_;
+  obj_id_ = other.obj_id_;
+  obj_type_ = other.obj_type_;
+  grantor_id_ = other.grantor_id_;
+  revoke_all_ora_ = other.revoke_all_ora_;
+  if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", KR(ret));
+  } else if (OB_FAIL(obj_priv_array_.assign(other.obj_priv_array_))) {
+    LOG_WARN("fail to assign obj_priv_array", KR(ret));
+  } else if (OB_FAIL(ins_col_ids_.assign(other.ins_col_ids_))) {
+    LOG_WARN("fail to assign ins_col_ids_", K(ret));
+  } else if (OB_FAIL(upd_col_ids_.assign(other.upd_col_ids_))) {
+    LOG_WARN("fail to assign upd_col_ids_", K(ret));
+  } else if (OB_FAIL(ref_col_ids_.assign(other.ref_col_ids_))) {
+    LOG_WARN("fail to assign ref_col_ids_", K(ret));
+  } else if (OB_FAIL(sel_col_ids_.assign(other.sel_col_ids_))) {
+    LOG_WARN("fail to assign sel_col_ids_", K(ret));
+  } else if (OB_FAIL(column_names_priv_.assign(other.column_names_priv_))) {
+    LOG_WARN("fail to assign column_names_priv", KR(ret));
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObRevokeTableArg, ObDDLArg),
                     tenant_id_,
                     user_id_,
@@ -4624,7 +4671,12 @@ OB_SERIALIZE_MEMBER((ObRevokeTableArg, ObDDLArg),
                     obj_type_,
                     grantor_id_,
                     obj_priv_array_,
-                    revoke_all_ora_);
+                    revoke_all_ora_,
+                    sel_col_ids_,
+                    ins_col_ids_,
+                    upd_col_ids_,
+                    ref_col_ids_,
+                    column_names_priv_);
 
 bool ObRevokeRoutineArg::is_valid() const
 {
@@ -4680,9 +4732,9 @@ int ObRevokeSysPrivArg::assign(const ObRevokeSysPrivArg &other)
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(sys_priv_array_.assign(other.sys_priv_array_))) {
-    LOG_WARN("fail to assign sys_priv_array_", K(ret));
+    LOG_WARN("fail to assign sys_priv_array_", KR(ret));
   } else if (OB_FAIL(role_ids_.assign(other.role_ids_))) {
-    LOG_WARN("fail to assign role_ids_");
+    LOG_WARN("fail to assign role_ids_", KR(ret));
   }
   return ret;
 }

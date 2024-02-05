@@ -945,11 +945,11 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
         K(ret),
         K(cur_row_.count_),
         K(col_count));
-  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, select_stmt,
+  } else if (OB_FAIL(ObTableColumns::deduce_column_attributes(is_oracle_mode, *table_schema, select_stmt,
                                                               select_item, schema_guard_,
                                                               session_, column_type_str_,
                                                               column_type_str_len_,
-                                                              column_attributes))) {
+                                                              column_attributes, *allocator_))) {
     SERVER_LOG(WARN, "failed to deduce column attributes",
              K(select_item), K(ret));
   } else {

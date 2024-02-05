@@ -62,6 +62,7 @@
 #include "rootserver/ob_ddl_service.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 
@@ -351,6 +352,184 @@ int add_col_id_array_to_need_priv(
       }
       default : {
         break;
+      }
+    }
+  }
+  return ret;
+}
+
+int add_col_priv_to_need_priv(
+    const ObStmt *basic_stmt,
+    const TableItem &table_item,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  ObStmtExprGetter visitor;
+  ObNeedPriv need_priv;
+  need_priv.db_ = table_item.database_name_;
+  need_priv.table_ = table_item.table_name_;
+  need_priv.is_sys_table_ = table_item.is_system_table_;
+  need_priv.is_for_update_ = table_item.for_update_;
+  need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+  const uint64_t table_id = table_item.table_id_;
+  visitor.set_relation_scope();
+  visitor.remove_scope(SCOPE_DML_COLUMN);
+  visitor.remove_scope(SCOPE_DML_CONSTRAINT);
+  visitor.remove_scope(SCOPE_DMLINFOS);
+  ObSEArray<ObRawExpr *, 4> col_exprs;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("basic_stmt is NULL", K(ret));
+  } else {
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    switch (stmt_type) {
+      case stmt::T_DELETE: {
+        need_priv.priv_set_ = OB_PRIV_DELETE;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      case stmt::T_REPLACE:
+      case stmt::T_INSERT: {
+        visitor.remove_scope(SCOPE_INSERT_DESC);
+        visitor.remove_scope(SCOPE_DML_VALUE);
+        const ObInsertStmt *insert_stmt = NULL;
+        insert_stmt = static_cast<const ObInsertStmt*>(basic_stmt);
+        if (OB_ISNULL(insert_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("insert_stmt is NULL", K(ret));
+        } else {
+          ObColumnRefRawExpr *value_desc = NULL;
+          if (insert_stmt->is_replace()) {
+            need_priv.priv_set_ = OB_PRIV_DELETE;
+            ADD_NEED_PRIV(need_priv);
+            need_priv.columns_.reuse();
+          }
+          need_priv.priv_set_ = OB_PRIV_INSERT;
+          for (int i = 0; OB_SUCC(ret) && i < insert_stmt->get_values_desc().count(); ++i) {
+            if (OB_ISNULL(value_desc = insert_stmt->get_values_desc().at(i))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("value_desc is null", K(ret));
+            } else if (table_id == value_desc->get_table_id()
+                      && value_desc->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
+              OZ (need_priv.columns_.push_back(value_desc->get_column_name()));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ADD_NEED_PRIV(need_priv);
+            need_priv.columns_.reuse();
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (insert_stmt->is_insert_up()) {
+            const ObIArray<ObAssignment> &assigns = insert_stmt->get_table_assignments();
+            need_priv.priv_set_ = OB_PRIV_UPDATE;
+            for (int j = 0; OB_SUCC(ret) && j < assigns.count(); ++j) {
+              if (!assigns.at(j).is_implicit_) {
+                const ObColumnRefRawExpr *col_expr = assigns.at(j).column_expr_;
+                const ObRawExpr *expr = assigns.at(j).expr_;
+                if (OB_ISNULL(col_expr) || OB_ISNULL(expr)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("col_expr is null");
+                } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, col_exprs))) {
+                  LOG_WARN("extract column exprs failed", K(ret));
+                } else if (col_expr->get_table_id() == table_id
+                        && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
+                  OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              ADD_NEED_PRIV(need_priv);
+              need_priv.columns_.reuse();
+            }
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(append(col_exprs, insert_stmt->get_insert_table_info().column_in_values_vector_))) {
+            LOG_WARN("append failed", K(ret));
+          }
+        }
+
+        break;
+      }
+      case stmt::T_UPDATE: {
+        need_priv.priv_set_ = OB_PRIV_UPDATE;
+        const ObUpdateStmt *update_stmt = NULL;
+        update_stmt = static_cast<const ObUpdateStmt*>(basic_stmt);
+        if (OB_ISNULL(update_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("update_stmt is null", K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < update_stmt->get_update_table_info().count(); ++i) {
+            ObUpdateTableInfo* table_info = update_stmt->get_update_table_info().at(i);
+            if (OB_ISNULL(table_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get null table info", K(ret));
+            } else if (table_info->table_id_ == table_id) {
+              const ObAssignments &assigns = table_info->assignments_;
+              for (int j = 0; OB_SUCC(ret) && j < assigns.count(); ++j) {
+                if (!assigns.at(j).is_implicit_) {
+                  const ObColumnRefRawExpr *col_expr = assigns.at(j).column_expr_;
+                  const ObRawExpr *value_expr = assigns.at(j).expr_;
+                  if (OB_ISNULL(col_expr)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("col_expr is null");
+                  } else if (col_expr->get_table_id() == table_id
+                          && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
+                    OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+                  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(value_expr, col_exprs))) {
+                    LOG_WARN("extract column exprs failed", K(ret));
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ADD_NEED_PRIV(need_priv);
+          need_priv.columns_.reuse();
+        }
+        break;
+      }
+      default : {
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr *, 4> rel_exprs;
+      need_priv.priv_set_ = OB_PRIV_SELECT;
+      if (OB_FAIL(static_cast<const ObDMLStmt *>(basic_stmt)->get_relation_exprs(rel_exprs, visitor))) {
+        LOG_WARN("get rel exprs failed", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(rel_exprs, col_exprs))) {
+        LOG_WARN("extract column exprs failed", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
+          if (OB_ISNULL(col_exprs.at(i)) || OB_UNLIKELY(!col_exprs.at(i)->is_column_ref_expr())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          } else {
+            ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(col_exprs.at(i));
+            if (OB_ISNULL(col_expr)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (col_expr->get_table_id() == table_id && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
+              OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (need_priv.columns_.empty()) {
+            if (basic_stmt->is_select_stmt()) {
+              need_priv.check_any_column_priv_ = true;
+              ADD_NEED_PRIV(need_priv);
+              need_priv.check_any_column_priv_ = false;
+            }
+          } else {
+            ADD_NEED_PRIV(need_priv);
+            need_priv.columns_.reuse();
+          }
+        }
       }
     }
   }
@@ -961,7 +1140,16 @@ int get_dml_stmt_need_privs(
                 need_priv.priv_set_ &= ~OB_PRIV_SELECT;
               }
             }
-            ADD_NEED_PRIV(need_priv);
+
+            if (OB_SUCC(ret)) {
+              if (lib::is_mysql_mode()) {
+                if (OB_FAIL(add_col_priv_to_need_priv(basic_stmt, *table_item, need_privs))) {
+                  LOG_WARN("add col id array to need priv failed", K(ret));
+                }
+              } else {
+                ADD_NEED_PRIV(need_priv);
+              }
+            }
           }
         }
         break;
@@ -1404,6 +1592,47 @@ int get_grant_stmt_need_privs(
       need_priv.priv_level_ = stmt->get_grant_level();
       need_priv.obj_type_ = stmt->get_object_type();
       ADD_NEED_PRIV(need_priv);
+      #define DEF_COLUM_NEED_PRIV(priv_prefix, priv_type) \
+        ObNeedPriv priv_prefix##_need_priv;  \
+        priv_prefix##_need_priv.db_ = stmt->get_database_name(); \
+        priv_prefix##_need_priv.table_ = stmt->get_table_name(); \
+        priv_prefix##_need_priv.priv_set_ = priv_type | OB_PRIV_GRANT; \
+        priv_prefix##_need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+
+      DEF_COLUM_NEED_PRIV(sel, OB_PRIV_SELECT);
+      DEF_COLUM_NEED_PRIV(ins, OB_PRIV_INSERT);
+      DEF_COLUM_NEED_PRIV(upd, OB_PRIV_UPDATE);
+      DEF_COLUM_NEED_PRIV(ref, OB_PRIV_REFERENCES);
+
+      #undef DEF_COLUM_NEED_PRIV
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_privs().count(); i++) {
+        const ObString &column_name = stmt->get_column_privs().at(i).first;
+        ObPrivSet priv_set = stmt->get_column_privs().at(i).second;
+        if ((stmt->get_priv_set() & priv_set) != 0) {
+          //contains in table priv already.
+        } else if (0 != (priv_set & OB_PRIV_SELECT)) {
+          ret = sel_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_INSERT)) {
+          ret = ins_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_UPDATE)) {
+          ret = upd_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_REFERENCES)) {
+          ret = ref_need_priv.columns_.push_back(column_name);
+        }
+      }
+
+      #define ADD_COLUMN_NEED_PRIV(priv_prefix) \
+        if (OB_FAIL(ret)) { \
+        } else if (priv_prefix##_need_priv.columns_.count() != 0) { \
+          ADD_NEED_PRIV(priv_prefix##_need_priv); \
+        }
+
+      ADD_COLUMN_NEED_PRIV(sel);
+      ADD_COLUMN_NEED_PRIV(ins);
+      ADD_COLUMN_NEED_PRIV(upd);
+      ADD_COLUMN_NEED_PRIV(ref);
+      #undef ADD_COLUMN_NEED_PRIV
     }
   }
   return ret;
@@ -1436,6 +1665,47 @@ int get_revoke_stmt_need_privs(
       need_priv.priv_level_ = stmt->get_grant_level();
       need_priv.obj_type_ = stmt->get_object_type();
       ADD_NEED_PRIV(need_priv);
+      #define DEF_COLUM_NEED_PRIV(priv_prefix, priv_type) \
+        ObNeedPriv priv_prefix##_need_priv;  \
+        priv_prefix##_need_priv.db_ = stmt->get_database_name(); \
+        priv_prefix##_need_priv.table_ = stmt->get_table_name(); \
+        priv_prefix##_need_priv.priv_set_ = priv_type | OB_PRIV_GRANT; \
+        priv_prefix##_need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+
+      DEF_COLUM_NEED_PRIV(sel, OB_PRIV_SELECT);
+      DEF_COLUM_NEED_PRIV(ins, OB_PRIV_INSERT);
+      DEF_COLUM_NEED_PRIV(upd, OB_PRIV_UPDATE);
+      DEF_COLUM_NEED_PRIV(ref, OB_PRIV_REFERENCES);
+
+      #undef DEF_COLUM_NEED_PRIV
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_privs().count(); i++) {
+        const ObString &column_name = stmt->get_column_privs().at(i).first;
+        ObPrivSet priv_set = stmt->get_column_privs().at(i).second;
+        if ((stmt->get_priv_set() & priv_set) != 0) {
+          //contains in table priv already.
+        } else if (0 != (priv_set & OB_PRIV_SELECT)) {
+          ret = sel_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_INSERT)) {
+          ret = ins_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_UPDATE)) {
+          ret = upd_need_priv.columns_.push_back(column_name);
+        } else if (0 != (priv_set & OB_PRIV_REFERENCES)) {
+          ret = ref_need_priv.columns_.push_back(column_name);
+        }
+      }
+
+      #define ADD_COLUMN_NEED_PRIV(priv_prefix) \
+        if (OB_FAIL(ret)) { \
+        } else if (priv_prefix##_need_priv.columns_.count() != 0) { \
+          ADD_NEED_PRIV(priv_prefix##_need_priv); \
+        }
+
+      ADD_COLUMN_NEED_PRIV(sel);
+      ADD_COLUMN_NEED_PRIV(ins);
+      ADD_COLUMN_NEED_PRIV(upd);
+      ADD_COLUMN_NEED_PRIV(ref);
+      #undef ADD_COLUMN_NEED_PRIV
     }
   }
   return ret;
@@ -1465,11 +1735,64 @@ int get_create_user_privs(
       case stmt::T_CREATE_USER : {
         if (stmt::T_SET_PASSWORD == stmt_type
             && static_cast<const ObSetPasswordStmt*>(basic_stmt)->get_for_current_user()) {
+        } else if (stmt::T_ALTER_USER_PROFILE == stmt_type
+                   && lib::is_mysql_mode()
+                   && !!static_cast<const ObAlterUserProfileStmt*>(basic_stmt)->get_set_role_flag()) {
         } else {
           need_priv.priv_set_ = OB_PRIV_CREATE_USER;
           need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
           ADD_NEED_PRIV(need_priv);
         }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("Stmt type not in types dealt in this function", K(ret), K(stmt_type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int get_role_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  UNUSED(session_priv);
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    ret = no_priv_needed(session_priv, basic_stmt, need_privs);
+  } else {
+    ObNeedPriv need_priv;
+    stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
+    switch (stmt_type) {
+      case stmt::T_CREATE_ROLE: {
+        need_priv.priv_set_ = OB_PRIV_CREATE_USER; //[TODO ROLE]
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      case stmt::T_DROP_ROLE: {
+        need_priv.priv_set_ = OB_PRIV_CREATE_USER;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      case stmt::T_GRANT_ROLE: {
+        need_priv.priv_set_ = OB_PRIV_SUPER;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
+        break;
+      }
+      case stmt::T_REVOKE_ROLE: {
+        need_priv.priv_set_ = OB_PRIV_SUPER;
+        need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        ADD_NEED_PRIV(need_priv);
         break;
       }
       default: {
@@ -2478,6 +2801,20 @@ int ObPrivilegeCheck::check_privilege(
   return ret;
 }
 
+int adjust_session_priv(ObSchemaGetterGuard &schema_guard,
+                        ObSessionPrivInfo &session_priv) {
+  int ret = OB_SUCCESS;
+  const ObUserInfo *user_info = NULL;
+  if (OB_ISNULL(user_info = schema_guard.get_user_info(session_priv.tenant_id_, session_priv.user_id_))) {
+    ret = OB_USER_NOT_EXIST;
+    LOG_WARN("fail to get user_info", K(ret));
+  } else {
+    session_priv.user_name_ = user_info->get_user_name_str();
+    session_priv.host_name_ = user_info->get_host_name_str();
+  }
+  return ret;
+}
+
 int ObPrivilegeCheck::check_privilege(
     const ObSqlCtx &ctx,
     const ObStmtNeedPrivs &stmt_need_priv)
@@ -2487,20 +2824,14 @@ int ObPrivilegeCheck::check_privilege(
     //do not check privilege
   } else {
     ObSessionPrivInfo session_priv;
-    if (OB_ISNULL(ctx.session_info_)) {
+    if (OB_ISNULL(ctx.session_info_) || OB_ISNULL(ctx.schema_guard_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Session is NULL");
     } else {
-      if (ctx.session_info_->get_user_id() == ctx.session_info_->get_priv_user_id()) {
-        ctx.session_info_->get_session_priv_info(session_priv);
-      } else if (OB_FAIL(const_cast<ObSchemaGetterGuard *>(ctx.schema_guard_)->get_session_priv_info(
-                                    ctx.session_info_->get_priv_tenant_id(),
-                                    ctx.session_info_->get_priv_user_id(),
-                                    ctx.session_info_->get_database_name(),
-                                    session_priv))) {
-        LOG_WARN("fail to get_session_priv_info", K(ret));
-      }
-      if (OB_FAIL(ret)) {
+      ctx.session_info_->get_session_priv_info(session_priv);
+      if (ctx.session_info_->get_user_id() != ctx.session_info_->get_priv_user_id()
+          && OB_FAIL(adjust_session_priv(*ctx.schema_guard_, session_priv))) {
+        LOG_WARN("fail to assign enable role id array", K(ret));
       } else if (OB_UNLIKELY(!session_priv.is_valid())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
@@ -2512,6 +2843,9 @@ int ObPrivilegeCheck::check_privilege(
       } else {
         //do nothing
       }
+      LOG_DEBUG("check priv",
+                K(session_priv),
+                "enable_roles", ctx.session_info_->get_enable_role_array());
     }
   }
   return ret;
@@ -3300,6 +3634,64 @@ int ObPrivilegeCheck::check_password_life_time_oracle(
   }
   return ret;
 }
+
+int ObPrivilegeCheck::check_priv_in_roles(
+    const uint64_t tenant_id,
+    const uint64_t user_id,
+    ObSchemaGetterGuard &schema_guard,
+    const ObIArray<uint64_t> &role_ids,
+    const ObStmtNeedPrivs &stmt_need_priv)
+{
+  int ret = OB_SUCCESS;
+  bool check_succ = false;
+  ObArray<uint64_t> role_ids_queue;
+  const ObUserInfo *user_info = NULL;
+  if (OB_ISNULL(user_info = schema_guard.get_user_info(tenant_id, user_id))) {
+    ret = OB_USER_NOT_EXIST;
+    LOG_WARN("fail to get user_info", K(ret));
+  }
+  for (int i = 0; OB_SUCC(ret) && i < role_ids.count(); ++i) {
+    uint64_t cur_role_id = role_ids.at(i);
+    if (has_exist_in_array(user_info->get_role_id_array(), cur_role_id)) {
+      //enabled role can be revoked from the current user by other session
+      //only check the granted roles
+      if (OB_FAIL(role_ids_queue.push_back(cur_role_id))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < role_ids_queue.count() && !check_succ; i++) {
+    ObSessionPrivInfo session_priv;
+    //for print correct error info
+    session_priv.user_name_ = user_info->get_user_name_str();
+    session_priv.host_name_ = user_info->get_host_name_str();
+    OZ (schema_guard.get_session_priv_info(tenant_id, role_ids_queue.at(i), "", session_priv));
+
+    if (OB_SUCC(ret)) {
+      if (OB_SUCCESS == schema_guard.check_priv(session_priv, stmt_need_priv)) {
+        check_succ = true;
+      }
+    }
+    if (OB_SUCC(ret) && !check_succ) {
+      const ObUserInfo *user_info = NULL;
+      OZ (schema_guard.get_user_info(tenant_id, role_ids_queue.at(i), user_info));
+      if (OB_SUCC(ret) && OB_ISNULL(user_info)) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_WARN("user not exist", K(ret));
+      }
+      for (int j = 0; OB_SUCC(ret) && j < user_info->get_role_id_array().count(); j++) {
+        OZ (role_ids_queue.push_back(user_info->get_role_id_array().at(j)));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !check_succ) {
+    ret = OB_ERR_NO_PRIVILEGE;
+  }
+  return ret;
+}
+
 
 #undef ADD_NEED_PRIV
 

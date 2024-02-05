@@ -327,6 +327,9 @@
 # 499: __all_transfer_partition_task_history
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 501: __wr_sqltext
+# 505: __all_column_privilege
+# 506: __all_column_privilege_history
+# 506: __all_column_privilege  # BASE_TABLE_NAME
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1031,6 +1034,12 @@
 # 12454: __wr_sqltext  # BASE_TABLE_NAME
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
+# 12462: __all_virtual_column_privilege
+# 12462: __all_column_privilege  # BASE_TABLE_NAME
+# 12463: __all_virtual_column_privilege_history
+# 12463: __all_column_privilege  # BASE_TABLE_NAME
+# 12463: __all_column_privilege_history  # BASE_TABLE_NAME1
+# 12466: ENABLED_ROLES
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2009,7 +2018,10 @@
 # 21506: CDB_WR_SQLTEXT
 # 21507: GV$OB_ACTIVE_SESSION_HISTORY
 # 21508: V$OB_ACTIVE_SESSION_HISTORY
+# 21511: role_edges
+# 21512: default_roles
 # 21513: CDB_INDEX_USAGE
+# 21516: columns_priv
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2827,6 +2839,9 @@
 # 101098: __idx_498_idx_transfer_partition_key
 # 101098: idx_transfer_partition_key  # INDEX_NAME
 # 101098: __all_transfer_partition_task  # DATA_BASE_TABLE_NAME
+# 101100: __idx_505_idx_column_privilege_name
+# 101100: idx_column_privilege_name  # INDEX_NAME
+# 101100: __all_column_privilege  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME

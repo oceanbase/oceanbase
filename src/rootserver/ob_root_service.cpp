@@ -5494,29 +5494,7 @@ int ObRootService::check_parallel_ddl_conflict(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const obrpc::ObDDLArg &arg)
 {
-  int ret = OB_SUCCESS;
-  int64_t schema_version = OB_INVALID_VERSION;
-
-  if (arg.is_need_check_based_schema_objects()) {
-    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.based_schema_object_infos_.count()); ++i) {
-      const ObBasedSchemaObjectInfo &info = arg.based_schema_object_infos_.at(i);
-      if (OB_FAIL(schema_guard.get_schema_version(
-          info.schema_type_,
-          info.schema_tenant_id_ == OB_INVALID_TENANT_ID ? arg.exec_tenant_id_: info.schema_tenant_id_,
-          info.schema_id_,
-          schema_version))) {
-        LOG_WARN("failed to get_schema_version", K(ret), K(arg.exec_tenant_id_), K(info));
-      } else if (OB_INVALID_VERSION == schema_version) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is OB_INVALID_VERSION", K(ret), K(info));
-      } else if (schema_version != info.schema_version_) {
-        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
-        LOG_WARN("schema_version is not equal to info.schema_version_", K(ret), K(schema_version), K(info));
-      }
-    }
-  }
-
-  return ret;
+  return ddl_service_.check_parallel_ddl_conflict(schema_guard, arg);
 }
 
 int ObRootService::init_sequence_id()
@@ -5898,7 +5876,17 @@ int ObRootService::grant(const ObGrantArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
   } else {
-    if (OB_FAIL(ddl_service_.grant(arg))) {
+    lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+    if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, compat_mode))) {
+      LOG_WARN("failed to get compat mode", K(ret), K(arg.tenant_id_));
+    } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+      //do nothing
+    } else if (arg.column_names_priv_.count() != 0
+               && OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(arg.tenant_id_))) {
+      LOG_WARN("grant or revoke column priv is not suppported", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ddl_service_.grant(arg))) {
       LOG_WARN("Grant user failed", K(arg), K(ret));
     }
   }
@@ -6054,13 +6042,16 @@ int ObRootService::revoke_database(const ObRevokeDBArg &arg)
 int ObRootService::revoke_table(const ObRevokeTableArg &arg)
 {
   int ret = OB_SUCCESS;
+  lib::Worker::CompatMode mode;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else {
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(arg.tenant_id_, mode))) {
+    LOG_WARN("fail to get tenant mode", K(ret));
+  } else if (lib::Worker::CompatMode::ORACLE == mode) {
     ObTablePrivSortKey table_priv_key(arg.tenant_id_, arg.user_id_, arg.db_, arg.table_);
     ObObjPrivSortKey obj_priv_key(arg.tenant_id_,
                                   arg.obj_id_,
@@ -6068,11 +6059,22 @@ int ObRootService::revoke_table(const ObRevokeTableArg &arg)
                                   OBJ_LEVEL_FOR_TAB_PRIV,
                                   arg.grantor_id_,
                                   arg.user_id_);
-    OZ (ddl_service_.revoke_table(table_priv_key,
+    OZ (ddl_service_.revoke_table(arg,
+                                  table_priv_key,
                                   arg.priv_set_,
                                   obj_priv_key,
                                   arg.obj_priv_array_,
                                   arg.revoke_all_ora_));
+  } else if (lib::Worker::CompatMode::MYSQL == mode) {
+    if (arg.column_names_priv_.count() != 0
+        && OB_FAIL(ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(arg.tenant_id_))) {
+      LOG_WARN("grant or revoke column priv is not suppported", KR(ret));
+    } else if (OB_FAIL(ddl_service_.revoke_table_and_column_mysql(arg))) {
+      LOG_WARN("revoke table and col failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected feature action", K(ret));
   }
   return ret;
 }

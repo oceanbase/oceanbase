@@ -8966,6 +8966,94 @@ OB_DEF_SERIALIZE_SIZE(ObRoutinePriv)
   return len;
 }
 
+int ObColumnPriv::assign(const ObColumnPriv &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    if (OB_FAIL(ObPriv::assign(other))) {
+      LOG_WARN("assign failed", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.db_, db_))) {
+      LOG_WARN("Fail to deep copy db", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.table_, table_))) {
+      LOG_WARN("Fail to deep copy table", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.column_, column_))) {
+      LOG_WARN("Fail to deep copy table", K(ret));
+    } else {
+      priv_id_ = other.priv_id_;
+      error_ret_ = other.error_ret_;
+    }
+    if (OB_FAIL(ret)) {
+      error_ret_ = ret;
+    }
+  }
+  return ret;
+}
+
+bool ObColumnPriv::is_valid() const
+{
+  return ObSchema::is_valid() && ObPriv::is_valid() && priv_id_ != OB_INVALID_ID;
+}
+
+void ObColumnPriv::reset()
+{
+  db_.reset();
+  table_.reset();
+  column_.reset();
+  priv_id_ = 0;
+  ObPriv::reset();
+  ObSchema::reset();
+}
+
+int64_t ObColumnPriv::get_convert_size() const
+{
+  int64_t convert_size = 0;
+  convert_size += ObPriv::get_convert_size();
+  convert_size += sizeof(ObColumnPriv) - sizeof(ObPriv);
+  convert_size += db_.length() + 1;
+  convert_size += table_.length() + 1;
+  convert_size += column_.length() + 1;
+  return convert_size;
+}
+
+OB_DEF_SERIALIZE(ObColumnPriv)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_ENCODE, db_, table_, column_, priv_id_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObColumnPriv)
+{
+  int ret = OB_SUCCESS;
+  ObString db;
+  ObString table;
+  ObString column;
+  uint64_t priv_id;
+  BASE_DESER((, ObPriv));
+  LST_DO_CODE(OB_UNIS_DECODE, db, table, column, priv_id);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to deserialize data", K(ret));
+  } else if (OB_FAIL(deep_copy_str(db, db_))) {
+    LOG_WARN("Fail to deep copy user_name", K(db), K(ret));
+  } else if (OB_FAIL(deep_copy_str(table, table_))) {
+    LOG_WARN("Fail to deep copy user_name", K(table), K(ret));
+  } else if (OB_FAIL(deep_copy_str(column, column_))) {
+    LOG_WARN("Fail to deep copy user_name", K(column), K(ret));
+  } else {
+    priv_id_ = priv_id;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObColumnPriv)
+{
+  int64_t len = ObPriv::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, db_, table_, column_, priv_id_);
+  return len;
+}
+
 //ObObjPriv
 ObObjPriv& ObObjPriv::operator=(const ObObjPriv &other)
 {
@@ -9108,10 +9196,20 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   is_for_update_ = other.is_for_update_;
   priv_check_type_ = other.priv_check_type_;
   obj_type_ = other.obj_type_;
+  check_any_column_priv_ = other.check_any_column_priv_;
   if (OB_FAIL(ob_write_string(allocator, other.db_, db_))) {
     LOG_WARN("Fail to deep copy db", K_(db), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.table_, table_))) {
     LOG_WARN("Fail to deep copy table", K_(table), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.columns_.count(); i++) {
+      ObString tmp_column;
+      if (OB_FAIL(ob_write_string(allocator, other.columns_.at(i), tmp_column))) {
+        LOG_WARN("ob write string failed", K(ret));
+      } else if (OB_FAIL(columns_.push_back(tmp_column))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
   }
   return ret;
 }

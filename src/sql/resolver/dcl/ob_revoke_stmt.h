@@ -41,7 +41,7 @@ public:
   void set_revoke_all(bool revoke_all) { revoke_all_ = revoke_all; }
   int set_priv_array(const share::ObRawPrivArray &array_in);
   int set_obj_priv_array(const share::ObRawObjPrivArray &array_in);
-  void set_obj_id(uint64_t obj_id) { obj_id_ = obj_id; }
+  void set_object_id(uint64_t obj_id) { obj_id_ = obj_id; }
   void set_grantor_id(uint64_t grantor_id) { grantor_id_ = grantor_id; }
   void set_revoke_all_ora(bool flag) { revoke_all_ora_ = flag; }
   int add_grantee(const common::ObString &grantee);
@@ -55,7 +55,7 @@ public:
   void set_object_type(share::schema::ObObjectType object_type) { object_type_ = object_type; }
   const share::ObRawPrivArray& get_priv_array() const {return sys_priv_array_;}
   const share::ObRawObjPrivArray& get_obj_priv_array() const {return obj_priv_array_;}
-  uint64_t get_obj_id() const { return obj_id_; }
+  uint64_t get_object_id() const { return obj_id_; }
   uint64_t get_grantor_id() const { return grantor_id_; }
   bool get_revoke_all_ora() const { return revoke_all_ora_; }
 
@@ -64,6 +64,8 @@ public:
   bool get_revoke_all() const { return revoke_all_; }
   const common::ObStrings& get_grantees() const { return grantees_; }
   virtual bool cause_implicit_commit() const { return true; }
+  void set_has_warning() { has_warning_ = true; }
+  bool get_has_warning() const { return has_warning_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() 
   { 
     return share::schema::OB_PRIV_USER_LEVEL == grant_level_ ? static_cast<obrpc::ObDDLArg &>(user_arg_) 
@@ -72,6 +74,12 @@ public:
         : (share::schema::OB_PRIV_ROUTINE_LEVEL == grant_level_ ?  static_cast<obrpc::ObDDLArg &>(routine_arg_)
         : static_cast<obrpc::ObDDLArg &>(syspriv_arg_))));
   }
+  int add_column_privs(const ObString& column_name,const ObPrivSet priv_set) { return column_names_priv_.push_back(std::make_pair(column_name, priv_set)); }
+  const ObIArray<std::pair<ObString, ObPrivType>> &get_column_privs() const { return column_names_priv_; }
+  void set_table_schema_version(int64_t schema_version) { table_schema_version_ = schema_version; }
+  int64_t get_table_schema_version() { return table_schema_version_; }
+
+  bool is_grant_stmt() const { return false; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
@@ -96,6 +104,9 @@ private:
   uint64_t obj_type_;
   uint64_t grantor_id_;
   bool revoke_all_ora_;
+  bool has_warning_;
+  ObSEArray<std::pair<ObString, ObPrivType>, 4, common::ModulePageAllocator, true> column_names_priv_;
+  int64_t table_schema_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeStmt);
 };

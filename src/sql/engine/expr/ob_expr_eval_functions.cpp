@@ -1133,7 +1133,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
   NULL, //ObExprIs::json_is_true,                                     /* 675 */
   NULL, //ObExprIs::json_is_false,                                    /* 676 */
-  NULL, //ObExprCurrentRole::eval_current_role                        /* 677 */
+  ObExprCurrentRole::eval_current_role,                               /* 677 */
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
 };
 

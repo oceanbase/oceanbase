@@ -64,6 +64,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::share;
 using namespace oceanbase::pl;
 using namespace oceanbase::obmysql;
+using namespace oceanbase::observer;
 
 static const int64_t DEFAULT_XA_END_TIMEOUT_SECONDS = 60;/*60s*/
 
@@ -1089,7 +1090,7 @@ void ObSQLSessionInfo::update_show_warnings_buf()
 void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
 {
   session_priv.tenant_id_ = get_priv_tenant_id();
-  session_priv.user_id_ = get_user_id();
+  session_priv.user_id_ = get_priv_user_id();
   session_priv.user_name_ = get_user_name();
   session_priv.host_name_ = get_host_name();
   session_priv.db_ = get_database_name();
@@ -2926,12 +2927,12 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return ret;
 }
 
-observer::ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   if (NULL == piece_cache_ && need_init) {
-    void *buf = get_session_allocator().alloc(sizeof(observer::ObPieceCache));
+    void *buf = get_session_allocator().alloc(sizeof(ObPieceCache));
     if (NULL != buf) {
-      MEMSET(buf, 0, sizeof(observer::ObPieceCache));
-      piece_cache_ = new (buf) observer::ObPieceCache();
+      MEMSET(buf, 0, sizeof(ObPieceCache));
+      piece_cache_ = new (buf) ObPieceCache();
       if (OB_SUCCESS != piece_cache_->init(get_effective_tenant_id())) {
         piece_cache_->~ObPieceCache();
         get_session_allocator().free(piece_cache_);

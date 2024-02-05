@@ -196,7 +196,8 @@ public:
       values_desc_(),
       values_vector_(),
       column_conv_exprs_(),
-      assignments_()
+      assignments_(),
+      column_in_values_vector_()
   {
   }
   ObInsertTableInfo(ObDmlTableType dml_type) :
@@ -206,7 +207,8 @@ public:
       values_vector_(),
       column_conv_exprs_(),
       part_generated_col_dep_cols_(),
-      assignments_()
+      assignments_(),
+      column_in_values_vector_()
   {
   }
   virtual ~ObInsertTableInfo()
@@ -232,7 +234,8 @@ public:
                K_(values_vector),
                K_(column_conv_exprs),
                K_(part_generated_col_dep_cols),
-               K_(assignments));
+               K_(assignments),
+               K_(column_in_values_vector));
   bool is_replace_;  // replace semantic for mysql
   // 下面两个变量组合在一起描述了 INSERT 的 VALUES 结构
   // 以 INSERT INTO T1 (i, j, k) VALUES (1,2,3),(4,5,6) 为例：
@@ -248,6 +251,7 @@ public:
   // part_generated_col_dep_cols_ store c1.
   common::ObSEArray<ObColumnRefRawExpr*, 16, common::ModulePageAllocator, true> part_generated_col_dep_cols_;
   ObAssignments assignments_;
+  common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> column_in_values_vector_;
 };
 
 class ObMergeTableInfo: public ObInsertTableInfo

@@ -221,6 +221,7 @@
 #include "observer/virtual_table/ob_all_virtual_sql_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+#include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 
 namespace oceanbase
 {
@@ -2631,6 +2632,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSqlStat, all_virtual_sqlstat))) {
               all_virtual_sqlstat->set_allocator(&allocator);
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_sqlstat);
+            }
+            break;
+          }
+          case OB_ENABLED_ROLES_TID:
+          {
+            ObInfoSchemaEnableRolesTable *enable_roles = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaEnableRolesTable, enable_roles))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(enable_roles);
             }
             break;
           }

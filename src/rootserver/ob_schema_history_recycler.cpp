@@ -919,6 +919,11 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
                          rls_context_id);
     ret = OB_SUCCESS; // overwrite ret
 
+    // --------------------------- column priv ---------------------------------------------------
+    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_COMPRESS, column_priv, OB_ALL_COLUMN_PRIVILEGE_HISTORY_TNAME,
+                         priv_id);
+    ret = OB_SUCCESS; // overwrite ret
+
 #undef RECYCLE_FIRST_SCHEMA
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     ROOTSERVICE_EVENT_ADD("schema_recycler", "batch_recycle_by_tenant",

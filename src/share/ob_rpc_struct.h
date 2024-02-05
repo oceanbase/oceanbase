@@ -116,6 +116,7 @@ enum ObDefaultRoleFlag
   OB_DEFAULT_ROLE_ALL = 2,
   OB_DEFAULT_ROLE_ALL_EXCEPT = 3,
   OB_DEFAULT_ROLE_NONE = 4,
+  OB_DEFAULT_ROLE_DEFAULT = 5,
   OB_DEFAULT_ROLE_MAX,
 };
 struct Bool
@@ -4791,7 +4792,7 @@ struct ObCreateUserArg : public ObDDLArg
 
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
-                      creator_id_(common::OB_INVALID_ID), primary_zone_()
+                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false)
   {}
   virtual ~ObCreateUserArg()
   {}
@@ -4804,6 +4805,7 @@ public:
   common::ObSArray<share::schema::ObUserInfo> user_infos_;
   uint64_t creator_id_;
   common::ObString primary_zone_; // only used in oracle mode
+  bool is_create_role_;
 };
 
 struct ObDropUserArg : public ObDDLArg
@@ -4914,7 +4916,7 @@ struct ObAlterUserProfileArg : public ObDDLArg
 public:
   ObAlterUserProfileArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID),
     user_name_(), host_name_(), profile_name_(), user_id_(common::OB_INVALID_TENANT_ID),
-    default_role_flag_(common::OB_INVALID_TENANT_ID), role_id_array_()
+    default_role_flag_(common::OB_INVALID_TENANT_ID), role_id_array_(),user_ids_()
   { }
   virtual ~ObAlterUserProfileArg() {}
   int assign(const ObAlterUserProfileArg &other);
@@ -4928,6 +4930,7 @@ public:
   uint64_t user_id_;
   uint64_t default_role_flag_;
   common::ObSEArray<uint64_t, 4> role_id_array_;
+  common::ObSEArray<uint64_t, 4> user_ids_; //for set default role to multiple users
 };
 
 struct ObCreateDirectoryArg : public ObDDLArg
@@ -4996,7 +4999,8 @@ public:
                  object_type_(share::schema::ObObjectType::INVALID),
                  object_id_(common::OB_INVALID_ID), ins_col_ids_(),
                  upd_col_ids_(), ref_col_ids_(),
-                 grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false)
+                 grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
+                 sel_col_ids_(), column_names_priv_()
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -5006,7 +5010,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set),
                K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
-               K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id));
+               K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv));
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -5031,6 +5035,8 @@ public:
   // to support grant xxx to multiple user in oracle mode
   common::ObSArray<common::ObString> remain_roles_;
   bool is_inner_;
+  common::ObSEArray<uint64_t, 4> sel_col_ids_;
+  ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg
@@ -5103,8 +5109,10 @@ public:
   ObRevokeTableArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
                             priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
                             obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
-                            obj_priv_array_(), revoke_all_ora_(false)
+                            obj_priv_array_(), revoke_all_ora_(false), column_names_priv_()
   { }
+
+  int assign(const ObRevokeTableArg& other);
   bool is_valid() const;
   TO_STRING_KV(K_(tenant_id),
                K_(user_id),
@@ -5115,7 +5123,8 @@ public:
                K_(obj_id),
                K_(obj_type),
                K_(grantor_id),
-               K_(obj_priv_array));
+               K_(obj_priv_array),
+               K_(column_names_priv));
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -5128,6 +5137,13 @@ public:
   uint64_t grantor_id_;
   share::ObRawObjPrivArray obj_priv_array_;
   bool revoke_all_ora_;
+  common::ObSEArray<uint64_t, 4> sel_col_ids_;
+  common::ObSEArray<uint64_t, 4> ins_col_ids_;
+  common::ObSEArray<uint64_t, 4> upd_col_ids_;
+  common::ObSEArray<uint64_t, 4> ref_col_ids_;
+  ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRevokeTableArg);
 };
 
 struct ObRevokeRoutineArg : public ObDDLArg

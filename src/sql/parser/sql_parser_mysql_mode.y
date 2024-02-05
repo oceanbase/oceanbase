@@ -256,7 +256,7 @@ END_P SET_VAR DELIMITER
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ASCII AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
-        ACTIVATE AVAILABILITY ARCHIVELOG AUDIT
+        ACTIVATE AVAILABILITY ARCHIVELOG AUDIT ADMIN
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -333,7 +333,7 @@ END_P SET_VAR DELIMITER
         RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE ROLLBACK ROLLUP ROOT
         ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
-        RANK READ_ONLY RECOVERY REJECT
+        RANK READ_ONLY RECOVERY REJECT ROLE
 
         SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
@@ -433,15 +433,16 @@ END_P SET_VAR DELIMITER
 %type <ival> opt_scope opt_drop_behavior opt_integer scope_or_scope_alias global_or_session_alias
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i cast_datetime_type_i text_type_i blob_type_i
 %type <node> create_user_stmt user_specification user_specification_list user password opt_host_name user_with_host_name opt_auth_plugin
-%type <node> drop_user_stmt user_list
+%type <node> drop_user_stmt user_list user_specification_without_password user_specification_with_password
+%type <node> create_role_stmt drop_role_stmt role_list role_with_host role user_specification_without_password_list
 %type <node> set_password_stmt opt_for_user
 %type <node> rename_user_stmt rename_info rename_list
 %type <node> rename_table_stmt rename_table_actions rename_table_action
 %type <node> truncate_table_stmt
 %type <node> lock_user_stmt lock_spec_mysql57
-%type <node> grant_stmt grant_privileges priv_type_list priv_type priv_level opt_privilege grant_options object_type
-%type <node> revoke_stmt
-%type <node> opt_limit opt_for_grant_user
+%type <node> grant_stmt grant_privileges role_or_priv_list role_or_priv priv_level opt_privilege grant_options object_type
+%type <node> revoke_stmt opt_with_admin_option opt_ignore_unknown_user set_role_stmt default_set_role_clause set_role_clause
+%type <node> opt_limit opt_for_grant_user opt_using_role
 %type <node> parameterized_trim
 %type <ival> opt_with_consistent_snapshot opt_config_scope opt_index_keyname opt_full opt_extended opt_extended_or_full
 %type <node> opt_work begin_stmt commit_stmt rollback_stmt opt_ignore xa_begin_stmt xa_end_stmt xa_prepare_stmt xa_commit_stmt xa_rollback_stmt
@@ -456,7 +457,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr
 %type <node> opt_when check_state constraint_definition
-%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra
+%type <non_reserved_keyword> unreserved_keyword unreserved_keyword_normal unreserved_keyword_special unreserved_keyword_extra unreserved_keyword_ambiguous_roles unreserved_keyword_for_role_name
 %type <reserved_keyword> mysql_reserved_keyword
 %type <ival> set_type_other set_type_union audit_by_session_access_option audit_whenever_option audit_or_noaudit
 %type <ival> consistency_level use_plan_cache_type
@@ -606,6 +607,9 @@ stmt:
   | deallocate_prepare_stmt { $$ = $1; check_question_mark($$, result); }
   | create_user_stmt        { $$ = $1; check_question_mark($$, result); }
   | drop_user_stmt          { $$ = $1; check_question_mark($$, result); }
+  | create_role_stmt        { $$ = $1; check_question_mark($$, result); }
+  | drop_role_stmt          { $$ = $1; check_question_mark($$, result); }
+  | set_role_stmt          { $$ = $1; check_question_mark($$, result); }
   | set_password_stmt       { $$ = $1; check_question_mark($$, result); }
   | rename_user_stmt        { $$ = $1; check_question_mark($$, result); }
   | lock_user_stmt          { $$ = $1; check_question_mark($$, result); }
@@ -12379,9 +12383,13 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
   malloc_non_terminal_node(fun, result->malloc_pool_, T_FUN_COUNT, 1, node);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_ERRORS, 1, fun);
 }
-| SHOW GRANTS opt_for_grant_user
+| SHOW GRANTS opt_for_grant_user opt_using_role
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_GRANTS, 1, $3);
+  if (NULL != $4 && NULL == $3) {
+    yyerror(&@4, result, "");
+    YYERROR;
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_GRANTS, 2, $3, $4);
 }
 | SHOW charset_key opt_show_condition
 {
@@ -12539,6 +12547,15 @@ opt_for_user
 | FOR CURRENT_USER
 { $$ = NULL; }
 | FOR CURRENT_USER '(' ')'
+{ $$ = NULL; }
+;
+
+opt_using_role:
+USING role_list
+{
+  merge_nodes($$, result, T_USERS, $2);
+}
+| /* EMPTY */
 { $$ = NULL; }
 ;
 
@@ -12844,6 +12861,17 @@ WITH STRING_VALUE
 ;
 
 user_specification:
+user_specification_without_password
+{
+  $$ = $1;
+}
+|
+user_specification_with_password
+{
+  $$ = $1;
+}
+;
+user_specification_without_password:
 user opt_host_name
 {
   ParseNode *need_enc_node = NULL;
@@ -12851,7 +12879,10 @@ user opt_host_name
   need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, NULL, need_enc_node, $2, NULL);
 }
-| user opt_host_name IDENTIFIED opt_auth_plugin BY password
+;
+
+user_specification_with_password:
+user opt_host_name IDENTIFIED opt_auth_plugin BY password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
@@ -13031,6 +13062,78 @@ user_with_host_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
+
+/*****************************************************************************
+ *
+ *	role grammar
+ *
+ *****************************************************************************/
+create_role_stmt:
+create_with_opt_hint ROLE opt_if_not_exists role_list
+{
+  ParseNode *role_list_node = NULL;
+  (void)($1);
+  merge_nodes(role_list_node, result, T_USERS, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_ROLE, 2, role_list_node, $3);
+}
+;
+
+role_list:
+role_with_host
+{
+  $$ = $1;
+}
+| role_list ',' role_with_host
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+user_specification_without_password_list:
+user_specification_without_password
+{
+  $$ = $1;
+}
+| user_specification_without_password_list ',' user_specification_without_password
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+drop_role_stmt:
+DROP ROLE opt_if_not_exists user_list
+{
+  ParseNode *user_list_node = NULL;
+  merge_nodes(user_list_node, result, T_USERS, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_ROLE, 2, user_list_node, $3);
+}
+;
+
+role_with_host:
+role opt_host_name
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, NULL, need_enc_node, $2, NULL);
+}
+;
+
+role:
+STRING_VALUE
+{
+  $$ = $1;
+}
+| NAME_OB
+{
+  $$ = $1;
+}
+| unreserved_keyword_for_role_name
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
+}
+;
+
 
 /*****************************************************************************
  *
@@ -13653,10 +13756,39 @@ GRANT grant_privileges ON priv_level TO user_specification_list grant_options
   malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT,
                            4, privileges_node, $4, $5, users_node);
 }
+| GRANT role_or_priv_list TO user_specification_without_password_list opt_with_admin_option
+{
+  ParseNode *roles_node = NULL;
+  ParseNode *grantees_node = NULL;
+  ParseNode *grantees_list = NULL;
+
+  merge_nodes(roles_node, result, T_USERS, $2);
+  merge_nodes(grantees_list, result, T_USERS, $4);
+  malloc_non_terminal_node(grantees_node, result->malloc_pool_, T_USERS, 1, grantees_list);
+
+  for (int i = 0; i < roles_node->num_child_; i++) {
+    if (T_PRIV_TYPE == roles_node->children_[i]->type_) {
+      yyerror(&@2, result, "");
+      YYERROR;
+    }
+  }
+  malloc_non_terminal_node($$, result->malloc_pool_, T_GRANT_ROLE, 3, roles_node, grantees_node, $5);
+}
+;
+
+opt_with_admin_option:
+WITH ADMIN OPTION
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_WITH_ADMIN_OPTION);
+}
+| /*empty*/
+{
+  $$ = NULL;
+}
 ;
 
 grant_privileges:
-priv_type_list
+role_or_priv_list
 {
   $$ = $1;
 }
@@ -13668,24 +13800,28 @@ priv_type_list
 }
 ;
 
-priv_type_list:
-priv_type
+role_or_priv_list:
+role_or_priv
 {
   $$ = $1;
 }
-| priv_type_list ',' priv_type
+| role_or_priv_list ',' role_or_priv
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
 ;
 
-priv_type:
-ALTER
+role_or_priv:
+role_with_host
+{
+  $$ = $1;
+}
+| ALTER
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_ALTER;
 }
-|create_with_opt_hint
+| create_with_opt_hint
 {
   (void)($1);
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
@@ -13725,6 +13861,27 @@ ALTER
 | SELECT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_SELECT;
+}
+| INSERT '(' column_name_list ')'
+{
+  ParseNode *col_list = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE, 1, col_list);
+  $$->value_ = OB_PRIV_INSERT;
+}
+| UPDATE '(' column_name_list ')'
+{
+  ParseNode *col_list = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE, 1, col_list);
+  $$->value_ = OB_PRIV_UPDATE;
+}
+| SELECT '(' column_name_list ')'
+{
+  ParseNode *col_list = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE, 1, col_list);
   $$->value_ = OB_PRIV_SELECT;
 }
 | INDEX
@@ -13904,31 +14061,63 @@ WITH GRANT OPTION
  *
  *****************************************************************************/
 revoke_stmt:
-REVOKE grant_privileges ON priv_level FROM user_list
+REVOKE opt_if_exists grant_privileges ON priv_level FROM user_list opt_ignore_unknown_user
 {
   ParseNode *privileges_node = NULL;
   ParseNode *users_node = NULL;
-  merge_nodes(privileges_node, result, T_PRIVILEGES, $2);
-  merge_nodes(users_node, result, T_USERS, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE,
-                           4, privileges_node, NULL, $4, users_node);
-}
-| REVOKE grant_privileges ON object_type priv_level FROM user_list
-{
-  ParseNode *privileges_node = NULL;
-  ParseNode *users_node = NULL;
-  merge_nodes(privileges_node, result, T_PRIVILEGES, $2);
+  merge_nodes(privileges_node, result, T_PRIVILEGES, $3);
   merge_nodes(users_node, result, T_USERS, $7);
   malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE,
-                           4, privileges_node, $4, $5, users_node);
+                           6, privileges_node, NULL, $5, users_node, $2, $8);
 }
-| REVOKE ALL opt_privilege ',' GRANT OPTION FROM user_list
+| REVOKE opt_if_exists grant_privileges ON object_type priv_level FROM user_list opt_ignore_unknown_user
 {
-  (void)$3;//useless
+  ParseNode *privileges_node = NULL;
   ParseNode *users_node = NULL;
+  merge_nodes(privileges_node, result, T_PRIVILEGES, $3);
   merge_nodes(users_node, result, T_USERS, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE,
+                           6, privileges_node, $5, $6, users_node, $2, $9);
+}
+| REVOKE opt_if_exists ALL opt_privilege ',' GRANT OPTION FROM user_list opt_ignore_unknown_user
+{
+  (void)$4;//useless
+  ParseNode *users_node = NULL;
+  merge_nodes(users_node, result, T_USERS, $9);
   malloc_non_terminal_node($$, result->malloc_pool_, T_REVOKE_ALL,
-                           1, users_node);
+                           3, users_node, $2, $10);
+}
+| REVOKE opt_if_exists role_or_priv_list FROM user_specification_without_password_list opt_ignore_unknown_user
+{
+  ParseNode *roles_node = NULL;
+  ParseNode *grantees_node = NULL;
+  ParseNode *grantees_list = NULL;
+  ParseNode *revoke_type_node = NULL;
+
+  merge_nodes(roles_node, result, T_USERS, $3);
+  merge_nodes(grantees_list, result, T_USERS, $5);
+  malloc_non_terminal_node(grantees_node, result->malloc_pool_, T_USERS, 1, grantees_list);
+
+  for (int i = 0; i < roles_node->num_child_; i++) {
+    if (T_PRIV_TYPE == roles_node->children_[i]->type_) {
+      yyerror(&@3, result, "");
+      YYERROR;
+    }
+  }
+
+  malloc_non_terminal_node(revoke_type_node, result->malloc_pool_, T_REVOKE_ROLE, 4, roles_node, grantees_node, $2, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SYSTEM_REVOKE, 1, revoke_type_node);
+}
+;
+
+opt_ignore_unknown_user:
+/* empty */
+{
+  $$ = NULL;
+}
+| IGNORE UNKNOWN USER
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_IGNORE_UNKNOWN_USER);
 }
 ;
 
@@ -14111,6 +14300,77 @@ to_or_eq:
 TO      { $$ = NULL; }
 | COMP_EQ { $$ = NULL; }
 ;
+
+set_role_stmt:
+SET ROLE set_role_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_ROLE, 1, $3);
+}
+| SET DEFAULT ROLE default_set_role_clause TO user_list
+{
+  ParseNode *user_list = NULL;
+  merge_nodes(user_list, result, T_USERS, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_USER_DEFAULT_ROLE, 2, user_list, $4);
+}
+| ALTER USER user_with_host_name DEFAULT ROLE default_set_role_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_USER_DEFAULT_ROLE, 2, $3, $6);
+};
+;
+
+default_set_role_clause:
+role_list
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 0;
+
+  ParseNode *role_list = NULL;
+  merge_nodes(role_list, result, T_LINK_NODE, $1);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_ROLE, 2, type_node, role_list);
+}
+| NONE
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_ROLE, 1, type_node);
+}
+| ALL
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_ROLE, 1, type_node);
+}
+;
+
+set_role_clause:
+default_set_role_clause
+{
+  $$ = $1;
+}
+| ALL EXCEPT grant_privileges
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 2;
+
+  ParseNode *role_list = NULL;
+  merge_nodes(role_list, result, T_LINK_NODE, $3);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_ROLE, 2, type_node, role_list);
+}
+| DEFAULT
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = 4;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DEFAULT_ROLE, 1, type_node);
+}
+;
+
 
 /*****************************************************************************
  *
@@ -18583,6 +18843,11 @@ JSON '(' column_name ')' STORE AS '(' lob_storage_parameters ')'
 ;
 
 unreserved_keyword:
+unreserved_keyword_for_role_name { $$=$1;}
+| unreserved_keyword_ambiguous_roles { $$=$1;}
+;
+
+unreserved_keyword_for_role_name:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
 | unreserved_keyword_extra { $$=$1;}
@@ -18593,6 +18858,7 @@ ACCOUNT
 |       ACTION
 |       ACTIVE
 |       ADDDATE
+|       ADMIN
 |       AFTER
 |       AGAINST
 |       AGGREGATE
@@ -18768,12 +19034,10 @@ ACCOUNT
 |       ERRORS
 |       ESCAPE
 |       ESTIMATE
-|       EVENT
 |       EVENTS
 |       EVERY
 |       EXCEPT %prec HIGHER_PARENS
 |       EXCHANGE
-|       EXECUTE
 |       EXPANSION
 |       EXPIRE
 |       EXPIRED
@@ -18791,7 +19055,6 @@ ACCOUNT
 |       FIELDS
 |       FIELD_DELIMITER
 |       FIELD_OPTIONALLY_ENCLOSED_BY
-|       FILEX
 |       FILE_ID
 |       FINAL_COUNT
 |       FIRST
@@ -18970,7 +19233,6 @@ ACCOUNT
 |       NODEGROUP
 |       NOMINVALUE
 |       NOMAXVALUE
-|       NONE
 |       NOORDER
 |       NOPARALLEL
 |       NORMAL
@@ -19040,12 +19302,10 @@ ACCOUNT
 |       PREV
 |       PRIMARY_ZONE
 |       PRIVILEGES
-|       PROCESS
 |       PROCESSLIST
 |       PROFILE
 |       PROFILES
 |       PROGRESSIVE_MERGE_NUM
-|       PROXY
 |       PS
 |       PUBLIC
 |       PCTFREE
@@ -19079,7 +19339,6 @@ ACCOUNT
 |       RELAY_LOG_FILE
 |       RELAY_LOG_POS
 |       RELAY_THREAD
-|       RELOAD
 |       REMAP
 |       REMOVE
 |       REORGANIZE
@@ -19088,10 +19347,8 @@ ACCOUNT
 |       REPLICA
 |       REPLICA_NUM
 |       REPLICA_TYPE
-|       REPLICATION
 |       REPORT
 |       RESET
-|       RESOURCE
 |       RESOURCE_POOL_LIST
 |       RESPECT
 |       RESTART
@@ -19101,6 +19358,7 @@ ACCOUNT
 |       RETURNING
 |       RETURNS
 |       REVERSE
+|       ROLE
 |       ROLLBACK
 |       ROLLING
 |       ROLLUP
@@ -19206,7 +19464,6 @@ ACCOUNT
 |       SUBSTRING
 |       SUCCESSFUL
 |       SUM
-|       SUPER
 |       SUSPEND
 |       SWAPS
 |       SWITCH
@@ -19347,6 +19604,22 @@ PASSWORD
 ;
 unreserved_keyword_extra:
 ACCESS
+;
+
+/*
+  These non-reserved keywords cannot be used as unquoted role names:
+*/
+unreserved_keyword_ambiguous_roles:
+        SUPER
+|       FILEX
+|       PROCESS
+|       NONE
+|       EVENT
+|       PROXY
+|       RELOAD
+|       REPLICATION
+|       RESOURCE
+|       EXECUTE
 ;
 
 /*注释掉的关键字有规约冲突暂时注释了,都是一些sql中常用的关键字,后面按需打开,增加这块代码逻辑是为了支持在mysql中允许以

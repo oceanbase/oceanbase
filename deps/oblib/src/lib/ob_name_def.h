@@ -752,6 +752,7 @@
 #define N_EFFECTIVE_TENANT_ID "effective_tenant_id"
 #define N_CURRENT_USER "current_user"
 #define N_CURRENT_USER_PRIV "current_user_priv"
+#define N_CURRENT_ROLE "current_role"
 #define N_USER "user"
 #define N_HOST_IP "host_ip"
 #define N_RPC_PORT "rpc_port"

@@ -61,9 +61,44 @@ int ObCreateRoleResolver::resolve(const ParseNode &parse_tree)
     if (OB_ISNULL(role)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("role should not be NULL", K(ret));
-    } else {
+    } else if (lib::is_oracle_mode()) {
       ObString role_name(role->str_len_, role->str_value_);
       create_role_stmt->set_role_name(role_name);
+    } else {
+      //mysql mode
+      OZ (ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(params_.session_info_->get_effective_tenant_id()));
+
+      if (OB_SUCC(ret) && NULL != parse_tree.children_[1]) {
+        if (T_IF_NOT_EXISTS != parse_tree.children_[1]->type_) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(parse_tree.children_[1]->type_), K(ret));
+        } else {
+          create_role_stmt->set_if_not_exists();
+        }
+      }
+
+      OZ (create_role_stmt->get_user_names().reserve(role->num_child_));
+      OZ (create_role_stmt->get_host_names().reserve(role->num_child_));
+
+      for (int i = 0; OB_SUCC(ret) && i < role->num_child_; i++) {
+        ParseNode *cur_role = role->children_[i];
+        ObString user_name;
+        ObString host_name;
+        if (OB_ISNULL(cur_role)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid role", K(ret));
+        } else {
+          OZ (resolve_user_host(cur_role, user_name, host_name));
+          user_name.trim_space_only();
+          if (OB_SUCC(ret) && user_name.empty()) {
+            ret = OB_CANNOT_USER;
+            LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("CREATE ROLE"), "CREATE ROLE",
+                           (int)strlen("anonymous user"), "anonymous user");
+          }
+          OZ (create_role_stmt->get_user_names().push_back(user_name));
+          OZ (create_role_stmt->get_host_names().push_back(host_name));
+        }
+      }
     }
   }
   // resolve password

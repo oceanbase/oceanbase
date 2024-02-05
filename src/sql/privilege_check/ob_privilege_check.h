@@ -83,6 +83,12 @@ public:
                                  const ObStmt *basic_stmt,
                                  common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
 
+
+  static int check_priv_in_roles(const uint64_t tenant_id,
+                                 const uint64_t user_id,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const common::ObIArray<uint64_t> &role_ids,
+                                 const share::schema::ObStmtNeedPrivs &stmt_need_priv);
 private:
    ///Extract priv info needed by a single stmt, may be sub-query.
    ///called by recursive_stmt_need_priv

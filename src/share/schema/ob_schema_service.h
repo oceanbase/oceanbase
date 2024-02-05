@@ -335,6 +335,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_ROUTINE_PRIV, = 2062)                         \
   ACT(OB_DDL_DEL_ROUTINE_PRIV, = 2063)                           \
   ACT(OB_DDL_ROUTINE_PRIV_OPERATION_END, = 2070)                 \
+  ACT(OB_DDL_COLUMN_PRIV_OPERATION_BEGIN, = 2071)               \
+  ACT(OB_DDL_GRANT_COLUMN_PRIV, = 2072)                         \
+  ACT(OB_DDL_DEL_COLUMN_PRIV, = 2073)                           \
+  ACT(OB_DDL_COLUMN_PRIV_OPERATION_END, = 2080)                 \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
@@ -353,6 +357,7 @@ IS_DDL_TYPE(USER, user)
 IS_DDL_TYPE(DB_PRIV, db_priv)
 IS_DDL_TYPE(TABLE_PRIV, table_priv)
 IS_DDL_TYPE(ROUTINE_PRIV, routine_priv)
+IS_DDL_TYPE(COLUMN_PRIV, column_priv)
 IS_DDL_TYPE(OUTLINE, outline)
 IS_DDL_TYPE(ZONE, zone)
 IS_DDL_TYPE(SYNONYM, synonym)
@@ -425,6 +430,7 @@ public:
     uint64_t rls_group_id_;
     uint64_t rls_context_id_;
     uint64_t routine_type_;
+    uint64_t column_priv_id_;
   };
   union {
     common::ObString table_name_;
@@ -438,7 +444,6 @@ public:
   };
   ObSchemaOperationType op_type_;
   common::ObString ddl_stmt_str_;
-
   bool operator <(const ObSchemaOperation &rv) const { return schema_version_ < rv.schema_version_; }
   void reset();
   bool is_valid() const;
@@ -892,6 +897,7 @@ public:
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
+  GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(column_priv, ObColumnPriv);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(routine, ObSimpleRoutineSchema);
   GET_ALL_SCHEMA_FUNC_DECLARE_PURE_VIRTUAL(synonym, ObSimpleSynonymSchema);
@@ -991,6 +997,7 @@ public:
   virtual int fetch_new_rls_policy_id(const uint64_t tenant_id, uint64_t &new_rls_policy_id) = 0;
   virtual int fetch_new_rls_group_id(const uint64_t tenant_id, uint64_t &new_rls_group_id) = 0;
   virtual int fetch_new_rls_context_id(const uint64_t tenant_id, uint64_t &new_rls_context_id) = 0;
+  virtual int fetch_new_priv_id(const uint64_t tenant_id, uint64_t &new_priv_id) = 0;
 
 //------------------For managing privileges-----------------------------//
   #define GET_BATCH_SCHEMAS_WITH_ALLOCATOR_FUNC_DECLARE_PURE_VIRTUAL(SCHEMA, SCHEMA_TYPE)  \
@@ -1017,6 +1024,7 @@ public:
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(db_priv, ObDBPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(table_priv, ObTablePriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(routine_priv, ObRoutinePriv);
+  GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(column_priv, ObColumnPriv);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(outline, ObSimpleOutlineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(routine, ObSimpleRoutineSchema);
   GET_BATCH_SCHEMAS_FUNC_DECLARE_PURE_VIRTUAL(synonym, ObSimpleSynonymSchema);

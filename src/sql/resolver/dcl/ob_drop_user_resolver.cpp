@@ -97,47 +97,13 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
       uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
       // resolved user_list_node
       for (int i = 0; i < user_list_node->num_child_ && OB_SUCCESS == ret; ++i) {
-        if (OB_ISNULL(user_list_node->children_[i])) {
-          ret = OB_ERR_PARSE_SQL;
-          LOG_WARN("The child of user_hostname node should not be NULL", K(ret), K(i));
-        } else if (2 != user_list_node->children_[i]->num_child_) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("sql_parser parse user error", K(ret));
-        } else if (OB_ISNULL(user_list_node->children_[i]->children_[0])) {
-          // 0: user, 1: hostname
-          ret = OB_ERR_PARSE_SQL;
-          LOG_WARN("The child of user node should not be NULL", K(ret), K(i));
-        } else {
-          ParseNode *user_hostname_node = user_list_node->children_[i];
-          ObString user_name(user_hostname_node->children_[0]->str_len_, user_hostname_node->children_[0]->str_value_);
-          ObString host_name;
-          if (NULL == user_hostname_node->children_[1]) {
-            host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
-          } else {
-            host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
-                                 static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));
-          }
-          const ObUserInfo *user_info = NULL;
-          if (OB_FAIL(schema_checker_->get_user_info(tenant_id, user_name, host_name, user_info))) {
-            LOG_WARN("failed to get user info", K(ret), K(user_name));
-            if (OB_USER_NOT_EXIST == ret) {
-              // 跳过, RS统一处理, 兼容MySQL行为
-              ret = OB_SUCCESS;
-            }
-          } else if (is_inner_user_or_role(user_info->get_user_id())) {
-            ret = OB_ERR_NO_PRIVILEGE;
-            SQL_RESV_LOG(WARN, "Can not drop internal user", K(ret));
-          } else if (OB_FAIL(check_dcl_on_inner_user(top_node->type_,
-                                                     params_.session_info_->get_priv_user_id(),
-                                                     user_info->get_user_id()))) {
-            LOG_WARN("failed to check dcl on inner-user or unsupport to modify reserved user",
-                     K(ret), K(params_.session_info_->get_user_name()), K(user_name));
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(drop_user_stmt->add_user(user_name, host_name))) {
-              LOG_WARN("Add user error", K(user_name), K(ret));
-            }
-          }
+        ObString user_name;
+        ObString host_name;
+        if (OB_FAIL(resolve_user_list_node(user_list_node->children_[i], top_node,
+                                           user_name, host_name))) {
+          LOG_WARN("fail to resolve user list node", K(ret));
+        } else if (OB_FAIL(drop_user_stmt->add_user(user_name, host_name))) {
+          LOG_WARN("Add user error", K(user_name), K(ret));
         }
       }
       if (OB_SUCC(ret)) {

@@ -1060,13 +1060,13 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_USER_OR_ROLE_DOES_NOT_EXIST, -5369, -1, "HY000", 
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_ON_KEYWORD, -5370, -1, "HY000", "missing ON keyword", 969, "missing ON keyword");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_NO_GRANT_OPTION, -5371, -1, "HY000", "grant option does not exists", "grant option does not exist for '%.*s.%.*s'", 1720, "grant option does not exist", "grant option does not exist for '%.*s.%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_ALTER_INDEX_AND_EXECUTE_NOT_ALLOWED_FOR_VIEWS, -5372, -1, "HY000", "ALTER, INDEX and EXECUTE not allowed for views", 2204, "ALTER, INDEX and EXECUTE not allowed for views");
-DEFINE_ORACLE_ERROR(OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED, -5373, -1, "HY000", "circular role grant detected", 1934, "circular role grant detected");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_CIRCULAR_ROLE_GRANT_DETECTED, -5373, ER_ROLE_GRANTED_TO_ITSELF, "HY000", "The GRANT would create a loop", "User account `%.*s`@`%.*s` is directly or indirectly granted to the role `%.*s`@`%.*s`. The GRANT would create a loop", 1934, "circular role grant detected", "User account `%.*s`@`%.*s` is directly or indirectly granted to the role `%.*s`@`%.*s`. The GRANT would create a loop");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_DIRECTORIES, -5374, -1, "HY000", "invalid privilege on directories", 22928, "invalid privilege on directories");
 DEFINE_ORACLE_ERROR(OB_ERR_DIRECTORY_ACCESS_DENIED, -5375, -1, "HY000", "directory access denied", 29289, "directory access denied");
 DEFINE_ORACLE_ERROR(OB_ERR_MISSING_OR_INVALID_ROLE_NAME, -5376, -1, "HY000", "missing or invalid role name", 1937, "missing or invalid role name");
-DEFINE_ORACLE_ERROR_EXT(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST, -5377, -1, "HY000", "role not granted or does not exist", "role '%.*s' not granted or does not exist", 1924, "role not granted or does not exist", "role '%.*s' not granted or does not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_ROLE_NOT_GRANTED_OR_DOES_NOT_EXIST, -5377, ER_ROLE_NOT_GRANTED, "HY000", "role not granted or does not exist", "role '%.*s' not granted or does not exist", 1924, "role not granted or does not exist", "role '%.*s' not granted or does not exist");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DEFAULT_ROLE_NOT_GRANTED_TO_USER, -5378, -1, "HY000", "DEFAULT ROLE not granted to user", "DEFAULT ROLE '%.*s' not granted to user", 1955, "DEFAULT ROLE not granted to user", "DEFAULT ROLE '%.*s' not granted to user");
-DEFINE_ORACLE_ERROR_EXT(OB_ERR_ROLE_NOT_GRANTED_TO, -5379, -1, "HY000", "ROLE not granted to", "ROLE '%.*s' not granted to '%.*s'", 1951, "ROLE not granted to", "ROLE '%.*s' not granted to '%.*s'");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_ROLE_NOT_GRANTED_TO, -5379, ER_ROLE_NOT_GRANTED, "HY000", "ROLE not granted to", "`%.*s`@`%.*s` is not granted to `%.*s`@`%.*s`", 1951, "ROLE not granted to", "ROLE '%.*s%.*s' not granted to '%.*s%.*s'");
 DEFINE_ORACLE_ERROR(OB_ERR_CANNOT_GRANT_TO_A_ROLE_WITH_GRANT_OPTION, -5380, -1, "HY000", "cannot GRANT to a role WITH GRANT OPTION", 1926, "cannot GRANT to a role WITH GRANT OPTION");
 DEFINE_ORACLE_ERROR(OB_ERR_DUPLICATE_USERNAME_IN_LIST, -5381, -1, "HY000", "duplicate username in list", 1700, "duplicate username in list");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_CANNOT_GRANT_STRING_TO_A_ROLE, -5382, -1, "HY000", "cannot grant string to a role", "cannot grant %.*s to a role", 1931, "cannot grant string to a role", "cannot grant %.*s to a role");
@@ -1079,6 +1079,8 @@ DEFINE_ERROR_EXT(OB_ERR_NO_ROUTINE_PRIVILEGE, -5387, ER_PROCACCESS_DENIED_ERROR,
 
 DEFINE_ERROR_EXT(OB_ERR_USER_REFFERD_AS_DEFINER, -5388, ER_USER_REFERRED_AS_DEFINER, "HY000", "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine.", "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine.");
 DEFINE_ERROR_EXT(OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER, -5389, ER_OPERATION_ON_USER_REFERRED_AS_DEFINER, "HY000", "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine.", "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine.");
+DEFINE_ERROR_EXT(OB_ERR_NO_COLUMN_PRIVILEGE, -5390, ER_COLUMNACCESS_DENIED_ERROR, "42000", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'", "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'");
+
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_OBJECT_STRING_DOES_NOT_EXIST, -5400, -1, "HY000", "object string does not exist", "object %.*s does not exist", 4043, "object string does not exist", "object %.*s does not exist");
 DEFINE_ORACLE_ERROR(OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED, -5401, -1, "HY000", "resultant data type of virtual column is not supported", 54004, "resultant data type of virtual column is not supported");
 DEFINE_ERROR(OB_ERR_GET_STACKED_DIAGNOSTICS, -5402, ER_GET_STACKED_DIAGNOSTICS_INACTIVE, "0Z002", "GET STACKED DIAGNOSTICS when handler not active");
@@ -2581,6 +2583,10 @@ DEFINE_ERROR_EXT(OB_EST_DEVIA_TOO_LARGE, -11004, -1, "HY000", "Optimizer estimat
 DEFINE_ORACLE_ERROR(OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT, -11005, -1, "HY000", "cannot drop or replace a type with type or table dependents", 2303, "cannot drop or replace a type with type or table dependents");
 DEFINE_ORACLE_ERROR(OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT, -11006, -1, "HY000", "cannot replace a type with table dependents", 22866, "cannot replace a type with table dependents");
 DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query range memory exhausted");
+DEFINE_ERROR_EXT(OB_ERR_UNKNOWN_AUTHID, -11007, ER_UNKNOWN_AUTHID, "HY000", "Unknown authorization ID", "Unknown authorization ID `%.*s`@`%.*s`");
+DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT, "42000", "There is no such grant defined for user", "There is no such grant defined for user '%.*s' on host '%.*s'");
+DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
+
 
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
 

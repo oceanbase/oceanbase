@@ -1051,6 +1051,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprSTSymDifference);
     REG_OP(ObExprPrivSTAsMVTGeom);
     REG_OP(ObExprPrivSTMakeValid);
+    REG_OP(ObExprCurrentRole);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

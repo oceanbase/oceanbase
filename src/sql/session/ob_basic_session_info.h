@@ -648,6 +648,7 @@ public:
   int get_sql_notes(bool &sql_notes) const;
   int get_regexp_stack_limit(int64_t &v) const;
   int get_regexp_time_limit(int64_t &v) const;
+  int get_activate_all_role_on_login(bool &v) const;
   int update_timezone_info();
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_wrap_.get_time_zone_info(); }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }

@@ -1063,6 +1063,8 @@ int ObInsertResolver::replace_column_to_default(ObRawExpr *&origin)
       if (OB_ISNULL(column_item = insert_stmt->get_column_item_by_id(
                   insert_stmt->get_insert_table_info().table_id_, b_expr->get_column_id()))) {
         LOG_WARN("fail to get column item", K(ret));
+      } else if (OB_FAIL(insert_stmt->get_insert_table_info().column_in_values_vector_.push_back(column_item->expr_))) {
+        LOG_WARN("fail to push back column expr", K(ret));
       } else if (OB_FAIL(utils.resolve_column_ref_in_insert(column_item, origin))) {
         LOG_WARN("fail to resolve column ref in insert", K(ret));
       }

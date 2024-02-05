@@ -284,17 +284,10 @@ int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> 
       if (OB_SUCC(ret)) {
         const ObString &user = users.at(i);
         const ObString &host = hosts.at(i);
-        if (OB_UNLIKELY(user.empty()) || OB_UNLIKELY(host.empty())) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("Username is invalid", K(ret), K(user), K(host));
-        } else {
-          if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
-                                     user.length(), user.ptr(),
-                                     host.length(), host.ptr()))) {
-            LOG_WARN("Build msg fail", K(user), K(host), K(ret));
-          } else {
-            //do nothing
-          }
+        if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
+                                    user.length(), user.ptr(),
+                                    host.length(), host.ptr()))) {
+          LOG_WARN("Build msg fail", K(user), K(host), K(ret));
         }
       }
     }
@@ -408,13 +401,8 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
     ObSqlString fail_msg;
     if (OB_FAIL(rpc_proxy->drop_user(arg, failed_index))) {
       LOG_WARN("Lock user failed", K(ret));
-      if (OB_FAIL(ObDropUserExecutor::build_fail_msg(arg.users_, arg.hosts_, fail_msg))) {
-        LOG_WARN("Build fail msg error", K(arg), K(ret));
-      } else {
-        ret = OB_CANNOT_USER;
-        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("DROP USER"), "DROP USER", (int)fail_msg.length(), fail_msg.ptr());
-      }
-    } else if (0 != failed_index.count()) {
+    }
+    if (0 != failed_index.count()) {
       ObSArray<ObString> failed_users;
       ObSArray<ObString> failed_hosts;
       if (OB_FAIL(ObDropUserExecutor::string_array_index_extract(arg.users_, arg.hosts_,
@@ -424,11 +412,10 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
       } else if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
         LOG_WARN("Build fail msg error", K(arg), K(ret));
       } else {
+        const char *ERR_CMD = (arg.is_role_ && lib::is_mysql_mode()) ? "DROP ROLE" : "DROP USER";
         ret = OB_CANNOT_USER;
-        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen("DROP USER"), "DROP USER", (int)fail_msg.length(), fail_msg.ptr());
+        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen(ERR_CMD), ERR_CMD, (int)fail_msg.length(), fail_msg.ptr());
       }
-    } else {
-      //do nothing
     }
   }
   return ret;
@@ -536,12 +523,13 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
   uint64_t role_id = OB_INVALID_ID;
-  CK (1 == stmt.get_set_role_flag());
+  CK (ObAlterUserProfileStmt::SET_ROLE == stmt.get_set_role_flag());
   if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
     const uint64_t tenant_id = session->get_effective_tenant_id();
+    const uint64_t user_id = lib::is_mysql_mode() ? session->get_priv_user_id() : session->get_user_id();
     const ObUserInfo * user_info = NULL;
     common::ObIArray<uint64_t> &enable_role_id_array =
                           session->get_enable_role_array();
@@ -551,7 +539,7 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
     OZ (GCTX.schema_service_->get_tenant_schema_guard(
                   tenant_id,
                   schema_guard));
-    OZ (schema_guard.get_user_info(tenant_id, session->get_user_id(), user_info));
+    OZ (schema_guard.get_user_info(tenant_id, user_id, user_info));
     if (OB_SUCC(ret) && NULL == user_info) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user info is null", K(ret));
@@ -582,8 +570,18 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
           }
         }
         break;
+      case OB_DEFAULT_ROLE_DEFAULT:
+        OX (enable_role_id_array.reset());
+        for (int i = 0; OB_SUCC(ret) && i < user_info->get_role_id_array().count(); i++) {
+          if (user_info->get_disable_option(user_info->get_role_id_option_array().at(i)) == 0) {
+            OZ (enable_role_id_array.push_back(user_info->get_role_id_array().at(i)));
+          }
+        }
+        break;
       }
-      OZ (enable_role_id_array.push_back(OB_ORA_PUBLIC_ROLE_ID));
+      if (lib::is_oracle_mode()) {
+        OZ (enable_role_id_array.push_back(OB_ORA_PUBLIC_ROLE_ID));
+      }
     }
   }
   return ret;
@@ -598,7 +596,7 @@ int ObAlterUserProfileExecutor::execute(ObExecContext &ctx, ObAlterUserProfileSt
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", K(ret));
-  } else if (1 == stmt.get_set_role_flag()) {
+  } else if (ObAlterUserProfileStmt::SET_ROLE == stmt.get_set_role_flag()) {
     OZ (set_role_exec(ctx, stmt));
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;

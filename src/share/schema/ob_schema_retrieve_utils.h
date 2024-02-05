@@ -363,6 +363,8 @@ public:
   RETRIEVE_SCHEMA_FUNC_DECLARE(db_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(table_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine_priv);
+
+  RETRIEVE_SCHEMA_FUNC_DECLARE(column_priv);
   RETRIEVE_SCHEMA_FUNC_DECLARE(package);
   RETRIEVE_SCHEMA_FUNC_DECLARE(routine);
   RETRIEVE_SCHEMA_FUNC_DECLARE(trigger);
@@ -481,6 +483,8 @@ public:
   FILL_SCHEMA_FUNC_DECLARE(db_priv, ObDBPriv);
   FILL_SCHEMA_FUNC_DECLARE(table_priv, ObTablePriv);
   FILL_SCHEMA_FUNC_DECLARE(routine_priv, ObRoutinePriv);
+
+  FILL_SCHEMA_FUNC_DECLARE(column_priv, ObColumnPriv);
   FILL_SCHEMA_FUNC_DECLARE(package, ObPackageInfo);
   FILL_SCHEMA_FUNC_DECLARE(routine, ObRoutineInfo);
   FILL_SCHEMA_FUNC_DECLARE(routine_param, ObRoutineParam);

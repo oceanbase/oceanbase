@@ -223,7 +223,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
       DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
       MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
       SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -414,6 +414,20 @@ sql_stmt:
       do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
     }
+  | CREATE ROLE /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
+  | DROP ROLE /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
   | CREATE OR REPLACE sql_keyword /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
@@ -442,7 +456,9 @@ sql_stmt:
       do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
       if (T_SET_PASSWORD == sql_stmt->type_ ||
           T_SET_NAMES == sql_stmt->type_ ||
-          T_SET_CHARSET == sql_stmt->type_) {
+          T_SET_CHARSET == sql_stmt->type_ ||
+          T_SET_ROLE == sql_stmt->type_ ||
+          T_ALTER_USER_DEFAULT_ROLE == sql_stmt->type_) {
         malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
       } else {
         $$ = sql_stmt;
@@ -740,6 +756,7 @@ unreserved_keyword:
   | RETURNS
   | ROW
   | ROWTYPE
+  | ROLE
   | SCHEMA_NAME
   | SECURITY
   | SUBCLASS_ORIGIN

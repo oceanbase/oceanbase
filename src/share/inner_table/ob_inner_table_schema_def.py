@@ -6351,6 +6351,7 @@ def_table_schema(
   ],
 )
 
+
 # 481 : __all_import_stmt_exec_history
 # 482 : __all_tablet_reorganize_history
 def_table_schema(
@@ -6654,6 +6655,31 @@ def_table_schema(
         ('sql_type', 'int'),
     ],
 )
+
+
+all_column_privilege_def = dict(
+    owner = 'mingye.swj',
+    table_name    = '__all_column_privilege',
+    table_id      = '505',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+        ('tenant_id', 'int'),
+        ('priv_id', 'int'),
+    ],
+    in_tenant_space = True,
+    normal_columns =[
+        ('user_id', 'int'),
+        ('database_name', 'varbinary:1024'),
+        ('table_name', 'varbinary:1024'),
+        ('column_name', 'varbinary:1024'),
+        ('all_priv', 'int', 'false', '0'),
+    ],
+)
+
+def_table_schema(**all_column_privilege_def)
+
+def_table_schema(**gen_history_table_def(506, all_column_privilege_def))
 
 #
 # 余留位置（此行之前占位）
@@ -13540,6 +13566,34 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_index_usage_info',
   keywords = all_def_keywords['__all_index_usage_info']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12462',
+  table_name = '__all_virtual_column_privilege',
+  keywords = all_def_keywords['__all_column_privilege']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12463',
+  table_name = '__all_virtual_column_privilege_history',
+  keywords = all_def_keywords['__all_column_privilege_history']))
+
+def_table_schema(
+  owner = 'jim.wjh',
+  database_id    = 'OB_INFORMATION_SCHEMA_ID',
+  table_name     = 'ENABLED_ROLES',
+  table_id       = '12466',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('ROLE_NAME', 'varchar:OB_MAX_SYS_PARAM_NAME_LENGTH', 'true', 'NULL'),
+  ('ROLE_HOST', 'varchar:OB_MAX_SYS_PARAM_VALUE_LENGTH', 'true', 'NULL'),
+  ('IS_DEFAULT', 'varchar:OB_MAX_SYS_PARAM_VALUE_LENGTH', 'true', 'NULL'),
+  ('IS_MANDATORY', 'varchar:OB_MAX_SYS_PARAM_VALUE_LENGTH', 'false', ''),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17183,16 +17237,25 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT
-      CAST(NULL AS CHAR(292)) AS GRANTEE,
-      CAST('def' AS CHAR(512)) AS TABLE_CATALOG,
-      CAST(NULL AS CHAR(64)) AS TABLE_SCHEMA,
-      CAST(NULL AS CHAR(64)) AS TABLE_NAME,
-      CAST(NULL AS CHAR(64)) AS COLUMN_NAME,
-      CAST(NULL AS CHAR(64)) AS PRIVILEGE_TYPE,
-      CAST(NULL AS CHAR(3))  AS IS_GRANTABLE
-    FROM DUAL
-    WHERE 1 = 0
+  view_definition = """SELECT cast(concat('''', B.user_name, '''', '@', '''', B.host, '''') as char(292)) as GRANTEE,
+        cast('def' as char(512)) AS TABLE_CATALOG,
+        cast(DATABASE_NAME as char(64)) AS TABLE_SCHEMA,
+        cast(TABLE_NAME as char(64)) AS TABLE_NAME,
+        cast(COLUMN_NAME as char(64)) AS COLUMN_NAME,
+        cast(CASE WHEN V1.C1 = 0  AND (A.all_priv & 1) != 0 THEN 'SELECT'
+              WHEN V1.C1 = 1  AND (A.all_priv & 2) != 0 THEN 'INSERT'
+              WHEN V1.C1 = 2  AND (A.all_priv & 4) != 0 THEN 'UPDATE'
+              WHEN V1.C1 = 3  AND (A.all_priv & 8) != 0 THEN 'REFERENCES'
+              END AS char(64)) AS PRIVILEGE_TYPE,
+        cast(case when priv_grant_option = 1 then 'YES' ELSE 'NO' END as char(3)) AS IS_GRANTABLE
+  FROM oceanbase.__all_column_privilege A, oceanbase.__all_user B,
+      (SELECT 0 AS C1
+        UNION ALL SELECT 1 AS C1
+        UNION ALL SELECT 2 AS C1
+        UNION ALL SELECT 3 AS C1) V1
+  WHERE A.tenant_id = B.tenant_id and A.tenant_id = 0 and A.user_id = B.user_id AND
+        ((V1.C1 = 0 AND (A.all_priv & 1) != 0) OR (V1.C1 = 1 AND (A.all_priv & 2) != 0)
+         OR (V1.C1 = 2 AND (A.all_priv & 4) != 0 OR (V1.C1 = 0 AND (A.all_priv & 8) != 0)))
 """.replace("\n", " "),
 )
 
@@ -31301,6 +31364,58 @@ def_table_schema(
 )
 
 def_table_schema(
+  owner = 'jim.wjh',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'role_edges',
+  table_id        = '21511',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT cast(from_user.host AS char(255)) FROM_HOST,
+         cast(from_user.user_name AS char(128)) FROM_USER,
+         cast(to_user.host AS char(255)) TO_HOST,
+         cast(to_user.user_name AS char(128)) TO_USER,
+         cast(CASE role_map.admin_option WHEN 1 THEN 'Y' ELSE 'N' END AS char(1)) WITH_ADMIN_OPTION
+  FROM oceanbase.__all_tenant_role_grantee_map role_map,
+       oceanbase.__all_user from_user,
+       oceanbase.__all_user to_user
+  WHERE role_map.tenant_id = from_user.tenant_id
+    AND role_map.tenant_id = to_user.tenant_id
+    AND role_map.grantee_id = to_user.user_id
+    AND role_map.role_id = from_user.user_id;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'jim.wjh',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'default_roles',
+  table_id        = '21512',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT cast(to_user.host AS char(255)) HOST,
+         cast(to_user.user_name AS char(128)) USER,
+         cast(from_user.host AS char(255)) DEFAULT_ROLE_HOST,
+         cast(from_user.user_name AS char(128)) DEFAULT_ROLE_USER
+  FROM oceanbase.__all_tenant_role_grantee_map role_map,
+       oceanbase.__all_user from_user,
+       oceanbase.__all_user to_user
+  WHERE role_map.tenant_id = from_user.tenant_id
+    AND role_map.tenant_id = to_user.tenant_id
+    AND role_map.grantee_id = to_user.user_id
+    AND role_map.role_id = from_user.user_id
+    AND role_map.disable_flag = 0;
+""".replace("\n", " ")
+)
+
+def_table_schema(
   owner = 'yangjiali.yjl',
   table_name     = 'CDB_INDEX_USAGE',
   table_id       = '21513',
@@ -31336,6 +31451,32 @@ def_table_schema(
       ON IUT.TENANT_ID = DB.TENANT_ID AND t.DATABASE_ID = DB.DATABASE_ID
     WHERE T.TABLE_ID = IUT.OBJECT_ID
 """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'mingye.swj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'columns_priv',
+  table_id        = '21516',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT cast(b.host as char(255)) as Host,
+           cast(a.database_name as char(128)) as Db,
+           cast(b.user_name as char(128)) as User,
+           cast(a.table_name as char(128)) as Table_name,
+           cast(a.column_name as char(128)) as Column_name,
+           substr(concat(case when (a.all_priv & 1) > 0 then ',Select' else '' end,
+                          case when (a.all_priv & 2) > 0 then ',Insert' else '' end,
+                          case when (a.all_priv & 4) > 0 then ',Update' else '' end,
+                          case when (a.all_priv & 8) > 0 then ',References' else '' end), 2) as Column_priv,
+           cast(a.gmt_modified as datetime) as Timestamp
+    FROM oceanbase.__all_column_privilege a, oceanbase.__all_user b
+    WHERE a.tenant_id = 0 and a.tenant_id = b.tenant_id AND a.user_id = b.user_id
+""".replace("\n", " ")
 )
 
 # 余留位置（此行之前占位）
@@ -57708,6 +57849,14 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_transfer_partition_task'])
+
+def_sys_index_table(
+  index_name = 'idx_column_privilege_name',
+  index_table_id = 101100,
+  index_columns = ['user_id', 'database_name', 'table_name', 'column_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_column_privilege'])
 
 
 # 余留位置（此行之前占位）
