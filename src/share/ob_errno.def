@@ -2561,11 +2561,6 @@ DEFINE_ERROR_EXT(OB_KV_COLUMN_TYPE_NOT_MATCH, -10511, -1, "HY000", "OBKV column 
 DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation type not match", "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
 
-// 余留位置
-////////////////////////////////////////////////////////////////
-// OBKV错误码值域：[-10500, -10700)
-////////////////////////////////////////////////////////////////
-
 //////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
 // 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
 // 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可

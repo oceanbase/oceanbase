@@ -98,8 +98,8 @@ int ObTableQueryAndMutateP::check_arg()
 void ObTableQueryAndMutateP::audit_on_finish()
 {
   audit_record_.consistency_level_ = ObConsistencyLevel::STRONG; // todo: exact consistency
-  audit_record_.return_rows_ = arg_.query_and_mutate_.return_affected_entity() ? result_.affected_entity_.get_row_count() : 0;
-  audit_record_.table_scan_ = true; // todo: exact judgement
+  audit_record_.return_rows_ = result_.affected_entity_.get_row_count();
+  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
   audit_record_.affected_rows_ = result_.affected_rows_;
   audit_record_.try_cnt_ = retry_count_ + 1;
 }
@@ -1034,12 +1034,10 @@ int ObTableQueryAndMutateP::try_process()
   }
   #ifndef NDEBUG
     // debug mode
-    LOG_INFO("[TABLE] execute query_and_mutate", K(ret), K_(arg), K(rpc_timeout),
-             K_(retry_count));
+    LOG_INFO("[TABLE] execute query_and_mutate", K(ret), K(rpc_timeout), K_(retry_count));
   #else
     // release mode
-    LOG_TRACE("[TABLE] execute query_and_mutate", K(ret), K_(arg),
-              K(rpc_timeout), K_(retry_count),
+    LOG_TRACE("[TABLE] execute query_and_mutate", K(ret), K(rpc_timeout), K_(retry_count),
               "receive_ts", get_receive_timestamp());
   #endif
   return ret;

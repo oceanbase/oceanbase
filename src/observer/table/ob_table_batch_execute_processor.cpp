@@ -99,10 +99,14 @@ void ObTableBatchExecuteP::audit_on_finish()
 {
   audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
       ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = arg_.returning_affected_rows_ ? result_.count() : 0;
   audit_record_.table_scan_ = false;
-  audit_record_.affected_rows_ = result_.count();
   audit_record_.try_cnt_ = retry_count_ + 1;
+  audit_record_.return_rows_ = 0;
+  audit_record_.affected_rows_ = 0;
+  for (int i = 0; i < result_.count(); i++) {
+     audit_record_.return_rows_ += result_.at(i).get_return_rows();
+     audit_record_.affected_rows_ += result_.at(i).get_affected_rows();
+  }
 }
 
 uint64_t ObTableBatchExecuteP::get_request_checksum()
@@ -258,10 +262,10 @@ int ObTableBatchExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count));
+  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count),
+  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count),
             "receive_ts", get_receive_timestamp());
 #endif
   return ret;

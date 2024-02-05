@@ -11450,20 +11450,28 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
     LOG_WARN("not supported statement for TTL expression", K(ret), K(stmt_->get_stmt_type()));
   }
 
-  if (OB_SUCC(ret)) {
-    ObString ttl_definition(node->str_len_, node->str_value_);
-    ObSEArray<ObString, 8> ttl_columns;
-    if (OB_FAIL(get_ttl_columns(ttl_definition, ttl_columns))) {
-      LOG_WARN("fail to get ttl columns", K(ttl_definition));
-    }
-    for (int i = 0; i < OB_SUCC(ret) && ttl_columns.count(); i++) {
-      ObString column_name = ttl_columns.at(i);
-      if (NULL == (column_schema = tbl_schema->get_column_schema(column_name))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("ttl column is invalid", K(ret));
+  for (int i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+    if (OB_ISNULL(node->children_[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ttl expr is null", K(ret), K(i));
+    } else if (OB_ISNULL(node->children_[i]) || T_TTL_EXPR != node->children_[i]->type_ ||
+                node->children_[i]->num_child_ != 3) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child node of ttl definition is wrong", KR(ret), K(node->children_[i]));
+    } else if (OB_ISNULL(node->children_[i]->children_[0]) || T_COLUMN_REF != node->children_[i]->children_[0]->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child node of ttl expr is wrong", KR(ret), K(node->children_[i]->children_[0]));
+    } else {
+      ObString column_name(node->children_[i]->children_[0]->str_len_, node->children_[i]->children_[0]->str_value_);
+      if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(column_name))) {
+        ret = OB_TTL_COLUMN_NOT_EXIST;
+        LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, column_name.length(), column_name.ptr());
+        LOG_WARN("ttl column is not exists", K(ret), K(column_name));
       } else if ((!ob_is_datetime_tc(column_schema->get_data_type()))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp", K(ret), K(column_schema->get_data_type()));
+        ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, column_name.length(), column_name.ptr());
+        LOG_WARN("invalid ttl expression, ttl column type should be datetime or timestamp",
+                  K(ret), K(column_name), K(column_schema->get_data_type()));
       }
     }
   }

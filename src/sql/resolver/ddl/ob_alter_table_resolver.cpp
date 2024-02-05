@@ -1076,6 +1076,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
             }
           }
         }
