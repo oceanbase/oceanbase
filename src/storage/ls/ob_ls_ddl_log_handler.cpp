@@ -409,15 +409,12 @@ int ObLSDDLLogHandler::flush(SCN &rec_scn)
           param.data_format_version_ = direct_load_mgr_hdl.get_full_obj()->get_data_format_version();
           param.snapshot_version_    = direct_load_mgr_hdl.get_full_obj()->get_table_key().get_snapshot_version();
           LOG_INFO("schedule ddl merge dag", K(param));
-          if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
-            if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-              LOG_WARN("failed to schedule ddl kv merge dag", K(ret));
-            } else {
-              ret = OB_SUCCESS;
-            }
+          if (OB_FAIL(ObTabletDDLUtil::freeze_ddl_kv(param))) {
+            LOG_WARN("try to freeze ddl kv failed", K(ret), K(param));
           }
         }
       }
+      (void)tenant_direct_load_mgr->gc_tablet_direct_load();
     }
   }
   return OB_SUCCESS;
