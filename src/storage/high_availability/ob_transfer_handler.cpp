@@ -1492,7 +1492,9 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   } else {
     LOG_INFO("[TRANSFER_BLOCK_TX] wait src ls repaly to start scn", "cost", ObTimeUtil::current_time() - start_ts);
   }
-
+#ifdef ERRSIM
+  SERVER_EVENT_SYNC_ADD("errsim_transfer", "DEBUG_SYNC_WAIT_REPLAY_TO_START_SCN");
+#endif
   DEBUG_SYNC(AFTER_START_TRANSFER_WAIT_REPLAY_TO_START_SCN);
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
