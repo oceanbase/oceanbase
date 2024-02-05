@@ -1279,7 +1279,10 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
   int ret = OB_SUCCESS;
   is_valid = true;
   bool can_set_unique = false;
-  if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
+  if (stmt.is_set_stmt()
+      || stmt.is_hierarchical_query()
+      || stmt.has_for_update()
+      || !stmt.is_sel_del_upd()) {
     is_valid = false;
   } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
