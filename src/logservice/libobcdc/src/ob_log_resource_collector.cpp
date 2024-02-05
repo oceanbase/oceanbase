@@ -527,6 +527,8 @@ int ObLogResourceCollector::handle(void *data,
 
           if (OB_FAIL(trans_ctx_mgr_->get_trans_ctx(tenant_id, trans_id, trans_ctx, enable_create))) {
             LOG_ERROR("get trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), K(*task));
+          } else if (task->is_dml_trans() && trans_ctx->has_ddl_participant() && OB_FAIL(recycle_stored_redo_(*task))) {
+            LOG_ERROR("recycle stored redo for dml_participant of dist ddl trans failed", KR(ret), KPC(task), KPC(trans_ctx));
           }
           // Increase the number of participants that can be recycled
           else if (OB_FAIL(trans_ctx->inc_revertable_participant_count(all_participant_revertable))) {
@@ -866,7 +868,7 @@ void ObLogResourceCollector::get_task_count(int64_t &part_trans_task_count, int6
   br_count = ATOMIC_LOAD(&br_count_);
 }
 
-int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
+int ObLogResourceCollector::recycle_stored_redo_(PartTransTask &task)
 {
   int ret = OB_SUCCESS;
   const logservice::TenantLSID &tenant_ls_id = task.get_tls_id();
@@ -897,14 +899,23 @@ int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t threa
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(recycle_part_trans_task_(thread_idx, &task))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("recycle_part_trans_task_ failed", KR(ret), K(thread_idx), K(task));
-      }
-    } else {
-      // no more access to task
+  return ret;
+}
+
+int ObLogResourceCollector::revert_unserved_part_trans_task_(const int64_t thread_idx, PartTransTask &task)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(recycle_stored_redo_(task))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("recycle_stored_redo_ failed", KR(ret), K(thread_idx), K(task));
     }
+  } else if (OB_FAIL(recycle_part_trans_task_(thread_idx, &task))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("recycle_part_trans_task_ failed", KR(ret), K(thread_idx), K(task));
+    }
+  } else {
+    // no more access to task
   }
 
   return ret;
