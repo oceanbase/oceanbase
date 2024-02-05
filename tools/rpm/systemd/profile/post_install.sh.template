@@ -11,4 +11,4 @@ cp -f $prefix/profile/oceanbase.cnf /etc/oceanbase.cnf
 systemctl daemon-reload
 
 # telemetry
-/bin/bash $prefix/profile/telemetry.sh $1
+/bin/bash $prefix/profile/telemetry.sh $1 >/dev/null 2>&1
