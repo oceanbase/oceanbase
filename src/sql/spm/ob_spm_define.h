@@ -269,7 +269,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       cur_baseline_not_enable_(false),
       need_spm_timeout_(false),
       baseline_exec_time_(0),
-      evolution_task_in_two_plan_set_(false)
+      evolution_task_in_two_plan_set_(false),
+      force_evo_(false)
   {}
   enum SpmMode {
     MODE_INVALID,
@@ -339,6 +340,8 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   bool need_spm_timeout_;
   int64_t baseline_exec_time_;
   bool evolution_task_in_two_plan_set_;
+  // for testing
+  bool force_evo_;
 };
 
 struct EvolutionTaskResult
@@ -348,7 +351,8 @@ public:
   : key_(),
     accept_new_plan_(false),
     new_plan_hash_(0),
-    new_stat_()
+    new_stat_(),
+    from_mock_task_(false)
   {}
   ~EvolutionTaskResult() {}
 int deep_copy(common::ObIAllocator& allocator, const EvolutionTaskResult& other);
@@ -361,6 +365,7 @@ public:
   // new plan statistics
   uint64_t new_plan_hash_;
   ObEvolutionStat new_stat_;
+  bool from_mock_task_;
 };
 
 struct EvoResultUpdateTask

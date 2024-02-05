@@ -5015,7 +5015,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           LOG_WARN("fail to add plan to plan cache", K(ret));
         } else if (!plan_added) {
           // plan not add to plan cache, do not check if need evolution.
-          if (spm_ctx.check_execute_status_) {
+          if (spm_ctx.force_evo_ && ObSpmCacheCtx::SpmStat::STAT_ADD_EVOLUTION_PLAN == spm_ctx.spm_stat_) {
+            // do nothing
+          } else if (spm_ctx.check_execute_status_) {
             (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
           }
         } else if (baseline_enable && !baseline_exists) {
