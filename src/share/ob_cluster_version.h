@@ -175,6 +175,8 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_4_2_1_3 (oceanbase::common::cal_version(4, 2, 1, 3))
 #define CLUSTER_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
 #define CLUSTER_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
+
+#define CLUSTER_VERSION_4_3_0_0 (oceanbase::common::cal_version(4, 3, 0, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
 #define CLUSTER_CURRENT_VERSION CLUSTER_VERSION_4_2_3_0

@@ -1275,15 +1275,17 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
 int ObInnerSQLConnection::forward_request(const uint64_t tenant_id,
                                           const int64_t op_type,
                                           const ObString &sql,
-                                          ObInnerSQLResult &res)
+                                          ObInnerSQLResult &res,
+                                          const int32_t group_id)
 {
-  return forward_request_(tenant_id, op_type, sql, res);
+  return forward_request_(tenant_id, op_type, sql, res, group_id);
 }
 
 int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
                                            const int64_t op_type,
                                            const ObString &sql,
-                                           ObInnerSQLResult &res)
+                                           ObInnerSQLResult &res,
+                                           const int32_t group_id)
 {
   int ret = OB_SUCCESS;
   ObInnerSqlWaitGuard guard(is_inner_session(), inner_session_);
@@ -1295,6 +1297,10 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
   ObSQLMode sql_mode = 0;
   const ObSessionDDLInfo &ddl_info = get_session().get_ddl_info();
   bool is_load_data_exec = get_session().is_load_data_exec_session();
+  int32_t real_group_id = group_id_;
+  if (0 != group_id) {
+    real_group_id = group_id;
+  }
   if (is_resource_conn()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource", K(ret),
@@ -1324,7 +1330,7 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
     } else if (OB_FAIL(GCTX.inner_sql_rpc_proxy_->to(get_resource_svr())
                        .by(tenant_id)
                        .timeout(query_timeout)
-                       .group_id(group_id_)
+                       .group_id(real_group_id)
                        .inner_sql_sync_transmit(arg,
                                                 *(handler->get_result()),
                                                 handler->get_handle()))) {
