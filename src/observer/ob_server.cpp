@@ -1841,19 +1841,19 @@ int ObServer::init_config()
   // local_ip is a critical parameter, if it is set, then verify it; otherwise, set it via devname.
   if (strlen(config_.local_ip) > 0) {
     char if_name[MAX_IFNAME_LENGTH] = { '\0' };
-    if (0 != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name))) {
-      // if it is incorrect, then ObServer should not be started.
-      ret = OB_ERR_OBSERVER_START;
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip is not a valid IP for this machine, local_ip", config_.local_ip.get_value());
-    } else {
-      if (0 != strcmp(config_.devname, if_name)) {
-        // this is done to ensure the consistency of local_ip and devname.
-        LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
-                    config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
-      }
-      // unconditionally call set_value to ensure that devname is written to the configuration file.
+    bool has_found = false;
+    if (OB_SUCCESS != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name), has_found)) {
+      // if it is incorrect, then ObServer start but log a error.
+      LOG_DBA_WARN(OB_ERR_OBSERVER_START, "get ifname by local_ip failed, local_ip", config_.local_ip.get_value());
+    } else if (false == has_found) {
+      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip set failed, please check your local_ip", config_.local_ip.get_value());
+    } else if (0 != strcmp(config_.devname, if_name)) {
       config_.devname.set_value(if_name);
       config_.devname.set_version(start_time_);
+      // this is done to ensure the consistency of local_ip and devname.
+      LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
+                  config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
+                        // unconditionally call set_value to ensure that devname is written to the configuration file.
     }
   } else {
     if (config_.use_ipv6) {

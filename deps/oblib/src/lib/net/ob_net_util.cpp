@@ -167,13 +167,12 @@ char *ObNetUtil::get_addr_by_hostname(const char *hostname)
   return addr;
 }
 
-int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len)
+int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len, bool& has_found)
 {
   int ret = OB_SUCCESS;
   struct in_addr ip;
   struct in6_addr ip6;
   int af_type = AF_INET;
-
   if (1 == inet_pton(AF_INET, local_ip, &ip)) {
     // do nothing
   } else if (1 == inet_pton(AF_INET6, local_ip, &ip6)) {
@@ -190,7 +189,6 @@ int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t 
       ret = OB_ERR_SYS;
       LOG_ERROR("call getifaddrs failed", K(errno), K(ret));
     } else {
-      bool has_found = false;
       for (ifa = ifa_list; nullptr != ifa && !has_found; ifa = ifa->ifa_next) {
         if (nullptr != ifa->ifa_addr &&
             ((AF_INET == af_type && AF_INET == ifa->ifa_addr->sa_family &&
@@ -208,8 +206,7 @@ int ObNetUtil::get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t 
         }
       } // end for
       if (!has_found) {
-        ret = OB_SEARCH_NOT_FOUND;
-        LOG_ERROR("can not find ifname by local ip", KCSTRING(local_ip));
+        LOG_WARN("can not find ifname by local ip", KCSTRING(local_ip));
       }
     }
     if (nullptr != ifa_list) {

@@ -44,7 +44,10 @@ public:
   static uint64_t ip_to_addr(uint32_t ip, int port);
   // get ipv4 by hostname, no need free the returned value
   static char *get_addr_by_hostname(const char *hostname);
-  static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len);
+  static int get_ifname_by_addr(const char *local_ip, char *if_name, uint64_t if_name_len, bool& has_found);
+
+  static bool is_match(const common::ObString &client_ip, const common::ObString &host_name);
+  static bool is_in_white_list(const common::ObString &client_ip, common::ObString &orig_ip_white_list);
 };
 }  // namespace obsys
 }  // namespace oceanbase
