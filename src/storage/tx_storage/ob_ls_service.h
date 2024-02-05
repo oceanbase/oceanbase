@@ -60,7 +60,7 @@ public:
   int stop();
   int wait();
   void destroy();
-  bool safe_to_destroy();
+  bool is_empty();
   void inc_ls_safe_destroy_task_cnt();
   void dec_ls_safe_destroy_task_cnt();
   void inc_iter_cnt();
@@ -186,7 +186,8 @@ private:
 
 private:
   bool is_inited_;
-  bool is_running_;
+  bool is_running_; // used by create/remove, only can be used after start and before stop.
+  bool is_stopped_; // only for ls iter, get ls iter will cause OB_NOT_RUNNING after stop.
   uint64_t tenant_id_;
   // a map from ls id to ls
   ObLSMap ls_map_;
