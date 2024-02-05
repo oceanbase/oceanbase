@@ -1689,8 +1689,10 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
               spi_result.destruct_exec_params(*session);
             }
             //if (OB_SUCCESS == ret) {
-              session->get_pl_sqlcode_info()->set_sqlcode(
-                saved_sqlcode_info.get_sqlcode(), saved_sqlcode_info.get_sqlmsg());
+              if (session->get_pl_sqlcode_info()->get_sqlcode() == OB_SUCCESS) {
+                session->get_pl_sqlcode_info()->set_sqlcode(
+                  saved_sqlcode_info.get_sqlcode(), saved_sqlcode_info.get_sqlmsg());
+              }
             //} else {
             //  session->get_pl_sqlcode_info()->set_sqlcode(ret);
             //}
@@ -1916,12 +1918,13 @@ int ObSPIService::dbms_cursor_execute(ObPLExecCtx *ctx,
             }
             ret = OB_SUCCESS == ret ? close_ret : ret;
           }
-          if (OB_SUCCESS == ret) {
+          if (session->get_pl_sqlcode_info()->get_sqlcode() == OB_SUCCESS) {
             session->get_pl_sqlcode_info()->set_sqlcode(
               saved_sqlcode_info.get_sqlcode(), saved_sqlcode_info.get_sqlmsg());
-          } else {
-            session->get_pl_sqlcode_info()->set_sqlcode(ret);
           }
+          //} else {
+          //  session->get_pl_sqlcode_info()->set_sqlcode(ret);
+          //}
           //监控项统计结束
           time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
           if (enable_perf_event) {
