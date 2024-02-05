@@ -12,11 +12,11 @@
 
 #ifndef OCEANBASE_OBRPC_OB_POC_RPC_PROXY_H_
 #define OCEANBASE_OBRPC_OB_POC_RPC_PROXY_H_
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_endec.h"
 #include "rpc/frame/ob_req_transport.h"
 #include "rpc/ob_request.h"
 #include "rpc/obrpc/ob_rpc_stat.h"
-#include "rpc/obrpc/ob_poc_rpc_server.h"
 
 extern "C" {
 #include "rpc/pnio/interface/group.h"

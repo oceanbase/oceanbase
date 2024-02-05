@@ -72,7 +72,7 @@ static int ib_prepare_buffer(ibuffer_t* ib, int64_t sz) {
   if (NULL == ib->b) {
     err = ib_create(ib, rk_max(sz, MIN_IBUFFER_SIZE));
   } else if (sz > ib->limit - ib->s) {
-    err = ib_replace(ib, sz);
+    err = ib_replace(ib, rk_max(sz, MIN_IBUFFER_SIZE));
   }
   return err;
 }

@@ -143,6 +143,19 @@ int eloop_run(eloop_t* ep) {
       rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
       last_rx_bytes = rx_bytes;
       last_time = cur_time_us;
+      if (1 == pn->gid) {
+        // reclaim expired memory cache, only the first pnio1 thread will reach here
+        const char* str = mem_freelists_str();
+        refresh_mem_freelists();
+        if (0 == (cur_time_us/1000000%20)) {
+          //print mem cache info each 20 seconds
+          rk_info("print mem cache info %s", str);
+        }
+        int64_t refresh_time = rk_get_us() - cur_time_us;
+        if (refresh_time > 10 * 1000) {
+          rk_warn("refresh_mem_freelists cost too much time, time=%ld, %s", refresh_time, str);
+        }
+      }
     }
   }
   pn_release(pn);

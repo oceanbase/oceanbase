@@ -11,6 +11,7 @@
  */
 
 #define USING_LOG_PREFIX RPC_OBRPC
+#include "rpc/obrpc/ob_poc_rpc_server.h"
 #include "rpc/obrpc/ob_rpc_endec.h"
 #include "rpc/obrpc/ob_irpc_extra_payload.h"
 #include "lib/runtime.h"
@@ -81,6 +82,11 @@ int rpc_decode_ob_packet(ObRpcMemPool& pool, const char* buf, int64_t sz, ObRpcP
     new(pkt)ObRpcPacket();
     if (OB_SUCC(pkt->decode(buf, sz))) {
       ret_pkt = pkt;
+      const int64_t fly_ts = ObTimeUtility::current_time() - pkt->get_timestamp();
+      if (pkt->get_timestamp() > 0 && fly_ts > oceanbase::common::OB_MAX_PACKET_FLY_TS && TC_REACH_TIME_INTERVAL(100 * 1000)) {
+        RPC_LOG_RET(WARN, common::OB_ERR_TOO_MUCH_TIME, "PNIO packet wait too much time between response and client_cb", "pcode", pkt->get_pcode(),
+                "fly_ts", fly_ts, "send_timestamp", pkt->get_timestamp(), K(sz));
+      }
     }
   }
   return ret;
