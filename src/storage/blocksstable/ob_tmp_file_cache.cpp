@@ -124,17 +124,17 @@ int ObTmpPageCache::inner_read_io(const ObTmpBlockIOInfo &io_info,
                                   ObMacroBlockHandle &macro_block_handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(read_io(io_info, nullptr, macro_block_handle))) {
+  if (OB_FAIL(read_io(io_info, callback, macro_block_handle))) {
     if (macro_block_handle.get_io_handle().is_empty()) {
       // TODO: After the continuous IO has been optimized, this should
       // not happen.
       if (OB_FAIL(macro_block_handle.wait())) {
-        STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
-      } else if (OB_FAIL(read_io(io_info, nullptr, macro_block_handle))) {
-        STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+        STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret), KP(callback));
+      } else if (OB_FAIL(read_io(io_info, callback, macro_block_handle))) {
+        STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret), KP(callback));
       }
     } else {
-      STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+      STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret), KP(callback));
     }
   }
   // Avoid double_free with io_handle
@@ -391,12 +391,16 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_desc_ = io_info.io_desc_;
   read_info.macro_block_id_ = io_info.macro_block_id_;
   read_info.io_timeout_ms_ = io_info.io_timeout_ms_;
-  read_info.io_callback_ = callback;
+  if (callback == nullptr) {
+    read_info.buf_ = io_info.buf_;
+  } else {
+    read_info.io_callback_ = callback;
+  }
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
   read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, handle))) {
-    STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info));
+    STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info), KP(callback));
   }
   return ret;
 }
