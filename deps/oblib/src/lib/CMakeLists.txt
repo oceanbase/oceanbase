@@ -252,7 +252,6 @@ ob_set_subtarget(oblib_lib signal
   signal/ob_signal_struct.cpp
   signal/ob_signal_utils.cpp
   signal/ob_signal_worker.cpp
-  signal/safe_snprintf.c
   signal/ob_libunwind.c
 )
 

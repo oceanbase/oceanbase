@@ -142,7 +142,7 @@ void safe_current_datetime_str(char *buf, int64_t len, int64_t &pos)
   clock_gettime(CLOCK_REALTIME, &ts);
   struct tm tm;
   safe_secs_to_tm(ts.tv_sec, &tm);
-  int64_t count = safe_snprintf(buf, len, "%d%d%d%d%d%d",
+  int64_t count = lnprintf(buf, len, "%d%d%d%d%d%d",
                                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                                 tm.tm_hour, tm.tm_min, tm.tm_sec);
   if (count >= 0 && count < len) {
@@ -157,7 +157,7 @@ void safe_current_datetime_str_v2(char *buf, int64_t len, int64_t &pos)
   clock_gettime(CLOCK_REALTIME, &ts);
   struct tm tm;
   safe_secs_to_tm(ts.tv_sec, &tm);
-  int64_t count = safe_snprintf(buf, len, "%d-%d-%d %d:%d:%d.%ld",
+  int64_t count = lnprintf(buf, len, "%d-%d-%d %d:%d:%d.%ld",
                                 tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                                 tm.tm_hour, tm.tm_min, tm.tm_sec, (long)(ts.tv_nsec * 1e-3));
   if (count >= 0 && count < len) {
