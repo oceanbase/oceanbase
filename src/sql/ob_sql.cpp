@@ -2962,7 +2962,8 @@ int ObSql::generate_stmt(ParseResult &parse_result,
           bool in_pl = NULL != resolver_ctx.secondary_namespace_
             || (resolver_ctx.is_dynamic_sql_ && OB_NOT_NULL(result.get_session().get_pl_context()))
             || resolver_ctx.is_dbms_sql_;
-          bool need_rebuild = lib::is_mysql_mode() ?  false : resolver_ctx.is_prepare_stage_ && in_pl;
+          bool need_rebuild = (lib::is_mysql_mode() ? (resolver_ctx.is_dynamic_sql_ &&
+          OB_NOT_NULL(result.get_session().get_pl_context()) && resolver_ctx.is_prepare_stage_) : resolver_ctx.is_prepare_stage_ && in_pl);
           bool is_returning_into = false;
           if (stmt->is_insert_stmt() || stmt->is_update_stmt() || stmt->is_delete_stmt()) {
             ObDelUpdStmt &dml_stmt = static_cast<ObDelUpdStmt&>(*stmt);

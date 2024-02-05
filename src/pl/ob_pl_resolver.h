@@ -1026,6 +1026,9 @@ private:
                               ObRawExpr *&expr,
                               const ObPLDataType *expected_type,
                               ObPLCompileUnitAST &func);
+  int try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func);
+  int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
+  int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int replace_to_const_expr_if_need(ObRawExpr *&expr);
   int build_seq_value_expr(ObRawExpr *&expr,
