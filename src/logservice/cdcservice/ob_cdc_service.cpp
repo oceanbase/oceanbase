@@ -140,7 +140,7 @@ void ObCdcService::run1()
     int64_t last_recycle_ts = 0;
     int64_t last_purge_ts = 0;
     int64_t last_check_cdc_read_archive_ts = 0;
-    while(! is_stoped()) {
+    while(! has_set_stop()) {
       // archive is always off for sys tenant, no need to query archive dest
       int64_t current_ts = ObTimeUtility::current_time();
       IGNORE_RETURN lib::Thread::update_loop_ts(current_ts);
@@ -180,6 +180,8 @@ void ObCdcService::run1()
       }
       ob_usleep(static_cast<uint32_t>(BASE_INTERVAL));
     }
+
+    EXTLOG_LOG(INFO, "CdcSrv Thread Exit due to has_set_stop", "stop_flag", has_set_stop());
   }
 }
 
