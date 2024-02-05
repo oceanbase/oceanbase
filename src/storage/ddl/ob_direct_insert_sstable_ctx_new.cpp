@@ -2198,7 +2198,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
       ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
       if (OB_FAIL(direct_load_mgr_handle.set_obj(this))) {
         LOG_WARN("set direct load mgr handle failed", K(ret));
-      } else if (OB_FAIL(redo_writer.write_commit_log(true, table_key_,
+      } else if (OB_FAIL(redo_writer.write_commit_log_with_retry(true, table_key_,
           start_scn, direct_load_mgr_handle, tablet_handle, commit_scn, is_remote_write, lock_tid))) {
         LOG_WARN("fail write ddl commit log", K(ret), K(table_key_), K(sqc_build_ctx_));
       }

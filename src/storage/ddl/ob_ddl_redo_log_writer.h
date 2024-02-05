@@ -274,6 +274,17 @@ public:
       share::SCN &commit_scn,
       bool &is_remote_write,
       uint32_t &lock_tid);
+  int write_commit_log_with_retry(
+      const bool allow_remote_write,
+      const ObITable::TableKey &table_key,
+      const share::SCN &start_scn,
+      ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+      ObTabletHandle &tablet_handle,
+      share::SCN &commit_scn,
+      bool &is_remote_write,
+      uint32_t &lock_tid);
+  static const int64_t DEFAULT_RETRY_TIMEOUT_US = 60L * 1000L * 1000L; // 1min
+  static bool need_retry(int ret_code);
 private:
   int switch_to_remote_write();
   int local_write_ddl_start_log(
@@ -348,6 +359,7 @@ public:
   int wait();
 private:
   bool is_column_group_info_valid() const;
+  int retry(const int64_t timeout_us);
 private:
   bool is_inited_;
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
