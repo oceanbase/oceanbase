@@ -1717,13 +1717,9 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
     }
 
     if (OB_FAIL(ret)) {
-    } else if (no_subpart) {
+    } else if (no_subpart && orig_table_schema.has_sub_part_template_def()) {
       bool generated = false;
-      if (!orig_table_schema.has_sub_part_template_def()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("sub part template is null", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add partition on subpart table without template");
-      } else if (OB_FAIL(inner_add_partition(part_elements_node, part_func_type, part_option,
+      if (OB_FAIL(inner_add_partition(part_elements_node, part_func_type, part_option,
                  alter_stmt, alter_table_schema))) {
         LOG_WARN("failed to inner add partition", K(ret));
       } else if (OB_FAIL(alter_table_schema.try_assign_def_subpart_array(orig_table_schema))) {
@@ -1752,6 +1748,37 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
                             alter_stmt->get_subpart_fun_exprs(), dummy_part_keys));
       OZ (inner_add_partition(part_elements_node, part_func_type, part_option,
                               alter_stmt, alter_table_schema));
+      if (OB_SUCC(ret) && no_subpart) {
+        const int64_t part_num = alter_table_schema.get_partition_num();
+        ObPartition **part_array = alter_table_schema.get_part_array();
+        if (OB_ISNULL(part_array) || part_num <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("part_array is null or part_num is invalid", K(ret), KP(part_array), K(part_num));
+        } else {
+          const int64_t BUF_SIZE = OB_MAX_PARTITION_NAME_LENGTH;
+          char buf[BUF_SIZE];
+          ObSubPartition *subpart;
+          for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+            ObPartition *part = part_array[i];
+            MEMSET(buf, 0, BUF_SIZE);
+            int64_t pos = 0;
+            ObString sub_part_name;
+            if (OB_ISNULL(part) || OB_ISNULL(part->get_subpart_array()) ||
+               OB_ISNULL(subpart = part->get_subpart_array()[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected null", K(ret), K(i), K(part), K(subpart));
+            } else if (OB_FAIL(databuff_printf(buf, BUF_SIZE, pos, "%s%s",
+                      part->get_part_name().ptr(), lib::is_oracle_mode() ? "SP0" : "sp0"))) {
+              LOG_WARN("part name is too long", K(ret), KPC(part), K(subpart));
+            } else if (FALSE_IT(sub_part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
+            } else if (OB_FAIL(subpart->set_part_name(sub_part_name))) {
+              LOG_WARN("set subpart name failed", K(ret), K(sub_part_name));
+            } else {
+              subpart->set_is_empty_partition_name(false);
+            }
+          }
+        }
+      }
     }
   }
 
