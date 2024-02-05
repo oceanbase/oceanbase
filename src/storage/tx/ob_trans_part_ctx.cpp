@@ -1649,6 +1649,7 @@ int ObPartTransCtx::serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t 
       TRANS_LOG(WARN, "failed to serialize ctx_info", KR(ret), K(ctx_info), K(pos));
     } else {
       is_ctx_table_merged_ = true;
+      serialize_size = pos;
     }
   }
 
