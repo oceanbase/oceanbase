@@ -104,6 +104,7 @@ public:
   typedef common::ObKVCache<ObTmpPageCacheKey, ObTmpPageCacheValue> BasePageCache;
   static ObTmpPageCache &get_instance();
   int init(const char *cache_name, const int64_t priority);
+  int direct_read(const ObTmpBlockIOInfo &info, ObMacroBlockHandle &mb_handle);
   int prefetch(
       const ObTmpPageCacheKey &key,
       const ObTmpBlockIOInfo &info,
@@ -142,7 +143,7 @@ public:
   {
   public:
     ObTmpPageIOCallback();
-    ~ObTmpPageIOCallback();
+    ~ObTmpPageIOCallback() override;
     int64_t size() const override;
     int inner_process(const char *data_buffer, const int64_t size) override;
     const char *get_data() override;
@@ -156,7 +157,7 @@ public:
   {
   public:
     ObTmpMultiPageIOCallback();
-    ~ObTmpMultiPageIOCallback();
+    ~ObTmpMultiPageIOCallback() override;
     int64_t size() const override;
     int inner_process(const char *data_buffer, const int64_t size) override;
     const char *get_data() override;
@@ -169,8 +170,12 @@ public:
 private:
   ObTmpPageCache();
   ~ObTmpPageCache();
-  int read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback &callback,
-      ObMacroBlockHandle &handle);
+  int inner_read_io(const ObTmpBlockIOInfo &io_info,
+                    ObITmpPageIOCallback *callback,
+                    ObMacroBlockHandle &handle);
+  int read_io(const ObTmpBlockIOInfo &io_info,
+              ObITmpPageIOCallback *callback,
+              ObMacroBlockHandle &handle);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCache);

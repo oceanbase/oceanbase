@@ -43,6 +43,7 @@ public:
   uint64_t tenant_id_;
   char *buf_;
   common::ObIOFlag io_desc_;
+  bool disable_page_cache_;
 };
 
 class ObTmpFileIOHandle final
@@ -97,6 +98,7 @@ public:
   ~ObTmpFileIOHandle();
   OB_INLINE char *get_buffer() { return buf_; }
   OB_INLINE int64_t get_data_size() { return size_; }
+  OB_INLINE bool is_disable_page_cache() const { return disable_page_cache_; }
   int prepare_read(
       const int64_t read_size,
       const int64_t read_offset,
@@ -104,7 +106,8 @@ public:
       char *read_buf,
       int64_t fd,
       int64_t dir_id,
-      uint64_t tenant_id);
+      uint64_t tenant_id,
+      const bool disable_page_cache);
   int prepare_write(
       char *write_buf,
       const int64_t write_size,
@@ -160,6 +163,7 @@ private:
   bool is_read_;
   bool has_wait_;
   bool is_finished_;
+  bool disable_page_cache_;
   int ret_code_;
   int64_t expect_read_size_;
   int64_t last_read_offset_; // only for more than 8MB read.

@@ -119,6 +119,43 @@ int ObTmpPageCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
+int ObTmpPageCache::inner_read_io(const ObTmpBlockIOInfo &io_info,
+                                  ObITmpPageIOCallback *callback,
+                                  ObMacroBlockHandle &macro_block_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(read_io(io_info, nullptr, macro_block_handle))) {
+    if (macro_block_handle.get_io_handle().is_empty()) {
+      // TODO: After the continuous IO has been optimized, this should
+      // not happen.
+      if (OB_FAIL(macro_block_handle.wait())) {
+        STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
+      } else if (OB_FAIL(read_io(io_info, nullptr, macro_block_handle))) {
+        STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+      }
+    } else {
+      STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+    }
+  }
+  // Avoid double_free with io_handle
+  if (OB_FAIL(ret) && OB_NOT_NULL(callback) && OB_NOT_NULL(callback->get_allocator())) {
+    common::ObIAllocator *allocator = callback->get_allocator();
+    callback->~ObITmpPageIOCallback();
+    allocator->free(callback);
+  }
+  return ret;
+}
+
+int ObTmpPageCache::direct_read(const ObTmpBlockIOInfo &info,
+                                ObMacroBlockHandle &mb_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_read_io(info, nullptr, mb_handle))) {
+    STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
+  }
+  return ret;
+}
+
 int ObTmpPageCache::prefetch(
     const ObTmpPageCacheKey &key,
     const ObTmpBlockIOInfo &info,
@@ -142,22 +179,8 @@ int ObTmpPageCache::prefetch(
       callback->offset_ = info.offset_;
       callback->allocator_ = &allocator;
       callback->key_ = key;
-      if (OB_FAIL(read_io(info, *callback, mb_handle))) {
-        if (mb_handle.get_io_handle().is_empty()) {
-          // TODO: After the continuous IO has been optimized, this should
-          // not happen.
-          if (OB_FAIL(mb_handle.wait())) {
-            STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
-          } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
-            STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
-          }
-        } else {
-          STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
-        }
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
-        callback->~ObTmpPageIOCallback();
-        allocator.free(callback);
+      if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
+        STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
       }
     }
   }
@@ -187,22 +210,8 @@ int ObTmpPageCache::prefetch(
       callback->allocator_ = &allocator;
       if (OB_FAIL(callback->page_io_infos_.assign(page_io_infos))) {
         STORAGE_LOG(WARN, "fail to assign page io infos", K(ret), K(page_io_infos.count()), K(info));
-      } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
-        if (mb_handle.get_io_handle().is_empty()) {
-          // TODO: After the continuous IO has been optimized, this should
-          // not happen.
-          if (OB_FAIL(mb_handle.wait())) {
-            STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
-          } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
-            STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
-          }
-        } else {
-          STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
-        }
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
-        callback->~ObTmpMultiPageIOCallback();
-        allocator.free(callback);
+      } else if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
+        STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
       }
     }
   }
@@ -372,7 +381,7 @@ const char *ObTmpPageCache::ObTmpMultiPageIOCallback::get_data()
   return data_buf_;
 }
 
-int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback &callback,
+int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback *callback,
     ObMacroBlockHandle &handle)
 {
   int ret = OB_SUCCESS;
@@ -382,7 +391,7 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_desc_ = io_info.io_desc_;
   read_info.macro_block_id_ = io_info.macro_block_id_;
   read_info.io_timeout_ms_ = io_info.io_timeout_ms_;
-  read_info.io_callback_ = &callback;
+  read_info.io_callback_ = callback;
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
   read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);
