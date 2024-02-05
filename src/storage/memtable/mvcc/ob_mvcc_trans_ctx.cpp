@@ -439,7 +439,7 @@ void ObTransCallbackMgr::reset_pdml_stat()
     WRLockGuard guard(rwlock_);
     int64_t stat = ATOMIC_LOAD(&parallel_stat_);
     if (!ATOMIC_BCAS(&parallel_stat_, stat, 0)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "reset parallel stat when leader revoke encounter parallel",
+      TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "reset parallel stat when leader revoke encounter parallel",
                 K(stat), K(parallel_stat_));
     } else {
       need_retry = false;
