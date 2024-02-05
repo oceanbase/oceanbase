@@ -1016,6 +1016,7 @@ ObBaseIndexBlockBuilder::ObBaseIndexBlockBuilder()
    micro_writer_(nullptr),
    macro_writer_(nullptr),
    index_block_pre_warmer_(),
+   micro_block_adaptive_splitter_(),
    row_count_(0),
    row_count_delta_(0),
    max_merged_trans_version_(0),
@@ -1057,6 +1058,7 @@ void ObBaseIndexBlockBuilder::reset()
   }
   macro_writer_ = nullptr;
   index_block_pre_warmer_.reset();
+  micro_block_adaptive_splitter_.reset();
   allocator_ = nullptr;
   level_ = 0;
   reset_accumulative_info();
@@ -1087,6 +1089,10 @@ int ObBaseIndexBlockBuilder::init(ObDataStoreDesc &index_store_desc,
       STORAGE_LOG(WARN, "fail to init ObBaseIndexBlockBuilder", K(ret));
     } else if (OB_FAIL(ObMacroBlockWriter::build_micro_writer(index_store_desc_, allocator, micro_writer_))) {
       STORAGE_LOG(WARN, "fail to build micro writer", K(ret));
+    } else if (OB_FAIL(micro_block_adaptive_splitter_.init(index_store_desc_->macro_store_size_,
+        MIN_INDEX_MICRO_BLOCK_ROW_CNT /*min_micro_row_count*/, true/*is_use_adaptive*/))) {
+      STORAGE_LOG(WARN, "Failed to init micro block adaptive split", K(ret),
+            "macro_store_size", index_store_desc_->macro_store_size_);
     } else {
       if (index_store_desc_->need_pre_warm_) {
         index_block_pre_warmer_.init();
@@ -1286,6 +1292,7 @@ int ObBaseIndexBlockBuilder::append_index_micro_block()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  int64_t block_size = 0;
   ObMicroBlockDesc micro_block_desc;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1293,6 +1300,7 @@ int ObBaseIndexBlockBuilder::append_index_micro_block()
   } else if (OB_FAIL(build_index_micro_block(micro_block_desc))) {
     STORAGE_LOG(WARN, "fail to build index micro block", K(ret));
   } else {
+    block_size = micro_block_desc.buf_size_;
     if (index_block_pre_warmer_.is_valid()
         && OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(micro_block_desc, level_+1))) {
       if (OB_BUF_NOT_ENOUGH != tmp_ret) {
@@ -1302,6 +1310,9 @@ int ObBaseIndexBlockBuilder::append_index_micro_block()
     if (OB_FAIL(macro_writer_->append_index_micro_block(micro_block_desc))) {
       micro_writer_->dump_diagnose_info(); // ignore dump error
       STORAGE_LOG(WARN, "fail to append index micro block", K(ret), K(micro_block_desc));
+    } else if (OB_FAIL(micro_block_adaptive_splitter_.update_compression_info(micro_block_desc.row_count_,
+        block_size, micro_block_desc.buf_size_))) {
+      STORAGE_LOG(WARN, "Fail to update_compression_info", K(ret), K(micro_block_desc));
     } else if (OB_FAIL(append_next_row(micro_block_desc))) {
       STORAGE_LOG(WARN, "fail to append next row", K(ret), K(micro_block_desc));
     }
@@ -1451,7 +1462,10 @@ int ObBaseIndexBlockBuilder::new_next_builder(ObBaseIndexBlockBuilder *&next_bui
 {
   int ret = OB_SUCCESS;
   void *buf = NULL;
-  if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObBaseIndexBlockBuilder)))) {
+  if (OB_UNLIKELY(level_ >= MAX_LEVEL_LIMIT)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "unexpected too high index block tree level", K(ret), K(level_));
+  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObBaseIndexBlockBuilder)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
   } else if (OB_ISNULL(next_builder = new (buf) ObBaseIndexBlockBuilder())) {
@@ -1494,13 +1508,25 @@ int ObBaseIndexBlockBuilder::insert_and_update_index_tree(const ObDatumRow *inde
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument.", K(ret), K(index_row));
   } else {
-    if (micro_writer_->get_block_size() >= index_store_desc_->micro_block_size_ /*force split*/
-      || OB_FAIL(micro_writer_->append_row(*index_row))) {
+    bool is_split = false;
+    if (0 < micro_writer_->get_row_count() &&
+        OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(),
+        micro_writer_->get_row_count(), index_store_desc_->micro_block_size_,
+        macro_writer_->get_macro_data_size(), false /*is_keep_freespace*/, is_split))) {
+      STORAGE_LOG(WARN, "Failed to check need split", K(ret),
+          "micro_block_size", index_store_desc_->micro_block_size_,
+          "current_macro_size", macro_writer_->get_macro_data_size(), KPC(micro_writer_));
+    } else if (is_split || OB_FAIL(micro_writer_->append_row(*index_row))) {
       if (OB_FAIL(ret) && OB_BUF_NOT_ENOUGH != ret) {
         STORAGE_LOG(WARN, "Fail to append row to micro block, ", K(ret), K(*index_row));
       } else if (OB_UNLIKELY(0 == micro_writer_->get_row_count())) {
         ret = OB_NOT_SUPPORTED;
         STORAGE_LOG(WARN, "The single row is too large, ", K(ret), K(*index_row), KPC_(index_store_desc));
+      } else if (OB_UNLIKELY(1 == micro_writer_->get_row_count())) {
+        micro_writer_->dump_diagnose_info(); // ignore dump error
+        ret = OB_NOT_SUPPORTED;
+        STORAGE_LOG(WARN, "row is too large to put more than one into micro block",
+            K(ret), K(is_split), K(*index_row), KPC_(index_store_desc));
       } else if (OB_FAIL(append_index_micro_block())) {
         STORAGE_LOG(WARN, "Fail to append index micro block, ", K(ret));
       } else if (OB_FAIL(micro_writer_->append_row(*index_row))) {

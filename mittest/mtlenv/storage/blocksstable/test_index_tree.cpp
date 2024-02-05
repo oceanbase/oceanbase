@@ -504,7 +504,7 @@ void TestIndexTree::prepare_index_desc(ObDataStoreDesc &index_desc)
 {
   int ret = OB_SUCCESS;
   ret = index_desc.init_as_index(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE);
-  index_desc.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
+  index_desc.major_working_cluster_version_ = DATA_CURRENT_VERSION;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -694,45 +694,6 @@ TEST_F(TestIndexTree, test_macro_writer_bug1)
   convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
   OK(data_writer.append_row(multi_row));
   OK(data_writer.close());
-}
-
-TEST_F(TestIndexTree, test_micro_block_size)
-{
-  int ret = OB_SUCCESS;
-  ObDatumRow row;
-  OK(row.init(allocator_, TEST_COLUMN_CNT));
-  ObDatumRow multi_row;
-  OK(multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
-  ObDmlFlag dml = DF_INSERT;
-
-  const int64_t micro_block_size = 10; // limit the micro block size
-
-  table_schema_.set_row_store_type(FLAT_ROW_STORE);
-  index_schema_.set_row_store_type(FLAT_ROW_STORE);
-  ObDataStoreDesc index_desc;
-  ObSSTableIndexBuilder sstable_builder;
-  prepare_index_desc(index_desc);
-  index_desc.micro_block_size_ = micro_block_size;
-  OK(sstable_builder.init(index_desc));
-
-  ObDataStoreDesc data_desc;
-  prepare_data_desc(data_desc, &sstable_builder);
-  data_desc.micro_block_size_ = micro_block_size;
-  ObMacroBlockWriter data_writer;
-  OK(data_writer.open(data_desc, 0));
-  ASSERT_EQ(data_writer.builder_->data_store_desc_->micro_block_size_, micro_block_size); // ==
-  ASSERT_GT(data_writer.builder_->index_store_desc_->micro_block_size_, micro_block_size); // >
-
-  OK(row_generate_.get_next_row(0, row));
-  convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
-  OK(data_writer.append_row(multi_row, 2 << 20L));
-  OK(data_writer.close());
-
-  // mock sstable_builder.close()
-  ObSSTableMergeRes res;
-  ASSERT_EQ(sstable_builder.index_store_desc_.micro_block_size_, micro_block_size); // ==
-  OK(sstable_builder.sort_roots());
-  ASSERT_EQ(sstable_builder.merge_index_tree(res), OB_NOT_SUPPORTED);
 }
 
 TEST_F(TestIndexTree, test_index_macro_writer)
@@ -1159,6 +1120,55 @@ TEST_F(TestIndexTree, test_single_row_desc)
   OK(sstable_builder3.close(res3));
 }
 
+TEST_F(TestIndexTree, test_extend_micro_block_size)
+{
+  int ret = OB_SUCCESS;
+  const int64_t test_row_num = 20;
+  ObSSTableMergeRes res;
+  ObDataStoreDesc index_desc;
+  prepare_index_desc(index_desc);
+  index_desc.micro_block_size_ = 248; // only push one index block row will exceed 248.
+  ObSSTableIndexBuilder sstable_builder;
+  ret = sstable_builder.init(index_desc);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObDataStoreDesc data_desc;
+  prepare_data_desc(data_desc, &sstable_builder);
+
+  ObDatumRow multi_row;
+  ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
+  ObDmlFlag dml = DF_INSERT;
+
+  ObMacroDataSeq data_seq(0);
+  ObMacroBlockWriter data_writer;
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc, data_seq));
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, TEST_COLUMN_CNT));
+  for(int64_t i = 0; i < test_row_num; ++i){
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(i, row));
+    convert_to_multi_version_row(row, table_schema_.get_rowkey_column_num(), table_schema_.get_column_count(), SNAPSHOT_VERSION, dml, multi_row);
+    ASSERT_EQ(OB_SUCCESS, data_writer.append_row(multi_row));
+    ASSERT_EQ(OB_SUCCESS, data_writer.build_micro_block());
+    ASSERT_EQ(OB_SUCCESS, data_writer.try_switch_macro_block());
+  }
+  ObMacroBlock &fir_blk = data_writer.macro_blocks_[0];
+  ObMacroBlock &sec_blk = data_writer.macro_blocks_[1];
+  ASSERT_EQ(fir_blk.original_size_, fir_blk.data_zsize_);
+  ASSERT_EQ(sec_blk.original_size_, sec_blk.data_zsize_);
+  ASSERT_EQ(OB_SUCCESS, data_writer.close());
+  ASSERT_EQ(OB_SUCCESS, sstable_builder.close(res));
+
+  ObSSTableMergeRes tmp_res;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, data_writer.close()); // not re-entrant
+  OK(sstable_builder.close(tmp_res)); // re-entrant
+  ASSERT_EQ(tmp_res.root_desc_.buf_, res.root_desc_.buf_);
+  ASSERT_EQ(tmp_res.data_root_desc_.buf_, res.data_root_desc_.buf_);
+  ASSERT_EQ(tmp_res.data_blocks_cnt_, res.data_blocks_cnt_);
+
+
+}
+
 TEST_F(TestIndexTree, test_data_block_checksum)
 {
   int ret = OB_SUCCESS;
@@ -1536,7 +1546,7 @@ int main(int argc, char **argv)
 {
   system("rm -f test_index_tree.log*");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_index_tree.log");
+  OB_LOGGER.set_file_name("test_index_tree.log", true);
   srand(time(NULL));
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

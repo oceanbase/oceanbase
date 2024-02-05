@@ -258,6 +258,8 @@ private:
 
 protected:
   static const int64_t ROOT_BLOCK_SIZE_LIMIT = 16 << 10; // 16KB
+  static const int64_t MIN_INDEX_MICRO_BLOCK_ROW_CNT = 10;
+  static const int64_t MAX_LEVEL_LIMIT = 20;
 
   bool is_inited_;
   bool is_closed_;
@@ -271,6 +273,7 @@ protected:
   ObMacroBlockWriter *macro_writer_;
   // accumulative info
   ObIndexBlockCachePreWarmer index_block_pre_warmer_;
+  ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
   int64_t row_count_;
   int64_t row_count_delta_;
   int64_t max_merged_trans_version_;
