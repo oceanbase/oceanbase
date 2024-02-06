@@ -83,6 +83,8 @@ public:
 private:
   int build_hash_map(const uint64_t tenant_id, const ObIArray<share::schema::ObColDesc> &column_descs);
   int build_sort_array(const ObIArray<share::schema::ObColDesc> &column_descs);
+  static int32_t get_func_from_array(ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &input_array_idx);
+  static int32_t get_func_from_map(ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &input_array_idx);
   typedef int32_t (*GET_FUNC)(ObSortColumnIdArray&, const int64_t, int64_t&);
   typedef hash::ObHashMap<int64_t, int64_t> ColIdToIdxMap;
   typedef common::ObSEArray<ObColumnIdToIdx, share::ObTabletReplicaReportColumnMeta::DEFAULT_COLUMN_CNT> ColIdToIdxArray;

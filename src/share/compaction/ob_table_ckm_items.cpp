@@ -48,6 +48,22 @@ int ObSortColumnIdArray::build(
   return ret;
 }
 
+int32_t ObSortColumnIdArray::get_func_from_map(
+  ObSortColumnIdArray &sort_array,
+  const int64_t column_id,
+  int64_t &input_array_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sort_array.map_.get_refactored(column_id, input_array_idx))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to get column id from map", KR(ret), K(column_id));
+    }
+  }
+  return ret;
+}
+
 int ObSortColumnIdArray::build_hash_map(
   const uint64_t tenant_id,
   const ObIArray<ObColDesc> &column_descs)
@@ -63,17 +79,25 @@ int ObSortColumnIdArray::build_hash_map(
     }
   } // end of for
   if (OB_SUCC(ret)) {
-    get_func_ = [](ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &array_idx) -> int {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(sort_array.map_.get_refactored(column_id, array_idx))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
-        } else {
-          LOG_WARN("failed to get column id from map", KR(ret), K(column_id));
-        }
-      }
-      return ret;
-    };
+    get_func_ = get_func_from_map;
+  }
+  return ret;
+}
+
+int32_t ObSortColumnIdArray::get_func_from_array(
+  ObSortColumnIdArray &sort_array,
+  const int64_t column_id,
+  int64_t &input_array_idx)
+{
+  int ret = OB_SUCCESS;
+  const int64_t array_idx =
+      std::lower_bound(sort_array.array_.begin(), sort_array.array_.end(),
+                       ObColumnIdToIdx(column_id)) - sort_array.array_.begin();
+  if ((sort_array.array_.count() != array_idx) &&
+      (sort_array.array_[array_idx].column_id_ == column_id)) {
+    input_array_idx = sort_array.array_[array_idx].idx_;
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
 }
@@ -97,20 +121,7 @@ int ObSortColumnIdArray::build_sort_array(
     if (OB_SUCC(ret)) {
       std::sort(array_.begin(), array_.end());
       LOG_TRACE("success to sort array", KR(ret), K(array_));
-      get_func_ = [](ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &input_array_idx) -> int {
-        int ret = OB_SUCCESS;
-        const int64_t array_idx = std::lower_bound(
-            sort_array.array_.begin(),
-            sort_array.array_.end(),
-            ObColumnIdToIdx(column_id)) - sort_array.array_.begin();
-        if ((sort_array.array_.count() != array_idx)
-            && (sort_array.array_[array_idx].column_id_ == column_id)) {
-          input_array_idx = sort_array.array_[array_idx].idx_;
-        } else {
-          ret = OB_ENTRY_NOT_EXIST;
-        }
-        return ret;
-      };
+      get_func_ = get_func_from_array;
     }
   }
   return ret;

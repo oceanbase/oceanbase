@@ -42,7 +42,9 @@ public:
       const compaction::ObMediumCompactionInfoKey &key,
       compaction::ObMediumCompactionInfo &medium_info);
 
-  int get_min_medium_snapshot(int64_t &min_medium_snapshot);
+  int get_min_medium_snapshot(
+    const int64_t last_major_snapshot_version,
+    int64_t &min_medium_snapshot);
   int get_max_medium_snapshot(int64_t &max_medium_snapshot);
 private:
   int advance_mds_iter();

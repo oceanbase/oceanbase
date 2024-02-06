@@ -166,8 +166,8 @@ int ObLSReservedSnapshotMgr::update_min_reserved_snapshot_for_leader(const int64
     if (0 == dependent_tablet_set_.size()) {
       if (new_snapshot_version < min_reserved_snapshot_) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("failed to update min reserved snapshot", K(ret), K(new_snapshot_version),
-            K(min_reserved_snapshot_));
+        LOG_WARN("failed to update min reserved snapshot", K(ret), "ls_id", ls_->get_ls_id(),
+          K(new_snapshot_version), K(min_reserved_snapshot_));
       } else if (new_snapshot_version > min_reserved_snapshot_) {
         // update min_reserved_snapshot and send clog
         min_reserved_snapshot_ = new_snapshot_version;
@@ -204,7 +204,7 @@ int ObLSReservedSnapshotMgr::try_sync_reserved_snapshot(
     LOG_WARN("invalid argument", K(ret), K(new_reserved_snapshot));
   } else if (update_flag) {
     if (OB_FAIL(update_min_reserved_snapshot_for_leader(new_reserved_snapshot))) {
-      LOG_WARN("failed to update min_reserved_snapshot", K(ret), K(new_reserved_snapshot));
+      LOG_WARN("failed to update min_reserved_snapshot", K(ret), "ls_id", ls_->get_ls_id(), K(new_reserved_snapshot));
     }
   } else if (OB_FAIL(sync_clog(new_reserved_snapshot))) {
     LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
@@ -226,7 +226,7 @@ int ObLSReservedSnapshotMgr::sync_clog(const int64_t new_reserved_snapshot)
   } else {
     ObMutexGuard guard(sync_clog_lock_);
     if (OB_FAIL(try_update_for_leader(new_reserved_snapshot, nullptr/*allocator*/))) {
-      LOG_WARN("failed to send update reserved snapshot log", K(ret), K(new_reserved_snapshot));
+      LOG_WARN("failed to send update reserved snapshot log", K(ret), "ls_id", ls_->get_ls_id(), K(new_reserved_snapshot));
     }
   }
   return ret;

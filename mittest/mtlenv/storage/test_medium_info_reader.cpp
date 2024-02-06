@@ -325,9 +325,13 @@ TEST_F(TestMediumInfoReader, pure_mds_table)
     ObTabletMediumInfoReader reader(*tablet);
     ASSERT_EQ(OB_SUCCESS, reader.init(allocator));
     int64_t medium_snapshot = 0;
-    ret = reader.get_min_medium_snapshot(medium_snapshot);
+    ret = reader.get_min_medium_snapshot(0, medium_snapshot);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(medium_snapshot, 1);
+
+    ret = reader.get_min_medium_snapshot(1, medium_snapshot);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(medium_snapshot, 2);
   }
 }
 
@@ -494,7 +498,7 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_overlap)
     ObTabletMediumInfoReader reader(*tablet);
     ASSERT_EQ(OB_SUCCESS, reader.init(allocator));
     int64_t medium_snapshot = 0;
-    ret = reader.get_min_medium_snapshot(medium_snapshot);
+    ret = reader.get_min_medium_snapshot(0, medium_snapshot);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(medium_snapshot, 1);
   }
@@ -620,7 +624,7 @@ TEST_F(TestMediumInfoReader, mds_table_dump_data_no_overlap)
     ObTabletMediumInfoReader reader(*tablet);
     ASSERT_EQ(OB_SUCCESS, reader.init(allocator));
     int64_t medium_snapshot = 0;
-    ret = reader.get_min_medium_snapshot(medium_snapshot);
+    ret = reader.get_min_medium_snapshot(0, medium_snapshot);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(medium_snapshot, 1);
   }
