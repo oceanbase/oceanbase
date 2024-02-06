@@ -527,6 +527,7 @@ public:
   int update(const ObTenantLogArchiveStatus& new_status);
   int get_piece_key(ObBackupPieceInfoKey& key) const;
   bool need_switch_piece() const;
+  bool is_piece_open() const;
 
   uint64_t tenant_id_;
   int64_t copy_id_;
