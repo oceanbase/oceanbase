@@ -105,6 +105,9 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
         } else if (is_oracle && type.get_precision() > OB_MAX_NUMBER_PRECISION) {
           type1.set_calc_type(ObNumberType);
           type2.set_calc_type(ObNumberType);
+          type.set_number();
+          type.set_scale(ORA_NUMBER_SCALE_UNKNOWN_YET);
+          type.set_precision(PRECISION_UNKNOWN_YET);
         } else if ((type1.get_scale() + type2.get_scale() <= OB_MAX_DECIMAL_SCALE)
               && (type1.get_precision() + type2.get_precision() <= MAX_PRECISION_DECIMAL_INT_256)) {
           // use specialized functions without additional casts
