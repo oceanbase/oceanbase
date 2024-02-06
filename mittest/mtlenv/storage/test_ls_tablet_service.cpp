@@ -686,6 +686,35 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   test_tablet_handle.get_obj()->fetch_table_store(wrapper);
   ASSERT_EQ(nullptr, wrapper.get_member()->get_major_sstables().get_boundary_table(true));
+  ObMetaDiskAddr tablet_addr = test_tablet_handle.get_obj()->tablet_addr_;
+
+  // validate that empty shell can be washed
+  ObTabletHandle normal_tablet_hdl;
+  void *free_obj = nullptr;
+  ObTabletPointer *tablet_ptr = test_tablet_handle.get_obj()->pointer_hdl_.get_resource_ptr();
+  ObTablet *empty_tablet = test_tablet_handle.get_obj();
+  test_tablet_handle.reset(); // release the ref cnt of tablet
+  ret = tablet_ptr->dump_meta_obj(normal_tablet_hdl, free_obj);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_NE(nullptr, free_obj);
+  ASSERT_EQ((char *)(empty_tablet), (char *)(free_obj)+32); // 32Bytes header
+
+  // gc empty tablet
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ret = t3m->gc_tablet(empty_tablet);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  bool cleared = false;
+  ret = t3m->gc_tablets_in_queue(cleared);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(cleared);
+
+
+  // test load empty tablet
+  ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, test_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  test_tablet_handle.get_obj()->fetch_table_store(wrapper);
+  ASSERT_EQ(nullptr, wrapper.get_member()->get_major_sstables().get_boundary_table(true));
+  ASSERT_EQ(tablet_addr, test_tablet_handle.get_obj()->tablet_addr_);
 
   ObTabletMapKey key(ls_id_, tablet_id);
   ret = ls_tablet_service_->do_remove_tablet(key);
