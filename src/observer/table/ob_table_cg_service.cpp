@@ -226,7 +226,7 @@ int ObTableExprCgService::generate_current_timestamp_expr(ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *tmp_expr = NULL;
 
-  if (!IS_DEFAULT_NOW_OBJ(item.default_value_)) {
+  if ((!IS_DEFAULT_NOW_OBJ(item.default_value_)) && (!item.auto_filled_timestamp_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid column item", K(ret), K(item));
   } else if (OB_ISNULL(item.expr_)) {
@@ -440,7 +440,7 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
     if (OB_FAIL(generate_autoinc_nextval_expr(ctx, *item, tmp_expr))) {
       LOG_WARN("fail to generate autoinc nextval expr", K(ret));
     }
-  } else if (IS_DEFAULT_NOW_OBJ(item->default_value_)) { // defualt current time
+  } else if (IS_DEFAULT_NOW_OBJ(item->default_value_) || item->auto_filled_timestamp_) { // defualt current time or on update current_timestamp
     if (OB_FAIL(generate_current_timestamp_expr(ctx, *item, tmp_expr))) {
       LOG_WARN("fail to generate autoinc nextval expr", K(ret));
     }

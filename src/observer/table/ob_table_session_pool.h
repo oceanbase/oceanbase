@@ -128,8 +128,7 @@ friend class ObTableApiSessNode;
 friend class ObTableApiSessGuard;
 public:
   explicit ObTableApiSessNodeVal(ObTableApiSessNode *owner)
-      : allocator_("TbSessNodeVal", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        is_inited_(false),
+      : is_inited_(false),
         owner_node_(owner)
   {}
   TO_STRING_KV(K_(is_inited),
@@ -144,7 +143,6 @@ public:
   }
   void give_back_to_free_list();
 private:
-  common::ObArenaAllocator allocator_;
   bool is_inited_;
   sql::ObSQLSessionInfo sess_info_;
   ObTableApiSessNode *owner_node_;
@@ -312,7 +310,6 @@ class ObTableApiSessUtil final
 public:
   static int init_sess_info(uint64_t tenant_id,
                             const common::ObString &tenant_name,
-                            common::ObIAllocator *allocator,
                             share::schema::ObSchemaGetterGuard &schema_guard,
                             sql::ObSQLSessionInfo &sess_info);
 private:

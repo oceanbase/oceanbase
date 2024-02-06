@@ -570,8 +570,7 @@ int ObTableApiSessPool::replace_sess_node_safe(ObTableApiCredential &credential)
 
 void ObTableApiSessNodeVal::destroy()
 {
-  sess_info_.destroy();
-  allocator_.reset();
+  sess_info_.~ObSQLSessionInfo();
   is_inited_ = false;
   owner_node_ = nullptr;
 }
@@ -592,7 +591,6 @@ int ObTableApiSessNodeVal::init_sess_info()
       LOG_WARN("tenant schema is null", K(ret));
     } else if (OB_FAIL(ObTableApiSessUtil::init_sess_info(MTL_ID(),
                                                           tenant_schema->get_tenant_name_str(),
-                                                          &allocator_,
                                                           schema_guard,
                                                           sess_info_))) {
       LOG_WARN("fail to init sess info", K(ret), K(MTL_ID()));
@@ -790,16 +788,12 @@ int ObTableApiSessForeachOp::operator()(MapKV &entry)
 
 int ObTableApiSessUtil::init_sess_info(uint64_t tenant_id,
                                        const common::ObString &tenant_name,
-                                       ObIAllocator *allocator,
                                        ObSchemaGetterGuard &schema_guard,
                                        sql::ObSQLSessionInfo &sess_info)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("allocator is null", K(ret));
-  } else if (OB_FAIL(sess_info.init(0, 0, allocator))) {
+  if (OB_FAIL(sess_info.init(0, 0, nullptr))) {
     LOG_WARN("fail to init session into", K(ret));
   } else if (OB_FAIL(sess_info.init_tenant(tenant_name, tenant_id))) {
     LOG_WARN("fail to init session tenant", K(ret), K(tenant_id));
