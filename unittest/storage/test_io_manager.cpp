@@ -1412,7 +1412,7 @@ void write_group_perf_config()
       "tenant_id   device_id     group    io_mode     io_size_byte    io_depth    perf_mode     target_iops     thread_count    is_sequence     start_s    stop_s\n"
       "1001        1             0        r           16384           10          rolling       0               16              0               0          8\n"
       "1001        1             10001        r           16384           10          rolling       0               16              0               2          7\n"
-      "1001        1             20001        r           16384           10          rolling       0               16              0               0          6\n"
+      "1001        1             10002        r           16384           10          rolling       0               16              0               0          6\n"
       "1002        1             0        r           16384           10          rolling       0               16              0               0          5\n"
       ;
     const int64_t file_len = strlen(file_buf);
