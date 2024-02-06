@@ -56,28 +56,6 @@ void ObDMLStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt 
   print_cte_ = false;
 }
 
-int ObDMLStmtPrinter::set_synonym_name_recursively(ObRawExpr * cur_expr, const ObDMLStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(cur_expr) || OB_ISNULL(stmt)) {
-  } else if (cur_expr->is_column_ref_expr()) {
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(cur_expr);
-    const TableItem *table_item = stmt->get_table_item_by_id(column_expr->get_table_id());
-    if (NULL != table_item && table_item->alias_name_.empty()) {
-      column_expr->set_synonym_name(table_item->synonym_name_);
-      column_expr->set_synonym_db_name(table_item->synonym_db_name_);
-    }
-  } else if (cur_expr->get_param_count() > 0) {
-    for (int64_t param_idx = 0; param_idx < cur_expr->get_param_count(); ++param_idx) {
-      ObRawExpr * param_expr = cur_expr->get_param_expr(param_idx);
-      OZ (SMART_CALL(set_synonym_name_recursively(param_expr, stmt)));
-    }
-  } else {
-    //do nothing
-  }
-  return ret;
-}
-
 int ObDMLStmtPrinter::print_hint()
 {
   int ret = OB_SUCCESS;
@@ -1947,11 +1925,9 @@ int ObDMLStmtPrinter::print_returning()
     const ObIArray<ObRawExpr*> &returning_exprs = dml_stmt.get_returning_exprs();
     if (returning_exprs.count() > 0) {
       DATA_PRINTF(" returning ");
-      OZ (set_synonym_name_recursively(returning_exprs.at(0), stmt_));
       OZ (expr_printer_.do_print(returning_exprs.at(0), T_NONE_SCOPE));
       for (uint64_t i = 1; OB_SUCC(ret) && i < returning_exprs.count(); ++i) {
         DATA_PRINTF(",");
-        OZ (set_synonym_name_recursively(returning_exprs.at(i), stmt_));
         OZ (expr_printer_.do_print(returning_exprs.at(i), T_NONE_SCOPE));
       }
     }

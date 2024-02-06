@@ -98,7 +98,6 @@ public:
   void disable_print_temp_table_as_cte() { print_cte_ = false; }
   void init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt *stmt);
   virtual int do_print() = 0;
-  static int set_synonym_name_recursively(ObRawExpr * cur_expr, const ObDMLStmt *stmt);
 
   int print_from(bool need_from = true);
   int print_semi_join();
