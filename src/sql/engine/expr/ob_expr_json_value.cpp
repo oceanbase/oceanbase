@@ -1139,7 +1139,7 @@ int ObExprJsonValue::cast_to_otimstamp(ObIJsonBase *j_base,
   INIT_SUCC(ret);
   int64_t val;
 
-  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, true);
+  oceanbase::common::ObTimeConvertCtx cvrt_ctx(NULL, dst_type == ObTimestampType);
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
