@@ -367,6 +367,7 @@ int ObTabletUnbindMdsHelper::unbind_hidden_tablets_from_orig_tablets(
           if (arg.is_redefined()) {
             data.redefined_ = true;
             data.snapshot_version_ = OB_INVALID_VERSION; // will be fill back on commit
+            data.schema_version_ = arg.schema_version_;
           }
           return OB_SUCCESS;
         }))) {
