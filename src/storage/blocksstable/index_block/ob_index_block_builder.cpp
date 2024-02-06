@@ -1473,13 +1473,13 @@ int ObBaseIndexBlockBuilder::append_index_micro_block()
       STORAGE_LOG(WARN, "fail to append index micro block", K(ret), K(micro_block_desc));
     } else if (OB_FAIL(append_next_row(micro_block_desc))) {
       STORAGE_LOG(WARN, "fail to append next row", K(ret), K(micro_block_desc));
-    } else if (FALSE_IT(clean_status())) {
     }
     if (OB_FAIL(ret) || OB_TMP_FAIL(tmp_ret) || !index_block_pre_warmer_.is_valid()) {
     } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(micro_block_desc))) {
       STORAGE_LOG(WARN, "Fail to build index block cache key and put into cache", K(tmp_ret));
     }
     index_block_pre_warmer_.reuse();
+    clean_status();
   }
 
   return ret;
