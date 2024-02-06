@@ -1125,9 +1125,9 @@ int ObPxCoordOp::erase_dtl_interm_result()
             LOG_TRACE("fail to release recieve internal result", K(ret));
           }
         }
-        last_px_batch_rescan_size_ = 0;
       }
     }
+    last_px_batch_rescan_size_ = 0;
   }
   return ret;
 }
