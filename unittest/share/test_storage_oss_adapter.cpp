@@ -33,7 +33,7 @@ public:
 protected:
   char test_oss_bucket_[OB_MAX_URI_LENGTH] = "oss://antsys-oceanbasebackup";
   // oss config
-  char oss_host_[OB_MAX_URI_LENGTH] = "cn-hangzhou-alipay-b.oss-cdn.aliyun-inc.com";
+  char oss_host_[OB_MAX_URI_LENGTH] = "";
   char oss_id_[MAX_OSS_ID_LENGTH] = "";  //test need add id
   char oss_key_[MAX_OSS_KEY_LENGTH] = ""; //test need add key
 
