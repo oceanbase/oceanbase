@@ -1524,7 +1524,7 @@ void ObMultiVersionMicroBlockMinorMergeRowScanner::complete_row_queue()
       last_row->row_type_flag_.set_compacted_multi_version_row(true);  //  For 2.1 version compatibility
     }
     row_queue_.get_first()->row_type_flag_.set_compacted_multi_version_row(true);  // set first row compacted
-    STORAGE_LOG(DEBUG, "set last row", KPC(this), KPC(last_row));
+    STORAGE_LOG(DEBUG, "set last row", KPC(this), KPC(last_row), KPC(row_queue_.get_first()));
   }
 }
 

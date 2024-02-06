@@ -1440,6 +1440,8 @@ int ObMinorMergeMacroRowIterator::make_first_row_compacted()
       } else {
         LOG_DEBUG("success to compact row", K(ret), KPC(curr_row_), KPC(first_row), KPC(row_queue_.get_last()));
       }
+    } else {
+      row_queue_.get_first()->row_type_flag_.set_compacted_multi_version_row(true);
     }
     if (OB_SUCC(ret)) {
       if (curr_row_->row_type_flag_.is_first_multi_version_row()) {
