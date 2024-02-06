@@ -2626,6 +2626,8 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
             OB_UNLIKELY(!column_exprs.at(i)->is_column_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(ret), KPC(column_exprs.at(i)));
+        } else if (table_id != static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))->get_table_id()) {
+          //do nothing
         } else if (OB_FAIL(col_exprs.push_back(static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))))) {
           LOG_WARN("failed to push back", K(ret));
         } else {/*do nothing*/}
@@ -2868,7 +2870,8 @@ int ObTransformUtils::get_simple_filter_column_in_parent_stmt(const ObDMLStmt *r
       } else if (OB_FALSE_IT(sel_idx = col->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
       } else if (sel_idx < 0 || sel_idx >= sel_stmt->get_select_item_size()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select item index is incorrect", K(sel_idx), K(ret));
+        LOG_WARN("select item index is incorrect", KPC(parent_stmt), KPC(parent_col_exprs.at(i)),
+                                                   K(sel_idx), K(ret));
       } else {
         ObRawExpr *sel_expr = sel_stmt->get_select_item(sel_idx).expr_;
         ObColumnRefRawExpr *col_expr = NULL;
