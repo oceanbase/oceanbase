@@ -108,7 +108,6 @@ class ObDMLResolver : public ObStmtResolver
     }
     inline void set_is_with_resolver(bool is_with_resolver) { is_with_clause_resolver_ = is_with_resolver; }
     inline void set_current_cte_table_name(const ObString& table_name) { current_cte_table_name_ = table_name; }
-    inline ObString& get_current_cte_table_name() { return current_cte_table_name_; }
     inline bool is_with_resolver() const { return is_with_clause_resolver_; }
     inline void set_recursive(bool recursive) { is_recursive_cte_ = recursive; }
     inline void set_in_subquery() { is_cte_subquery_ = true; }

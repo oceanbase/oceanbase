@@ -1167,7 +1167,7 @@ int ObTabletMergeCtx::prepare_index_tree()
                                data_version_))) {
     LOG_WARN("failed to init index store desc", K(ret), KPC(this));
   } else {
-    // TODO(luhaopeng.lhp) modify index_desc.init to avoid reset col_desc_array_
+    // TODO(zhuixin.gsy) modify index_desc.init to avoid reset col_desc_array_
     desc.row_column_count_ = desc.rowkey_column_count_ + 1;
     desc.col_desc_array_.reset();
     desc.need_prebuild_bloomfilter_ = false;

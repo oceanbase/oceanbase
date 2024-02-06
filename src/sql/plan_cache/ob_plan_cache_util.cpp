@@ -404,7 +404,6 @@ int ObConfigInfoInPC::load_influence_plan_config()
     px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
     px_join_skew_minfreq_ = static_cast<int8_t>(tenant_config->_px_join_skew_minfreq);
     min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
-    enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
   }
 
   return ret;
@@ -445,9 +444,6 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                "%lu", min_cluster_version_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_cluster_version_));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                              "%d,", enable_spf_batch_rescan_))) {
-    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_spf_batch_rescan_));
   } else {
     // do nothing
   }

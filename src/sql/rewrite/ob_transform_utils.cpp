@@ -2626,8 +2626,6 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
             OB_UNLIKELY(!column_exprs.at(i)->is_column_ref_expr())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(ret), KPC(column_exprs.at(i)));
-        } else if (table_id != static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))->get_table_id()) {
-          //do nothing
         } else if (OB_FAIL(col_exprs.push_back(static_cast<ObColumnRefRawExpr*>(column_exprs.at(i))))) {
           LOG_WARN("failed to push back", K(ret));
         } else {/*do nothing*/}
@@ -2870,8 +2868,7 @@ int ObTransformUtils::get_simple_filter_column_in_parent_stmt(const ObDMLStmt *r
       } else if (OB_FALSE_IT(sel_idx = col->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
       } else if (sel_idx < 0 || sel_idx >= sel_stmt->get_select_item_size()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select item index is incorrect", KPC(parent_stmt), KPC(parent_col_exprs.at(i)),
-                                                   K(sel_idx), K(ret));
+        LOG_WARN("select item index is incorrect", K(sel_idx), K(ret));
       } else {
         ObRawExpr *sel_expr = sel_stmt->get_select_item(sel_idx).expr_;
         ObColumnRefRawExpr *col_expr = NULL;
@@ -3827,7 +3824,7 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+  } else if (OB_FAIL(stmt->get_select_exprs_without_lob(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(SMART_CALL(check_stmt_unique(stmt,
                                                   session_info,
@@ -8700,9 +8697,6 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
     }
   } else if (OB_FAIL(select_stmt->get_from_tables(origin_output_rel_ids))) {
     LOG_WARN("failed to get output rel ids", K(ret));
-  } else if (OB_UNLIKELY(origin_output_rel_ids.is_empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty unique keys", K(ret), KPC(select_stmt));
   } else {
     ObIArray<TableItem *> &table_items = select_stmt->get_table_items();
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
@@ -8780,13 +8774,10 @@ int ObTransformUtils::get_unique_keys_from_unique_stmt(const ObSelectStmt *selec
   unique_keys.reuse();
   added_unique_keys.reuse();
   ObConstRawExpr *expr = NULL;
-  const bool can_use_lob_as_unique_key = lib::is_mysql_mode();
   if (OB_ISNULL(select_stmt) || OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt), K(expr_factory));
-  } else if (can_use_lob_as_unique_key && OB_FAIL(select_stmt->get_select_exprs(unique_keys))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (!can_use_lob_as_unique_key && OB_FAIL(select_stmt->get_select_exprs_without_lob(unique_keys))) {
+  } else if (OB_FAIL(select_stmt->get_select_exprs_without_lob(unique_keys))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_LIKELY(!unique_keys.empty())) {
     /* do nothing */

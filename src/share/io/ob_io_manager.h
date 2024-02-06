@@ -73,11 +73,6 @@ public:
   int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
   int get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder);
   int get_tenant_ids(ObIArray<uint64_t> &tenant_ids);
-  int modify_group_io_config(const uint64_t tenant_id,
-                             const uint64_t index,
-                             const int64_t min_percent,
-                             const int64_t max_percent,
-                             const int64_t weight_percent);
   ObIOScheduler *get_scheduler();
 
 private:

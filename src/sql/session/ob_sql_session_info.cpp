@@ -462,30 +462,6 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
   return bret;
 }
 
-//to control subplan filter and multiple level join group rescan
-bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
-{
-  bool bret = false;
-  int64_t tenant_id = get_effective_tenant_id();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    bret = tenant_config->_enable_spf_batch_rescan;
-  }
-  return bret;
-}
-
-int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
-{
-  int ret = OB_SUCCESS;
-  enabled = true;
-  int64_t tenant_id = get_effective_tenant_id();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    enabled = tenant_config->_enable_range_extraction_for_not_in;
-  }
-  return ret;
-}
-
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {
@@ -2843,7 +2819,6 @@ int ObSysVarEncoder::get_serialize_size(ObSQLSessionInfo& sess, int64_t &len) co
   }
   return ret;
 }
-
 
 int ObAppInfoEncoder::serialize(ObSQLSessionInfo &sess, char *buf, const int64_t length, int64_t &pos)
 {

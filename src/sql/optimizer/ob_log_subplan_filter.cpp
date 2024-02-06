@@ -554,8 +554,6 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
-    enable_das_group_rescan_ = false;
   } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_group_rescan_))) {
     LOG_WARN("failed to get enable batch variable", K(ret));
   }

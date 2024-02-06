@@ -2303,8 +2303,6 @@ private:
                                     const ObIArray<const ObTableSchema*> &orig_table_schemas,
                                     const ObIArray<ObTableSchema*> &new_table_schemas,
                                     ObMySQLTransaction &trans);
-  bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
-
 private:
   bool inited_;
   volatile bool stopped_;

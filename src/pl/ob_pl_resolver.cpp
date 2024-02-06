@@ -10215,24 +10215,14 @@ int ObPLResolver::resolve_udf(ObUDFInfo &udf_info,
           && (ObPLBlockNS::BlockType::BLOCK_PACKAGE_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_OBJECT_BODY == current_block_->get_namespace().get_block_type()
               || ObPLBlockNS::BlockType::BLOCK_ROUTINE == current_block_->get_namespace().get_block_type());
-        int64_t cur_pkg_version = current_block_->get_namespace().get_package_version();
-        if (OB_SUCC(ret)
-            && OB_INVALID_ID != package_routine_info->get_pkg_id()
-            && package_routine_info->get_pkg_id() != current_block_->get_namespace().get_package_id()) {
-          share::schema::ObSchemaType schema_type = OB_MAX_SCHEMA;
-          schema_type = package_routine_info->is_udt_routine() ? UDT_SCHEMA : PACKAGE_SCHEMA;
-          OZ (resolve_ctx_.schema_guard_.get_schema_version(schema_type,
-                                                            package_routine_info->get_tenant_id(),
-                                                            package_routine_info->get_pkg_id(),
-                                                            cur_pkg_version));
-        }
+
         OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
                                                     package_name.empty() ? pkg_name : package_name,
                                                     package_routine_info->get_id(),
                                                     package_routine_info->get_pkg_id(),
                                                     package_routine_info->get_subprogram_path(),
                                                     common::OB_INVALID_VERSION, /*udf_schema_version*/
-                                                    cur_pkg_version,
+                                                    current_block_->get_namespace().get_package_version(),
                                                     package_routine_info->is_deterministic(),
                                                     package_routine_info->is_parallel_enable(),
                                                     is_package_body_udf,
@@ -14498,19 +14488,32 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
     // 这里一定是包含关系，dst_block包含了goto_blk，因为前面verify过了。
     parent_blk = goto_block;
     bool exit_flag = false;
+    const ObPLCursorForLoopStmt *cur_level_forloop = NULL;
     int loopcnt = 0;
     do {
       exit_flag = parent_blk == dst_block;
       const ObIArray<ObPLStmt *> &stmts = parent_blk->get_cursor_stmts();
-      bool is_contain = false;
-      for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < stmts.count(); ++i) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < stmts.count(); ++i) {
         const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(stmts.at(i));
         CK (OB_NOT_NULL(cfl_stmt));
-        // There is an implicit invariant here:
-        // in a multi-level for loop cursor structure, each level has at most 1 cursor that requires closing.
-        OZ (check_contain_goto_block(cfl_stmt->get_body(), goto_block, is_contain));
-        if (OB_SUCC(ret) && is_contain) {
-          OZ (goto_stmt.push_cursor_stmt(cfl_stmt));
+        // 这里有一个隐含的不变量就是，多层for loop cursor，每层有且只有1或0个for loop cursor需要关闭cursor
+        if (OB_FAIL(ret)) {
+        } else if (cfl_stmt->is_contain_goto_stmt() || cfl_stmt->get_body()->is_contain_stmt(cur_level_forloop)) {
+          if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
+            LOG_WARN("failed to push stmt", K(ret));
+            break;
+          }
+          cur_level_forloop = cfl_stmt;
+          break;
+        } else if (OB_NOT_NULL(cur_level_forloop)) {
+          bool is_contain = false;
+          OZ (check_contain_cursor_loop_stmt(cfl_stmt->get_body(), cur_level_forloop, is_contain));
+          if (OB_SUCC(ret) && is_contain) {
+            if (OB_FAIL(goto_stmt.push_cursor_stmt(cfl_stmt))) {
+              LOG_WARN("failed to push stmt", K(ret));
+              break;
+            }
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -14524,18 +14527,33 @@ int ObPLResolver::check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt, const ObPLStm
   return ret;
 }
 
-int ObPLResolver::check_contain_goto_block(const ObPLStmt *cur_stmt,
-                                           const ObPLStmtBlock *goto_block,
-                                           bool &is_contain)
+int ObPLResolver::check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block,
+                                                 const ObPLCursorForLoopStmt *cur_loop_stmt,
+                                                 bool &is_contain)
 {
   int ret = OB_SUCCESS;
-  is_contain = false;
-  CK (OB_NOT_NULL(cur_stmt));
-  CK (OB_NOT_NULL(goto_block));
-  OX (is_contain = (cur_stmt == goto_block));
-  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cur_stmt->get_child_size(); i++) {
-    const ObPLStmt *child_stmt = cur_stmt->get_child_stmt(i);
-    OZ (SMART_CALL(check_contain_goto_block(child_stmt, goto_block, is_contain)));
+  const ObIArray<ObPLStmt *> &cursor_stmts = stmt_block->get_cursor_stmts();
+  const ObIArray<ObPLStmt*> &stmts = stmt_block->get_stmts();
+  bool stop = false;
+  CK (OB_NOT_NULL(stmt_block));
+  CK (OB_NOT_NULL(cur_loop_stmt));
+  OX (stop = (stmt_block->get_level() == cur_loop_stmt->get_level()));
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < cursor_stmts.count(); i++) {
+    const ObPLCursorForLoopStmt *cfl_stmt = static_cast<ObPLCursorForLoopStmt *>(cursor_stmts.at(i));
+    CK (OB_NOT_NULL(cfl_stmt));
+    if (OB_SUCC(ret) && cfl_stmt->get_stmt_id() == cur_loop_stmt->get_stmt_id()) {
+      is_contain = true;
+      break;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !stop && !is_contain && i < stmts.count(); i++) {
+    CK (OB_NOT_NULL(stmts.at(i)));
+    if (OB_SUCC(ret) && PL_BLOCK == stmts.at(i)->get_type()) {
+      OZ (check_contain_cursor_loop_stmt(static_cast<ObPLStmtBlock *>(stmts.at(i)), cur_loop_stmt, is_contain));
+      if (OB_SUCC(ret) && is_contain) {
+        break;
+      }
+    }
   }
   return ret;
 }

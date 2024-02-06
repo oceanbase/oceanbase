@@ -3671,7 +3671,6 @@ bool ObBasicSessionInfo::is_sync_sys_var(share::ObSysVarClassType sys_var_id) co
     case SYS_VAR_OB_PROXY_PARTITION_HIT:
     case SYS_VAR_VERSION_COMMENT:
     case SYS_VAR_OB_LAST_SCHEMA_VERSION:
-    case SYS_VAR_SYSTEM_TIME_ZONE:
       not_need_serialize = true;
       break;
     default:

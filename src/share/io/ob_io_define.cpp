@@ -1326,15 +1326,7 @@ int64_t ObTenantIOConfig::to_string(char* buf, const int64_t buf_len) const
   bool need_comma = false;
   for (int64_t i = 0; i < group_configs_.count(); ++i) {
     if (group_configs_.at(i).deleted_ || group_configs_.at(i).cleared_) {
-      if (need_comma) {
-        J_COMMA();
-      }
-      BUF_PRINTF("group_id = ");
-      char group_id[8];
-      snprintf(group_id, sizeof(group_id), "%ld", group_ids_.at(i));
-      J_KV(group_id, group_configs_.at(i).deleted_);
-      J_KV(" cleared", group_configs_.at(i).cleared_);
-      need_comma = true;
+      continue;
     } else if (!self_valid || group_configs_.at(i).is_valid()) {
       if (need_comma) {
         J_COMMA();
@@ -1649,16 +1641,6 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
     ret = OB_EAGAIN;
     if (!r_heap_.empty() && !r_heap_.top()->req_list_.is_empty()) {
       ObPhyQueue *next_tmp_phy_queue = r_heap_.top();
-      if (OB_UNLIKELY(next_tmp_phy_queue->reservation_ts_ == INT64_MAX &&
-                      (next_tmp_phy_queue->group_limitation_ts_ == INT64_MAX || next_tmp_phy_queue->tenant_limitation_ts_== INT64_MAX) &&
-                      next_tmp_phy_queue->proportion_ts_== INT64_MAX)) {
-        // 对应min = max = 0的极端场景
-        const int64_t current_ts = ObTimeUtility::fast_current_time();
-        next_tmp_phy_queue->reservation_ts_ = current_ts;
-        next_tmp_phy_queue->group_limitation_ts_ = current_ts;
-        next_tmp_phy_queue->tenant_limitation_ts_ = current_ts;
-        next_tmp_phy_queue->proportion_ts_ = current_ts;
-      }
       if (0 == deadline_ts) {
         deadline_ts = next_tmp_phy_queue->reservation_ts_;
       } else {

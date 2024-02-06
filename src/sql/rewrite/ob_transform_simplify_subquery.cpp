@@ -246,8 +246,7 @@ int ObTransformSimplifySubquery::is_subquery_to_expr_valid(const ObSelectStmt *s
              && 0 == stmt->get_having_expr_size()
              && !stmt->has_limit()
              && !stmt->is_hierarchical_query()
-             && !stmt->is_set_stmt()
-             && !stmt->has_sequence()) {
+             && !stmt->is_set_stmt()) {
     is_valid = true;
   }
   if (OB_SUCC(ret) && is_valid) {

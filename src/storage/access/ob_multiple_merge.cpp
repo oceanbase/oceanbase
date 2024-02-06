@@ -386,9 +386,6 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
 int ObMultipleMerge::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(access_param_->op_)) {
-    access_param_->op_->clear_evaluated_flag();
-  }
   count = 0;
   if (access_param_->iter_param_.enable_pd_aggregate()) {
     ObDatumRow *row = nullptr;
@@ -416,9 +413,6 @@ int ObMultipleMerge::get_next_rows(int64_t &count, int64_t capacity)
     }
   } else {
     ret = get_next_normal_rows(count, capacity);
-  }
-  if (OB_NOT_NULL(access_param_->op_)) {
-    access_param_->op_->clear_evaluated_flag();
   }
   return ret;
 }

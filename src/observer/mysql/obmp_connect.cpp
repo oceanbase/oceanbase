@@ -126,9 +126,6 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
   ObSchemaGetterGuard schema_guard;
   // init_connect可以执行query和dml语句，必须加上req_timeinfo_guard
   observer::ObReqTimeGuard req_timeinfo_guard;
-  //Do not change the order of SqlCtx and Allocator. ObSqlCtx uses the resultset's allocator to
-  //allocate memory for ObSqlCtx::base_constraints_. The allocator must be deconstructed after sqlctx.
-  ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   ObSqlCtx ctx;
   ctx.exec_type_ = MpQuery;
   if (OB_FAIL(init_process_var(ctx, multi_stmt_item, session))) {
@@ -146,6 +143,7 @@ int ObMPConnect::init_process_single_stmt(const ObMultiStmtItem &multi_stmt_item
     }
     ctx.retry_times_ = 0; // 这里是建立连接的时候的初始化sql的执行，不重试
     ctx.schema_guard_ = &schema_guard;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
     HEAP_VAR(ObMySQLResultSet, result, session, allocator) {
       result.set_has_more_result(has_more_result);
       result.get_exec_context().get_task_exec_ctx().set_min_cluster_version(GET_MIN_CLUSTER_VERSION());

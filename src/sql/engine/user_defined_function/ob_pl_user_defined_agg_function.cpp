@@ -155,9 +155,8 @@ int ObPlAggUdfFunction::call_pl_engine_exectue_udf(ParamStore& udf_params,
                                  K(ret), K(udf_params.count()), K(routine_info->get_param_count()));
   } else if (OB_FAIL(pl_engine->execute(*exec_ctx_,
                                         exec_ctx_->get_allocator(),
-                                        share::schema::ObUDTObjectType::mask_object_id(routine_info->get_package_id()),
-                                        OB_INVALID_ID != routine_info->get_package_id() ? routine_info->get_subprogram_id()
-                                                                                        : routine_info->get_routine_id(),
+                                        -1,
+                                        routine_info->get_routine_id(),
                                         empty_subprogram_path,
                                         udf_params,
                                         empty_nocopy_params,

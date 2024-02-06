@@ -366,6 +366,7 @@ void ObSSTableIndexBuilder::reset()
 bool ObSSTableIndexBuilder::check_index_desc(const ObDataStoreDesc &index_desc) const
 {
   bool ret = true;
+  // TODO(zhuixin.gsy): these args influence write_micro_block and need to be evaluated
   if (!index_desc.is_valid()
       || index_desc.need_prebuild_bloomfilter_
       || index_desc.merge_info_ != nullptr
@@ -1366,13 +1367,13 @@ int ObBaseIndexBlockBuilder::append_index_micro_block()
       STORAGE_LOG(WARN, "fail to append index micro block", K(ret), K(micro_block_desc));
     } else if (OB_FAIL(append_next_row(micro_block_desc))) {
       STORAGE_LOG(WARN, "fail to append next row", K(ret), K(micro_block_desc));
+    } else if (FALSE_IT(clean_status())) {
     }
     if (OB_FAIL(ret) || OB_TMP_FAIL(tmp_ret) || !index_block_pre_warmer_.is_valid()) {
     } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(micro_block_desc))) {
       STORAGE_LOG(WARN, "Fail to build index block cache key and put into cache", K(tmp_ret));
     }
     index_block_pre_warmer_.reuse();
-    clean_status();
   }
 
   return ret;
@@ -1401,7 +1402,7 @@ int ObBaseIndexBlockBuilder::close_index_tree(ObBaseIndexBlockBuilder *&root_bui
   } else if (OB_UNLIKELY(next_level_builder_ == nullptr)) {
     root_builder = this;
   } else {
-    //TODO(luhaopeng.lhp) check if row_count == 0 is error?
+    //TODO(zhuixin.gsy) check if row_count == 0 is error?
     if (OB_LIKELY(micro_writer_->get_row_count() > 0)) {
       if (OB_FAIL(append_index_micro_block())) {
         STORAGE_LOG(WARN, "Fail to append index micro block, ", K(ret));

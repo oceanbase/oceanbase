@@ -113,7 +113,7 @@ int ObSelectIntoOp::inner_open()
   }
 
   if (OB_SUCC(ret)
-      && (T_INTO_OUTFILE == into_type || T_INTO_DUMPFILE == into_type)
+      && T_INTO_OUTFILE == into_type
       && IntoFileLocation::SERVER_DISK == file_location_) {
     ObString file_name = url_;
     ObString file_path = file_name.split_on(file_name.reverse_find('/'));

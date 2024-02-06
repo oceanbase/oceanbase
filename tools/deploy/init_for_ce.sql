@@ -29,5 +29,3 @@ alter system set merger_check_interval = '10s' tenant all;
 alter system set enable_sql_extension=true tenant all;
 alter system set _enable_adaptive_compaction = false tenant all;
 alter system set_tp tp_no = 1200, error_code = 4001, frequency = 1;
-
-alter system set _enable_spf_batch_rescan = true tenant all;

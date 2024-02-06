@@ -6036,7 +6036,6 @@ static int text_text(const ObObjType expect_type, ObObjCastParams &params,
     }
   } else {
     out = in;
-    out.set_type(expect_type); // set expect_type
   }
   LOG_DEBUG("obj text cast to text", K(in), K(out),
     K(ret), K(in_type), K(out_type), K(in_cs_type), K(out_cs_type));
@@ -8203,7 +8202,6 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
   } else {
     int64_t value;
     ObString j_bin_str = in.get_string();
-    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
     if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(params.allocator_v2_, in, j_bin_str))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_bin_str));
     } else {
@@ -8211,7 +8209,7 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
       ObIJsonBase *j_base = &j_bin;
       if (OB_FAIL(j_bin.reset_iter())) {
         LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-      } else if (CAST_FAIL(j_base->to_datetime(value, &cvrt_ctx))) {
+      } else if (CAST_FAIL(j_base->to_datetime(value))) {
         LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
         ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);

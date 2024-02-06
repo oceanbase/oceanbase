@@ -153,11 +153,6 @@ public:
                                   uint64_t ref_obj_id,
                                   common::ObISQLClient &sql_proxy,
                                   common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
-  static int collect_all_dep_objs_inner(uint64_t tenant_id,
-                                        uint64_t root_obj_id,
-                                        uint64_t ref_obj_id,
-                                        common::ObISQLClient &sql_proxy,
-                                        common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
   static int cascading_modify_obj_status(common::ObMySQLTransaction &trans,
                                          uint64_t tenant_id,
                                          uint64_t obj_id,

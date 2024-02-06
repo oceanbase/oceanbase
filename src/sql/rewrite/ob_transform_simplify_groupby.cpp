@@ -1900,8 +1900,6 @@ int ObTransformSimplifyGroupby::check_can_convert_to_distinct(ObSelectStmt *stmt
           LOG_WARN("unexpected null", K(ret), K(select_exprs.at(i)));
         } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(select_exprs.at(i),
                                              stmt->get_group_exprs(),
-                                             true, // need_check_contain
-                                             true, // used_in_compare
                                              is_calculable))) {
           LOG_WARN("fail to check if select expr is const or exist", K(ret));
         } else {
@@ -1914,8 +1912,6 @@ int ObTransformSimplifyGroupby::check_can_convert_to_distinct(ObSelectStmt *stmt
           LOG_WARN("unexpected null", K(ret), K(stmt->get_having_exprs().at(i)));
         } else if (OB_FAIL(ObOptimizerUtil::expr_calculable_by_exprs(stmt->get_having_exprs().at(i),
                                                             stmt->get_group_exprs(),
-                                                            true, // need_check_contain
-                                                            true, // used_in_compare
                                                             is_calculable))) {
           LOG_WARN("fail to check if having expr is const or exist", K(ret));
         } else {

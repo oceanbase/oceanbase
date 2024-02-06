@@ -90,15 +90,11 @@ public:
   public:
     OB_INLINE explicit BaseWaitGuard() : last_ts_(blocking_ts_)
     {
-      if (0 == last_ts_) {
-        loop_ts_ = blocking_ts_ = common::ObTimeUtility::fast_current_time();
-      }
+      blocking_ts_ = common::ObTimeUtility::fast_current_time();
     }
     ~BaseWaitGuard()
     {
-      if (0 == last_ts_) {
-        blocking_ts_ = 0;
-      }
+      blocking_ts_ = last_ts_;
     }
   private:
     int64_t last_ts_;

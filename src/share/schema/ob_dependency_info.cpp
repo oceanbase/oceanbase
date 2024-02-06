@@ -405,15 +405,6 @@ int ObDependencyInfo::collect_all_dep_objs(uint64_t tenant_id,
                                            common::ObISQLClient &sql_proxy,
                                            common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs)
 {
-  return collect_all_dep_objs_inner(tenant_id, ref_obj_id, ref_obj_id, sql_proxy, objs);
-}
-
-int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
-                                                 uint64_t root_obj_id,
-                                                 uint64_t ref_obj_id,
-                                                 common::ObISQLClient &sql_proxy,
-                                                 common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs)
-{
   int ret = OB_SUCCESS;
   ObSqlString sql;
   const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
@@ -442,7 +433,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
                       || tmp_type >= static_cast<int64_t> (share::schema::ObObjectType::MAX_TYPE)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get wrong obj type", K(ret));
-          } else if (ref_obj_id == tmp_obj_id || root_obj_id == tmp_obj_id) {
+          } else if (ref_obj_id == tmp_obj_id) {
             // skip
           } else if (has_exist_in_array(objs, {static_cast<uint64_t> (tmp_obj_id), static_cast<share::schema::ObObjectType> (tmp_type)})) {
             // dedpulicate
@@ -468,7 +459,7 @@ int ObDependencyInfo::collect_all_dep_objs_inner(uint64_t tenant_id,
     LOG_WARN("too deep recusive", K(ret));
   } else {
     for (int64_t i = init_count; OB_SUCC(ret) && i < objs.count(); ++i) {
-      if (OB_FAIL(collect_all_dep_objs_inner(tenant_id, root_obj_id, objs.at(i).first, sql_proxy, objs))) {
+      if (OB_FAIL(collect_all_dep_objs(tenant_id, objs.at(i).first, sql_proxy, objs))) {
         LOG_WARN("failed to collect all dep objs", K(ret), K(objs.count()), K(init_count), K(i));
       }
     }
@@ -541,7 +532,6 @@ int ObDependencyInfo::modify_all_obj_status(const ObIArray<std::pair<uint64_t, s
           } else if (!view_schema.is_view_table()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get wrong schema", K(ret), K(view_schema));
-          } else if (new_status == view_schema.get_object_status()) {
           } else if (OB_FAIL(schema_service.gen_new_schema_version(tenant_id, refresh_schema_version))) {
             LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
           } else if (OB_FAIL(ddl_operator.update_table_status(view_schema, refresh_schema_version,

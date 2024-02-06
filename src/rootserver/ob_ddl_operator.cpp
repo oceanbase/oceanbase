@@ -1836,28 +1836,6 @@ int ObDDLOperator::reinit_autoinc_row(const ObTableSchema &table_schema,
   return ret;
 }
 
-int ObDDLOperator::try_reinit_autoinc_row(const ObTableSchema &table_schema,
-                                          common::ObMySQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  bool need_reinit_inner_table = false;
-  const uint64_t table_id = table_schema.get_table_id();
-  const uint64_t tenant_id = table_schema.get_tenant_id();
-  const int64_t truncate_version = table_schema.get_truncate_version();
-  const uint64_t column_id = table_schema.get_autoinc_column_id();
-  ObAutoincrementService &autoinc_service = share::ObAutoincrementService::get_instance();
-  if (OB_FAIL(autoinc_service.try_lock_autoinc_row(tenant_id, table_id, column_id, truncate_version,
-                                                    need_reinit_inner_table, trans))) {
-    LOG_WARN("fail to check inner autoinc version", KR(ret), K(tenant_id), K(table_id), K(column_id));
-  } else if (need_reinit_inner_table) {
-    if (OB_FAIL(autoinc_service.reset_autoinc_row(tenant_id, table_id, column_id,
-                                                  truncate_version, trans))) {
-      LOG_WARN("fail to reinit autoinc row", KR(ret), K(tenant_id), K(table_id), K(column_id));
-    }
-  }
-  return ret;
-}
-
 // Notice: this function process index.
 int ObDDLOperator::alter_table_drop_aux_column(
     ObTableSchema &new_table_schema,

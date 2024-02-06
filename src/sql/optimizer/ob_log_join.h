@@ -99,9 +99,6 @@ namespace sql
     const common::ObIArray<ObRawExpr *> &get_join_conditions() const { return join_conditions_; }
 
     common::ObIArray<ObRawExpr *> &get_join_filters() { return join_filters_; }
-    int adjust_join_conds(ObIArray<ObRawExpr *> &dest_exprs);
-    int calc_equal_cond_opposite(const ObRawExpr &raw_expr,
-                                  bool &is_opposite);
 
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
     const common::ObIArray<ObOrderDirection> &get_merge_directions() const { return merge_directions_; }

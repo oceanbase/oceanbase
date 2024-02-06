@@ -1810,23 +1810,24 @@ int ObMPStmtExecute::process()
     }
     session.check_and_reset_retry_info(*cur_trace_id, THIS_WORKER.need_retry());
     session.set_last_trace_id(ObCurTraceId::get_trace_id());
-    // whether the previous error was reported, a cleanup is to be done here
-    if (!async_resp_used) {
-      // async remove in ObSqlEndTransCb
-      ObPieceCache *piece_cache = static_cast<ObPieceCache*>(session.get_piece_cache());
-      if (OB_ISNULL(piece_cache)) {
-        // do nothing
-        // piece_cache not be null in piece data protocol
-      } else {
-        for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
-          if (OB_FAIL(piece_cache->remove_piece(
-                              piece_cache->get_piece_key(stmt_id_, i),
-                              session))) {
-            if (OB_HASH_NOT_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
-            }
+  }
+
+  // whether the previous error was reported, a cleanup is to be done here
+  if (NULL != sess && !async_resp_used) {
+    // async remove in ObSqlEndTransCb
+    ObPieceCache *piece_cache = static_cast<ObPieceCache*>(sess->get_piece_cache());
+    if (OB_ISNULL(piece_cache)) {
+      // do nothing
+      // piece_cache not be null in piece data protocol
+    } else {
+      for (uint64_t i = 0; OB_SUCC(ret) && i < params_num_; i++) {
+        if (OB_FAIL(piece_cache->remove_piece(
+                            piece_cache->get_piece_key(stmt_id_, i),
+                            *sess))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("remove piece fail", K(stmt_id_), K(i), K(ret));
           }
         }
       }
@@ -2743,16 +2744,10 @@ int ObMPStmtExecute::parse_mysql_time_value(const char *&data, ObObj &param)
         LOG_WARN("invalid date format", K(ret));
       } else {
         ob_time.parts_[DT_DATE] = ObTimeConverter::ob_time_to_date(ob_time);
-        ob_time.parts_[DT_HOUR] += ob_time.parts_[DT_MDAY] * 24;
-        ob_time.parts_[DT_MDAY] = 0;
         value = ObTimeConverter::ob_time_to_time(ob_time);
-        if(is_negative) {
-          value = -value;
-        }
       }
     }
   }
-
   if (OB_SUCC(ret)) {
     param.set_time(value);
   }

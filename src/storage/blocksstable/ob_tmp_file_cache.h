@@ -30,7 +30,6 @@ class ObTmpFileIOHandle;
 class ObTmpMacroBlock;
 class ObTmpFileExtent;
 class ObMacroBlockHandle;
-class ObTmpTenantFileStore;
 
 class ObTmpPageCacheKey final : public common::ObIKVCacheKey
 {
@@ -324,7 +323,7 @@ public:
     IOWaitInfo *wait_info_;
   };
 
-  explicit ObTmpTenantMemBlockManager(ObTmpTenantFileStore &tenant_store);
+  ObTmpTenantMemBlockManager();
   ~ObTmpTenantMemBlockManager();
   int init(const uint64_t tenant_id,
            common::ObConcurrentFIFOAllocator &allocator,
@@ -427,7 +426,6 @@ private:
                                const int64_t page_nums, ObTmpMacroBlock *&t_mblk);
   int get_block_and_set_washing(int64_t block_id, ObTmpMacroBlock *&m_blk);
 
-  ObTmpTenantFileStore &tenant_store_;
   ObSpLinkQueue wait_info_queue_;
   WaitHandleMap wait_handles_map_;
   TmpMacroBlockMap t_mblk_map_;  // <block id, tmp macro block>

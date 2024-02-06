@@ -9404,7 +9404,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (top->is_match_all()) {
+  } else if (!top->is_distributed()) {
     is_match_repart = false;
   } else if (OB_FAIL(append(input_esets, top->get_output_equal_sets()))) {
     LOG_WARN("failed to append equal sets", K(ret));
@@ -9413,8 +9413,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
     ObLogicalOperator *pre_child = NULL;
     ObSEArray<ObRawExpr *, 4> left_keys;
     ObSEArray<ObRawExpr *, 4> right_keys;
-    ObSEArray<ObRawExpr *, 4> pre_left_keys;
-    ObSEArray<ObRawExpr *, 4> pre_right_keys;
+    ObSEArray<ObRawExpr *, 4> pre_child_keys;
     ObSEArray<ObRawExpr*, 4> target_part_keys;
     ObSEArray<bool, 4> null_safe_info;
     is_match_repart = true;
@@ -9453,23 +9452,17 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
       } else if (!is_match_repart) {
         //do nothing
       } else if (i < 1) {
-        if (OB_FAIL(pre_left_keys.assign(left_keys))) {
-          LOG_WARN("failed to assign exprs", K(ret));
-        } else if (OB_FAIL(pre_right_keys.assign(right_keys))) {
+        if (OB_FAIL(pre_child_keys.assign(right_keys))) {
           LOG_WARN("failed to assign exprs", K(ret));
         } else {
           pre_child = child;
         }
-      } else if (!ObOptimizerUtil::is_exprs_equivalent(left_keys,
-                                                       pre_left_keys,
-                                                       input_esets)) {
-        is_match_repart = false;
       } else if(OB_ISNULL(pre_child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(
                                         input_esets,
-                                        pre_right_keys,
+                                        pre_child_keys,
                                         right_keys,
                                         pre_child->get_strong_sharding(),
                                         child->get_strong_sharding(),
@@ -11704,9 +11697,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type() &&
                  OB_FAIL(static_cast<ObLogSubPlanFilter*>(op)->check_and_set_das_group_rescan())) {
         LOG_WARN("failed to set use batch spf", K(ret));
-      } else if (log_op_def::LOG_JOIN == op->get_type() &&
-                 OB_FAIL(static_cast<ObLogJoin*>(op)->adjust_join_conds(static_cast<ObLogJoin *>(op)->get_join_conditions()))) {
-        LOG_WARN("failed to adjust join conds", K(ret));
       } else { /*do nothing*/ }
     }
   }
@@ -11944,41 +11934,20 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
         LOG_WARN("failed to add table partition info", K(ret));
       } else { /*do nothing*/ }
-    } else if (log_op_def::LOG_INSERT == op->get_type()
-               && static_cast<ObLogInsert*>(op)->is_insert_select()
-               && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
+    } else if ((log_op_def::LOG_INSERT == op->get_type() ||
+                log_op_def::LOG_MERGE == op->get_type()) &&
+               !static_cast<ObLogInsert*>(op)->has_instead_of_trigger() &&
+               static_cast<ObLogInsert*>(op)->is_insert_select()) {
       ObLogInsert *insert_op = static_cast<ObLogInsert*>(op);
       ObTablePartitionInfo *table_partition_info = insert_op->get_table_partition_info();
       if (OB_ISNULL(table_partition_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(ret));
-      } else if (!insert_op->is_multi_part_dml() ||
-                 ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == insert_op->get_phy_plan_type()) {
+      } else if ((!insert_op->is_multi_part_dml() ||
+                 ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == insert_op->get_phy_plan_type())) {
         if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
           LOG_WARN("failed to add table partition info", K(ret));
         } else { /*do nothing*/ }
-      } else { /*do nothing*/ }
-    } else if (log_op_def::LOG_MERGE == op->get_type()
-               && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
-      ObLogDelUpd *dml_op = static_cast<ObLogDelUpd*>(op);
-      ObTablePartitionInfo *table_partition_info = dml_op->get_table_partition_info();
-      const ObOptimizerContext &opt_ctx = get_optimizer_context();
-      if (OB_ISNULL(table_partition_info) || OB_ISNULL(opt_ctx.get_query_ctx())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(table_partition_info), K(opt_ctx.get_query_ctx()), K(ret));
-      } else if (!dml_op->is_multi_part_dml()) {
-        /* for merge into view, additional table location for insert sharding need add
-          create table tp1(c1 int, c2 int, c3 int) partition by hash(c1) partitions 2;
-          create table tp2(c1 int, c2 int, c3 int) partition by hash(c1) partitions 2;
-          create or replace view v as select * from tp1 where c1 = 3;
-          merge into v v1 using (select * from tp2 where c1 = 2) t2 on (v1.c1 = t2.c1)
-          when matched then update set v1.c2 = t2.c1 + 100
-          when not matched then insert values (t2.c1, t2.c2, t2.c3);
-        */
-        table_partition_info->get_table_location().set_table_id(opt_ctx.get_query_ctx()->available_tb_id_ - 1);
-        if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
-          LOG_WARN("failed to add table partition info", K(ret));
-        }
       } else { /*do nothing*/ }
     } else { /*do nothing*/ }
     if (OB_SUCC(ret) && OB_FAIL(collect_location_related_info(*op))) {

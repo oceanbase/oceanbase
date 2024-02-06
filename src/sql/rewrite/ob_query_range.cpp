@@ -3387,12 +3387,9 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
   int ret = OB_SUCCESS;
   const ObRawExpr *l_expr = NULL;
   const ObOpRawExpr *r_expr = NULL;
-  ObSQLSessionInfo *session = NULL;
-  bool enable_not_in_range = false;
-  if (OB_ISNULL(b_expr) || OB_ISNULL(query_range_ctx_) || OB_ISNULL(query_range_ctx_->exec_ctx_)
-      || OB_ISNULL(session = query_range_ctx_->exec_ctx_->get_my_session())) {
+  if (OB_ISNULL(b_expr) || OB_ISNULL(query_range_ctx_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("unexpected null", K(b_expr), K_(query_range_ctx), K(session));
+    LOG_WARN("expr is null.", K(b_expr), K_(query_range_ctx));
   } else if (2 != b_expr->get_param_count()) {//binary op expr
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("b_expr must has 2 arguments", K(ret));
@@ -3400,11 +3397,8 @@ int ObQueryRange::pre_extract_not_in_op(const ObOpRawExpr *b_expr,
              OB_ISNULL(r_expr = static_cast<const ObOpRawExpr *>(b_expr->get_param_expr(1)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("r_expr is null.", K(ret));
-  } else if (OB_FAIL(session->is_enable_range_extraction_for_not_in(enable_not_in_range))) {
-    LOG_WARN("failed to check not in range enabled", K(ret));
-  } else if (!enable_not_in_range || r_expr->get_param_count() > MAX_NOT_IN_SIZE
-             || l_expr->get_expr_type() == T_OP_ROW) {
-    // do not extract range: 1. not in range is disabled; 2. not in size over MAX_NOT_IN_SIZE
+  } else if (r_expr->get_param_count() > MAX_NOT_IN_SIZE || l_expr->get_expr_type() == T_OP_ROW) {
+    // do not extract range over MAX_NOT_IN_SIZE
     GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     query_range_ctx_->cur_expr_is_precise_ = false;
   } else {
@@ -8728,7 +8722,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
                                              ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
-  common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"));
+  common::ObArenaAllocator tmp_alloc;
   ObS2Cellids cells;
   ObS2Cellids cells_with_ancestors;
   ObSpatialMBR mbr_filter(op_type);
@@ -8863,9 +8857,6 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         }
       }
     }
-  }
-  if (OB_NOT_NULL(s2object)) {
-    s2object->~ObS2Adapter();
   }
 
   return ret;
@@ -9042,9 +9033,6 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         }
       }
     }
-  }
-  if (OB_NOT_NULL(s2object)) {
-    s2object->~ObS2Adapter();
   }
 
   return ret;

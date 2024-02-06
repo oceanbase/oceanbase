@@ -818,9 +818,8 @@ void ObTmpTenantMemBlockManager::ObIOWaitInfoHandle::reset()
   }
 }
 
-ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager(ObTmpTenantFileStore &tenant_store)
-  : tenant_store_(tenant_store),
-    wait_info_queue_(),
+ObTmpTenantMemBlockManager::ObTmpTenantMemBlockManager()
+  : wait_info_queue_(),
     wait_handles_map_(),
     t_mblk_map_(),
     dir_to_blk_map_(),
@@ -1529,8 +1528,8 @@ int ObTmpTenantMemBlockManager::exec_wait()
       const int64_t washing_count = ATOMIC_LOAD(&washing_count_);
       int64_t block_cache_num = -1;
       int64_t page_cache_num = -1;
-      block_cache_num = tenant_store_.get_block_cache_num();
-      page_cache_num = tenant_store_.get_page_cache_num();
+      OB_TMP_FILE_STORE.get_block_cache_num(tenant_id_, block_cache_num);
+      OB_TMP_FILE_STORE.get_page_cache_num(tenant_id_, page_cache_num);
       ObTaskController::get().allow_next_syslog();
       STORAGE_LOG(INFO, "succeed to do one round of tmp block io", K(ret), K(loop_nums),
           K(wait_io_cnt), K(washing_count), K(block_cache_num), K(page_cache_num));
@@ -1542,12 +1541,20 @@ int ObTmpTenantMemBlockManager::exec_wait()
 int ObTmpTenantMemBlockManager::change_mem()
 {
   int ret = OB_SUCCESS;
-  // Here, this memory is used to store temporary file block metadata, which is related to the
-  // datafile size. So, we set the upper limit of memory to be percentage (default, 70%) of tenant memory to
-  // avoid excessive tenant memory, and affecting system stability. In theory, the limit
-  // will be reached only when the tenant's memory is extremely small and the disk is extremely
-  // large.
-  tenant_store_.refresh_memory_limit(tenant_id_);
+  uint64_t mem_limit = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    COMMON_LOG(INFO, "failed to get tenant config", K_(tenant_id));
+  } else {
+    if (0 == tenant_config->_temporary_file_io_area_size) {
+      mem_limit = 2 * (2 << 20);
+    } else {
+      mem_limit = common::upper_align(
+        lib::get_tenant_memory_limit(tenant_id_) * 0.7, ObTmpFileStore::get_block_size());
+    }
+    allocator_->set_total_limit(mem_limit);
+  }
+
   return ret;
 }
 

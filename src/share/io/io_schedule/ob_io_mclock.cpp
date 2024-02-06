@@ -24,7 +24,6 @@ using namespace oceanbase::common;
 ObMClock::ObMClock()
   : is_inited_(false),
     is_stopped_(false),
-    is_unlimited_(false),
     reservation_clock_(),
     limitation_clock_(),
     proportion_clock_()
@@ -53,7 +52,6 @@ int ObMClock::init(const int64_t min_iops, const int64_t max_iops, const int64_t
     limitation_clock_.last_ns_ = 0;
     proportion_clock_.iops_ = weight;
     proportion_clock_.last_ns_ = proportion_ts * 1000L;
-    is_unlimited_ = false;
     is_stopped_ = false;
     is_inited_ = true;
   }
@@ -86,14 +84,12 @@ void ObMClock::start()
 void ObMClock::stop()
 {
   is_stopped_ = true;
-  is_unlimited_ = true;
 }
 
 void ObMClock::destroy()
 {
   is_inited_ = false;
   is_stopped_ = false;
-  is_unlimited_ = false;
   reservation_clock_.reset();
   limitation_clock_.reset();
   proportion_clock_.reset();
@@ -114,11 +110,6 @@ bool ObMClock::is_stop() const
   return is_stopped_;
 }
 
-bool ObMClock::is_unlimited() const
-{
-  return is_unlimited_;
-}
-
 int ObMClock::calc_phy_clock(const int64_t current_ts, const double iops_scale, const double weight_scale, ObPhyQueue *phy_queue)
 {
   int ret = OB_SUCCESS;
@@ -130,11 +121,6 @@ int ObMClock::calc_phy_clock(const int64_t current_ts, const double iops_scale, 
         || weight_scale <= std::numeric_limits<double>::epsilon())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(current_ts), K(iops_scale), K(weight_scale));
-  } else if (is_unlimited_) {
-    phy_queue->reservation_ts_ = current_ts;
-    phy_queue->group_limitation_ts_ = current_ts;
-    phy_queue->tenant_limitation_ts_ = current_ts;
-    phy_queue->proportion_ts_ = current_ts;
   } else {
     reservation_clock_.atom_update(current_ts, iops_scale, phy_queue->reservation_ts_);
     limitation_clock_.atom_update(current_ts, iops_scale, phy_queue->group_limitation_ts_);
@@ -421,14 +407,6 @@ int ObTenantIOClock::update_io_clocks(const ObTenantIOConfig &io_config)
   return ret;
 }
 
-bool ObTenantIOClock::is_unlimited_config(const ObMClock &clock, const ObTenantIOConfig::GroupConfig &cur_config)
-{
-  return clock.is_stop() ||
-         cur_config.deleted_ ||
-         cur_config.cleared_ ||
-         (cur_config.min_percent_ == INT64_MAX && cur_config.max_percent_ == INT64_MAX);
-}
-
 int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig &io_config, const int64_t all_group_num)
 {
   int ret = OB_SUCCESS;
@@ -458,9 +436,8 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
     const ObTenantIOConfig::GroupConfig &cur_config = io_config.group_configs_.at(index);
     if (!group_clocks_.at(index).is_inited()) {
       LOG_WARN("clock is not init", K(ret), K(index), K(group_clocks_.at(index)));
-    } else if (is_unlimited_config(group_clocks_.at(index), cur_config)) {
-      group_clocks_.at(index).set_unlimited();
-      LOG_INFO("clock set unlimited", K(group_clocks_.at(index)), K(cur_config));
+    } else if (group_clocks_.at(index).is_stop() || cur_config.deleted_ || cur_config.cleared_) {
+      // group has been deleted, ignore
     } else if (!cur_config.is_valid()) {
       LOG_WARN("config is not valid", K(ret), K(index), K(cur_config), K(group_clocks_.at(index)));
       // stop
@@ -472,9 +449,6 @@ int ObTenantIOClock::update_io_clock(const int64_t index, const ObTenantIOConfig
       LOG_WARN("update group io clock failed", K(ret), K(index), K(unit_config), K(cur_config));
     } else {
       group_clocks_.at(index).start();
-      if (!is_unlimited_config(group_clocks_.at(index), cur_config)) {
-        group_clocks_.at(index).set_limited();
-      }
       LOG_INFO("update group clock success", K(index), K(unit_config), K(cur_config));
     }
   } else {

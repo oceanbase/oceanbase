@@ -447,11 +447,6 @@ DEF_INT(_temporary_file_io_area_size, OB_TENANT_PARAMETER, "1", "[0, 50)",
          "memory buffer size of temporary file, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_temporary_file_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
-        "The memory limit of temporary file meta, and the value is a percentage of the tenant's memory. "
-        "The default value is 70. For compatibility, 0 is 70% of tenant memory."
-        "Range: [0, 100], percentage",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_storage_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "[0, 50)",
          "maximum memory for storage meta, as a percentage of total tenant memory. "
          "Range: [0, 50), percentage, 0 means no limit to storage meta memory",
@@ -1219,9 +1214,6 @@ DEF_INT(open_cursors, OB_TENANT_PARAMETER, "50", "[0,65535]",
 DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          "enable px batch rescan for nlj or subplan filter",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
-         "enable das batch rescan for subplan filter",
-         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",
         "max active parallel sessions allowed for tenant. Range: [0,+∞)",
@@ -1491,7 +1483,3 @@ DEF_INT(_ha_tablet_info_batch_count, OB_TENANT_PARAMETER, "0", "[0,]",
 DEF_TIME(_ha_rpc_timeout, OB_TENANT_PARAMETER, "0", "[0,120s]",
          "the rpc timeout for storage high availability. Range:[0, 120s]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
-DEF_BOOL(_enable_range_extraction_for_not_in, OB_TENANT_PARAMETER, "True",
-        "Enable extract query range for not in predicate",
-        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

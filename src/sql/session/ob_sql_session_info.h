@@ -115,14 +115,8 @@ public:
 struct ObContextUnit
 {
   inline void free(common::ObIAllocator &alloc) {
-    if (nullptr != value_.ptr()) {
-      alloc.free(value_.ptr());
-      value_.reset();
-    }
-    if (nullptr != attribute_.ptr()) {
-      alloc.free(attribute_.ptr());
-      attribute_.reset();
-    }
+    alloc.free(value_.ptr());
+    alloc.free(attribute_.ptr());
   }
   int deep_copy(const common::ObString &attribute,
                 const common::ObString &value,
@@ -132,7 +126,6 @@ struct ObContextUnit
       SQL_ENG_LOG(WARN, "failed to copy attribute", K(ret));
     } else if (OB_FAIL(ob_write_string(alloc, value, value_))) {
       alloc.free(attribute_.ptr());
-      attribute_.reset();
       SQL_ENG_LOG(WARN, "failed to copy value", K(ret));
     }
     return ret;
@@ -374,11 +367,9 @@ struct ObInnerContextMap {
     if (OB_NOT_NULL(context_map_)) {
       context_map_->destroy();
       alloc_.free(context_map_);
-      context_map_ = nullptr;
     }
     if (OB_NOT_NULL(context_name_.ptr())) {
       alloc_.free(context_name_.ptr());
-      context_name_.reset();
     }
   }
   int init()
@@ -980,8 +971,6 @@ public:
   bool is_in_range_optimization_enabled() const;
   int is_better_inlist_enabled(bool &enabled) const;
   bool is_index_skip_scan_enabled() const;
-  bool is_spf_mlj_group_rescan_enabled() const;
-  int is_enable_range_extraction_for_not_in(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }

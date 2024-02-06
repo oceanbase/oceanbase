@@ -110,6 +110,9 @@ private:
                                           ObIArray<ObRawExpr *> &vaild_having_exprs);
   int convert_group_by_to_distinct(ObDMLStmt *stmt, bool &trans_happened);
   int check_can_convert_to_distinct(ObSelectStmt *stmt, bool &can_convert);
+  int expr_calculable_by_exprs(const ObRawExpr *src_expr,
+                                   const ObIArray<ObRawExpr*> &dst_exprs,
+                                   bool &is_calculable);
 };
 
 }

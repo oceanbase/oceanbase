@@ -130,15 +130,11 @@ int ObParallelMergeCtx::init(const compaction::ObMediumCompactionInfo &medium_in
     schema_rowkey_range.end_key_.set_min_rowkey();
     schema_rowkey_range.set_left_open();
     schema_rowkey_range.set_right_closed();
-    ObDatumRowkeyHelper rowkey_helper;
     for (int i = 0; OB_SUCC(ret) && i < paral_info.list_size_ + 1; ++i) {
       if (i > 0 && OB_FAIL(schema_rowkey_range.end_key_.deep_copy(schema_rowkey_range.start_key_, allocator_))) { // end_key -> start_key
         STORAGE_LOG(WARN, "failed to deep copy start key", K(ret), K(i), K(medium_info));
       } else if (i < paral_info.list_size_) {
-        ObDatumRowkey tmp_datum_rowkey;
-        if (OB_FAIL(rowkey_helper.convert_datum_rowkey(paral_info.parallel_end_key_list_[i].get_rowkey()/*src*/, tmp_datum_rowkey/*dst*/))) {
-          STORAGE_LOG(WARN, "failed to convert to datum rowkey", K(ret), K(i), K(paral_info.parallel_end_key_list_[i]));
-        } else if (OB_FAIL(tmp_datum_rowkey.deep_copy(schema_rowkey_range.end_key_/*dst*/, allocator_))) {
+        if (OB_FAIL(schema_rowkey_range.end_key_.from_rowkey(paral_info.parallel_end_key_list_[i].get_rowkey(), allocator_))) {
           STORAGE_LOG(WARN, "failed to deep copy end key", K(ret), K(i), K(medium_info));
         }
       } else { // i == paral_info.list_size_

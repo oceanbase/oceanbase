@@ -705,7 +705,6 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_col_part_expr_ = other.is_col_part_expr_;
     is_col_subpart_expr_ = other.is_col_subpart_expr_;
     is_oracle_temp_table_ = other.is_oracle_temp_table_;
-    table_type_ = other.table_type_;
     part_col_type_ = other.part_col_type_;
     part_collation_type_ = other.part_collation_type_;
     subpart_col_type_ = other.subpart_col_type_;
@@ -722,7 +721,6 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
-    check_no_partiton_ = other.check_no_partiton_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -814,7 +812,6 @@ void ObTableLocation::reset()
   is_col_part_expr_ = false;
   is_col_subpart_expr_ = false;
   is_oracle_temp_table_ = false;
-  table_type_ = MAX_TABLE_TYPE;
 
   calc_node_ = NULL;
   gen_col_node_ = NULL;
@@ -852,7 +849,6 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
-  check_no_partiton_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1662,9 +1658,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
 
     if ( OB_SUCC(ret)
         && 0 == partition_ids.count()
-        && (stmt::T_INSERT == stmt_type_
-            || stmt::T_REPLACE == stmt_type_
-            || check_no_partiton_)) {
+        && (stmt::T_INSERT == stmt_type_ || stmt::T_REPLACE == stmt_type_)) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     }
@@ -4738,8 +4732,6 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(tablet_id_);
   OB_UNIS_ENCODE(object_id_);
   OB_UNIS_ENCODE(related_list_);
-  OB_UNIS_ENCODE(table_type_);
-  OB_UNIS_ENCODE(check_no_partiton_);
   return ret;
 }
 
@@ -4816,8 +4808,6 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(tablet_id_);
   OB_UNIS_ADD_LEN(object_id_);
   OB_UNIS_ADD_LEN(related_list_);
-  OB_UNIS_ADD_LEN(table_type_);
-  OB_UNIS_ADD_LEN(check_no_partiton_);
   return len;
 }
 
@@ -4972,8 +4962,6 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(tablet_id_);
   OB_UNIS_DECODE(object_id_);
   OB_UNIS_DECODE(related_list_);
-  OB_UNIS_DECODE(table_type_);
-  OB_UNIS_DECODE(check_no_partiton_);
   return ret;
 }
 

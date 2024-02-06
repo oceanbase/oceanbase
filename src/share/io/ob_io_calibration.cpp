@@ -692,6 +692,10 @@ int ObIOCalibration::read_from_table()
     if (OB_FAIL(update_io_ability(tmp_ability))) {
       LOG_WARN("update io ability failed", K(ret), K(tmp_ability));
     }
+  } else {
+    if (OB_FAIL(reset_io_ability())) {
+      LOG_WARN("reset io ability failed", K(ret));
+    }
   }
   return ret;
 }
