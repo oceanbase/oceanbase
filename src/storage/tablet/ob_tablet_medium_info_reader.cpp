@@ -106,7 +106,7 @@ int ObTabletMediumInfoReader::get_next_medium_info(
     compaction::ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
-
+  medium_info.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -204,7 +204,6 @@ int ObTabletMediumInfoReader::get_specified_medium_info(
         break;
       }
     }
-    tmp_medium_info.reset();
   } // end of while
   return ret;
 }
@@ -254,7 +253,6 @@ int ObTabletMediumInfoReader::get_max_medium_snapshot(int64_t &max_medium_snapsh
     } else {
       max_medium_snapshot = tmp_key.get_medium_snapshot();
     }
-    tmp_medium_info.reset();
   } // end of while
   return ret;
 }
