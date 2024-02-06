@@ -514,7 +514,6 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     sweep_cost_time_(0),
     start_time_(0),
     last_end_time_(0),
-    mark_finished_(false),
     hold_info_()
 {
 }
@@ -561,7 +560,6 @@ void ObMacroBlockMarkerStatus::reuse()
   sweep_cost_time_ = 0;
   start_time_ = 0;
   last_end_time_ = 0;
-  mark_finished_ = false;
   hold_info_.reset();
 }
 
