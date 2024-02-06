@@ -987,6 +987,10 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       OX (package_body = static_cast<ObPLPackage*>(cacheobj_guard->get_cache_obj()));
       CK (OB_NOT_NULL(package_body));
       OZ (package_body->init(package_body_ast));
+
+      for (int64_t i = 0; OB_SUCC(ret) &&  i < package_spec_ast.get_dependency_table().count(); ++i) {
+        OZ (package_body_ast.add_dependency_object(package_spec_ast.get_dependency_table().at(i)));
+      }
       OZ (compiler.compile_package(package_body_info,
                                   &(package_spec_ast.get_body()->get_namespace()),
                                   package_body_ast,
