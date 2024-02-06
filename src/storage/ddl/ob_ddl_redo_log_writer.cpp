@@ -29,6 +29,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
+#include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -187,6 +188,8 @@ int ObDDLCtrlSpeedItem::do_sleep(
   } else if (next_available_ts <= 0 || OB_INVALID_TENANT_ID == tenant_id || task_id == 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument.", K(ret), K(next_available_ts), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(DDL_SIM(MTL_ID(), task_id, DDL_REDO_WRITER_SPEED_CONTROL_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(MTL_ID()), K(task_id));
   } else if (OB_TMP_FAIL(check_need_stop_write(ddl_kv_mgr_handle, is_need_stop_write))) {
     LOG_WARN("fail to check need stop write", K(tmp_ret), K(ddl_kv_mgr_handle));
   }
@@ -394,6 +397,8 @@ int ObDDLCtrlSpeedHandle::limit_and_sleep(const uint64_t tenant_id,
   } else if (OB_UNLIKELY(!speed_handle_map_.created())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("speed handle map is not created", K(ret));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, WRITE_DUPLICATED_DDL_REDO_LOG))) {
+    LOG_WARN("ddl sim remote write", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(add_ctrl_speed_item(speed_handle_key, item_handle))) {
     LOG_WARN("add speed item failed", K(ret));
   } else if (OB_FAIL(item_handle.get_ctrl_speed_item(speed_handle_item))) {
@@ -721,6 +726,8 @@ int ObDDLRedoLogWriter::write(
   /* use the ObString data_buffer_ in tmp_log.redo_info_, do not rely on the macro_block_buf in original log*/
   } else if (OB_FAIL(cb->init(ls_id, tmp_log.get_redo_info(), macro_block_id, tablet_handle, ddl_kv_mgr_handle))) {
     LOG_WARN("init ddl clog callback failed", K(ret));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, DDL_REDO_WRITER_WRITE_MACRO_LOG_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(log_handler->append(buffer,
                                          buffer_size,
                                          base_scn,
@@ -1155,6 +1162,7 @@ int ObDDLSSTableRedoWriter::init(const ObLSID &ls_id, const ObTabletID &tablet_i
 }
 
 int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
+                                           const int64_t ddl_task_id,
                                            const int64_t execution_id,
                                            const int64_t data_format_version,
                                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
@@ -1183,6 +1191,8 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
     LOG_WARN("get tablet handle failed", K(ret), K(ls_id_), K(tablet_id_));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
     LOG_WARN("create ddl kv mgr failed", K(ret));
+  } else if (OB_FAIL(DDL_SIM(MTL_ID(), ddl_task_id, DDL_REDO_WRITER_WRITE_START_LOG_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(MTL_ID()), K(ddl_task_id));
   } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().write_ddl_start_log(ls_handle, tablet_handle, ddl_kv_mgr_handle, log, ls->get_log_handler(), tmp_scn))) {
     LOG_WARN("fail to write ddl start log", K(ret), K(table_key));
   } else if (FALSE_IT(set_start_scn(tmp_scn))) {
@@ -1191,6 +1201,14 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
   } else {
     ddl_kv_mgr_handle.get_obj()->reset_commit_success(); // releated issue:
   }
+  SERVER_EVENT_ADD("ddl", "ddl write start log",
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", ddl_task_id,
+    "tablet_id", tablet_id_,
+    "start_scn", get_start_scn());
+  LOG_INFO("ddl write start log", K(ret), "ddl_event_info", ObDDLEventInfo(), K(ddl_task_id));
   return ret;
 }
 
@@ -1271,6 +1289,10 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
     ret = OB_ERR_SYS;
     LOG_WARN("tablet handle is null", K(ret), K(ls_id), K(tablet_id));
   } else {
+    bool need_report_ddl_checksum = true;
+#ifdef ERRSIM
+    need_report_ddl_checksum = 0 == GCONF.errsim_ddl_major_delay_time;
+#endif
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     ObSSTableMetaHandle sst_meta_hdl;
     const ObSSTable *first_major_sstable = nullptr;
@@ -1278,6 +1300,8 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
             LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_FALSE_IT(first_major_sstable = static_cast<const ObSSTable *>(
         table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
+    } else if (!need_report_ddl_checksum) {
+      // skip
     } else if (OB_ISNULL(first_major_sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no major after wait merge success", K(ret), K(ls_id), K(tablet_id));
@@ -1431,6 +1455,15 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
       is_remote_write = !(leader_addr_ == GCTX.self_addr());
     }
   }
+  SERVER_EVENT_ADD("ddl", "ddl write commit log",
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "start_scn", start_scn_,
+    "tablet_id", tablet_id_,
+    "commit_scn", commit_scn,
+    is_remote_write);
+  LOG_INFO("ddl write commit log", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

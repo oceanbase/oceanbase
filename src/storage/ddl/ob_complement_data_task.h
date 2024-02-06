@@ -113,6 +113,8 @@ public:
   ObSEArray<common::ObStoreRange, 32> ranges_;
 };
 
+void add_ddl_event(const ObComplementDataParam *param, const ObString &stmt);
+
 struct ObComplementDataContext final
 {
 public:

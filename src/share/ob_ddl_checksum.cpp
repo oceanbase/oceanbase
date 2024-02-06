@@ -17,6 +17,7 @@
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "share/ob_ddl_sim_point.h"
 #include "observer/ob_server_struct.h"
 
 using namespace oceanbase::common;
@@ -104,6 +105,8 @@ int ObDDLChecksumOperator::update_checksum(const ObIArray<ObDDLChecksumItem> &ch
   if (0 == checksum_items.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(checksum_items.count()));
+  } else if (OB_FAIL(DDL_SIM(checksum_items.at(0).tenant_id_, checksum_items.at(0).ddl_task_id_, UPDATE_DDL_CHECKSUM_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(checksum_items.at(0)));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < checksum_items.count(); ++i) {
       const ObDDLChecksumItem &item = checksum_items.at(i);
@@ -143,7 +146,9 @@ int ObDDLChecksumOperator::update_checksum(const ObIArray<ObDDLChecksumItem> &ch
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+      if (OB_FAIL(DDL_SIM(checksum_items.at(0).tenant_id_, checksum_items.at(0).ddl_task_id_, UPDATE_DDL_CHECKSUM_SLOW))) {
+        LOG_WARN("ddl sim failure", K(ret), K(checksum_items.at(0)));
+      } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
         LOG_WARN("fail to execute sql", K(ret));
       } else if (OB_UNLIKELY(affected_rows > 2 * checksum_items.count())) {
         ret = OB_ERR_UNEXPECTED;
@@ -272,6 +277,8 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
     LOG_WARN("invalid argument",
       K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id),
       K(tablet_checksum_status_map.created()));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_TABLET_COLUMN_CHECKSUM_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else {
     int64_t batch_size = 100;
     ObArray<uint64_t> batch_tablet_array;
@@ -295,6 +302,8 @@ int ObDDLChecksumOperator::get_tablet_checksum_record(
               batch_tablet_array.at(0), // first tablet_id in one batch
               last_tablet_id_id))) {    // last  tablet id in one batch
             LOG_WARN("fail to assign fmt", K(ret), K(tenant_id), K(execution_id), K(ddl_task_id));
+          } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_TABLET_COLUMN_CHECKSUM_SLOW))) {
+            LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
           } else if (OB_FAIL(get_tablet_checksum_status(
               sql, tenant_id, batch_tablet_array, sql_proxy, tablet_checksum_status_map))) {
             LOG_WARN("fail to get column checksum", K(ret), K(sql));
@@ -325,6 +334,8 @@ int ObDDLChecksumOperator::get_table_column_checksum(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(table_id), K(ddl_task_id),
         K(column_checksum_map.created()));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_TABLE_COLUMN_CHECKSUM_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT column_id, checksum FROM %s "
       "WHERE execution_id = %ld AND tenant_id = %ld AND table_id = %ld AND ddl_task_id = %ld AND task_id %s "
@@ -332,6 +343,8 @@ int ObDDLChecksumOperator::get_table_column_checksum(
       execution_id, ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
       ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id), ddl_task_id, is_unique_index_checking ? "< 0" : ">= 0"))) {
     LOG_WARN("fail to assign fmt", K(ret));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, GET_TABLE_COLUMN_CHECKSUM_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_FAIL(get_column_checksum(sql, tenant_id, column_checksum_map, sql_proxy))) {
     LOG_WARN("fail to get column checksum", K(ret), K(sql));
   }
@@ -414,6 +427,8 @@ int ObDDLChecksumOperator::delete_checksum(
                   || OB_INVALID_ID == source_table_id || OB_INVALID_ID == dest_table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(execution_id), K(source_table_id), K(dest_table_id));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, DELETE_DDL_CHECKSUM_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_INVALID_INDEX != tablet_task_id
     && OB_FAIL(remove_tablet_chksum_sql.assign_fmt("AND (task_id >> %ld) = %ld ", ObDDLChecksumItem::PX_SQC_ID_OFFSET, tablet_task_id))) {
     LOG_WARN("assign fmt failed", K(ret), K(tablet_task_id), K(remove_tablet_chksum_sql));
@@ -423,6 +438,8 @@ int ObDDLChecksumOperator::delete_checksum(
       OB_ALL_DDL_CHECKSUM_TNAME, execution_id, ddl_task_id, source_table_id, dest_table_id,
       static_cast<int>(remove_tablet_chksum_sql.length()), remove_tablet_chksum_sql.ptr()))) {
     LOG_WARN("fail to assign fmt", K(ret), K(remove_tablet_chksum_sql));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, DELETE_DDL_CHECKSUM_SLOW))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to execute sql", KR(ret), K(sql));
   } else if (OB_UNLIKELY(affected_rows < 0)) {

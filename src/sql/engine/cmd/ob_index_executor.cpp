@@ -27,6 +27,7 @@
 #include "sql/engine/cmd/ob_partition_executor_utils.h"
 #include "sql/resolver/ddl/ob_flashback_stmt.h"
 #include "observer/ob_server.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -102,6 +103,14 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
       LOG_WARN("failed to wait ddl finish", K(ret));
     }
   }
+  SERVER_EVENT_ADD("ddl", "create index execute finish",
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", res.task_id_,
+    "table_id", res.index_table_id_,
+    "schema_version", res.schema_version_);
+  SQL_ENG_LOG(INFO, "finish create index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_index_arg));
   return ret;
 }
 
@@ -369,6 +378,14 @@ int ObDropIndexExecutor::execute(ObExecContext &ctx, ObDropIndexStmt &stmt)
   } else if (OB_FAIL(wait_drop_index_finish(res.tenant_id_, res.task_id_, *my_session))) {
     LOG_WARN("wait drop index finish failed", K(ret));
   }
+  SERVER_EVENT_ADD("ddl", "drop index execute finish",
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", res.task_id_,
+    "table_id", res.index_table_id_,
+    "schema_version", res.schema_version_);
+  SQL_ENG_LOG(INFO, "finish drop index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_index_arg));
   return ret;
 }
 
@@ -395,6 +412,17 @@ int ObFlashBackIndexExecutor::execute(ObExecContext &ctx, ObFlashBackIndexStmt &
   } else if (OB_FAIL(common_rpc_proxy->flashback_index(flashback_index_arg))) {
     LOG_WARN("rpc proxy flashback index failed", "dst", common_rpc_proxy->get_server(), K(ret));
   }
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "flashback index execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "origin_table_name", flashback_index_arg.origin_table_name_,
+      "new_table_name", flashback_index_arg.new_table_name_,
+      flashback_index_arg.new_db_name_);
+  }
+  SQL_ENG_LOG(INFO, "finish flashback index execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(flashback_index_arg));
   return ret;
 }
 
@@ -421,6 +449,17 @@ int ObPurgeIndexExecutor::execute(ObExecContext &ctx, ObPurgeIndexStmt &stmt) {
   } else if (OB_FAIL(common_rpc_proxy->purge_index(purge_index_arg))) {
     LOG_WARN("rpc proxy purge index failed", "dst", common_rpc_proxy->get_server(), K(ret));
   }
+  if (OB_NOT_NULL(common_rpc_proxy)) {
+    SERVER_EVENT_ADD("ddl", "purge index execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "rpc_dst", common_rpc_proxy->get_server(),
+      "table_id", purge_index_arg.table_id_,
+      "database_id", purge_index_arg.database_id_,
+      purge_index_arg.table_name_);
+  }
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(purge_index_arg));
   return ret;
 }
 

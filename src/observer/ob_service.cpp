@@ -71,6 +71,7 @@
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/ob_ddl_sim_point.h" // for DDL_SIM
 #include "storage/backup/ob_backup_utils.h"
 #include "observer/report/ob_tenant_meta_checker.h"//ObTenantMetaChecker
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
@@ -598,7 +599,9 @@ int ObService::calc_column_checksum_request(const obrpc::ObCalcColumnChecksumReq
           ObUniqueCheckingDag *dag = NULL;
           int tmp_ret = OB_SUCCESS;
           saved_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(dag_scheduler->alloc_dag(dag))) {
+          if (OB_TMP_FAIL(DDL_SIM(tenant_id, arg.task_id_, CALC_COLUMN_CHECKSUM_RPC_SLOW))) {
+            LOG_WARN("ddl sim failure: calcualte column checksum rpc slow", K(tmp_ret), K(tenant_id), K(arg.task_id_));
+          } else if (OB_TMP_FAIL(dag_scheduler->alloc_dag(dag))) {
             STORAGE_LOG(WARN, "fail to alloc dag", KR(tmp_ret));
           } else if (OB_TMP_FAIL(dag->init(arg.tenant_id_,
                                            calc_item.ls_id_,
@@ -1132,7 +1135,9 @@ int ObService::check_modify_time_elapsed(
         SCN snapshot_version;
         ObCheckTransElapsedResult single_result;
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_MODIFY_TIME_ELAPSED_SLOW))) {
+          LOG_WARN("ddl sim failure: check modify time elapsed slow", K(tmp_ret), K(arg.tenant_id_), K(arg.ddl_task_id_));
+        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(ls_id));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(tablet_id,
                                                                              arg.sstable_exist_ts_,
@@ -1185,7 +1190,9 @@ int ObService::check_schema_version_elapsed(
         const ObTabletID &tablet_id = arg.tablets_.at(i).tablet_id_;
         ObCheckTransElapsedResult single_result;
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_SCHEMA_TRANS_END_SLOW))) {
+          LOG_WARN("ddl sim failure: check schema version elapsed slow", K(tmp_ret), K(arg));
+        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(i), K(ls_id));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
           LOG_WARN("fail to get tablet", K(tmp_ret), K(i), K(ls_id), K(tablet_id));

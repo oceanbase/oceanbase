@@ -19,6 +19,7 @@
 #include "share/ob_srv_rpc_proxy.h"      //ObSrvRpcProxy
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -62,6 +63,14 @@ int ObDDLExecutorUtil::wait_ddl_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
+    SERVER_EVENT_ADD("ddl", "start wait ddl finish",
+      "tenant_id", tenant_id,
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", task_id,
+      "rpc_dest", common_rpc_proxy->get_server());
+    LOG_INFO("start wait ddl finsih", K(task_id), "ddl_event_info", ObDDLEventInfo());
+
     int tmp_ret = OB_SUCCESS;
     bool is_tenant_dropped = false;
     bool is_tenant_standby = false;
@@ -107,6 +116,14 @@ int ObDDLExecutorUtil::wait_ddl_finish(
         }
       }
     }
+
+    SERVER_EVENT_ADD("ddl", "end wait ddl finish",
+      "tenant_id", tenant_id,
+      "ret", error_message.ret_code_,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", task_id,
+      "rpc_dest", common_rpc_proxy->get_server());
+    LOG_INFO("finish wait ddl", K(ret), K(task_id), "ddl_event_info", ObDDLEventInfo(), K(error_message));
   }
   return ret;
 }
@@ -122,7 +139,14 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
   THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
   share::ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
   is_finish = false;
-  LOG_INFO("wait build index finish", K(task_id));
+  SERVER_EVENT_ADD("ddl", "start wait build index finish",
+    "tenant_id", tenant_id,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", task_id,
+    "is_tenant_standby", is_tenant_standby);
+  LOG_INFO("start wait build index finish", K(task_id), "ddl_event_info", ObDDLEventInfo());
+
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id));
@@ -153,6 +177,14 @@ int ObDDLExecutorUtil::wait_build_index_finish(const uint64_t tenant_id, const i
       LOG_WARN("server is stopping, check whether the ddl task finish successfully or not", K(ret), K(tenant_id), K(task_id));
     }
   }
+
+  SERVER_EVENT_ADD("ddl", "end wait build index finish",
+    "tenant_id", tenant_id,
+    "ret", error_message.ret_code_,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", task_id,
+    "is_tenant_standby", is_tenant_standby);
+  LOG_INFO("finish wait build index", K(ret), "ddl_event_info", ObDDLEventInfo(), K(error_message));
   return ret;
 }
 
@@ -175,6 +207,14 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id), KP(common_rpc_proxy));
   } else {
+    SERVER_EVENT_ADD("ddl", "start wait ddl retry task finish",
+      "tenant_id", tenant_id,
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", task_id,
+      "rpc_dest", common_rpc_proxy->get_server());
+    LOG_INFO("start wait ddl retry task finish", K(task_id), "ddl_event_info", ObDDLEventInfo(), K(error_message));
+
     bool is_tenant_dropped = false;
     bool is_tenant_standby = false;
     int tmp_ret = OB_SUCCESS;
@@ -254,6 +294,14 @@ int ObDDLExecutorUtil::wait_ddl_retry_task_finish(
       }
     }
     affected_rows = error_message.affected_rows_;
+
+    SERVER_EVENT_ADD("ddl", "end wait ddl retry task finish",
+      "tenant_id", tenant_id,
+      "ret", error_message.ret_code_,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", task_id,
+      "rpc_dest", common_rpc_proxy->get_server());
+    LOG_INFO("fnish wait ddl retry task", K(ret), K(task_id), "ddl_event_info", ObDDLEventInfo(), K(error_message));
   }
   return ret;
 }
@@ -273,9 +321,13 @@ int ObDDLExecutorUtil::cancel_ddl_task(const int64_t tenant_id, obrpc::ObCommonR
     } else {
       LOG_WARN("failed to cancel remote sys task", K(ret), K(rpc_arg), K(rs_leader_addr));
     }
-  } else {
-    LOG_INFO("succeed to cancel sys task", K(rpc_arg), K(rs_leader_addr));
   }
+  SERVER_EVENT_ADD("ddl", "finish cancel ddl task",
+    "tenant_id", tenant_id,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "rpc_dest", rs_leader_addr);
+  LOG_INFO("finish cancel ddl task", K(ret), K(rpc_arg), K(rs_leader_addr), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 

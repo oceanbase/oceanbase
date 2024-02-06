@@ -16,12 +16,14 @@
 #include "observer/ob_server_struct.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_ddl_common.h"
+#include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_heart_beat_task.h"
 #include "lib/ob_define.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "rootserver/ddl_task/ob_table_redefinition_task.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -108,6 +110,17 @@ int ObDDLServerClient::create_hidden_table(
       // abort_redef_table() function last step must remove heart_beat task, so there is no need to call heart_beat_clear()
     }
   }
+  char tenant_id_buffer[256];
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "tenant_id:%ld, dest_tenant_id:%ld",
+            arg.tenant_id_, arg.dest_tenant_id_);
+  SERVER_EVENT_ADD("ddl", "create hidden table",
+    "tenant_id", tenant_id_buffer,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", res.task_id_,
+    "table_id", res.table_id_,
+    "schema_version", res.schema_version_);
+  LOG_INFO("finish create hidden table.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(arg), K(res));
   return ret;
 }
 
@@ -140,6 +153,22 @@ int ObDDLServerClient::start_redef_table(const obrpc::ObStartRedefTableArg &arg,
     }
     // abort_redef_table() function last step must remove heart_beat task, so there is no need to call heart_beat_clear()
   }
+  char tenant_id_buffer[256];
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_tenant_id:%ld, target_tenant_id:%ld",
+            arg.orig_tenant_id_, arg.target_tenant_id_);
+  char table_id_buffer[256];
+  snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "orig_table_id:%ld, target_table_id:%ld",
+            arg.orig_table_id_, arg.target_table_id_);
+
+  SERVER_EVENT_ADD("ddl", "start redef table",
+    "tenant_id", tenant_id_buffer,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", res.task_id_,
+    "table_id", table_id_buffer,
+    "schema_version", res.schema_version_);
+  LOG_INFO("start redef table.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(arg), K(res));
+
   return ret;
 }
 
@@ -189,6 +218,14 @@ int ObDDLServerClient::copy_table_dependents(
       }
     }
   }
+
+  SERVER_EVENT_ADD("ddl", "copy table dependents",
+    "tenant_id", arg.tenant_id_,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", arg.task_id_,
+    "rpc_dst", rs_leader_addr);
+  LOG_INFO("finish copy table dependents.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(arg), K(rs_leader_addr));
   return ret;
 }
 
@@ -247,6 +284,14 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(arg.task_id_));
     }
   }
+
+  SERVER_EVENT_ADD("ddl", "abort redef table",
+    "tenant_id", arg.tenant_id_,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", arg.task_id_,
+    "rpc_dst", rs_leader_addr);
+  LOG_INFO("abort redef table.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(arg), K(rs_leader_addr));
   return ret;
 }
 
@@ -306,6 +351,16 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
       LOG_WARN("heart beat clear failed", K(tmp_ret), K(finish_redef_arg.task_id_));
     }
   }
+
+  SERVER_EVENT_ADD("ddl", "finish redef table",
+    "tenant_id", finish_redef_arg.tenant_id_,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", finish_redef_arg.task_id_,
+    "snapshot_version", build_single_arg.snapshot_version_,
+    "rpc_dst", rs_leader_addr,
+    build_single_arg.ls_id_);
+  LOG_INFO("finish redef table.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(finish_redef_arg), K(build_single_arg), K(rs_leader_addr));
   return ret;
 }
 
@@ -339,10 +394,14 @@ int ObDDLServerClient::wait_task_reach_pending(const uint64_t tenant_id, const i
     if (OB_UNLIKELY(task_id <= 0 || OB_INVALID_ID == tenant_id)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id));
+    } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, WAIT_REDEF_TASK_REACH_PENDING_FAILED))) {
+      LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
     } else {
       while (OB_SUCC(ret)) {
         if (OB_FAIL(sql_string.assign_fmt("SELECT status, snapshot_version FROM %s WHERE task_id = %lu", share::OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
           LOG_WARN("assign sql string failed", K(ret), K(task_id));
+        } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, WAIT_REDEF_TASK_REACH_PENDING_SLOW))) {
+          LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
         } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql_string.ptr()))) {
           LOG_WARN("fail to execute sql", K(ret), K(sql_string));
         } else if (OB_ISNULL(result = res.get_result())) {

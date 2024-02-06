@@ -15,6 +15,7 @@
 #include "ob_drop_index_task.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
+#include "share/ob_ddl_sim_point.h"
 #include "rootserver/ob_root_service.h"
 
 using namespace oceanbase::rootserver;
@@ -42,6 +43,7 @@ int ObDropIndexTask::init(
     const int64_t schema_version,
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
+    const int32_t sub_task_trace_id,
     const obrpc::ObDropIndexArg &drop_index_arg)
 {
   int ret = OB_SUCCESS;
@@ -64,6 +66,7 @@ int ObDropIndexTask::init(
     task_id_ = task_id;
     parent_task_id_ = parent_task_id;
     consumer_group_id_ = consumer_group_id;
+    sub_task_trace_id_ = sub_task_trace_id;
     task_version_ = OB_DROP_INDEX_TASK_VERSION;
     dst_tenant_id_ = tenant_id_;
     dst_schema_version_ = schema_version_;
@@ -148,6 +151,8 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
     DEBUG_SYNC(BEFORE_UPDATE_GLOBAL_INDEX_STATUS);
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(tenant_id_, table_id, ddl_rpc_timeout))) {
       LOG_WARN("get ddl rpc timeout fail", K(ret));
+    } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_INDEX_STATUS_FAILED))) {
+      LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
     } else if (OB_FAIL(root_service_->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(ddl_rpc_timeout).update_index_status(arg))) {
       LOG_WARN("update index status failed", K(ret), K(arg));
     } else {
@@ -250,6 +255,8 @@ int ObDropIndexTask::drop_index_impl()
     drop_index_arg.task_id_           = task_id_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", K(ret));
+    } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {
+      LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
     } else if (OB_FAIL(root_service_->get_common_rpc_proxy().timeout(ddl_rpc_timeout).drop_index(drop_index_arg, drop_index_res))) {
       LOG_WARN("drop index failed", K(ret), K(ddl_rpc_timeout));
     }
@@ -367,6 +374,10 @@ int ObDropIndexTask::process()
         LOG_WARN("error unexpected, task status is not valid", K(ret), K(task_status_));
     }
     ddl_tracing_.release_span_hierarchy();
+    if (OB_FAIL(ret)) {
+      add_event_info("drop index task process fail");
+      LOG_INFO("drop index task process fail", "ddl_event_info", ObDDLEventInfo());
+    }
   }
   return ret;
 }

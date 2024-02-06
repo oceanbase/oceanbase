@@ -31,6 +31,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
+#include "share/ob_ddl_sim_point.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;

@@ -1929,6 +1929,29 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tablet_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ddl_sim_point;
+Field	Type	Null	Key	Default	Extra
+sim_point_id	bigint(20)	NO		NULL	
+sim_point_name	varchar(1024)	NO		NULL	
+sim_point_description	varchar(256)	NO		NULL	
+sim_point_action	varchar(256)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_sim_point;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_ddl_sim_point_stat;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+ddl_task_id	bigint(20)	NO		NULL	
+sim_point_id	bigint(20)	NO		NULL	
+trigger_count	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ddl_sim_point_stat;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_ddl_sim_point_stat runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc information_schema.SESSION_VARIABLES;
 Field	Type	Null	Key	Default	Extra
 VARIABLE_NAME	varchar(128)	NO			

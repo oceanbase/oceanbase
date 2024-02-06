@@ -22,6 +22,7 @@
 #include "storage/ddl/ob_ddl_replay_executor.h"
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -202,7 +203,9 @@ int ObLSDDLLogHandler::offline()
     TCWLockGuard guard(online_lock_);
     is_online_ = false;
   }
-  FLOG_INFO("ddl log hanlder offline", K(ret), "ls_meta", ls_->get_ls_meta());
+
+  add_ddl_event(ret, "ddl log hanlder offline");
+  FLOG_INFO("ddl log hanlder offline", K(ret), "ls_meta", ls_->get_ls_meta(), "ddl_event_info", ObDDLEventInfo());
   return OB_SUCCESS;
 }
 
@@ -239,7 +242,8 @@ int ObLSDDLLogHandler::online()
     TCWLockGuard guard(online_lock_);
     is_online_ = true;
   }
-  FLOG_INFO("ddl log hanlder online", K(ret), "ls_meta", ls_->get_ls_meta());
+  add_ddl_event(ret, "ddl log hanlder online");
+  FLOG_INFO("ddl log hanlder online", K(ret), "ls_meta", ls_->get_ls_meta(), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -497,6 +501,15 @@ int ObLSDDLLogHandler::replay_ddl_start_log_(const char *log_buf,
     }
   }
   return ret;
+}
+
+void ObLSDDLLogHandler::add_ddl_event(const int ret, const ObString &ddl_event_stmt)
+{
+  SERVER_EVENT_ADD("ddl", ddl_event_stmt.ptr(),
+    "tenant_id", MTL_ID(),
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "last_rec_scn", last_rec_scn_);
 }
 
 int ObLSDDLLogHandler::add_tablet(const ObTabletID &tablet_id)

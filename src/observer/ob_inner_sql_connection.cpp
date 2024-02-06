@@ -33,6 +33,7 @@
 #include "observer/ob_server_struct.h"
 #include "observer/virtual_table/ob_virtual_table_iterator_factory.h"
 #include "observer/ob_req_time_service.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "ob_inner_sql_connection_pool.h"
 #include "ob_inner_sql_read_context.h"
 #include "ob_inner_sql_result.h"
@@ -1458,6 +1459,16 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       } else if (OB_FAIL(res.close())) {
         LOG_WARN("close result set failed", K(ret), K(tenant_id), K(sql));
       }
+      if (get_session().get_ddl_info().is_ddl()) {
+        SERVER_EVENT_ADD(
+          "ddl", "local execute ddl inner sql",
+          "tenant_id", tenant_id,
+          "trace_id", *ObCurTraceId::get_trace_id(),
+          "ret", ret,
+          "affected_rows", affected_rows,
+          "start_ts", res.execute_start_ts_,
+          "end_ts", res.execute_end_ts_);
+      }
     } else if (is_resource_conn()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource",
@@ -1533,6 +1544,16 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
             ObStmt::is_dml_write_stmt(handler->get_result()->get_stmt_type())
             || ObStmt::is_savepoint_stmt(handler->get_result()->get_stmt_type());
           get_session().set_has_exec_inner_dml(dml_or_savepoint);
+        }
+        if (get_session().get_ddl_info().is_ddl()) {
+          SERVER_EVENT_ADD(
+            "ddl", "send ddl inner sql",
+            "tenant_id", tenant_id,
+            "trace_id", *ObCurTraceId::get_trace_id(),
+            "ret", ret,
+            "affected_rows", affected_rows,
+            "start_ts", res.execute_start_ts_,
+            "end_ts", res.execute_end_ts_);
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(res.close())) {

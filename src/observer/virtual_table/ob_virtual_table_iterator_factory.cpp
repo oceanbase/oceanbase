@@ -153,6 +153,7 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_history.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_compaction_info.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_ddl_kv_info.h"
+#include "observer/virtual_table/ob_all_virtual_ddl_sim_point_stat.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_pointer_status.h"
 #include "observer/virtual_table/ob_all_virtual_storage_meta_memory_status.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -2330,6 +2331,24 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
                 SERVER_LOG(WARN, "fail to init ObAllVirtualIOQuota, ", K(ret));
               } else {
                 vt_iter = static_cast<ObVirtualTableIterator *>(io_quota);
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DDL_SIM_POINT_TID: {
+            ObAllVirtualDDLSimPoint *ddl_sim_point = nullptr;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualDDLSimPoint, ddl_sim_point))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(ddl_sim_point);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_DDL_SIM_POINT_STAT_TID: {
+            ObAllVirtualDDLSimPointStat *ddl_sim_point_stat = nullptr;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualDDLSimPointStat, ddl_sim_point_stat))) {
+              if (OB_FAIL(ddl_sim_point_stat->init(addr_))) {
+                SERVER_LOG(WARN, "fail to init ddl sim point stat iterator, ", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(ddl_sim_point_stat);
               }
             }
             break;

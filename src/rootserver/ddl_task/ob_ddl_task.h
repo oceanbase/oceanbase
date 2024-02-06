@@ -113,13 +113,14 @@ struct ObDDLTaskSerializeField final
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id), K_(is_abort));
-  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false) {}
+  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id), K_(is_abort), K_(sub_task_trace_id));
+  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0) {}
   ObDDLTaskSerializeField(const int64_t task_version,
                           const int64_t parallelism,
                           const int64_t data_format_version,
                           const int64_t consumer_group_id,
-                          const bool is_abort);
+                          const bool is_abort,
+                          const int32_t sub_task_trace_id);
   ~ObDDLTaskSerializeField() = default;
   void reset();
 public:
@@ -128,6 +129,7 @@ public:
   int64_t data_format_version_;
   int64_t consumer_group_id_;
   bool is_abort_;
+  int32_t sub_task_trace_id_;
 };
 
 struct ObCreateDDLTaskParam final
@@ -149,9 +151,10 @@ public:
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
-  TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
+  TO_STRING_KV(K_(sub_task_trace_id), K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg));
 public:
+  int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
   int64_t object_id_;
   int64_t schema_version_;
@@ -321,6 +324,7 @@ public:
   ~ObDDLWaitTransEndCtx();
   int init(
       const uint64_t tenant_id,
+      const int64_t ddl_task_id,
       const uint64_t table_id,
       const WaitTransType wait_trans_type,
       const int64_t wait_version);
@@ -329,7 +333,7 @@ public:
   int try_wait(bool &is_trans_end, int64_t &snapshot_version, const bool need_wait_trans_end = true);
   transaction::ObTransID get_pending_tx_id() const { return pending_tx_id_; }
   TO_STRING_KV(K(is_inited_), K_(tenant_id), K(table_id_), K(is_trans_end_), K(wait_type_),
-      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()));
+      K(wait_version_), K_(pending_tx_id), K(tablet_ids_.count()), K(snapshot_array_.count()), K(ddl_task_id_));
 
 public:
   /**
@@ -340,6 +344,7 @@ public:
   */
   static int calc_snapshot_with_gts(
       const uint64_t tenant_id,
+      const int64_t ddl_task_id,
       const int64_t trans_end_snapshot,
       int64_t &snapshot);
 private:
@@ -380,6 +385,7 @@ private:
   transaction::ObTransID pending_tx_id_;
   common::ObArray<common::ObTabletID> tablet_ids_;
   common::ObArray<int64_t> snapshot_array_;
+  int64_t ddl_task_id_;
 };
 
 class ObDDLTask;
@@ -465,7 +471,7 @@ class ObDDLTask : public common::ObDLinkBase<ObDDLTask>
 public:
   explicit ObDDLTask(const share::ObDDLType task_type)
     : lock_(), ddl_tracing_(this), is_inited_(false), need_retry_(true), is_running_(false), is_abort_(false),
-      task_type_(task_type), trace_id_(), tenant_id_(0), dst_tenant_id_(0), object_id_(0), schema_version_(0), dst_schema_version_(0),
+      task_type_(task_type), trace_id_(), sub_task_trace_id_(0), tenant_id_(0), dst_tenant_id_(0), object_id_(0), schema_version_(0), dst_schema_version_(0),
       target_object_id_(0), task_status_(share::ObDDLTaskStatus::PREPARE), snapshot_version_(0), ret_code_(OB_SUCCESS), task_id_(0),
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
@@ -485,6 +491,9 @@ public:
   void set_is_abort(const bool is_abort) { is_abort_ = is_abort; }
   bool get_is_abort() { return is_abort_; }
   void set_consumer_group_id(const int64_t group_id) { consumer_group_id_ = group_id; }
+  void set_sub_task_trace_id(const int32_t sub_task_trace_id) { sub_task_trace_id_ = sub_task_trace_id; }
+  void add_event_info(const ObString &ddl_event_stmt);
+  void add_event_info(const share::ObDDLTaskStatus status, const uint64_t tenant_id);
   bool try_set_running() { return !ATOMIC_CAS(&is_running_, false, true); }
   uint64_t get_tenant_id() const { return dst_tenant_id_; }
   uint64_t get_object_id() const { return object_id_; }
@@ -551,7 +560,7 @@ public:
   int check_errsim_error();
   #endif
   VIRTUAL_TO_STRING_KV(
-      K(is_inited_), K(need_retry_), K(is_abort_), K(task_type_), K(trace_id_),
+      K(is_inited_), K(need_retry_), K(is_abort_), K(task_type_), K(trace_id_), K(sub_task_trace_id_),
       K(tenant_id_), K(dst_tenant_id_), K(object_id_), K(schema_version_),
       K(target_object_id_), K(task_status_), K(snapshot_version_),
       K_(ret_code), K_(task_id), K_(parent_task_id), K_(parent_task_key),
@@ -559,6 +568,7 @@ public:
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
       K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_),
       K_(dst_tenant_id), K_(dst_schema_version));
+  static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
 protected:
   int gather_redefinition_stats(const uint64_t tenant_id,
                                 const int64_t task_id,
@@ -589,7 +599,6 @@ protected:
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
 protected:
-  static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
   common::TCRWLock lock_;
   ObDDLTracing ddl_tracing_;
@@ -599,6 +608,7 @@ protected:
   bool is_abort_;
   share::ObDDLType task_type_;
   TraceId trace_id_;
+  int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
   uint64_t dst_tenant_id_;
   uint64_t object_id_;
@@ -645,7 +655,9 @@ struct PartitionColChecksumStat
       col_checksum_stat_(CCS_INVALID),
       snapshot_(-1),
       execution_id_(-1),
-      ret_code_(OB_SUCCESS)
+      ret_code_(common::OB_SUCCESS),
+      retry_cnt_(0),
+      table_id_(common::OB_INVALID_ID)
   {}
   void reset() {
     tablet_id_.reset();
@@ -653,6 +665,7 @@ struct PartitionColChecksumStat
     snapshot_ = -1;
     execution_id_ = -1;
     ret_code_ = common::OB_SUCCESS;
+    retry_cnt_ = 0;
     table_id_ = common::OB_INVALID_ID;
   }
   bool is_valid() const { return tablet_id_.is_valid() && execution_id_ >= 0 && common::OB_INVALID_ID != table_id_; }
@@ -660,12 +673,15 @@ struct PartitionColChecksumStat
                K_(col_checksum_stat),
                K_(snapshot),
                K_(execution_id),
+               K_(ret_code),
+               K_(retry_cnt),
                K_(table_id));
   ObTabletID tablet_id_; // may be data table, local index or global index
   ColChecksumStat col_checksum_stat_;
   int64_t snapshot_;
   int64_t execution_id_;
   int ret_code_;
+  int retry_cnt_;
   int64_t table_id_;
 };
 

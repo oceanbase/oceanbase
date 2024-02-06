@@ -340,7 +340,9 @@ int ObPxSubCoord::setup_op_input(ObExecContext &ctx,
         LOG_WARN("start ddl failed", K(ret));
       }
 #ifdef ERRSIM
-      ret = OB_E(EventTable::EN_DDL_START_FAIL) OB_SUCCESS;
+      if (OB_SUCC(ret)) {
+        ret = OB_E(EventTable::EN_DDL_START_FAIL) OB_SUCCESS;
+      }
 #endif
     }
   } else if (IS_PX_GI(root.get_type())) {

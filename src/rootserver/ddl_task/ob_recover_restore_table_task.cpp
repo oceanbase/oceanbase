@@ -39,7 +39,7 @@ ObRecoverRestoreTableTask::~ObRecoverRestoreTableTask()
 
 int ObRecoverRestoreTableTask::init(const uint64_t src_tenant_id, const uint64_t dst_tenant_id, const int64_t task_id,
     const share::ObDDLType &ddl_type, const int64_t data_table_id, const int64_t dest_table_id, const int64_t src_schema_version,
-    const int64_t dst_schema_version, const int64_t parallelism, const int64_t consumer_group_id,
+    const int64_t dst_schema_version, const int64_t parallelism, const int64_t consumer_group_id, const int32_t sub_task_trace_id,
     const ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
@@ -50,7 +50,7 @@ int ObRecoverRestoreTableTask::init(const uint64_t src_tenant_id, const uint64_t
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ddl_type), K(src_tenant_id), K(data_table_id));
   } else if (OB_FAIL(ObTableRedefinitionTask::init(src_tenant_id, dst_tenant_id, task_id, ddl_type, data_table_id,
-      dest_table_id, src_schema_version, dst_schema_version, parallelism, consumer_group_id, alter_table_arg, task_status, 0/*snapshot*/))) {
+      dest_table_id, src_schema_version, dst_schema_version, parallelism, consumer_group_id, sub_task_trace_id, alter_table_arg, task_status, 0/*snapshot*/))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
     execution_id_ = 1L;
@@ -92,7 +92,7 @@ int ObRecoverRestoreTableTask::obtain_snapshot(const ObDDLTaskStatus next_task_s
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (snapshot_version_ > 0) {
     // do nothing, already hold snapshot.
-  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, 0/*trans_end_snapshot*/, snapshot_version_))) {
+  } else if (OB_FAIL(ObDDLWaitTransEndCtx::calc_snapshot_with_gts(dst_tenant_id_, task_id_, 0/*trans_end_snapshot*/, snapshot_version_))) {
     // fetch snapshot.
     LOG_WARN("calc snapshot with gts failed", K(ret), K(dst_tenant_id_));
   } else if (snapshot_version_ <= 0) {

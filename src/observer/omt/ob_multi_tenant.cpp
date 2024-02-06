@@ -92,6 +92,7 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "share/io/ob_io_manager.h"
+#include "share/ob_ddl_sim_point.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "observer/omt/ob_tenant_srs.h"
@@ -1284,6 +1285,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_ddl_config())) {
+        LOG_WARN("failed to update tenant ddl config", K(tmp_ret), K(tenant_id));
+      }
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
@@ -1317,6 +1321,24 @@ int ObMultiTenant::update_tenant_dag_scheduler_config()
   } else {
     dag_scheduler->reload_config();
   }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_ddl_config()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+#ifdef ERRSIM
+  if (tenant_config.is_valid()) {
+    if (OB_FAIL(ObDDLSimPointMgr::get_instance().set_tenant_param(tenant_id,
+                                                                  tenant_config->errsim_ddl_sim_point_random_control,
+                                                                  tenant_config->errsim_ddl_sim_point_fixed_list))) {
+      LOG_WARN("set tenant param for ddl sim point failed", K(ret),
+          K(tenant_id), K(tenant_config->errsim_ddl_sim_point_random_control), K(tenant_config->errsim_ddl_sim_point_fixed_list));
+    }
+  }
+#endif
   return ret;
 }
 

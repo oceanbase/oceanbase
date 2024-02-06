@@ -308,7 +308,11 @@ private:
   private:
     void runTimerTask() override;
   private:
+#ifdef ERRSIM
+    static const int64_t DDL_TASK_SCAN_PERIOD = 1000L * 1000L; // 1s
+#else
     static const int64_t DDL_TASK_SCAN_PERIOD = 60 * 1000L * 1000L; // 60s
+#endif
     ObDDLScheduler &ddl_scheduler_;
   };
 
@@ -321,7 +325,11 @@ private:
   private:
     void runTimerTask() override;
   private:
+#ifdef ERRSIM
+    static const int64_t DDL_TASK_CHECK_PERIOD = 1000L * 1000L; // 1s
+#else
     static const int64_t DDL_TASK_CHECK_PERIOD = 30 * 1000L * 1000L; // 30s
+#endif
     ObDDLScheduler &ddl_scheduler_;
   };
 private:
@@ -343,6 +351,7 @@ private:
       const int64_t parallelism,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -355,6 +364,7 @@ private:
       const obrpc::ObAlterTableArg *arg,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -366,6 +376,7 @@ private:
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const int64_t task_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -378,6 +389,7 @@ private:
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const int64_t task_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -390,6 +402,7 @@ private:
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const int64_t task_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -401,6 +414,7 @@ private:
       const int64_t schema_version,
       const int64_t consumer_group_id,
       const int64_t task_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -410,6 +424,7 @@ private:
       const share::schema::ObTableSchema *index_schema,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObDropIndexArg *drop_index_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -420,6 +435,7 @@ private:
       const uint64_t object_id,
       const int64_t schema_version,
       const int64_t consumer_group_id,
+      const int32_t sub_task_trace_id,
       const share::ObDDLType &type,
       const obrpc::ObDDLArg *arg,
       ObIAllocator &allocator,
@@ -433,6 +449,7 @@ private:
       const int64_t parallelism,
       const int64_t consumer_group_id,
       const int64_t task_id,
+      const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
@@ -452,6 +469,7 @@ private:
   int add_task_to_longops_mgr(ObDDLTask *ddl_task);
   int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
   int remove_ddl_task(ObDDLTask *ddl_task);
+  void add_event_info(const ObDDLTaskRecord &ddl_record, const ObString &ddl_event_stmt);
 
 private:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;

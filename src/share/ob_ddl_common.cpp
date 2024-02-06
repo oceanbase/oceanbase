@@ -22,6 +22,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/ob_ddl_sim_point.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "storage/tablet/ob_tablet.h"
@@ -35,6 +36,109 @@ using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::obrpc;
 using namespace oceanbase::sql;
+
+const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
+{
+  const char *ret_name = "UNKNOWN_DDL_TYPE";
+  switch (ddl_type) {
+    case ObDDLType::DDL_INVALID:
+      ret_name = "DDL_INVALID";
+      break;
+    case ObDDLType::DDL_CHECK_CONSTRAINT:
+      ret_name = "DDL_CHECK_CONSTRAINT";
+      break;
+    case ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT:
+      ret_name = "DDL_FOREIGN_KEY_CONSTRAINT";
+      break;
+    case ObDDLType::DDL_ADD_NOT_NULL_COLUMN:
+      ret_name = "DDL_ADD_NOT_NULL_COLUMN";
+      break;
+    case ObDDLType::DDL_MODIFY_AUTO_INCREMENT:
+      ret_name = "DDL_MODIFY_AUTO_INCREMENT";
+      break;
+    case ObDDLType::DDL_CREATE_INDEX:
+      ret_name = "DDL_CREATE_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_INDEX:
+      ret_name = "DDL_DROP_INDEX";
+      break;
+    case ObDDLType::DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS:
+      ret_name = "DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS";
+      break;
+    case ObDDLType::DDL_DROP_DATABASE:
+      ret_name = "DDL_DROP_DATABASE";
+      break;
+    case ObDDLType::DDL_DROP_TABLE:
+      ret_name = "DDL_DROP_TABLE";
+      break;
+    case ObDDLType::DDL_TRUNCATE_TABLE:
+      ret_name = "DDL_TRUNCATE_TABLE";
+      break;
+    case ObDDLType::DDL_DROP_PARTITION:
+      ret_name = "DDL_DROP_PARTITION";
+      break;
+    case ObDDLType::DDL_DROP_SUB_PARTITION:
+      ret_name = "DDL_DROP_SUB_PARTITION";
+      break;
+    case ObDDLType::DDL_TRUNCATE_PARTITION:
+      ret_name = "DDL_TRUNCATE_PARTITION";
+      break;
+    case ObDDLType::DDL_TRUNCATE_SUB_PARTITION:
+      ret_name = "DDL_TRUNCATE_SUB_PARTITION";
+      break;
+    case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
+      ret_name = "DDL_DOUBLE_TABLE_OFFLINE";
+      break;
+    case ObDDLType::DDL_MODIFY_COLUMN:
+      ret_name = "DDL_MODIFY_COLUMN";
+      break;
+    case ObDDLType::DDL_ADD_PRIMARY_KEY:
+      ret_name = "DDL_ADD_PRIMARY_KEY";
+      break;
+    case ObDDLType::DDL_DROP_PRIMARY_KEY:
+      ret_name = "DDL_DROP_PRIMARY_KEY";
+      break;
+    case ObDDLType::DDL_ALTER_PRIMARY_KEY:
+      ret_name = "DDL_ALTER_PRIMARY_KEY";
+      break;
+    case ObDDLType::DDL_ALTER_PARTITION_BY:
+      ret_name = "DDL_ALTER_PARTITION_BY";
+      break;
+    case ObDDLType::DDL_DROP_COLUMN:
+      ret_name = "DDL_DROP_COLUMN";
+      break;
+    case ObDDLType::DDL_CONVERT_TO_CHARACTER:
+      ret_name = "DDL_CONVERT_TO_CHARACTER";
+      break;
+    case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
+      ret_name = "DDL_ADD_COLUMN_OFFLINE";
+      break;
+    case ObDDLType::DDL_COLUMN_REDEFINITION:
+      ret_name = "DDL_COLUMN_REDEFINITION";
+      break;
+    case ObDDLType::DDL_TABLE_REDEFINITION:
+      ret_name = "DDL_TABLE_REDEFINITION";
+      break;
+    case ObDDLType::DDL_DIRECT_LOAD:
+      ret_name = "DDL_DIRECT_LOAD";
+      break;
+    case ObDDLType::DDL_DIRECT_LOAD_INSERT:
+      ret_name = "DDL_DIRECT_LOAD_INSERT";
+      break;
+    case ObDDLType::DDL_NORMAL_TYPE:
+      ret_name = "DDL_NORMAL_TYPE";
+      break;
+    case ObDDLType::DDL_ADD_COLUMN_ONLINE:
+      ret_name = "DDL_ADD_COLUMN_ONLINE";
+      break;
+    case ObDDLType::DDL_CHANGE_COLUMN_NAME:
+      ret_name = "DDL_CHANGE_COLUMN_NAME";
+      break;
+    default:
+      break;
+  }
+  return ret_name;
+}
 
 int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
                           const AlterTableSchema &alter_table_schema)
@@ -560,6 +664,8 @@ int ObDDLUtil::generate_build_replica_sql(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(data_table_id), K(dest_table_id), K(schema_version),
                                   K(snapshot_version), K(execution_id), K(task_id));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, GENERATE_BUILD_REPLICA_SQL))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
       tenant_id, schema_guard, schema_version))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id));
@@ -1151,6 +1257,8 @@ int ObDDLUtil::get_data_format_version(
       || nullptr == GCTX.sql_proxy_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), K(task_id), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, GET_DATA_FORMAT_VERISON_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       ObSqlString query_string;
@@ -1874,6 +1982,8 @@ int ObCheckTabletDataComplementOp::check_tablet_checksum_update_status(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task",
       K(ret), K(tenant_id), K(index_table_id), K(tablet_ids), K(execution_id), K(ddl_task_id));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, CHECK_TABLET_CHECKSUM_STATUS_FAILED))) {
+    LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(ddl_task_id));
   } else if (OB_FAIL(tablet_checksum_status_map.create(tablet_count, ObModIds::OB_SSTABLE_CREATE_INDEX))) {
     LOG_WARN("fail to create column checksum map", K(ret));
   } else if (OB_FAIL(ObDDLChecksumOperator::get_tablet_checksum_record(
@@ -1968,7 +2078,11 @@ int ObCheckTabletDataComplementOp::check_finish_report_checksum(
   int ret = OB_SUCCESS;
   bool is_checksums_all_report = false;
   ObArray<ObTabletID> dest_tablet_ids;
-
+#ifdef ERRSIM
+  if (GCONF.errsim_ddl_major_delay_time.get() > 0) {
+    return OB_SUCCESS;
+  }
+#endif
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == index_table_id ||
       ddl_task_id == OB_INVALID_ID || execution_id < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2010,6 +2124,8 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, CHECK_OLD_COMPLEMENT_TASK_FAILED))) {
+    LOG_WARN("ddl sim failure: check old complement task failed", K(ret), K(tenant_id), K(ddl_task_id));
   } else {
     if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, ddl_task_id, scn, is_old_task_session_exist))) {
       LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
@@ -2050,4 +2166,40 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
   return ret;
 }
 
+//record trace_id
+ObDDLEventInfo::ObDDLEventInfo()
+  : addr_(GCTX.self_addr()),
+    sub_id_(0),
+    event_ts_(ObTimeUtility::fast_current_time())
+{
+  init_sub_trace_id(sub_id_);
+}
 
+//modify trace_id
+ObDDLEventInfo::ObDDLEventInfo(const int32_t sub_id)
+  : addr_(GCTX.self_addr()),
+    sub_id_(sub_id),
+    event_ts_(ObTimeUtility::fast_current_time())
+{
+  init_sub_trace_id(sub_id_);
+}
+
+void ObDDLEventInfo::init_sub_trace_id(const int32_t sub_id)
+{
+  parent_trace_id_ = *ObCurTraceId::get_trace_id();
+  if (sub_id == 0) {
+    // ignore
+  } else {
+    ObCurTraceId::set_sub_id(sub_id);
+  }
+  trace_id_ = *ObCurTraceId::get_trace_id();
+}
+
+void ObDDLEventInfo::copy_event(const ObDDLEventInfo &other)
+{
+  addr_ = other.addr_;
+  sub_id_ = other.sub_id_;
+  parent_trace_id_ = other.parent_trace_id_;
+  trace_id_ = other.trace_id_;
+  event_ts_ = other.event_ts_;
+}

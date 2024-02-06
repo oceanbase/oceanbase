@@ -43,6 +43,7 @@
 #include "sql/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
+#include "observer/ob_server_event_history_table_operator.h"
 #include "lib/worker.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_file_task.h"
@@ -483,6 +484,19 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       } else {
         LOG_DEBUG("table exists, no need to CTAS", K(create_table_res.table_id_));
       }
+      if (OB_NOT_NULL(common_rpc_proxy)) {
+        char table_info_buffer[256];
+        snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
+                  alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
+        SERVER_EVENT_ADD("ddl", "create table as select execute finish",
+          "tenant_id", MTL_ID(),
+          "ret", ret,
+          "trace_id", *ObCurTraceId::get_trace_id(),
+          "rpc_dst", common_rpc_proxy->get_server(),
+          "table_info", table_info_buffer,
+          "schema_version", create_table_res.schema_version_);
+      }
+      SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_table_arg), K(alter_table_arg));
     }
     OZ(my_session->store_query_string(cur_query));
   }
@@ -597,6 +611,16 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         LOG_WARN("execute create table as select failed", KR(ret));
       }
     }
+    if (OB_NOT_NULL(common_rpc_proxy)) {
+      SERVER_EVENT_ADD("ddl", "create table execute finish",
+        "tenant_id", MTL_ID(),
+        "ret", ret,
+        "trace_id", *ObCurTraceId::get_trace_id(),
+        "rpc_dst", common_rpc_proxy->get_server(),
+        "table_info", res.table_id_,
+        "schema_version", res.schema_version_);
+    }
+    SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_table_arg));
 
     // only CTAS or create temporary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
@@ -1284,6 +1308,19 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         }
       }
     }
+    char table_info_buffer[256];
+    snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
+              alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
+
+    SERVER_EVENT_ADD("ddl", "alter table execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", res.task_id_,
+      "table_info", table_info_buffer,
+      "schema_version", res.schema_version_,
+      alter_table_arg.inner_sql_exec_addr_);
+    SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(alter_table_arg), K(first_stmt));
   }
   return ret;
 }
@@ -2056,6 +2093,13 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
       //do nothing
     }
   }
+  SERVER_EVENT_ADD("ddl", "drop table execute finish",
+    "tenant_id", res.tenant_id_,
+    "ret", ret,
+    "trace_id", *ObCurTraceId::get_trace_id(),
+    "task_id", res.task_id_,
+    "schema_id", res.schema_id_);
+    SQL_ENG_LOG(INFO, "finish drop table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_table_arg));
   return ret;
 }
 
@@ -2248,6 +2292,14 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                  K(query_timeout), K(THIS_WORKER.get_timeout_remain()));
       }
     }
+    SERVER_EVENT_ADD("ddl", "truncate table execute finish",
+      "tenant_id", MTL_ID(),
+      "ret", ret,
+      "trace_id", *ObCurTraceId::get_trace_id(),
+      "task_id", res.task_id_,
+      "table_info", truncate_table_arg.table_name_,
+      "schema_id", res.schema_id_);
+    SQL_ENG_LOG(INFO, "finish truncate table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(truncate_table_arg));
   }
   return ret;
 }
