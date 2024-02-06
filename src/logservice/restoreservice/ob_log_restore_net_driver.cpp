@@ -410,7 +410,7 @@ int ObLogRestoreNetDriver::init_fetcher_if_needed_(const int64_t cluster_id, con
   }
 
   if (OB_FAIL(ret) && NULL != fetcher_) {
-    destroy_fetcher_();
+    destroy_fetcher_forcedly_();
   }
   return ret;
 }
@@ -520,6 +520,22 @@ void ObLogRestoreNetDriver::destroy_fetcher_()
       fetcher_ = NULL;
     }
   }
+  // destroy proxy after fetcher is destroyed
+  if (NULL == fetcher_) {
+    proxy_.destroy();
+  }
+}
+
+void ObLogRestoreNetDriver::destroy_fetcher_forcedly_()
+{
+  if (NULL != fetcher_) {
+    CLOG_LOG(INFO, "destroy_fetcher forcedly");
+    fetcher_->stop();
+    fetcher_->destroy();
+    mtl_free(fetcher_);
+    fetcher_ = NULL;
+  }
+
   // destroy proxy after fetcher is destroyed
   if (NULL == fetcher_) {
     proxy_.destroy();
