@@ -548,6 +548,9 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
   } else {
     int64_t batch_size = MIN(iter_param_->op_->get_batch_size(), capacity);
     prefetcher_.recycle_block_data();
+    if (nullptr != micro_scanner_) {
+      micro_scanner_->reserve_reader_memory(false);
+    }
     while (OB_SUCC(ret) && count < batch_size) {
       if (OB_FAIL(prefetcher_.prefetch())) {
         LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
@@ -566,9 +569,6 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
           }
         }
       }
-    }
-    if (OB_SUCC(ret) && nullptr != micro_scanner_) {
-      micro_scanner_->reserve_reader_memory(false);
     }
   }
   if (count > 0 && datum_infos_.count() > 0) {
