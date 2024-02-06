@@ -75,11 +75,6 @@ public:
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
-    SEARCH_META_TABLE,
-    CHECK_META_TABLE,
-    SEARCH_CHECKSUM,
-    CHECK_CHECKSUM,
-    SCHEDULER_NEXT_ROUND,
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;

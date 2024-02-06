@@ -586,6 +586,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_tenant_tablet_scheduler.cpp
   compaction/ob_tenant_tablet_scheduler_task_mgr.cpp
   compaction/ob_compaction_schedule_iterator.cpp
+  compaction/ob_compaction_schedule_util.cpp
   compaction/ob_schedule_dag_func.cpp
   compaction/ob_extra_medium_info.cpp
   compaction/ob_medium_compaction_func.cpp

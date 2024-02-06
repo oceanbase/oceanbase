@@ -979,7 +979,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_meta_table(
     } else if (OB_FAIL(ObTabletTableOperator::batch_get_tablet_info(GCTX.sql_proxy_, MTL_ID(), tablet_ls_infos, tablet_infos))) {
       LOG_WARN("failed to get tablet info", K(ret), K(tablet_ls_infos));
     } else {
-      time_guard.click(ObStorageCompactionTimeGuard::SEARCH_META_TABLE);
+      time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_META_TABLE);
       for (int64_t i = 0, idx = 0; OB_SUCC(ret) && i < tablet_infos.count() && idx < tablet_ls_infos.count(); ++idx) {
         bool merge_finish = false;
         const ObTabletCheckInfo &tablet_ls_info = tablet_ls_infos.at(idx);
@@ -1000,7 +1000,7 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_meta_table(
           ++i;
         }
       }
-      time_guard.click(ObStorageCompactionTimeGuard::CHECK_META_TABLE);
+      time_guard.click(ObCompactionScheduleTimeGuard::CHECK_META_TABLE);
     }
   }
   return ret;
@@ -1209,10 +1209,10 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
         } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablets_replica_checksum(
             MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
           LOG_WARN("failed to get tablet checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObStorageCompactionTimeGuard::SEARCH_CHECKSUM))) {
+        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
         } else if (OB_FAIL(batch_check_medium_checksum(finish_tablet_ls_infos, checksum_items))) {
           LOG_WARN("failed to check medium tablets checksum", K(ret));
-        } else if (FALSE_IT(time_guard.click(ObStorageCompactionTimeGuard::CHECK_CHECKSUM))) {
+        } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
         }
       }
     }

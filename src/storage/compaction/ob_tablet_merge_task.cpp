@@ -69,12 +69,7 @@ const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "UPDATE_TABLET",
     "RELEASE_MEMTABLE",
     "SCHEDULE_OTHER_COMPACTION",
-    "DAG_FINISH",
-    "SEARCH_META_TABLE",
-    "CHECK_META_TABLE",
-    "SEARCH_CHECKSUM",
-    "CHECK_CHECKSUM",
-    "SCHEDULER_NEXT_ROUND"
+    "DAG_FINISH"
 };
 
 const char *ObStorageCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
