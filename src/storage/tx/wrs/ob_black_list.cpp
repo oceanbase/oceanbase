@@ -173,7 +173,9 @@ void ObBLService::run1()
       int64_t begin_tstamp = ObTimeUtility::current_time();
       do_thread_task_(begin_tstamp, last_print_stat_ts, last_clean_up_ts);
       int64_t end_tstamp = ObTimeUtility::current_time();
-      int64_t wait_interval = BLACK_LIST_REFRESH_INTERVAL - (end_tstamp - begin_tstamp);
+      int64_t cost_time = end_tstamp - begin_tstamp;
+      int64_t wait_interval = BLACK_LIST_REFRESH_INTERVAL - cost_time;
+      TRANS_LOG(INFO, "ls blacklist refresh finish", K(cost_time));
       if (wait_interval > 0) {
         thread_cond_.timedwait(wait_interval);
       }
@@ -236,6 +238,9 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
 {
   int ret = OB_SUCCESS;
   int64_t max_stale_time = 0;
+  int64_t max_stale_time_ns = 0;
+  int64_t gts = 0;
+  int64_t weak_read_scn = 0;
 
   while (OB_SUCC(result->next())) {
     ObBLKey bl_key;
@@ -251,7 +256,9 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
       TRANS_LOG(WARN, "get gts scn error", K(ret), K(bl_key));
     } else {
       max_stale_time = get_tenant_max_stale_time_(bl_key.get_tenant_id());
-      int64_t max_stale_time_ns = max_stale_time * 1000;
+      max_stale_time_ns = max_stale_time * 1000;
+      gts = gts_scn.get_val_for_gts() / 1000; // us
+      weak_read_scn = ls_info.weak_read_scn_ / 1000;  // us
       if (gts_scn.get_val_for_gts() > ls_info.weak_read_scn_ + max_stale_time_ns
           || ls_info.tx_blocked_
           || ls_info.migrate_status_ != ObMigrationStatus::OB_MIGRATION_STATUS_NONE) {
@@ -259,11 +266,13 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
         if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
           TRANS_LOG(WARN, "ls_bl_mgr_ add fail ", K(bl_key), K(ls_info));
         }
+        TRANS_LOG(INFO, "ls_bl_mgr_ add finish ", KR(ret), KTIME(gts), KTIME(weak_read_scn), K(max_stale_time), K(bl_key), K(ls_info));
       } else if (gts_scn.get_val_for_gts() + BLACK_LIST_WHITEWASH_INTERVAL_NS < ls_info.weak_read_scn_ + max_stale_time_ns) {
         // scn is new enough，remove this log stream in the blacklist
         ls_bl_mgr_.remove(bl_key);
       } else {
         // do nothing
+        TRANS_LOG(INFO, "ls_bl_mgr_ do nothing ", KR(ret), KTIME(gts), KTIME(weak_read_scn), K(max_stale_time), K(bl_key), K(ls_info));
       }
     }
   }
