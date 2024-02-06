@@ -399,6 +399,13 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
         #endif
           char *data = chunk->blk_data(block);
           int64_t len = cls * ABLOCK_SIZE;
+#if defined(__powerpc64__)  //Power ppc64le support medium page 65536(default) and small page 4096
+          // ABLOCK_SIZE is 8192, ps is medium page 65536(default)
+          if ( ps > ABLOCK_SIZE ) {
+            //do nothing
+            if ( false ) {
+              //do nothing
+#else
           if ((reinterpret_cast<uint64_t>(data) & (ps - 1)) != 0 ||
               (len & (ps - 1)) != 0) {
             _OB_LOG(DEBUG, "cannot be applied to non-multiple of page-size, page_size: %zd", ps);
@@ -411,6 +418,7 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
             if (-1 == result) {
               _OB_LOG_RET(WARN, OB_ERR_SYS, "madvise failed, errno: %d", errno);
               has_ignore = true;
+#endif
             } else {
               take_off_free_block(block, cls, chunk);
               block->is_washed_ = true;
@@ -442,7 +450,11 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
     tallocator_->update_wash_stat(related_chunks, washed_blks, washed_size);
   }
 #if MEMCHK_LEVEL >= 1
+#if defined(__powerpc64__)  //Power ppc64le support medium page 65536(default) and small page 4096
+  if (0 == washed_size && ABLOCK_SIZE & (PPC_SMALL_PAGE_SIZE - 1)) {
+#else
   if (0 == washed_size && ABLOCK_SIZE & (ps - 1)) {
+#endif
     abort_unless(total_payload_ == total_used_);
   }
 #endif
