@@ -2071,6 +2071,8 @@ private:
   int sess_bt_buff_pos_;
   int32_t sess_ref_cnt_;
   int32_t sess_ref_seq_;
+  int64_t found_rows_;
+  int64_t affected_rows_;
 
 protected:
   // alloc at most SMALL_BLOCK_SIZE bytes for each alloc() call.
