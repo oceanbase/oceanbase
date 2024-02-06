@@ -3827,7 +3827,7 @@ int ObTransformUtils::check_stmt_unique(const ObSelectStmt *stmt,
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(stmt->get_select_exprs_without_lob(select_exprs))) {
+  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(SMART_CALL(check_stmt_unique(stmt,
                                                   session_info,
@@ -8700,6 +8700,9 @@ int ObTransformUtils::recursive_set_stmt_unique(ObSelectStmt *select_stmt,
     }
   } else if (OB_FAIL(select_stmt->get_from_tables(origin_output_rel_ids))) {
     LOG_WARN("failed to get output rel ids", K(ret));
+  } else if (OB_UNLIKELY(origin_output_rel_ids.is_empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty unique keys", K(ret), KPC(select_stmt));
   } else {
     ObIArray<TableItem *> &table_items = select_stmt->get_table_items();
     for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
@@ -8777,10 +8780,13 @@ int ObTransformUtils::get_unique_keys_from_unique_stmt(const ObSelectStmt *selec
   unique_keys.reuse();
   added_unique_keys.reuse();
   ObConstRawExpr *expr = NULL;
+  const bool can_use_lob_as_unique_key = lib::is_mysql_mode();
   if (OB_ISNULL(select_stmt) || OB_ISNULL(expr_factory)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(select_stmt), K(expr_factory));
-  } else if (OB_FAIL(select_stmt->get_select_exprs_without_lob(unique_keys))) {
+  } else if (can_use_lob_as_unique_key && OB_FAIL(select_stmt->get_select_exprs(unique_keys))) {
+    LOG_WARN("failed to get select exprs", K(ret));
+  } else if (!can_use_lob_as_unique_key && OB_FAIL(select_stmt->get_select_exprs_without_lob(unique_keys))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_LIKELY(!unique_keys.empty())) {
     /* do nothing */
