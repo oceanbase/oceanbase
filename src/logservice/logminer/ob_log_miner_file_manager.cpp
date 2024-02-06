@@ -443,6 +443,10 @@ int ObLogMinerFileManager::generate_data_file_header_(
       break;
     }
 
+    case RecordFileFormat::JSON: {
+      // do nothing;
+      break;
+    }
 
     // TODO: support other type
     default: {
