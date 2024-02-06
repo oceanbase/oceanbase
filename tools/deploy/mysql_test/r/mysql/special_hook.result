@@ -13,8 +13,6 @@ gbk_chinese_ci	gbk	28	Yes	Yes	1
 gbk_bin	gbk	87		Yes	1
 utf16_general_ci	utf16	54	Yes	Yes	1
 utf16_bin	utf16	55		Yes	1
-utf8mb4_unicode_ci	utf8mb4	224		Yes	1
-utf16_unicode_ci	utf16	101		Yes	1
 gb18030_chinese_ci	gb18030	248	Yes	Yes	1
 gb18030_bin	gb18030	249		Yes	1
 latin1_swedish_ci	latin1	8	Yes	Yes	1
