@@ -8752,7 +8752,8 @@ int ObOptimizerUtil::check_pushdown_join_filter_for_subquery(const ObDMLStmt &pa
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpect null expr", K(ret));
           } else if (expr->has_flag(CNT_WINDOW_FUNC) ||
-                     expr->has_flag(CNT_AGG)) {
+                     expr->has_flag(CNT_AGG) ||
+                     ObPredicateDeduce::contain_special_expr(*expr)) {
             is_simple_expr = false;
           } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, view_column_exprs))) {
             LOG_WARN("failed to extract column exprs", K(ret));
