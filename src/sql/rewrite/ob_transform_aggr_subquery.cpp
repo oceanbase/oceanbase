@@ -441,6 +441,10 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObQueryRefRawExpr &query_
   if (OB_ISNULL(subquery = query_ref.get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret));
+  } else if (OB_FAIL(check_nested_subquery(query_ref, is_valid))) {
+    LOG_WARN("failed to check nested subquery", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("exec param reference another subquery");
     // 0. check single set
   } else if (OB_FAIL(check_single_set_subquery(*subquery,
                                                is_valid,
@@ -1439,6 +1443,10 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
   if (OB_ISNULL(subquery = query_ref.get_ref_stmt()) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret));
+  } else if (OB_FAIL(check_nested_subquery(query_ref, is_valid))) {
+    LOG_WARN("failed to check nested subquery", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("exec param reference another subquery");
     // 0. check single set
   } else if (OB_FAIL(check_single_set_subquery(*subquery,
                                                is_valid,
@@ -2667,6 +2675,26 @@ int ObTransformAggrSubquery::convert_limit_as_aggr(ObSelectStmt *subquery,
       } else {
         subquery->set_limit_offset(NULL, NULL);
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::check_nested_subquery(ObQueryRefRawExpr &query_ref,
+                                                   bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < query_ref.get_exec_params().count(); i++) {
+    ObExecParamRawExpr* exec_param = NULL;
+    ObRawExpr* outer_expr = NULL;
+    if (OB_ISNULL(exec_param = query_ref.get_exec_params().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_ISNULL(outer_expr = exec_param->get_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (outer_expr->has_flag(CNT_SUB_QUERY)) {
+      is_valid = false;
     }
   }
   return ret;
