@@ -7683,6 +7683,8 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
   ObSEArray<ObRawExpr*, 4> exec_param_remove_const_exprs;
   ObSEArray<ObRawExpr*, 4> column_ref_exprs;
   ObSEArray<ObRawExpr*, 4> column_ref_remove_const_exprs;
+  ObSEArray<ObRawExpr*, 4> query_ref_exprs;
+  ObSEArray<ObRawExpr*, 4> query_ref_remove_const_exprs;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null stmt", K(ret));
@@ -7698,9 +7700,11 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
                                             exec_param_remove_const_exprs,
                                             column_ref_exprs,
                                             column_ref_remove_const_exprs,
+                                            query_ref_exprs,
+                                            query_ref_remove_const_exprs,
                                             trans_happened))) {
     LOG_WARN("failed to get rollup const exprs", K(ret));
-  } else if (static_const_exprs.empty() && exec_param_exprs.empty()) {
+  } else if (static_const_exprs.empty() && exec_param_exprs.empty() && query_ref_exprs.empty()) {
     //do nothing
   } else if (OB_FAIL(replace_remove_const_exprs(
                                         sel_stmt,
@@ -7709,7 +7713,9 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
                                         exec_param_exprs,
                                         exec_param_remove_const_exprs,
                                         column_ref_exprs,
-                                        column_ref_remove_const_exprs))) {
+                                        column_ref_remove_const_exprs,
+                                        query_ref_exprs,
+                                        query_ref_remove_const_exprs))) {
     LOG_WARN("failed to replace remove const exprs", K(ret));
   }
   return ret;
@@ -7721,6 +7727,8 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
                                                   ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
                                                   ObIArray<ObRawExpr*> &column_ref_exprs,
                                                   ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                                                  ObIArray<ObRawExpr*> &query_ref_exprs,
+                                                  ObIArray<ObRawExpr*> &query_ref_remove_const_exprs,
                                                   bool &trans_happened)
 {
   int ret = OB_SUCCESS;
@@ -7739,8 +7747,31 @@ int ObTransformPreProcess::transform_rollup_exprs(ObDMLStmt *stmt, bool &trans_h
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (expr->has_flag(CNT_VOLATILE_CONST) || !expr->is_const_expr()) {
+    } else if (expr->has_flag(CNT_VOLATILE_CONST) || (!expr->is_const_expr() && !expr->is_query_ref_expr())) {
       //do nothing
+    } else if (expr->is_query_ref_expr()) {
+      // In mysql mode, rollup expr can reference subquery which may be transformed to a static const or onetime expr
+      // e.g. select (select 1) as field1, sum(id) from t1 GROUP BY field1 with rollup;
+      //      select (select count(1) from t1) as field1, sum(id) from t1 GROUP BY field1 with rollup;
+      if (ObOptimizerUtil::find_item(query_ref_exprs, expr)) {
+        //do nothing, skip dup exprs
+      } else if (OB_FAIL(ObRawExprUtils::build_remove_const_expr(
+                                        *ctx_->expr_factory_,
+                                        *ctx_->session_info_,
+                                        expr,
+                                        remove_const_expr))) {
+        LOG_WARN("failed to build remove const expr", K(ret));
+      } else if (OB_ISNULL(remove_const_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null expr", K(ret));
+      } else if (OB_FAIL(query_ref_exprs.push_back(expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(query_ref_remove_const_exprs.push_back(remove_const_expr))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      } else {
+        stmt->get_rollup_exprs().at(i) = remove_const_expr;
+        trans_happened = true;
+      }
     } else if (expr->is_static_const_expr()) { //static const expr
       if (ObOptimizerUtil::find_item(static_const_exprs, expr)) {
         //do nothing, skip dup exprs
@@ -7807,7 +7838,9 @@ int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
                                                       ObIArray<ObRawExpr*> &exec_params,
                                                       ObIArray<ObRawExpr*> &exec_params_remove_const_exprs,
                                                       ObIArray<ObRawExpr*> &column_ref_exprs,
-                                                      ObIArray<ObRawExpr*> &column_ref_remove_const_exprs)
+                                                      ObIArray<ObRawExpr*> &column_ref_remove_const_exprs,
+                                                      ObIArray<ObRawExpr*> &query_ref_exprs,
+                                                      ObIArray<ObRawExpr*> &query_ref_remove_const_exprs)
 {
   int ret = OB_SUCCESS;
   ObQueryCtx *query_ctx = NULL;
@@ -7833,6 +7866,8 @@ int ObTransformPreProcess::replace_remove_const_exprs(ObSelectStmt *stmt,
       if (OB_FAIL(replacer.add_replace_exprs(static_const_exprs, static_remove_const_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));
       } else if (OB_FAIL(replacer.add_replace_exprs(column_ref_exprs, column_ref_remove_const_exprs))) {
+        LOG_WARN("failed to add replace exprs", K(ret));
+      } else if (OB_FAIL(replacer.add_replace_exprs(query_ref_exprs, query_ref_remove_const_exprs))) {
         LOG_WARN("failed to add replace exprs", K(ret));
       } else if (OB_FAIL(stmt->iterate_stmt_expr(replacer))) {
         LOG_WARN("failed to iterate stmt expr", K(ret));
