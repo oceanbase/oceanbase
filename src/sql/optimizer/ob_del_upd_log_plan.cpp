@@ -1084,7 +1084,7 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
         LOG_WARN("failed to assign sharding conditions", K(ret));
       }
     }
-    if (OB_FAIL(calculate_table_location_and_sharding(
+    if (FAILEDx(calculate_table_location_and_sharding(
                        *get_stmt(),
                        sharding_conditions,
                        index_dml_info->loc_table_id_,
@@ -1548,7 +1548,7 @@ int ObDelUpdLogPlan::allocate_pdml_update_as_top(ObLogicalOperator *&top,
         LOG_WARN("failed to get view check exprs", K(ret));
       }
     }
-    if (OB_FAIL(update_op->compute_property())) {
+    if (FAILEDx(update_op->compute_property())) {
       LOG_WARN("failed to compute property", K(ret));
     } else {
       top = update_op;

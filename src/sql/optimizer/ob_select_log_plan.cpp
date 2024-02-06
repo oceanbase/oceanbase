@@ -6701,9 +6701,9 @@ int ObSelectLogPlan::init_wf_topn_option(WinFuncOpHelper &win_func_helper, bool 
   }
   if (OB_FAIL(ret) || !win_func_helper.enable_topn_) {
     //do nothing
-  } else if (check_wf_part_topn_supported(winfunc_exprs,
-                                          win_func_helper.partition_exprs_,
-                                          win_func_helper.enable_topn_)) {
+  } else if (OB_FAIL(check_wf_part_topn_supported(winfunc_exprs,
+                                                  win_func_helper.partition_exprs_,
+                                                  win_func_helper.enable_topn_))) {
     LOG_WARN("check partition topn supported failed", K(ret));
   } else if (win_func_helper.enable_topn_) {
     for (int64_t i = 0; OB_SUCC(ret) && NULL == win_func_helper.topn_const_ && i < filter_exprs.count(); ++i) {

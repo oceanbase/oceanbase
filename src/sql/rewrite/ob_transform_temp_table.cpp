@@ -303,7 +303,7 @@ int ObTransformTempTable::check_stmt_can_materialize(ObSelectStmt *stmt, bool is
       ObAggFunRawExpr *dummy = NULL;
       bool can_use_fast_min_max = false;
       STOP_OPT_TRACE;
-      if (ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max)) {
+      if (OB_FAIL(ObTransformMinMax::check_transform_validity(*ctx_, stmt, dummy, can_use_fast_min_max))) {
         LOG_WARN("failed to check fast min max", K(ret));
       }
       RESUME_OPT_TRACE;
@@ -1698,7 +1698,7 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
     if (OB_SUCC(ret) && !find) {
       ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
       ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-      if (ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select)) {
+      if (OB_FAIL(ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select))) {
         LOG_WARN("failed to replace expr", K(ret));
       } else if (OB_FAIL(new_select_list.push_back(view_select))) {
         LOG_WARN("failed to push back expr", K(ret));

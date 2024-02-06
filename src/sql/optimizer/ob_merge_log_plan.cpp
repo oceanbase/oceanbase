@@ -879,7 +879,7 @@ int ObMergeLogPlan::prepare_table_dml_info_update(const ObMergeTableInfo& merge_
     }
 
     ObSEArray<IndexDMLInfo*, 8> udpate_indexes;
-    if (OB_FAIL(udpate_indexes.assign(index_dml_infos))) {
+    if (FAILEDx(udpate_indexes.assign(index_dml_infos))) {
       LOG_WARN("failed to assign index dml infos", K(ret));
     } else {
       index_dml_infos.reset();

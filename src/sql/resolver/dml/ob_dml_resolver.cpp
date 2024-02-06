@@ -9812,6 +9812,10 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
           col_expr->set_column_attr(table_item.get_table_name(), ref_select_item.alias_name_);
           col_expr->set_database_name(table_item.database_name_);
           col_expr->set_unpivot_mocked_column(ref_select_item.is_unpivot_mocked_column_);
+          if (table_item.alias_name_.empty()) {
+            col_expr->set_synonym_db_name(table_item.synonym_db_name_);
+            col_expr->set_synonym_name(table_item.synonym_name_);
+          }
           //set enum_set_values
           if (ob_is_enumset_tc(select_expr->get_data_type())) {
             if (OB_FAIL(col_expr->set_enum_set_values(select_expr->get_enum_set_values()))) {
