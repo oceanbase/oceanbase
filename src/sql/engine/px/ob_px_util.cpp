@@ -973,7 +973,9 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
                                                   ObDASTableLoc *dml_loc)
 {
   int ret = OB_SUCCESS;
-
+  ObDASTableLoc *dml_table_loc = nullptr;
+  ObTableID dml_table_location_key = OB_INVALID_ID;
+  ObTableID dml_ref_table_id = OB_INVALID_ID;
   ObSEArray<int64_t, 2>base_order;
   // 处理insert op 对应的partition location信息
   if (OB_FAIL(ret) || OB_ISNULL(dml_op)) {
@@ -1010,8 +1012,10 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
         dfo, base_order, table_loc, dml_op))) {
       LOG_WARN("failed to set sqc accessed location", K(ret));
     }
+    dml_table_loc = table_loc;
+    dml_table_location_key = table_location_key;
+    dml_ref_table_id = ref_table_id;
   }
-
   // 处理tsc对应的partition location信息
   for (int64_t i = 0; OB_SUCC(ret) && i < scan_ops.count(); ++i) {
     ObDASTableLoc *table_loc = nullptr;
@@ -1039,6 +1043,15 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
                K(ref_table_id), KPC(table_loc));
     }
   } // end for
+  if (OB_FAIL(ret)) {
+    if (NULL == dml_op) {
+      LOG_WARN("set dfo accessed location failed, dml op is null", K(base_table_location_key), K(dfo));
+    } else {
+      LOG_WARN("set dfo accessed location failed, dml op is not null", K(base_table_location_key),
+               K(dml_op), K(dml_op->is_table_location_uncertain()),  K(dml_table_location_key),
+               K(dml_ref_table_id), KPC(dml_table_loc));
+    }
+  }
   return ret;
 }
 
