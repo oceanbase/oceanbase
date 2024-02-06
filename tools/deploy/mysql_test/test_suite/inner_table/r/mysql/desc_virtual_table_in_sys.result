@@ -5806,6 +5806,8 @@ create_scn	bigint(20) unsigned	NO		0
 readable_scn	bigint(20) unsigned	NO		0	
 sync_scn	bigint(20) unsigned	NO		0	
 drop_scn	bigint(20) unsigned	NO		0	
+config_version	varchar(128)	NO			
+bconfig_version	varchar(1024)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_recovery_stat;
 IF(count(*) >= 0, 1, 0)
 1
