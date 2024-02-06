@@ -1795,10 +1795,10 @@ int ObResolverUtils::resolve_sp_name(ObSQLSessionInfo &session_info,
       (lib::is_oracle_mode() ? OB_MAX_PL_IDENT_LENGTH : OB_MAX_MYSQL_PL_IDENT_LENGTH))) {
       ret = OB_ERR_TOO_LONG_IDENT;
       LOG_WARN("identifier is too long", K(sp_name), K(ret));
-    } else if (!need_db_name && lib::is_oracle_mode()) {
-      // do nothing
     } else if (NULL == (db_node = sp_name_node.children_[0])) {
-      if (session_info.get_database_name().empty()) {
+      if (!need_db_name && lib::is_oracle_mode()) {
+        // do nothing ...
+      } else if (session_info.get_database_name().empty()) {
         ret = OB_ERR_NO_DB_SELECTED;
         LOG_USER_ERROR(OB_ERR_NO_DB_SELECTED);
         LOG_WARN("No Database Selected", K(ret));
