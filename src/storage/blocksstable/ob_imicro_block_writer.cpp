@@ -90,16 +90,10 @@ int ObMicroBufferWriter::init(const int64_t capacity, const int64_t reserve_size
 
 void ObMicroBufferWriter::reset()
 {
-  if (old_buf_ != nullptr) {
-    allocator_.free(old_buf_);
-    old_buf_ = nullptr;
-  }
   if (data_ != nullptr) {
     allocator_.free(data_);
     data_ = nullptr;
   }
-  old_size_ = 0;
-  lazy_move_ = false;
   has_expand_ = false;
   memory_reclaim_cnt_ = 0;
   reset_memory_threshold_ = 0;
@@ -113,11 +107,6 @@ void ObMicroBufferWriter::reset()
 
 void ObMicroBufferWriter::reuse()
 {
-  if (old_buf_ != nullptr) {
-    int ret = OB_ERR_SYS;
-    STORAGE_LOG(ERROR, "unexcpected old buf", K(ret), K(*this));
-    abort();
-  }
   if (buffer_size_ > default_reserve_ && len_ <= default_reserve_) {
     memory_reclaim_cnt_++;
     if (memory_reclaim_cnt_ >= reset_memory_threshold_) {
@@ -136,8 +125,6 @@ void ObMicroBufferWriter::reuse()
   } else {
     memory_reclaim_cnt_ = 0;
   }
-  old_size_ = 0;
-  lazy_move_ = false;
   has_expand_ = false;
   len_ = 0;
 }
@@ -179,14 +166,8 @@ int ObMicroBufferWriter::reserve(const int64_t size)
       STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(alloc_size));
     } else if (data_ != nullptr) {
       has_expand_ = true;
-      if (lazy_move_) {
-        lazy_move_ = false;
-        old_buf_ = data_;
-        old_size_ = len_;
-      } else {
-        MEMCPY(buf, data_, len_);
-        allocator_.free(data_);
-      }
+      MEMCPY(buf, data_, len_);
+      allocator_.free(data_);
       data_ = nullptr;
     }
     if (OB_SUCC(ret)) {
