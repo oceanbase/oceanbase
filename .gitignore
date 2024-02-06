@@ -229,6 +229,7 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
+tools/deploy/tpchobp_test.yaml
 tools/log_parser/slog_parser
 tools/log_tool/log_statistics
 tools/log_tool/log_tool
