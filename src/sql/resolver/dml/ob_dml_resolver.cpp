@@ -4604,6 +4604,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   }
   if (OB_SUCC(ret)) {
     OX (params_.is_resolve_table_function_expr_ = true);
+    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     OZ (resolve_sql_expr(*(parse_tree.children_[0]), function_table_expr));
     OX (params_.is_resolve_table_function_expr_ = false);
     CK (OB_NOT_NULL(function_table_expr));
