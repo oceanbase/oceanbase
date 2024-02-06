@@ -493,13 +493,10 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < access_col_cnt; ++i) {
       exprs.reuse();
-      // mysql compatibility, select a,count(a), output the first value of a
-      // from 4.3, this non-standard scalar group by will not pushdown to storage
-      // so just ignore the output_exprs_
-      // if (nullptr != row_param.output_sel_mask_ && !row_param.output_sel_mask_->at(i)) {
-      // } else if (OB_FAIL(exprs.push_back(row_param.output_exprs_->at(i)))) {
-      //   LOG_WARN("Fail to push back", K(ret), K(i));
-      // }
+      if (nullptr != row_param.output_sel_mask_ && !row_param.output_sel_mask_->at(i)) {
+      } else if (OB_FAIL(exprs.push_back(row_param.output_exprs_->at(i)))) {
+        LOG_WARN("Fail to push back", K(ret), K(i));
+      }
       const int32_t out_col_offset = row_param.out_cols_project_->at(i);
       const uint32_t cg_idx = access_cgs->at(out_col_offset);
       for (int64_t j = 0; OB_SUCC(ret) && j < row_param.agg_cols_project_->count(); ++j) {

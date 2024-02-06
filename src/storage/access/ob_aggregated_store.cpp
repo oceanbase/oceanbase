@@ -152,12 +152,12 @@ int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
     for (int64_t i = 0; OB_SUCC(ret) && i < param.output_exprs_->count(); ++i) {
       // mysql compatibility, select a,count(a), output the first value of a
       // from 4.3, this non-standard scalar group by will not pushdown to storage
-      // so just ignore the output_exprs_
+      // so we can just set an determined value to output_exprs_ as it's never be used
       if (T_PSEUDO_GROUP_ID == param.output_exprs_->at(i)->type_) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("Unexpected group idx expr", K(ret));
-      } /* else if (nullptr == param.output_sel_mask_ || param.output_sel_mask_->at(i)) {
-        need_access_data_ = true;
+      } else if (nullptr == param.output_sel_mask_ || param.output_sel_mask_->at(i)) {
+        ObAggCell *cell = nullptr;
         int32_t col_offset = param.iter_param_.out_cols_project_->at(i);
         int32_t col_index = param.iter_param_.read_info_->get_columns_index().at(col_offset);
         const share::schema::ObColumnParam *col_param = out_cols_param->at(col_offset);
@@ -165,8 +165,14 @@ int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
         ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, expr, batch_size);
         if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_))) {
           LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
+        } else if (FALSE_IT(cell = agg_cells_.at(agg_cells_.count() - 1))) {
+        } else if (OB_UNLIKELY(PD_FIRST_ROW != cell->get_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected agg type", K(ret), KPC(cell));
+        } else {
+          static_cast<ObFirstRowAggCell*>(cell)->set_determined_value();
         }
-      } */
+      }
     }
     if (OB_SUCC(ret)) {
       has_lob_column_out_ = false;
