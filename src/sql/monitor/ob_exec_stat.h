@@ -412,6 +412,8 @@ struct ObAuditRecordData {
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
+  uint64_t total_memstore_read_row_count_;
+  uint64_t total_ssstore_read_row_count_;
 };
 
 } //namespace sql

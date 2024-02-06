@@ -1065,6 +1065,12 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           int64_t set_v = record.data_.seq_num_;
           cells[cell_idx].set_int(set_v);
         } break;
+        case TOTAL_MEMSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
+        } break;
+        case TOTAL_SSSTORE_READ_ROW_COUNT: {
+          cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
+        } break;
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(col_id));

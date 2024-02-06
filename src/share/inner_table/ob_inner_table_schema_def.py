@@ -8167,7 +8167,9 @@ def_table_schema(
     ('plsql_exec_time', 'int'),
     ('network_wait_time', 'uint', 'true'),
     ('stmt_type', 'varchar:MAX_STMT_TYPE_NAME_LENGTH', 'true'),
-    ('seq_num', 'int')
+    ('seq_num', 'int'),
+    ('total_memstore_read_row_count', 'int'),
+    ('total_ssstore_read_row_count', 'int')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -15371,7 +15373,9 @@ def_table_schema(
                          case when tx_internal_route_flag & 96 = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -51632,7 +51636,9 @@ def_table_schema(
                          case when bitand(tx_internal_route_flag, 96) = 32 then 1 else 0 end
                            as TX_INTERNAL_ROUTING,
                          tx_internal_route_version as TX_STATE_VERSION,
-                         flt_trace_id as FLT_TRACE_ID
+                         flt_trace_id as FLT_TRACE_ID,
+                         total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
