@@ -174,6 +174,7 @@ class ObIComponentFactory;
 class ObLS : public common::ObLink
 {
 public:
+  typedef common::ObLatch RWLock;
   friend ObLSLockGuard;
   friend class ObFreezer;
   friend class checkpoint::ObDataCheckpoint;
@@ -194,6 +195,34 @@ public:
     void reset_() { pos_ = 0; }
   private:
     int64_t pos_;
+  };
+  class RDLockGuard
+  {
+    static const int64_t LOCK_CONFLICT_WARN_TIME = 100 * 1000; // 100 ms
+  public:
+    [[nodiscard]] explicit RDLockGuard(RWLock &lock, const int64_t abs_timeout_us = INT64_MAX);
+    ~RDLockGuard();
+    inline int get_ret() const { return ret_; }
+  private:
+    RWLock &lock_;
+    int ret_;
+    int64_t start_ts_;
+  private:
+    DISALLOW_COPY_AND_ASSIGN(RDLockGuard);
+  };
+  class WRLockGuard
+  {
+    static const int64_t LOCK_CONFLICT_WARN_TIME = 100 * 1000; // 100 ms
+  public:
+    [[nodiscard]] explicit WRLockGuard(RWLock &lock, const int64_t abs_timeout_us = INT64_MAX);
+    ~WRLockGuard();
+    inline int get_ret() const { return ret_; }
+  private:
+    RWLock &lock_;
+    int ret_;
+    int64_t start_ts_;
+  private:
+    DISALLOW_COPY_AND_ASSIGN(WRLockGuard);
   };
 public:
   ObLS();
@@ -938,7 +967,8 @@ private:
   ObTransferHandler transfer_handler_;
   // Record the dependent transfer information when restarting
   ObLSTransferInfo startup_transfer_info_;
-
+  // this is used for the meta lock, and will be removed later
+  RWLock meta_rwlock_;
 };
 
 }
