@@ -86,6 +86,7 @@ mysql -uroot -h127.1 -P2881
 | OB_TENANT_MINI_CPU      |            | oceanbase租户mini_cpu参数配置 |
 | OB_TENANT_MEMORY_SIZE   |            | oceanbase租户memory_size参数配置 |
 | OB_TENANT_LOG_DISK_SIZE |            | oceanbase租户log_disk_size参数配置 |
+| OB_TENANT_LOWER_CASE_TABLE_NAMES | 1 | oceanbase 租户 表名是否区分大小写 |
 
 ## 运行 Sysbench 脚本
 

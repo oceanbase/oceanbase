@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", dest="opt_str", type=str, default="__min_full_resource_pool_memory=2147483648,memory_limit=6G,system_memory=1G,datafile_size=256M,log_disk_size=5G,cpu_count=16")
     parser.add_argument("-N", dest="daemon", type=str, default="1")
     parser.add_argument("--tenant_name", type=str, default="@OB_TENANT_NAME@")
+    parser.add_argument("--tenant_lower_case_table_names", type=int, default="@OB_TENANT_LOWER_CASE_TABLE_NAMES@")
     parser.add_argument("--max_cpu", type=float, default=14.0)
     parser.add_argument("--min_cpu", type=float, default=14.0)
     parser.add_argument("--memory_size", type=int, default=3221225472)
@@ -116,8 +117,8 @@ if __name__ == "__main__":
                             args.tenant_name, args.tenant_name, args.zone))
             logging.info("waiting for create tenant...")
             create_tenant_begin = datetime.datetime.now()
-            cursor.execute("create tenant %s replica_num=1,zone_list=('%s'),primary_zone='RANDOM',resource_pool_list=('%s_pool') set ob_tcp_invited_nodes='%%', ob_compatibility_mode = 'mysql'" % ( \
-                            args.tenant_name, args.zone, args.tenant_name))
+            cursor.execute("create tenant %s replica_num=1,zone_list=('%s'),primary_zone='RANDOM',resource_pool_list=('%s_pool') set ob_tcp_invited_nodes='%%', ob_compatibility_mode = 'mysql', lower_case_table_names=%d" % ( \
+                            args.tenant_name, args.zone, args.tenant_name, args.tenant_lower_case_table_names))
             create_tenant_end = datetime.datetime.now()
             logging.info('create tenant success: %s ms' % ((create_tenant_end - create_tenant_begin).total_seconds() * 1000))
         db.close()
