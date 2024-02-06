@@ -121,5 +121,271 @@ show create view v2_from_cte;
 --source mysql_test/include/show_create_table_old_version_replica2.inc
 show create view v3_from_cte;
 
-
 drop database cte_st;
+
+##bug:https://work.aone.alibaba-inc.com/issue/50854986
+
+--disable_warnings
+drop database if exists cte_test;
+--enable_warnings
+
+create database cte_test;
+use cte_test;
+
+create table columns(id int, parent_id int);
+create table columns_content_category( business_id int, attribute_value int);
+
+with recursive temp as (
+    select r.*, c.attribute_value from columns r left join columns_content_category c on r.id = c.business_id where r.id = '1' 
+    union all 
+    select s.*,c.attribute_value from columns s left join columns_content_category c on s.id = c.business_id inner join temp t on s.parent_id = t.id
+) select * from temp;
+
+with recursive temp as (
+    select r.*, c.attribute_value from columns r join columns_content_category c 
+    union all 
+    select s.*,c.attribute_value from columns s join columns_content_category c, temp t
+) select * from temp;
+
+with recursive temp as (
+    select * from columns 
+    union all 
+    select columns.* from columns inner join temp
+) select * from temp;
+
+DROP TABLE /*! IF EXISTS*/ table10_hash_pk_parts_10_int_not_null; 
+CREATE TABLE table10_hash_pk_parts_10_int_not_null (
+col_decimal_20_0_index decimal(20,0),
+col_decimal_20_0 decimal(20,0),
+col_double_unique_index double,
+col_varchar_20 varchar(20),
+col_double double,
+col_varchar_20_unique_index varchar(20),
+col_timestamp_index timestamp NULL DEFAULT NULL,
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+pk int not null,
+col_bigint_index bigint,
+col_decimal_20_0_unique_index decimal(20,0),
+col_timestamp timestamp NULL DEFAULT NULL,
+col_bigint_unique_index bigint,
+col_double_index double,
+col_varchar_20_index varchar(20),
+col_bigint bigint,
+/*Indices*/
+index idx7(pk, col_decimal_20_0_index ),
+unique index idx5(pk, col_double_unique_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx13(pk, col_timestamp_index ),
+unique index idx14(pk, col_timestamp_unique_index ),
+primary key (pk) ,
+index idx1(pk, col_bigint_index ),
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+unique index idx2(pk, col_bigint_unique_index ),
+index idx4(pk, col_double_index ),
+index idx10(pk, col_varchar_20_index ))    PARTITION BY hash(pk) partitions 10  ; 
+INSERT INTO table10_hash_pk_parts_10_int_not_null VALUES  (NULL, 0, NULL, '', NULL, 'w', '2001-01-10 17:32:35.010189', NULL, 1, -7294424021456650240, NULL, NULL, 3, 5, 'dt', NULL) ,  (0, 0, 1, 'jd', 5, NULL, '2009-04-27 07:59:12.056599', '2002-01-09 05:46:20.000211', 2, NULL, 0, NULL, NULL, NULL, NULL, -306526249637904384) ,  (0, 0, 1, 't', 7, NULL, '2008-11-01 18:54:51.025038', '2001-01-04 02:08:46.017648', 3, 0, 2, '2008-06-25 02:39:08.005037', -1912059516795486208, 7, NULL, 5) ,  (0, 0, 0, '', 0, 'y', '2008-03-01 20:48:49.025320', NULL, 4, 7, 0, '2007-05-05 16:02:47.032046', 1, 0, 'w', 9) ,  (NULL, 5, NULL, 'ow', 1, 'fo', NULL, NULL, 5, 3, 0, '2007-08-04 10:41:56.047051', NULL, 0, NULL, 0) ,  (0, 9, 0, '', 0, '', '2004-05-25 10:26:50.025548', '2008-01-04 12:11:43.019553', 6, -3417669167220785152, NULL, '2003-02-06 18:13:10.024145', NULL, NULL, NULL, NULL) ,  (NULL, 2, NULL, NULL, 0, 'h', NULL, NULL, 7, 7, 0, NULL, 5, 2, 'f', 4) ,  (2, 4, 8, 'm', 1, 'k', '2008-06-03 17:51:04.064939', NULL, 8, 9203950263461740544, NULL, '2006-07-20 12:00:33.056114', 7338334117823512576, 1, 'xf', NULL) ,  (0, 3, 0, NULL, NULL, 'j', '2007-05-13 08:24:35.056780', '2000-03-04 12:49:39.002452', 9, NULL, 8, NULL, NULL, 0, 'lx', -436567688878227456) ,  (4, NULL, 0, 'xl', 0, 'y', NULL, NULL, 10, 9, 0, NULL, 4, NULL, '', NULL) ;
+
+
+DROP TABLE /*! IF EXISTS*/ table10_key_pk_parts_10_int_not_null; 
+CREATE TABLE table10_key_pk_parts_10_int_not_null (
+col_double_index double,
+col_double double,
+col_timestamp_index timestamp NULL DEFAULT NULL,
+col_decimal_20_0 decimal(20,0),
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_decimal_20_0_unique_index decimal(20,0),
+col_decimal_20_0_index decimal(20,0),
+col_varchar_20 varchar(20),
+col_bigint bigint,
+col_timestamp timestamp NULL DEFAULT NULL,
+col_bigint_unique_index bigint,
+col_double_unique_index double,
+col_varchar_20_unique_index varchar(20),
+col_bigint_index bigint,
+col_varchar_20_index varchar(20),
+pk int not null,
+/*Indices*/
+index idx4(pk, col_double_index ),
+index idx13(pk, col_timestamp_index ),
+unique index idx14(pk, col_timestamp_unique_index ),
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+index idx7(pk, col_decimal_20_0_index ),
+unique index idx2(pk, col_bigint_unique_index ),
+unique index idx5(pk, col_double_unique_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx1(pk, col_bigint_index ),
+index idx10(pk, col_varchar_20_index ),
+primary key (pk) )     ; 
+INSERT INTO table10_key_pk_parts_10_int_not_null VALUES  (0, 1, NULL, 1, NULL, NULL, 7, '', 3736017365880537088, '2002-11-28 22:56:38.058026', NULL, 0, '', 4, NULL, 1) ,  (7, 0, '2008-01-24 00:02:32.055687', NULL, NULL, NULL, 7, 'w', -1047931338293772288, NULL, 1159958379024613376, NULL, 't', 777996835628253184, 'b', 2) ,  (NULL, 0, NULL, 0, NULL, NULL, 0, 'r', -1936829314746023936, '2009-07-24 04:15:52.015027', 7, 0, '', NULL, 'm', 3) ,  (NULL, 0, '2003-09-03 11:59:53.056768', 5, NULL, 0, 0, 'i', NULL, '2000-08-19 07:39:28.003506', 4, NULL, 'em', NULL, 'l', 4) ,  (4, NULL, '2004-05-06 10:04:04.024740', 9, NULL, NULL, NULL, NULL, NULL, '2003-10-03 12:26:00.052711', NULL, NULL, NULL, 1, 'v', 5) ,  (0, 4, NULL, NULL, NULL, 0, 0, 'd', 7910009795522854912, '2007-09-23 03:06:55.011088', 2, NULL, 'c', NULL, '', 6) ,  (8, 0, '2005-01-19 14:48:58.056925', 0, '2000-01-03 07:12:19.021293', 7, 5, '', NULL, NULL, -8732761152448102400, 0, NULL, 0, NULL, 7) ,  (3, NULL, NULL, 0, '2005-12-18 18:09:45.035692', 6, 4, '', -3061884796658515968, '2007-03-02 14:26:30.055104', -3525192608324255744, NULL, 'tl', 4, 'e', 8) ,  (0, 9, '2002-03-05 18:37:32.033436', 0, NULL, 5, 4, '', 8482811373129039872, NULL, 2678515878378602496, 0, 'l', 5, '', 9) ,  (0, NULL, NULL, NULL, '2007-03-10 08:28:05.014675', 6, 1, 't', -5018135884797575168, NULL, NULL, NULL, NULL, 6, '', 10) ;
+
+
+DROP TABLE /*! IF EXISTS*/ table10_int_not_null; 
+CREATE TABLE table10_int_not_null (
+col_timestamp timestamp NULL DEFAULT NULL,
+col_decimal_20_0 decimal(20,0),
+pk int not null,
+col_bigint_unique_index bigint,
+col_timestamp_index timestamp NULL DEFAULT NULL,
+col_bigint_index bigint,
+col_varchar_20_index varchar(20),
+col_double double,
+col_double_index double,
+col_double_unique_index double,
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_bigint bigint,
+col_varchar_20_unique_index varchar(20),
+col_decimal_20_0_index decimal(20,0),
+col_varchar_20 varchar(20),
+col_decimal_20_0_unique_index decimal(20,0),
+/*Indices*/
+primary key (pk) ,
+unique index idx2(pk, col_bigint_unique_index ),
+index idx13(pk, col_timestamp_index ),
+index idx1(pk, col_bigint_index ),
+index idx10(pk, col_varchar_20_index ),
+index idx4(pk, col_double_index ),
+unique index idx5(pk, col_double_unique_index ),
+unique index idx14(pk, col_timestamp_unique_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx7(pk, col_decimal_20_0_index ),
+unique index idx8(pk, col_decimal_20_0_unique_index ))    ; 
+INSERT INTO table10_int_not_null VALUES  ('2005-05-18 11:19:09.008943', NULL, 1, NULL, '2001-09-12 05:02:08.016157', -1550927121675714560, NULL, NULL, 1, NULL, '2008-02-01 13:55:11.062376', NULL, '', 0, 'rb', 4) ,  ('2003-08-14 14:59:03.016659', 0, 2, -3900117277302849536, NULL, 5421208051447234560, 'e', 0, 0, NULL, '2001-05-17 10:57:24.021688', 0, NULL, 0, NULL, 6) ,  (NULL, 0, 3, 8, '2000-01-10 07:01:46.050646', 5, NULL, NULL, 0, 0, NULL, 2689211927493607424, 't', 0, NULL, NULL) ,  ('2009-02-01 14:26:43.012924', 0, 4, 6997186446050197504, '2007-12-07 20:38:29.030916', NULL, 's', 0, 0, NULL, NULL, NULL, '', 1, 'd', 9) ,  ('2003-04-09 09:58:31.028925', 0, 5, -6533878634384457728, '2004-05-03 19:06:57.031964', -3141542215067631616, 'f', 2, 0, 3, NULL, NULL, NULL, 0, '', 0) ,  ('2008-04-18 14:38:47.027080', 0, 6, 3, NULL, NULL, 'e', 3, 0, NULL, NULL, 7441916909253033984, 'e', 0, '', 6) ,  ('2003-08-18 05:10:35.041295', 0, 7, 0, NULL, 2, 'oe', 0, 0, NULL, '2004-09-24 05:12:58.037006', 8790182047697076224, 'q', 2, 'q', 0) ,  ('2002-01-20 23:51:20.024661', 0, 8, NULL, '2006-08-07 12:41:54.044595', 1, 'i', NULL, 0, 2, '2001-11-13 20:07:58.005476', NULL, 'z', 0, 'n', NULL) ,  ('2001-04-24 02:57:53.038521', NULL, 9, 5, NULL, -4339218240971472896, NULL, 1, 7, 0, '2006-11-09 13:38:11.061982', 2, 'i', 3, 'in', NULL) ,  ('2008-09-03 11:36:10.038876', 0, 10, -6797902162539053056, '2005-06-20 11:32:10.026280', 1, 'oi', 5, 1, 0, '2009-12-19 17:00:43.014595', 4, NULL, 2, 'so', 0) ;
+
+select (select rcte2.num2 from (with recursive cte as ( select t1.col_decimal_20_0_index as num1, t1.col_double as num2, t1.col_varchar_20_index as var1, t1.col_varchar_20_unique_index as var2 from table10_key_pk_parts_10_int_not_null as t1 union all select /*+ no_rewrite leading((cte t2) t3) use_nl((cte t2) t3) */ cte.num1+1, cte.num2+1, cte.var1, cte.var2 from cte, table10_key_pk_parts_10_int_not_null as t2, table10_int_not_null as t3 where cte.num1 = t2.col_bigint_index and t3.col_bigint_unique_index < t2.col_double ) select * from cte order by 1,2,3,4 asc) as rcte2 where rcte2.num2 >= rcte1.num2 and rcte2.num2 > 7 and rcte1.num2 <= 1 order by 1 desc limit 1) from (with recursive cte as ( select t1.col_decimal_20_0_unique_index as num1, t1.col_decimal_20_0_unique_index as num2, t1.col_varchar_20_index as var1, t1.col_varchar_20_index as var2 from table10_hash_pk_parts_10_int_not_null as t1 union all select /*+ use_nl(cte t2) leading(cte t2)*/ cte.num1+1, cte.num2+1, cte.var1, cte.var2 from cte join table10_key_pk_parts_10_int_not_null as t2 on cte.num1 = t2.col_decimal_20_0_unique_index ) select * from cte order by 1,2,3,4 asc) as rcte1 order by 1 desc;
+
+DROP TABLE /*! IF EXISTS*/ table10_hash_pk_parts_10_int_not_null; 
+CREATE TABLE table10_hash_pk_parts_10_int_not_null (
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_bigint bigint,
+col_bigint_unique_index bigint,
+col_decimal_20_0_index decimal(20,0),
+col_double_index double,
+col_timestamp_index timestamp NULL DEFAULT NULL,
+col_varchar_20_unique_index varchar(20),
+col_double_unique_index double,
+col_varchar_20_index varchar(20),
+col_decimal_20_0 decimal(20,0),
+pk int not null,
+col_varchar_20 varchar(20),
+col_decimal_20_0_unique_index decimal(20,0),
+col_double double,
+col_bigint_index bigint,
+col_timestamp timestamp NULL DEFAULT NULL,
+/*Indices*/
+unique index idx14(pk, col_timestamp_unique_index ),
+unique index idx2(pk, col_bigint_unique_index ),
+index idx7(pk, col_decimal_20_0_index ),
+index idx4(pk, col_double_index ),
+index idx13(pk, col_timestamp_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+unique index idx5(pk, col_double_unique_index ),
+index idx10(pk, col_varchar_20_index ),
+primary key (pk) ,
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+index idx1(pk, col_bigint_index ))    PARTITION BY hash(pk) partitions 10  ; 
+INSERT INTO table10_hash_pk_parts_10_int_not_null VALUES  ('2003-05-18 09:00:34.063398', 0, NULL, 0, 0, '2009-07-08 01:42:35.011669', 'dm', NULL, '', NULL, 1, 'fd', 6, NULL, NULL, NULL) ,  (NULL, -8181351673071927296, NULL, NULL, NULL, NULL, '', 6, NULL, NULL, 2, 'yf', 0, NULL, -1395552934531432448, '2000-10-23 07:21:17.000398') ,  ('2008-11-06 08:33:27.014789', 0, NULL, NULL, NULL, NULL, '', NULL, 'z', NULL, 3, 'v', 4, 8, -7504967304036220928, NULL) ,  (NULL, 4502192252486942720, 4, NULL, NULL, NULL, 'fv', 0, 'r', NULL, 4, 'of', 7, NULL, -3657204372401553408, NULL) ,  (NULL, NULL, 2, NULL, 5, '2003-07-25 22:10:51.020706', '', 0, 'g', NULL, 5, '', NULL, 0, 1, '2006-10-23 18:25:24.054086') ,  ('2003-07-14 05:33:09.009707', NULL, NULL, 0, NULL, NULL, '', 3, '', 5, 6, 'v', NULL, 7, 7, '2003-03-12 08:18:04.004652') ,  ('2001-02-27 20:24:02.042071', 1582452319067308032, -62205969853054976, 0, NULL, '2004-10-02 22:33:45.009016', 'w', NULL, NULL, 2, 7, 'nw', 0, 0, NULL, '2004-05-03 18:11:37.023767') ,  (NULL, 2941132031649644544, 3010656350897176576, 2, 0, '2004-07-03 16:14:22.008090', 'l', NULL, 'x', NULL, 8, NULL, 9, 0, 543246705051566080, '2007-01-14 03:18:47.021996') ,  (NULL, NULL, 4, 4, 7, NULL, '', NULL, '', 7, 9, 'fl', 2, NULL, 3, NULL) ,  (NULL, NULL, NULL, 0, 0, '2008-11-26 13:58:13.011346', NULL, 2, 'l', 6, 10, NULL, 0, 1, 1083115710382604288, '2002-02-22 15:18:19.051141') ;
+
+
+DROP TABLE /*! IF EXISTS*/ table10_int_not_null; 
+CREATE TABLE table10_int_not_null (
+col_decimal_20_0 decimal(20,0),
+col_bigint_unique_index bigint,
+col_double_index double,
+col_double_unique_index double,
+col_double double,
+col_bigint bigint,
+col_varchar_20 varchar(20),
+col_decimal_20_0_unique_index decimal(20,0),
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_timestamp timestamp NULL DEFAULT NULL,
+col_bigint_index bigint,
+col_varchar_20_index varchar(20),
+col_varchar_20_unique_index varchar(20),
+col_timestamp_index timestamp NULL DEFAULT NULL,
+pk int not null,
+col_decimal_20_0_index decimal(20,0),
+/*Indices*/
+unique index idx2(pk, col_bigint_unique_index ),
+index idx4(pk, col_double_index ),
+unique index idx5(pk, col_double_unique_index ),
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+unique index idx14(pk, col_timestamp_unique_index ),
+index idx1(pk, col_bigint_index ),
+index idx10(pk, col_varchar_20_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx13(pk, col_timestamp_index ),
+primary key (pk) ,
+index idx7(pk, col_decimal_20_0_index ))     ; 
+INSERT INTO table10_int_not_null VALUES  (NULL, NULL, NULL, 0, 0, 5487636145950949376, NULL, NULL, NULL, NULL, 5342676532944961536, 'c', 'ed', '2007-03-20 11:55:22.037911', 1, NULL) ,  (3, NULL, NULL, 2, NULL, 1, 'm', 0, NULL, '2004-07-17 01:43:41.031267', NULL, 'j', 'b', NULL, 2, 0) ,  (0, NULL, 4, 0, 0, NULL, 'jb', 0, NULL, '2005-01-24 14:33:09.055623', 5, NULL, '', '2003-02-11 22:24:15.016913', 3, 8) ,  (0, NULL, 0, 6, 6, 6, NULL, 0, NULL, NULL, 7, '', '', '2006-11-10 14:21:28.045267', 4, 2) ,  (NULL, 5, 0, NULL, 7, 4, NULL, 9, '2001-08-16 21:28:57.036523', NULL, 6, '', 't', '2001-04-02 09:00:37.021969', 5, 0) ,  (NULL, 1, 5, 0, 9, 9, 'h', 0, '2009-01-02 18:42:41.025545', NULL, NULL, 'd', '', NULL, 6, 0) ,  (0, -1195705701066866688, NULL, NULL, NULL, 3113957667349987328, 'l', 8, '2008-03-24 05:54:41.057308', NULL, 6, '', NULL, NULL, 7, NULL) ,  (NULL, NULL, NULL, 1, 8, 8, NULL, 1, '2009-01-17 21:43:59.020136', NULL, NULL, NULL, NULL, '2001-11-21 20:39:17.057922', 8, 3) ,  (NULL, NULL, NULL, 0, 9, NULL, '', 3, NULL, NULL, 5, 'e', 'i', NULL, 9, 0) ,  (2, -5762918673173970944, 0, 0, 0, 729583139634020352, 'p', NULL, '2002-09-07 15:17:47.009031', '2003-02-23 17:07:47.061046', 5359283556570890240, NULL, 'f', '2007-10-27 22:41:00.053727', 10, 0) ;
+
+
+DROP TABLE /*! IF EXISTS*/ table10_key_pk_parts_10_int_not_null; 
+CREATE TABLE table10_key_pk_parts_10_int_not_null (
+col_bigint_unique_index bigint,
+col_decimal_20_0_index decimal(20,0),
+col_double_unique_index double,
+col_varchar_20_index varchar(20),
+col_timestamp timestamp NULL DEFAULT NULL,
+col_varchar_20_unique_index varchar(20),
+col_varchar_20 varchar(20),
+col_timestamp_index timestamp NULL DEFAULT NULL,
+pk int not null,
+col_double double,
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_decimal_20_0_unique_index decimal(20,0),
+col_double_index double,
+col_bigint_index bigint,
+col_decimal_20_0 decimal(20,0),
+col_bigint bigint,
+/*Indices*/
+unique index idx2(pk, col_bigint_unique_index ),
+index idx7(pk, col_decimal_20_0_index ),
+unique index idx5(pk, col_double_unique_index ),
+index idx10(pk, col_varchar_20_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx13(pk, col_timestamp_index ),
+primary key (pk) ,
+unique index idx14(pk, col_timestamp_unique_index ),
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+index idx4(pk, col_double_index ),
+index idx1(pk, col_bigint_index ))     ; 
+INSERT INTO table10_key_pk_parts_10_int_not_null VALUES  (8201617871395094528, NULL, 0, NULL, NULL, '', 'zy', NULL, 1, 0, '2005-02-25 15:39:21.039452', 4, 5, 3660863547098791936, 7, 8191484772233510912) ,  (5, 7, 0, '', NULL, 'd', NULL, '2000-06-05 20:26:26.053200', 2, NULL, NULL, 3, 6, 3, 6, 2091640551936884736) ,  (NULL, 8, NULL, '', NULL, NULL, '', '2000-02-14 16:06:20.023505', 3, 0, '2007-01-18 00:48:19.061110', NULL, 9, NULL, 0, 8552054217399861248) ,  (9, 0, 9, 'm', '2007-05-17 19:31:36.035884', 'bz', '', '2005-06-27 05:30:45.051122', 4, NULL, '2004-03-28 23:02:51.020070', 0, NULL, 0, 0, 6822671960489590784) ,  (7, 3, 0, '', NULL, NULL, 'f', NULL, 5, 8, '2005-03-20 10:24:08.002233', NULL, 0, 6107725519644524544, 3, NULL) ,  (NULL, 0, 8, 'zb', NULL, 'k', 'f', NULL, 6, 0, '2007-04-03 18:01:31.024496', 8, 0, 3455386814100013056, 0, NULL) ,  (1, 5, NULL, NULL, NULL, NULL, 'g', '2008-06-15 05:22:26.059130', 7, NULL, NULL, NULL, NULL, 9, NULL, 4889501820440805376) ,  (-6349512524638978048, 0, NULL, 'm', NULL, 'f', '', '2003-10-18 12:10:52.008913', 8, 0, NULL, 0, 7, NULL, NULL, 5787406996147798016) ,  (8053280558668578816, 0, 0, '', '2001-03-04 04:00:21.060103', NULL, 'w', '2009-09-19 02:47:52.044390', 9, NULL, '2001-08-04 15:20:03.004437', 5, 3, -72902018968059904, 3, 8) ,  (5, 0, NULL, '', '2005-06-06 01:08:15.063150', '', '', NULL, 10, 5, '2004-07-16 10:23:17.022122', NULL, 0, NULL, 1, 2) ;
+
+
+DROP TABLE /*! IF EXISTS*/ table10_range_pk_part_p1__50_part_p2__maxvalue_int_not_null; 
+CREATE TABLE table10_range_pk_part_p1__50_part_p2__maxvalue_int_not_null (
+col_varchar_20 varchar(20),
+col_double_unique_index double,
+col_bigint_index bigint,
+col_timestamp_index timestamp NULL DEFAULT NULL,
+col_decimal_20_0 decimal(20,0),
+col_bigint_unique_index bigint,
+col_varchar_20_unique_index varchar(20),
+col_decimal_20_0_index decimal(20,0),
+col_double_index double,
+col_bigint bigint,
+col_varchar_20_index varchar(20),
+pk int not null,
+col_decimal_20_0_unique_index decimal(20,0),
+col_timestamp_unique_index timestamp NULL DEFAULT NULL,
+col_timestamp timestamp NULL DEFAULT NULL,
+col_double double,
+/*Indices*/
+unique index idx5(pk, col_double_unique_index ),
+index idx1(pk, col_bigint_index ),
+index idx13(pk, col_timestamp_index ),
+unique index idx2(pk, col_bigint_unique_index ),
+unique index idx11(pk, col_varchar_20_unique_index ),
+index idx7(pk, col_decimal_20_0_index ),
+index idx4(pk, col_double_index ),
+index idx10(pk, col_varchar_20_index ),
+primary key (pk) ,
+unique index idx8(pk, col_decimal_20_0_unique_index ),
+unique index idx14(pk, col_timestamp_unique_index ))    PARTITION BY range(pk)(partition p1 values less than(50), partition p2 values less than(maxvalue)) ; 
+INSERT INTO table10_range_pk_part_p1__50_part_p2__maxvalue_int_not_null VALUES  ('z', 0, -1552615971535978496, NULL, 0, 7, 'si', 0, 0, 8, 'j', 1, 0, '2000-05-21 18:55:33.063628', '2001-05-01 03:19:17.031274', 1) ,  ('', 0, 8530662119169851392, '2008-03-25 12:48:41.019653', 0, NULL, 'u', 0, NULL, -5625277409562460160, '', 2, 6, NULL, '2002-05-13 20:25:35.027636', 7) ,  ('vu', 0, NULL, NULL, NULL, 2708352225909932032, '', 0, 0, 3407817543035912192, 's', 3, 0, '2002-03-05 11:16:29.025372', '2009-07-01 14:12:56.054535', 0) ,  ('p', NULL, 4, '2001-10-12 12:00:47.003907', 8, NULL, 'r', 8, 0, 1739515356071854080, 'xr', 4, 8, '2009-12-13 05:58:48.043057', '2009-11-02 12:19:17.056845', 0) ,  (NULL, 0, -148055837749805056, '2009-10-03 07:32:31.018337', 0, 6424103393467301888, 'v', 4, 0, 4, 'o', 5, 0, NULL, '2005-01-18 17:57:58.003336', 7) ,  ('c', 0, NULL, NULL, NULL, -2513853017002868736, 'k', 0, NULL, NULL, '', 6, 4, NULL, NULL, 4) ,  (NULL, 0, NULL, '2003-08-11 01:15:49.036208', 0, 0, 'c', 0, NULL, 9, 'j', 7, 4, '2001-03-05 18:34:48.064435', NULL, 0) ,  ('', NULL, NULL, '2008-08-12 08:03:35.047266', NULL, 7069525515064836096, NULL, NULL, NULL, 0, 'i', 8, NULL, '2008-11-03 12:54:23.035927', NULL, NULL) ,  ('d', 2, -8176285123491135488, '2000-12-15 19:31:25.034844', 8, 6909084778339762176, 'cd', 3, NULL, 5645825082862338048, 'y', 9, 0, NULL, NULL, 0) ,  ('', 9, 8980459131953479680, NULL, NULL, -6760747465613246464, 'l', 0, 2, 2, '', 10, 7, '2009-02-21 03:05:47.053850', '2006-10-19 18:31:17.059392', 0) ;
+
+select /*+ use_nl(rcte1 rcte2) leading(rcte1 rcte2) */ * from (with recursive cte as ( select t1.col_decimal_20_0_index as num1, t1.col_decimal_20_0 as num2, t1.col_varchar_20_index as var1, t1.col_varchar_20 as var2 from table10_range_pk_part_p1__50_part_p2__maxvalue_int_not_null as t1 union all select /*+ use_nl(cte t2) leading(cte t2)*/ cte.num1+1, cte.num2+1, cte.var1, cte.var2 from cte join table10_range_pk_part_p1__50_part_p2__maxvalue_int_not_null as t2 on cte.num1 = t2.col_bigint_index and cte.num2 = 7 ) select * from cte order by 1,2,3,4 desc) as rcte1, (with recursive cte as ( select t1.pk as num1, t1.col_double as num2, t1.col_varchar_20_index as var1, t1.col_varchar_20_unique_index as var2 from table10_hash_pk_parts_10_int_not_null as t1 union all select /*+ use_nl(cte t2) leading(cte t2)*/ cte.num1+1, cte.num2+1, cte.var1, cte.var2 from cte, table10_key_pk_parts_10_int_not_null as t2 where cte.num1 = t2.col_bigint_unique_index and cte.num2 IN ( select (t2.col_double in (select t3.col_double_index from table10_hash_pk_parts_10_int_not_null as t3 where t3.col_double_unique_index < t2.col_bigint)) and (select t3.col_double_index from table10_key_pk_parts_10_int_not_null as t3 where t3.pk = t2.col_double order by 1 limit 1) from table10_key_pk_parts_10_int_not_null as t2 ) ) select * from cte order by 1,2,3,4) as rcte2 where rcte2.var2 > rcte1.var2 order by 1,2,3,4,5,6,7,8;
+
+--disable_warnings
+drop database cte_test;
+--enable_warnings

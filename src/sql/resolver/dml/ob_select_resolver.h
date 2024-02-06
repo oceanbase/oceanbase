@@ -72,6 +72,10 @@ class ObSelectResolver : public ObDMLResolver, public ObChildStmtResolver {
     {
       current_cte_table_name_ = table_name;
     }
+    inline ObString &get_current_cte_table_name()
+    {
+      return current_cte_table_name_;
+    }
     inline bool is_with_resolver() const
     {
       return is_with_clause_resolver_;
