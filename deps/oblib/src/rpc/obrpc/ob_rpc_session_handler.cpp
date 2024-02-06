@@ -25,7 +25,7 @@ using namespace oceanbase::obrpc;
 
 ObRpcSessionHandler::ObRpcSessionHandler()
 {
-  sessid_ = 0;
+  sessid_ = ObTimeUtility::current_time();
   ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_HASH_NODE_NEXT_WAIT_MAP);
   SET_USE_500(attr);
   next_wait_map_.create(MAX_COND_COUNT, attr, attr);

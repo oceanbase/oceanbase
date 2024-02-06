@@ -108,7 +108,7 @@ protected:
   virtual int deserialize();
   virtual int serialize();
   virtual int response(const int retcode) { return part_response(retcode, true); }
-  virtual int flush(int64_t wait_timeout = DEFAULT_WAIT_NEXT_PACKET_TIMEOUT);
+  virtual int flush(int64_t wait_timeout = 0);
 
   void set_preserve_recv_data() { preserve_recv_data_ = true; }
   void set_result_compress_type(common::ObCompressorType t) { result_compress_type_ = t; }
