@@ -1015,6 +1015,7 @@ bool ObMigrationUtils::is_need_retry_error(const int err)
     case OB_TRANSFER_SYS_ERROR :
     case OB_INVALID_TABLE_STORE :
     case OB_UNEXPECTED_TABLET_STATUS :
+    case OB_TABLET_TRANSFER_SEQ_NOT_MATCH:
       bret = false;
       break;
     default:

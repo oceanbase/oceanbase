@@ -375,6 +375,8 @@ private:
   int check_need_copy_sstable_(
       const ObITable::TableKey &table_key,
       bool &need_copy);
+  int check_transfer_seq_equal_(
+      const ObMigrationTabletParam *src_tablet_meta);
 
 private:
   bool is_inited_;
