@@ -4593,16 +4593,29 @@ int ObDDLService::update_autoinc_schema(obrpc::ObAlterTableArg &alter_table_arg)
           LOG_WARN("unexpected alter_column_num or iter is NULL", K(ret), K(alter_column_num));
         } else {
           const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
+          const ObColumnSchemaV2 *curr_column_schema = curr_table_schema->get_column_schema(orig_column_name);
           new_column_schema = new_table_schema.get_column_schema(orig_column_name);
           if (OB_ISNULL(new_column_schema)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("alter column schema is null");
+            LOG_WARN("alter column schema is null", KR(ret), K(new_table_schema.get_table_id()),
+                                                    K(orig_column_name));
+          } else if (OB_ISNULL(curr_column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cur column schema is null", KR(ret), K(curr_table_schema->get_table_id()),
+                                                  K(orig_column_name));
           } else {
             new_column_schema->set_autoincrement(alter_column_schema->is_autoincrement());
             new_column_schema->set_nullable(alter_column_schema->is_nullable());
             new_table_schema.set_auto_increment(alter_table_schema.get_auto_increment());
             new_table_schema.set_autoinc_column_id(alter_column_schema->get_column_id());
-            if (OB_FAIL(ddl_operator.update_single_column(trans,
+
+            // we need clear inner autoinc when add autoinc attribute bug/53305960
+            if (new_column_schema->is_autoincrement() && !curr_column_schema->is_autoincrement()) {
+              if (OB_FAIL(ddl_operator.try_reinit_autoinc_row(new_table_schema, trans))) {
+                LOG_WARN("fail to reinit autoinc row", KR(ret), K(new_table_schema));
+              }
+            }
+            if (FAILEDx(ddl_operator.update_single_column(trans,
                                                           *curr_table_schema,
                                                           new_table_schema,
                                                           *new_column_schema))) {

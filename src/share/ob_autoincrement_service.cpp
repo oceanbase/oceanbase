@@ -589,6 +589,66 @@ int ObAutoincrementService::reinit_autoinc_row(const uint64_t &tenant_id,
   return ret;
 }
 
+// use for alter table add autoincrement
+int ObAutoincrementService::try_lock_autoinc_row(const uint64_t &tenant_id,
+                                                 const uint64_t &table_id,
+                                                 const uint64_t &column_id,
+                                                 const int64_t &autoinc_version,
+                                                 bool &need_update_inner_table,
+                                                 common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString lock_sql;
+  need_update_inner_table = false;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                    || OB_INVALID_ID == table_id
+                    || 0 == column_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("arg is not invalid", KR(ret), K(tenant_id), K(table_id), K(column_id));
+    } else if (OB_FAIL(lock_sql.assign_fmt("SELECT truncate_version "
+                                    "FROM %s WHERE tenant_id = %lu AND sequence_key = %lu "
+                                    "AND column_id = %lu FOR UPDATE",
+                                    OB_ALL_AUTO_INCREMENT_TNAME,
+                                    ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
+                                    column_id))) {
+      LOG_WARN("failed to assign sql", KR(ret));
+    } else if (OB_FAIL(trans.read(res, tenant_id, lock_sql.ptr()))) {
+      LOG_WARN("failded to execute sql", KR(ret), K(lock_sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get result, result is NULL", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("autoinc row not exist", K(tenant_id), K(table_id), K(column_id));
+      } else {
+        LOG_WARN("iterate next result fail", KR(ret), K(lock_sql));
+      }
+    } else {
+      int64_t inner_autoinc_version = OB_INVALID_VERSION;
+      if (OB_FAIL(result->get_int(0l, inner_autoinc_version))) {
+        LOG_WARN("fail to get truncate_version", KR(ret));
+      } else if (inner_autoinc_version > autoinc_version) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("autoincrement's newest version can not less than inner version",
+                  KR(ret), K(tenant_id), K(table_id), K(column_id),
+                  K(inner_autoinc_version), K(autoinc_version));
+      } else if (inner_autoinc_version < autoinc_version) {
+        need_update_inner_table = true;
+        LOG_INFO("inner autoinc version is old, we need to update inner table",
+                  K(tenant_id), K(table_id), K(column_id), K(inner_autoinc_version), K(autoinc_version));
+      } else {
+        LOG_TRACE("inner autoinc version is equal, not need to update inner table",
+                   K(tenant_id), K(table_id), K(column_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObAutoincrementService::clear_autoinc_cache_all(const uint64_t tenant_id,
                                                     const uint64_t table_id,
                                                     const uint64_t column_id,
