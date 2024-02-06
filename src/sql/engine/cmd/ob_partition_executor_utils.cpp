@@ -622,12 +622,13 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
       LOG_WARN("Empty partition", K(i), K(ret));
     } else {
       bool is_increasing = true;
+      bool need_check_maxvalue = false;
       rowkey_cur = &array[i]->get_high_bound_val();
       if (rowkey_cur->get_obj_cnt() != rowkey_last->get_obj_cnt()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid object count", K(*rowkey_cur), K(*rowkey_last), K(ret));
       } else {
-        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && is_increasing && OB_SUCC(ret); j++) {
+        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && OB_SUCC(ret); j++) {
           if (!ObSQLUtils::is_same_type_for_compare(rowkey_cur->get_obj_ptr()[j].get_meta(),
                                                     rowkey_last->get_obj_ptr()[j].get_meta())
               && !rowkey_cur->get_obj_ptr()[j].is_max_value()
@@ -636,16 +637,31 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
             LOG_WARN("partiton value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
           } else if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
                      rowkey_last->get_obj_ptr()[j].is_max_value()) {
-            is_increasing = false;
+            need_check_maxvalue = true;
           }
         }
       }
-      if (OB_SUCC(ret) && is_increasing) {
+      if (OB_SUCC(ret)) {
         if (*rowkey_cur <= *rowkey_last) {
           is_increasing = false;
         } else {
-          rowkey_last = rowkey_cur;
-          last_part = cur_part;
+          if (OB_UNLIKELY(need_check_maxvalue)) {
+            for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && is_increasing && OB_SUCC(ret); j++) {
+              if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
+                  rowkey_last->get_obj_ptr()[j].is_max_value()) {
+                is_increasing = false;
+              } else if (0 != rowkey_cur->get_obj_ptr()[j].check_collation_free_and_compare(rowkey_last->get_obj_ptr()[j])) {
+                //  p0 (1, maxvalue), p1 (2, maxvalue) is allowed
+                //  p0 (1, maxvalue), p1 (1, maxvalue) is not allowed
+                //  p0 (maxvalue, 1), p1 (maxvalue, 2) is not allowed
+                break;
+              }
+            }
+          }
+          if (is_increasing) {
+            rowkey_last = rowkey_cur;
+            last_part = cur_part;
+          }
         }
       }
       if (OB_SUCC(ret) && !is_increasing) {
