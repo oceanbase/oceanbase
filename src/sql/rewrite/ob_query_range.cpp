@@ -8722,7 +8722,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
                                              ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
-  common::ObArenaAllocator tmp_alloc;
+  common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"));
   ObS2Cellids cells;
   ObS2Cellids cells_with_ancestors;
   ObSpatialMBR mbr_filter(op_type);
@@ -8857,6 +8857,9 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         }
       }
     }
+  }
+  if (OB_NOT_NULL(s2object)) {
+    s2object->~ObS2Adapter();
   }
 
   return ret;
@@ -9033,6 +9036,9 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
         }
       }
     }
+  }
+  if (OB_NOT_NULL(s2object)) {
+    s2object->~ObS2Adapter();
   }
 
   return ret;
