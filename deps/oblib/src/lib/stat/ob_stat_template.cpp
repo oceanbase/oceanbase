@@ -115,6 +115,11 @@ void DIRWLock::unlock()
   } else {
     ATOMIC_AAF(&lock_, -1);
   }
+#ifdef ENABLE_DEBUG_LOG
+  if (ATOMIC_LOAD(&lock_) > WRITE_MASK) {
+    abort();
+  }
+#endif
 }
 
 }

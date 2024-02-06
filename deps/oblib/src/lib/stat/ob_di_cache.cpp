@@ -96,35 +96,36 @@ int ObDISessionCache::get_node(uint64_t session_id, ObDISessionCollect *&session
   while (1) {
     bucket.lock_.rdlock();
     if (OB_SUCCESS == (ret = bucket.get_the_node(session_id, session_collect))) {
-      if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
 #ifdef ENABLE_DEBUG_LOG
-        if (conflict_retry_count) {
-          bucket.lock_.unlock();
-          bucket.lock_.wrlock();
-          if (session_collect->lock_.get_lock() == 1) {
-            session_collect->lock_.unlock();
-            session_collect->lock_.wrlock();
-            bucket.list_.remove(session_collect);
-            session_collect->clean();
-            session_collect->lock_.unlock();
-            ret = OB_ENTRY_NOT_EXIST;
-          } else {
-            // current collect hold by several session. we cannot release it right now.
-            bucket.lock_.unlock();
-            break;
-          }
+      if (conflict_retry_count && OB_SUCCESS == (ret = session_collect->lock_.try_wrlock())) {
+        bucket.lock_.unlock();
+        if (OB_SUCC(bucket.lock_.try_wrlock())) {
+          bucket.list_.remove(session_collect);
+          session_collect->clean();
+          session_collect->lock_.unlock();
+          ret = OB_ENTRY_NOT_EXIST;
         } else {
-          bucket.lock_.unlock();
+          // do not try to remove old collect if collect's wrlock is not acquired.
+          ret = OB_SUCCESS;
+          session_collect->lock_.wr2rdlock();
           break;
         }
-#else
+      } else if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
         bucket.lock_.unlock();
         break;
-#endif
       } else {
         bucket.lock_.unlock();
         continue;
       }
+#else
+      if (OB_SUCCESS == (ret = session_collect->lock_.try_rdlock())) {
+        bucket.lock_.unlock();
+        break;
+      } else {
+        bucket.lock_.unlock();
+        continue;
+      }
+#endif
     }
     if (OB_SUCCESS != ret) {
       bucket.lock_.unlock();
