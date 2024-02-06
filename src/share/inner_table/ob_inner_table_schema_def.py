@@ -13148,6 +13148,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12454: __all_virtual_wr_sqltext
 # 12455: __all_virtual_trusted_root_certificate_info
 # 12456: __all_virtual_dbms_lock_allocated
+# 12457: __all_virtual_sharing_storage_compaction_info
 # 余留位置
 #
 
