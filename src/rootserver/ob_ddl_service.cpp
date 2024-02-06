@@ -25352,8 +25352,11 @@ int ObDDLService::drop_tenant(const ObDropTenantArg &arg)
       FLOG_INFO("is standby tenant, need drop force", K(tenant_info));
     }
   }
-
-  if (FAILEDx(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
+  if (OB_FAIL(ret)) {
+    // ignore
+  } else if (OB_ISNULL(tenant_schema)) {
+    // We need to ignore the drop tenant if exists statement in the case that the tenant has already been deleted
+  } else if (OB_FAIL(schema_guard.get_schema_version(OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
     LOG_WARN("start transaction failed", KR(ret), K(user_tenant_id), K(refreshed_schema_version));
