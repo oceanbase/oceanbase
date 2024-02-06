@@ -481,7 +481,8 @@ public:
   need_partition_pruning_(false),
   pruning_table_locations_(),
   pump_version_(0),
-  is_taskset_reset_(false)
+  is_taskset_reset_(false),
+  fetch_task_ret_(OB_SUCCESS)
   {
   }
 
@@ -593,6 +594,9 @@ private:
   int64_t pump_version_;
 
   bool is_taskset_reset_;
+  // when granule tasks are fetched concurrently, if one thread failed to fetch task,
+  // others should not fetch tasks any more.
+  int fetch_task_ret_;
 };
 
 }//sql
