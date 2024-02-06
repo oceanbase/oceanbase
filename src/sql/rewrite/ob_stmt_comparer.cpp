@@ -245,21 +245,39 @@ bool ObStmtCompareContext::compare_query(const ObQueryRefRawExpr &first,
   int ret = OB_SUCCESS;
   ObStmtMapInfo stmt_map_info;
   QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
+  const ObSelectStmt *first_sel = NULL;
+  const ObSelectStmt *second_sel = NULL;
   if (&first == &second) {
     bret = true;
-  } else if (first.is_set() != second.is_set() || first.is_multiset() != second.is_multiset()) {
+  } else if (first.is_set() != second.is_set() || first.is_multiset() != second.is_multiset() ||
+             OB_ISNULL(first_sel = first.get_ref_stmt()) ||
+             OB_ISNULL(second_sel = second.get_ref_stmt())) {
     bret = false;
-  } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first.get_ref_stmt(),
-                                                            second.get_ref_stmt(),
+  } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_sel,
+                                                            second_sel,
                                                             stmt_map_info,
                                                             relation))) {
     LOG_WARN("failed to compute stmt relationship", K(ret));
     err_code_ = ret;
   } else if (stmt_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {
-    bret = true;
-    if (OB_FAIL(append(equal_param_info_, stmt_map_info.equal_param_map_))) {
-      LOG_WARN("failed to append equal param", K(ret));
-      err_code_ = ret;
+    bool is_same = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_same && i < first_sel->get_select_item_size(); ++i) {
+      ObRawExpr *first_expr = first_sel->get_select_item(i).expr_;
+      ObRawExpr *second_expr = second_sel->get_select_item(i).expr_;
+      if (OB_ISNULL(first_expr) || OB_ISNULL(second_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(first_expr), KP(second_expr));
+        err_code_ = ret;
+      } else {
+        is_same = first_expr->same_as(*second_expr, this);
+      }
+    }
+    if (OB_SUCC(ret) && is_same) {
+      bret = true;
+      if (OB_FAIL(append(equal_param_info_, stmt_map_info.equal_param_map_))) {
+        LOG_WARN("failed to append equal param", K(ret));
+        err_code_ = ret;
+      }
     }
   }
   return bret;

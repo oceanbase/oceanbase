@@ -736,6 +736,10 @@ int ObTransformSubqueryCoalesce::check_conditions_validity(ObDMLStmt *stmt,
   return ret;
 }
 
+/* do coalesce:
+ * (1). in (query_1) and not in (query_2), query_1 equals to query_2
+ * (2). in (query_1) and not in (query_2), query_1 is subset of query_2
+*/
 int ObTransformSubqueryCoalesce::compare_any_all_subqueries(ObDMLStmt *stmt,
                                                             TransformParam &param, 
                                                             ObIArray<TransformParam> &trans_params,
@@ -786,9 +790,9 @@ int ObTransformSubqueryCoalesce::compare_any_all_subqueries(ObDMLStmt *stmt,
   } else if (!param.map_info_.is_select_item_equal_) {
     OPT_TRACE("stmts have different select items, can not coalesce");
   } else if (OB_FAIL(check_select_items_same(first_query_ref->get_ref_stmt(),
-                                      second_query_ref->get_ref_stmt(),
-                                      param.map_info_,
-                                      is_select_same))) {
+                                             second_query_ref->get_ref_stmt(),
+                                             param.map_info_,
+                                             is_select_same))) {
     LOG_WARN("check select items failed", K(ret));
   } else if (!is_select_same) {
     OPT_TRACE("The order of select items in two stmts is different, can not coalesce");
@@ -800,21 +804,21 @@ int ObTransformSubqueryCoalesce::compare_any_all_subqueries(ObDMLStmt *stmt,
     if (OB_FAIL(trans_params.push_back(param))) {
       LOG_WARN("failed to push back transform param", K(ret));
     } else if (OB_FAIL(add_coalesce_stmt(first_query_ref->get_ref_stmt(), 
-                                          second_query_ref->get_ref_stmt()))) {
+                                         second_query_ref->get_ref_stmt()))) {
       LOG_WARN("failed to add coalesce stmts", K(ret));
     } else {
-      OPT_TRACE("left stmt contain right stmt, will coalesce");
+      OPT_TRACE("all stmt contain any stmt, will coalesce");
     }
   } else if (can_coalesce && relation == QUERY_LEFT_SUBSET) {
-    if (OB_FAIL(trans_params.push_back(param))) {
-      LOG_WARN("failed to push back transform param", K(ret));
-    } else if (OB_FAIL(add_coalesce_stmt(first_query_ref->get_ref_stmt(),
-                                          second_query_ref->get_ref_stmt()))) {
-      LOG_WARN("failed to add coalesce stmts", K(ret));
-    } else {
-      is_used = true;
-      OPT_TRACE("right stmt contain left stmt, will coalesce");
-    }
+    // is_used = true;
+    // if (OB_FAIL(trans_params.push_back(param))) {
+    //   LOG_WARN("failed to push back transform param", K(ret));
+    // } else if (OB_FAIL(add_coalesce_stmt(first_query_ref->get_ref_stmt(),
+    //                                      second_query_ref->get_ref_stmt()))) {
+    //   LOG_WARN("failed to add coalesce stmts", K(ret));
+    // } else {
+    //   OPT_TRACE("any stmt contain all stmt, will coalesce");
+    // }
   } else {
     OPT_TRACE("stmt not contain each other, will not coalesce");
   }
@@ -1765,7 +1769,7 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
         LOG_WARN("unexpect null stmt", K(ret));
       } else if (!query_ref_expr->is_scalar()) {
         //do nothing
-      } else if (stmt->has_limit() || stmt->has_distinct() || stmt->is_set_stmt()) {
+      } else if (stmt->has_limit() || stmt->has_distinct() || stmt->is_set_stmt() || stmt->has_sequence()) {
         //stmt can not coalesce,do nothing
       } else if (ObOptimizerUtil::find_item(subqueries, stmt)) {
         //do nothing
@@ -1784,7 +1788,7 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
         if (OB_ISNULL(stmt)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null stmt", K(ret));
-        } else if (stmt->has_limit() || stmt->has_distinct() || stmt->is_set_stmt()) {
+        } else if (stmt->has_limit() || stmt->has_distinct() || stmt->is_set_stmt() || stmt->has_sequence()) {
           //stmt can not coalesce,do nothing
         } else if (ObOptimizerUtil::find_item(subqueries, stmt)) {
           //do nothing
