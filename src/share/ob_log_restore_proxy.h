@@ -154,7 +154,11 @@ private:
   // check if user or password changed
   bool is_user_changed_(const char *user_name, const char *user_password);
   void destroy_tg_();
-  int detect_tenant_mode_(common::sqlclient::ObMySQLServerProvider *server_provider, const char *user_name, const char *user_password);
+  int detect_tenant_mode_(common::sqlclient::ObMySQLServerProvider *server_provider,
+                          const char *user_name,
+                          const char *user_password,
+                          common::ObIArray<common::ObAddr> *new_server_list);
+  int64_t cal_timeout_();
 private:
   int construct_server_ip_list(const common::ObSqlString &sql, common::ObIArray<common::ObAddr> &addrs);
   bool inited_;
