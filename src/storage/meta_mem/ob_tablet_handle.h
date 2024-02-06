@@ -75,9 +75,7 @@ class ObTabletTableIterator final
 public:
   ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr) {}
   explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr) {}
-
-  ObTabletTableIterator(const ObTabletTableIterator& other) { *this = other; } ;
-  void operator=(const ObTabletTableIterator& other);
+  int assign(const ObTabletTableIterator& other);
   ~ObTabletTableIterator() { reset(); }
   void reset()
   {
@@ -106,6 +104,7 @@ private:
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator table_store_iter_;
   ObTabletHandle *transfer_src_handle_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletTableIterator);
 };
 
 struct ObGetTableParam final

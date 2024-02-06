@@ -192,9 +192,12 @@ int ObSingleRowGetter::init_dml_access_param(ObRelativeTable &relative_table,
 {
   int ret = OB_SUCCESS;
   relative_table_ = &relative_table;
-  get_table_param_.tablet_iter_ = relative_table.tablet_iter_;
+
   const share::schema::ObTableSchemaParam *schema_param = relative_table.get_schema_param();
   output_projector_.set_capacity(out_col_ids.count());
+  if (OB_FAIL(get_table_param_.tablet_iter_.assign(relative_table.tablet_iter_))) {
+    LOG_WARN("assign tablet iterator fail", K(ret));
+  }
   for (int32_t i = 0; OB_SUCC(ret) && i < out_col_ids.count(); ++i) {
     int idx = OB_INVALID_INDEX;
     if (OB_FAIL(schema_param->get_col_map().get(out_col_ids.at(i), idx))) {

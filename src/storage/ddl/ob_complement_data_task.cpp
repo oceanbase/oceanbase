@@ -1773,9 +1773,10 @@ int ObLocalScan::construct_multiple_scan_merge(
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  get_table_param_.tablet_iter_ = table_iter;
   LOG_INFO("start to do output_store.scan");
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultipleScanMerge)))) {
+  if (OB_FAIL(get_table_param_.tablet_iter_.assign(table_iter))) {
+    LOG_WARN("fail to assign tablet iterator", K(ret));
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMultipleScanMerge)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObMultipleScanMerge", K(ret));
   } else if (FALSE_IT(scan_merge_ = new(buf)ObMultipleScanMerge())) {

@@ -26,7 +26,7 @@ class ObTableHandleV2;
 class ObSSTableArray;
 class ObMemtableArray;
 
-class ObTableStoreIterator
+class ObTableStoreIterator final
 {
 // TODO: currently, we will load all related tables into memory on initializetion of iterator,
 // maybe we should init with sstable address and prefetch sstable on iteratring for more smooth memory usage
@@ -48,8 +48,7 @@ public:
   typedef common::ObSEArray<ObStorageMetaHandle, DEFAULT_TABLE_HANDLE_CNT> SSTableHandleArray;
   typedef common::ObSEArray<TablePtr, DEFAULT_TABLE_CNT> TableArray;
   ObTableStoreIterator(const bool is_reverse = false, const bool need_load_sstable = true);
-  ObTableStoreIterator(const ObTableStoreIterator& other) { *this = other; } ;
-  void operator=(const ObTableStoreIterator& other);
+  int assign(const ObTableStoreIterator& other);
   virtual ~ObTableStoreIterator();
 
   OB_INLINE bool is_valid() const { return table_ptr_array_.count() > 0; }
@@ -96,6 +95,7 @@ private:
   int64_t step_;
   bool * memstore_retired_;
   ObStorageMetaHandle *transfer_src_table_store_handle_;
+  DISALLOW_COPY_AND_ASSIGN(ObTableStoreIterator);
 };
 
 

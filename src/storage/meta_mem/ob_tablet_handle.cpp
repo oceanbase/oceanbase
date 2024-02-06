@@ -195,27 +195,43 @@ int64_t ObTabletHandle::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-void ObTabletTableIterator::operator=(const ObTabletTableIterator& other)
+int ObTabletTableIterator::assign(const ObTabletTableIterator& other)
 {
+  int ret = OB_SUCCESS;
   if (this != &other) {
     if (other.tablet_handle_.is_valid()) {
       tablet_handle_ = other.tablet_handle_;
     } else if (tablet_handle_.is_valid()) {
       tablet_handle_.reset();
     }
-    if (other.table_store_iter_.is_valid()) {
-      table_store_iter_ = other.table_store_iter_;
+    if (OB_FAIL(ret)) {
+    } else if (other.table_store_iter_.is_valid()) {
+      if (OB_FAIL(table_store_iter_.assign(other.table_store_iter_))) {
+        LOG_WARN("assign table store iter fail", K(ret));
+      }
     } else if (table_store_iter_.is_valid()) {
       table_store_iter_.reset();
     }
-    if (OB_UNLIKELY(nullptr != other.transfer_src_handle_)) {
-      if (nullptr == transfer_src_handle_) {
-        void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
-        transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
+
+    if (OB_FAIL(ret)) {
+    } else {
+      if (OB_UNLIKELY(nullptr != other.transfer_src_handle_)) {
+        if (nullptr == transfer_src_handle_) {
+          void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
+          if (OB_ISNULL(tablet_hdl_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocator memory for handle", K(ret));
+          } else {
+            transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
+          }
+        }
+        if (OB_SUCC(ret)) {
+          *transfer_src_handle_ = *(other.transfer_src_handle_);
+        }
       }
-      *transfer_src_handle_ = *(other.transfer_src_handle_);
     }
   }
+  return ret;
 }
 
 ObTableStoreIterator *ObTabletTableIterator::table_iter()
@@ -242,7 +258,7 @@ int ObTabletTableIterator::set_transfer_src_tablet_handle(const ObTabletHandle &
     void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferTblH"));
     if (OB_ISNULL(tablet_hdl_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocator memory for handles");
+      LOG_WARN("fail to allocator memory for handles", K(ret));
     } else {
       transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
     }

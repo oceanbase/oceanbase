@@ -5506,9 +5506,10 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
       ObSingleMerge *get_merge = nullptr;
       ObGetTableParam get_table_param;
       ObDatumRow *row = nullptr;
-      get_table_param.tablet_iter_ = data_table.tablet_iter_;
       void *buf = nullptr;
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSingleMerge)))) {
+      if (OB_FAIL(get_table_param.tablet_iter_.assign(data_table.tablet_iter_))) {
+        LOG_WARN("Failed to assign tablet iterator", K(ret));
+      } else if (OB_ISNULL(buf = allocator.alloc(sizeof(ObSingleMerge)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc memory for single merge", K(ret));
       } else if (FALSE_IT(get_merge = new(buf)ObSingleMerge())) {
