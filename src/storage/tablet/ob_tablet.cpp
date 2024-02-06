@@ -4244,7 +4244,6 @@ int ObTablet::build_migration_tablet_param(
 
     ObArenaAllocator arena_allocator(common::ObMemAttr(MTL_ID(), "BuildMigParam"));
     ObStorageSchema *storage_schema = nullptr;
-    const ObTabletAutoincSeq *tablet_autoinc_seq = nullptr;
     if (!is_empty_shell()) {
       if (OB_FAIL(load_storage_schema(arena_allocator, storage_schema))) {
         LOG_WARN("fail to load storage schema", K(ret));
