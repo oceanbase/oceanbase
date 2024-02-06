@@ -30239,6 +30239,8 @@ def_table_schema(
 #21508 V$OB_ACTIVE_SESSION_HISTORY
 #21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
 #21510 DBA_OB_CLONE_JOBS
+#21511 mysql.role_edges
+#21512 mysql.default_roles
 # 余留位置
 
 ################################################################################

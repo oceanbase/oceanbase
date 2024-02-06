@@ -1812,6 +1812,9 @@ constexpr int OB_WRONG_PARTITION_NAME = -11002;
 constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
 constexpr int OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT = -11005;
 constexpr int OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT = -11006;
+constexpr int OB_ERR_UNKNOWN_AUTHID = -11007;
+constexpr int OB_ERR_NO_GRANT_DEFINED_FOR_USER = -11008;
+constexpr int OB_ERR_USER_ALREADY_EXISTS = -11009;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3989,6 +3992,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__USER_ERROR_MSG "Plugin '%.*s' is not loaded"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__USER_ERROR_MSG "cannot replace a type with table dependents"
+#define OB_ERR_UNKNOWN_AUTHID__USER_ERROR_MSG "Unknown authorization ID `%.*s`@`%.*s`"
+#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__USER_ERROR_MSG "There is no such grant defined for user '%.*s' on host '%.*s'"
+#define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -6166,6 +6172,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-02303: cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22866: cannot replace a type with table dependents"
+#define OB_ERR_UNKNOWN_AUTHID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11007, Unknown authorization ID `%.*s`@`%.*s`"
+#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11008, There is no such grant defined for user '%.*s' on host '%.*s'"
+#define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6176,7 +6185,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2173];
+extern int g_all_ob_errnos[2176];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

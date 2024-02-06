@@ -3429,13 +3429,26 @@ static struct VarsInit{
     ObSysVars[242].alias_ = "OB_SV_LC_TIME_NAMES" ;
     }();
 
+    [&] (){
+      ObSysVars[243].default_value_ = "0" ;
+      ObSysVars[243].info_ = "whether to enable automatic activation of all granted roles when users log in to the server" ;
+      ObSysVars[243].name_ = "activate_all_roles_on_login" ;
+      ObSysVars[243].data_type_ = ObIntType ;
+      ObSysVars[243].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[243].id_ = SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ACTIVATE_ALL_ROLES_ON_LOGIN] = 243 ;
+      ObSysVars[243].base_value_ = "0" ;
+    ObSysVars[243].alias_ = "OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 243;
+static int64_t var_amount = 244;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

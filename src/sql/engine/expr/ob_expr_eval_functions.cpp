@@ -1064,7 +1064,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprUpdateXml::eval_mysql_update_xml                      /* 629 */
   NULL, //ObExprXmlSequence::eval_xml_sequence                        /* 630 */
   NULL, //ObExprJsonAppend::eval_json_array_append                    /* 631 */
-  ObExprJsonObjectStar::eval_ora_json_object_star                     /* 632 */
+  ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 632 */
+  NULL, //ObExprCurrentRole::eval_current_role                        /* 633 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

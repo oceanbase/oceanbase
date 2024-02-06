@@ -3459,5 +3459,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "activate_all_roles_on_login": {
+    "id": 10161,
+    "name": "activate_all_roles_on_login",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "whether to enable automatic activation of all granted roles when users log in to the server",
+    "flags": "GLOBAL",
+    "publish_version": "430",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
