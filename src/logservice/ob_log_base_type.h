@@ -128,6 +128,12 @@ enum ObLogBaseType
 
   // for table load resource manager
   TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE = 40,
+
+  // for tenant snapshot
+  SNAPSHOT_SCHEDULER_LOG_BASE_TYPE = 41,
+
+  //for tenant clone
+  CLONE_SCHEDULER_LOG_BASE_TYPE = 42,
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
