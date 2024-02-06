@@ -4837,6 +4837,37 @@ bool ObAdminRollingUpgradeArg::is_valid() const
 }
 
 OB_SERIALIZE_MEMBER(ObRsListArg, rs_list_, master_rs_);
+
+int ObRsListArg::assign(const ObRsListArg &that)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(rs_list_.assign(that.rs_list_))) {
+    LOG_WARN("fail to assign rs list", KR(ret));
+  } else {
+    master_rs_ = that.master_rs_;
+  }
+  return ret;
+}
+
+int ObRsListArg::init(const ObAddr &master_rs, const ObIAddrList &rs_list)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(!master_rs.is_valid() || rs_list.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(master_rs), K(rs_list));
+  } else {
+    master_rs_ = master_rs;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rs_list.count(); ++i) {
+      if (OB_FAIL(rs_list_.push_back(rs_list.at(i).server_))) {
+        LOG_WARN("failed to push back", KR(ret), K(i), K(rs_list));
+      }
+    }
+  }
+  return ret;
+}
+
 ObLocationRpcRenewArg::ObLocationRpcRenewArg(common::ObIAllocator& allocator)
     : keys_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator))
 {}
