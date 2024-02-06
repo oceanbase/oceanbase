@@ -103,6 +103,7 @@ public:
   virtual void TearDown() override
   {
     blocksstable::ObTmpFileManager::get_instance().destroy();
+    ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
     blocksstable::TestDataFilePrepare::TearDown();
     destroy_tenant_mgr();
   }

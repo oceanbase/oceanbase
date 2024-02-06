@@ -103,6 +103,7 @@ public:
   virtual void TearDown() override
   {
     blocksstable::ObTmpFileManager::get_instance().destroy();
+    ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
     blocksstable::TestDataFilePrepare::TearDown();
     common::ObModItem mod;
     lib::get_tenant_mod_memory(tenant_id_, static_cast<int>(mod_id_), mod);

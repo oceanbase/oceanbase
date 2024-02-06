@@ -17,8 +17,8 @@
 #include "lib/io/ob_io_manager.h"
 #include "share/cache/ob_kv_storecache.h"
 #include "storage/ob_i_store.h"
+#include "storage/blocksstable/ob_macro_block_struct.h"
 #include "ob_store_file.h"
-#include "ob_tmp_file_cache.h"
 
 namespace oceanbase {
 namespace blocksstable {
@@ -165,7 +165,7 @@ public:
 
   private:
     friend class ObTmpPageCache;
-    common::ObIArray<ObTmpPageIOInfo>* page_io_infos_;
+    common::ObArray<ObTmpPageIOInfo> page_io_infos_;
   };
 
 private:
@@ -174,7 +174,7 @@ private:
   int read_io(const ObTmpBlockIOInfo& io_info, ObITmpPageIOCallback& callback, ObMacroBlockHandle& handle);
 
 private:
-  common::ObConcurrentFIFOAllocator allocator_;
+  common::ObFIFOAllocator allocator_;
   ObStorageFileHandle file_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObTmpPageCache);
 };
