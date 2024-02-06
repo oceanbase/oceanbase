@@ -981,6 +981,7 @@ public:
   int is_better_inlist_enabled(bool &enabled) const;
   bool is_index_skip_scan_enabled() const;
   bool is_spf_mlj_group_rescan_enabled() const;
+  int is_enable_range_extraction_for_not_in(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
