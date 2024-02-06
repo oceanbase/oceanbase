@@ -2150,7 +2150,11 @@ int ObTableLocation::record_in_dml_partition_info(const ObDMLStmt &stmt,
       }
 
       ObOpRawExpr *value_expr = static_cast<ObOpRawExpr *>(tmp);
-      if (op_left_expr->get_param_count() != value_expr->get_param_count()) {
+      if (op_left_expr->get_param_count() != value_expr->get_param_count() ||
+          OB_ISNULL(value_expr->get_param_expr(pos1)) ||
+          OB_ISNULL(value_expr->get_param_expr(pos2)) ||
+          OB_UNLIKELY(!value_expr->get_param_expr(pos1)->is_const_expr() ||
+                      !value_expr->get_param_expr(pos2)->is_const_expr())) {
         hit = false;
         break;
       }
