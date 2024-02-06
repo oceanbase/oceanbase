@@ -47,20 +47,20 @@ int LogRequestHandler::get_palf_handle_guard_(const int64_t palf_id,
 
 int LogRequestHandler::get_log_handler_(
     const int64_t palf_id,
+    storage::ObLSHandle &ls_handle,
     logservice::ObLogHandler *&log_handler) const
 {
   log_handler = nullptr;
   storage::ObLSService *ls_svr = MTL(ObLSService*);
   storage::ObLS *ls = nullptr;
   share::ObLSID ls_id(palf_id);
-  storage::ObLSHandle handle;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
     CLOG_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = handle.get_ls())) {
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "ls should not be null", KR(ret));
   } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
@@ -343,8 +343,9 @@ int LogRequestHandler::change_access_mode_(const LogChangeAccessModeCmd &req)
   int ret = OB_SUCCESS;
   const int64_t palf_id = req.ls_id_;
   const common::ObAddr &server = req.src_;
+  storage::ObLSHandle ls_handle;
   logservice::ObLogHandler *log_handler = nullptr;
-  if (OB_FAIL(get_log_handler_(palf_id, log_handler))) {
+  if (OB_FAIL(get_log_handler_(palf_id, ls_handle, log_handler))) {
     CLOG_LOG(WARN, "get_log_handler_ failed", K(ret), K(palf_id), K(server));
   } else if (OB_FAIL(log_handler->change_access_mode(req.mode_version_, req.access_mode_, req.ref_scn_))) {
     CLOG_LOG(WARN, "change_access_mode failed", K(ret), K(palf_id), K(server));
