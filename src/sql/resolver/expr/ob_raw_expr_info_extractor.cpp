@@ -39,7 +39,6 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
   int ret = OB_SUCCESS;
   ObItemType type = expr.get_expr_type();
   switch (type) {
-  //case T_USER_VARIABLE_IDENTIFIER:
   case T_SYSTEM_VARIABLE:
   case T_QUESTIONMARK: {
     if (OB_FAIL(expr.add_flag(IS_STATIC_PARAM))) {
@@ -59,9 +58,7 @@ int ObRawExprInfoExtractor::visit(ObConstRawExpr &expr)
     break;
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(expr.add_flag(IS_CONST))) {
+    if (OB_FAIL(expr.add_flag(IS_CONST))) {
       LOG_WARN("failed to add flag IS_CONST", K(ret));
     }
   }
