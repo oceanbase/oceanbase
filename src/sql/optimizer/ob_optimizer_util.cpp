@@ -5906,6 +5906,9 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObExprResType &child_type, con
           is_lossless = (dst_type.get_scale() >= child_type.get_scale()
                          && dst_type.get_precision() >= child_type.get_precision());
         }
+      } else if (ObNumberTC == dst_tc) {
+        is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                      && PRECISION_UNKNOWN_YET == dst_type.get_precision();
       }
     }
   }
@@ -6052,6 +6055,9 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr, bool &is_los
             is_lossless = (dst_type.get_scale() >= child_type.get_scale()
                            && dst_type.get_precision() >= child_type.get_precision());
           }
+        } else if (ObNumberTC == dst_tc) {
+          is_lossless = NUMBER_SCALE_UNKNOWN_YET == dst_type.get_scale()
+                        && PRECISION_UNKNOWN_YET == dst_type.get_precision();
         }
       }
     }
