@@ -25,6 +25,7 @@
 #include "share/ob_unit_getter.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
+#include "share/rpc/ob_batch_rpc.h"
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_srv_network_frame.h"
@@ -99,6 +100,7 @@ int ObLogService::mtl_init(ObLogService* &logservice)
                                       self,
                                       alloc_mgr,
                                       net_frame->get_req_transport(),
+                                      GCTX.batch_rpc_,
                                       MTL(ObLSService*),
                                       location_service,
                                       reporter,
@@ -230,6 +232,7 @@ int ObLogService::init(const PalfOptions &options,
                        const common::ObAddr &self,
                        common::ObILogAllocator *alloc_mgr,
                        rpc::frame::ObReqTransport *transport,
+                       obrpc::ObBatchRpc *batch_rpc,
                        ObLSService *ls_service,
                        ObLocationService *location_service,
                        observer::ObIMetaReport *reporter,
@@ -246,14 +249,14 @@ int ObLogService::init(const PalfOptions &options,
     ret = OB_INIT_TWICE;
     CLOG_LOG(WARN, "ObLogService init twice", K(ret));
   } else if (false == options.is_valid() || OB_ISNULL(base_dir) || OB_UNLIKELY(!self.is_valid())
-      || OB_ISNULL(alloc_mgr) || OB_ISNULL(transport) || OB_ISNULL(ls_service)
+      || OB_ISNULL(alloc_mgr) || OB_ISNULL(transport) || OB_ISNULL(batch_rpc) || OB_ISNULL(ls_service)
       || OB_ISNULL(location_service) || OB_ISNULL(reporter) || OB_ISNULL(log_block_pool)
       || OB_ISNULL(sql_proxy) || OB_ISNULL(net_keepalive_adapter)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(options), KP(base_dir), K(self),
-             KP(alloc_mgr), KP(transport), KP(ls_service), KP(location_service), KP(reporter),
+             KP(alloc_mgr), KP(transport), KP(batch_rpc), KP(ls_service), KP(location_service), KP(reporter),
              KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
-  } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport,
+  } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport, batch_rpc,
                                               alloc_mgr, log_block_pool, &monitor_, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {
@@ -287,7 +290,7 @@ int ObLogService::init(const PalfOptions &options,
     net_keepalive_adapter_ = net_keepalive_adapter;
     self_ = self;
     is_inited_ = true;
-    FLOG_INFO("ObLogService init success", K(ret), K(base_dir), K(self), KP(transport),
+    FLOG_INFO("ObLogService init success", K(ret), K(base_dir), K(self), KP(transport), KP(batch_rpc),
         KP(ls_service), K(tenant_id));
   }
 

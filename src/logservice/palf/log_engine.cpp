@@ -957,13 +957,14 @@ int LogEngine::submit_push_log_req(const common::ObAddr &server,
 
 int LogEngine::submit_push_log_resp(const ObAddr &server,
                                     const int64_t &msg_proposal_id,
-                                    const LSN &lsn)
+                                    const LSN &lsn,
+                                    const bool is_batch)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    ret = log_net_service_.submit_push_log_resp(server, msg_proposal_id, lsn);
+    ret = log_net_service_.submit_push_log_resp(server, msg_proposal_id, lsn, is_batch);
     PALF_LOG(TRACE, "submit_push_log_resp success", K(ret), K(server));
   }
   return ret;

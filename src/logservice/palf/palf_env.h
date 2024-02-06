@@ -32,6 +32,10 @@ class ObReqTransport;
 }
 }
 
+namespace obrpc
+{
+class ObBatchRpc;
+}
 namespace palf
 {
 class PalfRoleChangeCb;
@@ -53,6 +57,7 @@ public:
                              const char *base_dir,
                              const common::ObAddr &self,
                              rpc::frame::ObReqTransport *transport,
+                             obrpc::ObBatchRpc *batch_rpc,
                              common::ObILogAllocator *alloc_mgr,
                              ILogBlockPool *log_block_pool,
                              PalfMonitorCb *monitor,

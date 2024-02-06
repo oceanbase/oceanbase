@@ -209,6 +209,7 @@ private:
   void on_replay_error_();
   // 析构前调用,归还所有日志流的replay status计数
   int remove_all_ls_();
+  share::SCN inner_get_replayable_point_() const;
 private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000; //10ms
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 100 * 1000; //100ms

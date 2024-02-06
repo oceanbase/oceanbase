@@ -53,7 +53,7 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 TEST_F(TestObSimpleLogClusterBasicFunc, submit_log)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "submit_log");
-  //OB_LOGGER.set_log_level("TRACE");
+  OB_LOGGER.set_log_level("TRACE");
   const int64_t id = ATOMIC_AAF(&palf_id_, 1);
   const int64_t create_ts = 100;
   share::SCN create_scn;

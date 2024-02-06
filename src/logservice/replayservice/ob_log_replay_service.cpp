@@ -16,6 +16,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_ls_adapter.h"
 #include "logservice/palf/palf_env.h"
+#include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/scn.h"
 #include "share/ob_thread_mgr.h"
 #include "share/rc/ob_tenant_base.h"
@@ -668,6 +669,33 @@ int ObLogReplayService::get_replayable_point(SCN &replayable_scn)
   return ret;
 }
 
+share::SCN ObLogReplayService::inner_get_replayable_point_() const
+{
+  int ret = OB_SUCCESS;
+  const int64_t ADVANCED_NS_VAL = 3 * 1000 * 1000 * 1000L;
+  share::SCN replayable_scn;
+  const share::SCN replayable_point = replayable_point_.atomic_load();
+
+  replayable_scn = replayable_point;
+  if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+    rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+    share::SCN recovery_until_scn;
+    if (OB_ISNULL(tenant_info_loader)) {
+      CLOG_LOG(WARN, "ObTenantInfoLoader is NULL", K(ret));
+    } else if (OB_FAIL(tenant_info_loader->get_recovery_until_scn(recovery_until_scn))) {
+      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+        CLOG_LOG(WARN, "get_recovery_until_scn failed", K(ret));
+      }
+    } else {
+      replayable_scn = SCN::min(SCN::plus(replayable_point, ADVANCED_NS_VAL), recovery_until_scn);
+    }
+    if (OB_UNLIKELY(false == replayable_scn.is_valid())) {
+      replayable_scn = replayable_point;
+    }
+  } else { }
+  return replayable_scn;
+}
+
 int ObLogReplayService::stat_for_each(const common::ObFunction<int (const ObReplayStatus &)> &func)
 {
   auto stat_func = [&func](const ObLSID &id, ObReplayStatus *replay_status) -> bool {
@@ -973,7 +1001,7 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
   ObLogBaseHeader header;
   int64_t header_pos = 0;
   ObLogReplayTask *replay_task = NULL;
-  const SCN &replayable_point = replayable_point_.atomic_load();
+  const SCN &replayable_point = inner_get_replayable_point_();
   if (OB_UNLIKELY(OB_ISNULL(submit_task))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "submit task is NULL when fetch log", K(id), K(replay_status), KPC(submit_task), K(ret));
@@ -1089,7 +1117,7 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
       if (!replay_status->is_enabled_without_lock() || !replay_status->need_submit_log()) {
         need_submit_log = false;
       } else {
-        const SCN &replayable_point = replayable_point_.atomic_load();
+        const SCN &replayable_point = inner_get_replayable_point_();
         need_submit_log = submit_task->has_remained_submit_log(replayable_point,
                                                                iterate_end_by_replayable_point);
         if (!need_submit_log) {

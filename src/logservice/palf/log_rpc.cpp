@@ -15,6 +15,7 @@
 #include "log_rpc_proxy.h"                         // LogRpcProxyV2
 #include "log_rpc_packet.h"                        // LogRpcPaket
 #include "log_req.h"                               // LogPushReq...
+#include "observer/ob_server_struct.h"             // GCTX
 namespace oceanbase
 {
 using namespace common;
@@ -25,6 +26,7 @@ LogRpc::LogRpc() : rpc_proxy_(NULL),
                    opt_lock_(),
                    options_(),
                    tenant_id_(0),
+                   cluster_id_(0),
                    is_inited_(false)
 {
 }
@@ -37,7 +39,8 @@ LogRpc::~LogRpc()
 int LogRpc::init(const ObAddr &self,
                  const int64_t cluster_id,
                  const int64_t tenant_id,
-                 rpc::frame::ObReqTransport *transport)
+                 rpc::frame::ObReqTransport *transport,
+                 obrpc::ObBatchRpc *batch_rpc)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -47,6 +50,8 @@ int LogRpc::init(const ObAddr &self,
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
+    batch_rpc_ = batch_rpc;
+    cluster_id_ = cluster_id;
     is_inited_ = true;
     PALF_LOG(INFO, "LogRpc init success", K(tenant_id), K(self));
   }
