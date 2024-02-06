@@ -228,6 +228,7 @@ struct ObLobDiff
     WRITE = 2,
     ERASE = 3,
     ERASE_FILL_ZERO = 4,
+    WRITE_DIFF = 5,
   };
   ObLobDiff()
     : type_(DiffType::INVALID), ori_offset_(0), ori_len_(0), offset_(0), byte_len_(0), dst_offset_(0), dst_len_(0),
