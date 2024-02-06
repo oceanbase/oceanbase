@@ -1712,18 +1712,17 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
   bool interrupted = tx.flags_.INTERRUPTED_;
   tx.clear_interrupt();
   tx.flags_.BLOCK_ = false;
-  if (OB_SUCC(ret)) {
-    if (op_sn != tx.op_sn_) {
-      if (tx.is_aborted()) {
-        ret = tx.abort_cause_ == OB_DEAD_LOCK ? OB_DEAD_LOCK : OB_TRANS_KILLED;
-        TRANS_LOG(WARN, "txn has been aborted", KR(ret), K(tx.abort_cause_));
-      } else if (interrupted) {
-          ret = OB_ERR_INTERRUPTED;
-          TRANS_LOG(WARN, "txn has been interrupted", KR(ret), K(tx));
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(WARN, "txn has been disturbed", KR(ret), K(tx));
-      }
+  if (op_sn != tx.op_sn_) {
+    if (tx.is_aborted()) {
+      ret = tx.abort_cause_ == OB_DEAD_LOCK ? OB_DEAD_LOCK : OB_TRANS_KILLED;
+      TRANS_LOG(WARN, "txn has been aborted", KR(ret), K(tx.abort_cause_));
+    } else if (interrupted) {
+        ret = OB_ERR_INTERRUPTED;
+        TRANS_LOG(WARN, "txn has been interrupted", KR(ret), K(tx));
+    } else if (OB_FAIL(ret)) {
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "txn has been disturbed", KR(ret), K(tx));
     }
   }
   return ret;
