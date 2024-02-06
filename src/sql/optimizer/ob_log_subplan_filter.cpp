@@ -554,17 +554,10 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
       || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
+    enable_das_group_rescan_ = false;
   } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_group_rescan_))) {
     LOG_WARN("failed to get enable batch variable", K(ret));
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-    if (tenant_config.is_valid()) {
-      enable_das_group_rescan_ = tenant_config->_enable_spf_batch_rescan;
-      LOG_TRACE("trace disable hash groupby in second stage for three-stage",
-        K(enable_das_group_rescan_));
-    } else {
-      enable_das_group_rescan_ = false;
-    }
   }
   // check use batch
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {
