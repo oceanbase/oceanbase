@@ -36,12 +36,14 @@ class SubObjectMgr : public IBlockMgr
 {
   friend class ObTenantCtxAllocator;
 public:
-  SubObjectMgr(ObTenantCtxAllocator &ta,
-               const bool enable_no_log,
-               const uint32_t ablock_size,
-               const bool enable_dirty_list,
+  SubObjectMgr(const bool for_logger, const int64_t tenant_id, const int64_t ctx_id,
+               const uint32_t ablock_size, const bool enable_dirty_list,
                IBlockMgr *blk_mgr);
   virtual ~SubObjectMgr() {}
+  OB_INLINE void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator)
+  {
+    bs_.set_tenant_ctx_allocator(allocator);
+  }
   OB_INLINE void lock() { locker_.lock(); }
   OB_INLINE void unlock() { locker_.unlock(); }
   OB_INLINE bool trylock() { return locker_.trylock(); }
@@ -68,7 +70,6 @@ public:
     return os_.check_has_unfree(first_label);
   }
 private:
-  ObTenantCtxAllocator &ta_;
 #ifndef ENABLE_SANITY
   lib::ObMutex mutex_;
 #else
@@ -84,7 +85,6 @@ private:
 class ObjectMgr final : public IBlockMgr
 {
   static const int N = 32;
-  friend class SubObjectMgr;
 public:
   struct Stat
   {
@@ -95,11 +95,8 @@ public:
     int64_t last_wash_ts_;
   };
 public:
-  ObjectMgr(ObTenantCtxAllocator &ta,
-            bool enable_no_log,
-            uint32_t ablock_size,
-            int parallel,
-            bool enable_dirty_list,
+  ObjectMgr(ObTenantCtxAllocator &allocator, uint64_t tenant_id, uint64_t ctx_id,
+            uint32_t ablock_size, int parallel, bool enable_dirty_list,
             IBlockMgr *blk_mgr);
   ~ObjectMgr();
   void reset();
@@ -123,7 +120,6 @@ private:
 
 public:
   ObTenantCtxAllocator &ta_;
-  bool enable_no_log_;
   uint32_t ablock_size_;
   int parallel_;
   bool enable_dirty_list_;

@@ -72,7 +72,6 @@ public:
   // fill ' ' to %buf with specified charset.
   static int fill_default_pattern(char *buf, const int64_t in_len,
                                   common::ObCollationType cs_type, int64_t &out_len);
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // helper func
   static int lrtrim(const common::ObString src,

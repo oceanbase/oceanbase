@@ -18,7 +18,7 @@
 #include "share/ob_scanner.h"
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/rc/ob_tenant_base.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/ob_i_table.h"
 #include "storage/meta_mem/ob_tablet_handle.h"

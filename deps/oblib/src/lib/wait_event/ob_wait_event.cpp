@@ -17,20 +17,12 @@ namespace oceanbase
 {
 namespace common
 {
-
-#define WAIT_EVENT_DEF_true(def, id, name, param1, param2, param3, wait_class, is_phy) \
-  {id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy},
-#define WAIT_EVENT_DEF_false(def, id, name, param1, param2, param3, wait_class, is_phy)
-
 ObWaitEventDef OB_WAIT_EVENTS[ObWaitEventIds::WAIT_EVENT_DEF_END + ObLatchIds::LATCH_END] = {
-#define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy, enable) \
-WAIT_EVENT_DEF_##enable(def, id, name, param1, param2, param3, wait_class, is_phy)
+#define WAIT_EVENT_DEF(def, id, name, param1, param2, param3, wait_class, is_phy) \
+  {id, name, param1, param2, param3, ObWaitClassIds::wait_class, is_phy},
 #include "lib/wait_event/ob_wait_event.h"
 #undef WAIT_EVENT_DEF
 };
-
-#undef WAIT_EVENT_DEF_true
-#undef WAIT_EVENT_DEF_false
 
 // would called after OB_LATCHES have been initialized
 static __attribute__ ((constructor(103))) void init_latch_wait_events()

@@ -99,42 +99,6 @@ int ObRLEDecoder::batch_decode(
   return ret;
 }
 
-int ObRLEDecoder::decode_vector(
-    const ObColumnDecoderCtx &decoder_ctx,
-    const ObIRowIndex *row_index,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  UNUSED(row_index);
-  int ret = OB_SUCCESS;
-  int64_t null_cnt = 0;
-  if (OB_UNLIKELY(!is_inited())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not inited", K(ret));
-  } else if (OB_FAIL(extract_ref_and_null_count(
-      vector_ctx.row_ids_, vector_ctx.row_cap_, vector_ctx.len_arr_, null_cnt))) {
-    LOG_WARN("Failed to extract refs",K(ret));
-  } else {
-    if (0 == null_cnt) {
-      if (OB_FAIL(dict_decoder_.batch_decode_dict<false>(
-          decoder_ctx.obj_meta_,
-          decoder_ctx.col_header_->get_store_obj_type(),
-          decoder_ctx.col_header_->length_ - meta_header_->offset_,
-          vector_ctx))) {
-        LOG_WARN("Failed to batch decode dict", K(ret), K(decoder_ctx), K(vector_ctx));
-      }
-    } else {
-      if (OB_FAIL(dict_decoder_.batch_decode_dict<true>(
-          decoder_ctx.obj_meta_,
-          decoder_ctx.col_header_->get_store_obj_type(),
-          decoder_ctx.col_header_->length_ - meta_header_->offset_,
-          vector_ctx))) {
-        LOG_WARN("Failed to batch decode dict", K(ret), K(decoder_ctx), K(vector_ctx));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRLEDecoder::get_null_count(
     const ObColumnDecoderCtx &ctx,
     const ObIRowIndex *row_index,
@@ -525,12 +489,12 @@ int ObRLEDecoder::set_res_with_bitset(
   return ret;
 }
 
-template<typename T>
 int ObRLEDecoder::extract_ref_and_null_count(
     const int64_t *row_ids,
     const int64_t row_cap,
-    T ref_buf,
-    int64_t &null_count) const
+    common::ObDatum *datums,
+    int64_t &null_count,
+    uint32_t *ref_buf) const
 {
   int ret = OB_SUCCESS;
   const ObIntArrayFuncTable &row_id_array
@@ -570,8 +534,12 @@ int ObRLEDecoder::extract_ref_and_null_count(
       }
       curr_ref = ref_array.at_(meta_header_->payload_ + ref_offset_, ref_table_pos - 1);
     }
-
-    load_ref_to_buf(ref_buf, trav_idx, curr_ref);
+    if (nullptr != datums) {
+      datums[trav_idx].pack_ = static_cast<uint32_t>(curr_ref);
+    }
+    if (nullptr != ref_buf) {
+      ref_buf[trav_idx] = static_cast<uint32_t>(curr_ref);
+    }
     if (curr_ref >= dict_count) {
       null_count++;
     }
@@ -580,24 +548,6 @@ int ObRLEDecoder::extract_ref_and_null_count(
     trav_idx += step;
   }
   return ret;
-}
-
-template<>
-void ObRLEDecoder::load_ref_to_buf(std::nullptr_t ref_buf, const int64_t trav_idx, const uint32_t ref) const
-{
-  return;
-}
-
-template<>
-void ObRLEDecoder::load_ref_to_buf(ObDatum *ref_buf, const int64_t trav_idx, const uint32_t ref) const
-{
-  ref_buf[trav_idx].pack_ = ref;
-}
-
-template<>
-void ObRLEDecoder::load_ref_to_buf(uint32_t *ref_buf, const int64_t trav_idx, const uint32_t ref) const
-{
-  ref_buf[trav_idx] = ref;
 }
 
 int ObRLEDecoder::get_distinct_count(int64_t &distinct_count) const
@@ -620,8 +570,6 @@ int ObRLEDecoder::read_distinct(
       ctx.col_header_->length_ - meta_header_->offset_,
       group_by_cell))) {
     LOG_WARN("Failed to load dict", K(ret));
-  } else if (has_null_value()) {
-    group_by_cell.add_distinct_null_value();
   }
   return ret;
 }
@@ -634,24 +582,10 @@ int ObRLEDecoder::read_reference(
 {
   int ret = OB_SUCCESS;
   int64_t null_cnt = 0;
-  if (OB_FAIL(extract_ref_and_null_count(row_ids, row_cap, group_by_cell.get_refs_buf(), null_cnt))) {
+  if (OB_FAIL(extract_ref_and_null_count(row_ids, row_cap, nullptr, null_cnt, group_by_cell.get_refs_buf()))) {
     LOG_WARN("Failed to extract refs",K(ret));
   }
   return ret;
-}
-
-bool ObRLEDecoder::has_null_value() const
-{
-  int ret = OB_SUCCESS;
-  bool has_null = false;
-  int64_t ref;
-  const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
-  const ObIntArrayFuncTable &refs = ObIntArrayFuncTable::instance(meta_header_->ref_byte_);
-  for (int64_t i = 0; !has_null && i < meta_header_->count_; ++i) {
-    ref = refs.at_(meta_header_->payload_ + ref_offset_, i);
-    has_null = ref >= dict_count;
-  }
-  return has_null;
 }
 
 } // end namespace blocksstable

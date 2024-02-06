@@ -50,11 +50,6 @@ public:
   public:
     MockPublicLogSlidingWindow() {}
     virtual ~MockPublicLogSlidingWindow() {}
-    virtual bool is_handle_thread_lease_expired(const int64_t thread_lease_begin_ts) const override final
-    {
-      UNUSED(thread_lease_begin_ts);
-      return false;
-    }
   };
   class MockLocCb : public PalfLocationCacheCb
   {

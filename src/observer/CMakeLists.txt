@@ -36,7 +36,7 @@ ob_set_subtarget(ob_server common
   ob_srv_xlator_storage.cpp
   ob_tenant_duty_task.cpp
   ob_uniq_task_queue.cpp
-  ob_startup_accel_task_handler.cpp
+  ob_server_startup_task_handler.cpp
   ob_srv_rpc_handler.cpp
 )
 
@@ -245,10 +245,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_load_data_stat.cpp
   virtual_table/ob_all_virtual_lock_wait_stat.cpp
   virtual_table/ob_all_virtual_long_ops_status.cpp
-  virtual_table/ob_all_virtual_tenant_snapshot_ls_replica.cpp
-  virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.cpp
   virtual_table/ob_all_virtual_ls_info.cpp
-  virtual_table/ob_all_virtual_ls_snapshot.cpp
   virtual_table/ob_all_virtual_timestamp_service.cpp
   virtual_table/ob_all_virtual_transaction_freeze_checkpoint.cpp
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
@@ -304,7 +301,6 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_table_mgr.cpp
   virtual_table/ob_all_virtual_unit.cpp
   virtual_table/ob_all_virtual_tablet_ddl_kv_info.cpp
-  virtual_table/ob_all_virtual_ddl_sim_point_stat.cpp
   virtual_table/ob_all_virtual_tablet_info.cpp
   virtual_table/ob_all_virtual_server.cpp
   virtual_table/ob_all_virtual_tablet_compaction_history.cpp
@@ -399,7 +395,6 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sql_plan.cpp
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
-  virtual_table/ob_all_virtual_cgroup_config.cpp
   virtual_table/ob_virtual_flt_config.cpp
   virtual_table/ob_all_virtual_kv_connection.cpp
 )

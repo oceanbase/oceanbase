@@ -1,10 +1,10 @@
 #!/bin/bash -x
 
-HOST=${1:-127.0.0.1}
+HOST=${1:-11.166.82.163}
 PORT=${2:-46905}
 RPCPORT=${3:-46904}
 
-# HOST=${1:-127.0.0.1}
+# HOST=${1:-11.158.97.240}
 # PORT=${2:-41101}
 # RPCPORT=${3:-41100}
 
@@ -18,7 +18,7 @@ table_name=batch_execute_test
 passwd=''
 user="$user_name@$tenant_name"
 db=test
-# ~/myWorkspace/dooba/dooba -d -h 127.0.0.1 -P 50803 -u root@sys --table-api=1
+# ~/myWorkspace/dooba/dooba -d -h 100.88.11.96 -P 50803 -u root@sys --table-api=1
 echo run test...
 rm -f libobtable.log
 # table api

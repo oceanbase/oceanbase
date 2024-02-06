@@ -1201,7 +1201,6 @@ void ObMemtableMutatorIterator::reset()
   row_header_.reset();
   row_.reset();
   table_lock_.reset();
-  row_seq_no_.reset();
 }
 
 int ObMemtableMutatorIterator::deserialize(const char *buf, const int64_t data_len, int64_t &pos,
@@ -1261,8 +1260,6 @@ int ObMemtableMutatorIterator::iterate_next_row(ObEncryptRowBuf &decrypt_buf,
               encrypt_info, unused_need_extract_encrypt_meta, encrypt_meta,
               unused_encrypt_stat_map, ObTransRowFlag::is_big_row(meta_.get_flags())))) {
         TRANS_LOG(WARN, "deserialize mutator row fail", K(ret));
-      } else {
-        row_seq_no_ = row_.seq_no_;
       }
       break;
     }
@@ -1271,8 +1268,6 @@ int ObMemtableMutatorIterator::iterate_next_row(ObEncryptRowBuf &decrypt_buf,
       if (OB_FAIL(
               table_lock_.deserialize(buf_.get_data(), buf_.get_limit(), buf_.get_position()))) {
         TRANS_LOG(WARN, "deserialize table lock fail", K(ret));
-      } else {
-        row_seq_no_ = table_lock_.seq_no_;
       }
       break;
     }
@@ -1295,6 +1290,7 @@ const ObMutatorRowHeader &ObMemtableMutatorIterator::get_row_head() { return row
 const ObMemtableMutatorRow &ObMemtableMutatorIterator::get_mutator_row() { return row_; }
 
 const ObMutatorTableLock &ObMemtableMutatorIterator::get_table_lock_row() { return table_lock_; }
+
 
 }//namespace memtable
 }//namespace oceanbase

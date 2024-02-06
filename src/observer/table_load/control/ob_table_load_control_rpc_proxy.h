@@ -46,7 +46,7 @@ public:
   {
   };
 
-#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_1(prio, name, pcode, Arg)                       \
+#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_1(name, pcode, Arg)                             \
   int name(const Arg &arg)                                                                    \
   {                                                                                           \
     int ret = OB_SUCCESS;                                                                     \
@@ -59,9 +59,6 @@ public:
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                                   \
                          .timeout(timeout_)                                                   \
                          .by(tenant_id_)                                                      \
-                         .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio                  \
-                                     ? share::OBCG_DIRECT_LOAD_HIGH_PRIO                      \
-                                     : share::OBCG_DEFAULT)                                   \
                          .direct_load_control(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load control", K(ret), K_(addr), K(request)); \
     } else if (OB_UNLIKELY(result.command_type_ != pcode)) {                                  \
@@ -74,7 +71,7 @@ public:
     return ret;                                                                               \
   }
 
-#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_2(prio, name, pcode, Arg, Res)                  \
+#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_2(name, pcode, Arg, Res)                        \
   int name(const Arg &arg, Res &res)                                                          \
   {                                                                                           \
     int ret = OB_SUCCESS;                                                                     \
@@ -87,9 +84,6 @@ public:
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                                   \
                          .timeout(timeout_)                                                   \
                          .by(tenant_id_)                                                      \
-                         .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio                  \
-                                     ? share::OBCG_DIRECT_LOAD_HIGH_PRIO                      \
-                                     : share::OBCG_DEFAULT)                                   \
                          .direct_load_control(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load control", K(ret), K_(addr), K(request)); \
     } else if (OB_UNLIKELY(result.command_type_ != pcode)) {                                  \
@@ -101,14 +95,13 @@ public:
     return ret;                                                                               \
   }
 
-#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL(prio, name, pcode, ...)   \
-  CONCAT(OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_, ARGS_NUM(__VA_ARGS__)) \
-  (prio, name, pcode, __VA_ARGS__)
+#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL(name, pcode, ...) \
+  CONCAT(OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL_, ARGS_NUM(__VA_ARGS__))(name, pcode, __VA_ARGS__)
 
-#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC(prio, name, pcode, Processor, ...)                     \
+#define OB_DEFINE_TABLE_LOAD_CONTROL_RPC(name, pcode, Processor, ...)                           \
   OB_DEFINE_TABLE_LOAD_RPC(ObTableLoadControlRpc, pcode, Processor, ObDirectLoadControlRequest, \
                            ObDirectLoadControlResult, __VA_ARGS__)                              \
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL(ObTableLoadRpcPriority::prio, name, pcode, __VA_ARGS__)
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC_CALL(name, pcode, __VA_ARGS__)
 
 public:
   ObTableLoadControlRpcProxy(obrpc::ObSrvRpcProxy &rpc_proxy)
@@ -140,79 +133,70 @@ public:
                       common::ObIAllocator &allocator);
 
   // pre_begin
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, pre_begin,
-                                   ObDirectLoadControlCommandType::PRE_BEGIN,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(pre_begin, ObDirectLoadControlCommandType::PRE_BEGIN,
                                    ObDirectLoadControlPreBeginExecutor,
                                    ObDirectLoadControlPreBeginArg);
   // confirm_begin
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, confirm_begin,
-                                   ObDirectLoadControlCommandType::CONFIRM_BEGIN,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(confirm_begin, ObDirectLoadControlCommandType::CONFIRM_BEGIN,
                                    ObDirectLoadControlConfirmBeginExecutor,
                                    ObDirectLoadControlConfirmBeginArg);
   // pre_merge
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, pre_merge,
-                                   ObDirectLoadControlCommandType::PRE_MERGE,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(pre_merge, ObDirectLoadControlCommandType::PRE_MERGE,
                                    ObDirectLoadControlPreMergeExecutor,
                                    ObDirectLoadControlPreMergeArg);
   // start_merge
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, start_merge,
-                                   ObDirectLoadControlCommandType::START_MERGE,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(start_merge, ObDirectLoadControlCommandType::START_MERGE,
                                    ObDirectLoadControlStartMergeExecutor,
                                    ObDirectLoadControlStartMergeArg);
   // commit
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, commit, ObDirectLoadControlCommandType::COMMIT,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(commit, ObDirectLoadControlCommandType::COMMIT,
                                    ObDirectLoadControlCommitExecutor, ObDirectLoadControlCommitArg,
                                    ObDirectLoadControlCommitRes);
   // abort
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, abort, ObDirectLoadControlCommandType::ABORT,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(abort, ObDirectLoadControlCommandType::ABORT,
                                    ObDirectLoadControlAbortExecutor, ObDirectLoadControlAbortArg,
                                    ObDirectLoadControlAbortRes);
   // get_status
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, get_status,
-                                   ObDirectLoadControlCommandType::GET_STATUS,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(get_status, ObDirectLoadControlCommandType::GET_STATUS,
                                    ObDirectLoadControlGetStatusExecutor,
                                    ObDirectLoadControlGetStatusArg,
                                    ObDirectLoadControlGetStatusRes);
   // heart_beat
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(HIGH_PRIO, heart_beat,
-                                   ObDirectLoadControlCommandType::HEART_BEAT,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(heart_beat, ObDirectLoadControlCommandType::HEART_BEAT,
                                    ObDirectLoadControlHeartBeatExecutor,
                                    ObDirectLoadControlHeartBeatArg);
 
   /// trans
   // pre_start_trans
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, pre_start_trans,
-                                   ObDirectLoadControlCommandType::PRE_START_TRANS,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(pre_start_trans, ObDirectLoadControlCommandType::PRE_START_TRANS,
                                    ObDirectLoadControlPreStartTransExecutor,
                                    ObDirectLoadControlPreStartTransArg);
   // confirm_start_trans
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, confirm_start_trans,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(confirm_start_trans,
                                    ObDirectLoadControlCommandType::CONFIRM_START_TRANS,
                                    ObDirectLoadControlConfirmStartTransExecutor,
                                    ObDirectLoadControlConfirmStartTransArg);
   // pre_finish_trans
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, pre_finish_trans,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(pre_finish_trans,
                                    ObDirectLoadControlCommandType::PRE_FINISH_TRANS,
                                    ObDirectLoadControlPreFinishTransExecutor,
                                    ObDirectLoadControlPreFinishTransArg);
   // confirm_finish_trans
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, confirm_finish_trans,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(confirm_finish_trans,
                                    ObDirectLoadControlCommandType::CONFIRM_FINISH_TRANS,
                                    ObDirectLoadControlConfirmFinishTransExecutor,
                                    ObDirectLoadControlConfirmFinishTransArg);
   // abandon_trans
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, abandon_trans,
-                                   ObDirectLoadControlCommandType::ABANDON_TRANS,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(abandon_trans, ObDirectLoadControlCommandType::ABANDON_TRANS,
                                    ObDirectLoadControlAbandonTransExecutor,
                                    ObDirectLoadControlAbandonTransArg);
   // get_trans_status
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, get_trans_status,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(get_trans_status,
                                    ObDirectLoadControlCommandType::GET_TRANS_STATUS,
                                    ObDirectLoadControlGetTransStatusExecutor,
                                    ObDirectLoadControlGetTransStatusArg,
                                    ObDirectLoadControlGetTransStatusRes);
-  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(NORMAL_PRIO, insert_trans,
-                                   ObDirectLoadControlCommandType::INSERT_TRANS,
+  OB_DEFINE_TABLE_LOAD_CONTROL_RPC(insert_trans, ObDirectLoadControlCommandType::INSERT_TRANS,
                                    ObDirectLoadControlInsertTransExecutor,
                                    ObDirectLoadControlInsertTransArg);
 

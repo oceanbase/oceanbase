@@ -276,10 +276,6 @@ public:
   {
     is_shadow_ = is_shadow_row;
   }
-  inline bool is_valid() const
-  {
-    return !is_first_multi_version_row() || is_uncommitted_row() || is_last_multi_version_row() || is_ghost_row() || is_shadow_row();
-  }
   inline bool is_compacted_multi_version_row() const { return is_compacted_; }
   inline bool is_last_multi_version_row() const { return is_last_; }
   inline bool is_first_multi_version_row() const { return is_first_; }
@@ -820,21 +816,17 @@ public:
 
 struct ObSqlDatumInfo {
 public:
-  ObSqlDatumInfo() :
-      datum_ptr_(nullptr),
-      expr_(nullptr)
-  {}
-  ObSqlDatumInfo(common::ObDatum* datum_ptr, sql::ObExpr *expr)
-      : datum_ptr_(datum_ptr), expr_(expr)
+  ObSqlDatumInfo() : datum_ptr_(nullptr), map_type_(OBJ_DATUM_MAPPING_MAX) {}
+  ObSqlDatumInfo(common::ObDatum* datum_ptr, const ObObjDatumMapType map_type)
+    : datum_ptr_(datum_ptr), map_type_(map_type)
   {}
   ~ObSqlDatumInfo() = default;
-  OB_INLINE void reset() { datum_ptr_ = nullptr; expr_ = nullptr; }
-  OB_INLINE bool is_valid() const { return datum_ptr_ != nullptr && expr_ != nullptr; }
-  OB_INLINE common::ObObjDatumMapType get_obj_datum_map() const { return expr_->obj_datum_map_; }
-  TO_STRING_KV(KP_(datum_ptr), KP_(expr));
+  OB_INLINE void reset() { datum_ptr_ = nullptr; map_type_ = OBJ_DATUM_MAPPING_MAX; }
+  OB_INLINE bool is_valid() const { return datum_ptr_ != nullptr && map_type_ != OBJ_DATUM_MAPPING_MAX; }
+  TO_STRING_KV(KP_(datum_ptr), K_(map_type));
 
   common::ObDatum *datum_ptr_;
-  const sql::ObExpr *expr_;
+  ObObjDatumMapType map_type_;
 };
 
 } // namespace blocksstable

@@ -392,7 +392,6 @@ TEST_F(ObTableLockServiceTest, lock_part)
   ObTableLockOwnerID OWNER_ONE(1);
   ObTableLockOwnerID OWNER_TWO(2);
   ObLockPartitionRequest lock_arg;
-  ObUnLockPartitionRequest unlock_arg;
 
   tx_param.access_mode_ = ObTxAccessMode::RW;
   tx_param.isolation_ = ObTxIsolationLevel::RC;
@@ -422,7 +421,6 @@ TEST_F(ObTableLockServiceTest, lock_part)
   lock_arg.timeout_us_ = 0;
   lock_arg.table_id_ = table_id;
   lock_arg.part_object_id_ = part_ids[0];
-  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_partition(*tx_desc,
                                                  tx_param,
@@ -434,7 +432,7 @@ TEST_F(ObTableLockServiceTest, lock_part)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_TWO);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   // 2. COMMIT
   LOG_INFO("ObTableLockServiceTest::lock_part 2");
@@ -450,7 +448,7 @@ TEST_F(ObTableLockServiceTest, lock_part)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_TWO);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   // 4. UNLOCK
   LOG_INFO("ObTableLockServiceTest::unlock_part 4");
@@ -462,16 +460,16 @@ TEST_F(ObTableLockServiceTest, lock_part)
   get_table_part_ids(table_id, part_ids);
 
   lock_mode = ROW_EXCLUSIVE;
-  unlock_arg.owner_id_ = OWNER_ONE;
-  unlock_arg.lock_mode_ = lock_mode;
-  unlock_arg.op_type_ = OUT_TRANS_UNLOCK;
-  unlock_arg.timeout_us_ = 0;
-  unlock_arg.table_id_ = table_id;
-  unlock_arg.part_object_id_ = part_ids[0];
+  lock_arg.owner_id_ = OWNER_ONE;
+  lock_arg.lock_mode_ = lock_mode;
+  lock_arg.op_type_ = OUT_TRANS_UNLOCK;
+  lock_arg.timeout_us_ = 0;
+  lock_arg.table_id_ = table_id;
+  lock_arg.part_object_id_ = part_ids[0];
 
   ret = MTL(ObTableLockService*)->unlock_partition(*tx_desc,
                                                    tx_param,
-                                                   unlock_arg);
+                                                   lock_arg);
   ASSERT_EQ(OB_SUCCESS, ret);
   // commit
   LOG_INFO("ObTableLockServiceTest::lock_part 4.2");
@@ -639,7 +637,6 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
-  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -650,7 +647,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_ONE);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
   // 2. LOCK MULTI PART TABLE
   // 2.1 lock multi part table
   // lock upgrade
@@ -662,7 +659,6 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
-  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -673,7 +669,7 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_table)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_ONE);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
   // 3. CLEAN
   LOG_INFO("ObTableLockServiceTest::in_trans_lock_table 3");
   const int64_t stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;
@@ -723,7 +719,6 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
-  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -734,7 +729,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_ONE);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   // 1.3. commit lock
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 1.3");
@@ -771,7 +766,6 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = IN_TRANS_COMMON_LOCK;
   lock_arg.timeout_us_ = 0;
-  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -785,7 +779,6 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   lock_arg.lock_mode_ = lock_mode;
   lock_arg.op_type_ = OUT_TRANS_LOCK;
   lock_arg.timeout_us_ = 0;
-  lock_arg.is_from_sql_ = true;
   ret = MTL(ObTableLockService*)->lock_table(*tx_desc,
                                              tx_param,
                                              lock_arg);
@@ -797,7 +790,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_ONE);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   // 2.4 commit lock
   LOG_INFO("ObTableLockServiceTest::lock_out_trans_after_in_trans 2.4");
@@ -813,7 +806,7 @@ TEST_F(ObTableLockServiceTest, lock_out_trans_after_in_trans)
   ret = MTL(ObTableLockService*)->lock_table(table_id,
                                              lock_mode,
                                              OWNER_ONE);
-  ASSERT_EQ(OB_EAGAIN, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   // 2.6 unlock out_trans lock
   lock_mode = ROW_EXCLUSIVE;
@@ -874,7 +867,6 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
-  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc1,
                                            tx_param,
@@ -889,7 +881,6 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
-  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc2,
                                            tx_param,
@@ -905,12 +896,11 @@ TEST_F(ObTableLockServiceTest, in_trans_lock_obj)
   lock_arg.timeout_us_ = 0;
   lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_COMMON_OBJ;
   lock_arg.obj_id_ = obj_id1;
-  lock_arg.is_from_sql_ = true;
 
   ret = MTL(ObTableLockService*)->lock_obj(*tx_desc3,
                                            tx_param,
                                            lock_arg);
-  ASSERT_EQ(OB_ERR_EXCLUSIVE_LOCK_CONFLICT, ret);
+  ASSERT_EQ(OB_TRY_LOCK_ROW_CONFLICT, ret);
 
   LOG_INFO("ObTableLockServiceTest::in_trans_lock_obj 1.4");
   const int64_t stmt_timeout_ts = ObTimeUtility::current_time() + 1000 * 1000;

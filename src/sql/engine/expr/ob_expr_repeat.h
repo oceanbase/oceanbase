@@ -61,7 +61,6 @@ public:
                          const int64_t count,
                          ObIAllocator &allocator,
                          const int64_t max_result_size);
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   static const int64_t MEM_WARN_THRESHOLD = 100 * 1024 * 1024; // 100M
   // disallow copy

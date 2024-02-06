@@ -42,7 +42,7 @@ public:
   int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper,
+      ObCGTableWrapper &wrapper,
       const blocksstable::ObDatumRowkey &idx_key);
   int get_next_row(ObMacroBlockReader &block_reader, const blocksstable::ObDatumRow *&store_row);
   TO_STRING_KV(K_(is_inited), K_(is_same_data_block), K_(prefetcher), KPC_(sstable));
@@ -51,7 +51,7 @@ protected:
   bool is_inited_;
   bool is_same_data_block_;
   ObSSTable *sstable_;
-  ObSSTableWrapper table_wrapper_;
+  ObCGTableWrapper table_wrapper_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   ObIndexTreePrefetcher prefetcher_;

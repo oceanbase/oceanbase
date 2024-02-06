@@ -55,8 +55,6 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
                                              ObIArray<ObRawExpr*> &params)
 {
   int ret = OB_SUCCESS;
-  bool has_assign_param = false;
-
   CK (OB_NOT_NULL(routine_info));
   CK (OB_NOT_NULL(call_proc_info));
 
@@ -66,6 +64,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
   }
   // Step 2: 从ParamsNode中解析参数
   if (OB_SUCC(ret) && OB_NOT_NULL(params_node)) {
+    bool has_assign_param = false;
     if (T_SP_CPARAM_LIST != params_node->type_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid params list node", K(ret), K(params_node->type_));
@@ -108,7 +107,7 @@ int ObCallProcedureResolver::resolve_cparams(const ParseNode *params_node,
   }
 
   if (OB_SUCC(ret)) { // 判断所有参数没有复杂表达式参数
-    bool v = (false == has_assign_param);
+    bool v = true;
     for (int64_t i = 0; v && OB_SUCC(ret) && i < params.count(); i ++) {
       if (OB_ISNULL(params.at(i))) {
         ret = OB_INVALID_ARGUMENT;
@@ -241,9 +240,6 @@ int ObCallProcedureResolver::generate_pl_cache_ctx(pl::ObPLCacheCtx &pc_ctx)
     pc_ctx.key_.sessid_ = 0;
     pc_ctx.key_.key_id_ = OB_INVALID_ID;
     pc_ctx.key_.name_ = params_.cur_sql_;
-    (void)ObSQLUtils::md5(pc_ctx.raw_sql_,
-                          pc_ctx.sql_id_,
-                          (int32_t)sizeof(pc_ctx.sql_id_));
   }
   return ret;
 }
@@ -473,8 +469,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
             const ObRawExpr* param = params.at(i);
             if (lib::is_mysql_mode()
                 && param->get_expr_type() != T_OP_GET_USER_VAR
-                && param->get_expr_type() != T_OP_GET_SYS_VAR
-                && param->get_expr_type() != T_QUESTIONMARK) {
+                && param->get_expr_type() != T_OP_GET_SYS_VAR) {
               ret = OB_ER_SP_NOT_VAR_ARG;
               LOG_USER_ERROR(OB_ER_SP_NOT_VAR_ARG, static_cast<int32_t>(i), static_cast<int32_t>(sp_name.length()), sp_name.ptr());
               LOG_WARN("OUT or INOUT argument for routine is not a variable", K(param->get_expr_type()), K(ret));

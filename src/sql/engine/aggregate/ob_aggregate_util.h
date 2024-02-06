@@ -12,8 +12,6 @@
 
 #ifndef OCEANBASE_SQL_ENGINE_AGGREGATE_UTIL_H
 #define OCEANBASE_SQL_ENGINE_AGGREGATE_UTIL_H
-#include <type_traits>
-
 #include "common/data_buffer.h"
 #include "lib/number/ob_number_v2.h"
 
@@ -23,14 +21,6 @@ namespace sql
 {
 
 using namespace common::number;
-
-template<typename src_type, class = void>
-struct nmb_param_may_has_null: public std::true_type{};
-
-template <typename src_type>
-struct nmb_param_may_has_null<src_type, std::void_t<decltype(src_type::_param_maybe_null)>>
-  : public std::conditional<src_type::_param_maybe_null, std::true_type, std::false_type>::type
-{};
 
 template<typename SRC_TYPE, typename SELECTOR_TYPE>
 int number_accumulator(
@@ -58,7 +48,7 @@ int number_accumulator(
   uint16_t i = 0; // row num in a batch
   for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
     i = selector.get_batch_index(it);
-    if (nmb_param_may_has_null<SRC_TYPE>::value && src.at(i)->is_null()) {
+    if (src.at(i)->is_null()) {
       continue;
     }
     all_skip = false;
@@ -115,7 +105,7 @@ int number_accumulator(
     result = ori_result;
     for (auto it = selector.begin(); OB_SUCC(ret) && it < selector.end(); selector.next(it)) {
       i = selector.get_batch_index(it);
-      if (nmb_param_may_has_null<SRC_TYPE>::value && src.at(i)->is_null()) {
+      if (src.at(i)->is_null()) {
         continue;
       }
       ObNumber src_num(src.at(i)->get_number());

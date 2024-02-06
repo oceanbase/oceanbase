@@ -195,7 +195,7 @@ TEST_F(TestIntegerPdFilter, test_integer_decoder_nullbitmap_type)
   const bool enable_check = ENABLE_CASE_CHECK;
   const bool has_null = true;
   const bool is_force_raw = true;
-  abnormal_filter_type_ = AbnormalFilterType::WIDER_WIDTH;
+  enable_abnormal_filter_type_ = true;
   ObObjType col_types[col_cnt] = {ObInt32Type, ObTinyIntType};
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
   ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER;
@@ -341,7 +341,7 @@ TEST_F(TestIntegerPdFilter, test_integer_abnormal_filter)
 {
   const int64_t rowkey_cnt = 1;
   const int64_t col_cnt = 2;
-  abnormal_filter_type_ = AbnormalFilterType::WIDER_WIDTH;
+  enable_abnormal_filter_type_ = true;
   const bool enable_check = ENABLE_CASE_CHECK;
   ObObjType col_types[col_cnt] = {ObInt32Type, ObSmallIntType};
   ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
@@ -551,86 +551,6 @@ TEST_F(TestIntegerPdFilter, test_exceed_range_compare_filter)
     int64_t res_arr_ge[4] = {1, 1, 0, 0};
     integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
   }
-  LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
-}
-
-//
-TEST_F(TestIntegerPdFilter, test_singed_and_unsigned_compare_filter)
-{
-  const int64_t rowkey_cnt = 1;
-  const int64_t col_cnt = 3;
-  const bool enable_check = ENABLE_CASE_CHECK;
-  abnormal_filter_type_ = AbnormalFilterType::OPPOSITE_SIGN;
-  ObObjType col_types[col_cnt] = {ObInt32Type, ObUSmallIntType, ObIntType};
-  ASSERT_EQ(OB_SUCCESS, prepare(col_types, rowkey_cnt, col_cnt));
-  ctx_.column_encodings_[0] = ObCSColumnHeader::Type::INTEGER; // integer
-  ctx_.column_encodings_[1] = ObCSColumnHeader::Type::INTEGER; // integer
-  ctx_.column_encodings_[2] = ObCSColumnHeader::Type::INTEGER; // integer
-
-  const int64_t row_cnt = 2;
-  ObMicroBlockCSEncoder encoder;
-  ASSERT_EQ(OB_SUCCESS, encoder.init(ctx_));
-  ObDatumRow row_arr[row_cnt];
-  for (int64_t i = 0; i < row_cnt; ++i) {
-    ASSERT_EQ(OB_SUCCESS, row_arr[i].init(allocator_, col_cnt));
-  }
-  row_arr[0].storage_datums_[0].set_int32(0);
-  row_arr[0].storage_datums_[1].set_uint(0);
-  row_arr[0].storage_datums_[2].set_int(-1);
-  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[0]));
-  row_arr[1].storage_datums_[0].set_int32(1);
-  row_arr[1].storage_datums_[1].set_uint(1);
-  row_arr[1].storage_datums_[2].set_int(0);
-  ASSERT_EQ(OB_SUCCESS, encoder.append_row(row_arr[1]));
-
-  HANDLE_TRANSFORM();
-
-  int64_t col_offset = 1;
-  bool need_check = true;
-
-  // check EQ NE
-  {
-    int64_t ref_arr[4] = {0, 1, 100, 1000};
-    int64_t res_arr_eq[4] = {1, 1, 0, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_EQ, 4, 1, res_arr_eq);
-    int64_t res_arr_ne[4] = {1, 1, 2, 2};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_NE, 4, 1, res_arr_ne);
-  }
-
-  // check LT/LE/GT/GE
-  {
-    int64_t ref_arr[4] = {-1, 0, 1, 100};
-    int64_t res_arr_lt[4] = {0, 0, 1, 2};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 4, 1, res_arr_lt);
-    int64_t res_arr_le[4] = {0, 1, 2, 2};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 4, 1, res_arr_le);
-  }
-  {
-    int64_t ref_arr[4] = {-1, 0, 1, 100};
-    int64_t res_arr_gt[4] = {2, 1, 0, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GT, 4, 1, res_arr_gt);
-    int64_t res_arr_ge[4] = {2, 2, 1, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
-  }
-  LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
-
-  col_offset = 2;
-  // check LT/LE/GT/GE
-  {
-    int64_t ref_arr[4] = {0, 1, 10, 100};
-    int64_t res_arr_lt[4] = {1, 2, 2, 2};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LT, 4, 1, res_arr_lt);
-    int64_t res_arr_le[4] = {2, 2, 2, 2};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_LE, 4, 1, res_arr_le);
-  }
-  {
-    int64_t ref_arr[4] = {0, 1, 10, 100};
-    int64_t res_arr_gt[4] = {0, 0, 0, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GT, 4, 1, res_arr_gt);
-    int64_t res_arr_ge[4] = {1, 0, 0, 0};
-    integer_type_filter_normal_check(true, ObWhiteFilterOperatorType::WHITE_OP_GE, 4, 1, res_arr_ge);
-  }
-
   LOG_INFO(">>>>>>>>>>FINISH PD FILTER<<<<<<<<<<<");
 }
 

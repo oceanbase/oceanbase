@@ -27,6 +27,38 @@ namespace oceanbase {
 using namespace pl;
 namespace common {
 
+/* Now, the following scenarios will try derive global stat:
+ * if granularity specify 'APPROX_GLOBAL AND PARTITION':
+ *   if in auto gather stats, choose gather subpartition stats and incremental gather global stats:
+ *      then we choose incremental gather global stats from subpartition stats.
+ *   else we choose incremental gather global stats from partition stats.
+ *
+*/
+int ObIncrementalStatEstimator::try_derive_global_stat(ObExecContext &ctx,
+                                                      const ObTableStatParam &param,
+                                                      ObExtraParam &extra,
+                                                      ObIArray<ObOptStat> &approx_part_opt_stats,
+                                                      ObIArray<ObOptStat> &opt_stats)
+{
+  int ret = OB_SUCCESS;
+  if (extra.type_ == INVALID_LEVEL ||
+      extra.type_ == TABLE_LEVEL ||
+      !(param.global_stat_param_.need_modify_ && param.global_stat_param_.gather_approx_) ||
+      param.part_level_ == share::schema::PARTITION_LEVEL_ZERO) {
+    LOG_TRACE("not fullfill derive global stat", K(extra.type_),K(param.global_stat_param_),
+                                                K(param.part_level_));
+  } else if (extra.type_ == SUBPARTITION_LEVEL) {
+    if (OB_FAIL(derive_part_stats_from_subpart_stats(ctx, param, opt_stats,
+                                                    approx_part_opt_stats))) {
+      LOG_WARN("failed to derive part stats from subpart stats", K(ret));
+    }
+  } else if (OB_FAIL(derive_global_stat_from_part_stats(ctx, param,
+                                                       approx_part_opt_stats, opt_stats))) {
+    LOG_WARN("failed to derive global stat from part stats", K(ret));
+  }
+  return ret;
+}
+
 int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext &ctx,
                                                                   const uint64_t table_id)
 {
@@ -50,13 +82,14 @@ int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext 
       } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(ctx.get_my_session()->get_rpc_tenant_id(), param))) {
         LOG_WARN("fail to update stat cache", K(ret));
       }
-    } else if (OB_FAIL(get_all_part_opt_stats(param,
-                                              param.part_level_ == share::schema::PARTITION_LEVEL_ONE ?
-                                                param.all_part_infos_ : param.all_subpart_infos_,
-                                              part_tab_stats,
-                                              part_col_handles,
-                                              part_opt_stats))) {
-      LOG_WARN("failed to get all part opt stats", K(ret));
+    } else if (OB_FAIL(get_all_part_opt_stat_by_direct_load(param,
+                                                            part_tab_stats,
+                                                            part_col_handles,
+                                                            part_opt_stats))) {
+      LOG_WARN("failed to get all part opt stat by direct load", K(ret));
+    } else if (OB_FAIL(param.all_part_infos_.assign(param.part_infos_))||
+              OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
+      LOG_WARN("failed to assign", K(ret));
     } else {
       bool nee_derive_part = param.part_level_ == share::schema::PARTITION_LEVEL_TWO;
       //derive part stat first
@@ -64,17 +97,18 @@ int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext 
         ObSEArray<ObOptStat, 1> empty_opt_stats;
         if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, alloc, param, empty_opt_stats,
                                                             part_opt_stats, all_derive_opt_stats))) {
-          LOG_WARN("failed to do derive part stats from subpart stats", K(ret));
+          LOG_WARN("failed to derive part stat by direct load", K(ret));
         }
       }
       //derive global stat
       if (OB_SUCC(ret)) {
         ObOptStat global_opt_stat;
         bool need_derive_hist = false;
+        bool need_gather_hybrid_hist = false;
         if (OB_FAIL(do_derive_global_stat(ctx, alloc, param,
                                           nee_derive_part ? all_derive_opt_stats : part_opt_stats,
                                           need_derive_hist,
-                                          TABLE_LEVEL, param.global_part_id_,
+                                          TABLE_LEVEL, param.global_part_id_, need_gather_hybrid_hist,
                                           global_opt_stat))) {
           LOG_WARN("Failed to derive global stat from part stat", K(ret));
         } else if (OB_FAIL(all_derive_opt_stats.push_back(global_opt_stat))) {
@@ -107,21 +141,25 @@ int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext 
 int ObIncrementalStatEstimator::derive_global_stat_from_part_stats(
     ObExecContext &ctx,
     const ObTableStatParam &param,
-    const ObIArray<ObOptStat> &part_opt_stats,
-    ObOptStat &global_opt_stat)
+    const ObIArray<ObOptStat> &approx_part_opt_stats,
+    ObIArray<ObOptStat> &opt_stats)
 {
   int ret = OB_SUCCESS;
+  ObOptStat global_opt_stat;
   ObSEArray<ObOptTableStat, 4> table_stats;
   ObSEArray<ObOptColumnStatHandle, 4> col_handles;
   ObSEArray<ObOptStat, 4> tmp_opt_stats;
   ObSEArray<int64_t, 4> no_regather_part_ids;
   bool need_derive_hist = true;
+  bool need_gather_hybrid_hist = false;
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
-  } else if (part_opt_stats.empty()) {
+  } else if (OB_FAIL(append(opt_stats, approx_part_opt_stats))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (opt_stats.empty()) {
     /*do nothing*/
-  } else if (OB_FAIL(tmp_opt_stats.assign(part_opt_stats))) {
+  } else if (OB_FAIL(tmp_opt_stats.assign(opt_stats))) {
     LOG_WARN("failed to assign", K(ret));
   } else {
     //if specify part/subpart name, need get other already existed part stats, but only derive base
@@ -169,11 +207,13 @@ int ObIncrementalStatEstimator::derive_global_stat_from_part_stats(
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(do_derive_global_stat(ctx, *param.allocator_, param, tmp_opt_stats, need_derive_hist,
-                                        TABLE_LEVEL,param.global_part_id_,
+                                        TABLE_LEVEL,param.global_part_id_, need_gather_hybrid_hist,
                                         global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
+      } else if (OB_FAIL(opt_stats.push_back(global_opt_stat))) {
+        LOG_WARN("failed to push back global stat", K(ret));
       } else {
-        LOG_TRACE("Succeed to derive global stat from part stats", K(global_opt_stat), K(param));
+        LOG_TRACE("Succeed to derive global stat from part stats", K(opt_stats.count()), K(param));
       }
     }
   }
@@ -183,7 +223,7 @@ int ObIncrementalStatEstimator::derive_global_stat_from_part_stats(
 int ObIncrementalStatEstimator::derive_part_stats_from_subpart_stats(
     ObExecContext &ctx,
     const ObTableStatParam &param,
-    const ObIArray<ObOptStat> &gather_subpart_opt_stats,
+    const ObIArray<ObOptStat> &gather_opt_stats,
     ObIArray<ObOptStat> &approx_part_opt_stats)
 {
   int ret = OB_SUCCESS;
@@ -191,6 +231,7 @@ int ObIncrementalStatEstimator::derive_part_stats_from_subpart_stats(
   ObSEArray<ObOptTableStat, 4> no_regather_table_stats;
   ObSEArray<ObOptColumnStatHandle, 4> no_regather_col_handles;
   ObSEArray<ObOptStat, 4> no_regather_subpart_opt_stats;
+  bool need_gather_hybrid_hist = false;
   if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
@@ -202,87 +243,13 @@ int ObIncrementalStatEstimator::derive_part_stats_from_subpart_stats(
     LOG_WARN("failed to get locked partition stats", K(ret));
   } else if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, *param.allocator_, param,
                                                              no_regather_subpart_opt_stats,
-                                                             gather_subpart_opt_stats,
+                                                             gather_opt_stats,
                                                              approx_part_opt_stats))) {
     LOG_WARN("failed to do derive part stats from subpart stats", K(ret));
   } else {
     LOG_TRACE("Succeed to derive part stats from subpart stats", K(approx_part_opt_stats.count()),
-                                                                 K(gather_subpart_opt_stats.count()),
+                                                                 K(gather_opt_stats.count()),
                                                                  K(param));
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::derive_split_gather_stats(ObExecContext &ctx,
-                                                          ObMySQLTransaction &trans,
-                                                          const ObTableStatParam &param,
-                                                          bool derive_part_stat,
-                                                          bool is_all_columns_gather,
-                                                          ObIArray<ObOptTableStat *> &all_tstats)
-{
-  int ret = OB_SUCCESS;
-  if (param.part_level_ != share::schema::PARTITION_LEVEL_ONE &&
-      param.part_level_ != share::schema::PARTITION_LEVEL_TWO) {
-    //do nothing
-  } else if (OB_ISNULL(param.allocator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(param));
-  } else {
-    ObArenaAllocator allocator("IncrementStats", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
-    ObSEArray<ObOptTableStat *, 4> cur_table_stats;
-    ObSEArray<ObOptColumnStat *, 4> cur_column_stats;
-    ObSEArray<ObOptStat, 4> part_opt_stats;
-    ObSEArray<ObOptStat, 4> derive_opt_stats;
-    ObTableStatParam new_param;
-    if (OB_FAIL(prepare_get_opt_stats_param(param, derive_part_stat, new_param))) {
-      LOG_WARN("failed to prepare get opt stats param", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::get_current_opt_stats(allocator,
-                                                               trans.get_connection(),
-                                                               new_param,
-                                                               cur_table_stats,
-                                                               cur_column_stats))) {
-      LOG_WARN("failed to get current opt stats", K(ret));
-    } else if (OB_FAIL(generate_all_opt_stat(cur_table_stats,
-                                             cur_column_stats,
-                                             param.column_params_.count(),
-                                             part_opt_stats))) {
-      LOG_WARN("failed to generate all opt stat", K(ret));
-    } else if (derive_part_stat) {
-      ObSEArray<ObOptStat, 1> empty_opt_stats;
-      if (OB_FAIL(do_derive_part_stats_from_subpart_stats(ctx, *param.allocator_, param, empty_opt_stats,
-                                                          part_opt_stats, derive_opt_stats))) {
-        LOG_WARN("failed to do derive part stats from subpart stats", K(ret));
-      }
-    } else {
-      ObOptStat global_opt_stat;
-      bool need_derive_hist = true;
-      if (OB_FAIL(do_derive_global_stat(ctx, *param.allocator_, param,
-                                        part_opt_stats,
-                                        need_derive_hist,
-                                        TABLE_LEVEL, param.global_part_id_,
-                                        global_opt_stat))) {
-        LOG_WARN("Failed to derive global stat from part stat", K(ret));
-      } else if (OB_FAIL(derive_opt_stats.push_back(global_opt_stat))) {
-        LOG_WARN("faield to push back", K(ret));
-      }
-    }
-    //write all stat
-    if (OB_SUCC(ret)) {
-      ObSEArray<ObOptTableStat *, 4> tmp_all_tstats;
-      ObSEArray<ObOptColumnStat *, 4> all_cstats;
-      if (OB_FAIL(ObDbmsStatsUtils::calssify_opt_stat(derive_opt_stats,
-                                                      tmp_all_tstats,
-                                                      all_cstats))) {
-        LOG_WARN("failed to calssify opt stat", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsUtils::merge_split_gather_tab_stats(all_tstats, tmp_all_tstats))) {
-        LOG_WARN("failed to merge split gather tab stats", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(),
-                                                              is_all_columns_gather ? all_tstats : tmp_all_tstats,
-                                                              all_cstats))) {
-        LOG_WARN("failed to split batch write", K(ret));
-      }
-    }
-    LOG_TRACE("succeed to derive split gather stats", K(param), K(derive_part_stat), K(part_opt_stats), K(derive_opt_stats));
   }
   return ret;
 }
@@ -292,10 +259,12 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
     ObIAllocator &alloc,
     const ObTableStatParam &param,
     const ObIArray<ObOptStat> &no_regather_subpart_opt_stats,
-    const ObIArray<ObOptStat> &gather_subpart_opt_stats,
+    const ObIArray<ObOptStat> &gather_opt_stats,
     ObIArray<ObOptStat> &approx_part_opt_stats)
 {
   int ret = OB_SUCCESS;
+  bool need_gather_hybrid_hist = false;
+  ObSEArray<ObOptStat, 4> gather_hybrid_hist_opt_stats;
   int64_t cur_part_id = OB_INVALID_ID;
   for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
     ObOptStat opt_part_stat;
@@ -316,15 +285,15 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
       } else {/*do nothing*/}
     }
     //get regather subpart stats
-    for (int64_t j = 0; OB_SUCC(ret) && j < gather_subpart_opt_stats.count(); ++j) {
-      if (OB_ISNULL(gather_subpart_opt_stats.at(j).table_stat_)) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < gather_opt_stats.count(); ++j) {
+      if (OB_ISNULL(gather_opt_stats.at(j).table_stat_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(gather_subpart_opt_stats.at(j).table_stat_));
+        LOG_WARN("get unexpected error", K(ret), K(gather_opt_stats.at(j).table_stat_));
       } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 gather_subpart_opt_stats.at(j).table_stat_->get_partition_id(),
+                                                 gather_opt_stats.at(j).table_stat_->get_partition_id(),
                                                  cur_part_id)) {
         if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-          if (OB_FAIL(subpart_opt_stats.push_back(gather_subpart_opt_stats.at(j)))) {
+          if (OB_FAIL(subpart_opt_stats.push_back(gather_opt_stats.at(j)))) {
             LOG_WARN("failed to push back", K(ret));
           } else {/*do nothing*/}
         } else {/*do nothing*/}
@@ -338,11 +307,32 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
                                          K(param.approx_part_infos_.at(i)));
       } else if (OB_FAIL(do_derive_global_stat(ctx, alloc, param, subpart_opt_stats, true,
                                                PARTITION_LEVEL, param.approx_part_infos_.at(i).part_id_,
-                                               opt_part_stat))) {
+                                               need_gather_hybrid_hist, opt_part_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
         LOG_WARN("faield to push back", K(ret));
+      } else if (!need_gather_hybrid_hist) {
+        /*do nothing*/
+      } else if (OB_FAIL(gather_hybrid_hist_opt_stats.push_back(opt_part_stat))) {
+        LOG_WARN("failed to push back", K(ret));
       } else {/*do nothing*/}
+    }
+  }
+  if (OB_SUCC(ret) && !gather_hybrid_hist_opt_stats.empty()) {
+    //gather partition hybird hist togather.
+    ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
+    ObExtraParam extra;
+    extra.type_ = PARTITION_LEVEL;
+    extra.nth_part_ = 0;
+    extra.start_time_ = ObTimeUtility::current_time();
+    ObTableStatParam part_param;
+    if (OB_FAIL(gen_part_param(param, gather_hybrid_hist_opt_stats, part_param))) {
+      LOG_WARN("failed to gen part param", K(ret));
+    } else if (OB_FAIL(hybrid_est.estimate(part_param, extra,
+                                           gather_hybrid_hist_opt_stats))) {
+      LOG_WARN("failed to estimate hybrid histogram", K(ret));
+    } else {
+      LOG_TRACE("succeed to gather partition hybrid hist", K(gather_hybrid_hist_opt_stats.count()));
     }
   }
   return ret;
@@ -372,41 +362,6 @@ int ObIncrementalStatEstimator::generate_all_opt_stat(ObIArray<ObOptTableStat> &
       if (OB_UNLIKELY(opt_stat.column_stats_.count() != col_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(opt_stat.column_stats_), K(col_cnt));
-      } else if (OB_FAIL(all_opt_stats.push_back(opt_stat))) {
-        LOG_WARN("failed to push back opt stat", K(ret));
-      } else {/*do nothing*/}
-    }
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::generate_all_opt_stat(ObIArray<ObOptTableStat *> &table_stats,
-                                                      ObIArray<ObOptColumnStat *> &col_stats,
-                                                      int64_t col_cnt,
-                                                      ObIArray<ObOptStat> &all_opt_stats)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_stats.count(); ++i) {
-    ObOptStat opt_stat;
-    opt_stat.table_stat_ = table_stats.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < col_cnt; ++j) {
-      int64_t idx = i * col_cnt + j;
-      if (OB_UNLIKELY(idx >= col_stats.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(idx), K(col_stats.count()));
-      } else if (OB_ISNULL(col_stats.at(idx)) || OB_ISNULL(opt_stat.table_stat_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(table_stats), K(col_stats), K(i), K(idx));
-      } else if (opt_stat.table_stat_->get_partition_id() == col_stats.at(idx)->get_partition_id()) {
-        if (OB_FAIL(opt_stat.column_stats_.push_back(col_stats.at(idx)))) {
-          LOG_WARN("failed to push back col stat", K(ret));
-        } else {/*do nothing*/}
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(opt_stat.column_stats_.count() != col_cnt)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(table_stats), K(col_cnt), K(col_stats));
       } else if (OB_FAIL(all_opt_stats.push_back(opt_stat))) {
         LOG_WARN("failed to push back opt stat", K(ret));
       } else {/*do nothing*/}
@@ -471,14 +426,14 @@ int ObIncrementalStatEstimator::get_part_ids_and_column_ids_info(ObOptStat &src_
       if (OB_UNLIKELY(no_gather_id == -1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error, expected valid id", K(ret), K(no_gather_id));
-      } else if (OB_UNLIKELY(param.all_part_infos_.empty())) {
+      } else if (OB_UNLIKELY(param.part_ids_.empty())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error, expected isn't empty", K(ret), K(param.all_part_infos_));
+        LOG_WARN("get unexpected error, expected isn't empty", K(ret), K(param.part_ids_));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param.all_part_infos_.count(); ++i) {
-          if (param.all_part_infos_.at(i).part_id_ == no_gather_id) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < param.part_ids_.count(); ++i) {
+          if (param.part_ids_.at(i) == no_gather_id) {
             /*do nothing*/
-          } else if (OB_FAIL(part_ids.push_back(param.all_part_infos_.at(i).part_id_))) {
+          } else if (OB_FAIL(part_ids.push_back(param.part_ids_.at(i)))) {
             LOG_WARN("failed to push back id", K(ret));
           } else {/*do nothing*/}
         }
@@ -495,22 +450,25 @@ int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
                                                       bool need_derive_hist,
                                                       const StatLevel &approx_level,
                                                       const int64_t partition_id,
+                                                      bool &need_gather_hybrid_hist,
                                                       ObOptStat &global_opt_stat)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(derive_global_tbl_stat(alloc, param,  approx_level, partition_id,
+  if (OB_FAIL(derive_global_tbl_stat(ctx, alloc, param,  approx_level, partition_id,
                                      part_opt_stats, global_opt_stat))) {
     LOG_WARN("failed to derive global tbl stat from part tbl stat", K(ret));
   } else if (OB_FAIL(derive_global_col_stat(ctx, alloc, param, part_opt_stats, need_derive_hist,
-                                            approx_level, partition_id, global_opt_stat))) {
+                                            approx_level, partition_id, need_gather_hybrid_hist,
+                                            global_opt_stat))) {
     LOG_WARN("failed to derive global col stat from part col stat", K(ret));
   } else {
-    LOG_TRACE("Succeed to derive global stat", K(part_opt_stats));
+    LOG_TRACE("Succeed to derive global stat", K(part_opt_stats.count()));
   }
   return ret;
 }
 
-int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
+int ObIncrementalStatEstimator::derive_global_tbl_stat(ObExecContext &ctx,
+                                                       ObIAllocator &alloc,
                                                        const ObTableStatParam &param,
                                                        const StatLevel &approx_level,
                                                        const int64_t partition_id,
@@ -553,7 +511,6 @@ int ObIncrementalStatEstimator::derive_global_tbl_stat(ObIAllocator &alloc,
         table_stat->set_partition_id(partition_id);
         table_stat->set_object_type(approx_level);
         table_stat->set_row_count(global_tstat.get_row_count());
-        table_stat->set_sample_size(global_tstat.get_row_count());
         table_stat->set_avg_row_size(global_tstat.get_avg_row_size());
         table_stat->set_data_size(global_tstat.get_avg_data_size());
         table_stat->set_macro_block_num(global_tstat.get_macro_block_count());
@@ -573,12 +530,13 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                                                        bool need_derive_hist,
                                                        const StatLevel &approx_level,
                                                        const int64_t partition_id,
+                                                       bool &need_gather_hybrid_hist,
                                                        ObOptStat &global_opt_stat)
 {
   int ret = OB_SUCCESS;
   int64_t part_cnt = part_opt_stats.count();
   int64_t column_cnt = param.column_params_.count();
-  bool need_gather_hist = false;
+  need_gather_hybrid_hist = false;
   ObIArray<ObOptColumnStat *> &col_stats = global_opt_stat.column_stats_;
   if (OB_UNLIKELY(part_cnt <= 0 || column_cnt <= 0 ||
                   approx_level == INVALID_LEVEL || approx_level == SUBPARTITION_LEVEL) ||
@@ -601,7 +559,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
         ObSEArray<ObHistogram, 4> all_part_histograms;
-        bool can_try_derive_hist = need_derive_hist;
+        int64_t total_avg_len = 0;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
@@ -627,7 +585,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                      OB_FAIL(all_part_histograms.push_back(opt_col_stat->get_histogram()))) {
             LOG_WARN("failed to push back histogram", K(ret));
           } else {
-            can_try_derive_hist &= (opt_col_stat->get_num_distinct() == 0 || opt_col_stat->get_histogram().is_valid());
+            need_derive_hist &= opt_col_stat->get_histogram().is_valid();
             null_eval.add(opt_col_stat->get_num_null());
             if (opt_col_stat->get_num_distinct() != 0) {
               min_eval.add(opt_col_stat->get_min_value());
@@ -641,13 +599,12 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           }
         }
         if (OB_SUCC(ret)) {
-          col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_ : OB_INVALID_ID);
+          col_stat->set_table_id(param.table_id_);
           col_stat->set_partition_id(partition_id);
           col_stat->set_column_id(param.column_params_.at(i).column_id_);
           col_stat->set_stat_level(approx_level);
           col_stat->set_num_null(null_eval.get());
           col_stat->set_num_not_null(not_null_eval.get());
-          col_stat->get_histogram().set_sample_size(not_null_eval.get());
           col_stat->set_num_distinct(ndv_eval.get());
           col_stat->set_avg_len(avglen_eval.get());
           ndv_eval.get_llc_bitmap(col_stat->get_llc_bitmap(), col_stat->get_llc_bitmap_size());
@@ -661,70 +618,39 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           } else if (OB_FAIL(ob_write_obj(alloc, max_eval.get(), new_max_obj)) ||
                      FALSE_IT(col_stat->set_max_value(new_max_obj))) {
             LOG_WARN("failed to set max value", K(ret), K(max_eval.get()), K(new_max_obj));
+          } else if (need_derive_hist && !all_part_histograms.empty() &&
+                     OB_FAIL(derive_global_histogram(all_part_histograms,
+                                                     alloc,
+                                                     max_bucket_num,
+                                                     global_opt_stat.table_stat_->get_row_count(),
+                                                     col_stat->get_num_not_null(),
+                                                     col_stat->get_num_distinct(),
+                                                     col_stat->get_histogram(),
+                                                     need_gather_hybrid_hist))) {
+            LOG_WARN("failed to derive global histogram from part histogram", K(ret));
           } else if (OB_FAIL(col_stats.push_back(col_stat))) {
             LOG_WARN("failed to push back", K(ret));
-          } else if (need_derive_hist) {
-            if (can_try_derive_hist && col_stat->get_num_distinct() > 0) {
-              if (OB_FAIL(derive_global_histogram(all_part_histograms,
-                                                  alloc,
-                                                  max_bucket_num,
-                                                  global_opt_stat.table_stat_->get_row_count(),
-                                                  col_stat->get_num_not_null(),
-                                                  col_stat->get_num_distinct(),
-                                                  col_stat->get_histogram(),
-                                                  need_gather_hist))) {
-                LOG_WARN("failed to derive global histogram from part histogram", K(ret));
-              }
-            } else if (max_bucket_num > 1 &&
-                       param.column_params_.at(i).need_basic_stat() &&
-                       col_stat->get_num_distinct() > 0) {
-              need_gather_hist = true;
-              int64_t max_disuse_cnt = std::ceil(col_stat->get_num_not_null() * 1.0 / max_bucket_num);
-              //After testing, the error of using hyperloglog to estimate ndv is within %5.
-              const double MAX_LLC_NDV_ERR_RATE = !param.need_approx_ndv_ ? 0.0 : 0.05;
-              const int64_t fault_tolerance_cnt = std::ceil(col_stat->get_num_distinct() * MAX_LLC_NDV_ERR_RATE);
-              if (col_stat->get_num_distinct() >= max_bucket_num + max_disuse_cnt + fault_tolerance_cnt) {
-                //directly gather hybrid histogram
-                col_stat->get_histogram().set_type(ObHistType::HYBIRD);
-              } else {
-                //otherwise, try gather top frequery histogram
-                col_stat->get_histogram().set_type(ObHistType::TOP_FREQUENCY);
-              }
-            }
+          } else {
             LOG_TRACE("succeed to derive global col stat", K(*col_stat));
           }
         }
       }
     }
-    if (OB_SUCC(ret) && need_gather_hist) {
-      ObOptStatGatherParam gather_param;
-      ObTopkHistEstimator topk_est(ctx, *param.allocator_);
-      ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
-      ObSEArray<ObOptStat, 1> tmp_opt_stats;
-      if (OB_FAIL(ObDbmsStatsUtils::prepare_gather_stat_param(param, approx_level, NULL, false,
-                                                              DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE,
-                                                              gather_param))) {
-        LOG_WARN("failed to assign", K(ret));
-      } else if (OB_FAIL(gather_param.column_params_.assign(param.column_params_))) {
-        LOG_WARN("failed to assign", K(ret));
-      } else if (gather_param.stat_level_ != TABLE_LEVEL &&
-                 OB_FAIL(gather_param.partition_infos_.assign(param.approx_part_infos_))) {
-        LOG_WARN("failed to assign", K(ret));
-      } else if (gather_param.stat_level_ != TABLE_LEVEL &&
-                 OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(global_opt_stat.table_stat_->get_partition_id(),
-                                                                                   gather_param))) {
-        LOG_WARN("failed to remove stat gather param partition info", K(ret));
-      } else if (OB_FAIL(topk_est.estimate(gather_param, global_opt_stat))) {
-        LOG_WARN("failed to estimate topk histogram", K(ret));
-      } else if (OB_FAIL(hybrid_est.estimate(gather_param, global_opt_stat))) {
-        LOG_WARN("failed to estimate hybrid histogram", K(ret));
-      } else if (OB_FAIL(tmp_opt_stats.push_back(global_opt_stat))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_FAIL(ObDbmsStatsUtils::check_all_cols_range_skew(gather_param.column_params_,
-                                                                     tmp_opt_stats))) {
-        LOG_WARN("failed to check all cols range skew", K(ret));
-      } else {
-        LOG_TRACE("succeed to gather hist", K(gather_param), K(global_opt_stat));
+    if (OB_SUCC(ret) && need_gather_hybrid_hist) {
+      if (approx_level == TABLE_LEVEL) {//for partition level derive put together do it.
+        ObHybridHistEstimator hybrid_est(ctx, *param.allocator_);
+        ObExtraParam extra;
+        extra.type_ = TABLE_LEVEL;
+        extra.nth_part_ = 0;
+        extra.start_time_ = ObTimeUtility::current_time();
+        ObSEArray<ObOptStat, 1> opt_stats;
+        if (OB_FAIL(opt_stats.push_back(global_opt_stat))) {
+          LOG_WARN("failed to push back opt stat", K(ret));
+        } else if (OB_FAIL(hybrid_est.estimate(param, extra, opt_stats))) {
+          LOG_WARN("failed to estimate hybrid histogram", K(ret));
+        } else {
+          LOG_TRACE("succeed to gather hybrid hist");
+        }
       }
     }
   }
@@ -738,15 +664,13 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
                                                         int64_t not_null_count,
                                                         int64_t num_distinct,
                                                         ObHistogram &histogram,
-                                                        bool &need_gather_hist)
+                                                        bool &need_gather_hybrid_hist)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObHistBucket, 4> all_bkts;
   histogram.reset();
   void *ptr = NULL;
-  if (max_bucket_num <= 1) {
-    //do nothing
-  } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObTopKFrequencyHistograms)))) {
+  if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObTopKFrequencyHistograms)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(ptr));
   } else {
@@ -754,7 +678,6 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
     top_k_fre_hist->set_window_size(1000);
     top_k_fre_hist->set_item_size(256);
     top_k_fre_hist->set_is_topk_hist_need_des_row(true);
-    top_k_fre_hist->set_max_disuse_cnt(std::ceil(not_null_count * 1.0 / max_bucket_num));
     for (int64_t i = 0; OB_SUCC(ret) && i < all_part_histograms.count(); ++i) {
       if (all_part_histograms.at(i).is_valid()) {
         if (all_part_histograms.at(i).get_type() == ObHistType::FREQUENCY ||
@@ -762,9 +685,11 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
             all_part_histograms.at(i).get_type() == ObHistType::HYBIRD) {
           const ObHistogram::Buckets &part_bkts = all_part_histograms.at(i).get_buckets();
           for (int64_t j = 0; OB_SUCC(ret) && j < part_bkts.count(); ++j) {
-            if (OB_FAIL(top_k_fre_hist->add_top_k_frequency_item(part_bkts.at(j).endpoint_value_,
-                                                                 part_bkts.at(j).endpoint_repeat_count_))) {
-              LOG_WARN("failed to add topk frequency item", K(ret));
+            for (int64_t k = 0; OB_SUCC(ret) && k < part_bkts.at(j).endpoint_repeat_count_; ++k) {
+              if (OB_FAIL(top_k_fre_hist->add_top_k_frequency_item(
+                                                                part_bkts.at(j).endpoint_value_))) {
+                LOG_WARN("failed to add topk frequency item", K(ret));
+              } else {/*do nothing*/}
             }
           }
         } else {
@@ -781,9 +706,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
       if (OB_FAIL(top_k_fre_hist->create_topk_fre_items())) {
         LOG_WARN("failed to adjust frequency sort", K(ret));
       } else if (top_k_fre_hist->get_buckets().count() == 0) {
-        //directly to gather hybrid histogram
-        histogram.set_type(ObHistType::HYBIRD);
-        need_gather_hist = true;
+        /*do nothing*/
       } else if (OB_FAIL(ObStatTopKHist::build_histogram_from_topk_items(
                                                                       allocator,
                                                                       top_k_fre_hist->get_buckets(),
@@ -796,7 +719,7 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
       } else if (OB_FAIL(histogram.deep_copy(allocator, tmp_histogram))) {
         LOG_WARN("failed to deep copy", K(ret));
       } else {
-        need_gather_hist |= histogram.is_hybrid();
+        need_gather_hybrid_hist |= histogram.is_hybrid();
       }
     }
     if (top_k_fre_hist != NULL) {
@@ -853,35 +776,79 @@ int ObIncrementalStatEstimator::get_column_ids(const ObIArray<ObColumnStatParam>
   return ret;
 }
 
-int ObIncrementalStatEstimator::get_need_hybrid_part_infos(const ObTableStatParam &param,
-                                                           const ObIArray<ObOptStat> &need_hybrid_hist_opt_stats,
-                                                           ObIArray<PartInfo> &hybrid_part_infos)
+int ObIncrementalStatEstimator::gen_part_param(const ObTableStatParam &param,
+                                               const ObIArray<ObOptStat> &need_hybrid_hist_opt_stats,
+                                               ObTableStatParam &part_param)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < need_hybrid_hist_opt_stats.count(); ++i) {
-    if (OB_ISNULL(need_hybrid_hist_opt_stats.at(i).table_stat_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(need_hybrid_hist_opt_stats.at(i).table_stat_));
-    } else {
-      bool find_it = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !find_it && j < param.approx_part_infos_.count(); ++j) {
-        if (need_hybrid_hist_opt_stats.at(i).table_stat_->get_partition_id() ==
-                                                        param.approx_part_infos_.at(j).part_id_) {
-          if (OB_FAIL(hybrid_part_infos.push_back(param.approx_part_infos_.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {
-            find_it = true;
-          }
-        } else {/*do noting*/}
-      }
-      if (OB_SUCC(ret) && !find_it) {
+  if (OB_FAIL(part_param.assign(param))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    part_param.part_infos_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < need_hybrid_hist_opt_stats.count(); ++i) {
+      if (OB_ISNULL(need_hybrid_hist_opt_stats.at(i).table_stat_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(param.approx_part_infos_),
-                                          K(*need_hybrid_hist_opt_stats.at(i).table_stat_));
+        LOG_WARN("get unexpected null", K(ret), K(need_hybrid_hist_opt_stats.at(i).table_stat_));
+      } else {
+        bool find_it = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !find_it && j < param.approx_part_infos_.count(); ++j) {
+          if (need_hybrid_hist_opt_stats.at(i).table_stat_->get_partition_id() ==
+                                                          param.approx_part_infos_.at(j).part_id_) {
+            if (OB_FAIL(part_param.part_infos_.push_back(param.approx_part_infos_.at(j)))) {
+              LOG_WARN("failed to push back", K(ret));
+            } else {
+              find_it = true;
+            }
+          } else {/*do noting*/}
+        }
+        if (OB_SUCC(ret) && !find_it) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(param.approx_part_infos_),
+                                           K(*need_hybrid_hist_opt_stats.at(i).table_stat_));
+        }
       }
     }
   }
   return ret;
+}
+
+
+/*we take following strategy to judge a part can incremental gather wheather or not:
+ * if we need approx global and gather subpart:
+ *   1.if the part need gather stats:
+ *     if more than 50% of subpart is regather stats, then not choose incremental gather stats, else
+ *     choose incremental gather stats
+ *   2.if the part don't need gather stats, and some subpart is regather stats, then the part
+ *     stats need incremental gather.
+*/
+bool ObIncrementalStatEstimator::is_part_can_incremental_gather(const ObTableStatParam &param,
+                                                                int64_t part_id,
+                                                                int64_t subpart_cnt,
+                                                                bool is_gather_part)
+{
+  bool can_be = false;
+  int64_t no_regather_subpart_cnt = 0;
+  int64_t cur_part_id = OB_INVALID_ID;
+  if (param.global_stat_param_.need_modify_ &&
+      param.global_stat_param_.gather_approx_ &&
+      param.subpart_stat_param_.need_modify_ &&
+      param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
+    for (int64_t i = 0; i < param.no_regather_partition_ids_.count(); ++i) {
+      if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
+                                          param.no_regather_partition_ids_.at(i),
+                                          cur_part_id)) {
+        if (cur_part_id == part_id) {
+          ++ no_regather_subpart_cnt;
+        }
+      }
+    }
+    if (!is_gather_part) {
+      can_be = (subpart_cnt != no_regather_subpart_cnt);
+    } else {
+      can_be = subpart_cnt > 0 ? no_regather_subpart_cnt <= subpart_cnt / 2 : false;
+    }
+  }
+  return can_be;
 }
 
 int ObIncrementalStatEstimator::get_no_regather_subpart_stats(
@@ -933,8 +900,6 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
   const share::schema::ObTableSchema *table_schema = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   param.table_id_ = table_id;
-  ObSEArray<int64_t, 4> part_ids;
-  ObSEArray<int64_t, 4> subpart_ids;
   if (OB_ISNULL(schema_guard = ctx.get_virtual_table_ctx().schema_guard_) ||
        OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -949,11 +914,11 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
   } else if (OB_FAIL(ObDbmsStatsUtils::get_part_infos(*table_schema,
                                                       param.part_infos_,
                                                       param.subpart_infos_,
-                                                      part_ids,
-                                                      subpart_ids))) {
+                                                      param.part_ids_,
+                                                      param.subpart_ids_))) {
     LOG_WARN("failed to get partition infos", K(ret));
-  } else if (OB_FAIL(param.all_part_infos_.assign(param.part_infos_)) ||
-             OB_FAIL(param.all_subpart_infos_.assign(param.subpart_infos_))) {
+  } else if (table_schema->get_part_level() == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO
+            && OB_FAIL(param.approx_part_infos_.assign(param.part_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(pl::ObDbmsStats::init_column_stat_params(alloc,
                                                               *schema_guard,
@@ -961,46 +926,34 @@ int ObIncrementalStatEstimator::gen_opt_stat_param_by_direct_load(ObExecContext 
                                                               param.column_params_))) {
     LOG_WARN("failed to init column stat params", K(ret));
   } else {
-    for (int64_t i = 0; i < param.column_params_.count(); ++i) {
-      if (param.column_params_.at(i).is_valid_opt_col()) {
-        param.column_params_.at(i).set_need_basic_stat();
-      }
-    }
     param.tenant_id_ = ctx.get_my_session()->get_effective_tenant_id();
     param.part_level_ = table_schema->get_part_level();
-    param.global_stat_param_.set_gather_stat(true);
-    param.part_stat_param_.set_gather_stat(table_schema->get_part_level() == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO);
-    param.subpart_stat_param_.set_gather_stat();
+    param.total_part_cnt_ = table_schema->get_all_part_num();
+    param.global_stat_param_.need_modify_ = true;
+    param.part_stat_param_.need_modify_ = true;
+    param.subpart_stat_param_.need_modify_ = true;
     if (OB_FAIL(pl::ObDbmsStats::set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
-    } else if (table_schema->get_part_level() == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
-      if (OB_FAIL(param.approx_part_infos_.assign(param.part_infos_))) {
-        LOG_WARN("failed to assign", K(ret));
-      } else {
-        param.part_infos_.reset();
-      }
     }
-    LOG_TRACE("succeed to gen opt stat param by direct load", K(param));
+    LOG_TRACE("succeed to gen opt stat param by direct load", K(ret));
   }
   return ret;
 }
 
-int ObIncrementalStatEstimator::get_all_part_opt_stats(
+int ObIncrementalStatEstimator::get_all_part_opt_stat_by_direct_load(
     const ObTableStatParam param,
-    const ObIArray<PartInfo> &partition_infos,
     ObIArray<ObOptTableStat> &part_tab_stats,
     ObIArray<ObOptColumnStatHandle> &part_col_handles,
     ObIArray<ObOptStat> &part_opt_stats)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t ,4> partition_ids;
   ObSEArray<uint64_t, 4> column_ids;
+  const ObIArray<int64_t> &partition_ids = param.part_level_ == share::schema::PARTITION_LEVEL_ONE ?
+                                                               param.part_ids_ : param.subpart_ids_;
   if (OB_UNLIKELY(param.part_level_ != share::schema::PARTITION_LEVEL_ONE &&
                   param.part_level_ != share::schema::PARTITION_LEVEL_TWO)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
-  } else if (OB_FAIL(get_partition_ids(partition_infos, partition_ids))) {
-    LOG_WARN("failed to get column ids", K(ret));
   } else if (OB_FAIL(get_column_ids(param.column_params_, column_ids))) {
     LOG_WARN("failed to get column ids", K(ret));
   } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(param.tenant_id_,
@@ -1020,148 +973,7 @@ int ObIncrementalStatEstimator::get_all_part_opt_stats(
                                            part_opt_stats))) {
     LOG_WARN("failed to generate all opt stat", K(ret));
   } else {
-    LOG_TRACE("Succeed get all part opt stats", K(param), K(part_tab_stats));
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::get_partition_ids(const ObIArray<PartInfo> &partition_infos,
-                                                  ObIArray<int64_t> &partition_ids)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-    if (OB_FAIL(partition_ids.push_back(partition_infos.at(i).part_id_))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::derive_part_index_stat_by_subpart_index_stats(
-    const ObTableStatParam &param,
-    const ObIArray<ObOptTableStat *> &subpart_index_stats,
-    ObIArray<ObOptTableStat *> &part_index_stats)
-{
-  int ret = OB_SUCCESS;
-  int64_t cur_part_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
-    ObSEArray<ObOptStat, 4> subpart_opt_stats;
-    for (int64_t j = 0; OB_SUCC(ret) && j < subpart_index_stats.count(); ++j) {
-      if (OB_ISNULL(subpart_index_stats.at(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(subpart_index_stats.at(j)));
-      } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 subpart_index_stats.at(j)->get_partition_id(),
-                                                 cur_part_id)) {
-        if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-          ObOptStat tmp_opt_stat;
-          tmp_opt_stat.table_stat_ = subpart_index_stats.at(j);
-          if (OB_FAIL(subpart_opt_stats.push_back(tmp_opt_stat))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
-    }
-    //derive part stat from subpart stats
-    if (OB_SUCC(ret)) {
-      ObOptStat opt_part_stat;
-      if (OB_ISNULL(param.allocator_) ||
-          OB_UNLIKELY(subpart_opt_stats.count() != param.approx_part_infos_.at(i).subpart_cnt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(param), K(subpart_opt_stats.count()),
-                                         K(param.approx_part_infos_.at(i)));
-      } else if (OB_FAIL(derive_global_tbl_stat(*param.allocator_, param,
-                                                PARTITION_LEVEL,
-                                                param.approx_part_infos_.at(i).part_id_,
-                                                subpart_opt_stats,
-                                                opt_part_stat))) {
-        LOG_WARN("failed to derive global tbl stat from part tbl stat", K(ret));
-      } else if (OB_FAIL(part_index_stats.push_back(opt_part_stat.table_stat_))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        LOG_TRACE("succeed to derive part index stat by subpart index stats", K(param),
-                                                       K(subpart_index_stats), K(part_index_stats));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::derive_global_index_stat_by_part_index_stats(
-    const ObTableStatParam &param,
-    const ObIArray<ObOptTableStat *> &part_index_stats,
-    ObIArray<ObOptTableStat *> &all_index_stats)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObOptStat, 4> part_opt_stats;
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_index_stats.count(); ++i) {
-    ObOptStat tmp_opt_stat;
-    tmp_opt_stat.table_stat_ = part_index_stats.at(i);
-    ret = part_opt_stats.push_back(tmp_opt_stat);
-  }
-  if (OB_SUCC(ret)) {
-    ObOptStat global_opt_stat;
-    if (OB_ISNULL(param.allocator_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
-    } else if (OB_FAIL(derive_global_tbl_stat(*param.allocator_, param,
-                                              TABLE_LEVEL,
-                                              param.global_part_id_,
-                                              part_opt_stats,
-                                              global_opt_stat))) {
-      LOG_WARN("failed to derive global tbl stat from part tbl stat", K(ret));
-    } else if (OB_FAIL(all_index_stats.push_back(global_opt_stat.table_stat_))) {
-      LOG_WARN("failed to push back", K(ret));
-    } else {
-      LOG_TRACE("succeed to derive global index stat by part index stats", K(param), K(all_index_stats));
-    }
-  }
-  return ret;
-}
-
-int ObIncrementalStatEstimator::prepare_get_opt_stats_param(const ObTableStatParam &param,
-                                                            bool derive_part_stat,
-                                                            ObTableStatParam &new_param)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(new_param.assign(param))) {
-    LOG_WARN("failed to assign", K(ret));
-  } else {
-    //reset relation param
-    new_param.global_stat_param_.reset_gather_stat();
-    new_param.part_stat_param_.reset_gather_stat();
-    new_param.subpart_stat_param_.reset_gather_stat();
-    new_param.part_infos_.reset();
-    new_param.approx_part_infos_.reset();
-    new_param.subpart_infos_.reset();
-    new_param.all_part_infos_.reset();
-    new_param.all_subpart_infos_.reset();
-    if (!derive_part_stat) {
-      new_param.part_stat_param_.set_gather_stat();
-      if (OB_FAIL(new_param.part_infos_.assign(param.all_part_infos_))) {
-        LOG_WARN("failed to assign", K(ret));
-      }
-    } else {
-      new_param.subpart_stat_param_.set_gather_stat();
-      for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
-        int64_t subpart_cnt = 0;
-        for (int64_t j = 0;
-            OB_SUCC(ret) && subpart_cnt < param.approx_part_infos_.at(i).subpart_cnt_ && j < param.all_subpart_infos_.count();
-            ++j) {
-          if (param.approx_part_infos_.at(i).part_id_ == param.all_subpart_infos_.at(j).first_part_id_) {
-            if (OB_FAIL(new_param.subpart_infos_.push_back(param.all_subpart_infos_.at(j)))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              ++ subpart_cnt;
-            }
-          }
-        }
-        if (OB_UNLIKELY(subpart_cnt != param.approx_part_infos_.at(i).subpart_cnt_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(subpart_cnt), K(param));
-        }
-      }
-    }
+    LOG_TRACE("Succeed get all part opt stat by direct load", K(param), K(part_tab_stats));
   }
   return ret;
 }

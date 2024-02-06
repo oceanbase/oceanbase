@@ -16,7 +16,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/ddl/ob_context_stmt.h"
 #include "sql/ob_sql_context.h"
-#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/ob_select_stmt_printer.h"
 #include "sql/session/ob_sql_session_info.h"
 
 #include "lib/json/ob_json_print_utils.h"  // for SJ

@@ -386,30 +386,6 @@ int ObTabletTableUpdater::reput_to_queue_(
   return ret;
 }
 
-int ObTabletTableUpdater::check_tenant_status_(
-    const uint64_t tenant_id,
-    bool &tenant_dropped,
-    bool &schema_not_ready)
-{
-  int ret = OB_SUCCESS;
-  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  schema::ObSchemaGetterGuard guard;
-  tenant_dropped = false;
-  schema_not_ready = false;
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is null", KR(ret));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, tenant_dropped))) {
-    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-  } else if (!schema_service->is_tenant_full_schema(tenant_id)) {
-    // need wait schema refresh
-    schema_not_ready = true;
-  }
-  return ret;
-}
-
 int ObTabletTableUpdater::process_barrier(
     const ObTabletTableUpdateTask &task,
     bool &stopped)
@@ -619,9 +595,6 @@ int ObTabletTableUpdater::batch_process_tasks(
   UNUSED(stopped);
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool tenant_dropped = false;
-  bool schema_not_ready = false;
-  const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id_);
   const int64_t start_time = ObTimeUtility::current_time();
   ObArray<ObTabletReplica> update_tablet_replicas;
   ObArray<ObTabletReplica> remove_tablet_replicas;
@@ -644,25 +617,6 @@ int ObTabletTableUpdater::batch_process_tasks(
   } else if (batch_tasks.count() <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid batch_tasks", KR(ret), "task count", batch_tasks.count());
-  } else {
-    (void)check_tenant_status_(meta_tenant_id, tenant_dropped, schema_not_ready);
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (tenant_dropped) {
-    if (REACH_TIME_INTERVAL(10_s)) { // 10s
-      FLOG_INFO("REPORT: tasks can't be processed because it's superior tenant has been dropped",
-          KR(ret), K(meta_tenant_id), K(batch_tasks));
-    }
-  } else if (schema_not_ready) { // need wait schema refresh
-    ret = OB_NEED_WAIT;
-    if (REACH_TIME_INTERVAL(1_s)) { // 1s
-      LOG_WARN("tenant schema is not ready, need wait", KR(ret), K(meta_tenant_id), K(batch_tasks));
-    }
-    (void) throttle_(ret, ObTimeUtility::current_time() - start_time);
-    if (OB_FAIL(reput_to_queue_(batch_tasks))) {
-      LOG_WARN("fail to reput remove task to queue", KR(ret), K(batch_tasks));
-    }
   } else if (OB_FAIL(generate_tasks_(
       batch_tasks,
       update_tablet_replicas,

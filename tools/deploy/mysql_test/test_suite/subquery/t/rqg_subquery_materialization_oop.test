@@ -6,8 +6,8 @@
 --disable_abort_on_error
 # 15:10:53 Starting 
 # 15:10:53  gentest.pl \ 
-# 15:10:53  --dsn1=dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test \ 
-# 15:10:53  --dsn2=dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10 \ 
+# 15:10:53  --dsn1=dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test \ 
+# 15:10:53  --dsn2=dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10 \ 
 # 15:10:53  --gendata=conf/ob_subquery_materialization.mysql.zz \ 
 # 15:10:53  --grammar=conf/ob_subquery_materialization.mysql.yy \ 
 # 15:10:53  --threads=1 \ 
@@ -16,7 +16,7 @@
 # 15:10:53  --myprint
 # 15:10:53 -------------------------------
 # 15:10:53 Configuration
-# 15:10:53   dsn => ['dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10']
+# 15:10:53   dsn => ['dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10']
 # 15:10:53   duration => 3600
 # 15:10:53   gendata => conf/ob_subquery_materialization.mysql.zz
 # 15:10:53   grammar => conf/ob_subquery_materialization.mysql.yy
@@ -105,9 +105,9 @@ COMMIT;
 # 15:10:59 Starting 1 processes, 8000 queries each, duration 3600 seconds.
 # 15:10:59 GenTest::ErrorFilter(114237) started
 # 15:10:59 Default schema: test
-# 15:10:59 Caching metadata for dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test
+# 15:10:59 Caching metadata for dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test
 # 15:10:59 Default schema: test
-# 15:10:59 Caching metadata for dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10
+# 15:10:59 Caching metadata for dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10
 # 15:10:59 Started periodic reporting process...
 #SELECT  DISTINCT MIN(DISTINCT OUTR . `col_varchar_20` ) AS X FROM B AS OUTR2 LEFT JOIN B AS OUTR ON ( OUTR2 . `col_varchar_10` >= OUTR . `col_varchar_10` ) WHERE OUTR . `pk` IN ( #SELECT  DISTINCT INNR . `col_int` AS Y FROM CC AS INNR WHERE INNR . `col_int_key` > INNR . `pk` AND OUTR . `col_datetime` BETWEEN '2003-01-15' AND '2005-04-19'  ) OR ( OUTR . `col_date` <= '2000-08-04' AND NOT OUTR . `pk` IS NOT NULL )  ORDER BY OUTR . `col_datetime` , OUTR . `pk`;
 #SELECT  DISTINCT MAX(DISTINCT OUTR . `pk` ) AS X FROM B AS OUTR WHERE ( OUTR . `pk` , OUTR . `col_int_key` ) IN ( #SELECT   INNR . `pk` AS X , INNR . `pk` AS Y FROM BB AS INNR WHERE INNR . `col_datetime` < INNR . `col_date` AND INNR . `col_datetime_key` BETWEEN '2007-12-03' AND '2002-10-12' ORDER BY INNR . `col_date` ) AND ( OUTR . `col_date_key` BETWEEN '2002-04-08' AND '2002-09-07' AND OUTR . `col_int_key` < 2 ) HAVING X > NULL ORDER BY OUTR . `col_varchar_20` , OUTR . `pk`;

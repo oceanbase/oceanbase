@@ -49,21 +49,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (ctdef.table_param_.get_data_table().is_mlog_table()
-      && !ctdef.is_access_mlog_as_master_table_) {
-    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_DELETE);
-    if (OB_FAIL(as->insert_rows(ls_id,
-                                tablet_id,
-                                *tx_desc_,
-                                dml_param_,
-                                ctdef.column_ids_,
-                                &mlog_iter,
-                                affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("insert rows to access service failed", K(ret));
-      }
-    }
-  } else if (OB_FAIL(as->delete_rows(ls_id,
+  if (OB_FAIL(as->delete_rows(ls_id,
                               tablet_id,
                               *tx_desc_,
                               dml_param_,
@@ -98,7 +84,6 @@ int ObDASDeleteOp::open_op()
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator> del_adaptor;
   del_adaptor.tx_desc_ = trans_desc_;
   del_adaptor.snapshot_ = snapshot_;
-  del_adaptor.write_branch_id_ = write_branch_id_;
   del_adaptor.ctdef_ = del_ctdef_;
   del_adaptor.rtdef_ = del_rtdef_;
   del_adaptor.related_ctdefs_ = &related_ctdefs_;

@@ -115,7 +115,6 @@ public:
   virtual int get(common::ObIArray<share::ObServerStatus> &server_statuses);
   static int get(
     common::ObISQLClient &sql_proxy,
-    const ObZone &zone,
     common::ObIArray<share::ObServerStatus> &server_statuses);
   static int remove(const common::ObAddr &server, common::ObMySQLTransaction &trans);
   virtual int update(const share::ObServerStatus &server_status);
@@ -137,23 +136,8 @@ public:
 
   // @ret other error code			  failure
   static int get(
-      common::ObISQLClient &sql_proxy,
-      common::ObIArray<ObServerInfoInTable> &all_servers_info_in_table);
-  // read __all_server table and return servers' info in the given zone
-  //
-  // @param[in]   zone                          the given zone
-  // @param[in]   only_active_servers           true: only return servers' info whose status is active
-  // @param[out]  all_servers_info_in_zone			an array, which represents all rows of the given zone in __all_server table
-  //
-  // @ret OB_SUCCESS 			        get servers' info from __all_server table successfully
-  // @ret OB_TABLE_NOT_EXIST	    it occurs in the bootstrap period, we need to wait for some time.
-
-  // @ret other error code			  failure
-  static int get_servers_info_of_zone(
-      common::ObISQLClient &sql_proxy,
-      const ObZone &zone,
-      const bool only_active_servers,
-      common::ObIArray<ObServerInfoInTable> &all_servers_info_in_zone);
+    common::ObISQLClient &sql_proxy,
+    common::ObIArray<ObServerInfoInTable> &all_servers_info_in_table);
   // read the given server's corresponding row in __all_server table
   // this func can be called in version >= 4.2
   //

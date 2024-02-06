@@ -24,14 +24,12 @@ struct pktc_cb_t {
   int64_t expire_us;
   pktc_resp_cb_func_t resp_cb;
   pktc_req_t* req;
-  struct pktc_sk_t* sk;
   int errcode;
 };
 
 struct pktc_req_t {
-  int64_t pkt_type;
   struct pktc_sk_t* sk;
-  int64_t ctime_us;
+  PNIO_DELAY_WARN(int64_t ctime_us);
   pktc_flush_cb_func_t flush_cb;
   pktc_cb_t* resp_cb;
   addr_t dest;
@@ -39,14 +37,6 @@ struct pktc_req_t {
   dlink_t link;
   str_t msg;
 };
-
-typedef struct pn_client_cmd_req_t
-{
-  pktc_req_t req;
-  easy_head_t head;
-  int64_t cmd;
-  int64_t arg;
-} pn_client_cmd_req_t;
 
 extern int64_t pktc_init(pktc_t* io, eloop_t* ep, uint64_t dispatch_id);
 extern int pktc_post(pktc_t* io, pktc_req_t* req);
@@ -61,7 +51,6 @@ typedef struct pktc_sk_t {
   ibuffer_t ib;
   dlink_t cb_head;
   int64_t user_keepalive_timeout;
-  socket_diag_info_t sk_diag_info;
 } pktc_sk_t;
 
 typedef struct pktc_sf_t {
@@ -81,5 +70,4 @@ typedef struct pktc_t {
   link_t sk_table[1024];
   hash_t cb_map;
   link_t cb_table[1<<16];
-  diag_info_t diag_info;
 } pktc_t;

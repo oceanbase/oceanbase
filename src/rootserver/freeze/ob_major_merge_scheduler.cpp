@@ -227,15 +227,14 @@ int ObMajorMergeScheduler::try_idle(
 }
 
 int ObMajorMergeScheduler::get_uncompacted_tablets(
-    ObArray<ObTabletReplica> &uncompacted_tablets,
-    ObArray<uint64_t> &uncompacted_table_ids) const
+    ObArray<ObTabletReplica> &uncompacted_tablets) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
-    if (OB_FAIL(progress_checker_.get_uncompacted_tablets(uncompacted_tablets, uncompacted_table_ids))) {
+    if (OB_FAIL(progress_checker_.get_uncompacted_tablets(uncompacted_tablets))) {
       LOG_WARN("fail to get uncompacted tablets", KR(ret), K_(tenant_id));
     }
   }
@@ -521,15 +520,13 @@ int ObMajorMergeScheduler::handle_merge_progress(
     const int64_t expected_epoch)
 {
   int ret = OB_SUCCESS;
-  if (progress.is_merge_finished() || progress.is_merge_abnomal()) {
-    if (progress.is_merge_abnomal()) {
-      LOG_WARN("merge progress is abnomal, finish progress anyway", K(global_broadcast_scn), K(progress));
-    } else {
-      LOG_INFO("merge completed", K(global_broadcast_scn), K(progress));
-    }
+  if (progress.is_merge_finished()) {
+    LOG_INFO("merge completed", K(global_broadcast_scn), K(progress));
     if (OB_FAIL(try_update_global_merged_scn(expected_epoch))) { // MERGE_STATUS: change to IDLE
       LOG_WARN("fail to update global_merged_scn", KR(ret), K_(tenant_id), K(expected_epoch));
     }
+  } else if (progress.is_merge_abnomal()) {
+    LOG_WARN("merge progress is abnomal", K(global_broadcast_scn), K(progress));
   } else {
     LOG_INFO("this round of traversal is completed, but there are still tablets/tables that have not been merged",
       K(ret), K(global_broadcast_scn), K(progress));

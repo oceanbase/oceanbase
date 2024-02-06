@@ -44,8 +44,6 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     bool resolve_success = true;
     HEAP_VAR(ObPLPackageAST, package_ast, *allocator_) {
-      int64_t compatible_mode = lib::is_oracle_mode() ? COMPATIBLE_ORACLE_MODE
-                                                      : COMPATIBLE_MYSQL_MODE;
       ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
       ObPLResolver resolver(*params_.allocator_,
                             *params_.session_info_,
@@ -92,24 +90,9 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
                                     has_accessible_by));
       //NOTE: null package stmts is possible
       if (OB_SUCC(ret) && OB_NOT_NULL(package_stmts_node)) {
-        uint64_t db_id = OB_INVALID_ID;
-        uint64_t package_id = OB_INVALID_ID;
-        const ObPackageInfo *package_spec_info = NULL;
-        OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                              db_name,
-                                              package_name,
-                                              PACKAGE_TYPE,
-                                              compatible_mode,
-                                              package_spec_info));
-        if (OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret) { // may be not old package header
-          ret = OB_SUCCESS;
-        } else if (OB_NOT_NULL(package_spec_info)) {
-          db_id = package_spec_info->get_database_id();
-          package_id = package_spec_info->get_package_id();
-        }
         CK (T_PACKAGE_STMTS == package_stmts_node->type_);
         OZ (package_ast.init(db_name, package_name, PL_PACKAGE_SPEC,
-                             db_id, package_id, OB_INVALID_VERSION, NULL));
+                             OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_VERSION, NULL));
         OZ (resolver.init(package_ast));
         if (OB_SUCC(ret)
             && OB_FAIL(resolver.resolve(package_stmts_node, package_ast))) {
@@ -204,69 +187,6 @@ int ObCreatePackageResolver::resolve(const ParseNode &parse_tree)
             ObPackageInfo &pkg_info = create_package_arg.package_info_;
             error_info.collect_error_info(&pkg_info);
           }
-        }
-      }
-      // resolve package body to obtain analyze result again if it exists
-      if (OB_SUCC(ret) && package_ast.is_inited()) {
-        HEAP_VAR(ObPLPackageAST, package_body_ast, *allocator_) {
-          ObPLPackageGuard package_guard(params_.session_info_->get_effective_tenant_id());
-          ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_mgr();
-          ObPLCompiler compiler(*params_.allocator_,
-                                *params_.session_info_,
-                                *schema_guard,
-                                package_guard,
-                                *params_.sql_proxy_);
-          const ObPackageInfo *package_body_info = NULL;
-          OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
-                                                db_name,
-                                                package_name,
-                                                PACKAGE_BODY_TYPE,
-                                                compatible_mode,
-                                                package_body_info));
-          if (OB_SUCC(ret) && OB_NOT_NULL(package_body_info) && !package_body_info->is_for_trigger()) {
-            ObString source = package_body_info->get_source();
-            OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
-                  *allocator_, session_info_->get_dtc_params(), source));
-            OZ (package_body_ast.init(db_name,
-                                      package_name,
-                                      PL_PACKAGE_BODY,
-                                      OB_INVALID_ID,
-                                      OB_INVALID_ID,
-                                      OB_INVALID_VERSION,
-                                      &package_ast));
-            if (OB_NOT_NULL(package_ast.get_body())) {
-              (const_cast<ObPLBlockNS &>(package_ast.get_body()->get_namespace())).set_external_ns(NULL);
-            }
-            OZ (compiler.analyze_package(source,
-                                        &(package_ast.get_body()->get_namespace()),
-                                        package_body_ast,
-                                        false));
-            if (OB_SUCC(ret)) {
-              obrpc::ObCreatePackageArg &create_package_arg = stmt->get_create_package_arg();
-              ObIArray<ObRoutineInfo> &routine_list = create_package_arg.public_routine_infos_;
-              ObArray<ObRoutineInfo> routines;
-              ObArray<const ObRoutineInfo*> routine_infos;
-              const ObPLRoutineTable &spec_routine_table = package_ast.get_routine_table();
-              const ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
-              for (int64_t i = 0; OB_SUCC(ret) && i < routine_list.count(); ++i) {
-                OZ (routine_infos.push_back(&routine_list.at(i)));
-              }
-              OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_, *session_info_, routines,
-                                      spec_routine_table, body_routine_table, routine_infos));
-              if (OB_FAIL(ret)) {
-                routines.reset();
-              } else {
-                CK (routine_list.count() == routines.count());
-                for (int64_t i = 0; OB_SUCC(ret) && i < routine_list.count(); ++i) {
-                  routine_list.at(i) = routines.at(i);
-                }
-              }
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-          common::ob_reset_tsi_warning_buffer();
-          ret = OB_SUCCESS;
         }
       }
     }
@@ -679,9 +599,6 @@ int ObCreatePackageBodyResolver::resolve(const ParseNode &parse_tree)
 
           OZ (update_routine_route_sql(*allocator_, *session_info_, routine_list,
                                        spec_routine_table, body_routine_table, routine_infos));
-          if (OB_FAIL(ret)) {
-            routine_list.reset();
-          }
         }
         if (OB_FAIL(ret) && ret != OB_ERR_UNEXPECTED && ret != OB_ERR_TOO_LONG_IDENT) {
           LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE BODY",
@@ -797,8 +714,6 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
         OZ (ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator, session_info.get_dtc_params(), routine_body));
         OX (routine_info.set_routine_body(routine_body));
         if (OB_SUCC(ret)) {
-          // reset flag attr
-          routine_info.reset_analyze_flag();
           if (pl_routine_info->is_modifies_sql_data()) {
             routine_info.set_modifies_sql_data();
           } else if (pl_routine_info->is_reads_sql_data()) {

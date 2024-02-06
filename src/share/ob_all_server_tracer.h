@@ -62,9 +62,7 @@ public:
       const ObZone &zone,
       common::ObIArray<common::ObAddr> &alive_server_list,
       common::ObIArray<common::ObAddr> &not_alive_server_list) const;
-  virtual int get_min_server_version(
-              char min_server_version_str[OB_SERVER_VERSION_LENGTH],
-              uint64_t &min_observer_version);
+  virtual int get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH]);
   bool has_build() const {return has_build_; };
   int refresh();
   int for_each_server_info(const ObFunction<int(const ObServerInfoInTable &server_info)> &functor);
@@ -140,9 +138,7 @@ public:
       const ObZone &zone,
       common::ObIArray<common::ObAddr> &alive_server_list,
       common::ObIArray<common::ObAddr> &not_alive_server_list) const;
-  virtual int get_min_server_version(
-              char min_server_version_str[OB_SERVER_VERSION_LENGTH],
-              uint64_t &min_observer_version);
+  virtual int get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH]);
   bool has_build() const;
 private:
   ObAllServerTracer();

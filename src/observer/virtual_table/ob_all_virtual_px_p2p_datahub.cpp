@@ -21,6 +21,14 @@ using namespace sql;
 namespace observer
 {
 
+static const char *msg_type_str[] = {
+    "NOT_INIT",
+    "BLOOM_FILTER_MSG",
+    "RANGE_FILTER_MSG",
+    "IN_FILTER_MSG",
+    "MAX_TYPE"
+};
+
 int ObAllPxP2PDatahubTable::P2PMsgTraverseCall::operator() (
     common::hash::HashMapPair<ObP2PDhKey,
     ObP2PDatahubMsgBase *> &entry)
@@ -128,21 +136,18 @@ int ObAllPxP2PDatahubTable::inner_get_next_row(ObNewRow *&row)
           break;
         }
         case MESSAGE_TYPE: {
-          ObP2PDatahubMsgBase::ObP2PDatahubMsgType msg_type =
-              static_cast<ObP2PDatahubMsgBase::ObP2PDatahubMsgType>(
-                  node_array_.at(index_).msg_type_);
-          if (msg_type >= ObP2PDatahubMsgBase::ObP2PDatahubMsgType::MAX_TYPE
-              || msg_type < ObP2PDatahubMsgBase::ObP2PDatahubMsgType::NOT_INIT) {
+          int64_t msg_idx = node_array_.at(index_).msg_type_;
+          int64_t str_cnt = sizeof(msg_type_str) / sizeof(msg_type_str[0]);
+          if (msg_idx >= str_cnt || msg_idx < 0) {
             ret = OB_ERR_UNEXPECTED;
-            SERVER_LOG(WARN, "unexpected msg type", K(ret), K(msg_type),
-                       K(ObP2PDatahubMsgBase::ObP2PDatahubMsgType::MAX_TYPE),
-                       K(node_array_.at(index_).msg_type_));
+            SERVER_LOG(WARN, "unexpected msg type", K(ret), K(msg_idx), K(str_cnt), K(node_array_.at(index_).msg_type_));
           } else {
-            const char *msg_str = ObP2PDatahubMsgBase::get_p2p_datahub_msg_type_string(msg_type);
+            const char *msg_str = msg_type_str[msg_idx];
             cells[cell_idx].set_varchar(msg_str, strlen(msg_str));
             cells[cell_idx].set_collation_type(
                 ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
+
           break;
         }
         case HOLD_SIZE: {

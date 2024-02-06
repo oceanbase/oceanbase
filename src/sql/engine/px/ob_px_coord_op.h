@@ -22,6 +22,7 @@
 #include "sql/engine/px/ob_px_scheduler.h"
 #include "sql/engine/px/ob_px_coord_msg_proc.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
+#include "sql/dtl/ob_dtl_local_first_buffer_manager.h"
 #include "sql/dtl/ob_dtl_task.h"
 
 namespace oceanbase
@@ -43,7 +44,6 @@ public:
     bool is_inited() const { return PHY_INVALID != op_type_;  }
     ObPhyOperatorType op_type_;
     int64_t op_id_;
-    TO_STRING_KV(K(op_type_), K(op_id_));
   };
 public:
   virtual int inner_open() override;
@@ -112,6 +112,9 @@ protected:
 
   virtual int setup_loop_proc();
 
+  int register_first_buffer_cache(ObDfo *root_dfo);
+  void unregister_first_buffer_cache();
+
   int check_all_sqc(common::ObIArray<ObDfo *> &active_dfos,
       int64_t &time_offset,
       bool &all_dfo_terminate,
@@ -122,6 +125,7 @@ protected:
 
   virtual int init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info);
   virtual ObIPxCoordEventListener &get_listenner() = 0;
+  dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return &first_buffer_cache_; }
 
   int init_batch_info();
   int batch_rescan();
@@ -138,6 +142,7 @@ protected:
   bool first_row_fetched_;
   bool first_row_sent_;
   uint64_t qc_id_;
+  dtl::ObDtlLocalFirstBufferCache first_buffer_cache_;
   bool register_interrupted_;
   /*
     *   px_sequnce_id  explaination

@@ -309,7 +309,7 @@ int ObLogInsert::inner_est_cost(double child_card, double &op_cost)
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_insert(cost_info, 
                                           op_cost, 
-                                          opt_ctx))) {
+                                          opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to get insert cost", K(ret));
     }
   }

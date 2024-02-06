@@ -21,7 +21,8 @@ namespace compaction
 
 ObCompactionScheduleIterator::ObCompactionScheduleIterator(
     const bool is_major,
-    ObLSGetMod mod)
+    ObLSGetMod mod,
+    const int64_t batch_tablet_cnt)
     : mod_(mod),
       is_major_(is_major),
       scan_finish_(false),
@@ -30,7 +31,7 @@ ObCompactionScheduleIterator::ObCompactionScheduleIterator(
       ls_idx_(-1),
       tablet_idx_(0),
       schedule_tablet_cnt_(0),
-      max_batch_tablet_cnt_(0),
+      max_batch_tablet_cnt_(batch_tablet_cnt),
       ls_tablet_svr_(nullptr),
       ls_ids_(),
       tablet_ids_()

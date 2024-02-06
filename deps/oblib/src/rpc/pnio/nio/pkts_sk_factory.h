@@ -19,7 +19,6 @@ static int pkts_sk_init(pkts_sf_t* sf, pkts_sk_t* s) {
   ib_init(&s->ib, MOD_PKTS_INBUF);
   s->rl_ready_link.next = NULL;
   s->id = idm_set(&pkts->sk_map, s);
-  dlink_insert(&pkts->sk_list, &s->list_link);
   rk_info("set pkts_sk_t sock_id s=%p, s->id=%ld", s, s->id);
   return 0;
 }
@@ -27,7 +26,6 @@ static int pkts_sk_init(pkts_sf_t* sf, pkts_sk_t* s) {
 static void pkts_sk_destroy(pkts_sf_t* sf, pkts_sk_t* s) {
   pkts_t* pkts = structof(sf, pkts_t, sf);
   idm_del(&pkts->sk_map, s->id);
-  dlink_delete(&s->list_link);
 }
 
 int pkts_sk_handle_event(pkts_sk_t* s) {
@@ -41,11 +39,9 @@ static int pkts_sk_rl_handle_event(pkts_sk_t* s, int64_t* read_bytes) {
 static pkts_sk_t* pkts_sk_new(pkts_sf_t* sf) {
   pkts_sk_t* s = (pkts_sk_t*)pkts_sk_alloc(sizeof(*s));
   if (s) {
-    memset(s, 0, sizeof(*s));
     s->fty = (sf_t*)sf;
     s->ep_fd = -1;
     s->handle_event = (handle_event_t)pkts_sk_handle_event;
-    s->sk_diag_info.establish_time = rk_get_us();
     pkts_sk_init(sf, s);
   }
   rk_info("sk_new: s=%p", s);

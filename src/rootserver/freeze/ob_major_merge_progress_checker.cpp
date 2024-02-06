@@ -51,10 +51,12 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker(
       compaction_scn_(), expected_epoch_(OB_INVALID_ID), sql_proxy_(nullptr),
       schema_service_(nullptr), server_trace_(nullptr), progress_(),
       tablet_status_map_(), table_compaction_map_(),
-      ckm_validator_(tenant_id, stop_, tablet_ls_pair_cache_, tablet_status_map_,
-                     table_compaction_map_, idx_ckm_validate_array_, validator_statistics_,
-                     finish_tablet_ls_pair_array_, finish_tablet_ckm_array_, uncompact_info_),
-      uncompact_info_(), ls_locality_cache_(), total_time_guard_(), validator_statistics_(), batch_size_mgr_() {}
+      ckm_validator_(tenant_id, stop_, tablet_status_map_,
+                     tablet_ls_pair_array_, table_compaction_map_,
+                     idx_ckm_validate_array_, validator_statistics_),
+      uncompacted_tablets_(),
+      diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK),
+      ls_locality_cache_(), total_time_guard_(), validator_statistics_() {}
 
 int ObMajorMergeProgressChecker::init(
     const bool is_primary_service,
@@ -67,7 +69,7 @@ int ObMajorMergeProgressChecker::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
-  } else if (OB_FAIL(tablet_status_map_.create(TABLET_ID_BATCH_CHECK_SIZE, "RSCompStMap", "RSCompStMap", tenant_id_))) {
+  } else if (OB_FAIL(tablet_status_map_.create(TABLET_ID_BATCH_CHECK_SIZE, "RSStCompactMap", "RSStCompactMap", tenant_id_))) {
     LOG_WARN("fail to create tablet compaction status map", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(table_compaction_map_.create(TABLE_MAP_BUCKET_CNT, "RSCompactMap", "RSCompactMap", tenant_id_))) {
     LOG_WARN("fail to create table compaction info map", KR(ret), K_(tenant_id), K(TABLE_MAP_BUCKET_CNT));
@@ -76,47 +78,13 @@ int ObMajorMergeProgressChecker::init(
   } else if (OB_FAIL(ls_locality_cache_.init(tenant_id_, &merge_info_mgr))) {
     LOG_WARN("failed to init ls locality cache", K(ret));
   } else {
-    (void) tablet_ls_pair_cache_.set_tenant_id(tenant_id_);
     idx_ckm_validate_array_.set_attr(ObMemAttr(tenant_id_, "RSCompCkmPair"));
-    finish_tablet_ls_pair_array_.set_attr(ObMemAttr(tenant_id_, "RSCompTabPair"));
-    finish_tablet_ckm_array_.set_attr(ObMemAttr(tenant_id_, "RSCompCkmArray"));
+    tablet_ls_pair_array_.set_attr(ObMemAttr(tenant_id_, "RSCompLsPair"));
     sql_proxy_ = &sql_proxy;
     schema_service_ = &schema_service;
     server_trace_ = &server_trace;
     merge_info_mgr_ = &merge_info_mgr;
     is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObMajorMergeProgressChecker::rebuild_map_by_tablet_cnt()
-{
-  int ret = OB_SUCCESS;
-  int64_t recommend_map_bucked_cnt = 0;
-  if (first_loop_in_cur_round_) {
-    const bool need_rebuild_table_map = ObScheduleBatchSizeMgr::need_rebuild_map(
-      TABLE_MAP_BUCKET_CNT, table_ids_.count(), table_compaction_map_.bucket_count(), recommend_map_bucked_cnt);
-    if (need_rebuild_table_map) {
-      table_compaction_map_.destroy();
-      if (OB_FAIL(table_compaction_map_.create(recommend_map_bucked_cnt, "RSCompactMap", "RSCompactMap", tenant_id_))) {
-        LOG_WARN("fail to create table compaction info map", KR(ret), K_(tenant_id), K(recommend_map_bucked_cnt));
-      } else {
-        LOG_INFO("success to rebuild table compaction info map", KR(ret), K(recommend_map_bucked_cnt));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    int64_t tablet_cnt = MAX(table_ids_.count(), tablet_status_map_.size());
-    const bool need_rebuild_tablet_map = ObScheduleBatchSizeMgr::need_rebuild_map(
-      TABLET_ID_BATCH_CHECK_SIZE, tablet_cnt, tablet_status_map_.bucket_count(), recommend_map_bucked_cnt);
-    if (need_rebuild_tablet_map) {
-      tablet_status_map_.destroy();
-      if (OB_FAIL(tablet_status_map_.create(recommend_map_bucked_cnt, "RSCompStMap", "RSCompStMap", tenant_id_))) {
-        LOG_WARN("fail to create table compaction info map", KR(ret), K_(tenant_id), K(recommend_map_bucked_cnt));
-      } else {
-        LOG_INFO("success to rebuild tablet status map", KR(ret), K(recommend_map_bucked_cnt));
-      }
-    }
   }
   return ret;
 }
@@ -154,28 +122,28 @@ int ObMajorMergeProgressChecker::clear_cached_info()
     expected_epoch_ = OB_INVALID_ID;
     first_loop_in_cur_round_ = true;
     table_ids_.reset();
+    tablet_ls_pair_array_.reset();
     idx_ckm_validate_array_.reset();
-    finish_tablet_ls_pair_array_.reset();
-    finish_tablet_ckm_array_.reset();
     progress_.reset();
     ckm_validator_.clear_cached_info();
+    uncompacted_tablets_.reset();
     loop_cnt_ = 0;
-    tablet_ls_pair_cache_.reuse();
-    reset_uncompacted_tablets();
   }
   return ret;
 }
 
 int ObMajorMergeProgressChecker::get_uncompacted_tablets(
-    ObArray<ObTabletReplica> &input_tablets,
-    common::ObArray<uint64_t> &input_table_ids) const
+    ObArray<ObTabletReplica> &uncompacted_tablets) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (OB_FAIL(uncompact_info_.get_uncompact_info(input_tablets, input_table_ids))) {
-    LOG_WARN("fail to get uncompacted info", KR(ret), K_(tenant_id));
+  } else {
+    SpinRLockGuard r_guard(diagnose_rw_lock_);
+    if (OB_FAIL(uncompacted_tablets.assign(uncompacted_tablets_))) {
+      LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(tenant_id), K_(uncompacted_tablets));
+    }
   }
   return ret;
 }
@@ -188,30 +156,20 @@ int ObMajorMergeProgressChecker::check_verification(
   int tmp_ret = OB_SUCCESS;
   const ObTableCompactionInfo *table_compaction_info_ptr = &ckm_validator_.get_table_compaction_info();
   ckm_validator_.clear_array_index();
-  int64_t table_batch_size = 0;
-  (void) batch_size_mgr_.get_rs_check_batch_size(table_ids_.count(), table_batch_size);
-  int64_t index_cnt = 0;
-  int64_t table_cnt = 0;
-  int64_t idx = table_ids_.batch_start_idx_;
-  for ( ; OB_SUCC(ret) && !stop_ && idx < table_ids_.count(); ++idx) {
+  for (int64_t idx = table_ids_.batch_start_idx_; !stop_ && idx < table_ids_.batch_end_idx_; ++idx) {
     const uint64_t table_id = table_ids_.at(idx);
     LOG_TRACE("verify table id", KR(ret), K_(tenant_id), K(table_id));
     if (OB_TMP_FAIL(ckm_validator_.validate_checksum(table_id, schema_guard))) {
-      if (can_not_ignore_warning(tmp_ret)) {
-        ret = tmp_ret;
-        if (OB_CHECKSUM_ERROR == ret) {
-          LOG_ERROR("checksum error", KR(ret), K(table_id));
-        } else if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == ret) {
-          LOG_INFO("freeze service epoch mismatch", KR(ret));
-        }
+      if (OB_CHECKSUM_ERROR == tmp_ret) {
+        ret = OB_CHECKSUM_ERROR;
+        LOG_ERROR("checksum error", KR(ret), K(table_id));
+      } else if (OB_FREEZE_SERVICE_EPOCH_MISMATCH == tmp_ret) {
+        ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
+        LOG_INFO("freeze service epoch mismatch", KR(tmp_ret));
+        break;
       } else {
         LOG_WARN("failed to verify table", KR(tmp_ret), K(idx), K(table_id), KPC(table_compaction_info_ptr));
       }
-    }
-    if (table_compaction_info_ptr->is_index_table()) {
-      --index_cnt;
-    } else {
-      index_cnt = table_compaction_info_ptr->unfinish_index_cnt_;
     }
     // ignore errno, need update progress & unfinish table id array
     LOG_TRACE("check verification", KR(tmp_ret), KPC(table_compaction_info_ptr), K_(progress));
@@ -220,20 +178,15 @@ int ObMajorMergeProgressChecker::check_verification(
       if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
         LOG_WARN("failed to push table_id into finish_array", KR(tmp_ret), KPC(table_compaction_info_ptr));
       }
-      (void) uncompact_info_.add_table(table_id);
-    }
-    if (0 >= index_cnt // data & index should be in same batch
-        && (++table_cnt >= table_batch_size)) {
-      break;
     }
   } // end of for
-  if (OB_SUCC(ret)) { // record next untouched tablet
-    table_ids_.batch_start_idx_ = idx + 1;
-  } else {
-    // record first failed table, need check in next loop
-    table_ids_.batch_start_idx_ = idx;
-  }
   return ret;
+}
+
+void ObMajorMergeProgressChecker::reset_uncompacted_tablets()
+{
+  SpinWLockGuard w_guard(diagnose_rw_lock_);
+  uncompacted_tablets_.reuse();
 }
 
 bool ObMajorMergeProgressChecker::should_ignore_cur_table(const ObSimpleTableSchemaV2 *simple_schema)
@@ -391,45 +344,45 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
   return ret;
 }
 
-void ObMajorMergeProgressChecker::deal_with_unfinish_table_ids(
-  const int error_no,
-  ObIArray<uint64_t> &unfinish_table_id_array)
+void ObMajorMergeProgressChecker::reuse_batch_table(
+  ObIArray<uint64_t> &unfinish_table_id_array,
+  const bool reuse_rest_table)
 {
-  int ret = OB_SUCCESS;
-  bool assgin_flag = true;
-  if (OB_SUCCESS != error_no) {
-    if (0 == table_ids_.batch_start_idx_) {
-      // table_ids_ should not be modified
-      assgin_flag = false;
-    } else {
-      // need reuse all rest table in after start_idx
-      for (int64_t idx = table_ids_.batch_start_idx_; OB_SUCC(ret) && idx < table_ids_.count(); ++idx) {
-        const uint64_t table_id = table_ids_.at(idx);
-        if (OB_FAIL(unfinish_table_id_array.push_back(table_id))) {
-          LOG_WARN("failed to push table_id into finish_array", K(table_id));
-        }
-      }
-    }
+  int tmp_ret = OB_SUCCESS;
+  int64_t start_idx = 0;
+  int64_t end_idx = 0;
+  if (reuse_rest_table) {
+    start_idx = table_ids_.batch_end_idx_;
+    end_idx = table_ids_.count();
+  } else {
+    start_idx = table_ids_.batch_start_idx_;
+    end_idx = table_ids_.batch_end_idx_;
   }
-  if (OB_FAIL(ret)) {
-  } else if (assgin_flag) {
-    int64_t retry_times = 0;
-    do {
-      if (OB_FAIL(table_ids_.assign(unfinish_table_id_array))) {
-        LOG_WARN("failed to assign table ids", KR(ret), K(unfinish_table_id_array));
-      }
-    } while (OB_ALLOCATE_MEMORY_FAILED == ret && (++retry_times < ASSGIN_FAILURE_RETRY_TIMES));
+  for (int64_t idx = start_idx; idx < end_idx; ++idx) {
+    const uint64_t table_id = table_ids_.at(idx);
+    if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
+      LOG_WARN_RET(tmp_ret, "failed to push table_id into finish_array", KR(tmp_ret));
+    }
   }
 }
 
-int ObMajorMergeProgressChecker::prepare_check_progress(
-  ObRSCompactionTimeGuard &tmp_time_guard,
-  bool &exist_uncompacted_table)
+void ObMajorMergeProgressChecker::get_check_batch_size(
+  int64_t &tablet_id_batch_size,
+  int64_t &table_id_batch_size) const
+{
+  tablet_id_batch_size = TABLET_ID_BATCH_CHECK_SIZE;
+  table_id_batch_size = TABLE_ID_BATCH_CHECK_SIZE;
+  if (table_ids_.count() > TOTAL_TABLE_CNT_THREASHOLD) {
+    int64_t factor = (table_ids_.count() / TOTAL_TABLE_CNT_THREASHOLD) * 2;
+    tablet_id_batch_size *= factor;
+    table_id_batch_size *= factor;
+  }
+}
+
+int ObMajorMergeProgressChecker::prepare_check_progress()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  exist_uncompacted_table = true;
-  table_ids_.start_looping();
   if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(first_loop_in_cur_round_ /*force_refresh*/))) {
     LOG_WARN("failed to refresh ls locality", K(tmp_ret));
   }
@@ -441,27 +394,13 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
     } else {
       total_time_guard_.click(ObRSCompactionTimeGuard::PREPARE_UNFINISH_TABLE_IDS);
       progress_.total_table_cnt_ = table_ids_.count() + 1/*SPECIAL_TABLE_ID*/;
+      first_loop_in_cur_round_ = false;
     }
   }
-  if (FAILEDx(rebuild_map_by_tablet_cnt())) {
-    LOG_WARN("failed to rebuild map by tablet cnt", K(ret));
-  } else if (OB_FAIL(tablet_ls_pair_cache_.try_refresh(first_loop_in_cur_round_ /*force_refresh*/))) {
-    LOG_WARN("failed to refresh tablet ls pair", K(ret));
-  } else {
-    tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_LS_PAIRS);
-    first_loop_in_cur_round_ = false;
-    exist_uncompacted_table = progress_.exist_uncompacted_table();
+  if (OB_SUCC(ret)) {
+    table_ids_.start_looping();
     progress_.clear_before_each_loop();
     reset_uncompacted_tablets();
-    if (is_extra_check_round()) {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-      if (OB_UNLIKELY(!tenant_config.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant config is not valid", KR(ret), K_(tenant_id));
-      } else {
-        batch_size_mgr_.set_tablet_batch_size(tenant_config->compaction_schedule_tablet_batch_cnt);
-      }
-    }
   }
   return ret;
 }
@@ -475,7 +414,7 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     LOG_WARN("deal with rest data table", KR(ret), K_(compaction_scn));
   } else if (progress_.is_merge_finished()) {
     LOG_INFO("progress is check finished", KR(ret), K_(progress));
-  } else if (progress_.only_remain_special_table_to_verified() || table_ids_.empty()) {
+  } else if (progress_.only_remain_special_table_to_verified()) {
     bool finish_validate = false;
 #ifdef ERRSIM
     ret = OB_E(EventTable::EN_RS_CHECK_SPECIAL_TABLE) ret;
@@ -490,9 +429,11 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     } else if (finish_validate) {
       progress_.deal_with_special_tablet();
     }
+  } else if (table_ids_.empty()) {
+    // DEBUG LOG
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cnt in progress is not equal to table_ids", KR(ret), K(table_ids_), K(progress_));
   }
-  (void) ckm_validator_.batch_update_report_scn();
-  (void) ckm_validator_.batch_write_tablet_ckm();
   return ret;
 }
 
@@ -502,8 +443,6 @@ int ObMajorMergeProgressChecker::check_progress(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t start_time = ObTimeUtility::fast_current_time();
-  ObRSCompactionTimeGuard tmp_time_guard;
-  bool exist_uncompacted_table = true;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
@@ -513,22 +452,24 @@ int ObMajorMergeProgressChecker::check_progress(
   } else if (OB_UNLIKELY(expected_epoch_ < 0 || !compaction_scn_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cached info may be cleared", KR(ret), K_(expected_epoch), K_(compaction_scn));
-  } else if (OB_FAIL(prepare_check_progress(tmp_time_guard, exist_uncompacted_table))) {
+  } else if (OB_FAIL(prepare_check_progress())) {
     LOG_WARN("failed to prepare check progress", KR(ret));
   } else {
-    SMART_VAR(ObArray<uint64_t>, unfinish_table_id_array) {
+    SMART_VARS_2((ObArray<uint64_t>, unfinish_table_id_array),
+      (ObCompactionTabletMetaIterator, iter)) {
       int64_t tenant_schema_version = 0;
       unfinish_table_id_array.set_attr(ObMemAttr(tenant_id_, "RSCompTableIds"));
       if (OB_FAIL(unfinish_table_id_array.reserve(DEFAULT_ARRAY_CNT))) {
         LOG_WARN("failed to reserve unfinish table id array", KR(ret), "array_cnt", DEFAULT_ARRAY_CNT);
-      } else if (exist_uncompacted_table && OB_FAIL(generate_tablet_status_map())) {
-        LOG_WARN("failed to generate tablet status map", KR(ret));
-      } else {
-        tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_META_TABLE);
       }
       ObSchemaGetterGuard schema_guard(ObSchemaMgrItem::MOD_RS_MAJOR_CHECK);
       int64_t last_epoch_check_us = 0;
+      ObRSCompactionTimeGuard tmp_time_guard;
       while (OB_SUCC(ret) && !table_ids_.loop_finish() && !stop_) { // split batch table_ids
+        tmp_time_guard.reuse();
+        tablet_status_map_.reuse();
+        tablet_ls_pair_array_.reuse();
+        iter.reset();
         if (OB_FAIL(ObMajorFreezeUtil::check_epoch_periodically(
                 *sql_proxy_, tenant_id_, expected_epoch_, last_epoch_check_us))) {
           LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K_(expected_epoch), K_(compaction_scn));
@@ -538,6 +479,18 @@ int ObMajorMergeProgressChecker::check_progress(
             tenant_schema_version, OB_INVALID_VERSION,
             ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY))) {
           LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
+        } else if (OB_FAIL(get_tablet_ls_pairs_by_tables(schema_guard, table_ids_, tablet_ls_pair_array_))) {
+          // table_id -> tablet_ids -> tablet_ls_pairs
+          LOG_WARN("failed to get tablet_ls_pairs by tables", KR(ret), K_(table_ids));
+        } else if (FALSE_IT(tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_LS_PAIRS))) {
+        } else if (tablet_ls_pair_array_.empty()) {
+          // empty tablet_ls info, do nothing
+        } else if (OB_FAIL(iter.init(*sql_proxy_, tenant_id_, *server_trace_, tablet_ls_pair_array_))) {
+          LOG_WARN("failed to init iter", KR(ret), K(tablet_ls_pair_array_.count()));
+        } else if (OB_FAIL(generate_tablet_map_by_iter(iter))) {
+          LOG_WARN("failed to generate tablet status map", KR(ret));
+        } else {
+          tmp_time_guard.click(ObRSCompactionTimeGuard::GET_TABLET_META_TABLE);
         }
 #ifdef ERRSIM
         if (OB_SUCC(ret)) {
@@ -547,7 +500,10 @@ int ObMajorMergeProgressChecker::check_progress(
           }
         }
 #endif
-        if (FAILEDx(check_verification(schema_guard, unfinish_table_id_array))) {
+        if (OB_FAIL(ret)) {
+          // for any failure, should reuse cur table id array
+          reuse_batch_table(unfinish_table_id_array, false/*reuse_rest_table*/);
+        } else if (OB_FAIL(check_verification(schema_guard, unfinish_table_id_array))) {
           // check tablet_replica_checksum & table_index_checksum & cross_cluter_checksum
           LOG_WARN("failed to check verification", KR(ret), K_(compaction_scn), K_(expected_epoch));
           // only record OB_CHECKSUM_ERROR, and thus avoid confusing DBA
@@ -558,6 +514,7 @@ int ObMajorMergeProgressChecker::check_progress(
                                   "service_addr", GCONF.self_addr_);
           }
         }
+        tmp_time_guard.click(ObRSCompactionTimeGuard::CKM_VERIFICATION);
         if (OB_FAIL(ret) && last_errno_ == ret) {
           if (OB_TMP_FAIL(compaction::ADD_COMMON_SUSPECT_INFO(compaction::MAJOR_MERGE, ObDiagnoseTabletType::TYPE_RS_MAJOR_MERGE,
                           ObSuspectInfoType::SUSPECT_RS_SCHEDULE_ERROR,
@@ -571,12 +528,16 @@ int ObMajorMergeProgressChecker::check_progress(
         if (!can_not_ignore_warning(ret)) {
           // do not ignore ret, therefore not continue to check next table_schema
           ret = OB_SUCCESS;
+        } else {
+          reuse_batch_table(unfinish_table_id_array, true/*reuse_rest_table*/);
         }
+        table_ids_.finish_cur_batch(); // finish cur batch
+        total_time_guard_.add_time_guard(tmp_time_guard);
       } // end of while
-      tmp_time_guard.click(ObRSCompactionTimeGuard::CKM_VERIFICATION);
-      total_time_guard_.add_time_guard(tmp_time_guard);
       // deal with finish_table_id_array after loop table_ids_
-      (void) deal_with_unfinish_table_ids(ret, unfinish_table_id_array);
+      if (OB_TMP_FAIL(table_ids_.assign(unfinish_table_id_array))) {
+        LOG_WARN("failed to assign", KR(tmp_ret), K(unfinish_table_id_array));
+      }
     } // SMART_VAR
     if (FAILEDx(check_index_and_rest_table())) {
       LOG_WARN("failed check index ckm and rest table", KR(ret), K_(compaction_scn));
@@ -599,33 +560,33 @@ int ObMajorMergeProgressChecker::check_progress(
 void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
 {
   int ret = OB_SUCCESS;
-  const int64_t array_cnt = ObUncompactInfo::DEBUG_INFO_CNT;
-  ObSEArray<uint64_t, array_cnt> tmp_table_id_array;
-  ObSEArray<ObTabletReplica, array_cnt> uncompacted_replica_array;
-  ObSEArray<uint64_t, array_cnt> uncompacted_table_array;
-  (void) uncompact_info_.get_uncompact_info(uncompacted_replica_array, uncompacted_table_array);
+  ObSEArray<uint64_t, DEBUG_INFO_CNT> tmp_table_id_array;
+  ObSEArray<ObTabletReplica, DEBUG_INFO_CNT> tmp_replica_array;
+  {
+    SpinRLockGuard r_guard(diagnose_rw_lock_);
+    if (OB_FAIL(tmp_replica_array.assign(uncompacted_tablets_))) {
+      LOG_WARN("failed to assgin array", KR(ret));
+    }
+  }
   if (table_ids_.count() > 0) {
-    const int64_t table_id_cnt = MIN(array_cnt, table_ids_.count());
+    const int64_t table_id_cnt = MIN(DEBUG_INFO_CNT, table_ids_.count());
     for (int64_t idx = 0; OB_SUCC(ret) && idx < table_id_cnt; ++idx) {
       if (OB_FAIL(tmp_table_id_array.push_back(table_ids_.at(idx)))) {
         LOG_WARN("failed to push array", KR(ret));
       }
     }
   }
-  // table in table_ids_ may finish verified in deal_with_rest_data_table()
-  // need next loop to delete from array
   ADD_RS_COMPACTION_EVENT(
     compaction_scn_.get_val_for_tx(),
     ObServerCompactionEvent::RS_FINISH_CUR_LOOP,
     common::ObTimeUtility::fast_current_time(),
-    K(cost_us), K_(progress), "remain_table_id_count", table_ids_.count(),
-    "remain_table_ids", tmp_table_id_array,
+    K(cost_us), K_(progress), "unfinish_table_id_count", table_ids_.count(),
+    "unfinish_table_ids", tmp_table_id_array,
     K_(total_time_guard), K_(validator_statistics));
   LOG_INFO("succ to check merge progress", K_(tenant_id), K_(loop_cnt), K_(compaction_scn), K(cost_us),
-    K_(progress), "remain_table_id_count", table_ids_.count(),
-    "remain_table_ids", tmp_table_id_array,
-    "uncompacted_tablets", uncompacted_replica_array,
-    "uncompacted_table_ids", uncompacted_table_array,
+    K_(progress), "unfinish_table_id_count", table_ids_.count(),
+    "unfinish_table_ids", tmp_table_id_array,
+    "uncompacted_tablets", tmp_replica_array,
     K_(total_time_guard), K_(validator_statistics));
 }
 
@@ -633,7 +594,7 @@ int ObMajorMergeProgressChecker::deal_with_rest_data_table()
 {
   int ret = OB_SUCCESS;
   bool exist_index_table = false;
-  bool exist_data_table = false;
+  bool exist_finish_data_table = false;
   if ((is_extra_check_round() && table_ids_.count() > 0  && table_ids_.count() < DEAL_REST_TABLE_CNT_THRESHOLD)
       || REACH_TENANT_TIME_INTERVAL(DEAL_REST_TABLE_INTERVAL)) {
     ObTableCompactionInfo table_compaction_info;
@@ -647,12 +608,12 @@ int ObMajorMergeProgressChecker::deal_with_rest_data_table()
       } else if (table_compaction_info.is_index_table()) {
         LOG_TRACE("exist index table", K(ret), K(table_compaction_info));
         exist_index_table = true;
-      } else {
-        LOG_TRACE("exist data table", K(ret), K(table_compaction_info));
-        exist_data_table = true;
+        break;
+      } else if (table_compaction_info.is_compacted()) {
+        exist_finish_data_table = true;
       }
     } // end of for
-    if (OB_SUCC(ret) && (exist_index_table != exist_data_table)) { // rest table are data table/ index table
+    if (OB_SUCC(ret) && !exist_index_table && exist_finish_data_table) { // rest table are data table
       int tmp_ret = OB_SUCCESS;
       LOG_INFO("start to deal with rest data table", K(ret), K_(table_ids));
       for (int64_t idx = 0; idx < table_ids_.count(); ++idx) {
@@ -660,7 +621,10 @@ int ObMajorMergeProgressChecker::deal_with_rest_data_table()
         if (OB_FAIL(table_compaction_map_.get_refactored(table_id, table_compaction_info))) {
           LOG_WARN("failed to get table compaction info", KR(ret), K_(tenant_id), K(table_id));
         } else if (table_compaction_info.is_compacted()) {
-          if (OB_TMP_FAIL(set_table_compaction_info_status(table_id, ObTableCompactionInfo::INDEX_CKM_VERIFIED))) {
+          if (OB_TMP_FAIL(update_table_compaction_info(table_id,
+              [](ObTableCompactionInfo &table_compaction_info) {
+              table_compaction_info.set_index_ckm_verified();
+          }))) {
             LOG_WARN("failed to update table compaction info", KR(tmp_ret), K(idx), K(table_id));
           } else {
             LOG_TRACE("deal with data table", KR(tmp_ret), K(idx), K(table_id));
@@ -672,88 +636,41 @@ int ObMajorMergeProgressChecker::deal_with_rest_data_table()
   return ret;
 }
 
-int ObMajorMergeProgressChecker::set_table_compaction_info_status(
-  const uint64_t table_id,
-  const ObTableCompactionInfo::Status status)
-{
-  int ret = OB_SUCCESS;
-  ObTableCompactionInfo table_compaction_info;
-  if (OB_FAIL(table_compaction_map_.get_refactored(table_id, table_compaction_info))) {
-    if (OB_HASH_NOT_EXIST == ret) {  // first initialization
-      ret = OB_SUCCESS;
-      table_compaction_info.reset();
-      table_compaction_info.table_id_ = table_id;
-    } else {
-      LOG_WARN("fail to get val from hashmap", KR(ret), K(table_id));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (FALSE_IT(table_compaction_info.set_status(status))) {
-  } else if (OB_FAIL(table_compaction_map_.set_refactored(table_id, table_compaction_info, true /*overwrite*/))) {
-    LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
-  }
-  return ret;
-}
-
 int ObMajorMergeProgressChecker::validate_index_ckm()
 {
   int ret = OB_SUCCESS;
-  if (idx_ckm_validate_array_.count() > 0) {
-    if (idx_ckm_validate_array_.count() < 50
-      && progress_.get_wait_index_ckm_table_cnt() > 100
-      && !is_extra_check_round()) {
-      // do nothing
-    } else {
-      if (OB_FAIL(loop_index_ckm_validate_array())) {
-        LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
-      }
-    }
-    idx_ckm_validate_array_.reuse(); // reuse array
-  }
-  return ret;
-}
-
-int ObMajorMergeProgressChecker::deal_with_validated_table(
-  const uint64_t table_id,
-  const int64_t finish_index_cnt,
-  const ObTableCkmItems &table_ckm)
-{
-  int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool validate_finish = (finish_index_cnt == 0);
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(table_id));
-  } else if (!validate_finish
-      && OB_TMP_FAIL(update_finish_index_cnt_for_data_table(
-          table_id, finish_index_cnt, validate_finish))) {
-    // set table_compaction_info::unfinish_index_cnt
-    LOG_WARN("failed to update finish index", KR(tmp_ret), K(table_id), K(finish_index_cnt));
-  }
-  if (OB_SUCC(ret) && validate_finish) {
-    if (table_ckm.is_inited() ) {
-      if (OB_TMP_FAIL(ckm_validator_.push_finish_tablet_ls_pairs_with_update(
-          table_ckm.get_tablet_ls_pairs()))) {
-        LOG_WARN("failed to push back tablet_ls_pair", KR(tmp_ret));
-      }
-      if (OB_TMP_FAIL(ckm_validator_.push_tablet_ckm_items_with_update(
-          table_ckm.get_ckm_items()))) {
-        LOG_WARN("failed to push checksum items", KR(tmp_ret), K(table_id));
-      }
+  if (idx_ckm_validate_array_.count() < 50
+    && progress_.get_wait_index_ckm_table_cnt() > 100
+    && !is_extra_check_round()) {
+    // do nothing
+  } else if (idx_ckm_validate_array_.count() > 0) {
+    ObSEArray<uint64_t, DEFAULT_ARRAY_CNT> finish_validate_table_ids;
+    if (OB_FAIL(loop_index_ckm_validate_array(finish_validate_table_ids))) {
+      LOG_WARN("failed to loop index ckm validate array", KR(ret), K_(tenant_id));
     }
-    if (OB_TMP_FAIL(set_table_compaction_info_status(table_id, ObTableCompactionInfo::VERIFIED))) {
-      LOG_WARN("failed to update table compaction info", KR(tmp_ret), K(table_id));
-    }
+    for (int64_t idx = 0; idx < finish_validate_table_ids.count(); ++idx) {
+      if (OB_TMP_FAIL(update_table_compaction_info(finish_validate_table_ids.at(idx),
+        [](ObTableCompactionInfo &table_compaction_info) {
+          table_compaction_info.set_index_ckm_verified();
+        }))) {
+        LOG_WARN("failed to update table compaction info", KR(tmp_ret), K(idx),
+          "table_id", finish_validate_table_ids.at(idx));
+      }
+    } // end of for
   }
+  idx_ckm_validate_array_.reset();
   return ret;
 }
 
-int ObMajorMergeProgressChecker::loop_index_ckm_validate_array()
+int ObMajorMergeProgressChecker::loop_index_ckm_validate_array(
+  ObIArray<uint64_t> &finish_validate_table_ids)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   uint64_t finish_index_cnt = 0;
   uint64_t prev_data_table_id = OB_INVALID_ID;
+  const ObTableSchema *table_schema = nullptr;
   ObSchemaGetterGuard schema_guard(ObSchemaMgrItem::MOD_RS_MAJOR_CHECK);
   ObTableCkmItems data_table_ckm(tenant_id_);
   if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
@@ -763,115 +680,120 @@ int ObMajorMergeProgressChecker::loop_index_ckm_validate_array()
     const uint64_t data_table_id = idx_ckm_validate_array_.at(idx).data_table_id_;
     const uint64_t index_table_id = idx_ckm_validate_array_.at(idx).index_table_id_;
     if (prev_data_table_id != data_table_id) { // not same table
-      if (OB_INVALID_ID != prev_data_table_id) {
-        (void) deal_with_validated_table(prev_data_table_id, finish_index_cnt, data_table_ckm);
+      // set table_compaction_info::unfinish_index_cnt
+      if (OB_INVALID_ID != prev_data_table_id
+          && OB_TMP_FAIL(update_finish_index_cnt_for_data_table(prev_data_table_id, finish_index_cnt))) {
+        LOG_WARN("failed to push table_id", KR(tmp_ret), K(prev_data_table_id), K(finish_index_cnt));
+        if (OB_TMP_FAIL(finish_validate_table_ids.push_back(prev_data_table_id))) {
+          LOG_WARN("failed to push table_id", KR(tmp_ret), K(prev_data_table_id));
+        }
       }
 
       finish_index_cnt = 0;
       data_table_ckm.clear();
       prev_data_table_id = data_table_id;
       if (OB_FAIL(data_table_ckm.build(data_table_id, compaction_scn_,
-                                       *sql_proxy_, schema_guard, get_tablet_ls_pair_cache()))) {
+                                       *sql_proxy_, schema_guard, table_schema))) {
         LOG_WARN("fail to prepare schema checksum items", KR(ret), K_(tenant_id), K(data_table_id));
       } else {
         ++validator_statistics_.query_ckm_sql_cnt_;
         LOG_TRACE("success to get data table ckm", KR(ret), K(data_table_id), K(data_table_ckm));
       }
-    }
-    if (FAILEDx(get_idx_ckm_and_validate(index_table_id, schema_guard, data_table_ckm))) {
-      if (OB_ITEM_NOT_MATCH == ret || OB_TABLE_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to get index ckm and validate", KR(ret), K(data_table_id), K(index_table_id));
-      }
+    } else {
+      ++validator_statistics_.use_cached_ckm_cnt_;
     }
     if (OB_SUCC(ret)) {
-      ++finish_index_cnt;
-      ++validator_statistics_.checker_validate_idx_cnt_;
+      if (OB_FAIL(get_idx_ckm_and_validate(*table_schema, index_table_id, schema_guard, data_table_ckm))) {
+        LOG_WARN("failed to get index ckm and validate", KR(ret), K(data_table_id), K(index_table_id));
+      } else {
+        ++finish_index_cnt;
+      }
+    }
+    if (OB_SUCC(ret) || OB_TABLE_NOT_EXIST == ret) {
+      ret = OB_SUCCESS; // clear errno
+      if (OB_TMP_FAIL(finish_validate_table_ids.push_back(index_table_id))) {
+        LOG_WARN("failed to push table_id", KR(tmp_ret), K(index_table_id));
+      }
     }
   } // end of for
   if (OB_SUCC(ret) && finish_index_cnt > 0 && OB_INVALID_ID != prev_data_table_id) {
-    (void) deal_with_validated_table(prev_data_table_id, finish_index_cnt, data_table_ckm);
+    // deal with last validate data table id
+    if (OB_TMP_FAIL(update_finish_index_cnt_for_data_table(prev_data_table_id, finish_index_cnt))) {
+      LOG_WARN("failed to push table_id", KR(tmp_ret), K(prev_data_table_id), K(finish_index_cnt));
+      if (OB_TMP_FAIL(finish_validate_table_ids.push_back(prev_data_table_id))) {
+        LOG_WARN("failed to push table_id", KR(tmp_ret), K(prev_data_table_id));
+      }
+    }
   }
   return ret;
 }
 
 int ObMajorMergeProgressChecker::get_idx_ckm_and_validate(
+  const ObTableSchema &table_schema,
   const uint64_t index_table_id,
   ObSchemaGetterGuard &schema_guard,
   ObTableCkmItems &data_table_ckm)
 {
   int ret = OB_SUCCESS;
+  const ObTableSchema *index_table_schema = nullptr;
   ObTableCkmItems index_table_ckm(tenant_id_);
   if (OB_FAIL(index_table_ckm.build(index_table_id, compaction_scn_,
                                     *sql_proxy_, schema_guard,
-                                    get_tablet_ls_pair_cache()))) {
+                                    index_table_schema))) {
     LOG_WARN("failed to get checksum items", KR(ret), K(index_table_id), K_(compaction_scn));
-  } else if (OB_UNLIKELY(index_table_ckm.get_table_schema()->should_not_validate_data_index_ckm())) {
+  } else if (OB_UNLIKELY(index_table_schema->should_not_validate_data_index_ckm())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("should not validate spatial index and data table", KR(ret), K(index_table_id), K(index_table_ckm));
+    LOG_WARN("should not validate spatial index and data table", KR(ret), K(index_table_id), KPC(index_table_schema));
   } else {
-    const bool is_global_index = index_table_ckm.get_table_schema()->is_global_index_table();
+    const bool is_global_index = index_table_schema->is_global_index_table();
     if (OB_FAIL(ObTableCkmItems::validate_ckm_func[is_global_index](
       compaction_scn_,
+      table_schema,
+      *index_table_schema,
       *sql_proxy_,
       data_table_ckm,
       index_table_ckm))) {
-      LOG_WARN("failed to validate checksum", KR(ret), "data_table_id", data_table_ckm.get_table_id(),
-        K(index_table_id), K(data_table_ckm), K(index_table_ckm));
+      LOG_WARN("failed to validate checksum", KR(ret), "data_table_id", table_schema.get_table_id(),
+        K(index_table_id), K(data_table_ckm), K(index_table_ckm), K(table_schema), KPC(index_table_schema));
       if (OB_ITEM_NOT_MATCH == ret) {
         ret = OB_SUCCESS;
       }
     }
-  }
-  if (OB_SUCC(ret) || OB_TABLE_NOT_EXIST == ret) {
-    (void) deal_with_validated_table(index_table_id, 0 /*finish_index_cnt*/, index_table_ckm);
   }
   return ret;
 }
 
 int ObMajorMergeProgressChecker::update_finish_index_cnt_for_data_table(
   const uint64_t data_table_id,
-  const uint64_t finish_index_cnt,
-  bool &idx_validate_finish)
+  const uint64_t finish_index_cnt)
 {
   int ret = OB_SUCCESS;
-  idx_validate_finish = false;
-  ObTableCompactionInfo table_compaction_info;
-  if (OB_FAIL(table_compaction_map_.get_refactored(data_table_id, table_compaction_info))) {
-    LOG_WARN("failed to get table compaction info", KR(ret), K_(tenant_id), K(data_table_id));
-  } else {
-    if (table_compaction_info.unfinish_index_cnt_ < finish_index_cnt) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "finish index cnt is unexpected", K(table_compaction_info), K(finish_index_cnt));
-      table_compaction_info.unfinish_index_cnt_ = 0;
-    } else {
-      table_compaction_info.unfinish_index_cnt_ -= finish_index_cnt;
-    }
-    if (0 == table_compaction_info.unfinish_index_cnt_) {
-      table_compaction_info.set_index_ckm_verified();
-      idx_validate_finish = true;
-    }
+  if (OB_FAIL(update_table_compaction_info(data_table_id,
+    [finish_index_cnt](ObTableCompactionInfo &table_compaction_info) {
+      if (table_compaction_info.unfinish_index_cnt_ < finish_index_cnt) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "finish index cnt is unexpected", K(table_compaction_info), K(finish_index_cnt));
+        table_compaction_info.unfinish_index_cnt_ = 0;
+      } else {
+        table_compaction_info.unfinish_index_cnt_ -= finish_index_cnt;
+      }
+      if (0 == table_compaction_info.unfinish_index_cnt_) {
+        table_compaction_info.set_index_ckm_verified();
+      }
+      LOG_TRACE("success to update finish index cnt", K(finish_index_cnt), K(table_compaction_info));
+    } ))) {
+    LOG_WARN("failed to update table compaction info", KR(ret), K_(tenant_id), K(data_table_id));
   }
-  if (FAILEDx(table_compaction_map_.set_refactored(data_table_id, table_compaction_info, true /*overwrite*/))) {
-    LOG_WARN("fail to set refactored", KR(ret), K(data_table_id), K(table_compaction_info));
-  } else {
-    (void) progress_.update_table_cnt(table_compaction_info.status_);
-  }
-  LOG_TRACE("success to update finish index cnt", K(finish_index_cnt), K(table_compaction_info), K(idx_validate_finish));
   return ret;
 }
 
-int ObMajorMergeProgressChecker::generate_tablet_status_map()
+int ObMajorMergeProgressChecker::generate_tablet_map_by_iter(
+  ObCompactionTabletMetaIterator &iter)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObTabletInfo tablet_info;
   int64_t idx = 0;
   bool filter = false;
-  ObCompactionTabletMetaIterator iter(!is_extra_check_round(), compaction_scn_.get_val_for_tx());
-  if (OB_FAIL(iter.init(tenant_id_, batch_size_mgr_.get_inner_table_scan_batch_size(), *server_trace_))) {
-    LOG_WARN("failed to init iter", KR(ret));
-  }
   while (OB_SUCC(ret) && !stop_) {
     if (OB_FAIL(iter.next(tablet_info))) {
       if (OB_ITER_END != ret) {
@@ -909,10 +831,8 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
             // source ls meta has been deleted, but source tablet meta has not been deleted yet.
             ret = OB_SUCCESS;  // ignore ret
             filter = true;
-            if (REACH_TIME_INTERVAL(10_s)) {
-              LOG_INFO("ignore this tablet replica, sicne it is not in ls_info", K_(tenant_id),
+            LOG_INFO("ignore this tablet replica, sicne it is not in ls_info", K_(tenant_id),
                     KPC(replica), K(ls_info));
-            }
           } else {
             LOG_WARN("fail to find ls replica", KR(ret), KPC(replica), K_(tenant_id));
           }
@@ -933,9 +853,24 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
           ret = OB_CHECKSUM_ERROR;
           LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
         } else if (replica_snapshot_scn < compaction_scn_) {
+#ifdef ERRSIM
+          ret = OB_E(EventTable::EN_SKIP_INDEX_MAJOR) ret;
+          if (OB_FAIL(ret)
+              && replica->get_tablet_id().id() > ObTabletID::MIN_USER_TABLET_ID) {
+            ret = OB_SUCCESS;
+            LOG_INFO("ERRSIM EN_SKIP_INDEX_MAJOR", K(ret), KPC(replica));
+            status = ObTabletCompactionStatus::CAN_SKIP_VERIFYING;
+            break;
+          }
+#endif
           status = ObTabletCompactionStatus::INITIAL;
-          (void) uncompact_info_.add_tablet(*replica);
-          LOG_TRACE("unfinish tablet", KR(ret), KPC(replica), K(replica_snapshot_scn), K_(compaction_scn));
+          if (progress_.unmerged_tablet_cnt_++ < DEBUG_INFO_CNT) { // add into uncompacted tablets array to show in diagnose
+            SpinWLockGuard w_guard(diagnose_rw_lock_);
+            if (OB_TMP_FAIL(uncompacted_tablets_.push_back(*replica))) {
+              LOG_WARN("fail to push_back", KR(tmp_ret), K_(tenant_id), K_(compaction_scn), KPC(replica));
+            }
+          }
+          LOG_TRACE("unfinish tablet", KR(ret), K(replica_snapshot_scn), K_(compaction_scn));
           break;
         } else if (OB_FAIL(report_scn.convert_for_tx(replica->get_report_scn()))) { // check report_scn
           LOG_WARN("fail to convert val to SCN", KR(ret), KPC(replica));
@@ -947,7 +882,7 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
       } // end of FOREACH
       if (OB_SUCC(ret) && ObTabletCompactionStatus::INITIAL != status) {
         ++progress_.merged_tablet_cnt_;
-        if (OB_FAIL(tablet_status_map_.set_refactored(tablet_info.get_tablet_id(), status, 1/*overwrite*/))) {
+        if (OB_FAIL(tablet_status_map_.set_refactored(tablet_info.get_tablet_id(), status))) {
           LOG_WARN("failed to push back status", KR(ret), K(tablet_info), K(status));
         } else {
           LOG_TRACE("success to add tablet status", KR(ret), K(tablet_info), K(status));
@@ -955,6 +890,126 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
       }
     }
   } // end of while
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::get_tablet_ls_pairs_by_tables(
+  ObSchemaGetterGuard &schema_guard,
+  ObUnfinishTableIds &table_ids,
+  ObArray<ObTabletLSPair> &tablet_ls_pair_array)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table_ids_.loop_finish())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(table_ids_));
+  } else {
+    const ObSimpleTableSchemaV2 *simple_schema = nullptr;
+    uint64_t table_id = 0;
+    uint64_t table_cnt = 0;
+    SMART_VARS_2((ObArray<ObTabletLSPair>, tmp_tablet_ls_pairs),
+      (ObArray<ObTabletID>, tmp_tablet_ids)) {
+      if (OB_FAIL(tmp_tablet_ls_pairs.reserve(DEFAULT_ARRAY_CNT))) {
+        LOG_WARN("failed to reserve array", K(ret), "array_cnt", DEFAULT_ARRAY_CNT);
+      } else if (OB_FAIL(tmp_tablet_ids.reserve(DEFAULT_ARRAY_CNT))) {
+        LOG_WARN("failed to reserve array", K(ret), "array_cnt", DEFAULT_ARRAY_CNT);
+      }
+      int64_t idx = table_ids_.batch_start_idx_;
+      int64_t idx_cnt = 0;
+      ObTableCompactionInfo table_compaction_info;
+      int64_t tablet_batch_size = 0;
+      int64_t table_batch_size = 0;
+      (void) get_check_batch_size(tablet_batch_size, table_batch_size);
+      for ( ; OB_SUCC(ret) && idx < table_ids_.count(); ++idx) {
+        tmp_tablet_ls_pairs.reuse();
+        tmp_tablet_ids.reuse();
+        table_id = table_ids_.at(idx);
+        LOG_TRACE("loop table id", KR(ret), K_(tenant_id), K(table_id));
+        if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, table_id, simple_schema))) {
+          LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
+        } else if (should_ignore_cur_table(simple_schema)) {
+          // skip table
+          if (OB_TMP_FAIL(update_table_compaction_info(table_id,
+            [](ObTableCompactionInfo &table_compaction_info) {
+              table_compaction_info.set_can_skip_verifying();
+            }, false/*need_update_progress*/))) {
+            LOG_WARN("failed to update table compaction info", KR(tmp_ret), K(idx), K(table_id));
+          }
+          continue;
+        } else if (!simple_schema->is_index_table()) {
+          if (OB_FAIL(table_compaction_map_.get_refactored(table_id, table_compaction_info))) {
+            LOG_WARN("failed to get refactor", KR(ret), K(table_id));
+          } else {
+            idx_cnt = table_compaction_info.unfinish_index_cnt_;
+          }
+        } else {
+          --idx_cnt;
+        }
+
+        if (FAILEDx(simple_schema->get_tablet_ids(tmp_tablet_ids))) {
+          LOG_WARN("fail to get tablet_ids from table schema", KR(ret), K(simple_schema));
+        } else if (OB_UNLIKELY(tmp_tablet_ids.empty())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get tablet_ids of current table schema", KR(ret), K_(tenant_id), K(simple_schema));
+        } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
+                       tenant_id_, table_id, *sql_proxy_, tmp_tablet_ids, tmp_tablet_ls_pairs))) {
+          if (OB_ITEM_NOT_MATCH == ret) {
+            LOG_WARN("OB_ITEM_NOT_MATCH", KR(ret), K(idx), K(table_id));
+            ret = OB_SUCCESS; // clear errno
+            if (OB_TMP_FAIL(update_table_compaction_info(table_id,
+              [](ObTableCompactionInfo &table_compaction_info) {
+                table_compaction_info.set_can_skip_verifying();
+              }, false/*need_update_progress*/))) {
+              LOG_WARN("failed to update table compaction info", KR(tmp_ret), K(idx), K(table_id));
+            }
+          } else {
+            LOG_WARN("fail to get tablet_ls pairs", KR(ret), K_(tenant_id), K(table_id));
+          }
+        } else if (OB_FAIL(tablet_ls_pair_array.push_back(tmp_tablet_ls_pairs))) {
+          LOG_WARN("failed to push_back tablet_to_ls pair", K(ret), K(tmp_tablet_ls_pairs));
+        }
+        if (OB_SUCC(ret) && 0 >= idx_cnt // data & index should be in same batch
+          && (tablet_ls_pair_array.count() >= tablet_batch_size
+            || ++table_cnt >= table_batch_size)) {
+          ++idx;
+          break;
+        }
+      } // end of for
+      if (OB_SUCC(ret)) { // [batch_start_idx, batch_end_idx)
+        table_ids_.batch_end_idx_ = idx;
+        if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+          LOG_INFO("success to set batch end idx", KR(ret), K(table_ids_.batch_start_idx_),
+            K(table_ids_.batch_end_idx_), K(tablet_ls_pair_array.count()));
+        }
+      }
+    } // SMART_VARS
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::update_table_compaction_info(
+    const uint64_t table_id,
+    const ObFunction<void(ObTableCompactionInfo&)> &info_op,
+    const bool need_update_progress/*true*/)
+{
+  int ret = OB_SUCCESS;
+  ObTableCompactionInfo table_compaction_info;
+  if (OB_FAIL(table_compaction_map_.get_refactored(table_id, table_compaction_info))) {
+    if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get table compaction info", KR(ret), K_(tenant_id), K(table_id));
+    } else {
+      ret = OB_SUCCESS;
+      table_compaction_info.reset();
+      table_compaction_info.table_id_ = table_id;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(info_op(table_compaction_info))) { // execute operation on ObTableCompactionInfo
+  } else if (OB_FAIL(table_compaction_map_.set_refactored(table_id, table_compaction_info, true /*overwrite*/))) {
+    LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
+  } else if (need_update_progress) {
+    (void) progress_.update_table_cnt(table_compaction_info.status_);
+  }
   return ret;
 }
 

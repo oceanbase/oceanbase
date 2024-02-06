@@ -189,6 +189,8 @@ int Threads::start()
       Threads::stop();
       Threads::wait();
       Threads::destroy();
+    } else {
+      stop_ = false;
     }
   }
   return ret;

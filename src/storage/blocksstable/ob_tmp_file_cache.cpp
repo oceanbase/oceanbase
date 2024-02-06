@@ -119,43 +119,6 @@ int ObTmpPageCacheValue::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
-int ObTmpPageCache::inner_read_io(const ObTmpBlockIOInfo &io_info,
-                                  ObITmpPageIOCallback *callback,
-                                  ObMacroBlockHandle &macro_block_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(read_io(io_info, callback, macro_block_handle))) {
-    if (macro_block_handle.get_io_handle().is_empty()) {
-      // TODO: After the continuous IO has been optimized, this should
-      // not happen.
-      if (OB_FAIL(macro_block_handle.wait())) {
-        STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret), KP(callback));
-      } else if (OB_FAIL(read_io(io_info, callback, macro_block_handle))) {
-        STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret), KP(callback));
-      }
-    } else {
-      STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret), KP(callback));
-    }
-  }
-  // Avoid double_free with io_handle
-  if (OB_FAIL(ret) && OB_NOT_NULL(callback) && OB_NOT_NULL(callback->get_allocator())) {
-    common::ObIAllocator *allocator = callback->get_allocator();
-    callback->~ObITmpPageIOCallback();
-    allocator->free(callback);
-  }
-  return ret;
-}
-
-int ObTmpPageCache::direct_read(const ObTmpBlockIOInfo &info,
-                                ObMacroBlockHandle &mb_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inner_read_io(info, nullptr, mb_handle))) {
-    STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
-  }
-  return ret;
-}
-
 int ObTmpPageCache::prefetch(
     const ObTmpPageCacheKey &key,
     const ObTmpBlockIOInfo &info,
@@ -179,8 +142,22 @@ int ObTmpPageCache::prefetch(
       callback->offset_ = info.offset_;
       callback->allocator_ = &allocator;
       callback->key_ = key;
-      if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
-        STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
+      if (OB_FAIL(read_io(info, *callback, mb_handle))) {
+        if (mb_handle.get_io_handle().is_empty()) {
+          // TODO: After the continuous IO has been optimized, this should
+          // not happen.
+          if (OB_FAIL(mb_handle.wait())) {
+            STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
+          } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
+            STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+          }
+        } else {
+          STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+        }
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+        callback->~ObTmpPageIOCallback();
+        allocator.free(callback);
       }
     }
   }
@@ -210,8 +187,22 @@ int ObTmpPageCache::prefetch(
       callback->allocator_ = &allocator;
       if (OB_FAIL(callback->page_io_infos_.assign(page_io_infos))) {
         STORAGE_LOG(WARN, "fail to assign page io infos", K(ret), K(page_io_infos.count()), K(info));
-      } else if (OB_FAIL(inner_read_io(info, callback, mb_handle))) {
-        STORAGE_LOG(WARN, "fail to inner read io", K(ret), K(mb_handle));
+      } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
+        if (mb_handle.get_io_handle().is_empty()) {
+          // TODO: After the continuous IO has been optimized, this should
+          // not happen.
+          if (OB_FAIL(mb_handle.wait())) {
+            STORAGE_LOG(WARN, "fail to wait tmp page io", K(ret));
+          } else if (OB_FAIL(read_io(info, *callback, mb_handle))) {
+            STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+          }
+        } else {
+          STORAGE_LOG(WARN, "fail to read tmp page from io", K(ret));
+        }
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(callback->get_allocator())) { //Avoid double_free with io_handle
+        callback->~ObTmpMultiPageIOCallback();
+        allocator.free(callback);
       }
     }
   }
@@ -381,7 +372,7 @@ const char *ObTmpPageCache::ObTmpMultiPageIOCallback::get_data()
   return data_buf_;
 }
 
-int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback *callback,
+int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallback &callback,
     ObMacroBlockHandle &handle)
 {
   int ret = OB_SUCCESS;
@@ -391,16 +382,12 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_desc_ = io_info.io_desc_;
   read_info.macro_block_id_ = io_info.macro_block_id_;
   read_info.io_timeout_ms_ = io_info.io_timeout_ms_;
-  if (callback == nullptr) {
-    read_info.buf_ = io_info.buf_;
-  } else {
-    read_info.io_callback_ = callback;
-  }
+  read_info.io_callback_ = &callback;
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
   read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, handle))) {
-    STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info), KP(callback));
+    STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info));
   }
   return ret;
 }
@@ -632,7 +619,9 @@ void ObTmpFileWaitTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(mgr_.exec_wait())) {
-    STORAGE_LOG(WARN, "fail to wait block", K(ret));
+    if (OB_EAGAIN != ret){
+      STORAGE_LOG(WARN, "fail to wait block", K(ret));
+    }
   }
 }
 
@@ -1453,14 +1442,11 @@ int ObTmpTenantMemBlockManager::exec_wait()
     common::ObSpLinkQueue::Link *node = NULL;
     SpinWLockGuard io_guard(io_lock_);
     const int64_t begin_us = ObTimeUtility::fast_current_time();
-    while (OB_SUCC(ret) && (ObTimeUtility::fast_current_time() - begin_us)/1000 < TASK_INTERVAL) {
+    while (OB_SUCC(wait_info_queue_.pop(node)) &&
+           (ObTimeUtility::fast_current_time() - begin_us)/1000 < TASK_INTERVAL) {
       IOWaitInfo *wait_info = NULL;
-      if (OB_FAIL(wait_info_queue_.pop(node))) {
-        if (OB_EAGAIN != ret) {
-          STORAGE_LOG(WARN, "fail to pop wait info from queue", K(ret));
-        }
-      } else if (FALSE_IT(++loop_nums)) {
-      } else if (OB_ISNULL(wait_info = static_cast<IOWaitInfo*>(node))) {
+      ++loop_nums;
+      if (OB_ISNULL(wait_info = static_cast<IOWaitInfo*>(node))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "unexpected error, wait info is nullptr", K(ret), KP(node));
       } else if (OB_ISNULL(wait_info->block_handle_)) {
@@ -1516,11 +1502,8 @@ int ObTmpTenantMemBlockManager::exec_wait()
         }
       }
     }
-    if (OB_EAGAIN == ret) {
-      ret = OB_SUCCESS;
-    }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) || OB_EAGAIN == ret) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(cond_.broadcast())) {
       STORAGE_LOG(ERROR, "signal wash condition failed", K(ret), K(tmp_ret));
@@ -1542,12 +1525,25 @@ int ObTmpTenantMemBlockManager::exec_wait()
 int ObTmpTenantMemBlockManager::change_mem()
 {
   int ret = OB_SUCCESS;
-  // Here, this memory is used to store temporary file block metadata, which is related to the
-  // datafile size. So, we set the upper limit of memory to be percentage (default, 70%) of tenant memory to
-  // avoid excessive tenant memory, and affecting system stability. In theory, the limit
-  // will be reached only when the tenant's memory is extremely small and the disk is extremely
-  // large.
-  tenant_store_.refresh_memory_limit(tenant_id_);
+  uint64_t mem_limit = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    COMMON_LOG(INFO, "failed to get tenant config", K_(tenant_id));
+  } else {
+    // Here, this memory is used to store temporary file block metadata, which is related to the
+    // datafile size. So, we set the upper limit of memory to be 70% of tenant memory to
+    // avoid excessive tenant memory, and affecting system stability. In theory, the limit
+    // will be reached only when the tenant's memory is extremely small and the disk is extremely
+    // large.
+    if (0 == tenant_config->_temporary_file_io_area_size) {
+      mem_limit = 2 * (2 << 20);
+    } else {
+      mem_limit = common::upper_align(
+        lib::get_tenant_memory_limit(tenant_id_) * 0.7, ObTmpFileStore::get_block_size());
+    }
+    allocator_->set_total_limit(mem_limit);
+  }
+
   return ret;
 }
 

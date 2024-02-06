@@ -1462,13 +1462,6 @@ int ObBackupTaskOperator::move_task_to_his(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(job_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "update %s set macro_block_count = finish_macro_block_count, tablet_count = finish_tablet_count",
-      OB_ALL_BACKUP_TASK_TNAME))) {
-    LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
-  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
-  } else if (OB_FALSE_IT(sql.reset())) {
-  } else if (OB_FAIL(sql.assign_fmt(
       "insert into %s select * from %s where %s=%lu and %s=%lu", 
       OB_ALL_BACKUP_TASK_HISTORY_TNAME, OB_ALL_BACKUP_TASK_TNAME,
       OB_STR_JOB_ID, job_id, OB_STR_TENANT_ID, tenant_id))) {
@@ -2054,7 +2047,7 @@ int ObBackupLSTaskOperator::update_dst_and_status(
   return ret;
 }
 
-int ObBackupLSTaskOperator::update_stats(
+int ObBackupLSTaskOperator::update_stats_(
     common::ObISQLClient &proxy, 
     const int64_t task_id,
     const uint64_t tenant_id,
@@ -2146,13 +2139,6 @@ int ObBackupLSTaskOperator::move_ls_to_his(common::ObISQLClient &proxy, const ui
   if (tenant_id == OB_INVALID_TENANT_ID || job_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(job_id));
-  } else if (OB_FAIL(sql.assign_fmt(
-      "update %s set macro_block_count = finish_macro_block_count, tablet_count = finish_tablet_count",
-      OB_ALL_BACKUP_LS_TASK_TNAME))) {
-    LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
-  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
-  } else if (OB_FALSE_IT(sql.reset())) {
   } else if (OB_FAIL(sql.assign_fmt(
       "insert into %s select * from %s where %s=%lu", 
       OB_ALL_BACKUP_LS_TASK_HISTORY_TNAME, OB_ALL_BACKUP_LS_TASK_TNAME,
@@ -2534,13 +2520,6 @@ int ObBackupLSTaskInfoOperator::move_ls_task_info_to_his(
   if (tenant_id == OB_INVALID_TENANT_ID || task_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(tenant_id), K(task_id));
-  } else if (OB_FAIL(sql.assign_fmt(
-      "update %s set macro_block_count = finish_macro_block_count, tablet_count = finish_tablet_count",
-      OB_ALL_BACKUP_LS_TASK_INFO_TNAME))) {
-    LOG_WARN("[DATA_BACKUP]failed to init sql", K(ret));
-  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
-  } else if (OB_FALSE_IT(sql.reset())) {
   } else if (OB_FAIL(sql.assign_fmt(
       "insert into %s select * from %s where %s=%lu and %s=%lu", 
       OB_ALL_BACKUP_LS_TASK_INFO_HISTORY_TNAME, OB_ALL_BACKUP_LS_TASK_INFO_TNAME,

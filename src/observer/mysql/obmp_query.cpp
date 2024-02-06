@@ -131,7 +131,6 @@ int ObMPQuery::process()
     ObSQLSessionInfo &session = *sess;
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
-    session.init_use_rich_format();
     int64_t val = 0;
     const bool check_throttle = !is_root_user(sess->get_user_id());
 
@@ -165,8 +164,6 @@ int ObMPQuery::process()
       if (OB_UNLIKELY(!session.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid session", K_(sql), K(ret));
-      } else if (OB_FAIL(process_kill_client_session(session))) {
-        LOG_WARN("client session has been killed", K(ret));
       } else if (OB_UNLIKELY(session.is_zombie())) {
         //session has been killed some moment ago
         ret = OB_ERR_SESSION_INTERRUPTED;
@@ -590,7 +587,8 @@ OB_NOINLINE int ObMPQuery::process_with_tmp_context(ObSQLSessionInfo &session,
   param.set_mem_attr(MTL_ID(),
       ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
     .set_properties(lib::USE_TL_PAGE_OPTIONAL)
-    .set_page_size(OB_MALLOC_REQ_NORMAL_BLOCK_SIZE)
+    .set_page_size(!lib::is_mini_mode() ? OB_MALLOC_BIG_BLOCK_SIZE
+        : OB_MALLOC_MIDDLE_BLOCK_SIZE)
     .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
   CREATE_WITH_TEMP_CONTEXT(param) {
     ret = do_process(session,
@@ -950,7 +948,8 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       }
     }
       //update v$sql statistics
-    if (session.get_local_ob_enable_plan_cache()
+    if ((OB_SUCC(ret) || audit_record.is_timeout())
+        && session.get_local_ob_enable_plan_cache()
         && !retry_ctrl_.need_retry()) {
       ObIArray<ObTableRowCount> *table_row_count_list = NULL;
       ObPhysicalPlanCtx *plan_ctx = result.get_exec_context().get_physical_plan_ctx();

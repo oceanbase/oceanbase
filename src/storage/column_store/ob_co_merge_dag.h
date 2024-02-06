@@ -165,7 +165,6 @@ private:
   uint32_t end_cg_idx_;
   bool retry_create_task_;
   bool progress_inited_; // inited = true & merge_progress_ = nullptr means init failed
-  ObStorageCompactionTimeGuard time_guard_;
   compaction::ObPartitionMergeProgress *merge_progress_;
 };
 
@@ -269,7 +268,6 @@ public:
   virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override;
   virtual int fill_comment(char *buf, const int64_t buf_len) const override;
   virtual int schedule_rest_dag() override;
-  virtual int clear_dag_net_ctx() override;
   virtual bool inner_check_finished() override
   {
     return ATOMIC_LOAD(&finish_added_);
@@ -318,7 +316,7 @@ private:
       const int64_t max_cg_idx,
       ObCOMergeBatchExeDag *&dag,
       const bool add_scheduler_flag = true);
-  int choose_merge_batch_size(const int64_t column_group_cnt);
+  int choose_merge_batch_size(ObCOTabletMergeCtx &co_ctx);
   int inner_schedule_finish_dag(ObIDag *parent_dag = nullptr);
   void try_update_merge_batch_size(const int64_t column_group_cnt);
   int inner_create_and_schedule_dags(ObIDag *parent_dag = nullptr);

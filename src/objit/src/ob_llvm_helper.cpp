@@ -32,7 +32,6 @@
 #include "lib/container/ob_se_array.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/alloc/malloc_hook.h"
-#include "pl/ob_pl_allocator.h"
 
 using namespace llvm;
 
@@ -588,7 +587,7 @@ int ObLLVMHelper::init_llvm() {
 void ObLLVMHelper::compile_module(bool optimization)
 {
   if (optimization) {
-    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+    OB_LLVM_MALLOC_GUARD("PlCodeGen");
     jc_->optimize();
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
@@ -599,7 +598,7 @@ void ObLLVMHelper::compile_module(bool optimization)
 
 void ObLLVMHelper::dump_module()
 {
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   if (OB_ISNULL(jc_)) {
     //do nothing
   } else {
@@ -612,7 +611,7 @@ void ObLLVMHelper::dump_module()
 
 void ObLLVMHelper::dump_debuginfo()
 {
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   if (OB_ISNULL(jit_) || jit_->get_debug_info_size() <= 0) {
     // do nothing ...
   } else {
@@ -622,7 +621,7 @@ void ObLLVMHelper::dump_debuginfo()
 
 int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 {
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   int ret = OB_SUCCESS;
   if (OB_ISNULL(jc_)) {
     ret = OB_NOT_INIT;
@@ -639,7 +638,7 @@ int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 
 int ObLLVMHelper::verify_module()
 {
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
+  OB_LLVM_MALLOC_GUARD("PlCodeGen");
   int ret = OB_SUCCESS;
   std::string verify_error;
   llvm::raw_string_ostream verify_raw_os(verify_error);
@@ -1998,7 +1997,6 @@ int ObLLVMHelper::check_insert_point(bool &is_valid)
 int ObDWARFHelper::init()
 {
   int ret = OB_SUCCESS;
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD));
   std::string s;
   llvm::raw_string_ostream Out(s);
   if (nullptr == (Context = OB_NEWx(core::ObDWARFContext, (&Allocator), DebugBuf, DebugLen))) {
@@ -2020,12 +2018,7 @@ int ObDWARFHelper::init()
     DumpOpts.ShowForm = true;
     DumpOpts.SummarizeTypes = true;
     DumpOpts.Verbose = true; 
-    {
-      // dump uses static memory, record as SYS tenant
-      lib::ObMallocHookAttrGuard malloc_guard(
-          ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
-      Context->Context->dump(Out, DumpOpts);
-    }
+    Context->Context->dump(Out, DumpOpts);
     Out.flush();
     LOG_INFO("success to init ObDWARFHelper!", K(ret), K(Out.str().c_str()));
   }
@@ -2037,7 +2030,8 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
   int ret = OB_SUCCESS;
   std::string s;
   llvm::raw_string_ostream Out(s);
-  MemoryBufferRef MemoryRef(ObStringRef(DebugBuf, DebugLen), "");
+  core::StringMemoryBuffer MemoryBuf(DebugBuf, DebugLen);
+  MemoryBufferRef MemoryRef(MemoryBuf);
   auto BinOrErr = llvm::object::createBinary(MemoryRef);
   if (!BinOrErr) {
     ret = OB_ERR_UNEXPECTED;
@@ -2055,12 +2049,7 @@ int ObDWARFHelper::dump(char* DebugBuf, int64_t DebugLen)
       DumpOpts.SummarizeTypes = true;
       DumpOpts.Verbose = true;
       Context->verify(Out);
-      {
-        // dump uses static memory, record as SYS tenant
-        lib::ObMallocHookAttrGuard malloc_guard(
-            ObMemAttr(OB_SYS_TENANT_ID, GET_PL_MOD_STRING(pl::OB_PL_DEBUG_MOD)));
-        Context->dump(Out, DumpOpts);
-      }
+      Context->dump(Out, DumpOpts);
       Out.flush();
     }
   }
@@ -2217,13 +2206,5 @@ int ObDWARFHelper::find_function_from_pc(uint64_t pc, ObDIEAddress &func)
   return ret;
 }
 
-ObDWARFHelper::~ObDWARFHelper() {
-  if (nullptr != Context) {
-    Context->~ObDWARFContext();
-    Allocator.free(Context);
-    Context = nullptr;
-  }
 }
-
-} // namespace jit
-} // namespace oceanbase
+}

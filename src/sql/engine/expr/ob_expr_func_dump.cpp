@@ -26,7 +26,7 @@ using namespace common;
 namespace sql
 {
 
-const int64_t MAX_DUMP_BUFFER_SIZE = 4000;
+const int64_t MAX_DUMP_BUFFER_SIZE = 1024;
 const char *CONST_HEADER = "Typ=%d Len=%ld: ";
 
 enum ReturnFormat {
@@ -76,15 +76,11 @@ int print_value(char *tmp_buf, const int64_t buff_size, int64_t &pos,
       for (int64_t i = 0; i < print_value_string.length() && OB_SUCC(ret); ++i) {
         if (isprint(print_value_string[i])) {
           if (OB_FAIL(databuff_printf(tmp_buf, buff_size, pos, "%c,", print_value_string[i]))) {
-            if (OB_SIZE_OVERFLOW != ret) {
-              LOG_WARN("failed to databuff_printf", K(ret), K(pos));
-            }
+            LOG_WARN("failed to databuff_printf", K(ret), K(pos));
           }
         } else {
           if (OB_FAIL(databuff_printf(tmp_buf, buff_size, pos, "%x,", (unsigned)(unsigned char)print_value_string[i]))) {
-            if (OB_SIZE_OVERFLOW != ret) {
-              LOG_WARN("failed to databuff_printf", K(ret), K(pos));
-            }
+            LOG_WARN("failed to databuff_printf", K(ret), K(pos));
           }
         }
       }
@@ -96,14 +92,9 @@ int print_value(char *tmp_buf, const int64_t buff_size, int64_t &pos,
 
       for (int64_t i = 0; i < print_value_string.length() && OB_SUCC(ret); ++i) {
         if (OB_FAIL(databuff_printf(tmp_buf, buff_size, pos, fmt_str, (unsigned)(unsigned char)print_value_string[i]))) {
-          if (OB_SIZE_OVERFLOW != ret) {
-            LOG_WARN("failed to databuff_printf", K(ret), K(pos));
-          }
+          LOG_WARN("failed to databuff_printf", K(ret), K(pos));
         }
       }
-    }
-    if (OB_SIZE_OVERFLOW == ret) {
-      ret = common::OB_SUCCESS; // result string length > MAX_DUMP_BUFFER_SIZE, cut the result string and return
     }
   }
 
@@ -640,7 +631,7 @@ int ObExprFuncDump::eval_dump(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
         bool dumped = false;
         if (OB_FAIL(databuff_printf(buf, buf_len, buf_pos, CONST_HEADER,
                                     expr.args_[0]->datum_meta_.type_,
-                                    min(static_cast<int64_t>(input->len_), MAX_DUMP_BUFFER_SIZE)))) {
+                                    static_cast<int64_t>(input->len_)))) {
           LOG_WARN("data buffer print fail", K(ret));
         } else if (ReturnFormat::RF_OB_SEPC == fmt_val) {
           if (OB_FAIL(dump_ob_spec(buf, buf_len, buf_pos, dumped, *expr.args_[0], *input))) {

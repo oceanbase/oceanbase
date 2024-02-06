@@ -285,12 +285,11 @@ int ObTenantSqlMemoryManager::ObSqlWorkAreaCalcInfo::calculate_global_bound_size
   const bool auto_calc)
 {
   int ret = OB_SUCCESS;
-  int64_t error_sim = std::abs(OB_E(EventTable::EN_SQL_MEMORY_MRG_OPTION) 0);
   int64_t max_wa_size = wa_max_memory_size;
   // int64_t max_wa_size = wa_max_memory_size;
   // 最大占比6.25%（oracle 5%）
   // 这里改为按照8个并发来设置
-  int64_t max_bound_size = (0 == error_sim) ? (max_wa_size >> 3) : error_sim;
+  int64_t max_bound_size = (max_wa_size >> 3);
   profile_cnt_ = profile_cnt;
   int64_t avg_bound_size = (0 == profile_cnt_) ? max_bound_size : max_wa_size / profile_cnt_;
   int64_t best_interval_idx = -1;
@@ -327,10 +326,12 @@ int ObTenantSqlMemoryManager::ObSqlWorkAreaCalcInfo::calculate_global_bound_size
   return ret;
 }
 
-int ObTenantSqlMemoryManager::mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr)
+////////////////////////////////////////////////////////////////////////////////////
+int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
+  sql_mem_mgr = nullptr;
   // 系统租户不创建
   if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
     sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager,
@@ -338,19 +339,7 @@ int ObTenantSqlMemoryManager::mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr)
     if (nullptr == sql_mem_mgr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
-    }
-  }
-  return ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////////
-int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  // 系统租户不init
-  if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
-    if (OB_FAIL(sql_mem_mgr->allocator_.init(
+    } else if (OB_FAIL(sql_mem_mgr->allocator_.init(
               lib::ObMallocAllocator::get_instance(),
               OB_MALLOC_NORMAL_BLOCK_SIZE,
               ObMemAttr(tenant_id, "SqlMemMgr")))) {
@@ -532,16 +521,13 @@ int ObTenantSqlMemoryManager::get_work_area_size(
     increase(profile.get_cache_size());
     LOG_TRACE("trace drift size", K(drift_size_), K(global_bound_size_));
     if (need_manual_calc_bound()) {
-      if (OB_SUCCESS == global_bound_update_lock_.try_wrlock(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK)) {
-        ++manual_calc_cnt_;
-        if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
-          LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
-        } else {
-          profile.inc_calc_count();
-          LOG_TRACE("trace manual calc global bound size", K(global_bound_size_),
-            K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_));
-        }
-        global_bound_update_lock_.unlock();
+      ++manual_calc_cnt_;
+      if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
+        LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
+      } else {
+        profile.inc_calc_count();
+        LOG_TRACE("trace manual calc global bound size", K(global_bound_size_),
+          K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_));
       }
     }
     if (OB_FAIL(ret)) {
@@ -580,7 +566,6 @@ int ObTenantSqlMemoryManager::register_work_area_profile(ObSqlWorkAreaProfile &p
       } else if (OB_FAIL(profile_lists_[hash_val].register_work_area_profile(profile))) {
         LOG_WARN("failed to register work area profile", K(hash_val), K(profile));
       } else {
-        increase_profile_cnt();
         profile.active_time_ = ObTimeUtility::current_time();
       }
     }
@@ -599,20 +584,17 @@ int ObTenantSqlMemoryManager::update_work_area_profile(
     // delta_size maybe negative integer
     (ATOMIC_AAF(&drift_size_, delta_size));
     if (need_manual_by_drift()) {
-      if (OB_SUCCESS == global_bound_update_lock_.try_wrlock(common::ObLatchIds::SQL_MEMORY_MGR_MUTEX_LOCK)) {
-        int64_t pre_drift_size = drift_size_;
-        ++manual_calc_cnt_;
-        if (OB_ISNULL(allocator)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("allocator is null", K(lbt()));
-        } else if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
-          LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
-        } else {
-          profile.inc_calc_count();
-          LOG_TRACE("trace manual calc global bound size by drift", K(global_bound_size_),
-            K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_), K(pre_drift_size));
-        }
-        global_bound_update_lock_.unlock();
+      int64_t pre_drift_size = drift_size_;
+      ++manual_calc_cnt_;
+      if (OB_ISNULL(allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("allocator is null", K(lbt()));
+      } else if (OB_FAIL(calculate_global_bound_size(allocator, false))) {
+        LOG_WARN("failed to calculate global bound size", K(global_bound_size_));
+      } else {
+        profile.inc_calc_count();
+        LOG_TRACE("trace manual calc global bound size by drift", K(global_bound_size_),
+          K(profile.get_one_pass_size()), K(drift_size_), K(mem_target_), K(pre_drift_size));
       }
     }
   }
@@ -825,7 +807,6 @@ int ObTenantSqlMemoryManager::unregister_work_area_profile(ObSqlWorkAreaProfile 
     } else if (OB_FAIL(profile_lists_[hash_val].unregister_work_area_profile(profile))) {
       LOG_WARN("failed to register work area profile", K(hash_val), K(profile));
     } else {
-      decrease_profile_cnt();
       if (enable_auto_memory_mgr_ && profile.get_auto_policy()) {
         decrease(profile.get_cache_size());
       }
@@ -1079,7 +1060,7 @@ int ObTenantSqlMemoryManager::count_profile_into_work_area_intervals(
       ObDList<ObSqlWorkAreaProfile> &profile_list = profile_lists_[i].get_profile_list();
       DLIST_FOREACH_X(profile, profile_list, OB_SUCC(ret)) {
         if (!profile->get_auto_policy()) {
-          ++cur_profile_cnt;
+          // 没有使用auto的不作为统计之内
         } else if (OB_FAIL(find_interval_index(profile->get_cache_size(), interval_idx, cache_size))) {
           LOG_WARN("failed to find interval index", K(*profile));
         } else {

@@ -23,7 +23,6 @@ namespace storage
 int ObCGTileScanner::init(
     const ObIArray<ObTableIterParam*> &iter_params,
     const bool project_single_row,
-    const bool project_without_filter,
     ObTableAccessContext &access_ctx,
     ObITable *table)
 {
@@ -59,8 +58,6 @@ int ObCGTileScanner::init(
         LOG_WARN("Unexpected cg scanner", K(ret), K(cg_scanner->get_type()));
       } else if (OB_FAIL(cg_scanners_.push_back(cg_scanner))) {
         LOG_WARN("Fail to push back cg scanner", K(ret), K(i), KPC(iter_param));
-      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
-        static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }
     if (OB_SUCC(ret)) {
@@ -75,7 +72,6 @@ int ObCGTileScanner::init(
 int ObCGTileScanner::switch_context(
     const ObIArray<ObTableIterParam*> &iter_params,
     const bool project_single_row,
-    const bool project_without_filter,
     ObTableAccessContext &access_ctx,
     ObITable *table,
     const bool col_cnt_changed)
@@ -97,7 +93,7 @@ int ObCGTileScanner::switch_context(
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
     ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_scanners_.count(); i++) {
-      storage::ObSSTableWrapper cg_wrapper;
+      storage::ObCGTableWrapper cg_wrapper;
       const ObTableIterParam &cg_param = *iter_params.at(i);
       ObICGIterator *&cg_scanner = cg_scanners_.at(i);
       if (OB_ISNULL(cg_scanner)) {
@@ -113,8 +109,6 @@ int ObCGTileScanner::switch_context(
       } else if (OB_FAIL(cg_scanner->switch_context(
           cg_param, access_ctx, cg_wrapper))) {
         LOG_WARN("Fail to switch context for cg iter", K(ret));
-      } else if (ObICGIterator::OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
-        static_cast<ObCGRowScanner *>(cg_scanner)->set_project_type(project_without_filter);
       }
     }
   }
@@ -199,8 +193,6 @@ int ObCGTileScanner::apply_filter(
       }
       if (OB_SUCC(ret) && batch_row_count > 0) {
         ObCSRange row_range(is_reverse_scan_ ? current - batch_row_count : current, batch_row_count);
-        filter_info.start_ = 0;
-        filter_info.count_ = batch_row_count;
         bool can_skip_subtree = false;
         if (nullptr != parent) {
           if (ObCGScanner::can_skip_filter(*parent, *parent_bitmap, row_range)) {
@@ -215,7 +207,7 @@ int ObCGTileScanner::apply_filter(
           }
         }
         if (can_skip_subtree) {
-        } else if (OB_FAIL(filter_info.filter_->execute(parent, filter_info, nullptr, true))) {
+        } else if (OB_FAIL(ObCOSSTableRowsFilter::filter_batch_rows(parent, filter_info.filter_, batch_row_count))) {
           LOG_WARN("Failed to filter batch rows", K(ret), K(batch_row_count));
         } else if (OB_FAIL(result_bitmap.append_bitmap(*(filter_info.filter_->get_result()),
                                                        static_cast<uint32_t>(row_count - remained_rows),
@@ -262,7 +254,7 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       if (OB_ISNULL(cg_scanner = cg_scanners_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null cg scanner", K(ret), K(i));
-      } else if (is_valid_cg_row_scanner(cg_scanner->get_type())) {
+      } else if (OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
         ret = get_next_aligned_rows(static_cast<ObCGRowScanner*>(cg_scanner), count);
       } else {
         ret = cg_scanner->get_next_rows(count, capacity);

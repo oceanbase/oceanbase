@@ -60,7 +60,7 @@ struct ObWrsGetClusterVersionResponse
   OB_UNIS_VERSION(1);
 };
 
-// Cluster Heartbeat Request Struct
+// Cluster Heartbeat Requst Struct
 struct ObWrsClusterHeartbeatRequest
 {
   common::ObAddr  req_server_;          // Who I am

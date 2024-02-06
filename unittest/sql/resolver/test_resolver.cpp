@@ -13,7 +13,7 @@
 #include <iterator>
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/ob_sql_init.h"
-#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/ob_select_stmt_printer.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_insert_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
@@ -319,7 +319,7 @@ void TestResolver::do_join_order_test()
       const ObTableSchema *table_schema = NULL;
       OK(schema_guard_.get_table_schema(ref_id, table_schema));
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-      int ret = table_schema->get_simple_index_infos(simple_index_infos);
+      int ret = table_schema->get_simple_index_infos(simple_index_infos, false/*with mv*/);
       ASSERT_EQ(ret, OB_SUCCESS);
       of_tmp << "table [" << table_schema->get_table_name() << "]" << std::endl;
       for (int i = 0; i <= simple_index_infos.count(); ++i) {

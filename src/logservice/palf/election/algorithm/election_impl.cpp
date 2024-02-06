@@ -154,21 +154,6 @@ void ElectionImpl::stop()
   #undef PRINT_WRAPPER
 }
 
-int ElectionImpl::can_set_memberlist(const palf::LogConfigVersion &new_config_version) const
-{
-  ELECT_TIME_GUARD(500_ms);
-  #define PRINT_WRAPPER KR(ret), K(*this), K(new_config_version)
-  int ret = common::OB_SUCCESS;
-  CHECK_ELECTION_ARGS(new_config_version);
-  LockGuard lock_guard(lock_);
-  CHECK_ELECTION_INIT();
-  if (CLICK_FAIL(proposer_.can_set_memberlist(new_config_version))) {
-    LOG_SET_MEMBER(WARN, "can_set_memberlist failed");
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
 int ElectionImpl::set_memberlist(const MemberList &new_memberlist)
 {
   ELECT_TIME_GUARD(500_ms);

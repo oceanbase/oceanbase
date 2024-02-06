@@ -255,8 +255,7 @@ int ObTransformSimplifySubquery::is_subquery_to_expr_valid(const ObSelectStmt *s
              && 0 == stmt->get_having_expr_size()
              && !stmt->has_limit()
              && !stmt->is_hierarchical_query()
-             && !stmt->is_set_stmt()
-             && !stmt->has_sequence()) {
+             && !stmt->is_set_stmt()) {
     is_valid = true;
   }
   if (OB_SUCC(ret) && is_valid) {
@@ -589,7 +588,7 @@ int ObTransformSimplifySubquery::get_push_down_conditions(ObDMLStmt *stmt,
         }
       }
 
-      if (OB_SUCC(ret) && can_push_down && OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
+      if (can_push_down && OB_FAIL(push_down_conds.push_back(join_conds.at(i)))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
     }

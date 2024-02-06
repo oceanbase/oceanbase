@@ -35,23 +35,21 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override
+      ObCGTableWrapper &wrapper) override
   { return OB_NOT_SUPPORTED; }
   int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override
+      ObCGTableWrapper &wrapper) override
   { return OB_NOT_SUPPORTED; }
   int init(
       const ObIArray<ObTableIterParam*> &iter_params,
       const bool project_single_row,
-      const bool project_without_filter,
       ObTableAccessContext &access_ctx,
       ObITable *table);
   int switch_context(
       const ObIArray<ObTableIterParam*> &iter_params,
       const bool project_single_row,
-      const bool project_without_filter,
       ObTableAccessContext &access_ctx,
       ObITable *table,
       const bool col_cnt_changed);
@@ -81,7 +79,7 @@ private:
   int64_t sql_batch_size_;
   ObTableAccessContext* access_ctx_;
   common::ObFixedArray<ObICGIterator*, common::ObIAllocator> cg_scanners_;
-  blocksstable::ObDatumRow datum_row_;
+  ObDatumRow datum_row_;
 };
 }
 }

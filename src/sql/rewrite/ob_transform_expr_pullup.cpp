@@ -493,8 +493,7 @@ bool ObTransformExprPullup::is_view_acceptable_for_rewrite(TableItem &view)
       && !view.ref_query_->is_hierarchical_query()
       && !view.ref_query_->has_select_into()
       && !view.ref_query_->is_set_stmt()
-      && !view.ref_query_->is_distinct()
-      && !view.ref_query_->is_contains_assignment();
+      && !view.ref_query_->is_distinct();
 }
 
 int ObTransformExprPullup::check_stmt_validity(const ObDMLStmt *stmt, bool &is_valid)

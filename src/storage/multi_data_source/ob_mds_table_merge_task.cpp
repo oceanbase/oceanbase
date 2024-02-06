@@ -91,12 +91,6 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.start_time_ = common::ObTimeUtility::fast_current_time();
     const share::ObLSID &ls_id = ctx.get_ls_id();
     const common::ObTabletID &tablet_id = ctx.get_tablet_id();
-#ifdef ERRSIM
-    if (GCONF.errsim_test_tablet_id.get_value() > 0 && tablet_id.id() == GCONF.errsim_test_tablet_id.get_value()) {
-      LOG_INFO("test tablet mds dump start", K(ret), K(tablet_id));
-      DEBUG_SYNC(BEFORE_DDL_LOB_META_TABLET_MDS_DUMP);
-    }
-#endif
     const share::SCN &flush_scn = mds_merge_dag_->get_flush_scn();
     ctx.static_param_.scn_range_.end_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();
@@ -130,9 +124,6 @@ int ObMdsTableMergeTask::process()
     ctx.add_sstable_merge_info(ctx.get_merge_info().get_sstable_merge_info(),
               mds_merge_dag_->get_dag_id(), mds_merge_dag_->hash(),
               ctx.info_collector_.time_guard_);
-    // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-    FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx_ptr->get_merge_info(),
-        "time_guard", ctx_ptr->info_collector_.time_guard_);
   }
 
   return ret;

@@ -118,7 +118,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -127,15 +127,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -180,7 +179,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -189,15 +188,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -207,7 +205,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|2       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -242,7 +240,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -251,15 +249,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -269,7 +266,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |363         |
+|0 |TABLE FULL SCAN|t(idx)|5       |363         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -305,7 +302,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -314,15 +311,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:5
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -332,7 +328,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|2       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -367,7 +363,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -376,15 +372,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -394,7 +389,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |359         |
+|0 |TABLE FULL SCAN|t(idx)|3       |359         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -430,7 +425,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -439,15 +434,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -457,7 +451,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |351         |
+|0 |TABLE FULL SCAN|t(idx)|6       |351         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -493,7 +487,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -502,15 +496,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:6
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -520,7 +513,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|3       |355         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -555,7 +548,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -564,15 +557,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      index_back_rows:8
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -676,7 +668,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -685,15 +677,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:3
-      output_rows:1
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -738,7 +729,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -747,15 +738,14 @@ Optimization Info:
       table_rows:8
       physical_range_rows:8
       logical_range_rows:8
-      index_back_rows:0
-      output_rows:0
+      index_back_rows:8
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1009,7 +999,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1018,15 +1008,14 @@ Optimization Info:
       table_rows:2
       physical_range_rows:2
       logical_range_rows:2
-      index_back_rows:0
-      output_rows:0
+      index_back_rows:2
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1079,7 +1068,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table2"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1088,15 +1077,14 @@ Optimization Info:
       table_rows:2
       physical_range_rows:2
       logical_range_rows:2
-      index_back_rows:0
-      output_rows:0
+      index_back_rows:2
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1127,8 +1115,8 @@ Query Plan
 ============================================================
 |ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |SORT             |               |1       |299         |
-|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |299         |
+|0 |SORT             |               |2       |299         |
+|1 |└─TABLE FULL SCAN|geo_table(geom)|2       |299         |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1165,7 +1153,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."geo_table"@"SEL$1" "geom")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1174,15 +1162,14 @@ Optimization Info:
       table_rows:6
       physical_range_rows:6
       logical_range_rows:6
-      index_back_rows:1
-      output_rows:0
+      index_back_rows:6
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table]
       pruned_index_name:[geo_table]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1205,7 +1192,7 @@ INSERT INTO t (g) VALUES
 (ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')),
 (ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))')),
 (ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(0 0)'));
 st_astext(g)
 POINT(0 0)
 LINESTRING(0 0,1 1)
@@ -1214,10 +1201,10 @@ MULTIPOINT((0 0),(1 1))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
 GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
-select st_astext(g) from t ignore index(idx) where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
+select st_astext(g) from t where _st_covers(ST_GeomFromText('POINT(0 0)'), g);
 st_astext(g)
 POINT(0 0)
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(1 1)'));
 st_astext(g)
 POINT(1 1)
 LINESTRING(0 0,1 1)
@@ -1225,52 +1212,52 @@ POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTIPOINT((0 0),(1 1))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(2 2)'));
 st_astext(g)
 POINT(2 2)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
 GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(3 3)'));
 st_astext(g)
 POINT(3 3)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
 GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(4 4)'));
 st_astext(g)
 POINT(4 4)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POINT(5 5)'));
 st_astext(g)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('LINESTRING(0 0,1 1)'));
 st_astext(g)
 LINESTRING(0 0,1 1)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))'));
 st_astext(g)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOINT((0 0), (1 1))'));
 st_astext(g)
 LINESTRING(0 0,1 1)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTIPOINT((0 0),(1 1))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))'));
 st_astext(g)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 MULTILINESTRING((0 0,1 1),(4 4,5 5))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)), ((2.5 2.5, 6 2.5, 6 6, 2.5 6, 2.5 2.5), (3.5 3, 4.5 3, 4.5 4.5, 3.5 4.5, 3.5 3)))'));
 st_astext(g)
 MULTIPOLYGON(((0 0,2 0,2 2,0 2,0 0)),((2.5 2.5,6 2.5,6 6,2.5 6,2.5 2.5),(3.5 3,4.5 3,4.5 4.5,3.5 4.5,3.5 3)))
-select st_astext(g) from t ignore index(idx) where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
+select st_astext(g) from t where _st_covers(g, ST_GeomFromText('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(2 2,3 3))'));
 st_astext(g)
 POLYGON((0 0,10 0,10 5,0 5,0 0))
 GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 2,3 3))
@@ -1348,7 +1335,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|7       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1383,7 +1370,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1392,15 +1379,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:7
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1410,7 +1396,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|6       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1445,7 +1431,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1454,15 +1440,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:6
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1472,7 +1457,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1507,7 +1492,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1516,15 +1501,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:4
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1534,28 +1518,27 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |540         |
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
       access([t.__pk_increment], [t.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
-      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
-      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
-      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
-      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
-      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
-      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
-      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
-      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
-      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
-      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
-      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
-      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846979,
-      MIN,MIN ; 1152921504606846979,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846988,MIN,MIN ; 1152921504606846988,
-      MAX,MAX), (1152921504606846991,MIN,MIN ; 1152921504606846991,MAX,MAX)
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,
+      MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,
+      MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,
+      MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,
+      MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,
+      MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,
+      MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,
+      MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,
+      MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,
+      MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,
+      MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,
+      MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,
+      MAX,MAX), (1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846991,
+      MIN,MIN ; 1152921504606846991,MAX,MAX)
 Used Hint:
 -------------------------------------
   /*+
@@ -1571,7 +1554,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1580,15 +1563,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1598,7 +1580,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|5       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1633,7 +1615,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1642,15 +1624,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:5
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1660,26 +1641,26 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([BOOL(_st_covers(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
       access([t.__pk_increment], [t.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
-      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
-      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
-      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
-      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
-      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
-      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
-      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
-      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
-      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
-      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
-      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
-      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846981,
       MIN,MIN ; 1152921504606846981,MAX,MAX)
 Used Hint:
 -------------------------------------
@@ -1696,7 +1677,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1705,15 +1686,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1759,7 +1739,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1768,15 +1748,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1786,7 +1765,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1821,7 +1800,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -1830,15 +1809,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -1995,7 +1973,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2004,15 +1982,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2057,7 +2034,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2066,15 +2043,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2119,7 +2095,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2128,15 +2104,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2146,7 +2121,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |531         |
+|0 |TABLE FULL SCAN|t(idx)|9       |531         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2182,7 +2157,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2191,15 +2166,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:9
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2209,7 +2183,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2244,7 +2218,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2253,15 +2227,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2271,7 +2244,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2307,7 +2280,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2316,15 +2289,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2334,7 +2306,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+|0 |TABLE FULL SCAN|t(idx)|6       |519         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2370,7 +2342,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2379,15 +2351,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:6
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2397,7 +2368,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2432,7 +2403,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2441,15 +2412,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2459,7 +2429,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2494,7 +2464,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2503,15 +2473,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2521,7 +2490,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2556,7 +2525,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2565,15 +2534,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:4
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2583,7 +2551,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|4       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2618,7 +2586,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2627,15 +2595,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:4
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2645,28 +2612,27 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |540         |
+|0 |TABLE FULL SCAN|t(idx)|1       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('POLYGON((0 0, 10 0, 10 5, 0 5, 0 0))')))])
       access([t.__pk_increment], [t.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
-      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
-      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
-      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
-      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
-      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
-      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
-      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
-      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
-      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
-      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
-      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
-      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846979,
-      MIN,MIN ; 1152921504606846979,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846988,MIN,MIN ; 1152921504606846988,
-      MAX,MAX), (1152921504606846991,MIN,MIN ; 1152921504606846991,MAX,MAX)
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,
+      MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,
+      MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,
+      MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,
+      MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,
+      MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,
+      MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,
+      MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,
+      MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,
+      MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,
+      MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,
+      MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,
+      MAX,MAX), (1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846985,MIN,MIN ; 1152921504606846985,MAX,MAX), (1152921504606846991,
+      MIN,MIN ; 1152921504606846991,MAX,MAX)
 Used Hint:
 -------------------------------------
   /*+
@@ -2682,7 +2648,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2691,15 +2657,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2709,7 +2674,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|3       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2744,7 +2709,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2753,15 +2718,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2771,26 +2735,26 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |527         |
 =================================================
 Outputs & filters:
 -------------------------------------
   0 - output([st_astext(t.g)]), filter([BOOL(ST_Contains(t.g, ST_GeomFromText('MULTILINESTRING((0 0, 1 1), (4 4, 5 5))')))])
       access([t.__pk_increment], [t.g]), partitions(p0)
       is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846980,
-      MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,
-      MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,
-      MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,
-      MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,
-      MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,
-      MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,
-      MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,
-      MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,
-      MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,
-      MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,
-      MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,
-      MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846981,
+      range_key([t.__cellid_16], [t.__mbr_16], [t.__pk_increment]), range(1152921504606846980,MIN,MIN ; 1152921504606846980,MAX,MAX), (1152921504606846992,
+      MIN,MIN ; 1152921504606846992,MAX,MAX), (1152921504606847040,MIN,MIN ; 1152921504606847040,MAX,MAX), (1152921504606847232,MIN,MIN ; 1152921504606847232,
+      MAX,MAX), (1152921504606848000,MIN,MIN ; 1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,
+      MIN,MIN ; 1152921504606863360,MAX,MAX), (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,
+      MAX,MAX), (1152921504607895552,MIN,MIN ; 1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,
+      MIN,MIN ; 1152921504623624192,MAX,MAX), (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,
+      MAX,MAX), (1152921505680588800,MIN,MIN ; 1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,
+      MIN,MIN ; 1152921521786716160,MAX,MAX), (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,
+      MAX,MAX), (1152922604118474752,MIN,MIN ; 1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,
+      MIN,MIN ; 1152939096792891392,MAX,MAX), (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,
+      MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
+      MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
+      MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846977,MAX,MAX), (1152921504606846981,
       MIN,MIN ; 1152921504606846981,MAX,MAX)
 Used Hint:
 -------------------------------------
@@ -2807,7 +2771,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2816,15 +2780,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2870,7 +2833,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2879,15 +2842,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -2897,7 +2859,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |523         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2932,7 +2894,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -2941,15 +2903,14 @@ Optimization Info:
       table_rows:14
       physical_range_rows:14
       logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      index_back_rows:14
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       LOCAL
   Note:
@@ -3016,7 +2977,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."t"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -3033,7 +2994,6 @@ Optimization Info:
       pruned_index_name:[t]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -3178,51 +3138,3 @@ id	st_astext(g)
 4	POINT(5.00001 5)
 7	MULTIPOINT((5.00001 5))
 drop table geo_t1;
-bugfix: 53822176
-drop table if exists spatial_point_in_line;
-create table spatial_point_in_line (
-`id` int unsigned not null auto_increment primary key ,
-`min` int unsigned not null default 0,
-`max` int unsigned not null default 0,
-`line_geo` geometry  not null srid 0,
-SPATIAL INDEX index_spatial_line_geo(`line_geo`)
-);
-insert into spatial_point_in_line (min, max, line_geo) values
-(80, 90,  LineString(Point(min, 0), Point(max, 0))),
-(80, 100, LineString(Point(min, 0), Point(max, 0))),
-(90, 100, LineString(Point(min, 0), Point(max, 0))),
-(100, 110, LineString(Point(min, 0), Point(max, 0))),
-(100, 120, LineString(Point(min, 0), Point(max, 0)));
-select id, min, max, st_astext(line_geo) from spatial_point_in_line where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
-id	min	max	st_astext(line_geo)
-2	80	100	LINESTRING(80 0,100 0)
-explain select id, min, max, st_astext(line_geo) from spatial_point_in_line where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
-Query Plan
-========================================================================================
-|ID|OPERATOR       |NAME                                         |EST.ROWS|EST.TIME(us)|
-----------------------------------------------------------------------------------------
-|0 |TABLE FULL SCAN|spatial_point_in_line(index_spatial_line_geo)|1       |279         |
-========================================================================================
-Outputs & filters:
--------------------------------------
-  0 - output([spatial_point_in_line.id], [spatial_point_in_line.min], [spatial_point_in_line.max], [st_astext(spatial_point_in_line.line_geo)]), filter([ST_Contains(spatial_point_in_line.line_geo,
-       linestring(point(cast(80, DOUBLE(-1, -1)), cast(0, DOUBLE(-1, -1))), point(cast(91, DOUBLE(-1, -1)), cast(0, DOUBLE(-1, -1)))))])
-      access([spatial_point_in_line.id], [spatial_point_in_line.line_geo], [spatial_point_in_line.min], [spatial_point_in_line.max]), partitions(p0)
-      is_index_back=true, is_global_index=false, filter_before_indexback[false], 
-      range_key([spatial_point_in_line.__cellid_19], [spatial_point_in_line.__mbr_19], [spatial_point_in_line.id]), range(1152921504606848865,MIN,MIN ; 
-      1152921504606848865,MAX,MAX), (1152921504606848868,MIN,MIN ; 1152921504606848868,MAX,MAX), (1152921504606848880,MIN,MIN ; 1152921504606848880,MAX,MAX), 
-      (1152921504606848832,MIN,MIN ; 1152921504606848832,MAX,MAX), (1152921504606848768,MIN,MIN ; 1152921504606848768,MAX,MAX), (1152921504606848000,MIN,MIN ; 
-      1152921504606848000,MAX,MAX), (1152921504606851072,MIN,MIN ; 1152921504606851072,MAX,MAX), (1152921504606863360,MIN,MIN ; 1152921504606863360,MAX,MAX), 
-      (1152921504606912512,MIN,MIN ; 1152921504606912512,MAX,MAX), (1152921504607109120,MIN,MIN ; 1152921504607109120,MAX,MAX), (1152921504607895552,MIN,MIN ; 
-      1152921504607895552,MAX,MAX), (1152921504611041280,MIN,MIN ; 1152921504611041280,MAX,MAX), (1152921504623624192,MIN,MIN ; 1152921504623624192,MAX,MAX), 
-      (1152921504673955840,MIN,MIN ; 1152921504673955840,MAX,MAX), (1152921504875282432,MIN,MIN ; 1152921504875282432,MAX,MAX), (1152921505680588800,MIN,MIN ; 
-      1152921505680588800,MAX,MAX), (1152921508901814272,MIN,MIN ; 1152921508901814272,MAX,MAX), (1152921521786716160,MIN,MIN ; 1152921521786716160,MAX,MAX), 
-      (1152921573326323712,MIN,MIN ; 1152921573326323712,MAX,MAX), (1152921779484753920,MIN,MIN ; 1152921779484753920,MAX,MAX), (1152922604118474752,MIN,MIN ; 
-      1152922604118474752,MAX,MAX), (1152925902653358080,MIN,MIN ; 1152925902653358080,MAX,MAX), (1152939096792891392,MIN,MIN ; 1152939096792891392,MAX,MAX), 
-      (1152991873351024640,MIN,MIN ; 1152991873351024640,MAX,MAX), (1153202979583557632,MIN,MIN ; 1153202979583557632,MAX,MAX), (1154047404513689600,MIN,MIN ; 
-      1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,MIN,MIN ; 1170935903116328960,MAX,MAX), 
-      (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,MAX,MAX), (1152921504606846976,MIN,MIN ; 
-      1152921504606846976,MAX,MAX), (1152921504606848893,MIN,MIN ; 1152921504606848893,MAX,MAX), (1152921504606848892,MIN,MIN ; 1152921504606848892,MAX,MAX)
-select id, min, max, st_astext(line_geo) from spatial_point_in_line ignore index(geom_idx_1) where ST_Contains(line_geo, LineString(Point(80, 0), Point(91, 0)));
-id	min	max	st_astext(line_geo)
-2	80	100	LINESTRING(80 0,100 0)

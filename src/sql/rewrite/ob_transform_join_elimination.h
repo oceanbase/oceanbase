@@ -243,7 +243,7 @@ private:
    * @brief trans_table_item
    * 将关联target_table的结构改写为关联source_table
    * 从from item中删除target table
-   * 从partition信息中删除target table
+   * 从partiton信息中删除target table
    * 重构 rel_idx
    * @param stmt
    * @param source_table
@@ -593,7 +593,7 @@ private:
    * @brief trans_semi_table_item
    * 将关联target_table的结构改写为关联source_table
    * 从table items中删除target table
-   * 从partition信息中删除target table
+   * 从partiton信息中删除target table
    * 重构 rel_idx
    * @param stmt
    * @param source_table

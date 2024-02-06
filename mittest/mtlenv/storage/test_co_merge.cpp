@@ -138,8 +138,8 @@ void close_builder_and_prepare_sstable(
   param.master_key_id_ = res.master_key_id_;
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
-  ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
-  ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
+  param.data_block_ids_ = res.data_block_ids_;
+  param.other_block_ids_ = res.other_block_ids_;
   param.nested_size_ = res.nested_size_;
   param.nested_offset_ = res.nested_offset_;
   if (is_major_merge_type(data_store_desc.get_merge_type())) {
@@ -299,7 +299,6 @@ void TestCOMerge::prepare_scan_param(
   iter_param.vectorized_enabled_ = false;
   ASSERT_EQ(OB_SUCCESS,
             store_ctx.init_for_read(ls_id,
-                                    iter_param.tablet_id_,
                                     INT64_MAX, // query_expire_ts
                                     -1, // lock_timeout_us
                                     share::SCN::max_scn()));
@@ -437,7 +436,6 @@ void TestCOMerge::prepare_query_param(const ObVersionRange &version_range)
   iter_param_.vectorized_enabled_ = false;
   ASSERT_EQ(OB_SUCCESS,
             store_ctx_.init_for_read(ls_id,
-                                     iter_param_.tablet_id_,
                                      INT64_MAX, // query_expire_ts
                                      -1, // lock_timeout_us
                                      share::SCN::max_scn()));

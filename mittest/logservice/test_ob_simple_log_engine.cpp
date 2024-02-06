@@ -25,7 +25,6 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
-#include "logservice/palf/log_shared_queue_thread.h"
 #include "logservice/palf/lsn.h"
 #include "share/scn.h"
 #include "logservice/palf/log_io_task.h"
@@ -72,7 +71,6 @@ public:
     ObILogAllocator *alloc_mgr = log_engine_->alloc_mgr_;
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
     LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
-    LogSharedQueueTh *log_shared_queue_th = log_engine_->log_shared_queue_th_;
     LogPlugins *plugins = log_engine_->plugins_;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
@@ -83,7 +81,6 @@ public:
                                 &(leader_.palf_handle_impl_->hot_cache_),
                                 log_rpc,
                                 log_io_worker,
-                                log_shared_queue_th,
                                 plugins,
                                 entry_header,
                                 palf_epoch_,
@@ -435,6 +432,28 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
 }
 
 
+class IOTaskVerify : public LogIOTask {
+public:
+  IOTaskVerify(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0), after_consume_count_(0) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
+  {
+    count_ ++;
+    return OB_SUCCESS;
+  };
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) { return OB_SUCCESS; }
+  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
+  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
+  int64_t get_io_size_() const {return 0;}
+  bool need_purge_throttling_() const {return true;}
+  int init(int64_t palf_id)
+  {
+    palf_id_ = palf_id;
+    return OB_SUCCESS;
+  };
+  int64_t count_;
+  int64_t after_consume_count_;
+};
+
 TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "io_reducer_func");
@@ -498,9 +517,9 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   int64_t prev_log_id_2 = 0;
   int64_t leader_idx_2 = 0;
   PalfHandleImplGuard leader_2;
+	IOTaskCond io_task_cond_2(id_2, log_engine->palf_epoch_);
+  IOTaskVerify io_task_verify_2(id_2, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_2, leader_idx_2, leader_2));
-	IOTaskCond io_task_cond_2(id_2, leader_2.get_palf_handle_impl()->log_engine_.palf_epoch_);
-  IOTaskVerify io_task_verify_2(id_2, leader_2.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
     LogIOWorker *log_io_worker = leader_2.palf_handle_impl_->log_engine_.log_io_worker_;
     // 聚合度为1的忽略
@@ -518,7 +537,6 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     LSN max_lsn_1 = leader_1.palf_handle_impl_->sw_.get_max_lsn();
     const int64_t log_id_2 = leader_2.palf_handle_impl_->sw_.get_max_log_id();
     LSN max_lsn_2 = leader_2.palf_handle_impl_->sw_.get_max_lsn();
-    sleep(1);
     io_task_cond_2.cond_.signal();
     wait_lsn_until_flushed(max_lsn_1, leader_1);
     wait_lsn_until_flushed(max_lsn_2, leader_2);
@@ -568,9 +586,9 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   int64_t leader_idx_3 = 0;
   int64_t prev_log_id_3 = 0;
   PalfHandleImplGuard leader_3;
+	IOTaskCond io_task_cond_3(id_3, log_engine->palf_epoch_);
+  IOTaskVerify io_task_verify_3(id_3, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_3, leader_idx_3, leader_3));
-	IOTaskCond io_task_cond_3(id_3, leader_3.get_palf_handle_impl()->log_engine_.palf_epoch_);
-  IOTaskVerify io_task_verify_3(id_3, leader_3.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
     LogIOWorker *log_io_worker = leader_3.palf_handle_impl_->log_engine_.log_io_worker_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_3));
@@ -616,9 +634,9 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   int64_t leader_idx_4 = 0;
   int64_t prev_log_id_4 = 0;
   PalfHandleImplGuard leader_4;
+	IOTaskCond io_task_cond_4(id_4, log_engine->palf_epoch_);
+  IOTaskVerify io_task_verify_4(id_4, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_4, leader_idx_4, leader_4));
-	IOTaskCond io_task_cond_4(id_4, leader_4.get_palf_handle_impl()->log_engine_.palf_epoch_);
-	IOTaskVerify io_task_verify_4(id_4, leader_4.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
     LogIOWorker *log_io_worker = leader_4.palf_handle_impl_->log_engine_.log_io_worker_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_4));
@@ -638,6 +656,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
     io_task_cond_4.cond_.signal();
     LSN log_tail = leader_4.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
     PALF_LOG(INFO, "after signal", K(max_lsn), K(log_tail));
+    wait_lsn_until_flushed(max_lsn, leader_4);
     sleep(1);
     log_tail = leader_4.palf_handle_impl_->log_engine_.log_storage_.log_tail_;
     PALF_LOG(INFO, "after flused case 4", K(max_lsn), K(log_tail));

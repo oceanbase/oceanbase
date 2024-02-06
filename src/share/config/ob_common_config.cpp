@@ -316,7 +316,6 @@ int ObCommonConfig::add_extra_config(const char *config_str,
     }
     const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
     const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
-    const ObString compatible_cfg(COMPATIBLE);
     auto func = [&]() {
       char *saveptr_one = NULL;
       const char *name = NULL;
@@ -368,16 +367,6 @@ int ObCommonConfig::add_extra_config(const char *config_str,
         } else {
           (*pp_item)->set_version(version);
           LOG_INFO("Load config succ", K(name), K(value));
-          if (0 == compatible_cfg.case_compare(name)) {
-            FLOG_INFO("[COMPATIBLE] load data_version from config file",
-                      KR(ret), "tenant_id", get_tenant_id(),
-                      "version", (*pp_item)->version(),
-                      "value", (*pp_item)->str(),
-                      "value_updated", (*pp_item)->value_updated(),
-                      "dump_version", (*pp_item)->dumped_version(),
-                      "dump_value", (*pp_item)->spfile_str(),
-                      "dump_value_updated", (*pp_item)->dump_value_updated());
-          }
         }
       }
     };
@@ -421,14 +410,12 @@ OB_DEF_SERIALIZE(ObCommonConfig)
   ObConfigContainer::const_iterator it = container_.begin();
   const ObString external_kms_info_cfg(EXTERNAL_KMS_INFO);
   const ObString ssl_external_kms_info_cfg(SSL_EXTERNAL_KMS_INFO);
-  const ObString compatible_cfg(COMPATIBLE);
   HEAP_VAR(char[OB_MAX_CONFIG_VALUE_LEN], external_info_val) {
     external_info_val[0] = '\0';
     for (; OB_SUCC(ret) && it != container_.end(); ++it) {
       if (OB_ISNULL(it->second)) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (it->second->value_updated()
-                 || it->second->dump_value_updated()) {
+      } else if (it->second->value_updated()) {
         if (external_kms_info_cfg.case_compare(it->first.str()) == 0
             || ssl_external_kms_info_cfg.case_compare(it->first.str()) == 0) {
           int64_t hex_pos = 0, hex_c_str_pos = 0;
@@ -443,16 +430,6 @@ OB_DEF_SERIALIZE(ObCommonConfig)
         } else {
           ret = databuff_printf(buf, buf_len, pos, "%s=%s\n",
               it->first.str(), it->second->spfile_str());
-        }
-        if (OB_SUCC(ret) && 0 == compatible_cfg.case_compare(it->first.str())) {
-          FLOG_INFO("[COMPATIBLE] dump data_version",
-                    KR(ret), "tenant_id", get_tenant_id(),
-                    "version", it->second->version(),
-                    "value", it->second->str(),
-                    "value_updated", it->second->value_updated(),
-                    "dump_version", it->second->dumped_version(),
-                    "dump_value", it->second->spfile_str(),
-                    "dump_value_updated", it->second->dump_value_updated());
         }
       }
     } // for
@@ -507,9 +484,7 @@ OB_DEF_SERIALIZE_SIZE(ObCommonConfig)
     for (; OB_SUCC(ret) && it != container_.end(); ++it) {
       MEMSET(kv_str, '\0', OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN + 1);
       int64_t pos = 0;
-      if (OB_NOT_NULL(it->second)
-          && (it->second->value_updated()
-              || it->second->dump_value_updated())) {
+      if (OB_NOT_NULL(it->second) && it->second->value_updated()) {
         if (OB_FAIL(databuff_printf(kv_str, OB_MAX_CONFIG_NAME_LEN + OB_MAX_CONFIG_VALUE_LEN,
                         pos, "%s=%s\n", it->first.str(), it->second->spfile_str()))) {
           LOG_WARN("write data buff failed", K(ret));

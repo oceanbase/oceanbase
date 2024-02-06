@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_COMMOM_COMPRESS_ZLIB_COMPRESSOR_
 #define OCEANBASE_COMMOM_COMPRESS_ZLIB_COMPRESSOR_
 #include "lib/compress/ob_compressor.h"
-#include <zlib.h>
 
 namespace oceanbase
 {

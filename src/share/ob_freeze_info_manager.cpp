@@ -151,67 +151,43 @@ int ObFreezeInfoManager::init(
 }
 
 // reload will acquire latest freeze info from __all_freeze_info.
-int ObFreezeInfoManager::reload(const share::SCN &min_frozen_scn)
-{
-  int ret = OB_SUCCESS;
-  ObSEArray<ObFreezeInfo, 8> freeze_infos;
-  share::SCN latest_snapshot_gc_scn;
-
-  if (OB_FAIL(fetch_new_freeze_info(tenant_id_, min_frozen_scn, *sql_proxy_, freeze_infos, latest_snapshot_gc_scn))) {
-    LOG_WARN("failed to load updated info", K(ret));
-  } else if (OB_FAIL(update_freeze_info(freeze_infos, latest_snapshot_gc_scn))) {
-    LOG_WARN("failed to update freeze info", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    reset_freeze_info();
-  }
-  return ret;
-}
-
-int ObFreezeInfoManager::fetch_new_freeze_info(
-    const int64_t tenant_id,
+int ObFreezeInfoManager::reload(
     const share::SCN &min_frozen_scn,
-    common::ObMySQLProxy &sql_proxy,
-    common::ObIArray<ObFreezeInfo> &freeze_infos,
-    share::SCN &latest_snapshot_gc_scn)
+    const bool reset_on_fail)
 {
   int ret = OB_SUCCESS;
-  ObFreezeInfoProxy freeze_info_proxy(tenant_id);
+  share::SCN latest_snapshot_gc_scn;
+  ObSEArray<ObFreezeInfo, 4> freeze_infos;
+  ObFreezeInfoProxy freeze_info_proxy(tenant_id_);
 
   // 1. get snapshot_gc_scn
   if (OB_FAIL(ObGlobalStatProxy::get_snapshot_gc_scn(
-             sql_proxy, tenant_id, latest_snapshot_gc_scn))) {
-    LOG_WARN("fail to select for update snapshot_gc_scn", KR(ret), K(tenant_id));
+             *sql_proxy_, tenant_id_, latest_snapshot_gc_scn))) {
+    LOG_WARN("fail to select for update snapshot_gc_scn", KR(ret), K_(tenant_id));
   // 2. acquire freeze info in same trans, ensure we can get the latest freeze info
   } else if (OB_FAIL(freeze_info_proxy.get_freeze_info_larger_or_equal_than(
-             sql_proxy, min_frozen_scn, freeze_infos))) {
+             *sql_proxy_, min_frozen_scn, freeze_infos))) {
     LOG_WARN("fail to get freeze info", KR(ret), K(min_frozen_scn));
   } else if (OB_UNLIKELY(freeze_infos.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid frozen status", KR(ret), K(min_frozen_scn));
+  } else if (freeze_infos.count() > 1) {
+    std::sort(freeze_infos.begin(), freeze_infos.end(),
+              [](const ObFreezeInfo &a, const ObFreezeInfo &b)
+                 { return a.frozen_scn_ < b.frozen_scn_; });
   }
-  return ret;
-}
 
-int ObFreezeInfoManager::update_freeze_info(
-    const common::ObIArray<ObFreezeInfo> &freeze_infos,
-    const share::SCN &latest_snapshot_gc_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(freeze_info_.frozen_statuses_.prepare_allocate(freeze_infos.count()))) {
+  if (FAILEDx(freeze_info_.frozen_statuses_.prepare_allocate(freeze_infos.count()))) {
     LOG_WARN("failed to prepare allocate mem for new freeze info", KR(ret), K(freeze_infos), K(freeze_info_));
   } else if (OB_FAIL(freeze_info_.frozen_statuses_.assign(freeze_infos))) {
     LOG_WARN("fail to assign", KR(ret), K(freeze_infos));
-  } else if (freeze_info_.frozen_statuses_.count() > 1) {
-    std::sort(freeze_info_.frozen_statuses_.begin(), freeze_info_.frozen_statuses_.end(),
-              [](const ObFreezeInfo &a, const ObFreezeInfo &b)
-                { return a.frozen_scn_ < b.frozen_scn_; } );
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     freeze_info_.latest_snapshot_gc_scn_ = latest_snapshot_gc_scn;
     LOG_INFO("inner load succ", K(freeze_info_));
+  }
+
+  if (OB_FAIL(ret) && reset_on_fail) {
+    reset_freeze_info();
   }
   return ret;
 }

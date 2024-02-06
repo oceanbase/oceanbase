@@ -16,7 +16,6 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "share/ob_cluster_version.h"
-#include "lib/container/ob_fixed_array.h"
 
 namespace oceanbase
 {
@@ -40,7 +39,6 @@ class ObPhysicalPlan;
 class ObDMLStmt;
 class ObRawExprUniqueSet;
 class ObSQLSessionInfo;
-class ObRawExprFactory;
 
 class ObExprCGCtx
 {
@@ -81,10 +79,9 @@ public:
                  uint32_t frame_idx,
                  uint32_t frame_size,
                  uint32_t zero_init_pos,
-                 uint32_t zero_init_size,
-                 bool use_rich_format)
+                 uint32_t zero_init_size)
       : expr_start_pos_(start_pos),
-        frame_info_(expr_cnt, frame_idx, frame_size, zero_init_pos, zero_init_size, use_rich_format)
+        frame_info_(expr_cnt, frame_idx, frame_size, zero_init_pos, zero_init_size)
     {}
     TO_STRING_KV(K_(expr_start_pos), K_(frame_info));
   public:
@@ -106,8 +103,7 @@ public:
       batch_size_(0),
       rt_question_mark_eval_(false),
       need_flatten_gen_col_(true),
-      cur_cluster_version_(cur_cluster_version),
-      gen_questionmarks_(allocator, param_cnt)
+      cur_cluster_version_(cur_cluster_version)
   {
   }
   virtual ~ObStaticEngineExprCG() {}
@@ -159,8 +155,7 @@ public:
 
   static int generate_partial_expr_frame(const ObPhysicalPlan &plan,
                                          ObExprFrameInfo &partial_expr_frame_info,
-                                         ObIArray<ObRawExpr *> &raw_exprs,
-                                         const bool use_rich_format);
+                                         ObIArray<ObRawExpr *> &raw_exprs);
 
   void set_need_flatten_gen_col(const bool v) { need_flatten_gen_col_ = v; }
 
@@ -321,13 +316,7 @@ private:
 
   inline int64_t get_expr_skip_vector_size(const ObExpr &expr)
   {
-    return expr.is_batch_result() ? ObBitVector::memory_size(batch_size_) : 1;
-  }
-
-  inline int64_t get_expr_bitmap_vector_size(const ObExpr &expr)
-  {
-    int64_t batch_size = expr.is_batch_result() ? batch_size_: 1;
-    return ObBitVector::memory_size(batch_size);
+    return expr.is_batch_result() ? ObBitVector::memory_size(batch_size_) : 0;
   }
   int64_t dynamic_buf_header_size(const ObExpr &expr)
   {
@@ -366,12 +355,7 @@ private:
 
   // total datums size: header + reserved data
   int64_t get_expr_datums_size(const ObExpr &expr) {
-    int64_t size = get_expr_datums_header_size(expr) + reserve_datums_buf_len(expr);
-    if (use_rich_format()) {
-      size += get_rich_format_size(expr);
-    }
-
-    return size;
+    return get_expr_datums_header_size(expr) + reserve_datums_buf_len(expr);
   }
 
   // datums meta/header size vector version.
@@ -381,46 +365,9 @@ private:
   // - EvalFlag(BitVector) instance + BitVector data
   // - SkipBitmap(BitVector) + BitVector data
   int64_t get_expr_datums_header_size(const ObExpr &expr) {
-    int64_t size = get_datums_header_size(expr)
-                   + sizeof(ObEvalInfo)
-                   + get_expr_skip_vector_size(expr) /*skip*/
-                   + get_expr_bitmap_vector_size(expr); /*eval flags*/
-
-    return size;
+    return get_datums_header_size(expr) + sizeof(ObEvalInfo) +
+           2 * get_expr_skip_vector_size(expr);
   }
-
-  int64_t get_vector_header_size() {
-    return sizeof(VectorHeader);
-  }
-
-  // ptrs
-  int64_t get_ptrs_size(const ObExpr &expr) {
-    return expr.is_fixed_length_data_ ? 0 : sizeof(char *) * get_expr_datums_count(expr);
-  }
-
-  // cont dynamic buf header size
-  int64_t cont_dynamic_buf_header_size(const ObExpr &expr) {
-    return expr.is_fixed_length_data_
-           ? 0
-           : sizeof(ObDynReserveBuf);
-  }
-
-  // lens / offset
-  int64_t get_offsets_size(const ObExpr &expr) {
-    return expr.is_fixed_length_data_ ? 0 : sizeof(uint32_t) * (get_expr_datums_count(expr) + 1);
-  }
-
-  int64_t get_rich_format_size(const ObExpr &expr) {
-    int64_t size = 0;
-    size += get_offsets_size(expr);
-    size += get_ptrs_size(expr);
-    size += get_vector_header_size();
-    size += get_expr_bitmap_vector_size(expr); /* null bitmaps*/
-    size += cont_dynamic_buf_header_size(expr);
-
-    return size;
-  }
-
   // datum meta/header size non-vector version.
   // two parts:
   // - datum instance
@@ -459,11 +406,6 @@ private:
 
   int divide_probably_local_exprs(common::ObIArray<ObRawExpr *> &exprs);
 
-  bool use_rich_format() const;
-
-private:
-  int generate_extra_questionmarks(ObRawExprUniqueSet &flattened_raw_exprs, ObRawExprFactory &factory);
-  bool is_dynamic_eval_qm(const ObRawExpr &raw_expr) const;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObStaticEngineExprCG);
@@ -491,7 +433,6 @@ private:
   //is code generate temp expr witch used in table location
   bool need_flatten_gen_col_;
   uint64_t cur_cluster_version_;
-  common::ObFixedArray<ObRawExpr *, common::ObIAllocator> gen_questionmarks_;
 };
 
 } // end namespace sql

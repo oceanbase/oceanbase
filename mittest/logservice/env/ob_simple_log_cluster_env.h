@@ -166,15 +166,6 @@ public:
                                   int64_t &leader_idx,
                                   const bool with_mock_election,
                                   PalfHandleImplGuard &leader);
-  int create_paxos_group_with_arb(const int64_t id,
-                                  palf::PalfLocationCacheCb *loc_cb,
-                                  ObMemberList member_list,
-                                  int64_t member_cnt,
-                                  ObMember arb_member,
-                                  int64_t &arb_replica_idx,
-                                  int64_t &leader_idx,
-                                  const bool with_mock_election,
-                                  PalfHandleImplGuard &leader);
   int create_paxos_group_with_mock_election(const int64_t id,
                                             int64_t &leader_idx,
                                             PalfHandleImplGuard &leader);
@@ -246,7 +237,6 @@ public:
   virtual int advance_base_info(const int64_t id, const PalfBaseInfo &base_info);
   virtual int get_palf_env(const int64_t server_idx, PalfEnv *&palf_env);
   virtual int wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn);
-  virtual int wait_lsn_until_slide(const LSN &lsn, PalfHandleImplGuard &guard);
   virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard);
   //wait until all log task pushed into queue of LogIOWorker
   virtual int wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard);
@@ -268,15 +258,15 @@ private:
 
 class IOTaskCond : public LogIOTask {
 public:
-	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0) {}
-  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final
+	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
   {
     PALF_LOG(INFO, "before cond_wait");
     cond_.wait();
     PALF_LOG(INFO, "after cond_wait");
     return OB_SUCCESS;
   };
-  virtual int after_consume_(IPalfHandleImplGuard &guard) override final
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
   {
     return OB_SUCCESS;
   }
@@ -290,13 +280,12 @@ public:
   virtual int64_t get_io_size_() const {return 0;}
   bool need_purge_throttling_() const {return true;}
   ObCond cond_;
-  int64_t count_;
 };
 
 class IOTaskConsumeCond : public LogIOTask {
 public:
 	IOTaskConsumeCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch) {}
-  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final
+  virtual int do_task_(int tg_id, IPalfEnvImpl *palf_env_impl) override final
   {
     int ret = OB_SUCCESS;
     PALF_LOG(INFO, "do_task_ success");
@@ -305,7 +294,7 @@ public:
     }
     return ret;
   };
-  virtual int after_consume_(IPalfHandleImplGuard &guard) override final
+  virtual int after_consume_(IPalfEnvImpl *palf_env_impl) override final
   {
     PALF_LOG(INFO, "before cond_wait");
     cond_.wait();
@@ -322,28 +311,6 @@ public:
   virtual int64_t get_io_size_() const {return 0;}
   bool need_purge_throttling_() const {return true;}
   ObCond cond_;
-};
-
-class IOTaskVerify : public LogIOTask {
-public:
-  IOTaskVerify(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0), after_consume_count_(0) {}
-  virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard)
-  {
-    count_ ++;
-    return OB_SUCCESS;
-  };
-  virtual int after_consume_(IPalfHandleImplGuard &guard) { return OB_SUCCESS; }
-  virtual LogIOTaskType get_io_task_type_() const { return LogIOTaskType::FLUSH_META_TYPE; }
-  virtual void free_this_(IPalfEnvImpl *impl) {UNUSED(impl);}
-  int64_t get_io_size_() const {return 0;}
-  bool need_purge_throttling_() const {return true;}
-  int init(int64_t palf_id)
-  {
-    palf_id_ = palf_id;
-    return OB_SUCCESS;
-  };
-  int64_t count_;
-  int64_t after_consume_count_;
 };
 } // end namespace unittest
 } // end namespace oceanbase

@@ -79,8 +79,7 @@ private:
           sub_g->set_data(wkb_nosrid);
           sub_g->set_srid(g->get_srid());
         }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(eval_envelope_collection(sub_g, context, tmp_result))) {
+        if (OB_FAIL(eval_envelope_collection(sub_g, context, tmp_result))) {
           LOG_WARN("failed to eval sub geo from collection", K(sub_type), K(ret));
         } else {
           if (result.is_empty() && !tmp_result.is_empty()) {

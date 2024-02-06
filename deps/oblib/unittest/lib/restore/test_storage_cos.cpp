@@ -671,44 +671,6 @@ TEST_F(TestStorageCos, test_util_is_tagging)
   }
 }
 
-TEST_F(TestStorageCos, test_multipartupload)
-{
-  int ret = OB_SUCCESS;
-  if (enable_test_) {
-    ObStorageCosMultiPartWriter multi_upload;
-    ObStorageUtil util;
-    ASSERT_EQ(OB_SUCCESS, util.open(&cos_base));
-
-    const char *tmp_multi_dir = "test_multipartupload";
-    const int64_t content_size = 20 * 1024 * 1024L;//20MB
-    char *content = new char[content_size];
-    memset(content, 'a', content_size);
-
-    // operate before open
-    ASSERT_EQ(OB_COS_ERROR, multi_upload.write(content, content_size));
-
-    const int64_t ts = ObTimeUtility::current_time();
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
-        bucket, dir_name, tmp_multi_dir, ts));
-
-    // operate correctly
-    ASSERT_EQ(OB_SUCCESS, databuff_printf(uri, sizeof(uri), "%s/multipartupload", dir_uri));
-    ASSERT_EQ(OB_SUCCESS, multi_upload.open(uri, &cos_base));
-    ASSERT_EQ(true, multi_upload.is_opened());
-    ASSERT_EQ(OB_SUCCESS, multi_upload.write(content, content_size));
-    ASSERT_EQ(OB_SUCCESS, multi_upload.close());
-
-    // check multipartupload valid
-    ASSERT_EQ(content_size, multi_upload.get_length());
-    bool is_exist = false;
-    ASSERT_EQ(OB_SUCCESS, util.is_exist(uri, is_exist));
-    ASSERT_TRUE(is_exist);
-    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
-
-    delete[] content;
-  }
-}
-
 int main(int argc, char **argv)
 {
   system("rm -f test_storage_cos.log*");

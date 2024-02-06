@@ -17,7 +17,6 @@
 #include "share/object/ob_obj_cast.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -40,7 +39,7 @@ inline int ObExprMd5::calc_result_type1(ObExprResType &type, ObExprResType &str,
   static const int64_t MD5_RES_BIT_LENGTH = 32;
   type.set_varchar();
   type.set_length(MD5_RES_BIT_LENGTH);
-  type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
+  type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
   type.set_collation_level(CS_LEVEL_COERCIBLE);
 
   // str参数总是应该被转换成字符串
@@ -161,15 +160,6 @@ int ObExprMd5::calc_md5(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
         expr_datum.set_string(md5_str);
       }
     }
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprMd5, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

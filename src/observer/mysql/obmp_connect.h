@@ -49,9 +49,6 @@ private:
   int64_t get_database_id();
   int get_conn_id(uint32_t &conn_id) const;
   int get_proxy_conn_id(uint64_t &conn_id) const;
-  int get_client_addr_port(int32_t &client_addr_port) const;
-  int get_client_conn_id(uint32_t &conn_id) const;
-  int get_client_create_time(int64_t &client_create_time) const;
   int get_proxy_sess_create_time(int64_t &sess_create_time) const;
   int get_proxy_capability(uint64_t &cap) const;
   int get_proxy_scramble(ObString &proxy_scramble) const;
@@ -137,7 +134,6 @@ private:
   char user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_name_var_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   int deser_ret_;
-  int32_t client_port_;
 }; // end of class ObMPConnect
 
 } // end of namespace observer

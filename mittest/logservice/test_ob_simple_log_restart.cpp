@@ -418,27 +418,20 @@ TEST_F(TestObSimpleLogClusterRestart, advance_base_lsn_with_restart)
     sleep(2);
     LSN log_tail =
         leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_;
-    int count = (LSN(PALF_META_BLOCK_SIZE) - log_tail)/4096;
-    for (int64_t i = 0; i < count; i++) {
+    for (int64_t i = 0; i < 4096; i++) {
       EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->enable_vote());
     }
-    while (LSN(PALF_META_BLOCK_SIZE) !=
+    while (LSN(4096 * 4096 + log_tail.val_) !=
         leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_)
     {
       sleep(1);
     }
-    sleep(1);
-    EXPECT_EQ(LSN(PALF_META_BLOCK_SIZE), leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
-    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.log_meta_storage_.block_mgr_.switch_next_block(1));
   }
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
-    EXPECT_LT(LSN(PALF_META_BLOCK_SIZE), leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
     EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(LSN(0)));
-    sleep(1);
-    EXPECT_LT(LSN(PALF_META_BLOCK_SIZE) + 4096, leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
   }
 }
 

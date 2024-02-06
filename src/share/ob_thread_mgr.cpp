@@ -17,7 +17,7 @@
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "rootserver/ob_index_builder.h"
 #include "observer/ob_srv_deliver.h"
-#include "observer/ob_startup_accel_task_handler.h"
+#include "observer/ob_server_startup_task_handler.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/ob_arb_srv_deliver.h"
 #endif
@@ -26,7 +26,6 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/fetch_log_engine.h"
 #include "logservice/rcservice/ob_role_change_service.h"
-#include "observer/ob_startup_accel_task_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -36,12 +35,10 @@ namespace share
 {
 void ob_init_create_func()
 {
-  #define TG_DEF(id, name, type, args...)                              \
+  #define TG_DEF(id, name, type, args...)                 \
     lib::create_funcs_[lib::TGDefIDs::id] = []() {                     \
-      TG_##type *ret = OB_NEW(TG_##type, SET_USE_500("tg"), args);     \
-      if (NULL != ret) {                                               \
-        ret->attr_ = {#name, TGType::type};                            \
-      }                                                                \
+      auto ret = OB_NEW(TG_##type, SET_USE_500("tg"), args); \
+      ret->attr_ = {#name, TGType::type};        \
       return ret;                                                      \
     };
   #include "share/ob_thread_define.h"

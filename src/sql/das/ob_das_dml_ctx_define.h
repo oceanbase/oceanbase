@@ -23,10 +23,6 @@
 #include "sql/resolver/dml/ob_hint.h"
 namespace oceanbase
 {
-namespace storage
-{
-class ObDMLBaseParam;
-}
 namespace sql
 {
 typedef common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> ObjMetaFixedArray;
@@ -55,7 +51,6 @@ public:
                        K_(is_ignore),
                        K_(is_batch_stmt),
                        K_(is_insert_up),
-                       K_(is_table_api),
                        K_(tz_info),
                        K_(table_param),
                        K_(encrypt_meta));
@@ -79,9 +74,7 @@ public:
       uint64_t is_ignore_                       : 1;
       uint64_t is_batch_stmt_                   : 1;
       uint64_t is_insert_up_                    : 1;
-      uint64_t is_table_api_                    : 1;
-      uint64_t is_access_mlog_as_master_table_  : 1;
-      uint64_t reserved_                        : 58;
+      uint64_t reserved_                        : 61;
     };
   };
 protected:
@@ -455,7 +448,7 @@ private:
 class ObDASDMLIterator : public common::ObNewRowIterator
 {
 public:
-  static const int64_t DEFAULT_BATCH_SIZE = 1;
+  static const int64_t DEFAULT_BATCH_SIZE = 256;
 public:
   ObDASDMLIterator(const ObDASDMLBaseCtDef *das_ctdef,
                    ObDASWriteBuffer &write_buffer,
@@ -512,38 +505,6 @@ private:
   ObSpatIndexRow *spat_rows_;
   uint32_t spatial_row_idx_;
   int64_t batch_size_;
-};
-
-class ObDASMLogDMLIterator : public ObNewRowIterator
-{
-public:
-  ObDASMLogDMLIterator(
-      const ObTabletID &tablet_id,
-      const storage::ObDMLBaseParam &dml_param,
-      ObNewRowIterator *iter,
-      ObDASOpType op_type)
-    : tablet_id_(tablet_id),
-      dml_param_(dml_param),
-      row_iter_(iter),
-      op_type_(op_type),
-      is_old_row_(false)
-  {
-    if ((DAS_OP_TABLE_UPDATE == op_type_)
-        || (DAS_OP_TABLE_INSERT == op_type_)) {
-      is_old_row_ = true;
-    }
-  }
-  virtual ~ObDASMLogDMLIterator() {}
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
-  virtual void reset() override {}
-
-private:
-  const ObTabletID &tablet_id_;
-  const storage::ObDMLBaseParam &dml_param_;
-  ObNewRowIterator *row_iter_;
-  ObDASOpType op_type_;
-  bool is_old_row_;
 };
 }  // namespace sql
 }  // namespace oceanbase

@@ -20,7 +20,7 @@
 #include "common/ob_role.h"                                     // LEADER
 
 #include "share/inner_table/ob_inner_table_schema_constants.h"  // OB_***_TNAME
-#include "share/schema/ob_schema_struct.h"                      // TenantStatus, ObTenantStatus
+#include "share/schema/ob_schema_struct.h"                      // TenantStatus
 #include "ob_log_instance.h"                                    // TCTX
 #include "ob_log_config.h"                                      // ObLogConfig, TCONF
 #include "ob_log_utils.h"
@@ -195,7 +195,6 @@ int QueryAllTenantStrategy::build_sql_statement(
         "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s", OB_DBA_OB_ACCESS_POINT_TNAME))) {
       LOG_ERROR("build_sql_statement failed for query all_tenant_info in tenant_sync_mode", KR(ret), K(pos), KCSTRING(sql_buf));
     }
-    // should not filter tenant by status because schema_service may launch sql to all tenant
   } else if (OB_FAIL(databuff_printf(sql_buf, mul_statement_buf_len, pos,
       "SELECT DISTINCT TENANT_ID, TENANT_NAME FROM %s WHERE TENANT_TYPE != 'META'", OB_DBA_OB_TENANTS_TNAME))) {
     LOG_ERROR("build_sql_statement failed for query all_tenant_info", KR(ret), K(pos), KCSTRING(sql_buf));

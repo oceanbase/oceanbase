@@ -74,7 +74,6 @@ int ObRowsInfo::ExistHelper::init(const ObRelativeTable &table,
       table_iter_param_.tablet_id_ = table.get_tablet_id();
       table_iter_param_.out_cols_project_ = NULL;
       table_iter_param_.read_info_ = &rowkey_read_info;
-      table_iter_param_.set_tablet_handle(table.get_tablet_handle());
       is_inited_ = true;
     }
   }
@@ -206,12 +205,10 @@ int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRel
         RowsCompare rows_cmp(*datum_utils_, min_key_, true, ret);
         std::sort(rowkeys_.begin(), rowkeys_.end(), rows_cmp);
       }
-      if (OB_SUCC(ret)) {
-        for (int64_t i = 0; i < row_count; i++) {
-          permutation_[rowkeys_[i].row_idx_] = i;
-        }
-        min_key_ = rowkeys_.at(0).marked_rowkey_.get_rowkey();
+      for (int64_t i = 0; i < row_count; i++) {
+        permutation_[rowkeys_[i].row_idx_] = i;
       }
+      min_key_ = rowkeys_.at(0).marked_rowkey_.get_rowkey();
     }
   }
 

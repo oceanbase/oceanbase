@@ -151,7 +151,6 @@ int ObMPStmtPrexecute::before_process()
       uint32_t ps_stmt_checksum = DEFAULT_ITERATION_COUNT;
       ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
       session->set_current_trace_id(ObCurTraceId::get_trace_id());
-      session->init_use_rich_format();
       session->set_proxy_version(get_proxy_version());
       int64_t packet_len = (reinterpret_cast<const ObMySQLRawPacket &>
                                 (req_->get_packet())).get_clen();
@@ -167,8 +166,6 @@ int ObMPStmtPrexecute::before_process()
           if (OB_UNLIKELY(!session->is_valid())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_ERROR("invalid session", K_(sql), K(ret));
-          } else if (OB_FAIL(process_kill_client_session(*session))) {
-            LOG_WARN("client session has been killed", K(ret));
           } else if (OB_UNLIKELY(session->is_zombie())) {
             ret = OB_ERR_SESSION_INTERRUPTED;
             LOG_WARN("session has been killed", K(session->get_session_state()), K_(sql),
@@ -254,9 +251,7 @@ int ObMPStmtPrexecute::before_process()
                                K(ret), K(cli_ret), K(get_retry_ctrl().need_retry()), K(sql_));
                       ret = cli_ret;
                     }
-                    if (OB_FAIL(ret)) {
-                      session->set_session_in_retry(retry_ctrl_.need_retry());
-                    }
+                    session->set_session_in_retry(retry_ctrl_.need_retry());
                   }
                 }
               } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
@@ -301,11 +296,6 @@ int ObMPStmtPrexecute::before_process()
             if (OB_FAIL(request_params(session, pos, ps_stmt_checksum, *allocator_, params_num_))) {
               LOG_WARN("prepare-execute protocol get params request failed", K(ret));
             } else {
-              const bool enable_sql_audit =
-              GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
-              if (!is_pl_stmt(stmt_type_) && enable_sql_audit) {
-                OZ (store_params_value_to_str(*allocator_, *session));
-              }
               PS_DEFENSE_CHECK(4) // exec_mode
               {
                 ObMySQLUtil::get_uint4(pos, exec_mode_);

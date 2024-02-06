@@ -15,7 +15,6 @@
 
 #include "common/log/ob_log_cursor.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
-#include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 
 namespace oceanbase
 {
@@ -104,53 +103,26 @@ public:
   ServerSuperBlockBody body_;
 };
 
-struct ObTenantSnapshotMeta final
-{
-public:
-  ObTenantSnapshotMeta()
-    : ls_meta_entry_(oceanbase::storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK), snapshot_id_()
-  {
-  }
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(ls_meta_entry), K_(snapshot_id));
-  OB_UNIS_VERSION(1);
-public:
-  blocksstable::MacroBlockId ls_meta_entry_;
-  share::ObTenantSnapshotID snapshot_id_;
-};
-
 struct ObTenantSuperBlock final
 {
 public:
-  static const int64_t MAX_SNAPSHOT_NUM = 32;
   static const int64_t MIN_SUPER_BLOCK_VERSION = 0;
   static const int64_t TENANT_SUPER_BLOCK_VERSION_V1 = 1;
   static const int64_t TENANT_SUPER_BLOCK_VERSION = 3;
   ObTenantSuperBlock();
   ObTenantSuperBlock(const uint64_t tenant_id, const bool is_hidden = false);
   ~ObTenantSuperBlock() = default;
-  ObTenantSuperBlock(const ObTenantSuperBlock &other);
-  ObTenantSuperBlock &operator=(const ObTenantSuperBlock &other);
-  ObTenantSuperBlock &operator==(const ObTenantSuperBlock &other) = delete;
-  ObTenantSuperBlock &operator!=(const ObTenantSuperBlock &other) = delete;
-  void copy_snapshots_from(const ObTenantSuperBlock &other);
   void reset();
   bool is_valid() const;
-  int get_snapshot(const share::ObTenantSnapshotID &snapshot_id, ObTenantSnapshotMeta &snapshot) const;
   bool is_old_version() const { return version_ < TENANT_SUPER_BLOCK_VERSION; }
-  int add_snapshot(const ObTenantSnapshotMeta &snapshot);
-  int delete_snapshot(const share::ObTenantSnapshotID &snapshot_id);
-  int check_new_snapshot(const share::ObTenantSnapshotID &snapshot_id) const;
-  bool is_trivial_version() const { return version_ == TENANT_SUPER_BLOCK_VERSION_V1; }
+  bool is_trival_version() const { return version_ == TENANT_SUPER_BLOCK_VERSION_V1; }
 
   TO_STRING_KV(K_(tenant_id),
                K_(replay_start_point),
                K_(ls_meta_entry),
                K_(tablet_meta_entry),
                K_(is_hidden),
-               K_(version),
-               K_(snapshot_cnt));
+               K_(version));
   OB_UNIS_VERSION(TENANT_SUPER_BLOCK_VERSION);
 public:
   uint64_t tenant_id_;
@@ -159,8 +131,6 @@ public:
   blocksstable::MacroBlockId tablet_meta_entry_;
   bool is_hidden_;
   int64_t version_;
-  ObTenantSnapshotMeta tenant_snapshots_[MAX_SNAPSHOT_NUM];
-  int64_t snapshot_cnt_;
 };
 
 #define IS_EMPTY_BLOCK_LIST(entry_block) (entry_block == oceanbase::storage::ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK)

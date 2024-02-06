@@ -269,7 +269,7 @@ TEST_F(ObMonitoringDumpTest, test_get_next_row)
   ObExecContext ctx;
   ObTableScanFake table_scan;
   ObMonitoringDump root(ctx.get_allocator());
-  root.set_flags(ObAllocOpHint::OB_MONITOR_STAT | ObAllocOpHint::OB_MONITOR_TRACING);
+  root.set_flags(ObMonitorHint::OB_MONITOR_STAT | ObMonitorHint::OB_MONITOR_TRACING);
   ObPhysicalPlan physical_plan;
   int64_t op_size = 2;
   ObSQLSessionInfo origin_session;

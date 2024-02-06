@@ -161,15 +161,16 @@ int ObPxSqcAsyncProxy::wait_all() {
   // 1. 在有效时间内获得足够多并且正确的callback结果
   // 2. 超时，ret = OB_TIMEOUT
   // 3. retry一个rpc失败
-  oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_PX_MSG);
   while (return_cb_count_ < sqcs_.count() && OB_SUCC(ret)) {
 
     ObThreadCondGuard guard(cond_);
     // wait for timeout or until notified.
     cond_.wait_us(500);
 
-    if (OB_FAIL(exec_ctx_.fast_check_status())) {
-      LOG_WARN("check status failed", K(ret));
+    if ((phy_plan_ctx_->get_timeout_timestamp() -
+         ObTimeUtility::current_time()) < 0) {
+      // 超过查询计划的timeout，满足退出条件2
+      ret = OB_TIMEOUT;
     }
 
     ARRAY_FOREACH_X(callbacks_, idx, count, OB_SUCC(ret)) {
@@ -249,25 +250,6 @@ void ObPxSqcAsyncProxy::fail_process() {
   LOG_WARN_RET(OB_SUCCESS,
       "async sqc fails, process the callbacks that have not yet got results",
       K(return_cb_count_), K(callbacks_.count()));
-  ARRAY_FOREACH_X(callbacks_, idx, count, true) {
-    ObSqcAsyncCB &callback = *callbacks_.at(idx);
-    {
-      // avoid rpc thread access the callback currently.
-      ObThreadCondGuard guard(callback.get_cond());
-      if (!callback.is_visited() &&
-          !(callback.is_processed() || callback.is_timeout() || callback.is_invalid())) {
-        // unregister async callbacks that have not received response.
-        ObAsyncRespCallback *async_cb = static_cast<ObAsyncRespCallback *>(callback.low_level_cb_);
-        uint64_t gtid = async_cb->gtid_;
-        uint32_t pkt_id = async_cb->pkt_id_;
-        int err = 0;
-        if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
-          int ret = tranlate_to_ob_error(err);
-          LOG_WARN("terminate pkt failed", K(ret), K(err));
-        }
-      }
-    }
-  }
   while (return_cb_count_ < callbacks_.count()) {
     ObThreadCondGuard guard(cond_);
     ARRAY_FOREACH_X(callbacks_, idx, count, true) {

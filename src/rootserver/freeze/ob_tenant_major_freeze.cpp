@@ -288,15 +288,14 @@ int ObTenantMajorFreeze::clear_merge_error()
 }
 
 int ObTenantMajorFreeze::get_uncompacted_tablets(
-    ObArray<ObTabletReplica> &uncompacted_tablets,
-    ObArray<uint64_t> &uncompacted_table_ids) const
+    ObArray<ObTabletReplica> &uncompacted_tablets) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
-    if (OB_FAIL(merge_scheduler_.get_uncompacted_tablets(uncompacted_tablets, uncompacted_table_ids))) {
+    if (OB_FAIL(merge_scheduler_.get_uncompacted_tablets(uncompacted_tablets))) {
       LOG_WARN("fail to get uncompacted tablets", KR(ret), K_(tenant_id));
     }
   }

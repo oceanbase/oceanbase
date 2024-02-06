@@ -21,7 +21,7 @@
 #include "storage/access/ob_table_access_param.h"
 #include "storage/access/ob_table_access_context.h"
 #include "storage/compaction/ob_index_block_micro_iterator.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/access/ob_table_access_param.h"
@@ -124,7 +124,7 @@ public:
   virtual int multi_version_compare(const ObPartitionMergeIter &other, int &cmp_ret)
   { UNUSEDx(other, cmp_ret); return OB_NOT_SUPPORTED;}
   virtual OB_INLINE const storage::ObITable *get_table() const override { return table_; }
-  virtual OB_INLINE bool is_rowkey_first_row_already_output() { return is_rowkey_first_row_already_output_; }
+  virtual OB_INLINE bool is_rowkey_first_row_already_output() { return is_rowkey_first_row_reused_; }
   virtual OB_INLINE bool is_rowkey_shadow_row_already_output() { return is_rowkey_shadow_row_reused_; }
 
   OB_INLINE bool is_base_iter() const { return is_base_iter_; }
@@ -155,7 +155,7 @@ public:
 
   INHERIT_TO_STRING_KV("ObMergeIter", ObMergeIter, K_(tablet_id), K_(iter_end), K_(schema_rowkey_column_cnt), K_(schema_version), K_(merge_range),
       KPC(table_), K_(store_ctx), KPC_(read_info), KPC(row_iter_), K_(iter_row_count), KPC(curr_row_), K_(is_inited),
-      K_(iter_row_id), K_(last_macro_block_reused), K_(is_rowkey_first_row_already_output), K_(is_base_iter), K(access_context_));
+      K_(iter_row_id), K_(last_macro_block_reused), K_(is_rowkey_first_row_reused), K_(is_base_iter), K(access_context_));
 protected:
   virtual bool inner_check(const ObMergeParameter &merge_param) = 0;
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;
@@ -185,7 +185,7 @@ protected:
   bool iter_end_;
   common::ObIAllocator &allocator_;
   bool last_macro_block_reused_;
-  bool is_rowkey_first_row_already_output_;
+  bool is_rowkey_first_row_reused_;
   bool is_rowkey_shadow_row_reused_;
   bool is_reserve_mode_;
 };

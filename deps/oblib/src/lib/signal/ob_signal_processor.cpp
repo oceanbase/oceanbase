@@ -31,7 +31,7 @@ ObSigBTOnlyProcessor::ObSigBTOnlyProcessor()
 {
   char *buf = filename_;
   int64_t len = sizeof(filename_);
-  int64_t pos = lnprintf(buf, len, "stack.%d.", getpid());
+  int64_t pos = safe_snprintf(buf, len, "stack.%d.", getpid());
   int64_t count = 0;
   safe_current_datetime_str(buf + pos, len - pos, count);
   pos += count;
@@ -63,7 +63,7 @@ int ObSigBTOnlyProcessor::prepare()
   char tname[16];
   prctl(PR_GET_NAME, tname);
   int64_t count = 0;
-  count = lnprintf(buf_ + pos_, len - pos_, "tid: %ld, tname: %s, lbt: ", tid, tname);
+  count = safe_snprintf(buf_ + pos_, len - pos_, "tid: %ld, tname: %s, lbt: ", tid, tname);
   pos_ += count;
 #ifdef __x86_64__
   safe_backtrace(buf_ + pos_, len - pos_, &count);
@@ -91,7 +91,7 @@ int ObSigBTSQLProcessor::prepare()
     // TODO: save sql_
     int64_t len = sizeof(buf_) - 1;
     pos_--;
-    int64_t count = lnprintf(buf_ + pos_, len - pos_, ", sql: TODO");
+    int64_t count = safe_snprintf(buf_ + pos_, len - pos_, ", sql: TODO");
     pos_ += count;
     buf_[pos_++] = '\n';
   }

@@ -86,16 +86,6 @@ int64_t get_tenant_memory_hold(const uint64_t tenant_id, const uint64_t ctx_id)
   return bytes;
 }
 
-int64_t get_tenant_cache_hold(uint64_t tenant_id)
-{
-  int64_t bytes = 0;
-  ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
-  if (!OB_ISNULL(allocator)) {
-    bytes = allocator->get_tenant_cache_hold(tenant_id);
-  }
-  return bytes;
-}
-
 int64_t get_tenant_memory_remain(uint64_t tenant_id)
 {
   int64_t bytes = 0;

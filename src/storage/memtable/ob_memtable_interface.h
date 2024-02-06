@@ -40,7 +40,7 @@ class ObTransID;
 }
 namespace memtable
 {
-class ObTxFillRedoCtx;
+
 class ObRedoLogSubmitHelper;
 class ObMemtableCtxCbAllocator;
 
@@ -83,7 +83,11 @@ public:
   VIRTUAL_TO_STRING_KV("", "");
 public:
   // return OB_AGAIN/OB_SUCCESS
-  virtual int fill_redo_log(ObTxFillRedoCtx &ctx) = 0;
+  virtual int fill_redo_log(char *buf,
+                            const int64_t buf_len,
+                            int64_t &buf_pos,
+                            ObRedoLogSubmitHelper &helper,
+                            const bool log_for_lock_node = true) = 0;
   common::ActiveResource resource_link_;
 };
 
@@ -148,6 +152,7 @@ public:
       storage::ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey,
       blocksstable::ObDatumRow &row) = 0;
+
   virtual int64_t get_frozen_trans_version() { return 0; }
   virtual int major_freeze(const common::ObVersion &version)
   { UNUSED(version); return common::OB_SUCCESS; }

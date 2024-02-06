@@ -713,7 +713,6 @@ int ObDataCheckpoint::finish_freeze(ObFreezeCheckpoint *ob_freeze_checkpoint)
           }
           break;
         case PREPARE:
-        case OUT:
           break;
         case LS_FROZEN:
           if (OB_FAIL(transfer_from_ls_frozen_to_prepare_without_src_lock_(ob_freeze_checkpoint))) {

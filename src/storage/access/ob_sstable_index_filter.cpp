@@ -73,7 +73,7 @@ int ObSSTableIndexFilter::check_range(
         LOG_WARN("Fail to do filter by skipping index", K(ret), K(index_info));
       } else {
         can_use_skipping_index_filter =
-          (can_use_skipping_index_filter || node.filter_->is_filter_constant());
+          (can_use_skipping_index_filter || node.is_skipping_index_used_);
       }
     }
     if (OB_SUCC(ret) && can_use_skipping_index_filter) {
@@ -85,8 +85,7 @@ int ObSSTableIndexFilter::check_range(
         for (int64_t i = 0; OB_SUCC(ret) && i < skipping_filter_nodes_.count(); ++i) {
           ObSkippingFilterNode &node = skipping_filter_nodes_[i];
           if (node.filter_->is_filter_constant()) {
-            if (!node.is_already_determinate_ &&
-                OB_FAIL(index_info.add_skipping_filter_result(node.filter_))) {
+            if (node.is_skipping_index_used_ && OB_FAIL(index_info.add_skipping_filter_result(node.filter_))) {
               LOG_WARN("Fail to add skipping filter result", K(ret), K(index_info));
             }
             node.filter_->set_filter_uncertain();
@@ -105,13 +104,12 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  node.is_already_determinate_ = false;
+  node.is_skipping_index_used_ = false;
   if (OB_UNLIKELY(nullptr == node.filter_ || 1 != node.filter_->get_col_offsets().count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected filter in skipping filter node", K(ret), KPC_(node.filter));
   } else if (index_info.apply_skipping_filter_result(node.filter_)) {
     // There is no need to check skipping index because filter result is contant already.
-    node.is_already_determinate_ = true;
   } else {
     auto *white_filter = static_cast<sql::ObWhiteFilterExecutor *>(node.filter_);
     const uint32_t col_offset = white_filter->get_col_offsets(is_cg_).at(0);
@@ -124,6 +122,8 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
                                                                   *white_filter,
                                                                   allocator))) {
       LOG_WARN("Fail to falsifiable pushdown filter", K(ret), K(white_filter));
+    } else {
+      node.is_skipping_index_used_ = white_filter->is_filter_constant();
     }
   }
   return ret;
@@ -155,6 +155,7 @@ int ObSSTableIndexFilter::extract_skipping_filter_from_tree(
     sql::ObPushdownFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
+  // We maybe use skipping index for black filter in the future, such as like('abc%'), a + b > 3.
   if (filter.is_filter_white_node()) {
     auto &white_filter = static_cast<sql::ObWhiteFilterExecutor &>(filter);
     IndexList index_list;

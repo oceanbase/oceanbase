@@ -493,7 +493,7 @@ int ObCOPrefetcher::ObCOIndexTreeLevelHandle::forward(
     int8_t fetch_idx = fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH;
     ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
     if (OB_FAIL(index_block_read_handles_[fetch_idx].data_handle_.get_micro_block_data(nullptr, index_block_, false))) {
-      LOG_WARN("Fail to get index block data", K(ret), KPC(this), K(index_block_), K(fetch_idx_), K(prefetch_idx_));
+      LOG_WARN("Fail to get index block data", K(ret), KPC(this));
     } else if (index_info.is_get()) {
       if (OB_FAIL(index_scanner_.open(
           index_info.get_macro_id(),

@@ -32,9 +32,7 @@ public:
   ObTableDirectInsertCtx()
     : load_exec_ctx_(nullptr),
       table_load_instance_(nullptr),
-      is_inited_(false),
-      is_direct_(false),
-      is_online_gather_statistics_(false) {}
+      is_inited_(false) {}
   ~ObTableDirectInsertCtx();
   TO_STRING_KV(K_(is_inited));
 public:
@@ -42,17 +40,6 @@ public:
   int commit();
   int finish();
   void destroy();
-
-  bool get_is_direct() const { return is_direct_; }
-  void set_is_direct(bool is_direct) { is_direct_ = is_direct; }
-  bool get_is_online_gather_statistics() const {
-    return is_online_gather_statistics_;
-  }
-
-  void set_is_online_gather_statistics(const bool is_online_gather_statistics) {
-    is_online_gather_statistics_ = is_online_gather_statistics;
-  }
-
 private:
   int init_store_column_idxs(const uint64_t tenant_id, const uint64_t table_id,
                              common::ObIArray<int64_t> &store_column_idxs);
@@ -60,8 +47,6 @@ private:
   observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;
-  bool is_direct_; //indict whether the plan is direct load plan including insert into append and load data direct
-  bool is_online_gather_statistics_;
 };
 } // namespace observer
 } // namespace oceanbase

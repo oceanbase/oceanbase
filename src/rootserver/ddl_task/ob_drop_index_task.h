@@ -28,13 +28,11 @@ public:
   int init(
       const uint64_t tenant_id,
       const int64_t task_id,
-      const share::ObDDLType &ddl_type,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       const int64_t schema_version,
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
-      const int32_t sub_task_trace_id,
       const obrpc::ObDropIndexArg &drop_index_arg);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;

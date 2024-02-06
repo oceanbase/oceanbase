@@ -502,14 +502,11 @@ int ObServerTraceMap::get_servers_by_status(
   return ret;
 }
 
-int ObServerTraceMap::get_min_server_version(
-    char min_server_version[OB_SERVER_VERSION_LENGTH],
-    uint64_t &min_observer_version)
+int ObServerTraceMap::get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH])
 {
   int ret = OB_SUCCESS;
   ObZone zone; // empty zone, get all server statuses
   ObArray<ObServerInfoInTable> servers_info;
-  min_observer_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("server trace map has not inited", KR(ret));
@@ -542,7 +539,6 @@ int ObServerTraceMap::get_min_server_version(
           MEMCPY(min_server_version, version, len);
           min_server_version[len] = '\0';
           cur_min_version = version_parser.get_cluster_version();
-          min_observer_version = cur_min_version;
         }
       }
       if (OB_SUCC(ret) && UINT64_MAX == cur_min_version) {
@@ -566,9 +562,6 @@ int ObServerTraceMap::refresh()
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, servers_info))) {
     LOG_WARN("fail to get servers_info", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_UNLIKELY(servers_info.count() <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("read nothing in table", KR(ret), K(servers_info));
   } else {
     SpinWLockGuard guard(lock_);
     // reuse memory
@@ -582,7 +575,6 @@ int ObServerTraceMap::refresh()
     }
     if (OB_SUCC(ret) && !has_build_) {
       has_build_ = true;
-      FLOG_INFO("server tracer has built", KR(ret), K(has_build_), K(server_info_arr_));
     }
   }
   return ret;
@@ -774,11 +766,9 @@ int ObAllServerTracer::get_servers_by_status(
   return trace_map_.get_servers_by_status(zone, alive_server_list, not_alive_server_list);
 }
 
-int ObAllServerTracer::get_min_server_version(
-    char min_server_version[OB_SERVER_VERSION_LENGTH],
-    uint64_t &min_observer_version)
+int ObAllServerTracer::get_min_server_version(char min_server_version[OB_SERVER_VERSION_LENGTH])
 {
-  return trace_map_.get_min_server_version(min_server_version, min_observer_version);
+  return trace_map_.get_min_server_version(min_server_version);
 }
 
 bool ObAllServerTracer::has_build() const

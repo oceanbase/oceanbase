@@ -16,7 +16,6 @@
 #include "rootserver/ob_root_service.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "share/ob_ddl_common.h"
-#include "share/ob_ddl_sim_point.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/location_cache/ob_location_service.h"
 
@@ -31,8 +30,6 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(param));
-  } else if (OB_FAIL(DDL_SIM(param.tenant_id_, param.task_id_, SINGLE_REPLICA_EXECUTOR_BUILD_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(param.tenant_id_), K(param.task_id_));
   } else {
     ObSpinLockGuard guard(lock_);
     tenant_id_ = param.tenant_id_;
@@ -82,23 +79,11 @@ int ObDDLSingleReplicaExecutor::build(const ObDDLSingleReplicaExecutorParam &par
       }
     }
   }
-  char table_id_buffer[256];
-  snprintf(table_id_buffer, sizeof(table_id_buffer), "dest_table_id:%ld, source_table_id:%ld", dest_table_id_, source_table_id_);
-  ROOTSERVICE_EVENT_ADD("ddl scheduler", "build single replica",
-    "tenant_id",tenant_id_,
-    "ret", ret,
-    "trace_id", *ObCurTraceId::get_trace_id(),
-    K_(task_id),
-    "type", type_,
-    K_(schema_version),
-    table_id_buffer);
   if (OB_SUCC(ret)) {
-    LOG_INFO("start to schedule task", K(source_tablet_ids_.count()), K(dest_table_id_), "ddl_event_info", ObDDLEventInfo());
+    LOG_INFO("start to schedule task", K(source_tablet_ids_.count()), K(dest_table_id_));
     if (OB_FAIL(schedule_task())) {
       LOG_WARN("fail to schedule tasks", K(ret));
     }
-  } else {
-    LOG_INFO("fail to build single replica task", K(ret), K(dest_table_id_), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }
@@ -111,8 +96,6 @@ int ObDDLSingleReplicaExecutor::schedule_task()
   if (OB_ISNULL(rpc_proxy) || OB_ISNULL(location_service)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(rpc_proxy), KP(location_service));
-  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, SINGLE_REPLICA_EXECUTOR_SCHEDULE_TASK_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     ObDDLBuildSingleReplicaRequestProxy proxy(*rpc_proxy,
         &obrpc::ObSrvRpcProxy::build_ddl_single_replica_request);
@@ -189,18 +172,7 @@ int ObDDLSingleReplicaExecutor::schedule_task()
       } else if (OB_FAIL(proxy.call(dest_leader_addr, rpc_timeout, dest_tenant_id_, arg))) {
         LOG_WARN("fail to send rpc", K(ret), K(rpc_timeout));
       } else {
-        LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr), "ddl_event_info", ObDDLEventInfo());
-      char table_id_buffer[256];
-      snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, dest_table_id:%ld",
-                source_table_id_, dest_table_id_);
-      ROOTSERVICE_EVENT_ADD("ddl scheduler", "schedule single replica task",
-        "tenant_id", dest_tenant_id_,
-        "ret", ret,
-        "trace_id", *ObCurTraceId::get_trace_id(),
-        K_(task_id),
-        "table_id", table_id_buffer,
-        "dest_leader_addr", dest_leader_addr,
-        orig_leader_addr);
+        LOG_INFO("send build single replica request", K(arg), K(dest_leader_addr));
       }
     }
     if (OB_TMP_FAIL(proxy.wait_all(ret_array))) {

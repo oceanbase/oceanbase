@@ -222,13 +222,10 @@ int ObExprRegexp::eval_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       int64_t start_pos = 1;
       bool is_case_sensitive = ObCharset::is_bin_sort(expr.args_[0]->datum_meta_.cs_type_);
       ObString text_utf16;
-      ObExprRegexpSessionVariables regexp_vars;
       if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, is_case_sensitive, flags))) {
         LOG_WARN("failed to get regexp flags", K(ret));
-      } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_regexp_session_vars(regexp_vars))) {
-        LOG_WARN("fail to get regexp");
       } else if (OB_FAIL(regex_ctx->init(reusable ? ctx.exec_ctx_.get_allocator() : tmp_alloc,
-                                         regexp_vars,
+                                         ctx.exec_ctx_.get_my_session(),
                                          pattern->get_string(), flags, reusable, expr.args_[1]->datum_meta_.cs_type_))) {
         LOG_WARN("init regex context failed", K(ret), K(pattern->get_string()));
       } else if (expr.args_[0]->datum_meta_.cs_type_ == CS_TYPE_UTF8MB4_BIN ||

@@ -80,7 +80,7 @@ public:
 };
 
 typedef ObDList<ObTableLockOpLinkNode> ObTableLockOpList;
-class ObOBJLock : public share::ObLightHashLink<ObOBJLock>
+class ObOBJLock : public ObTransHashLink<ObOBJLock>
 {
 public:
   ObOBJLock(const ObLockID &lock_id);
@@ -298,7 +298,7 @@ public:
 
 class ObOBJLockMap
 {
-  typedef share::ObLightHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc, common::SpinRWLock, 1 << 10> Map;
+  typedef ObTransHashMap<ObLockID, ObOBJLock, ObOBJLockAlloc, common::SpinRWLock, 1 << 10> Map;
 public:
   ObOBJLockMap() :
       lock_map_(),

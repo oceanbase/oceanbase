@@ -24,12 +24,12 @@ namespace blocksstable
 class ObIColAggregator
 {
 public:
-  ObIColAggregator() : col_desc_(), result_(nullptr), can_aggregate_(true) {}
+  ObIColAggregator() : col_desc_(), can_aggregate_(true) {}
   virtual ~ObIColAggregator() {}
 
   virtual int init(const ObColDesc &col_desc, ObStorageDatum &result) = 0;
   virtual void reset() = 0;
-  virtual void reuse();
+  virtual void reuse() = 0;
   virtual int eval(const ObStorageDatum &datum, const bool is_data) = 0;
   virtual int get_result(const ObStorageDatum *&result) = 0;
   VIRTUAL_TO_STRING_KV(K_(can_aggregate));
@@ -47,14 +47,13 @@ protected:
   }
 protected:
   ObColDesc col_desc_;
-  ObStorageDatum *result_;
   bool can_aggregate_;
 };
 
 class ObColNullCountAggregator : public ObIColAggregator
 {
 public:
-  ObColNullCountAggregator() : null_count_(0) {}
+  ObColNullCountAggregator() : null_count_(0), result_(nullptr) {}
   virtual ~ObColNullCountAggregator() {}
 
   int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
@@ -64,13 +63,14 @@ public:
   int get_result(const ObStorageDatum *&result) override;
 private:
   int64_t null_count_;
+  ObStorageDatum *result_;
   DISALLOW_COPY_AND_ASSIGN(ObColNullCountAggregator);
 };
 
 class ObColMaxAggregator : public ObIColAggregator
 {
 public:
-  ObColMaxAggregator() : cmp_func_(nullptr) {}
+  ObColMaxAggregator() : cmp_func_(nullptr), result_(nullptr) {}
   virtual ~ObColMaxAggregator() {}
 
   int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
@@ -80,13 +80,14 @@ public:
   int get_result(const ObStorageDatum *&result) override;
 private:
   common::ObDatumCmpFuncType cmp_func_;
+  ObStorageDatum *result_;
   DISALLOW_COPY_AND_ASSIGN(ObColMaxAggregator);
 };
 
 class ObColMinAggregator : public ObIColAggregator
 {
 public:
-  ObColMinAggregator() : cmp_func_(nullptr) {}
+  ObColMinAggregator() : cmp_func_(nullptr), result_(nullptr) {}
   virtual ~ObColMinAggregator() {}
 
   int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
@@ -96,36 +97,8 @@ public:
   int get_result(const ObStorageDatum *&result) override;
 private:
   common::ObDatumCmpFuncType cmp_func_;
+  ObStorageDatum *result_;
   DISALLOW_COPY_AND_ASSIGN(ObColMinAggregator);
-};
-
-class ObColSumAggregator : public ObIColAggregator
-{
-typedef int (ObColSumAggregator::*ObColSumAggEvalFuncCType)(const common::ObDatum &datum);
-public:
-  ObColSumAggregator() : eval_func_(nullptr) {}
-  virtual ~ObColSumAggregator() {}
-  int init(const ObColDesc &col_desc, ObStorageDatum &result) override;
-  void reset() override { new (this) ObColSumAggregator(); }
-  void reuse() override;
-  int eval(const ObStorageDatum &datum, const bool is_data) override;
-  int get_result(const ObStorageDatum *&result) override;
-private:
-  // eval
-  int choose_eval_func(const bool is_data);
-  int inner_eval_number(const number::ObNumber &nmb);
-  int eval_int_number(const common::ObDatum &datum);
-  int eval_uint_number(const common::ObDatum &datum);
-  int eval_decimal_int_number(const common::ObDatum &datum);
-  int eval_number(const common::ObDatum &datum);
-  int eval_float(const common::ObDatum &datum);
-  int eval_double(const common::ObDatum &datum);
-
-  // eval float
-
-private:
-  ObColSumAggEvalFuncCType eval_func_;
-  DISALLOW_COPY_AND_ASSIGN(ObColSumAggregator);
 };
 
 class ObSkipIndexAggregator final
@@ -147,7 +120,7 @@ public:
   // Aggregate with datum row
   int eval(const ObDatumRow &datum_row);
   // Aggregate with serialized agg row
-  int eval(const char *buf, const int64_t buf_size, const int64_t row_count);
+  int eval(const char *buf, const int64_t buf_size);
   // Generate aggregated row for serialization
   int get_aggregated_row(const ObDatumRow *&aggregated_row);
   int64_t get_max_agg_size() { return max_agg_size_; }

@@ -47,7 +47,7 @@ public:
 
   int init(const common::ObObjectStorageInfo *storage_info);
   void reset();
-  int create_cos_handle(const bool check_md5);
+  int create_cos_handle();
   void destroy_cos_handle();
   qcloud_cos::ObCosWrapper::Handle *get_ptr() { return handle_; }
 
@@ -60,9 +60,6 @@ public:
 
   int set_delete_mode(const char *parameter);
   int64_t get_delete_mode() const { return delete_mode_; }
-
-  void *alloc_mem(size_t size);
-  void free_mem(void *addr);
 
 private:
   bool is_inited_;

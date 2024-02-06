@@ -32,7 +32,7 @@ public:
   ObLinkedMacroBlockReader(const ObLinkedMacroBlockReader &) = delete;
   ObLinkedMacroBlockReader &operator=(const ObLinkedMacroBlockReader &) = delete;
 
-  int init(const blocksstable::MacroBlockId &entry_block, const ObMemAttr &mem_attr);
+  int init(const blocksstable::MacroBlockId &entry_block);
   int iter_read_block(char *&buf, int64_t &buf_len, blocksstable::MacroBlockId &block_id);
   void reset();
   ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();
@@ -69,7 +69,7 @@ public:
   ObLinkedMacroBlockItemReader(const ObLinkedMacroBlockItemReader &) = delete;
   ObLinkedMacroBlockItemReader &operator=(const ObLinkedMacroBlockItemReader &) = delete;
 
-  int init(const blocksstable::MacroBlockId &entry_block, const ObMemAttr &mem_attr);
+  int init(const blocksstable::MacroBlockId &entry_block);
   int get_next_item(char *&item_buf, int64_t &item_buf_len, ObMetaDiskAddr &addr);
   void reset();
   common::ObIArray<blocksstable::MacroBlockId> &get_meta_block_list();

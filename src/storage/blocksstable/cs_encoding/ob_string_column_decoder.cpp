@@ -16,7 +16,6 @@
 #include "ob_integer_stream_decoder.h"
 #include "ob_cs_encoding_util.h"
 #include "ob_cs_decoding_util.h"
-#include "ob_string_stream_vector_decoder.h"
 
 namespace oceanbase
 {
@@ -72,23 +71,6 @@ int ObStringColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
     convert_func(string_ctx, string_ctx.str_data_, *string_ctx.str_ctx_,
         string_ctx.offset_data_, nullptr/*ref_data*/, row_ids, row_cap, datums);
   }
-  return ret;
-}
-
-int ObStringColumnDecoder::decode_vector(
-    const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObStringColumnDecoderCtx &string_ctx = ctx.string_ctx_;
-  ObStringStreamVecDecoder::StrVecDecoderCtx vec_decoder_ctx(
-    string_ctx.str_data_, string_ctx.str_ctx_, string_ctx.offset_data_, string_ctx.offset_ctx_, string_ctx.need_copy_);
-
-  if (OB_FAIL(ObStringStreamVecDecoder::decode_vector(
-    string_ctx, vec_decoder_ctx, nullptr, ObVecDecodeRefWidth::VDRW_NOT_REF, vector_ctx))) {
-    LOG_WARN("fail to decode_vector", K(ret), K(vec_decoder_ctx), K(vector_ctx));
-  }
-  return ret;
-
   return ret;
 }
 
@@ -181,10 +163,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const char *start = ctx.str_data_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-    if (OB_UNLIKELY(!op_handle.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(op_handle));
-    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
       row_id = i + row_start;
       if (0 == row_id) {
@@ -220,10 +199,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const char *start = ctx.str_data_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-    if (OB_UNLIKELY(!op_handle.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(op_handle));
-    }
+
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       if (ObCSDecodingUtil::test_bit(ctx.null_bitmap_, row_id)) {
@@ -263,11 +239,7 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
 
-    if (OB_UNLIKELY(!op_handle.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(op_handle));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
+    for (int64_t i = 0; i < row_count; ++i) {
       row_id = i + row_start;
       if (0 == row_id) {
         cur_start = start;
@@ -311,10 +283,6 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
 
-    if (OB_UNLIKELY(!op_handle.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(op_handle));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       cur_start = start + row_id * str_len;
@@ -347,10 +315,7 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
     const int64_t str_len = ctx.str_ctx_->meta_.fixed_str_len_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-    if (OB_UNLIKELY(!op_handle.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), K(op_handle));
-    }
+
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       if (ObCSDecodingUtil::test_bit(ctx.null_bitmap_, row_id)) {
@@ -402,6 +367,8 @@ int ObStringColumnDecoder::pushdown_operator(
   if (OB_UNLIKELY(row_cnt < 1 || row_cnt != result_bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(string_ctx), K(result_bitmap.size()));
+  } else if (!GCONF.enable_cs_encoding_filter) {
+    ret = OB_NOT_SUPPORTED;
   } else {
     const int64_t row_start = pd_filter_info.start_;
     const int64_t row_count = pd_filter_info.count_;
@@ -449,7 +416,7 @@ int ObStringColumnDecoder::pushdown_operator(
         LOG_WARN("Unexpected operation type", KR(ret), K(op_type));
       }
     }
-    LOG_TRACE("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
+    LOG_DEBUG("string white filter pushdown", K(ret), "string_ctx", col_ctx.string_ctx_,
         K(filter.get_op_type()), K(pd_filter_info), K(result_bitmap.popcnt()));
   }
   return ret;

@@ -70,11 +70,6 @@ int ObDestRoundCheckpointer::init(ObArchiveRoundHandler *round_handler, const Pi
   return ret;
 }
 
-void ObDestRoundCheckpointer::set_allow_force_stop()
-{
-  allow_force_stop_ = true;
-  LOG_INFO("set allow force stop");
-}
 
 int ObDestRoundCheckpointer::checkpoint(const ObTenantArchiveRoundAttr &round_info, const ObDestRoundSummary &summary)
 {
@@ -273,15 +268,8 @@ int ObDestRoundCheckpointer::checkpoint_(const ObTenantArchiveRoundAttr &old_rou
   if (OB_FAIL(generate_pieces_(old_round_info, summary, result))) {
     LOG_WARN("failed to generate pieces", K(ret), K(old_round_info), K(summary));
   } else if (OB_FAIL(round_checkpoint_cb_(round_handler_->get_sql_proxy(), old_round_info, result.new_round_info_))) {
-    if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
-      ret = OB_SUCCESS;
-      LOG_INFO("allow_force_stop is set, ignore round_checkpoint_cb error", K(old_round_info), K(summary), K(result));
-    } else {
-      LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
-    }
-  }
-
-  if (FAILEDx(fill_generated_pieces_(result, pieces))){
+    LOG_WARN("failed to call round_checkpoint_cb", K(ret), K(old_round_info), K(summary), K(result));
+  } else if (OB_FAIL(fill_generated_pieces_(result, pieces))){
     LOG_WARN("failed to fill generated pieces", K(ret), K(old_round_info), K(summary), K(result));
   } else if (OB_FAIL(round_handler_->checkpoint_to(old_round_info, result.new_round_info_, pieces))) {
     LOG_WARN("failed to checkpoint", K(ret), K(old_round_info), K(summary), K(result));
@@ -315,15 +303,8 @@ int ObDestRoundCheckpointer::generate_pieces_(const ObTenantArchiveRoundAttr &ol
       if (OB_FAIL(generate_one_piece_(old_round_info, result.new_round_info_, summary, piece_id, piece))) {
         LOG_WARN("failed to generate one piece", K(ret), K(old_round_info), K(result), K(summary), K(piece_id));
       } else if (OB_FAIL(piece_generated_cb_(round_handler_->get_sql_proxy(), old_round_info, result, piece))) {
-        if (result.new_round_info_.state_.is_stop() && allow_force_stop_) {
-          ret = OB_SUCCESS;
-          LOG_INFO("allow_force_stop is set, ignore piece_generated_cb_ error", K(old_round_info), K(piece));
-        } else {
-          LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
-        }
-      }
-
-      if (FAILEDx(result.piece_list_.push_back(piece))) {
+        LOG_WARN("call piece_generated_cb_ failed", K(ret), K(old_round_info), K(piece));
+      } else if (OB_FAIL(result.piece_list_.push_back(piece))) {
         LOG_WARN("failed to push back piece", K(ret), K(result), K(piece));
       } else if (piece.piece_info_.status_.is_frozen()) {
         frozen_input_bytes += piece.piece_info_.input_bytes_;

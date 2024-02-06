@@ -68,7 +68,6 @@ public:
   int erase_refactored(const common::ObString &key, ObSessionVariable *sess_var = NULL);
   int64_t size() const {return map_.size();}
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(size()));
 private:
   int free_mem();
 

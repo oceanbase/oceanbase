@@ -45,6 +45,16 @@ using namespace blocksstable;
 namespace compaction
 {
 
+bool is_merge_dag(ObDagType::ObDagTypeEnum dag_type)
+{
+  return dag_type == ObDagType::DAG_TYPE_MAJOR_MERGE
+    || dag_type == ObDagType::DAG_TYPE_MERGE_EXECUTE
+    || dag_type == ObDagType::DAG_TYPE_MINI_MERGE
+    || dag_type == ObDagType::DAG_TYPE_TX_TABLE_MERGE
+    || dag_type == ObDagType::DAG_TYPE_MDS_TABLE_MERGE;
+}
+
+
 /*
  *  ----------------------------------------------ObCompactionTimeGuard--------------------------------------------------
  */
@@ -59,7 +69,12 @@ const char *ObStorageCompactionTimeGuard::CompactionEventStr[] = {
     "UPDATE_TABLET",
     "RELEASE_MEMTABLE",
     "SCHEDULE_OTHER_COMPACTION",
-    "DAG_FINISH"
+    "DAG_FINISH",
+    "SEARCH_META_TABLE",
+    "CHECK_META_TABLE",
+    "SEARCH_CHECKSUM",
+    "CHECK_CHECKSUM",
+    "SCHEDULER_NEXT_ROUND"
 };
 
 const char *ObStorageCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
@@ -78,8 +93,6 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
 {
   int64_t pos = 0;
   int64_t total_cost = 0;
-  J_KV(K_(add_time));
-  common::databuff_printf(buf, buf_len, pos, "|");
   if (idx_ > DAG_WAIT_TO_SCHEDULE && click_poinsts_[DAG_WAIT_TO_SCHEDULE] > COMPACTION_SHOW_TIME_THRESHOLD) {
     fmt_ts_to_meaningful_str(buf, buf_len, pos, "wait_schedule_time", click_poinsts_[DAG_WAIT_TO_SCHEDULE]);
   }
@@ -256,7 +269,6 @@ int64_t ObMergeParameter::to_string(char* buf, const int64_t buf_len) const
 ObCompactionParam::ObCompactionParam()
   : score_(0),
     occupy_size_(0),
-    estimate_phy_size_(0),
     replay_interval_(0),
     add_time_(0),
     last_end_scn_(),
@@ -336,6 +348,7 @@ ObTabletMergeDag::ObTabletMergeDag(
     compat_mode_(lib::Worker::CompatMode::INVALID),
     ctx_(nullptr),
     param_(),
+    time_guard_(),
     allocator_("MergeDag", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID)
 {
 }
@@ -799,7 +812,7 @@ int ObTabletMergePrepareTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not null", K(ret));
-  } else if (OB_UNLIKELY(!is_compaction_dag(dag_->get_type()))) {
+  } else if (OB_UNLIKELY(!is_merge_dag(dag_->get_type()))) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
@@ -843,7 +856,6 @@ int ObTabletMergeDag::alloc_merge_ctx()
     LOG_WARN("failed to allocate ctx", KR(ret), KP(ctx_));
   } else {
     ctx_->merge_dag_ = this;
-    ctx_->init_time_guard(get_add_time());
     ctx_->time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
   }
   return ret;
@@ -954,7 +966,7 @@ int ObTabletMergeFinishTask::init()
   } else if (OB_ISNULL(dag_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("dag must not null", K(ret));
-  } else if (!is_compaction_dag(dag_->get_type())) {
+  } else if (!is_merge_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
@@ -1062,7 +1074,7 @@ int ObTabletMergeTask::generate_next_task(ObITask *&next_task)
     LOG_WARN("not init", K(ret));
   } else if (idx_ + 1 == ctx_->get_concurrent_cnt()) {
     ret = OB_ITER_END;
-  } else if (!is_compaction_dag(dag_->get_type())) {
+  } else if (!is_merge_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   } else {
@@ -1149,14 +1161,6 @@ int ObTabletMergeTask::process()
   }
 
   return ret;
-}
-
-ObTxTableMergeDag::~ObTxTableMergeDag()
-{
-  if (param_.is_reserve_mode_) {
-    MTL(ObTenantCompactionMemPool *)->release_reserve_mem();
-    FLOG_INFO("TxTable Compaction Leave the Reserve Mode", K(param_));
-  }
 }
 
 ObTabletMiniMergeDag::~ObTabletMiniMergeDag()

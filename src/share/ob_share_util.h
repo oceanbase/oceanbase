@@ -21,6 +21,10 @@ namespace common
 class ObTimeoutCtx;
 class ObISQLClient;
 }
+namespace storage
+{
+  class ObLS;
+}
 namespace share
 {
 
@@ -78,12 +82,6 @@ public:
   static int check_compat_version_for_arbitration_service(
       const uint64_t tenant_id,
       bool &is_compatible);
-  // data version must up to 4.3 with clone tenant
-  // params[in]  tenant_id, which tenant to check
-  // params[out] is_compatible, whether it is up to 4.3
-  static int check_compat_version_for_clone_tenant(
-      const uint64_t tenant_id,
-      bool &is_compatible);
   // generate the count of arb replica of a log stream
   // @params[in]  tenant_id, which tenant to check
   // @params[in]  ls_id, which log stream to check
@@ -124,6 +122,11 @@ public:
     const uint64_t tenant_id,
     const ObSqlString &sql,
     SCN &ora_rowscn);
+  // wait the given ls's end_scn be larger than or equal to sys_ls_target_scn
+  // @params[in]: sys_ls_target_scn
+  // @params[in]: ls
+  static int wait_user_ls_sync_scn_locally(const share::SCN &sys_ls_target_scn, storage::ObLS &ls);
+
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
   static bool is_tenant_enable_transfer(const uint64_t tenant_id);
 };

@@ -82,18 +82,7 @@ public:
       ObPxSQCProxy &sqc_proxy);
   int send_local_p2p_msg(ObP2PDatahubMsgBase &msg);
   template<typename T>
-  int alloc_msg(const ObMemAttr &attr, T *&msg_ptr)
-  {
-    int ret = OB_SUCCESS;
-    void *ptr = nullptr;
-    if (OB_ISNULL(ptr = (ob_malloc(sizeof(T), attr)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SQL_LOG(WARN, "failed to alloc memory for p2p dh msg", K(ret));
-    } else {
-      msg_ptr = new (ptr) T();
-    }
-    return ret;
-  }
+  int alloc_msg(int64_t tenant_id, T *&msg_ptr);
 
   int alloc_msg(common::ObIAllocator &allocator,
                 ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,
@@ -111,7 +100,7 @@ public:
 private:
   template<typename T>
   int alloc_msg(common::ObIAllocator &allocator,
-                T *&msg_ptr, const ObMemAttr &mem_attr);
+                T *&msg_ptr);
 private:
   static const int64_t BUCKET_NUM = 131072; //2^17
 private:

@@ -57,10 +57,6 @@ namespace frame
 class ObReqTransport;
 }
 }
-namespace obrpc
-{
-class ObBatchRpc;
-}
 
 namespace share
 {
@@ -102,7 +98,6 @@ public:
            const common::ObAddr &self,
            common::ObILogAllocator *alloc_mgr,
            rpc::frame::ObReqTransport *transport,
-           obrpc::ObBatchRpc *batch_rpc,
            storage::ObLSService *ls_service,
            share::ObLocationService *location_service,
            observer::ObIMetaReport *reporter,

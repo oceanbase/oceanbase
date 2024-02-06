@@ -17,19 +17,11 @@
 #include "share/ob_errno.h"
 #include "common/object/ob_object.h"
 #include "common/object/ob_obj_type.h"
-#include "share/datum/ob_datum.h"
-#include "share/ob_cluster_version.h"
+#include "sql/session/ob_basic_session_info.h"
+#include "storage/lob/ob_lob_manager.h"
 
 namespace oceanbase
 {
-namespace sql
-{
-class ObBasicSessionInfo;
-} // namespace sql
-namespace storage
-{
-  class ObLobQueryIter;
-} // namespace storage
 namespace common
 {
 // 1. This function is used to control plan generation or lob output when execution.
@@ -111,7 +103,7 @@ struct ObLobTextIterCtx
   bool is_backward_;
 
   ObLobLocatorV2 locator_;
-  storage::ObLobQueryIter *lob_query_iter_;
+  ObLobQueryIter *lob_query_iter_;
 };
 
 // wrapper class to handle string/text type input
@@ -124,7 +116,7 @@ public:
                    bool has_lob_header) :
     type_(type), cs_type_(cs_type), is_init_(false), is_lob_(false), is_outrow_(false),
     has_lob_header_(has_lob_header), state_(TEXTSTRING_ITER_INVALID), datum_str_(datum_str),
-    ctx_(nullptr), err_ret_(OB_SUCCESS), tmp_alloc_(nullptr)
+    ctx_(nullptr), err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(type)) {
       validate_has_lob_header(has_lob_header_);
@@ -134,7 +126,7 @@ public:
   ObTextStringIter(const ObObj &obj) :
     type_(obj.get_type()), cs_type_(obj.get_collation_type()), is_init_(false), is_lob_(false),
     is_outrow_(false), has_lob_header_(obj.has_lob_header()), state_(TEXTSTRING_ITER_INVALID),
-    datum_str_(obj.get_string()), ctx_(nullptr), err_ret_(OB_SUCCESS), tmp_alloc_(nullptr)
+    datum_str_(obj.get_string()), ctx_(nullptr), err_ret_(OB_SUCCESS)
   {
     if (is_lob_storage(obj.get_type())) {
       validate_has_lob_header(has_lob_header_);
@@ -147,14 +139,14 @@ public:
 
   int init(uint32_t buffer_len,
            const sql::ObBasicSessionInfo *session = NULL,
-           ObIAllocator *res_allocator = NULL,
-           ObIAllocator *tmp_allocator = NULL);
+           ObIAllocator *allocator = NULL,
+           bool clone_remote = false);
 
   ObTextStringIterState get_next_block(ObString &str);
 
   int get_current_block(ObString &str);
 
-  int get_full_data(ObString &data_str);
+  int get_full_data(ObString &data_str, ObIAllocator *allocator = nullptr);
 
   int get_inrow_or_outrow_prefix_data(ObString &data_str,
                                       uint32_t prefix_char_len = DEAFULT_LOB_PREFIX_CHAR_LEN);
@@ -215,7 +207,6 @@ private:
   const ObString datum_str_;
   ObLobTextIterCtx *ctx_;
   int err_ret_;
-  ObIAllocator *tmp_alloc_;
 };
 
 // wrapper class to handle templob output(including string types)
@@ -297,20 +288,8 @@ protected:
 OB_INLINE bool ob_is_empty_lob(ObObjType type, const ObDatum &datum, bool has_lob_header)
 {
   bool bret = false;
-  if (common::is_lob_storage(type)) {
+  if (common::ob_is_text_tc(type)) {
     common::ObLobLocatorV2 loc(datum.get_string(), has_lob_header);
-    bret = loc.is_empty_lob();
-  }
-  return bret;
-}
-
-template <typename TextVec>
-OB_INLINE bool ob_is_empty_lob(ObObjType type, const TextVec &vector, bool has_lob_header,
-                               int64_t idx)
-{
-  bool bret = false;
-  if (common::is_lob_storage(type)) {
-    common::ObLobLocatorV2 loc(vector->get_string(idx), has_lob_header);
     bret = loc.is_empty_lob();
   }
   return bret;
@@ -319,7 +298,7 @@ OB_INLINE bool ob_is_empty_lob(ObObjType type, const TextVec &vector, bool has_l
 OB_INLINE bool ob_is_empty_lob(const ObObj &obj)
 {
   bool bret = false;
-  if (common::is_lob_storage(obj.get_type())) {
+  if (common::ob_is_text_tc(obj.get_type())) {
     common::ObLobLocatorV2 loc(obj.get_string(), obj.has_lob_header());
     bret = loc.is_empty_lob();
   }

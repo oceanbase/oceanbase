@@ -42,7 +42,6 @@ public:
   int get_next_tablet(ObTabletHandle &handle);
   int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
-  int get_tablet_ids(ObIArray<common::ObTabletID> &ids);
 
   void reset();
   bool is_valid() const;
@@ -99,29 +98,6 @@ private:
   ObLSTabletService *ls_tablet_service_;
   ObHALSTabletIDIterator tablet_id_iter_;
 };
-
-class ObLSTabletFastIter final
-{
-  friend class ObLSTabletService;
-public:
-  ObLSTabletFastIter(ObITabletFilterOp &op,
-                     const ObMDSGetTabletMode mode);
-  ~ObLSTabletFastIter() = default;
-  int get_next_tablet(ObTabletHandle &handle);
-  bool is_valid() const;
-  void reset();
-  TO_STRING_KV(K_(idx), K_(mode));
-private:
-  ObLSTabletService *ls_tablet_service_;
-  common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
-  int64_t idx_;
-  ObMDSGetTabletMode mode_;
-  ObITabletFilterOp &op_;
-  DISALLOW_COPY_AND_ASSIGN(ObLSTabletFastIter);
-};
-
-
-
 
 } // namespace storage
 } // namespace oceanbase

@@ -18,7 +18,6 @@
 #include "storage/ls/ob_ls.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -31,36 +30,28 @@ ObDDLReplayExecutor::ObDDLReplayExecutor()
 {}
 
 int ObDDLReplayExecutor::check_need_replay_ddl_log_(
-    const ObLS *ls,
     const ObTabletHandle &tablet_handle,
     const share::SCN &ddl_start_scn,
     const share::SCN &scn,
-    bool &need_replay)
+    bool &need_replay) const
 {
   int ret = OB_SUCCESS;
   need_replay = true;
   ObTablet *tablet = nullptr;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
   ObMigrationStatus migration_status;
-  ObTabletBindingMdsUserData ddl_data;
-  if (OB_UNLIKELY(nullptr == ls || !tablet_handle.is_valid() || !ddl_start_scn.is_valid_and_not_min() || !scn.is_valid_and_not_min())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("not init", K(ret), KP(ls), K(tablet_handle), K(ddl_start_scn), K(scn));
-  } else if (OB_FAIL(ls->get_ls_meta().get_migration_status(migration_status))) {
-    LOG_WARN("get migration status failed", K(ret), KPC(ls));
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ls_->get_ls_meta().get_migration_status(migration_status))) {
+    LOG_WARN("get migration status failed", K(ret), KPC(ls_));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == migration_status
       || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == migration_status) {
     need_replay = false;
-    LOG_INFO("ls migration failed, so ddl log skip replay", "ls_id", ls->get_ls_id(), K(tablet_handle), K(migration_status));
+    LOG_INFO("ls migration failed, so ddl log skip replay", "ls_id", ls_->get_ls_id(), K(tablet_handle), K(migration_status));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is null", K(ret), K(tablet_handle));
-  } else if (tablet->is_empty_shell()) {
-    need_replay = false;
-    if (REACH_COUNT_INTERVAL(1000L)) {
-      LOG_INFO("no need to replay ddl log, because this tablet is empty shell",
-          K(tablet_handle), "tablet_meta", tablet->get_tablet_meta());
-    }
   } else if (tablet->get_tablet_meta().ha_status_.is_expected_status_deleted()) {
     need_replay = false;
     if (REACH_COUNT_INTERVAL(1000L)) {
@@ -73,22 +64,18 @@ int ObDDLReplayExecutor::check_need_replay_ddl_log_(
       LOG_INFO("no need to replay ddl log, because the log ts is less than the ddl checkpoint ts",
           K(tablet_handle), K(scn), "ddl_checkpoint_ts", tablet->get_tablet_meta().ddl_checkpoint_scn_);
     }
-  } else if (ddl_start_scn < tablet->get_tablet_meta().ddl_start_scn_) {
+  } else if (OB_FAIL(tablet->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("get ddl kv manager failed", K(ret), K(tablet_handle));
+    } else {
+      need_replay = (ddl_start_scn == scn); // only replay start log if ddl kv mgr is null
+      ret = OB_SUCCESS;
+    }
+  } else if (ddl_start_scn < ddl_kv_mgr_handle.get_obj()->get_start_scn()) {
     need_replay = false;
     if (REACH_COUNT_INTERVAL(1000L)) {
       LOG_INFO("no need to replay ddl log, because the ddl start log ts is less than the value in ddl kv manager",
-          K(tablet_handle), K(ddl_start_scn), "ddl_start_scn_in_tablet", tablet->get_tablet_meta().ddl_start_scn_);
-    }
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-  } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
-    ObTabletHandle lob_tablet_handle;
-    const ObTabletID lob_tablet_id = ddl_data.lob_meta_tablet_id_;
-    if (OB_FAIL(ls->replay_get_tablet_no_check(lob_tablet_id, scn, lob_tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_tablet_id), K(scn));
-    } else if (lob_tablet_handle.get_obj()->is_empty_shell()) {
-      need_replay = false;
-      LOG_INFO("lob tablet is empty shell, skip replay", K(ret), "tablet_id", tablet->get_tablet_id(), K(lob_tablet_id));
+          K(tablet_handle), K(ddl_start_scn), "ddl_start_scn_in_ddl_kv_mgr", ddl_kv_mgr_handle.get_obj()->get_start_scn());
     }
   }
   return ret;
@@ -126,115 +113,37 @@ int ObDDLStartReplayExecutor::init(
   return ret;
 }
 
-int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
+int ObDDLStartReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
-  ObTabletBindingMdsUserData ddl_data;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!log_->is_valid() || !tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(log), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-  } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
-    ObTabletHandle lob_meta_tablet_handle;
-    const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
-    if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_, lob_meta_tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
-    } else if (OB_FAIL(replay_ddl_start(lob_meta_tablet_handle, true/*is_lob_meta_tablet*/))) {
-      LOG_WARN("replay ddl start for lob meta tablet failed", K(ret), K(lob_meta_tablet_id), K(scn_));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(replay_ddl_start(tablet_handle, false/*is_lob_meta_tablet*/))) {
-      LOG_WARN("replay ddl start for data tablet failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, const bool is_lob_meta_tablet)
-{
-  int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
-  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
-  const int64_t unused_context_id = -1;
+  ObITable::TableKey table_key = log_->get_table_key();
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
   bool need_replay = true;
-  ObTabletID tablet_id;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!log_->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(log));
-  } else if (OB_FAIL(check_need_replay_ddl_log_(ls_, tablet_handle, scn_, scn_, need_replay))) {
+  if (OB_FAIL(check_need_replay_ddl_log_(handle, scn_, scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
-      LOG_WARN("fail to check need replay ddl log", K(ret), K(tablet_id), K_(scn));
+      LOG_WARN("fail to check need replay ddl log", K(ret), K(handle), K(scn_));
     }
   } else if (!need_replay) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle));
-  } else if (FALSE_IT(tablet_id = tablet_handle.get_obj()->get_tablet_id())) {
-  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(MTL_ID()));
+    ret = OB_NO_NEED_UPDATE;
+    LOG_WARN("skip replay ddl start", K(ret), "ls_id", ls_->get_ls_id(), K(handle));
+  } else if (OB_FAIL(handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
+    LOG_WARN("create ddl kv mgr failed", K(ret), K(handle), KPC_(log), K_(scn));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_start(*ls_,
+                                                            *handle.get_obj(),
+                                                            table_key,
+                                                            scn_,
+                                                            log_->get_data_format_version(),
+                                                            log_->get_execution_id(),
+                                                            SCN::min_scn()/*checkpoint_scn*/))) {
+    if (OB_TASK_EXPIRED != ret) {
+      LOG_WARN("start ddl log failed", K(ret), KPC_(log), K_(scn));
+    } else {
+      ret = OB_SUCCESS; // ignored expired ddl start log
+    }
   } else {
-    ObTabletDirectLoadInsertParam direct_load_param;
-    direct_load_param.is_replay_ = true;
-    bool is_major_sstable_exist = false;
-    const int64_t snapshot_version = log_->get_table_key().get_snapshot_version();
-    direct_load_param.common_param_.ls_id_ = tablet_handle.get_obj()->get_tablet_meta().ls_id_;
-    direct_load_param.common_param_.tablet_id_ = tablet_id;
-    direct_load_param.common_param_.data_format_version_ = log_->get_data_format_version();
-    direct_load_param.common_param_.direct_load_type_ = log_->get_direct_load_type();
-    direct_load_param.common_param_.read_snapshot_ = snapshot_version;
-    ObITable::TableKey table_key;
-    if (is_lob_meta_tablet) {
-      table_key.table_type_ = ObITable::MAJOR_SSTABLE;
-      table_key.tablet_id_ = tablet_id;
-      table_key.column_group_idx_ = 0;
-      table_key.version_range_.base_version_ = 0;
-      table_key.version_range_.snapshot_version_ = snapshot_version;
-    } else {
-      table_key = log_->get_table_key();
-    }
-    if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle, log_->get_execution_id(), direct_load_param))) {
-      LOG_WARN("create tablet manager failed", K(ret));
-    } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-            ls_->get_ls_id(),
-            tablet_id,
-            true/* is_full_direct_load */,
-            direct_load_mgr_handle,
-            is_major_sstable_exist))) {
-      if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-        ret = OB_SUCCESS;
-        LOG_INFO("ddl start log is expired, skip", K(ret), KPC(log_), K(scn_));
-      } else {
-        LOG_WARN("get tablet mgr failed", K(ret), K(tablet_id));
-      }
-    } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->update(
-            nullptr/*lob_direct_load_mgr*/, // replay is independent for data and lob meta tablet, force null here
-            direct_load_param))) {
-      LOG_WARN("update direct load mgr failed", K(ret));
-    } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->start(*tablet_handle.get_obj(),
-            table_key, scn_, log_->get_data_format_version(), log_->get_execution_id(), SCN::min_scn()/*checkpoint_scn*/))) {
-      LOG_WARN("direct load start failed", K(ret));
-      if (OB_TASK_EXPIRED != ret) {
-        LOG_WARN("start ddl log failed", K(ret), K_(log), K_(scn));
-      } else {
-        ret = OB_SUCCESS; // ignored expired ddl start log
-      }
-    } else {
-      LOG_INFO("succeed to replay ddl start log", K(ret), KPC_(log), K_(scn));
-    }
+    LOG_INFO("succeed to replay ddl start log", K(ret), KPC_(log), K_(scn));
   }
-  FLOG_INFO("finish replay ddl start log", K(ret), K(need_replay), K(tablet_id), KPC_(log), K_(scn), "ddl_event_info", ObDDLEventInfo());
+  LOG_INFO("finish replay ddl start log", K(ret), K(need_replay), KPC_(log), K_(scn));
   return ret;
 }
 
@@ -270,48 +179,37 @@ int ObDDLRedoReplayExecutor::init(
   return ret;
 }
 
-int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
+int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
+  const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
   bool need_replay = true;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
 
-  ObDDLMacroBlock macro_block;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedoLogExecutor has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!log_->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(log));
-  } else if (OB_FAIL(check_need_replay_ddl_log_(ls_, tablet_handle, log_->get_redo_info().start_scn_, scn_, need_replay))) {
+  if (OB_FAIL(check_need_replay_ddl_log_(handle, redo_info.start_scn_, scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
-      LOG_WARN("fail to check need replay ddl log", K(ret), K_(tablet_id), K_(scn));
+      LOG_WARN("fail to check need replay ddl log", K(ret), K(handle), K_(scn));
     }
   } else if (!need_replay) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_NO_NEED_UPDATE;
+    LOG_WARN("skip replay ddl redo", K(ret), "ls_id", ls_->get_ls_id(), K(handle));
+  } else if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(handle));
+  } else if (OB_FAIL(handle.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (!table_store_wrapper.get_member()->get_major_sstables().empty()) {
-    // major sstable already exist, means ddl commit success
-    need_replay = false;
-    if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-      LOG_INFO("no need to replay ddl log, because the major sstable already exist", K_(tablet_id));
-    }
   } else {
     ObMacroBlockWriteInfo write_info;
     ObMacroBlockHandle macro_handle;
-    const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     write_info.buffer_ = redo_info.data_buffer_.ptr();
     write_info.size_= redo_info.data_buffer_.length();
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     write_info.io_timeout_ms_ = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
+    ObDDLMacroBlock macro_block;
     if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
       LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
     } else if (OB_FAIL(macro_handle.wait())) {
-      LOG_WARN("fail to wait macro block io finish", K(ret), K(write_info));
+      LOG_WARN("fail to wait macro block io finish", K(ret));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_handle.get_macro_id()))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_handle.get_macro_id()));
     } else {
@@ -321,52 +219,12 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       macro_block.buf_ = redo_info.data_buffer_.ptr();
       macro_block.size_ = redo_info.data_buffer_.length();
       macro_block.ddl_start_scn_ = redo_info.start_scn_;
-      macro_block.table_key_ = redo_info.table_key_;
-      macro_block.end_row_id_ = redo_info.end_row_id_;
-      const int64_t snapshot_version = redo_info.table_key_.get_snapshot_version();
-      const ObITable::TableKey &table_key = redo_info.table_key_;
-      bool is_major_sstable_exist = false;
-      uint64_t data_format_version = redo_info.data_format_version_;
-
-      // to upgrade from lower version without `data_format_version` in redo log,
-      // use data_format_version in start log instead.
-      ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
-      ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
-      if (OB_ISNULL(tenant_direct_load_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected err", K(ret));
-      } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
-              ls_->get_ls_id(),
-              redo_info.table_key_.tablet_id_,
-              true/* is_full_direct_load */,
-              direct_load_mgr_handle,
-              is_major_sstable_exist))) {
-        if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-          need_replay = false;
-          ret = OB_SUCCESS;
-          LOG_INFO("major sstable already exist, ship replay", K(ret), K(scn_), K(table_key));
-        } else {
-          LOG_WARN("get tablet mgr failed", K(ret), K(table_key));
-        }
-      } else if (data_format_version <= 0) {
-        data_format_version = direct_load_mgr_handle.get_obj()->get_data_format_version();
-      }
-      if (OB_SUCC(ret) && need_replay) {
-        if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle.get_obj(), macro_block,
-            snapshot_version, data_format_version, direct_load_mgr_handle))) {
-          if (OB_TASK_EXPIRED == ret) {
-            need_replay = false;
-            LOG_INFO("task expired, skip replay the redo", K(ret), K(macro_block), KPC(direct_load_mgr_handle.get_obj()));
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle), K(macro_block),
-              K(snapshot_version), K(data_format_version));
-          }
-        }
+      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(handle.get_obj(), macro_block))) {
+        LOG_WARN("set macro block into ddl kv failed", K(ret), K(handle), K(macro_block));
       }
     }
   }
-  FLOG_INFO("finish replay ddl redo log", K(ret), K(need_replay), KPC_(log), K(macro_block), "ddl_event_info", ObDDLEventInfo());
+  LOG_INFO("finish replay ddl redo log", K(ret), K(need_replay), KPC_(log));
   return ret;
 }
 
@@ -401,89 +259,33 @@ int ObDDLCommitReplayExecutor::init(
   return ret;
 }
 
-int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
+int ObDDLCommitReplayExecutor::do_replay_(ObTabletHandle &handle) //TODO(jianyun.sjy): check it
 {
   int ret = OB_SUCCESS;
-  ObTabletBindingMdsUserData ddl_data;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!log_->is_valid() || !tablet_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(log), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-  } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
-    ObTabletHandle lob_meta_tablet_handle;
-    const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
-    if (OB_FAIL(ls_->replay_get_tablet_no_check(lob_meta_tablet_id, scn_, lob_meta_tablet_handle))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id), K(scn_));
-    } else if (OB_FAIL(replay_ddl_commit(lob_meta_tablet_handle))) {
-      LOG_WARN("replay ddl start for lob meta tablet failed", K(ret), K(lob_meta_tablet_id), K(scn_));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(replay_ddl_commit(tablet_handle))) {
-      LOG_WARN("replay ddl commit for data tablet failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObDDLCommitReplayExecutor::replay_ddl_commit(ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id;
-  ObTabletFullDirectLoadMgr *data_direct_load_mgr = nullptr;
-  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
+  ObDDLKvMgrHandle ddl_kv_mgr_handle;
   bool need_replay = true;
-  bool is_major_sstable_exist = false;
 
-  DEBUG_SYNC(BEFORE_REPLAY_DDL_PREPRARE);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
-  } else if (OB_UNLIKELY(!log_->is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K_(log));
-  } else if (OB_FAIL(check_need_replay_ddl_log_(ls_, tablet_handle, log_->get_start_scn(), scn_, need_replay))) {
+  if (OB_FAIL(check_need_replay_ddl_log_(handle, log_->get_start_scn(), scn_, need_replay))) {
     if (OB_EAGAIN != ret) {
-      LOG_WARN("fail to check need replay ddl log", K(ret), K_(scn), K_(log), "tablet", PC(tablet_handle.get_obj()));
+      LOG_WARN("fail to check need replay ddl log", K(ret), K(handle), K_(scn), KPC_(log));
     }
   } else if (!need_replay) {
-    // do nothing
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("need replay but tablet handle is invalid", K(ret), K(need_replay), K(tablet_handle), K_(log), K_(scn));
-  } else if (OB_FALSE_IT(tablet_id = tablet_handle.get_obj()->get_tablet_id())) {
-  } else if (OB_ISNULL(MTL(ObTenantDirectLoadMgr *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", K(ret), K(MTL_ID()));
-  } else if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->get_tablet_mgr_and_check_major(
-          ls_->get_ls_id(),
-          tablet_id,
-          true/* is_full_direct_load */,
-          direct_load_mgr_handle,
-          is_major_sstable_exist))) {
-    if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
-      ret = OB_SUCCESS;
-      LOG_INFO("ddl commit log is expired, skip", K(ret), KPC(log_), K(scn_));
-    } else {
-      LOG_WARN("get tablet mgr failed", K(ret), K(tablet_id));
-    }
-  } else if (OB_ISNULL(data_direct_load_mgr = direct_load_mgr_handle.get_full_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected err", K(ret), K(tablet_id));
-  } else if (OB_FAIL(data_direct_load_mgr->commit(*tablet_handle.get_obj(), log_->get_start_scn(), scn_, 0/*unused table_id*/, 0/*unused ddl_task_id*/, true/*is replay*/))) {
+    ret = OB_NO_NEED_UPDATE;
+    LOG_WARN("skip replay ddl commit", K(ret), "ls_id", ls_->get_ls_id(), K(handle));
+  } else if (OB_FAIL(handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+    LOG_WARN("get ddl kv mgr failed", K(ret), K_(scn), KPC_(log));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->set_commit_scn(handle.get_obj()->get_tablet_meta(), scn_))) {
+    LOG_WARN("failed to start prepare", K(ret), KPC_(log), K_(scn));
+  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(*handle.get_obj(), log_->get_start_scn(), scn_))) {
     if (OB_TABLET_NOT_EXIST == ret || OB_TASK_EXPIRED == ret) {
       ret = OB_SUCCESS; // exit when tablet not exist or task expired
     } else {
-      LOG_WARN("replay ddl commit log failed", K(ret), K_(log), K_(scn));
+      LOG_WARN("replay ddl commit log failed", K(ret), KPC_(log), K_(scn));
     }
   } else {
-    LOG_INFO("replay ddl commit log success", K(ret), K_(log), K_(scn));
+    LOG_INFO("replay ddl commit log success", K(ret), KPC_(log), K_(scn));
   }
-  FLOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K(tablet_id), KPC_(log), K_(scn), "ddl_event_info", ObDDLEventInfo());
+  LOG_INFO("finish replay ddl commit log", K(ret), K(need_replay), K_(scn), KPC_(log));
   return ret;
 }
 

@@ -149,13 +149,6 @@ constexpr int LOG_WRITE_FLAG = O_RDWR | O_DIRECT | O_SYNC;
 constexpr mode_t FILE_OPEN_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 // =========== Disk io end ====================
 
-
-// =========== BatchRPC start ==================
-// NOTE: ORDER AND VALUE ARE VITAL, DO NOT CHANGE
-constexpr int64_t LOG_BATCH_PUSH_LOG_REQ = 1;
-constexpr int64_t LOG_BATCH_PUSH_LOG_RESP = 2;
-// =========== BatchRPC end  ==================
-
 const int64_t OB_INVALID_CONFIG_CHANGE_LOCK_OWNER = -1;
 
 enum ObReplicaState {

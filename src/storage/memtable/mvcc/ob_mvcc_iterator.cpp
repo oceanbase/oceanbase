@@ -44,6 +44,10 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
   } else if (OB_ISNULL(value)) {
     // row not exist
     is_inited_ = true;
+  } else if (query_flag.iter_uncommitted_row()) {
+    value_ = value;
+    is_inited_ = true;
+    version_iter_ = value->get_list_head();
   } else {
     value_ = value;
     if (OB_FAIL(lock_for_read_(query_flag))) {
@@ -132,8 +136,6 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool read_latest = flag.is_read_latest();
   const ObTransID &data_tx_id = iter->get_tx_id();
 
-  const bool read_uncommitted = flag.iter_uncommitted_row();
-
   // NB: We need pay much attention to the order of the reads to the different
   // variables. Although we update the version before the state for the tnodes
   // and read the state before the version. It may appear that the compiled code
@@ -146,7 +148,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool is_delayed_cleanout = iter->is_delayed_cleanout();
   const SCN scn = iter->get_scn();
   // Opt1: data is decided
-  if ((is_committed || is_aborted || (is_elr && !is_delayed_cleanout))
+  if ((is_committed || is_aborted || is_elr)
       // Opt2: data is not decided while we donot need cleanout
       || (!is_delayed_cleanout
           && (// Opt2.1: snapshot reads the data written by snapshot
@@ -158,10 +160,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     if (is_committed || is_elr) {
       // Case 2: Data is committed, so the state is decided
       const SCN data_version = iter->trans_version_.atomic_load();
-      if (read_uncommitted) {
-        // Case 2.0 Read the version if we need the uncommitted version
-        version_iter_ = iter;
-      } else if (ctx_->get_snapshot_version() >= data_version) {
+      if (ctx_->get_snapshot_version() >= data_version) {
         // Case 2.1 Read the version if it is smaller than read version
         version_iter_ = iter;
       } else {
@@ -174,10 +173,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
       iter = iter->prev_;
     } else {
       // Case 4: data is during execution
-      if (read_uncommitted) {
-        // Case 4.0 Read the version if we need the uncommitted version
-        version_iter_ = iter;
-      } else if (read_latest && data_tx_id == ctx_->tx_id_) {
+      if (read_latest && data_tx_id == ctx_->tx_id_) {
         // Case 4.1: data is written by the current txn and we also need read the
         //           latest data(eg: check existence), then we can read it if it
         //           is not undone
@@ -208,7 +204,8 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
     //         when data is delay cleanout
     bool can_read = false;
     SCN data_version;
-    data_version.set_invalid();
+    data_version.set_max();
+    bool is_determined_state = false;
 
     // Opt3: we only cleanout tx node who is delay cleanout
     ObCleanoutOp *cleanout_op;
@@ -220,32 +217,29 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
       cleanout_op = &clean_nothing_op;
     }
 
-    ObReCheckTxNodeForLockForReadOperation recheck_tx_node_op(*iter,
-                                                              can_read,
-                                                              data_version);
+    ObReCheckTxNodeForLockForReadOperation recheck_tx_node_op(*iter, can_read, data_version, is_determined_state);
     ObReCheckOp *recheck_op = &recheck_tx_node_op;
 
     ObLockForReadArg lock_for_read_arg(*ctx_,
                                        data_tx_id,
                                        iter->get_seq_no(),
                                        read_latest,
-                                       read_uncommitted,
                                        scn);
 
     if (OB_FAIL(ctx_->get_tx_table_guards().lock_for_read(lock_for_read_arg,
-                                                          can_read,
-                                                          data_version,
-                                                          *cleanout_op,
-                                                          *recheck_op))) {
+                                        can_read,
+                                        data_version,
+                                        is_determined_state,
+                                        *cleanout_op,
+                                        *recheck_op))) {
       TRANS_LOG(WARN, "lock for read failed", KPC(iter), K(lock_for_read_arg));
-    } else if (can_read) {
+    } else if (can_read && ctx_->get_snapshot_version() >= data_version) {
       // Case 5.1: data is cleanout by lock for read and can be read by reader's
       //           snapshot
       int counter = 0;
       while (OB_SUCC(ret)
              && !ctx_->is_standby_read_
-             && !read_uncommitted
-             && transaction::is_effective_trans_version(data_version)
+             && is_determined_state
              && !(iter->is_committed() || iter->is_aborted() || iter->is_elr())) {
         if (OB_FAIL(try_cleanout_tx_node_(iter))) {
           TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(value_), KPC(iter));

@@ -81,19 +81,12 @@ int ObConnectByOpBFSPump::sort_sibling_rows()
   if (OB_ISNULL(sort_collations_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected sort columns", K(ret));
-  } else if (OB_UNLIKELY(0 != sort_collations_->count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected sort in connect by", K(ret));
+  } else if (0 != sort_collations_->count()
+             && !sort_stack_.empty()) {
+    RowComparer compare(sort_collations_, sort_cmp_funs_, ret);
+    PumpNode *first_node = &sort_stack_.at(0);
+    std::sort(first_node, first_node + sort_stack_.count(), compare);
   }
-  // if (OB_ISNULL(sort_collations_)) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   LOG_WARN("unexpected sort columns", K(ret));
-  // } else if (0 != sort_collations_->count()
-  //            && !sort_stack_.empty()) {
-  //   RowComparer compare(sort_collations_, sort_cmp_funs_, ret);
-  //   PumpNode *first_node = &sort_stack_.at(0);
-  //   std::sort(first_node, first_node + sort_stack_.count(), compare);
-  // }
 
   //add siblings to pump stack
   while(OB_SUCC(ret) && false == sort_stack_.empty()) {
@@ -173,7 +166,7 @@ int ObConnectByOpBFSPump::free_path_stack()
   return ret;
 }
 
-int ObConnectByOpBFSPump::free_pump_node_stack(ObSegmentArray<PumpNode> &stack)
+int ObConnectByOpBFSPump::free_pump_node_stack(ObIArray<PumpNode> &stack)
 {
   int ret = OB_SUCCESS;
   PumpNode pop_node;

@@ -186,7 +186,6 @@ private:
   int64_t tid_;
   ThreadListNode thread_list_node_;
   int64_t cpu_time_;
-  int create_ret_;
 };
 
 OB_INLINE bool Thread::has_set_stop() const

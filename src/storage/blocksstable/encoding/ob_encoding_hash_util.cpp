@@ -292,8 +292,6 @@ int ObEncodingHashTableFactory::recycle(ObEncodingHashTable *hashtable)
   } else if (!hashtable->created()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("hashtable not created", K(ret));
-  } else if (hashtable->get_node_cnt() >= MAX_CACHED_HASHTABLE_SIZE) {
-    allocator_.free(hashtable);
   } else {
     if (OB_FAIL(hashtables_.push_back(hashtable))) {
       LOG_WARN("push_back failed", K(ret));

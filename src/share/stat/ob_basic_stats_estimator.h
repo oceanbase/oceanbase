@@ -76,15 +76,13 @@ public:
   static int estimate_stale_partition(ObExecContext &ctx,
                                       const uint64_t tenant_id,
                                       const uint64_t table_id,
-                                      const int64_t global_part_id,
                                       const ObIArray<PartInfo> &partition_infos,
                                       const double stale_percent_threshold,
-                                      ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+                                      const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                      ObIArray<int64_t> &no_regather_partition_ids,
+                                      int64_t &no_regather_first_part_cnt);
 
   static int update_last_modified_count(ObExecContext &ctx,
-                                        const ObTableStatParam &param);
-
-  static int update_last_modified_count(sqlclient::ObISQLConnection *conn,
                                         const ObTableStatParam &param);
 
   static int check_table_statistics_state(ObExecContext &ctx,
@@ -95,20 +93,15 @@ public:
                                           ObIArray<ObPartitionStatInfo> &partition_stat_infos);
 
   static int check_partition_stat_state(const int64_t partition_id,
+                                        const ObIArray<PartInfo> &partition_infos,
                                         const int64_t inc_mod_count,
                                         const double stale_percent_threshold,
-                                        ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+                                        const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                        ObIArray<int64_t> &no_regather_partition_ids,
+                                        int64_t &no_regather_first_part_cnt);
 
   static int gen_tablet_list(const ObTableStatParam &param,
                              ObSqlString &tablet_list);
-
-  static int do_estimate_block_count(ObExecContext &ctx,
-                                     const uint64_t tenant_id,
-                                     const uint64_t table_id,
-                                     const ObIArray<ObTabletID> &tablet_ids,
-                                     const ObIArray<ObObjectID> &partition_ids,
-                                     const ObIArray<uint64_t> &column_group_ids,
-                                     ObIArray<EstimateBlockRes> &estimate_res);
 
   static int do_estimate_block_count_and_row_count(ObExecContext &ctx,
                                                    const uint64_t tenant_id,
@@ -142,26 +135,28 @@ public:
                                       const int64_t tenant_id,
                                       int64_t &task_table_count);
 
-  int estimate(const ObOptStatGatherParam &param,
+  int estimate(const ObTableStatParam &param,
+               const ObExtraParam &extra,
                ObIArray<ObOptStat> &dst_opt_stats);
 
   template <class T>
   int add_stat_item(const T &item);
-
-  int fill_hints(common::ObIAllocator &alloc, const ObString &table_name, int64_t gather_vectorize);
 
 private:
 
   static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
                                          hash::ObHashMap<int64_t, int64_t> &first_part_idx_map);
 
-  int refine_basic_stats(const ObOptStatGatherParam &param,
+  int refine_basic_stats(const ObTableStatParam &param,
+                         const ObExtraParam &extra,
                          ObIArray<ObOptStat> &dst_opt_stats);
 
-  int check_stat_need_re_estimate(const ObOptStatGatherParam &origin_param,
+  int check_stat_need_re_estimate(const ObTableStatParam &origin_param,
+                                  const ObExtraParam &origin_extra,
                                   ObOptStat &opt_stat,
                                   bool &need_re_estimate,
-                                  ObOptStatGatherParam &new_param);
+                                  ObTableStatParam &new_param,
+                                  ObExtraParam &new_extra);
 
   int fill_hints(common::ObIAllocator &alloc, const ObString &table_name);
 

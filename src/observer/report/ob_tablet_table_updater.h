@@ -111,6 +111,12 @@ public:
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   bool compare_without_version(
       const ObTabletTableUpdateTask &other) const;
+  inline bool need_assign_when_equal() const { return false; }
+  inline int assign_when_equal(const ObTabletTableUpdateTask &other)
+  {
+    UNUSED(other);
+    return common::OB_NOT_SUPPORTED;
+  }
   // TODO: need to realize barrier related functions
   bool is_barrier() const;
 
@@ -237,11 +243,6 @@ private:
   // @param [in] tasks, tasks to reput to queue
   int reput_to_queue_(
     const common::ObIArray<ObTabletTableUpdateTask> &tasks);
-
-  int check_tenant_status_(
-      const uint64_t tenant_id,
-      bool &tenant_dropped,
-      bool &schema_not_ready);
 
 private:
   const int64_t MINI_MODE_UPDATE_TASK_THREAD_CNT = 1;

@@ -164,7 +164,7 @@ void TestCreateExecutor::TearDown()
 {
 }
 
-ObTableApiSessNodeVal g_sess_node_val(NULL, 500);
+ObTableApiSessNodeVal g_sess_node_val(NULL);
 void TestCreateExecutor::fake_ctx_init_common(ObTableCtx &fake_ctx, ObTableSchema *table_schema)
 {
   fake_ctx.table_schema_ = table_schema;
@@ -353,7 +353,7 @@ TEST_F(TestCreateExecutor, insertup)
   fake_ctx.set_entity(&entity);
   schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up(false));
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.init_insert_up());
   ASSERT_EQ(OB_SUCCESS, ObTableExprCgService::generate_exprs(fake_ctx, allocator_, fake_expr_info));
   fake_ctx.set_expr_info(&fake_expr_info);
   ASSERT_EQ(4, fake_ctx.get_all_exprs().get_expr_array().count());
@@ -459,22 +459,21 @@ TEST_F(TestCreateExecutor, cons_column_type)
   col_schema.set_accuracy(acc);
   uint32_t res_flag = ObRawExprUtils::calc_column_result_flag(col_schema);
 
-  ObTableColumnInfo column_info;
+  ObExprResType column_type;
   ObTableCtx fake_ctx(allocator_);
   schema_service_.get_schema_guard(fake_ctx.schema_guard_, 1);
   fake_ctx_init_common(fake_ctx, &table_schema_);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_info(col_schema, column_info));
-  ASSERT_EQ(ObVarcharType, column_info.type_.get_type());
-  ASSERT_EQ(res_flag, column_info.type_.get_result_flag());
-  ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, column_info.type_.get_collation_type());
-  ASSERT_EQ(CS_LEVEL_IMPLICIT, column_info.type_.get_collation_level());
-  ASSERT_EQ(1, column_info.type_.get_accuracy().get_length());
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.cons_column_type(col_schema, column_type));
+  ASSERT_EQ(ObVarcharType, column_type.get_type());
+  ASSERT_EQ(res_flag, column_type.get_result_flag());
+  ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, column_type.get_collation_type());
+  ASSERT_EQ(CS_LEVEL_IMPLICIT, column_type.get_collation_level());
+  ASSERT_EQ(1, column_type.get_accuracy().get_length());
 }
 
 TEST_F(TestCreateExecutor, check_column_type)
 {
-  ObTableColumnInfo column_info;
-  column_info.type_.set_result_flag(NOT_NULL_WRITE_FLAG);
+  ObExprResType column_type;
   ObObj obj;
   uint32_t res_flag = 0;
   ObTableCtx fake_ctx(allocator_);
@@ -484,23 +483,22 @@ TEST_F(TestCreateExecutor, check_column_type)
   // check nullable
   obj.set_null();
   res_flag |= NOT_NULL_FLAG;
-  column_info.type_.set_result_flag(res_flag);
-  column_info.is_nullable_ = false;
-  ASSERT_EQ(OB_BAD_NULL_ERROR, fake_ctx.adjust_column_type(column_info, obj));
+  column_type.set_result_flag(res_flag);
+  ASSERT_EQ(OB_BAD_NULL_ERROR, fake_ctx.adjust_column_type(column_type, obj));
   // check data type mismatch
   res_flag = 0;
   obj.set_int(1);
-  column_info.type_.set_result_flag(res_flag);
-  column_info.type_.set_type(ObVarcharType);
-  ASSERT_EQ(OB_KV_COLUMN_TYPE_NOT_MATCH, fake_ctx.adjust_column_type(column_info, obj));
+  column_type.set_result_flag(res_flag);
+  column_type.set_type(ObVarcharType);
+  ASSERT_EQ(OB_OBJ_TYPE_ERROR, fake_ctx.adjust_column_type(column_type, obj));
   // check collation
   obj.set_binary("ttt");
-  column_info.type_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
-  ASSERT_EQ(OB_KV_COLLATION_MISMATCH, fake_ctx.adjust_column_type(column_info, obj));
+  column_type.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+  ASSERT_EQ(OB_ERR_COLLATION_MISMATCH, fake_ctx.adjust_column_type(column_type, obj));
   // collation convert
   obj.set_varchar("test");
   obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-  ASSERT_EQ(OB_SUCCESS, fake_ctx.adjust_column_type(column_info, obj));
+  ASSERT_EQ(OB_SUCCESS, fake_ctx.adjust_column_type(column_type, obj));
   ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, obj.get_collation_type());
 }
 

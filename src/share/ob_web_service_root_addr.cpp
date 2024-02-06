@@ -888,11 +888,11 @@ int64_t ObWebServiceRootAddr::curl_write_data(
 //        "ObRegion": "ob2.rongxuan.lc",
 //        "ObRegionId": 2,
 //        "RsList": [{
-//            "address": "127.0.0.1:16825",
+//            "address": "10.101.67.165:16825",
 //            "role": "LEADER",
 //            "sql_port": 16860
 //        }, {
-//            "address": "127.0.0.2:16827",
+//            "address": "10.218.78.76:16827",
 //            "role": "FOLLOWER",
 //            "sql_port": 16862
 //        }],

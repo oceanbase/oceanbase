@@ -58,7 +58,7 @@ void ObExprRegexContext::destroy()
 }
 
 int ObExprRegexContext::init(ObExprStringBuf &string_buf,
-                             const ObExprRegexpSessionVariables &regex_vars,
+                             ObSQLSessionInfo *session_info,
                              const ObString &origin_pattern,
                              const uint32_t cflags,
                              const bool reusable,
@@ -131,16 +131,22 @@ int ObExprRegexContext::init(ObExprStringBuf &string_buf,
     UChar *u_pattern = NULL;
     UParseError parse_error;
     UErrorCode u_error_code = U_ZERO_ERROR;
+    int64_t regexp_stack_limit = 0;
+    int64_t regexp_time_limit = 0;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_valid_unicode_string(string_buf, pattern, u_pattern, u_pattern_length))) {
       LOG_WARN("failed to get valid unicode string", K(ret));
-    } else if (OB_ISNULL(u_pattern)) {
+    } else if (OB_ISNULL(u_pattern) || OB_ISNULL(session_info)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpcted null", K(ret), K(pattern), K(u_pattern_length));
+      LOG_WARN("get unexpcted null", K(ret), K(pattern), K(u_pattern_length), K(session_info));
+    } else if (OB_FAIL(session_info->get_regexp_stack_limit(regexp_stack_limit)) ||
+               OB_FAIL(session_info->get_regexp_time_limit(regexp_time_limit))) {
+      LOG_WARN("failed to get regexp_stack_limit or get_regexp_time_limit", K(ret),
+                                                       K(regexp_stack_limit), K(regexp_time_limit));
     } else {
       regexp_engine_ = uregex_open(u_pattern, u_pattern_length, cflags, &parse_error, &u_error_code);
-      uregex_setStackLimit(regexp_engine_, regex_vars.regexp_stack_limit_, &u_error_code);
-      uregex_setTimeLimit(regexp_engine_, regex_vars.regexp_time_limit_, &u_error_code);
+      uregex_setStackLimit(regexp_engine_, regexp_stack_limit, &u_error_code);
+      uregex_setTimeLimit(regexp_engine_, regexp_time_limit, &u_error_code);
       if (OB_FAIL(check_icu_regexp_status(u_error_code, &parse_error))) {
         LOG_WARN("failed to check icu regexp status", K(ret));
         if (regexp_engine_ != NULL) {
@@ -881,8 +887,6 @@ int ObExprRegexContext::check_binary_compatible(const ObExprResType *types, int6
   }
   return ret;
 }
-
-OB_SERIALIZE_MEMBER(ObExprRegexpSessionVariables, regexp_stack_limit_, regexp_time_limit_);
 
 }
 }

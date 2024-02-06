@@ -772,10 +772,11 @@ int ObIOTuner::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::IO_TUNING, *this))) {
-    LOG_WARN("start io scheduler failed", K(ret));
   } else {
     is_inited_ = true;
+    if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::IO_TUNING, *this))) {
+      LOG_WARN("start io scheduler failed", K(ret));
+    }
   }
   if (OB_UNLIKELY(!is_inited_)) {
     destroy();
@@ -851,7 +852,7 @@ void ObIOTuner::print_sender_status()
 
       ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
       if (OB_NOT_INIT != ret) {
-        LOG_INFO("[IO STATUS SENDER]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
+        LOG_INFO("[IO SENDER STATUS]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
                  K(reservation_ts), K(group_limitation_ts), K(tenant_limitation_ts), K(proportion_ts));
       }
     }
@@ -861,17 +862,14 @@ void ObIOTuner::print_sender_status()
 int ObIOTuner::try_release_thread()
 {
   int ret = OB_SUCCESS;
-  ObVector<uint64_t> tenant_ids;
-  if (OB_NOT_NULL(GCTX.omt_)) {
-    GCTX.omt_->get_tenant_ids(tenant_ids);
-  }
-  if (tenant_ids.size() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant id failed", K(ret));
+  } else if (tenant_ids.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (is_virtual_tenant_id(cur_tenant_id)) {
-        // do nothing
-      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
       } else {
         tenant_holder.get_ptr()->get_callback_mgr().try_release_thread();
@@ -884,17 +882,14 @@ int ObIOTuner::try_release_thread()
 void ObIOTuner::print_io_status()
 {
   int ret = OB_SUCCESS;
-  ObVector<uint64_t> tenant_ids;
-  if (OB_NOT_NULL(GCTX.omt_)) {
-    GCTX.omt_->get_tenant_ids(tenant_ids);
-  }
-  if (tenant_ids.size() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(OB_IO_MANAGER.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("get tenant id failed", K(ret));
+  } else if (tenant_ids.count() > 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
       const uint64_t cur_tenant_id = tenant_ids.at(i);
       ObRefHolder<ObTenantIOManager> tenant_holder;
-      if (is_virtual_tenant_id(cur_tenant_id)) {
-        // do nothing
-      } else if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
+      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(cur_tenant_id, tenant_holder))) {
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("get tenant io manager failed", K(ret), K(cur_tenant_id));
         } else {
@@ -1047,7 +1042,7 @@ public:
           LOG_WARN("get tenant io manager failed", K(ret), K(entry.first));
         } else {
           entry.second->~ObIOGroupQueues();
-          if (OB_NOT_NULL(tenant_holder.get_ptr()) && OB_NOT_NULL(tenant_holder.get_ptr()->get_tenant_io_allocator())) {
+          if (OB_NOT_NULL(tenant_holder.get_ptr()->get_tenant_io_allocator())) {
             tenant_holder.get_ptr()->get_tenant_io_allocator()->free(entry.second);
           }
         }
@@ -3228,10 +3223,10 @@ void ObIOFaultDetector::handle(void *task)
         }
         if (OB_SUCC(ret) && !is_retry_succ) {
           const int64_t current_ts = ObTimeUtility::fast_current_time();
-          if (current_ts >= error_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_ERROR_TIMES)) {
+          if (current_ts >= error_ts) {
             set_device_error();
             LOG_WARN("ObIOManager::detect IO retry timeout, device error", K(ret), K(current_ts), K(error_ts), K(retry_task->io_info_));
-          } else if (current_ts >= warn_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_WARN_TIMES)) {
+          } else if (current_ts >= warn_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_TIMES)) {
             set_device_warning();
             LOG_WARN("ObIOManager::detect IO retry reach limit, device warning", K(ret), K(sys_io_errno), K(current_ts), K(current_ts), K(fs_error_times), K(retry_task->io_info_));
           }
@@ -3301,7 +3296,7 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.fd_.second_id_ = second_id;
     retry_task->io_info_.offset_ = 0;
     retry_task->io_info_.callback_ = nullptr;
-    retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s
+    retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
       LOG_WARN("io fault detector push task failed", K(ret), KP(retry_task));
     }
@@ -3337,7 +3332,7 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, ObIORequest 
       retry_task->io_info_.size_ = result.size_;
       retry_task->io_info_.offset_ = static_cast<int64_t>(result.offset_);
       retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
-      retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s
+      retry_task->timeout_ms_ = 5000L; // 5s
       if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
         LOG_WARN("io fault detector push task failed", K(ret), KPC(retry_task));
       }
@@ -3440,7 +3435,7 @@ ObIOTracer::~ObIOTracer()
 int ObIOTracer::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr attr = SET_USE_500("io_trace_map");
+  auto attr = SET_USE_500("io_trace_map");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -3593,13 +3588,6 @@ void ObIOTracer::print_status()
     ObIArray<TraceItem> &trace_array_;
   };
 
-  struct {
-    bool operator()(const TraceItem &left, const TraceItem &right) const
-    {
-      return left.count_ < right.count_;
-    }
-  } sort_fn;
-
   int ret = OB_SUCCESS;
   CountFn counter;
   if (OB_FAIL(counter.init())) {
@@ -3614,7 +3602,9 @@ void ObIOTracer::print_status()
     } else if (OB_FAIL(counter.bt_count_.foreach_refactored(store_fn))) {
       LOG_WARN("get max backtrace count failed", K(ret));
     } else {
-      std::sort(trace_array.begin(), trace_array.end(), sort_fn);
+      std::sort(trace_array.begin(), trace_array.end(), [](const TraceItem &left, const TraceItem &right) {
+          return left.count_ > right.count_;
+          });
       LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), "trace_request_count", counter.req_count_, "distinct_backtrace_count", trace_array.count());
       const int64_t print_count = min(5, trace_array.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < print_count; ++i) {

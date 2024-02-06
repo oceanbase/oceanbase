@@ -52,20 +52,7 @@ const char *ObTimeZoneInfoManager::FETCH_TZ_INFO_SQL =
     "ORDER BY tz_info.time_zone_id, tz_info.transition_time ";
 
 const char *ObTimeZoneInfoManager::FETCH_TENANT_TZ_INFO_SQL =
-    "SELECT /*+ "
-    "  BEGIN_OUTLINE_DATA "
-    "  PQ_DISTRIBUTE_WINDOW(@\"SEL$0208448F\"  (0) NONE PARTITION_SORT) "
-    "  LEADING(@\"SEL$0208448F\" ((\"t1\"@\"SEL$2\" \"oceanbase\".\"t2\"@\"SEL$2\") \"oceanbase\".\"t3\"@\"SEL$2\")) "
-    "  USE_HASH(@\"SEL$0208448F\" \"oceanbase\".\"t3\"@\"SEL$2\") "
-    "  USE_HASH(@\"SEL$0208448F\" \"oceanbase\".\"t2\"@\"SEL$2\") "
-    "  PQ_DISTRIBUTE_WINDOW(@\"SEL$3\"  (0) NONE) "
-    "  FULL(@\"SEL$3\" \"oceanbase\".\"__all_tenant_time_zone_name\"@\"SEL$3\") "
-    "  FULL(@\"SEL$0208448F\" \"t2\"@\"SEL$2\") "
-    "  FULL(@\"SEL$0208448F\" \"t3\"@\"SEL$2\") "
-    "  PRED_DEDUCE(@\"SEL$2\") "
-    "  QUERY_TIMEOUT(100000000) "
-    "  OPTIMIZER_FEATURES_ENABLE('4.0.0.0') "
-    "  END_OUTLINE_DATA  */ * "
+    "SELECT /*+ query_timeout(30000000) */ * "
     "FROM ("
     "SELECT t1.time_zone_id, t1.inner_tz_id, t1.name, t3.transition_time, t2.offset, t2.is_dst, "
     "t2.transition_type_id, t2.abbreviation, "

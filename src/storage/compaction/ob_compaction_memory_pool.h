@@ -18,7 +18,6 @@
 #include "lib/task/ob_timer.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/allocator/page_arena.h"
-#include "lib/literals/ob_literals.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 
 
@@ -139,10 +138,9 @@ private:
   };
 
 public:
-  static constexpr int64_t CHUNK_MEMORY_LIMIT = 128_MB;
-  static constexpr int64_t MINI_MODE_CHUNK_MEMORY_LIMIT = 32_MB;
-  static constexpr int64_t RESERVE_MEM_SIZE = 32_MB;
-  static constexpr int64_t CHECK_SHRINK_INTERVAL = 120_s;
+  static constexpr int64_t MAX_MEMORY_LIMIT = 2 << 26; // 128MB
+  static constexpr int64_t RESERVE_MEM_SIZE = 2 << 24; // 32MB
+  static constexpr int64_t CHECK_SHRINK_INTERVAL = 120L * 1000L * 1000L; // 120s
 private:
   MemPoolShrinkTask mem_shrink_task_;
   common::DefaultPageAllocator chunk_allocator_;

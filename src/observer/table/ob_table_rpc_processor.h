@@ -191,8 +191,8 @@ protected:
   bool had_do_response_; // asynchronous transactions return packet in advance
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
+  static const ObString OBKV_TRACE_INFO;
   ObAddr user_client_addr_;
-  ObSessionStatEstGuard sess_stat_guard_;
 };
 
 template<class T>

@@ -109,7 +109,7 @@ int ObServerConfig::read_config()
         OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
       } else {
         key.set_version(it->second->version());
-        temp_ret = system_config_->read_config(get_tenant_id(), key, *(it->second));
+        temp_ret = system_config_->read_config(key, *(it->second));
         if (OB_SUCCESS != temp_ret) {
           OB_LOG(DEBUG, "Read config error", "name", it->first.str(), K(temp_ret));
         }
@@ -309,12 +309,10 @@ int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_si
   }
   return adap_memory_size;
 }
-
 int64_t ObServerMemoryConfig::get_extra_memory()
 {
   return memory_limit_ < lib::ObRunningModeConfig::MINI_MEM_UPPER ? 0 : hidden_sys_memory_;
 }
-
 int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
 {
   int ret = OB_SUCCESS;
@@ -356,51 +354,11 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
     }
     if (memory_limit - system_memory >= min_server_avail_memory &&
         system_memory >= hidden_sys_memory) {
-      bool setted = false;
-      if (!is_mini_mode()) {
-        int64_t unit_assigned = 0;
-        if (OB_NOT_NULL(GCTX.omt_)) {
-          const int64_t system_memory_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
-          common::ObArray<omt::ObTenantMeta> tenant_metas;
-          if (OB_FAIL(GCTX.omt_->get_tenant_metas(tenant_metas))) {
-            LOG_WARN("fail to get tenant metas", K(ret));
-            // ignore ret
-            ret = OB_SUCCESS;
-          } else {
-            for (int64_t i = 0; i < tenant_metas.count(); i++) {
-              unit_assigned += tenant_metas.at(i).unit_.config_.memory_size();
-            }
-            LOG_INFO("update observer memory config",
-                     K(memory_limit_), K(system_memory_), K(hidden_sys_memory_),
-                     K(memory_limit), K(system_memory), K(hidden_sys_memory),
-                     K(system_memory_hold), K(unit_assigned));
-            if ((system_memory - hidden_sys_memory) >= system_memory_hold
-                && memory_limit >= (unit_assigned + system_memory) ) {
-              system_memory_ = system_memory;
-              hidden_sys_memory_ = hidden_sys_memory;
-              memory_limit_ = memory_limit;
-            } else {
-              LOG_ERROR("Unreasonable memory parameters",
-                  "[config]memory_limit", server_config.memory_limit.get_value(),
-                  "[config]system_memory", server_config.system_memory.get_value(),
-                  "[config]hidden_sys", server_config._hidden_sys_tenant_memory.get_value(),
-                  "[expect]memory_limit", memory_limit,
-                  "[expect]system_memory", system_memory,
-                  "[expect]hidden_sys", hidden_sys_memory,
-                  K(system_memory_hold),
-                  K(unit_assigned));
-            }
-            setted = true;
-          }
-        }
-      }
-      if (!setted) {
-        memory_limit_ = memory_limit;
-        system_memory_ = system_memory;
-        hidden_sys_memory_ = hidden_sys_memory;
-      }
-      LOG_INFO("update observer memory config",
-               K_(memory_limit), K_(system_memory), K_(hidden_sys_memory));
+      memory_limit_ = memory_limit;
+      system_memory_ = system_memory;
+      hidden_sys_memory_ = hidden_sys_memory;
+      LOG_INFO("update observer memory config success",
+                K_(memory_limit), K_(system_memory), K_(hidden_sys_memory));
     } else {
       ret = OB_INVALID_CONFIG;
       LOG_ERROR("update observer memory config failed",
@@ -447,20 +405,17 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
 
   int ret = OB_SUCCESS;
   bool unlimited = false;
-  int64_t tenant_limit = INT64_MAX;
-  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+  auto ma = ObMallocAllocator::get_instance();
   if (UNLIMIT_MODE == limit_mode) {
     unlimited = true;
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
   } else if (CTX_LIMIT_MODE == limit_mode) {
-    // do-nothing
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
   } else if (TENANT_LIMIT_MODE == limit_mode) {
-    tenant_limit = system_memory_ - get_extra_memory();
+    ObTenantMemoryMgr::error_log_when_tenant_500_oversize = true;
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid limit mode", K(ret), K(limit_mode));
-  }
-  if (OB_SUCC(ret)) {
-    set_tenant_memory_limit(OB_SERVER_TENANT_ID, tenant_limit);
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
@@ -612,16 +567,6 @@ bool enable_pkt_nio(bool start_as_client) {
 int64_t get_max_rpc_packet_size()
 {
   return GCONF._max_rpc_packet_size;
-}
-
-int64_t get_stream_rpc_max_wait_timeout(int64_t tenant_id)
-{
-  int64_t stream_rpc_max_wait_timeout = ObRpcProcessorBase::DEFAULT_WAIT_NEXT_PACKET_TIMEOUT;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (OB_LIKELY(tenant_config.is_valid())) {
-    stream_rpc_max_wait_timeout = tenant_config->_stream_rpc_max_wait_timeout;
-  }
-  return stream_rpc_max_wait_timeout;
 }
 } // end of namespace obrpc
 } // end of namespace oceanbase

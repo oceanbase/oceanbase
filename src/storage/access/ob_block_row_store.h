@@ -87,7 +87,6 @@ protected:
   bool is_inited_;
   sql::PushdownFilterInfo pd_filter_info_;
   ObTableAccessContext &context_;
-  const ObTableIterParam *iter_param_;
 private:
   bool can_blockscan_;
   bool filter_applied_;

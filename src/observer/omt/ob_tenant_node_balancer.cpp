@@ -136,21 +136,6 @@ void ObTenantNodeBalancer::run1()
   }
 }
 
-int ObTenantNodeBalancer::handle_notify_unit_resource(const obrpc::TenantServerUnitConfig &arg)
-{
-  int ret = OB_SUCCESS;
-  if (!arg.is_delete_) {
-    if (OB_FAIL(notify_create_tenant(arg))) {
-      LOG_WARN("failed to notify update tenant", KR(ret), K(arg));
-    }
-  } else {
-    if (OB_FAIL(try_notify_drop_tenant(arg.tenant_id_))) {
-      LOG_WARN("fail to try drop tenant", KR(ret), K(arg));
-    }
-  }
-  return ret;
-}
-
 int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConfig &unit)
 {
   LOG_INFO("succ to receive notify of creating tenant", K(unit));
@@ -205,35 +190,23 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     } else if (is_user_tenant(tenant_id)
         && OB_FAIL(basic_tenant_unit.divide_meta_tenant(meta_tenant_unit))) {
       LOG_WARN("divide meta tenant failed", KR(ret), K(unit), K(basic_tenant_unit));
-    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, false /*check_data_version*/, create_tenant_timeout_ts))) {
+    } else if (OB_FAIL(check_new_tenant(basic_tenant_unit, create_tenant_timeout_ts))) {
       LOG_WARN("failed to create new tenant", KR(ret), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     } else {
       ret = OB_SUCCESS;
       LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     }
 #ifdef OB_BUILD_TDE_SECURITY
-    // get and set root_key
-    if (OB_SUCC(ret)) {
-      if (!unit.with_root_key_) {
-        ObRootKey root_key;
-        if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id, root_key, true))) {
-          LOG_WARN("failed to get root key", KR(ret));
-        }
-      } else {
-        const obrpc::ObRootKeyResult &root_key = unit.root_key_;
-        if (obrpc::RootKeyType::INVALID == root_key.key_type_) {
-          // do nothing
-          LOG_INFO("root_key got from RS is INVALID, won't set now", KR(ret));
-        } else if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(
-                            tenant_id, root_key.key_type_, root_key.root_key_))) {
-          LOG_WARN("failed to set root_key", KR(ret));
-        }
+    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+      ObRootKey root_key;
+      if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id, root_key, true))) {
+        LOG_WARN("failed to get root key", K(ret));
       }
     }
 #endif
     // create meta tenant
     if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
-      if (OB_FAIL(check_new_tenant(meta_tenant_unit, false /*check_data_version*/, create_tenant_timeout_ts))) {
+      if (OB_FAIL(check_new_tenant(meta_tenant_unit, create_tenant_timeout_ts))) {
         LOG_WARN("failed to create meta tenant", KR(ret), K(meta_tenant_unit), K(create_tenant_timeout_ts));
       } else {
         ret = OB_SUCCESS;
@@ -350,25 +323,20 @@ int ObTenantNodeBalancer::check_del_tenants(const TenantUnits &local_units, Tena
 int ObTenantNodeBalancer::check_new_tenants(TenantUnits &units)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
 
   DEBUG_SYNC(CHECK_NEW_TENANT);
 
-  const bool check_data_version = true;
   // check all units of tenants.
   for (TenantUnits::iterator it = units.begin(); it != units.end(); it++) {
-    if (OB_TMP_FAIL(check_new_tenant(*it, check_data_version))) {
-      LOG_WARN("failed to check new tenant", KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    if (OB_FAIL(check_new_tenant(*it))) {
+      LOG_WARN("failed to check new tenant", K(ret));
     }
   }
+
   return ret;
 }
 
-int ObTenantNodeBalancer::check_new_tenant(
-    const ObUnitInfoGetter::ObTenantConfig &unit,
-    const bool check_data_version,
-    const int64_t abs_timeout_us)
+int ObTenantNodeBalancer::check_new_tenant(const ObUnitInfoGetter::ObTenantConfig &unit, const int64_t abs_timeout_us)
 {
   int ret = OB_SUCCESS;
 
@@ -383,16 +351,7 @@ int ObTenantNodeBalancer::check_new_tenant(
       ret = OB_SUCCESS;
       ObTenantMeta tenant_meta;
       ObTenantSuperBlock super_block(tenant_id, false /*is_hidden*/);  // empty super block
-      const bool should_check_data_version = check_data_version && is_user_tenant(tenant_id);
-      uint64_t data_version = 0;
-      if (should_check_data_version && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_EAGAIN;
-          LOG_WARN("data_version not refreshed yet, create tenant later", KR(ret), K(tenant_id));
-        } else {
-          LOG_WARN("fail to get data_version", KR(ret), K(tenant_id));
-        }
-      } else if (OB_FAIL(tenant_meta.build(unit, super_block))) {
+      if (OB_FAIL(tenant_meta.build(unit, super_block))) {
         LOG_WARN("fail to build tenant meta", K(ret));
       } else if (OB_FAIL(omt_->create_tenant(tenant_meta, true /* write_slog */, abs_timeout_us))) {
         LOG_WARN("fail to create new tenant", K(ret), K(tenant_id));
@@ -524,34 +483,8 @@ int ObTenantNodeBalancer::fetch_effective_tenants(const TenantUnits &old_tenants
             PRINT_OBJ_LEAK(MTL_ID(), share::LEAK_CHECK_OBJ_MAX_NUM);
           }
         } else {
-          // check ls service is empty.
-          is_released = MTL(ObLSService *)->is_empty();
-        }
-
-        bool is_tenant_snapshot_released = false;
-        if (is_user_tenant(tenant_config.tenant_id_)) {
-          const int64_t now_time = ObTimeUtility::current_time();
-          const int64_t life_time = now_time - tenant_config.create_timestamp_;
-          if (tenant_config.is_removed_ || life_time >= RECYCLE_LATENCY) {
-            MTL(ObTenantSnapshotService*)->notify_unit_is_deleting();
-          }
-          if (OB_FAIL(MTL(ObTenantSnapshotService*)->
-                check_all_tenant_snapshot_released(is_tenant_snapshot_released))) {
-            LOG_WARN("fail to check_all_tenant_snapshot_released", K(ret), K(tenant_config));
-          } else if (!is_tenant_snapshot_released) {
-            // can not release now. dump some debug info
-            const uint64_t interval = 180 * 1000 * 1000; // 180s
-            if (!is_tenant_snapshot_released && REACH_TIME_INTERVAL(interval)) {
-              MTL(ObTenantSnapshotService*)->dump_all_tenant_snapshot_info();
-            }
-            LOG_INFO("[DELETE_TENANT] tenant has been dropped, tenant snapshot is still waiting for gc",
-                K(tenant_config));
-          }
-          if (OB_SUCC(ret)) {
-            is_released = is_released && is_tenant_snapshot_released;
-          } else {
-            is_released = false;
-          }
+          // check ls service safe to destroy.
+          is_released = MTL(ObLSService *)->safe_to_destroy();
         }
       }
 
@@ -617,16 +550,10 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_new_tenants(units))) {
       LOG_WARN("check and add new tenant fail", K(ret));
-      ret = OB_SUCCESS; // just don't affect the following process in run1().
-    } else {
-      omt_->set_synced();
-    }
-
-    if (OB_FAIL(check_del_tenants(local_units, units))) { // overwrite ret
+    } else if (FALSE_IT(omt_->set_synced())) {
+    } else if (OB_FAIL(check_del_tenants(local_units, units))) {
       LOG_WARN("check delete tenant fail", K(ret));
-    }
-
-    if (OB_FAIL(refresh_hidden_sys_memory())) { // overwrite ret
+    } else if (OB_FAIL(refresh_hidden_sys_memory())) {
       LOG_WARN("refresh hidden sys memory failed", K(ret));
     }
   }

@@ -60,7 +60,6 @@ ObTabletMeta::ObTabletMeta()
     ddl_commit_scn_(SCN::min_scn()),
     mds_checkpoint_scn_(),
     transfer_info_(),
-    space_usage_(),
     create_schema_version_(0),
     compat_mode_(lib::Worker::CompatMode::INVALID),
     has_next_tablet_(false),
@@ -449,7 +448,6 @@ void ObTabletMeta::reset()
   ddl_data_format_version_ = 0;
   mds_checkpoint_scn_.reset();
   transfer_info_.reset();
-  space_usage_.reset();
   is_inited_ = false;
 }
 
@@ -595,8 +593,6 @@ int ObTabletMeta::serialize(char *buf, const int64_t len, int64_t &pos) const
     LOG_WARN("failed to serialize transfer info", K(ret), K(len), K(new_pos), K_(transfer_info));
   } else if (new_pos - pos < length && OB_FAIL(serialization::encode_i64(buf, len, new_pos, create_schema_version_))) {
     LOG_WARN("failed to serialize create schema version", K(ret), K(len), K(new_pos), K_(create_schema_version));
-  } else if (new_pos - pos < length && OB_FAIL(space_usage_.serialize(buf, len, new_pos))) {
-    LOG_WARN("failed to serialize tablet space usage", K(ret), K(len), K(new_pos), K_(space_usage));
   } else if (OB_UNLIKELY(length != new_pos - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet meta's length doesn't match standard length", K(ret), K(new_pos), K(pos), K(length), K(length));
@@ -683,9 +679,7 @@ int ObTabletMeta::deserialize(
     } else if (new_pos - pos < length_ && OB_FAIL(transfer_info_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize transfer info", K(ret), K(len), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(serialization::decode_i64(buf, len, new_pos, &create_schema_version_))) {
-      LOG_WARN("failed to deserialize create schema version", K(ret), K(len), K(new_pos));
-    } else if (new_pos - pos < length_ && OB_FAIL(space_usage_.deserialize(buf, len, new_pos))) {
-      LOG_WARN("failed to deserialize tablet space usage", K(ret), K(len), K(new_pos));
+      LOG_WARN("failed to deserialize create schema version", K(ret), K(len));
     } else if (OB_UNLIKELY(length_ != new_pos - pos)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet's length doesn't match standard length", K(ret), K(new_pos), K(pos), K_(length));
@@ -732,7 +726,6 @@ int64_t ObTabletMeta::get_serialize_size() const
   size += mds_checkpoint_scn_.get_fixed_serialize_size();
   size += transfer_info_.get_serialize_size();
   size += serialization::encoded_length_i64(create_schema_version_);
-  size += space_usage_.get_serialize_size();
   return size;
 }
 
@@ -1417,6 +1410,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.table_type_ = ObTableType::USER_TABLE;
   //storage_schema.table_mode_
   storage_schema.index_type_ = ObIndexType::INDEX_TYPE_PRIMARY;
+  storage_schema.index_status_ = ObIndexStatus::INDEX_STATUS_AVAILABLE;
   storage_schema.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
   storage_schema.schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
   storage_schema.column_cnt_ = 1;

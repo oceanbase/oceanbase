@@ -280,15 +280,7 @@ ObBackupDataCtx::ObBackupDataCtx()
 {}
 
 ObBackupDataCtx::~ObBackupDataCtx()
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
-    ObBackupIoAdapter util;
-    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-      LOG_WARN("fail to close device and fd", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-}
+{}
 
 int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBackupDataType &backup_data_type,
     const int64_t file_id)
@@ -391,7 +383,6 @@ int ObBackupDataCtx::close()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup data ctx do not init", K(ret));
@@ -402,25 +393,6 @@ int ObBackupDataCtx::close()
   } else if (OB_FAIL(file_write_ctx_.close())) {
     LOG_WARN("failed to close file writer", K(ret));
   }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
-      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
-      ret = COVER_SUCC(tmp_ret);
-      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-
-  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-    ret = COVER_SUCC(tmp_ret);
-    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-  } else {
-    dev_handle_ = NULL;
-    io_fd_.reset();
-  }
   return ret;
 }
 
@@ -428,7 +400,7 @@ int ObBackupDataCtx::open_file_writer_(const share::ObBackupPath &backup_path)
 {
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter util;
-  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
   if (OB_FAIL(util.mk_parent_dir(backup_path.get_obstr(), param_.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to make parent dir", K(backup_path));
   } else if (OB_FAIL(util.open_with_access_type(

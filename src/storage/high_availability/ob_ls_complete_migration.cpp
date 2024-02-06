@@ -326,10 +326,9 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
     ObMigrationStatus &new_migration_status)
 {
   int ret = OB_SUCCESS;
-  bool is_valid_member = true;
-  bool is_ls_deleted = false;
+  bool is_valid_member = false;
+  bool is_ls_deleted = true;
   new_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  bool is_tenant_dropped = false;
   if (!ObMigrationStatusHelper::is_valid(current_migration_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("current migration status is invalid", K(ret), K(current_migration_status));
@@ -338,24 +337,13 @@ int ObLSCompleteMigrationDagNet::trans_rebuild_fail_status_(
       && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != current_migration_status) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration status is unexpected", K(ret), K(current_migration_status), K(ctx_));
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
-      is_valid_member = true; // reset value if fail
-      LOG_WARN("failed to check self is valid member", K(ret), K(tmp_ret), K(ctx_));
-    }
-    if (OB_TMP_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
-      is_ls_deleted = false; // reset value if fail
-      LOG_WARN("failed to get ls status from inner table", K(ret), K(tmp_ret), K(ls));
-    }
-    if (OB_TMP_FAIL(check_tenant_is_dropped_(is_tenant_dropped))) {
-      is_tenant_dropped = false;
-      LOG_WARN("failed to check tenant is droppping or dropped", K(ret), K(tmp_ret), K(ctx_));
-    }
-    if (FAILEDx(ObMigrationStatusHelper::trans_rebuild_fail_status(
-        current_migration_status, is_valid_member, is_ls_deleted, is_tenant_dropped, new_migration_status))) {
-      LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ls.get_ls_id(), is_valid_member))) {
+    LOG_WARN("failed to check self is valid member", K(ret), K(ctx_));
+  } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls.get_ls_id(), is_ls_deleted))) {
+    LOG_WARN("failed to get ls status from inner table", K(ret), K(ls));
+  } else if (OB_FAIL(ObMigrationStatusHelper::trans_rebuild_fail_status(
+      current_migration_status, is_valid_member, is_ls_deleted, new_migration_status))) {
+    LOG_WARN("failed to trans rebuild fail status", K(ret), K(ctx_));
   }
   return ret;
 }
@@ -367,7 +355,8 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   static const int64_t UPDATE_MIGRATION_STATUS_INTERVAL_MS = 100 * 1000; //100ms
   ObTenantDagScheduler *scheduler = nullptr;
   int32_t result = OB_SUCCESS;
-  bool is_tenant_deleted = false;
+  share::ObTenantBase *tenant_base = MTL_CTX();
+  omt::ObTenant *tenant = nullptr;
 
   DEBUG_SYNC(BEFORE_COMPLETE_MIGRATION_UPDATE_STATUS);
 
@@ -380,6 +369,10 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_ISNULL(tenant_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
+  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
   } else {
     while (!is_finish) {
       ObMigrationStatus current_migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
@@ -403,6 +396,10 @@ int ObLSCompleteMigrationDagNet::update_migration_status_(ObLS *ls)
       } else if (scheduler->has_set_stop()) {
         ret = OB_SERVER_IS_STOPPING;
         LOG_WARN("tenant dag scheduler has set stop, stop migration dag net", K(ret), K(ctx_));
+        break;
+      } else if (tenant->has_stopped()) {
+        ret = OB_TENANT_HAS_BEEN_DROPPED;
+        LOG_WARN("tenant has been stopped, stop migration dag net", K(ret), K(ctx_));
         break;
       } else {
         bool in_final_state = false;
@@ -518,28 +515,6 @@ int ObLSCompleteMigrationDagNet::report_ls_meta_table_(ObLS *ls)
       //overwrite ret
       LOG_WARN("failed to submit ls update task", K(ret), K(ctx_));
     }
-  }
-  return ret;
-}
-
-int ObLSCompleteMigrationDagNet::check_tenant_is_dropped_(
-    bool &is_tenant_dropped)
-{
-  int ret = OB_SUCCESS;
-  schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
-  schema::ObSchemaGetterGuard guard;
-  is_tenant_dropped = false;
-  const ObTenantSchema *tenant_schema = nullptr;
-
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "schema_service is nullptr", KR(ret));
-  } else if (OB_FAIL(schema_service->get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(ctx_));
-  } else if (OB_FAIL(guard.check_if_tenant_has_been_dropped(ctx_.tenant_id_, is_tenant_dropped))) {
-    LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(ctx_));
-  } else if (is_tenant_dropped) {
-    LOG_INFO("tenant is already dropped", K(ctx_), K(is_tenant_dropped));
   }
   return ret;
 }
@@ -1598,7 +1573,7 @@ int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_before_restore_to_consistent_scn()) {
+  } else if (ls_restore_status.is_in_restore_and_before_quick_restore()) {
     need_wait = false;
   }
   return ret;
@@ -1980,9 +1955,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
         if (REACH_TENANT_TIME_INTERVAL(60 * 1000 * 1000)) {
           LOG_INFO("ls wait replay to max minor sstable end log ts, retry next loop", "arg", ctx_->arg_,
               "wait_replay_start_ts", wait_replay_start_ts,
-              "current_ts", current_ts,
-              "max_minor_end_scn", max_minor_end_scn_,
-              "current_replay_scn", current_replay_scn);
+              "current_ts", current_ts);
         }
 
         if (current_ts - wait_replay_start_ts < timeout) {

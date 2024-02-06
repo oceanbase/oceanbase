@@ -431,20 +431,6 @@ public:
     }
   }
 
-  inline static int get_zero_value_byte_precision(int16_t precision, const ObDecimalInt *&decint, int32_t &int_bytes)
-  {
-    int ret = OB_SUCCESS;
-    ObDecimalIntWideType dec_type = get_decimalint_type(precision);
-    if (OB_UNLIKELY(dec_type == DECIMAL_INT_MAX)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(WARN, "invalid precision", K(precision));
-    } else {
-      decint = ZERO_VALUES[dec_type];
-      int_bytes = ((int32_t(1)) << dec_type) * sizeof(int32_t);
-    }
-    return ret;
-  }
-
   inline static const ObDecimalInt* get_max_upper(ObPrecision prec)
   {
     OB_ASSERT(prec <= OB_MAX_DECIMAL_POSSIBLE_PRECISION);
@@ -477,8 +463,6 @@ private:
   static const ObDecimalInt *MAX_UPPER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1];
   // MYSQL_MIN_LOWER
   static const ObDecimalInt *MIN_LOWER[OB_MAX_DECIMAL_POSSIBLE_PRECISION + 1];
-
-  static const ObDecimalInt *ZERO_VALUES[5];
 };
 
 // helper functions
@@ -492,41 +476,6 @@ inline bool is_negative(const ObDecimalInt *decint, int32_t int_bytes)
   case sizeof(int512_t): return decint->int512_v_->is_negative();
   default: return false;
   }
-}
-
-inline bool is_zero(const ObDecimalInt *decint, int32_t int_bytes)
-{
-  if (int_bytes == 0) {
-    return true;
-  }
-  switch (int_bytes) {
-  case sizeof(int32_t): return *(decint->int32_v_) == 0;
-  case sizeof(int64_t): return *(decint->int64_v_) == 0;
-  case sizeof(int128_t): return *(decint->int128_v_) == 0;
-  case sizeof(int256_t): return *(decint->int256_v_) == 0;
-  case sizeof(int512_t): return *(decint->int512_v_) == 0;
-  default: return false;
-  }
-}
-
-inline int negate(const ObDecimalInt *decint, int32_t int_bytes, ObDecimalInt *&out_decint,
-                  int32_t out_bytes, ObIAllocator &allocator)
-{
-#define DO_NEG_VAL(in_type, out_type)\
-  *reinterpret_cast<out_type *>(out_decint) = -(*reinterpret_cast<const in_type *>(decint));
-
-  int ret = OB_SUCCESS;
-  out_decint = nullptr;
-  if (out_bytes == 0 || int_bytes == 0) {
-    // do nothing
-  } else if (OB_ISNULL(out_decint = (ObDecimalInt *)allocator.alloc(out_bytes))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SQL_LOG(WARN, "allocate memory failed", K(ret));
-  } else {
-    DISPATCH_INOUT_WIDTH_TASK(int_bytes, out_bytes, DO_NEG_VAL);
-  }
-  return ret;
-#undef DO_NEG_VAL
 }
 
 template <typename T>

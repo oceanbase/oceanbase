@@ -70,9 +70,7 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     rd_sort_cmp_funcs_,
                     rd_pby_sort_cnt_,
                     role_type_,
-                    wf_aggr_status_expr_,
-                    input_rows_mem_bound_ratio_,
-                    estimated_part_cnt_);
+                    wf_aggr_status_expr_);
 
 OB_SERIALIZE_MEMBER(ObWindowFunctionOpInput, local_task_count_, total_task_count_, wf_participator_shared_info_);
 

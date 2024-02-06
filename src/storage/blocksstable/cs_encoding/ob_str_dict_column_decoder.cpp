@@ -14,8 +14,6 @@
 
 #include "ob_str_dict_column_decoder.h"
 #include "ob_string_stream_decoder.h"
-#include "ob_cs_vector_decoding_util.h"
-#include "ob_string_stream_vector_decoder.h"
 
 namespace oceanbase
 {
@@ -114,53 +112,6 @@ int ObStrDictColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx, const 
     }
   }
 
-  return ret;
-}
-
-int ObStrDictColumnDecoder::decode_vector(
-    const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObDictColumnDecoderCtx &dict_ctx = ctx.dict_ctx_;
-  if (OB_UNLIKELY(0 == dict_ctx.dict_meta_->distinct_val_cnt_)) { // empty dict, all datum is null
-    if (OB_FAIL(ObCSVectorDecodingUtil::decode_all_null_vector(
-        vector_ctx.row_ids_, vector_ctx.row_cap_, vector_ctx.vec_header_, vector_ctx.vec_offset_))) {
-      LOG_WARN("fail to decode_all_null_vector", K(ret));
-    }
-  } else {
-     const char *ref_arr = nullptr;
-     ObVecDecodeRefWidth ref_width = ObVecDecodeRefWidth::VDRW_MAX;
-
-    if (dict_ctx.dict_meta_->is_const_encoding_ref()) {
-      uint32_t *temp_ref_arr = vector_ctx.len_arr_;
-      ref_arr =  (char*)temp_ref_arr;
-      ref_width = ObVecDecodeRefWidth::VDRW_TEMP_UINT32_REF;
-      const uint64_t width_size = dict_ctx.ref_ctx_->meta_.get_uint_width_size();
-      ObConstEncodingRefDesc ref_desc(dict_ctx.ref_data_, width_size);
-      int64_t unused_null_cnt = 0;
-      if (0 == ref_desc.exception_cnt_) {
-        for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-          temp_ref_arr[i] = ref_desc.const_ref_;
-        }
-      } else if (OB_FAIL(extract_ref_and_null_count_(
-          ref_desc, dict_ctx.dict_meta_->distinct_val_cnt_, vector_ctx.row_ids_, vector_ctx.row_cap_,
-          nullptr, unused_null_cnt, temp_ref_arr))) {
-        LOG_WARN("fail to extract_ref_and_null_count_", K(ret), K(dict_ctx));
-      }
-    } else {  // not const encoding ref
-      ref_arr = dict_ctx.ref_data_;
-      ref_width = static_cast<ObVecDecodeRefWidth>(dict_ctx.ref_ctx_->meta_.get_width_tag());
-    }
-    if (OB_SUCC(ret)) {
-      ObStringStreamVecDecoder::StrVecDecoderCtx vec_decode_ctx(
-        dict_ctx.str_data_, dict_ctx.str_ctx_, dict_ctx.offset_data_, dict_ctx.offset_ctx_, dict_ctx.need_copy_);
-
-      if (OB_FAIL(ObStringStreamVecDecoder::decode_vector(
-          dict_ctx, vec_decode_ctx, ref_arr, ref_width, vector_ctx))) {
-        LOG_WARN("fail to decode_vector", K(ret), K(dict_ctx), K(vec_decode_ctx), K(vector_ctx));
-      }
-    }
-  }
   return ret;
 }
 

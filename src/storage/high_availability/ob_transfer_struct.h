@@ -37,13 +37,11 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferOutInfo &start_transfer_out_info);
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(data_end_scn), K_(transfer_epoch));
+  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list));
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   common::ObSArray<share::ObTransferTabletInfo> tablet_list_;
-  share::SCN data_end_scn_;
-  int64_t transfer_epoch_;
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferOutInfo);
 };
 

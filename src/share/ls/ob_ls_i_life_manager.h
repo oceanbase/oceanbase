@@ -39,7 +39,6 @@ namespace share
 {
 class ObLSID;
 struct ObLSStatusInfo;
-
 #define ALL_LS_EVENT_ADD(tenant_id, ls_id, event, ret, sql, args...)\
   do {\
     const int64_t MAX_VALUE_LENGTH = 512; \
@@ -176,13 +175,7 @@ public:
                        const common::ObSqlString &sql, ObISQLClient &client,
                        TableOperator *table_operator,
                        common::ObIArray<LS_Result> &res);
-  template<typename T>
-  static int hex_str_to_type(const common::ObString &str, T &list);
 
-  template<typename T>
-  static int type_to_hex_str(const T &list,
-    common::ObIAllocator &allocator,
-    common::ObString &hex_str);
  private:
   DISALLOW_COPY_AND_ASSIGN(ObLSTemplateOperator);
 };
@@ -272,77 +265,6 @@ int ObLSTemplateOperator::exec_write(const uint64_t &tenant_id,
       SHARE_LOG(WARN, "expected one row, may need retry", KR(ret), K(affected_rows),
                K(sql), K(ignore_row));
     }
-  }
-  return ret;
-}
-
-template<typename T>
-int ObLSTemplateOperator::hex_str_to_type(
-    const common::ObString &str,
-    T &list)
-{
-  int ret = OB_SUCCESS;
-  list.reset();
-  char *deserialize_buf = NULL;
-  const int64_t str_size = str.length();
-  const int64_t deserialize_size = str.length() / 2 + 1;
-  int64_t deserialize_pos = 0;
-  ObArenaAllocator allocator("HexValue");
-  if (OB_UNLIKELY(str.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "str is empty", KR(ret));
-  } else if (OB_ISNULL(deserialize_buf = static_cast<char*>(allocator.alloc(deserialize_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "fail to alloc memory", KR(ret), K(deserialize_size));
-  } else if (OB_FAIL(hex_to_cstr(str.ptr(), str_size, deserialize_buf, deserialize_size))) {
-    SHARE_LOG(WARN, "fail to get cstr from hex", KR(ret), K(str_size), K(deserialize_size), K(str));
-  } else if (OB_FAIL(list.deserialize(deserialize_buf, deserialize_size, deserialize_pos))) {
-    SHARE_LOG(WARN, "fail to deserialize set member list arg", KR(ret), K(deserialize_pos), K(deserialize_size),
-             K(str));
-  } else if (OB_UNLIKELY(deserialize_pos > deserialize_size)) {
-    ret = OB_SIZE_OVERFLOW;
-    SHARE_LOG(WARN, "deserialize error", KR(ret), K(deserialize_pos), K(deserialize_size));
-  }
-  return ret;
-}
-
-template<typename T>
-int ObLSTemplateOperator::type_to_hex_str(
-    const T &list,
-    common::ObIAllocator &allocator,
-    common::ObString &hex_str)
-{
-  int ret = OB_SUCCESS;
-  char *serialize_buf = NULL;
-  const int64_t serialize_size = list.get_serialize_size();
-  int64_t serialize_pos = 0;
-  char *hex_buf = NULL;
-  const int64_t hex_size = 2 * serialize_size;
-  int64_t hex_pos = 0;
-  if (OB_UNLIKELY(!list.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_LOG(WARN, "list is invalid", KR(ret), K(list));
-  } else if (OB_UNLIKELY(hex_size > OB_MAX_LONGTEXT_LENGTH + 1)) {
-    ret = OB_SIZE_OVERFLOW;
-    SHARE_LOG(WARN, "format str is too long", KR(ret), K(hex_size), K(list));
-  } else if (OB_ISNULL(serialize_buf = static_cast<char *>(allocator.alloc(serialize_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "fail to alloc buf", KR(ret), K(serialize_size));
-  } else if (OB_FAIL(list.serialize(serialize_buf, serialize_size, serialize_pos))) {
-    SHARE_LOG(WARN, "failed to serialize set list arg", KR(ret), K(list), K(serialize_size), K(serialize_pos));
-  } else if (OB_UNLIKELY(serialize_pos > serialize_size)) {
-    ret = OB_SIZE_OVERFLOW;
-    SHARE_LOG(WARN, "serialize error", KR(ret), K(serialize_pos), K(serialize_size));
-  } else if (OB_ISNULL(hex_buf = static_cast<char*>(allocator.alloc(hex_size)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    SHARE_LOG(WARN, "fail to alloc memory", KR(ret), K(hex_size));
-  } else if (OB_FAIL(hex_print(serialize_buf, serialize_pos, hex_buf, hex_size, hex_pos))) {
-    SHARE_LOG(WARN, "fail to print hex", KR(ret), K(serialize_pos), K(hex_size), K(serialize_buf));
-  } else if (OB_UNLIKELY(hex_pos > hex_size)) {
-    ret = OB_SIZE_OVERFLOW;
-    SHARE_LOG(WARN, "encode error", KR(ret), K(hex_pos), K(hex_size));
-  } else {
-    hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_pos));
   }
   return ret;
 }

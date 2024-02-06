@@ -264,9 +264,9 @@ public:
                                    GotoRestrictionType &result);
   int check_goto_cursor_stmts(ObPLGotoStmt &goto_stmt,
                               const ObPLStmt &dst_stmt);
-  int check_contain_goto_block(const ObPLStmt *cur_stmt,
-                               const ObPLStmtBlock *goto_block,
-                               bool &is_contain);
+  int check_contain_cursor_loop_stmt(const ObPLStmtBlock *stmt_block,
+                                     const ObPLCursorForLoopStmt *cur_loop_stmt,
+                                     bool &is_contain);
 public:
   inline ObPLExternalNS &get_external_ns() { return external_ns_; }
   inline const ObPLResolveCtx &get_resolve_ctx() const { return resolve_ctx_; }
@@ -451,22 +451,7 @@ public:
                                ObProcType &routine_type,
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
-  static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
-  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type);
 
-  static
-  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
-                                 ObRawExprFactory &expr_factory,
-                                 const sql::ObSQLSessionInfo *session_info,
-                                 ObSchemaGetterGuard *schema_guard,
-                                 bool for_write,
-                                 ObString &result);
-  static
-  int set_write_property(ObRawExpr *obj_expr,
-                         ObRawExprFactory &expr_factory,
-                         const ObSQLSessionInfo *session_info,
-                         ObSchemaGetterGuard *schema_guard,
-                         bool for_write);
   int get_caller_accessor_item(
     const ObPLStmtBlock *caller, AccessorItem &caller_item);
   int check_package_accessible(
@@ -804,11 +789,10 @@ private:
                         const ObPLBlockNS &ns,
                         const ObPLConditionValue **value);
   int resolve_cursor(ObPLCompileUnitAST &func,
-                     const ObPLBlockNS &ns,
                      const ObString &db_name,
                      const ObString &package_name,
                      const ObString &cursor_name,
-                     int64_t &index);
+                     const ObPLCursor *&cursor);
   int resolve_cursor(const ObStmtNodeTree *parse_tree,
                      const ObPLBlockNS &ns,
                      int64_t &index,
@@ -928,6 +912,19 @@ private:
   int get_subprogram_var(
     ObPLBlockNS &ns, uint64_t subprogram_id, int64_t var_idx, const ObPLVar *&var);
   static
+  int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,
+                                 ObRawExprFactory &expr_factory,
+                                 const sql::ObSQLSessionInfo *session_info,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 bool for_write,
+                                 ObString &result);
+  static
+  int set_write_property(ObRawExpr *obj_expr,
+                         ObRawExprFactory &expr_factory,
+                         const ObSQLSessionInfo *session_info,
+                         ObSchemaGetterGuard *schema_guard,
+                         bool for_write);
+  static
   int make_var_from_access(const ObIArray<ObObjAccessIdx> &access_idxs,
                            ObRawExprFactory &expr_factory,
                            const sql::ObSQLSessionInfo *session_info,
@@ -1009,7 +1006,6 @@ private:
                                 int64_t table_idx);
   int check_forall_sql_and_modify_params(ObPLForAllStmt &stmt,
                                 ObPLFunctionAST &func);
-  int replace_record_member_default_expr(ObRawExpr *&expr);
   int check_param_default_expr_legal(ObRawExpr *expr, bool is_subprogram_expr = true);
   int check_params_legal_in_body_routine(ObPLFunctionAST &routine_ast,
                                          const ObPLRoutineInfo *parent_routine_info,
@@ -1019,9 +1015,6 @@ private:
                               ObRawExpr *&expr,
                               const ObPLDataType *expected_type,
                               ObPLCompileUnitAST &func);
-  int try_transform_assign_to_dynamic_SQL(ObPLStmt *&old_stmt, ObPLFunctionAST &func);
-  int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
-  int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int replace_to_const_expr_if_need(ObRawExpr *&expr);
   int build_seq_value_expr(ObRawExpr *&expr,
@@ -1066,6 +1059,8 @@ private:
   inline void set_item_type(ObItemType item_type) { item_type_ = item_type; }
 
   int resolve_question_mark_node(const ObStmtNodeTree *into_node, ObRawExpr *&into_expr);
+  bool is_question_mark_value(ObRawExpr *into_expr);
+  int set_question_mark_type(ObRawExpr *into_expr, const ObPLDataType *type);
 
   int check_cursor_formal_params(const ObIArray<int64_t>& formal_params,
                                  ObPLCursor &cursor,
@@ -1183,24 +1178,6 @@ private:
   ObArray<ObPLStmt *> goto_stmts_; // goto语句的索引，用来二次解析。
   ObItemType item_type_;
 };
-
-class ObPLSwitchDatabaseGuard
-{
-public:
-  ObPLSwitchDatabaseGuard(sql::ObSQLSessionInfo &session_info,
-                          share::schema::ObSchemaGetterGuard &schema_guard,
-                          ObPLCompileUnitAST &func,
-                          int &ret,
-                          bool with_rowid);
-  virtual ~ObPLSwitchDatabaseGuard();
-private:
-  int &ret_;
-  sql::ObSQLSessionInfo &session_info_;
-  uint64_t database_id_;
-  bool need_reset_;
-  ObSqlString database_name_;
-};
-
 }
 }
 

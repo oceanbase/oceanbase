@@ -110,9 +110,20 @@ int ObPlanMonitorNodeList::mtl_init(ObPlanMonitorNodeList* &node_list)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = lib::current_resource_owner_id();
-  int64_t mem_limit = get_tenant_memory_limit(tenant_id);
-  if (OB_FAIL(node_list->init(tenant_id, mem_limit))) {
-    LOG_WARN("failed to init event list", K(ret));
+  node_list = OB_NEW(ObPlanMonitorNodeList, ObMemAttr(tenant_id, MOD_LABEL));
+  if (nullptr == node_list) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for ObPlanMonitorNodeList", K(ret));
+  } else {
+    int64_t mem_limit = get_tenant_memory_limit(tenant_id);
+    if (OB_FAIL(node_list->init(tenant_id, mem_limit))) {
+      LOG_WARN("failed to init event list", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) && node_list != nullptr) {
+    // cleanup
+    common::ob_delete(node_list);
+    node_list = nullptr;
   }
   return ret;
 }

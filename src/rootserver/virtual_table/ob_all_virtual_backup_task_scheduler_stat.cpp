@@ -58,7 +58,7 @@ int ObAllBackupScheduleTaskStat::inner_get_next_row(ObNewRow *&row)
       return ret;
     };
     if (OB_FAIL(omt_->operate_in_each_tenant(func_iterate_tenant_task_scheduler))) {
-      LOG_WARN("fail to operate in each tenant", K(ret));
+      LOG_WARN("fail to operater in each tenant", K(ret));
     } else {
       scanner_it_ = scanner_.begin();
       start_to_read_ = true;

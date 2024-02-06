@@ -15,7 +15,6 @@
 
 #include "storage/access/ob_micro_block_handle_mgr.h"
 #include "ob_index_block_tree_cursor.h"
-#include "storage/blocksstable/index_block/ob_ddl_index_block_row_iterator.h"
 
 namespace oceanbase
 {
@@ -41,7 +40,7 @@ public:
       const bool is_reverse_scan = false,
       const int64_t sample_step = 0);
   virtual int get_next(ObDataMacroBlockMeta &macro_meta);
-  TO_STRING_KV(K_(is_reverse_scan), K_(is_inited), K_(start_bound_micro_block), K_(ddl_iter),
+  TO_STRING_KV(K_(is_reverse_scan), K_(is_inited), K_(start_bound_micro_block),
       K_(end_bound_micro_block), K_(idx_cursor), K_(curr_handle_idx), K_(prefetch_handle_idx),
       K_(prev_block_row_cnt), K_(curr_block_start_idx), K_(curr_block_end_idx), K_(curr_block_idx),
       K_(step_cnt), K_(is_prefetch_end), KPC_(query_range), KPC_(rowkey_read_info));
@@ -57,7 +56,7 @@ private:
 
   OB_INLINE bool is_target_row_in_curr_block() const
   {
-    return nullptr != block_meta_tree_ ? !ddl_iter_.end_of_block() : curr_block_idx_ >= curr_block_start_idx_ && curr_block_idx_ <= curr_block_end_idx_;
+    return curr_block_idx_ >= curr_block_start_idx_ && curr_block_idx_ <= curr_block_end_idx_;
   }
 
   int locate_bound_micro_block(
@@ -87,7 +86,6 @@ private:
   ObIMicroBlockReader *micro_reader_;
   ObMicroBlockReaderHelper micro_reader_helper_;
   storage::ObBlockMetaTree *block_meta_tree_;
-  ObDDLIndexBlockRowIterator ddl_iter_;
   const ObDatumRange *query_range_;
   ObMicroBlockId start_bound_micro_block_;
   ObMicroBlockId end_bound_micro_block_;

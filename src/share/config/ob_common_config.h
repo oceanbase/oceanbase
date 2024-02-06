@@ -98,7 +98,6 @@ public:
                                const int64_t version = 0,
                                const bool check_config = true);
   virtual bool is_debug_sync_enabled() const { return false; }
-  virtual uint64_t get_tenant_id() const { return common::OB_INVALID_TENANT_ID; }
 
   OB_UNIS_VERSION_V(1);
 

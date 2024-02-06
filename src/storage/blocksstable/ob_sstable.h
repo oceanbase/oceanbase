@@ -13,7 +13,6 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_H
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_H
 
-#include "lib/oblog/ob_log_module.h"
 #include "storage/meta_mem/ob_storage_meta_cache.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
@@ -36,8 +35,6 @@ class ObRowState;
 }
 namespace blocksstable
 {
-extern const char *DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_BUF;
-extern const int64_t DDL_EMPTY_SSTABLE_DUMMY_INDEX_DATA_SIZE;
 class ObSSTableSecMetaIterator;
 class ObIMacroBlockIterator;
 struct ObMacroBlocksWriteCtx;
@@ -52,15 +49,15 @@ public:
   void reset();
   int get_sstable_meta(const ObSSTableMeta *&sstable_meta) const;
 
-  OB_INLINE bool is_valid() const { return nullptr != meta_ && meta_->is_valid(); }
+  OB_INLINE bool is_valid() { return nullptr != meta_ && meta_->is_valid(); }
   OB_INLINE const ObSSTableMeta &get_sstable_meta() const
   {
     OB_ASSERT(nullptr != meta_);
     return *meta_;
   }
-  OB_INLINE const ObStorageMetaHandle &get_storage_handle() const { return handle_; }
   TO_STRING_KV(K_(handle), KPC_(meta));
-public:
+private:
+  friend class ObSSTable;
   ObStorageMetaHandle handle_;
   const ObSSTableMeta *meta_;
 };
@@ -70,48 +67,31 @@ public:
 struct ObSSTableMetaCache
 {
 public:
-  enum SSTableCacheStatus: uint8_t {
-    INVALID = 0,
-    PADDING = 1,
-    NORMAL = 2
-  };
   static const int SSTABLE_META_CACHE_VERSION = 1;
   ObSSTableMetaCache();
   ~ObSSTableMetaCache() = default;
   void reset();
-  int init(const blocksstable::ObSSTableMeta *meta, const bool has_multi_version_row = false);
+  int init(blocksstable::ObSSTableMeta *meta);
   bool is_valid() const { return version_ >= SSTABLE_META_CACHE_VERSION; }
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
-  int deserialize_for_compat(const bool has_multi_version_row, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  TO_STRING_KV(K_(version), K_(has_multi_version_row), K_(status), K_(data_macro_block_count), K_(nested_size), K_(nested_offset),
-        K_(total_macro_block_count), K_(total_use_old_macro_block_count), K_(row_count), K_(occupy_size), K_(data_checksum),
-        K_(max_merged_trans_version), K_(upper_trans_version), K_(filled_tx_scn), K_(contain_uncommitted_row));
+  TO_STRING_KV(K_(upper_trans_version), K_(max_merged_trans_version), K_(data_macro_block_count),
+        K_(row_count), K_(occupy_size), K_(total_macro_block_count), K_(reuse_macro_block_count),
+        K_(data_checksum), K_(filled_tx_scn), K_(contain_uncommitted_row));
 public:
-  union {
-    uint32_t header_;
-    struct {
-      uint32_t version_                   : 8;
-      uint32_t has_multi_version_row_     : 1;
-      uint32_t status_                    : 2;
-      uint32_t reserved_                  : 21;
-    };
-  };
-
-  int32_t data_macro_block_count_;
-  int32_t nested_size_;
-  int32_t nested_offset_;
-  int32_t total_macro_block_count_;
-  int32_t total_use_old_macro_block_count_;
+  int64_t version_; // maybe we could use version to help use to see how many members could be accessed
+  int64_t upper_trans_version_;
+  int64_t max_merged_trans_version_;
+  int64_t data_macro_block_count_;
   int64_t row_count_;
   int64_t occupy_size_;
-  int64_t max_merged_trans_version_;
-  // major sstable fields
   int64_t data_checksum_;
-  // mini sstable fields
-  int64_t upper_trans_version_;
+  int32_t total_macro_block_count_;
+  int32_t reuse_macro_block_count_;
+  int64_t nested_size_;
+  int64_t nested_offset_;
   share::SCN filled_tx_scn_;
   bool contain_uncommitted_row_;
 };
@@ -202,7 +182,7 @@ public:
       storage::ObTableAccessContext &context,
       share::SCN &max_trans_version,
       ObRowsInfo &rows_info);
-  int set_upper_trans_version(const int64_t upper_trans_version, const bool force_update);
+  int set_upper_trans_version(const int64_t upper_trans_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return meta_cache_.upper_trans_version_;
@@ -219,44 +199,20 @@ public:
   {
     return meta_cache_.filled_tx_scn_;
   }
-  OB_INLINE bool has_padding_meta_cache() const
-  {
-    return ObSSTableMetaCache::PADDING == meta_cache_.status_;
-  }
-
   bool is_empty() const
   {
     return 0 == meta_cache_.data_macro_block_count_;
   }
-  virtual bool no_data_to_read() const override
-  {
-    return is_empty() && !is_ddl_merge_sstable();
-  }
-  virtual bool is_ddl_merge_empty_sstable() const override
-  {
-    return is_empty() && is_ddl_merge_sstable();
-  }
   int set_addr(const ObMetaDiskAddr &addr);
   OB_INLINE const ObMetaDiskAddr &get_addr() const { return addr_; }
   OB_INLINE int64_t get_data_macro_block_count() const { return meta_cache_.data_macro_block_count_; }
+  OB_INLINE int64_t get_row_count() const { return meta_cache_.row_count_; }
+  OB_INLINE int64_t get_occupy_size() const { return meta_cache_.occupy_size_; }
+  OB_INLINE int64_t get_data_checksum() const { return meta_cache_.data_checksum_; }
+  OB_INLINE int64_t get_total_macro_block_count() const { return meta_cache_.total_macro_block_count_; }
+  OB_INLINE int64_t get_total_use_old_macro_block_count() const { return meta_cache_.reuse_macro_block_count_; }
   OB_INLINE int64_t get_macro_offset() const { return meta_cache_.nested_offset_; }
   OB_INLINE int64_t get_macro_read_size() const { return meta_cache_.nested_size_; }
-
-  #define GET_SSTABLE_META_DEFINE_FUNC(var_type, var_name)                  \
-    var_type get_##var_name() const {                                       \
-      var_type val = meta_cache_. var_name##_;                              \
-      if (OB_UNLIKELY(ObSSTableMetaCache::NORMAL != meta_cache_.status_)) { \
-        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED,                            \
-            "sstable meta cache not valid", K(meta_cache_), KPC(this));     \
-      }                                                                     \
-      return val;                                                           \
-    }
-
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, row_count);
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, occupy_size);
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, data_checksum);
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_macro_block_count);
-  GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_use_old_macro_block_count);
   OB_INLINE bool is_small_sstable() const
   {
     return OB_DEFAULT_MACRO_BLOCK_SIZE != meta_cache_.nested_size_ && 0 < meta_cache_.nested_offset_;

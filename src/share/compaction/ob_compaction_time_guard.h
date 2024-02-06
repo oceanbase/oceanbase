@@ -18,10 +18,8 @@ namespace compaction
 class ObCompactionTimeGuard : public common::occam::ObOccamTimeGuard
 {
 public:
-  const static uint64_t WARN_THRESHOLD = 30L * 1000 * 1000; // 30s
-  ObCompactionTimeGuard(const uint64_t warn_threshold = WARN_THRESHOLD, const char *mod = "")
-    : ObOccamTimeGuard(warn_threshold, nullptr, nullptr, mod),
-      add_time_(0)
+  ObCompactionTimeGuard(const uint64_t warn_threshold = 0, const char *mod = "")
+    : ObOccamTimeGuard(warn_threshold, nullptr, nullptr, mod)
   {}
   virtual ~ObCompactionTimeGuard() {}
   virtual int64_t to_string(char *buf, const int64_t buf_len) const
@@ -32,12 +30,6 @@ public:
   void add_time_guard(const ObCompactionTimeGuard &other);
   ObCompactionTimeGuard & operator=(const ObCompactionTimeGuard &other);
   OB_INLINE bool is_empty() const { return 0 == idx_; }
-  // set the dag add_time as the first click time
-  OB_INLINE void set_last_click_ts(const int64_t time)
-  {
-    last_click_ts_ = time;
-    add_time_ = time;
-  }
   OB_INLINE uint32_t get_specified_cost_time(const int64_t line) const {
     uint32_t ret_val = 0;
     for (int64_t idx = 0; idx < idx_; ++idx) {
@@ -48,8 +40,6 @@ public:
     }
     return ret_val;
   }
-
-  int64_t add_time_;
 };
 
 } // namespace compaction

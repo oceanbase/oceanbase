@@ -351,16 +351,16 @@ const char *ObMediumCompactionInfo::ObCompactionTypeStr[] = {
 const char *ObMediumCompactionInfo::get_compaction_type_str(enum ObCompactionType type)
 {
   const char *str = "";
-  if (is_valid_compaction_type(type)) {
-    str = ObCompactionTypeStr[type];
-  } else {
+  if (type >= COMPACTION_TYPE_MAX || type < MEDIUM_COMPACTION) {
     str = "invalid_type";
+  } else {
+    str = ObCompactionTypeStr[type];
   }
   return str;
 }
 
 ObMediumCompactionInfo::ObMediumCompactionInfo()
-  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V4),
+  : medium_compat_version_(MEDIUM_COMPAT_VERSION_V3),
     compaction_type_(COMPACTION_TYPE_MAX),
     contain_parallel_range_(false),
     medium_merge_reason_(ObAdaptiveMergePolicy::NONE),
@@ -410,12 +410,12 @@ int ObMediumCompactionInfo::init(
   return ret;
 }
 
-int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
+int ObMediumCompactionInfo::init_data_version()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(compat_version <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid input compat version", K(ret), K(compat_version));
+  uint64_t compat_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+    LOG_WARN("fail to get data version", K(ret));
   } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_1_0_0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid data version to schedule medium compaction", K(ret), K(compat_version));
@@ -425,10 +425,8 @@ int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION;
     } else if (compat_version < DATA_VERSION_4_2_1_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
-    } else if (compat_version < DATA_VERSION_4_2_1_2) {
-      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
     } else {
-      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3;
     }
   }
   return ret;

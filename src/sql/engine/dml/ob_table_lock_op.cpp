@@ -450,8 +450,7 @@ OB_INLINE int ObTableLockOp::get_next_batch_from_child(const int64_t max_row_cnt
   if (OB_FAIL(child_->get_next_batch(max_row_cnt, child_brs))) {
     LOG_WARN("fail to get next batch", K(ret));
   } else if (OB_LIKELY(!child_brs->end_ && child_brs->size_ > 0)) {
-    PRINT_VECTORIZED_ROWS(SQL, TRACE, eval_ctx_, child_->get_spec().output_, child_brs->size_,
-                         child_brs->skip_);
+    LOG_TRACE("child output row", "row", ROWEXPR2STR(eval_ctx_, child_->get_spec().output_));
   }
   return ret;
 }

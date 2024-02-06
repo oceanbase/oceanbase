@@ -867,11 +867,7 @@ int LSFetchCtx::get_dispatch_progress(int64_t &dispatch_progress, PartTransDispa
       tls_id_.get_ls_id(),
       dispatch_progress,
       dispatch_info))) {
-    if (OB_LS_NOT_EXIST != ret) {
-      LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
-    } else {
-      LOG_INFO("ls_not_exist when trying to get_dispatch_progress", K(tls_id_));
-    }
+    LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == dispatch_progress)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K(tls_id_), K(dispatch_info));
@@ -1219,9 +1215,7 @@ int LSFetchInfoForPrint::init(LSFetchCtx &ctx)
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(ctx.get_dispatch_progress(dispatch_progress_, dispatch_info_))) {
-    if (OB_LS_NOT_EXIST != ret) {
-      LOG_ERROR("get_dispatch_progress from LSFetchCtx fail", KR(ret), K(ctx));
-    }
+    LOG_ERROR("get_dispatch_progress from LSFetchCtx fail", KR(ret), K(ctx));
   } else {
     tps_ = ctx.get_tps();
     is_discarded_ = ctx.is_discarded();

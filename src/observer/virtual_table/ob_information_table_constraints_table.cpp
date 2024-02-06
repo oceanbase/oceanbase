@@ -253,7 +253,7 @@ int ObInfoSchemaTableConstraintsTable::add_index_constraints(const ObTableSchema
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "schema guard or cells should not be null", K(ret));
   } else if (OB_FAIL(table_schema.get_simple_index_infos(
-                     simple_index_infos))) {
+                     simple_index_infos, false))) {
     SERVER_LOG(WARN, "get simple_index_infos failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {

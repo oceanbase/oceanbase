@@ -76,11 +76,5 @@ bool ObLSMetaPackage::is_valid() const
           dup_ls_meta_.is_valid());
 }
 
-void ObLSMetaPackage::update_clog_checkpoint_in_ls_meta(const share::SCN& clog_checkpoint_scn,
-                                                        const palf::LSN& clog_base_lsn)
-{
-  ls_meta_.update_clog_checkpoint_in_ls_meta_package_(clog_checkpoint_scn, clog_base_lsn);
-}
-
 }
 }

@@ -40,8 +40,6 @@ public:
                                  ObDatum &res);
   static int calc(const common::ObString &sep_str, const common::ObIArray<common::ObString> &words,
                         common::ObIAllocator &alloc, common::ObString &res_str);
-  DECLARE_SET_LOCAL_SESSION_VARS;
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprConcatWs);

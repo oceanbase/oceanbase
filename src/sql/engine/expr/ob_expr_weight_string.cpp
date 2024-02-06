@@ -31,7 +31,7 @@ namespace oceanbase
 namespace sql
 {
 ObExprWeightString::ObExprWeightString(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_WEIGHT_STRING, N_WEIGHT_STRING, MORE_THAN_ZERO, VALID_FOR_GENERATED_COL)
+    : ObStringExprOperator(alloc, T_FUN_SYS_WEIGHT_STRING, N_WEIGHT_STRING, MORE_THAN_ZERO, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 ObExprWeightString::~ObExprWeightString()

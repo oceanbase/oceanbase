@@ -20,7 +20,6 @@
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_msg_type.h"
 #include "share/detect/ob_detect_manager_utils.h"
-#include "deps/oblib/src/lib/hash/ob_hashtable.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -103,11 +102,7 @@ void ObAtomicAppendBlockCall::operator() (common::hash::HashMapPair<ObDTLIntermR
     } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
       ret_ = OB_INVALID_ARGUMENT;
     } else {
-      if (entry.second->use_rich_format_) {
-        entry.second->col_store_->append_block(block_buf_, size_);
-      } else {
-        entry.second->datum_store_->append_block(block_buf_, size_, true);
-      }
+      ret_ = DTL_IR_STORE_DO(*entry.second, append_block, block_buf_, size_, true);
       if (is_eof_) {
         entry.second->is_eof_ = is_eof_;
       }
@@ -124,11 +119,7 @@ void ObAtomicAppendPartBlockCall::operator() (common::hash::HashMapPair<ObDTLInt
     } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
       ret_ = OB_INVALID_ARGUMENT;
     } else {
-      if (entry.second->use_rich_format_) {
-        entry.second->col_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_);
-      } else {
-        entry.second->datum_store_->append_block_payload(block_buf_ + start_pos_, length_, rows_, true);
-      }
+      ret_ = DTL_IR_STORE_DO(*entry.second, append_block_payload, block_buf_ + start_pos_, length_, rows_, true);
       if (is_eof_) {
         entry.second->is_eof_ = is_eof_;
       }
@@ -169,14 +160,13 @@ void ObDTLIntermResultManager::destroy()
   if (IS_INIT) {
     erase_tenant_interm_result_info();
     map_.destroy();
-    // Used to handle scenarios where destroy is called multiple times.
-    is_inited_ = false;
   }
 }
 
 void ObDTLIntermResultManager::mtl_destroy(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
   if (nullptr != dtl_interm_result_manager) {
+    dtl_interm_result_manager->destroy();
     ob_delete(dtl_interm_result_manager);
     dtl_interm_result_manager = nullptr;
   }
@@ -197,27 +187,20 @@ int ObDTLIntermResultManager::get_interm_result_info(ObDTLIntermResultKey &key,
 
 int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     ObDTLIntermResultInfoGuard &result_info_guard,
-    const ObDTLIntermResultMonitorInfo &monitor_info,
-    bool use_rich_format)
+    const ObDTLIntermResultMonitorInfo &monitor_info)
 {
   int ret = OB_SUCCESS;
   void *result_info_buf = NULL;
-  void *store_buf = NULL;
-  const int64_t store_size = use_rich_format ? sizeof(ObTempColumnStore) : sizeof(ObChunkDatumStore);
+  void *datum_store_buf = NULL;
   if (OB_ISNULL(result_info_buf = ob_malloc(sizeof(ObDTLIntermResultInfo), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc dtl interm result info", K(ret));
-  } else if (OB_ISNULL(store_buf = ob_malloc(store_size, attr))) {
+  } else if (OB_ISNULL(datum_store_buf = ob_malloc(sizeof(ObChunkDatumStore), attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc store", K(ret));
+    LOG_WARN("fail to alloc ob chunk datum store", K(ret));
   } else {
     ObDTLIntermResultInfo *result_info = new(result_info_buf) ObDTLIntermResultInfo();
-    if (use_rich_format) {
-      result_info->col_store_ = new(store_buf) ObTempColumnStore();
-    } else {
-      result_info->datum_store_ = new(store_buf) ObChunkDatumStore("DtlIntermRes");
-    }
-    result_info->use_rich_format_ = use_rich_format;
+    result_info->datum_store_ = new(datum_store_buf) ObChunkDatumStore("DtlIntermRes");
     result_info->is_read_ = false;
     result_info->trace_id_ = *ObCurTraceId::get_trace_id();
     result_info->monitor_info_ = monitor_info;
@@ -228,8 +211,8 @@ int ObDTLIntermResultManager::create_interm_result_info(ObMemAttr &attr,
     if (NULL != result_info_buf) {
       ob_free(result_info_buf);
     }
-    if (NULL != store_buf) {
-      ob_free(store_buf);
+    if (NULL != datum_store_buf) {
+      ob_free(datum_store_buf);
     }
   }
   return ret;
@@ -257,17 +240,14 @@ int ObDTLIntermResultManager::insert_interm_result_info(ObDTLIntermResultKey &ke
 
 void ObDTLIntermResultManager::free_interm_result_info_store(ObDTLIntermResultInfo *result_info)
 {
-  if (NULL != result_info && result_info->is_store_valid()) {
-    if (NULL != result_info->datum_store_) {
-      result_info->datum_store_->reset();
-      result_info->datum_store_->~ObChunkDatumStore();
-      ob_free(result_info->datum_store_);
-      result_info->datum_store_ = NULL;
-    } else if (NULL != result_info->col_store_) {
-      result_info->col_store_->reset();
-      result_info->col_store_->~ObTempColumnStore();
-      ob_free(result_info->col_store_);
-      result_info->col_store_ = NULL;
+  if (NULL != result_info) {
+    if (result_info->is_store_valid()) {
+      DTL_IR_STORE_DO(*result_info, reset);
+      if (NULL != result_info->datum_store_) {
+        result_info->datum_store_->~ObChunkDatumStore();
+        ob_free(result_info->datum_store_);
+        result_info->datum_store_ = NULL;
+      }
     }
   }
 }
@@ -280,7 +260,7 @@ void ObDTLIntermResultManager::free_interm_result_info(ObDTLIntermResultInfo *re
   }
 }
 
-int ObDTLIntermResultManager::erase_interm_result_info(const ObDTLIntermResultKey &key,
+int ObDTLIntermResultManager::erase_interm_result_info(ObDTLIntermResultKey &key,
     bool need_unregister_check_item_from_dm)
 {
   int ret = OB_SUCCESS;
@@ -387,27 +367,20 @@ int ObDTLIntermResultManager::generate_monitor_info_rows(observer::ObDTLIntermRe
 int ObDTLIntermResultManager::erase_tenant_interm_result_info()
 {
   int ret = OB_SUCCESS;
-  MAP::bucket_iterator bucket_it = map_.bucket_begin();
-  while (bucket_it != map_.bucket_end()) {
-    while (true) {
-      ObDTLIntermResultKey key;
-      {
-        MAP::hashtable::bucket_lock_cond blc(*bucket_it);
-        MAP::hashtable::readlocker locker(blc.lock());
-        MAP::hashtable::hashbucket::const_iterator node_it = bucket_it->node_begin();
-        if (node_it == bucket_it->node_end()) {
-          break;
-        } else {
-          key = node_it->first;
-        }
+  for (auto iter = map_.begin(); iter != map_.end(); ++iter) {
+    ObDTLIntermResultKey &key = iter->first;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = erase_interm_result_info(key))) {
+      if (OB_HASH_NOT_EXIST != tmp_ret) {
+        LOG_WARN("fail to erase result info", K(key), K(tmp_ret));
+        ret = tmp_ret;
       }
-      erase_interm_result_info(key);
     }
-    ++bucket_it;
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("erase_tenant_interm_result_info", K(MTL_ID()), K(map_.size()));
   }
+
   return ret;
 }
 
@@ -455,12 +428,12 @@ int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, i
 }
 
 int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buffer,
-                                                          ObDTLIntermResultKey &key,
-                                                          int64_t start_pos,
-                                                          int64_t length,
-                                                          int64_t rows,
-                                                          bool is_eof,
-                                                          bool append_whole_block)
+                                                                 ObDTLIntermResultKey &key,
+                                                                 int64_t start_pos,
+                                                                 int64_t length,
+                                                                 int64_t rows,
+                                                                 bool is_eof,
+                                                                 bool append_whole_block)
 {
   int ret = OB_SUCCESS;
   ObDTLIntermResultInfo result_info;
@@ -475,12 +448,10 @@ int ObDTLIntermResultManager::process_interm_result_inner(ObDtlLinkedBuffer &buf
             ObDTLIntermResultMonitorInfo(buffer.get_dfo_key().qc_id_,
                 buffer.get_dfo_id(), buffer.get_sqc_id())))) {
         LOG_WARN("fail to create chunk row store", K(ret));
-      } else if (result_info_guard.result_info_->use_rich_format_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the store type of interm_res_info is unexpected.", K(result_info_guard.result_info_));
-      } else if (OB_FAIL(result_info_guard.result_info_->datum_store_->init(
-                 0, buffer.tenant_id(), common::ObCtxIds::EXECUTE_CTX_ID, "DtlIntermRes"))) {
-        LOG_WARN("fail to init datum_store buffer", K(ret));
+      } else if (OB_FAIL(DTL_IR_STORE_DO(
+                  *result_info_guard.result_info_, init,
+                  0, buffer.tenant_id(), common::ObCtxIds::EXECUTE_CTX_ID, "DtlIntermRes"))) {
+        LOG_WARN("fail to init buffer", K(ret));
       } else if (OB_FAIL(insert_interm_result_info(key, result_info_guard.result_info_))) {
         LOG_WARN("fail to insert row store", K(ret));
       } else {
@@ -574,7 +545,7 @@ void ObDTLIntermResultManager::runTimerTask()
   // so it is unlikely to enter the loop, causing a big bug.
   ++gc_.dump_count_;
   gc_.interm_cnt_ = 0;
-  // dump every_10_seconds && not_expired && unused store
+  // dump every_10_seconds && not_expired && unused row_store
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dump_result_info(gc_))) {
       LOG_WARN("fail to for each row store", K(ret));
@@ -588,7 +559,7 @@ void ObDTLIntermResultManager::runTimerTask()
   gc_.clean_cnt_ = 0;
   gc_.interm_cnt_ = 0;
   gc_.cur_time_ = oceanbase::common::ObTimeUtility::current_time();
-  // Cleaning up expired store
+  // Cleaning up expired row_store
   if (OB_SUCC(ret)) {
     if (OB_FAIL(clear_timeout_result_info(gc_))) {
       LOG_WARN("fail to for each row store", K(ret));
@@ -628,7 +599,6 @@ int ObDTLIntermResultManager::mtl_start(ObDTLIntermResultManager *&dtl_interm_re
     } else {
       dtl_interm_result_manager->get_gc_task().disable_timeout_check();
       dtl_interm_result_manager->get_gc_task().dtl_interm_result_manager_ = dtl_interm_result_manager;
-      dtl_interm_result_manager->get_gc_task().is_start_ = true;
     }
   }
   return ret;
@@ -636,16 +606,14 @@ int ObDTLIntermResultManager::mtl_start(ObDTLIntermResultManager *&dtl_interm_re
 
 void ObDTLIntermResultManager::mtl_stop(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
-  if (OB_LIKELY(nullptr != dtl_interm_result_manager) &&
-      dtl_interm_result_manager->get_gc_task().is_start_) {
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
     TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
   }
 }
 
 void ObDTLIntermResultManager::mtl_wait(ObDTLIntermResultManager *&dtl_interm_result_manager)
 {
-  if (OB_LIKELY(nullptr != dtl_interm_result_manager &&
-      dtl_interm_result_manager->get_gc_task().is_start_)) {
+  if (OB_LIKELY(nullptr != dtl_interm_result_manager)) {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), dtl_interm_result_manager->get_gc_task());
   }
 }

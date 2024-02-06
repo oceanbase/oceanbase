@@ -18,7 +18,6 @@
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/system_variable/ob_system_variable.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -45,15 +44,13 @@ int ObExprSysTimestamp::eval_systimestamp(const ObExpr &expr, ObEvalCtx &ctx,
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
+  UNUSED(expr);
   int64_t utc_timestamp = 0;
   ObTimeZoneInfoWrap tz_info_wrap;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  const ObTimeZoneInfo *cur_tz_info = NULL;
-  if (OB_FAIL(helper.get_time_zone_info(cur_tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
-  } else if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())
-             || OB_ISNULL(ctx.exec_ctx_.get_my_session())
-             || OB_ISNULL(cur_tz_info)) {
+  const ObTimeZoneInfo *cur_tz_info = get_timezone_info(ctx.exec_ctx_.get_my_session());
+  if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())
+      || OB_ISNULL(ctx.exec_ctx_.get_my_session())
+      || OB_ISNULL(cur_tz_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("phy_plan_ctx_ or my_session_ or cur_tz_info is null",
              "phy_plan_ctx", ctx.exec_ctx_.get_physical_plan_ctx(), K(cur_tz_info), K(ret));
@@ -114,12 +111,6 @@ int ObExprSysTimestamp::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_exp
   return OB_SUCCESS;
 }
 
-DEF_SET_LOCAL_SESSION_VARS(ObExprSysTimestamp, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
-  return ret;
-}
 
 ObExprLocalTimestamp::ObExprLocalTimestamp(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_LOCALTIMESTAMP, N_LOCALTIMESTAMP, 0, NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
@@ -141,6 +132,7 @@ int ObExprLocalTimestamp::eval_localtimestamp(const ObExpr &expr, ObEvalCtx &ctx
     ObDatum &expr_datum)
 {
   int ret = OB_SUCCESS;
+  UNUSED(expr);
   if (OB_ISNULL(ctx.exec_ctx_.get_physical_plan_ctx())
       || OB_ISNULL(ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -154,15 +146,16 @@ int ObExprLocalTimestamp::eval_localtimestamp(const ObExpr &expr, ObEvalCtx &ctx
     int64_t dt_value = 0;
     int64_t odate_value = 0;
     ObOTimestampData ts_value;
-    ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-    const common::ObTimeZoneInfo *tz_info = NULL;
-    if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-      LOG_WARN("get tz info failed", K(ret));
-    } else if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(utc_value, tz_info, dt_value))) {
+    if (OB_FAIL(ObTimeConverter::timestamp_to_datetime(utc_value,
+        get_timezone_info(ctx.exec_ctx_.get_my_session()),
+        dt_value))) {
       LOG_WARN("failed to convert timestamp to datetime", K(ret));
     } else if (FALSE_IT(ObTimeConverter::trunc_datetime(expr.datum_meta_.scale_, dt_value))) {
     } else if (FALSE_IT(ObTimeConverter::datetime_to_odate(dt_value, odate_value))) {
-    } else if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(odate_value, tz_info, ObTimestampNanoType, ts_value))) {
+    } else if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(odate_value,
+        get_timezone_info(ctx.exec_ctx_.get_my_session()),
+        ObTimestampNanoType,
+        ts_value))) {
       LOG_WARN("failed to convert timestamp to datetime", K(ret));
     } else {
       expr_datum.set_otimestamp_tiny(ts_value);
@@ -180,12 +173,6 @@ int ObExprLocalTimestamp::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_e
   return OB_SUCCESS;
 }
 
-DEF_SET_LOCAL_SESSION_VARS(ObExprLocalTimestamp, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
-  return ret;
-}
 
 int ObExprToTimestamp::set_my_result_from_ob_time(ObExprCtx &expr_ctx, ObTime &ob_time, common::ObObj &result) const
 {

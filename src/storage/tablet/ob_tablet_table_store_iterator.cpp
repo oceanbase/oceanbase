@@ -38,9 +38,8 @@ ObTableStoreIterator::ObTableStoreIterator(const bool reverse, const bool need_l
   sstable_handle_array_.set_attr(ObMemAttr(MTL_ID(), "TblHdlArray"));
 }
 
-int ObTableStoreIterator::assign(const ObTableStoreIterator& other)
+void ObTableStoreIterator::operator=(const ObTableStoreIterator& other)
 {
-  int ret = OB_SUCCESS;
   if (this != &other) {
     need_load_sstable_ = other.need_load_sstable_;
     if (other.table_store_handle_.is_valid()) {
@@ -48,42 +47,23 @@ int ObTableStoreIterator::assign(const ObTableStoreIterator& other)
     } else if (table_store_handle_.is_valid()) {
       table_store_handle_.reset();
     }
-
-    if (OB_FAIL(ret)) {
-    } else if (other.sstable_handle_array_.count() > 0) {
-      if (OB_FAIL(sstable_handle_array_.assign(other.sstable_handle_array_))) {
-        LOG_WARN("assign sstable handle array fail", K(ret));
-      }
+    if (other.sstable_handle_array_.count() > 0) {
+      sstable_handle_array_ = other.sstable_handle_array_;
     } else if (sstable_handle_array_.count() > 0) {
       sstable_handle_array_.reset();
     }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(table_ptr_array_.assign(other.table_ptr_array_))) {
-      LOG_WARN("assign table ptr array fail", K(ret));
-    } else {
-      pos_ = other.pos_;
-      step_ = other.step_;
-      memstore_retired_ = other.memstore_retired_;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(nullptr != other.transfer_src_table_store_handle_)) {
+    table_ptr_array_ = other.table_ptr_array_;
+    pos_ = other.pos_;
+    step_ = other.step_;
+    memstore_retired_ = other.memstore_retired_;
+    if (OB_UNLIKELY(nullptr != other.transfer_src_table_store_handle_)) {
       if (nullptr == transfer_src_table_store_handle_) {
         void *meta_hdl_buf = ob_malloc(sizeof(ObStorageMetaHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
-        if (OB_ISNULL(meta_hdl_buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocator memory for handle", K(ret));
-        } else {
-          transfer_src_table_store_handle_ = new (meta_hdl_buf) ObStorageMetaHandle();
-        }
+        transfer_src_table_store_handle_ = new (meta_hdl_buf) ObStorageMetaHandle();
       }
-      if (OB_SUCC(ret)) {
-        *transfer_src_table_store_handle_ = *(other.transfer_src_table_store_handle_);
-      }
+       *transfer_src_table_store_handle_ = *(other.transfer_src_table_store_handle_);
     }
   }
-  return ret;
 }
 
 ObTableStoreIterator::~ObTableStoreIterator()
@@ -222,34 +202,24 @@ int ObTableStoreIterator::add_table(ObITable *table)
     // lifetime guaranteed by tablet_handle_
   } else if (static_cast<ObSSTable *>(table)->is_loaded() || !need_load_sstable_) {
     // lifetime guaranteed by table_store_handle_
-  } else if (OB_FAIL(get_table_ptr_with_meta_handle(static_cast<ObSSTable *>(table), table_ptr))) {
-    LOG_WARN("fail to get table ptr with meta handle", K(ret), KPC(table));
-  }
-
-  if (FAILEDx(table_ptr_array_.push_back(table_ptr))) {
-    LOG_WARN("fail to push table handle into array", K(ret));
-  }
-  return ret;
-}
-
-int ObTableStoreIterator::get_table_ptr_with_meta_handle(
-    const ObSSTable *table,
-    TablePtr &table_ptr)
-{
-  int ret = OB_SUCCESS;
-  ObStorageMetaHandle sstable_meta_hdl;
-  ObSSTable *sstable = nullptr;
-
-  if (OB_FAIL(ObTabletTableStore::load_sstable(table->get_addr(),
-      table->is_co_sstable(), sstable_meta_hdl))) {
-    LOG_WARN("fail to load sstable", K(ret));
-  } else if (OB_FAIL(sstable_handle_array_.push_back(sstable_meta_hdl))) {
-    LOG_WARN("fail to push sstable meta handle", K(ret), K(sstable_meta_hdl));
-  } else if (OB_FAIL(sstable_meta_hdl.get_sstable(sstable))) {
-    LOG_WARN("fail to get sstable from meta handle", K(ret), K(sstable_meta_hdl), KPC(table));
   } else {
-    table_ptr.table_ = sstable;
-    table_ptr.hdl_idx_ = sstable_handle_array_.count() - 1;
+    ObStorageMetaHandle sstable_meta_hdl;
+    if (OB_FAIL(ObTabletTableStore::load_sstable(static_cast<ObSSTable *>(table)->get_addr(),
+        table->is_co_sstable(), sstable_meta_hdl))) {
+      LOG_WARN("fail to load sstable", K(ret));
+    } else if (OB_FAIL(sstable_handle_array_.push_back(sstable_meta_hdl))) {
+      LOG_WARN("fail to push sstable meta handle", K(ret), K(sstable_meta_hdl));
+    } else if (OB_FAIL(sstable_meta_hdl.get_sstable(sstable))) {
+      LOG_WARN("fail to get sstable from meta handle", K(ret), K(sstable_meta_hdl), KPC(table));
+    } else {
+      table_ptr.table_ = sstable;
+      table_ptr.hdl_idx_ = sstable_handle_array_.count() - 1;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_ptr_array_.push_back(table_ptr))) {
+    LOG_WARN("fail to push table handle into array", K(ret));
   }
   return ret;
 }
@@ -285,67 +255,13 @@ int ObTableStoreIterator::add_tables(
         LOG_WARN("fail to add sstable to iterator", K(ret), K(i));
       } else if (sstable_array[i]->is_co_sstable() && unpack_co_table) {
         ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(sstable_array[i]);
-        ObSSTableMetaHandle meta_handle;
+        ObSSTableArray &cg_sstables = co_table->get_cg_sstables();
         if (co_table->is_empty_co_table()) {
           // empty co table, no need to call this func recursively
-        } else if (OB_FAIL(co_table->get_meta(meta_handle))) {
-          LOG_WARN("failed to get co meta handle", K(ret), KPC(co_table));
-        } else {
-          const ObSSTableArray &cg_sstables = meta_handle.get_sstable_meta().get_cg_sstables();
-          if (OB_FAIL(add_cg_tables(cg_sstables, co_table->is_loaded(), meta_handle))) {
-            LOG_WARN("fail to add cg table to iterator", K(ret), KPC(co_table));
-          }
+        } else if (OB_FAIL(add_tables(cg_sstables, 0, cg_sstables.count(), false))) {
+          LOG_WARN("fail to add cg table to iterator", K(ret), KPC(co_table));
         }
       }
-    }
-  }
-  return ret;
-}
-
-/*
- * cg sstable should be added carefully:
- * if cg is not loaded, its lifetime guranteed by cg meta handle and co meta handle
- * if cg is loaded, its lifetime guranteed by co meta handle
- */
-int ObTableStoreIterator::add_cg_tables(
-    const ObSSTableArray &cg_sstables,
-    const bool is_loaded_co_table,
-    const ObSSTableMetaHandle &co_meta_handle)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!cg_sstables.is_valid() || !co_meta_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(cg_sstables), K(co_meta_handle));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < cg_sstables.count(); ++i) {
-    ObSSTable *cg_table = cg_sstables[i];
-    TablePtr table_ptr;
-    ObSSTableMetaHandle cg_meta_handle;
-
-    if (OB_UNLIKELY(nullptr == (cg_table = cg_sstables[i]) || !cg_table->is_cg_sstable())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected cg table", K(ret), KPC(cg_table));
-    } else if (is_loaded_co_table && cg_table->is_loaded()) {
-      // lifetime guranteed by loaded co table
-      table_ptr.table_ = cg_table;
-    } else if (!cg_table->is_loaded()) {
-      // cg table is shell, lifetime guranteed by cg meta handle
-      if (OB_FAIL(get_table_ptr_with_meta_handle(cg_table, table_ptr))) {
-        LOG_WARN("fail to get table ptr with meta handle", K(ret), KPC(cg_table));
-      }
-    } else {
-      // cg table is loaded, lifetime guranteed by co meta handle
-      if (OB_FAIL(sstable_handle_array_.push_back(co_meta_handle.get_storage_handle()))) {
-        LOG_WARN("fail to push sstable meta handle", K(ret), KPC(cg_table));
-      } else {
-        table_ptr.table_ = cg_table;
-        table_ptr.hdl_idx_ = sstable_handle_array_.count() - 1;
-      }
-    }
-
-    if (FAILEDx(table_ptr_array_.push_back(table_ptr))) {
-      LOG_WARN("fail to push table handle into array", K(ret));
     }
   }
   return ret;
@@ -392,9 +308,6 @@ int ObTableStoreIterator::get_ith_table(const int64_t pos, ObITable *&table)
       LOG_WARN("unexpected handle idx for loaded sstable", K(ret), K(hdl_idx), KPC(tmp_table), KPC(this));
     } else if (OB_FAIL(sstable_handle_array_.at(hdl_idx).get_sstable(sstable))) {
       LOG_WARN("fail to get sstable value", K(ret), K(hdl_idx), K(sstable_handle_array_));
-    } else if (sstable->is_co_sstable() && tmp_table->is_cg_sstable()) {
-      // cg sstable's lifetime guranteed by co meta handle
-      table = tmp_table;
     } else {
       table = sstable;
       table_ptr_array_.at(pos).table_ = sstable;

@@ -63,7 +63,7 @@ public:
   virtual int open_op() override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  int init(const common::ObIArray<ObStoreRange> &ranges, int64_t expected_task_count, const int64_t timeout_us);
+  int init(const common::ObIArray<ObStoreRange> &ranges, int64_t expected_task_count);
   const ObArrayArray<ObStoreRange> &get_split_array() { return multi_range_split_array_; }
   INHERIT_TO_STRING_KV("parent", ObDASSimpleOp,
                         K_(ranges),
@@ -73,7 +73,6 @@ private:
   common::ObSEArray<ObStoreRange, 16> ranges_;
   int64_t expected_task_count_;
   ObArrayArray<ObStoreRange> multi_range_split_array_;
-  int64_t timeout_us_;
 };
 
 class ObDASSplitRangesResult : public ObIDASTaskResult
@@ -103,7 +102,7 @@ public:
   virtual int open_op() override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
-  int init(const common::ObIArray<ObStoreRange> &ranges, const int64_t timeout_us);
+  int init(const common::ObIArray<ObStoreRange> &ranges);
   int64_t get_total_size() const { return total_size_; }
   INHERIT_TO_STRING_KV("parent", ObDASSimpleOp,
                         K_(ranges),
@@ -111,7 +110,6 @@ public:
 private:
   common::ObSEArray<ObStoreRange, 16> ranges_;
   int64_t total_size_;
-  int64_t timeout_us_;
 };
 
 class ObDASRangesCostResult : public ObIDASTaskResult

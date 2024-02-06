@@ -30,7 +30,6 @@
 #include "lib/geo/ob_geo_utils.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/dml/ob_fk_checker.h"
-#include "storage/lob/ob_lob_manager.h"
 namespace oceanbase
 {
 using namespace common;
@@ -38,37 +37,16 @@ using namespace share;
 using namespace transaction;
 namespace sql
 {
-
-bool ObDMLService::check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row)
-{
-  bool bret = false;
-  if (OB_ISNULL(expr) || expr->parent_cnt_ <= 0) {
-    bret = false;
-  } else {
-    for (int i = 0; !bret && i < expr->parent_cnt_; ++i) {
-      ObExpr *parent_expr = expr->parents_[i];
-      if (parent_expr != nullptr) {
-        if (parent_expr->type_ == T_FUN_COLUMN_CONV) {
-          bret = has_exist_in_array(row, parent_expr);
-        }
-      }
-      if (!bret) {
-        bret = check_cascaded_reference(parent_expr, row);
-      }
-    }
-  }
-  return bret;
-}
-
 int ObDMLService::check_row_null(const ObExprPtrIArray &row,
-                                 ObEvalCtx &eval_ctx,
-                                 int64_t row_num,
-                                 const ColContentIArray &column_infos,
-                                 bool is_ignore,
-                                 bool is_single_value,
-                                 ObTableModifyOp &dml_op)
+                                       ObEvalCtx &eval_ctx,
+                                       int64_t row_num,
+                                       const ColContentIArray &column_infos,
+                                       const ObDASDMLBaseCtDef &das_ctdef,
+                                       bool is_single_value,
+                                       ObTableModifyOp &dml_op)
 {
   int ret = OB_SUCCESS;
+  const bool is_ignore = das_ctdef.is_ignore_;
   ObSQLSessionInfo *session = NULL;
   CK(row.count() >= column_infos.count());
   if (OB_ISNULL(session = dml_op.get_exec_ctx().get_my_session())) {
@@ -86,7 +64,6 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
       if (is_ignore ||
           (lib::is_mysql_mode() && !is_single_value && !is_strict_mode(session->get_sql_mode()))) {
         ObObj zero_obj;
-        ObExprStrResAlloc res_alloc(*row.at(col_idx), eval_ctx);
         ObDatum &row_datum = row.at(col_idx)->locate_datum_for_write(eval_ctx);
         bool is_decimal_int = ob_is_decimal_int(row.at(col_idx)->datum_meta_.type_);
         if (is_oracle_mode()) {
@@ -96,15 +73,11 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
             ret = OB_BAD_NULL_ERROR;
             LOG_WARN("dml with ignore not supported in geometry type");
             LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
-        } else if (check_cascaded_reference(row.at(col_idx), row)) {
-          //This column is dependent on other columns and cannot be modified again;
-          //otherwise, it will necessitate a cascading recalculation of the dependent expression results.
-          ret = OB_BAD_NULL_ERROR;
-          LOG_WARN("dml with ignore not supported with cascaded column", KPC(row.at(col_idx)));
-          LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_infos.at(i).column_name_.length(), column_infos.at(i).column_name_.ptr());
         } else if (OB_FAIL(ObObjCaster::get_zero_value(
             row.at(col_idx)->obj_meta_.get_type(),
             row.at(col_idx)->obj_meta_.get_collation_type(),
+            das_ctdef.column_accuracys_.at(col_idx).get_length(),
+            eval_ctx.exec_ctx_.get_allocator(),
             zero_obj))) {
           LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)), K(row.at(col_idx)->max_length_));
         } else if (is_decimal_int) {
@@ -114,16 +87,15 @@ int ObDMLService::check_row_null(const ObExprPtrIArray &row,
           row_datum.set_decimal_int(dec_val.get_decimal_int(), dec_val.get_int_bytes());
         }
         if (OB_FAIL(ret)) {
-          LOG_WARN("get column default zero value failed", K(ret), K(column_infos.at(i)));
-        } else if (OB_FAIL(ObDASUtils::padding_fixed_string_value(row.at(col_idx)->max_length_,
-                                                                  res_alloc,
-                                                                  zero_obj))) {
-          LOG_WARN("padding fixed string value failed", K(ret));
-        } else if (!is_decimal_int && OB_FAIL(row_datum.from_obj(zero_obj))) {
+        } else if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(zero_obj, eval_ctx.exec_ctx_.get_allocator()))) {
+          LOG_WARN("convert lob types zero obj failed", K(ret), K(zero_obj));
+        } else if (OB_FAIL(!is_decimal_int && row_datum.from_obj(zero_obj))) {
           LOG_WARN("assign zero obj to datum failed", K(ret), K(zero_obj));
-        } else if (zero_obj.is_lob_storage() && zero_obj.has_lob_header() != row.at(col_idx)->obj_meta_.has_lob_header()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("has lob header mark is wrong", K(ret), K(i), K(col_idx),
+        } else if (is_lob_storage(zero_obj.get_type()) &&
+                   OB_FAIL(ob_adjust_lob_datum(zero_obj, row.at(col_idx)->obj_meta_,
+                                               eval_ctx.exec_ctx_.get_allocator(),
+                                               row_datum))) {
+          LOG_WARN("adjust lob datum failed", K(ret), K(i), K(col_idx),
             K(zero_obj.get_meta()), K(row.at(col_idx)->obj_meta_));
         } else {
           //output warning msg
@@ -640,7 +612,7 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
                                       dml_op.get_eval_ctx(),
                                       ins_rtdef.cur_row_num_,
                                       ins_ctdef.column_infos_,
-                                      ins_ctdef.das_ctdef_.is_ignore_,
+                                      ins_ctdef.das_ctdef_,
                                       ins_ctdef.is_single_value_,
                                       dml_op))) {
       LOG_WARN("check row null failed", K(ret));
@@ -856,7 +828,7 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
                                         dml_op.get_eval_ctx(),
                                         upd_rtdef.cur_row_num_,
                                         upd_ctdef.assign_columns_,
-                                        upd_ctdef.dupd_ctdef_.is_ignore_,
+                                        upd_ctdef.dupd_ctdef_,
                                         false,
                                         dml_op))) {
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
@@ -1022,13 +994,6 @@ int ObDMLService::lock_row(const ObDASLockCtDef &dlock_ctdef,
                                                 stored_row);
 }
 
-/*
- * Note: During the update process,
- * ObDMLService::check_row_whether_changed() and ObDMLService::update_row() must be executed together
- * within a single iteration,
- * because the update_row process relies on check_row_whether_changed to determine
- * whether the new and old values of the row being updated have changed.
- **/
 int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                              ObUpdRtDef &upd_rtdef,
                              const ObDASTabletLoc *old_tablet_loc,
@@ -1176,7 +1141,6 @@ int ObDMLService::delete_row(const ObDASDelCtDef &das_del_ctdef,
 int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  ObDASDMLBaseRtDef &base_rtdef,
                                  transaction::ObTxReadSnapshot &snapshot,
-                                 const int16_t write_branch_id,
                                  ObIAllocator &das_alloc,
                                  storage::ObDMLBaseParam &dml_param)
 {
@@ -1193,15 +1157,11 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.is_batch_stmt_ = base_ctdef.is_batch_stmt_;
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
-  dml_param.branch_id_ = write_branch_id;
   if (base_ctdef.is_batch_stmt_) {
     dml_param.write_flag_.set_is_dml_batch_opt();
   }
   if (base_ctdef.is_insert_up_) {
     dml_param.write_flag_.set_is_insert_up();
-  }
-  if (base_ctdef.is_table_api_) {
-    dml_param.write_flag_.set_is_table_api();
   }
   if (dml_param.table_param_->get_data_table().is_storage_index_table()
       && !dml_param.table_param_->get_data_table().can_read_index()) {
@@ -2012,8 +1972,7 @@ int ObDMLService::check_local_index_affected_rows(int64_t table_affected_rows,
   int ret = OB_SUCCESS;
   if (GCONF.enable_defensive_check()) {
     if (table_affected_rows != index_affected_rows
-        && !related_ctdef.table_param_.get_data_table().is_spatial_index()
-        && !related_ctdef.table_param_.get_data_table().is_mlog_table()) {
+        && !related_ctdef.table_param_.get_data_table().is_spatial_index()) {
       ret = OB_ERR_DEFENSIVE_CHECK;
       ObString func_name = ObString::make_string("check_local_index_affected_rows");
       LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());

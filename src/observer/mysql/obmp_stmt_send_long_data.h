@@ -74,7 +74,7 @@ private:
   int64_t exec_start_timestamp_;
   int64_t exec_end_timestamp_;
   int32_t stmt_id_;
-  uint16_t param_id_;
+  int16_t param_id_;
   uint64_t buffer_len_;
   common::ObString buffer_;
   bool need_disconnect_;

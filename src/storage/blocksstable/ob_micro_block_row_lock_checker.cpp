@@ -25,10 +25,9 @@ using namespace share;
 
 ObMicroBlockRowLockChecker::ObMicroBlockRowLockChecker(common::ObIAllocator &allocator)
     : ObMicroBlockRowScanner(allocator),
-    check_exist_(false),
-    snapshot_version_(),
-    lock_state_(nullptr),
-    row_state_(nullptr)
+      check_exist_(false),
+      snapshot_version_(),
+      lock_state_(nullptr)
 {
 }
 
@@ -288,16 +287,16 @@ int ObMicroBlockRowLockMultiChecker::check_row(
         rows_info_->set_conflict_rowkey(rowkey_idx);
         rows_info_->set_error_code(OB_TRY_LOCK_ROW_CONFLICT);
         need_stop = true;
-        LOG_DEBUG("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
+        LOG_WARN("Find lock conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else if (lock_state.trans_version_ > snapshot_version_) {
         rows_info_->set_conflict_rowkey(rowkey_idx);
         rows_info_->set_error_code(OB_TRANSACTION_SET_VIOLATION);
         need_stop = true;
-        LOG_DEBUG("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
+        LOG_WARN("Find tsv conflict in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else {
         rows_info_->set_row_lock_checked(rowkey_idx, check_exist_);
       }
@@ -310,9 +309,9 @@ int ObMicroBlockRowLockMultiChecker::check_row(
         rows_info_->set_conflict_rowkey(rowkey_idx);
         rows_info_->set_error_code(OB_ERR_PRIMARY_KEY_DUPLICATE);
         need_stop = true;
-        LOG_DEBUG("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-                  K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
-                  K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
+        LOG_WARN("Find duplication in mini/minor sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt), K(lock_state),
+                 K(inner_dml_flag), K_(current), K_(start), K_(last), K(row_lock_checked), K_(macro_id));
       } else {
         rows_info_->set_row_checked(rowkey_idx);
       }
@@ -329,9 +328,9 @@ void ObMicroBlockRowLockMultiChecker::check_row_in_major_sstable(bool &need_stop
     rows_info_->set_conflict_rowkey(rowkey_idx);
     rows_info_->set_error_code(OB_ERR_PRIMARY_KEY_DUPLICATE);
     need_stop = true;
-    LOG_DEBUG("Find duplication in major sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
-              K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt),
-              K_(current), K_(start), K_(last), K_(macro_id));
+    LOG_WARN_RET(OB_SUCCESS, "Find duplication in major sstable", K(rowkey_idx), K(rows_info_->rowkeys_[rowkey_idx]),
+                 K_(rowkey_current_idx), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(empty_read_cnt),
+                 K_(current), K_(start), K_(last), K_(macro_id));
   } else {
     rows_info_->set_row_checked(rowkey_idx);
   }

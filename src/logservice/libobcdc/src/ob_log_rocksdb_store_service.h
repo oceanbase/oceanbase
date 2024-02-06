@@ -49,12 +49,7 @@ public:
   virtual int del(const std::string &key);
   virtual int del(void *cf_handle, const std::string &key);
   virtual int del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key);
-  virtual int compact_range(
-      void *cf_handle,
-      const std::string &begin_key,
-      const std::string &end_key,
-      const bool op_entire_cf = false);
-  virtual int flush(void *cf_handle);
+  virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key);
 
   virtual int create_column_family(const std::string& column_family_name,
       void *&cf_handle);

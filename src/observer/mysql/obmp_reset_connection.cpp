@@ -43,15 +43,9 @@ int ObMPResetConnection::process()
   int ret = OB_SUCCESS;
   bool need_disconnect = false;
   ObSQLSessionInfo *session = NULL;
-  ObSMConnection *conn = NULL;
-  ObSchemaGetterGuard schema_guard;
-  uint64_t tenant_id = OB_INVALID_ID;
-  const ObSysVariableSchema *sys_variable_schema = NULL;
+  bool is_proxy_mod = get_conn()->is_proxy_;
   if (OB_FAIL(get_session(session))) {
     LOG_ERROR("get session  fail", K(ret));
-  } else if (OB_ISNULL(conn = get_conn())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("null conn", K(ret));
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to get session info", K(ret), K(session));
@@ -59,24 +53,9 @@ int ObMPResetConnection::process()
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     session->update_last_active_time();
-    tenant_id = session->get_effective_tenant_id();
+
     if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
       OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(need_disconnect));
-    } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      OB_LOG(WARN,"fail get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_variable_schema))) {
-        LOG_WARN("get sys variable schema failed", K(ret));
-    } else if (OB_ISNULL(sys_variable_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sys variable schema is null", K(ret));
-    } else if (OB_FAIL(session->load_all_sys_vars(*sys_variable_schema, true))) {
-      LOG_WARN("load system variables failed", K(ret));
-    } else if (OB_FAIL(session->update_database_variables(&schema_guard))) {
-      OB_LOG(WARN, "failed to update database variables", K(ret));
-    } else if (OB_FAIL(update_proxy_sys_vars(*session))) {
-      LOG_WARN("update_proxy_sys_vars failed", K(ret));
-    } else if (OB_FAIL(update_charset_sys_vars(*conn, *session))) {
-        LOG_WARN("fail to update charset sys vars", K(ret));
     } else {
       session->clean_status();
     }

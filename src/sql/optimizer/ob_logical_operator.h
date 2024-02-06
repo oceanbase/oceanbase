@@ -392,23 +392,12 @@ public:
   int64_t multi_child_op_above_count_in_dfo_;
 };
 
-class AllocOpContext
+class AllocMDContext
 {
 public:
-  AllocOpContext() :
-      visited_map_(), disabled_op_set_(), gen_temp_op_id_(false), next_op_id_(0) {}
-  ~AllocOpContext();
-
-  int init();
-  int visit(uint64_t op_id, uint8_t flag);
-  bool is_visited(uint64_t op_id, uint8_t flag);
-
-  // For the `blocking` hint, there are different insertion levels. We need to ensure that
-  // when multiple insertion levels exist, material ops will not be inserted repeatedly.
-  hash::ObHashMap<uint8_t, ObSEArray<uint64_t, 8>> visited_map_; // key:flag, value:op ids
-  hash::ObHashSet<uint64_t> disabled_op_set_;
-  bool gen_temp_op_id_;
-  uint64_t next_op_id_;
+  AllocMDContext() : org_op_id_(0) {};
+  ~AllocMDContext() = default;
+  int64_t org_op_id_;
 };
 
 class AllocBloomFilterContext
@@ -1324,7 +1313,7 @@ public:
   virtual int compute_property();
 
   int check_property_valid() const;
-  int compute_normal_multi_child_parallel_and_server_info();
+  int compute_normal_multi_child_parallel_and_server_info(bool is_partition_wise);
   int set_parallel_and_server_info_for_match_all();
   int get_limit_offset_value(ObRawExpr *percent_expr,
                              ObRawExpr *limit_expr,
@@ -1354,19 +1343,8 @@ public:
    */
   int allocate_gi_recursively(AllocGIContext &ctx);
   /**
-   * Allocate op for monitering
+   * Allocate m dump operator.
    */
-  int alloc_op_pre(AllocOpContext& ctx);
-  int alloc_op_post(AllocOpContext& ctx);
-  int find_rownum_expr_recursively(const uint64_t &op_id, ObLogicalOperator *&rownum_op,
-                                   const ObRawExpr *expr);
-  int find_rownum_expr(const uint64_t &op_id, ObLogicalOperator *&rownum_op,
-                       const ObIArray<ObRawExpr *> &exprs);
-  int find_rownum_expr(const uint64_t &op_id, ObLogicalOperator *&rownum_op);
-  int gen_temp_op_id(AllocOpContext& ctx);
-  int recursively_disable_alloc_op_above(AllocOpContext& ctx);
-  int alloc_nodes_above(AllocOpContext& ctx, const uint64_t &flags);
-  int allocate_material_node_above();
   int allocate_monitoring_dump_node_above(uint64_t flags, uint64_t line_id);
 
   virtual int gen_location_constraint(void *ctx);
@@ -1687,8 +1665,6 @@ public:
                                ObIArray<ObExecParamRawExpr *> &right_above_params);
   // 生成 partition id 表达式
   int generate_pseudo_partition_id_expr(ObOpPseudoColumnRawExpr *&expr);
-  int pick_out_startup_filters();
-  int check_contain_false_startup_filter(bool &contain_false);
 
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
@@ -1769,6 +1745,10 @@ private:
   int numbering_operator_pre(NumberingCtx &ctx);
   void numbering_operator_post(NumberingCtx &ctx);
   /**
+   *  allocate md operator
+   */
+  int alloc_md_post(AllocMDContext &ctx);
+  /**
    * Numbering px transmit op with dfo id
    * for Explain display
    */
@@ -1803,20 +1783,20 @@ private:
                                   int64_t &filter_id);
   int create_runtime_filter_info(
       ObLogicalOperator *op,
-      ObLogicalOperator *join_filter_create_op,
+      ObLogicalOperator *join_filter_creare_op,
       ObLogicalOperator *join_filter_use_op,
       double join_filter_rate);
   int add_join_filter_info(
-      ObLogicalOperator *join_filter_create_op,
+      ObLogicalOperator *join_filter_creare_op,
       ObLogicalOperator *join_filter_use_op,
       ObRawExpr *join_filter_expr,
       RuntimeFilterType type);
   int add_partition_join_filter_info(
-      ObLogicalOperator *join_filter_create_op,
+      ObLogicalOperator *join_filter_creare_op,
       RuntimeFilterType type);
   int generate_runtime_filter_expr(
       ObLogicalOperator *op,
-      ObLogicalOperator *join_filter_create_op,
+      ObLogicalOperator *join_filter_creare_op,
       ObLogicalOperator *join_filter_use_op,
       double join_filter_rate,
       RuntimeFilterType type);
@@ -1824,17 +1804,6 @@ private:
       ObLogJoinFilter *join_filter_use,
       ObRawExpr *join_use_expr,
       ObRawExpr *join_create_expr);
-  int check_can_extract_query_range_by_rf(
-    ObLogicalOperator *scan_node,
-    ObLogicalOperator *join_filter_create_op,
-    ObLogicalOperator *join_filter_use_op,
-    bool &can_extract_query_range,
-    ObIArray<int64_t> &prefix_col_idxs);
-  int try_prepare_rf_query_range_info(
-    ObLogicalOperator *join_filter_create_op,
-    ObLogicalOperator *join_filter_use_op,
-    ObLogicalOperator *scan_node,
-    const JoinFilterInfo &info);
 
 
   /* manual set dop for each dfo */

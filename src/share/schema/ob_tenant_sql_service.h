@@ -47,7 +47,7 @@ public:
                             common::ObISQLClient &sql_client,
                             const common::ObString *ddl_stmt_str = NULL);
   virtual int delay_to_drop_tenant(const ObTenantSchema &tenant_schema,
-                                   ObMySQLTransaction &trans,
+                                   ObISQLClient &sql_client,
                                    const ObString *ddl_stmt_str);
   virtual int drop_tenant_to_recyclebin(const ObTenantSchema &tenant_schema,
                                         common::ObISQLClient &sql_client,
@@ -57,6 +57,9 @@ public:
                             const int64_t new_schema_version,
                             common::ObISQLClient &sql_client,
                             const common::ObString *ddl_stmt_str = NULL);
+  virtual int delete_tenant_content(common::ObISQLClient &client,
+                                    const uint64_t tenant_id,
+                                    const char *table_name);
 private:
   int replace_tenant(const ObTenantSchema &tenant_schema,
                      const ObSchemaOperationType op,

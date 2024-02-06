@@ -74,8 +74,6 @@ private:
                                  const int64_t param_cnt,
                                  const int64_t delta_length,
                                  const common::ObString &no_param_sql,
-                                 common::ObIArray<int64_t> &no_param_pos,
-                                 common::ObIArray<int64_t> &raw_sql_offset,
                                  common::ObString &new_raw_sql,
                                  int64_t &no_param_sql_pos,
                                  int64_t &new_raw_pos);

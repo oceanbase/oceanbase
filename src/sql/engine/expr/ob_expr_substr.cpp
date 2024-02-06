@@ -14,7 +14,6 @@
 
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
-#include "share/vector/ob_vector_define.h"
 #include "sql/engine/expr/ob_expr_substr.h"
 #include "objit/common/ob_item_type.h"
 #include "sql/engine/expr/ob_expr_util.h"
@@ -111,7 +110,7 @@ int ObExprSubstr::calc_result_length(ObExprResType *types_array,
             mbmaxlen = 1;
           }
           if (start_pos > 0 && substr_len > 0) {
-            if (start_pos <= INT64_MAX - substr_len && start_pos + substr_len <= result_len + 1) {
+            if (start_pos + substr_len <= result_len + 1) {
               if (is_oracle_mode) {
                 res_len = substr_len * mbmaxlen;
               } else {
@@ -212,17 +211,9 @@ int ObExprSubstr::calc_result_typeN(ObExprResType &type,
                                                 PREFER_VAR_LEN_CHAR));
     OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
 
-    bool all_decint_params = true;
-    for (int i = 1; all_decint_params && i < param_num; i++) {
-      all_decint_params = (types_array[i].get_type() == ObDecimalIntType);
-    }
-    if (all_decint_params) {
-      // do nothing
-    } else {
-      for (int i = 1; OB_SUCC(ret) && i < param_num; i++) {
-        types_array[i].set_calc_type(ObNumberType);
-        types_array[i].set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
-      }
+    for (int i = 1; OB_SUCC(ret) && i < param_num; i++) {
+      types_array[i].set_calc_type(ObNumberType);
+      types_array[i].set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
     }
     OZ(calc_result_length_oracle(types_array, param_num, type, len));
     CK(len <= INT32_MAX);
@@ -443,9 +434,7 @@ int ObExprSubstr::substr(common::ObString &varchar,
                          const int64_t start_pos,
                          const int64_t length,
                          common::ObCollationType cs_type,
-                         const bool do_ascii_optimize_check,
-                         const bool is_arg_batch_ascii,
-                         bool &is_result_batch_ascii)
+                         const bool do_ascii_optimize_check)
 {
   int ret = OB_SUCCESS;
   varchar = text;
@@ -462,35 +451,29 @@ int ObExprSubstr::substr(common::ObString &varchar,
     if (OB_UNLIKELY(start < 0 || start >= varchar.length())) {
       varchar.assign(NULL, 0);
     } else {
-      if (is_arg_batch_ascii) {
+      if (do_ascii_optimize_check) { // ObCharsetType is CHARSET_UTF8MB4 or CHARSET_GBK
         res_len = min(length, varchar.length() - start);
+        is_ascii = storage::is_ascii_str(varchar.ptr(), start + res_len);
+      }
+      if (is_ascii) {
         varchar.assign_ptr(varchar.ptr() + start, static_cast<int32_t>(res_len));
-      } else {
-        if (do_ascii_optimize_check) { // ObCharsetType is CHARSET_UTF8MB4 or CHARSET_GBK
-          res_len = min(length, varchar.length() - start);
-          is_ascii = storage::is_ascii_str(varchar.ptr(), start + res_len);
+      } else { // If not all the front chars in param is ascii, rollback to original method.
+        start = start_pos;
+        res_len = 0;
+        int64_t mb_len = ObCharset::strlen_char(cs_type, varchar.ptr(), varchar.length());
+        if (lib::is_oracle_mode() && 0 == start_pos) {
+          start = 1;
         }
-        if (is_ascii) {
-          varchar.assign_ptr(varchar.ptr() + start, static_cast<int32_t>(res_len));
-        } else { // If not all the front chars in param is ascii, rollback to original method.
-          is_result_batch_ascii = false;
-          start = start_pos;
-          res_len = 0;
-          int64_t mb_len = ObCharset::strlen_char(cs_type, varchar.ptr(), varchar.length());
-          if (lib::is_oracle_mode() && 0 == start_pos) {
-            start = 1;
-          }
-          start  = (start >= 0) ? start - 1 : start + mb_len;
-          if (OB_UNLIKELY(start < 0 || start >= mb_len)) {
-            varchar.assign(NULL, 0);
-          } else {
-            //It holds that 0<=start<mb_len && length > 0
-            res_len = min(length, mb_len - start);
-            int64_t offset = ObCharset::charpos(cs_type, varchar.ptr(), varchar.length(), start);
-            res_len = ObCharset::charpos(cs_type, varchar.ptr() + offset,
-                (offset == 0) ? varchar.length() : varchar.length() - offset, res_len);
-            varchar.assign_ptr(varchar.ptr() + offset, static_cast<int32_t>(res_len));
-          }
+        start  = (start >= 0) ? start - 1 : start + mb_len;
+        if (OB_UNLIKELY(start < 0 || start >= mb_len)) {
+          varchar.assign(NULL, 0);
+        } else {
+          //It holds that 0<=start<mb_len && length > 0
+          res_len = min(length, mb_len - start);
+          int64_t offset = ObCharset::charpos(cs_type, varchar.ptr(), varchar.length(), start);
+          res_len = ObCharset::charpos(cs_type, varchar.ptr() + offset,
+              (offset == 0) ? varchar.length() : varchar.length() - offset, res_len);
+          varchar.assign_ptr(varchar.ptr() + offset, static_cast<int32_t>(res_len));
         }
       }
     }
@@ -508,9 +491,7 @@ int ObExprSubstr::calc(ObObj &result,
 {
   int ret = OB_SUCCESS;
   ObString varchar;
-  bool is_result_batch_ascii = false;
-  if (OB_FAIL(substr(varchar, text, start_pos, length, cs_type,
-                     storage::can_do_ascii_optimize(cs_type), false, is_result_batch_ascii))) {
+  if (OB_FAIL(substr(varchar, text, start_pos, length, cs_type, storage::can_do_ascii_optimize(cs_type)))) {
     LOG_WARN("get substr failed", K(ret));
   } else {
     if (varchar.length() <= 0 && lib::is_oracle_mode() && !is_clob) {
@@ -540,13 +521,11 @@ int ObExprSubstr::cg_expr(ObExprCGCtx &op_cg_ctx,
         && rt_expr.args_[0]->is_batch_result()
         && !rt_expr.args_[1]->is_batch_result()) {
       rt_expr.eval_batch_func_ = eval_substr_batch;
-      rt_expr.eval_vector_func_ = eval_substr_vector;
     } else if (3 == rt_expr.arg_cnt_
                && rt_expr.args_[0]->is_batch_result()
                && !rt_expr.args_[1]->is_batch_result()
                && !rt_expr.args_[2]->is_batch_result()) {
       rt_expr.eval_batch_func_ = eval_substr_batch;
-      rt_expr.eval_vector_func_ = eval_substr_vector;
     }
   }
   return ret;
@@ -558,9 +537,6 @@ static int eval_substr_text(const ObCollationType &cs_type,
                             int64_t &total_byte_len,
                             int64_t &pos,
                             int64_t &len,
-                            const bool do_ascii_optimize_check,
-                            const bool is_arg_batch_ascii,
-                            bool &is_result_batch_ascii,
                             bool is_batch = false,
                             int64_t batch_idx = 0)
 {
@@ -572,11 +548,8 @@ static int eval_substr_text(const ObCollationType &cs_type,
     LOG_WARN("fail to get mbmaxlen", K(cs_type), K(ret));
   } else if (OB_FAIL(input_iter.get_char_len(total_char_len))) {
     LOG_WARN("get input char len failed", K(ret));
-  } else if (FALSE_IT(result_byte_len = MIN((pos >= 0 ? total_byte_len - pos + 1 : -pos * mbmaxlen),
-                                            (MIN((len), (total_char_len)) * mbmaxlen)))) {
-  } else if (len <= 0 && lib::is_oracle_mode()) {
-    output_result.set_result_null();
-  } else if (pos > total_char_len || len <= 0) {
+  } else if (FALSE_IT(result_byte_len = MIN((pos >= 0 ? total_byte_len - pos + 1 : -pos * mbmaxlen), (MIN((len), (total_char_len)) * mbmaxlen)))) {
+  } else if (len < 0 || pos > total_char_len) {
     if (!is_batch) {
       ret = output_result.init(0); // fill empty lob result
     } else {
@@ -593,46 +566,45 @@ static int eval_substr_text(const ObCollationType &cs_type,
     } else {
       ret = output_result.init_with_batch_idx(result_byte_len, batch_idx);
     }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("init stringtext result failed", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("init stringtext result failed", K(ret));
+  } else {
+    if (lib::is_oracle_mode() && 0 == pos) {
+      pos = 1;
+    }
+    // iter settings only effective to outrow lobs
+    uint64_t start_offset = (pos >= 0 ? pos - 1 : total_char_len + pos);
+    if (start_offset >= total_char_len) {
+      output_result.set_result();
     } else {
-      if (lib::is_oracle_mode() && 0 == pos) {
-        pos = 1;
-      }
-      // iter settings only effective to outrow lobs
-      uint64_t start_offset = (pos >= 0 ? pos - 1 : total_char_len + pos);
-      if (start_offset >= total_char_len) {
-        output_result.set_result();
-      } else {
-        input_iter.set_start_offset((pos >= 0 ? pos - 1 : total_char_len + pos));
-        input_iter.set_access_len(len);
-        ObTextStringIterState state;
-        ObString src_block_data;
-        while (OB_SUCC(ret)
-              && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
-          if (!input_iter.is_outrow_lob()) {
-            ObString inrow_result;
-            if (OB_FAIL(ObExprSubstr::substr(inrow_result, src_block_data, pos, len,
-                                            cs_type,
-                                            do_ascii_optimize_check,
-                                            is_arg_batch_ascii,
-                                            is_result_batch_ascii))) {
-              LOG_WARN("get substr failed", K(ret));
-            } else if (OB_FAIL(output_result.append(inrow_result))) {
-              LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
-            }
-          } else if (OB_FAIL(output_result.append(src_block_data))) {
+      input_iter.set_start_offset((pos >= 0 ? pos - 1 : total_char_len + pos));
+      input_iter.set_access_len(len);
+      ObTextStringIterState state;
+      ObString src_block_data;
+      while (OB_SUCC(ret)
+            && (state = input_iter.get_next_block(src_block_data)) == TEXTSTRING_ITER_NEXT) {
+        if (!input_iter.is_outrow_lob()) {
+          ObString inrow_result;
+          if (OB_FAIL(ObExprSubstr::substr(inrow_result, src_block_data, pos, len,
+                                           cs_type,
+                                           storage::can_do_ascii_optimize(cs_type)))) {
+            LOG_WARN("get substr failed", K(ret));
+          } else if (OB_FAIL(output_result.append(inrow_result))) {
             LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
           }
+        } else if (OB_FAIL(output_result.append(src_block_data))) {
+          LOG_WARN("append result failed", K(ret), K(output_result), K(src_block_data));
         }
-        if (OB_FAIL(ret)) {
-        } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
-          ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
-                  input_iter.get_inner_ret() : OB_INVALID_DATA;
-          LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
-        } else {
-          output_result.set_result();
-        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (state != TEXTSTRING_ITER_NEXT && state != TEXTSTRING_ITER_END) {
+        ret = (input_iter.get_inner_ret() != OB_SUCCESS) ?
+                input_iter.get_inner_ret() : OB_INVALID_DATA;
+        LOG_WARN("iter state invalid", K(ret), K(state), K(input_iter));
+      } else {
+        output_result.set_result();
       }
     }
   }
@@ -659,8 +631,8 @@ int ObExprSubstr::eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       int64_t pos = 0;
       int64_t len = input.length();
       if (lib::is_oracle_mode()) {
-        if (OB_FAIL(ora_get_integer(*pos_datum, *expr.args_[1], pos))
-            || (NULL != len_datum && OB_FAIL(ora_get_integer(*len_datum, *expr.args_[2], len)))) {
+        if (OB_FAIL(ObExprUtil::trunc_num2int64(*pos_datum, pos))
+            || (NULL != len_datum && OB_FAIL(ObExprUtil::trunc_num2int64(*len_datum, len)))) {
           LOG_WARN("get integer value failed", K(ret));
         }
       } else {
@@ -671,10 +643,9 @@ int ObExprSubstr::eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       if (OB_FAIL(ret)) {
       } else if (!ob_is_text_tc(input_meta.type_)) {
         ObString output;
-        bool is_result_batch_ascii = false;
-        if (OB_FAIL(substr(output, input, pos, len, expr.datum_meta_.cs_type_,
-                           storage::can_do_ascii_optimize(expr.datum_meta_.cs_type_), false,
-                           is_result_batch_ascii))) {
+        if (OB_FAIL(substr(output, input, pos, len,
+                           expr.datum_meta_.cs_type_,
+                           storage::can_do_ascii_optimize(expr.datum_meta_.cs_type_)))) {
           LOG_WARN("get substr failed", K(ret));
         } else {
           if (OB_UNLIKELY(output.length() <= 0)
@@ -698,17 +669,13 @@ int ObExprSubstr::eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
         } else {
           len = NULL == len_datum ? total_byte_len : len;
         }
-        bool is_result_batch_ascii = false;
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(eval_substr_text(expr.datum_meta_.cs_type_,
                                             input_iter,
                                             output_result,
                                             total_byte_len,
                                             pos,
-                                            len,
-                                            false,
-                                            false,
-                                            is_result_batch_ascii))) {
+                                            len))) {
           LOG_WARN("eval substr text failed", K(ret));
         }
       }
@@ -772,8 +739,8 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
         }
       } else {
         if (is_oracle_mode()) {
-          if (OB_FAIL(ora_get_integer(*pos_datum, *expr.args_[1], pos))
-              || (NULL != len_datum && OB_FAIL(ora_get_integer(*len_datum, *expr.args_[2], len)))) {
+          if (OB_FAIL(ObExprUtil::trunc_num2int64(*pos_datum, pos))
+              || (NULL != len_datum && OB_FAIL(ObExprUtil::trunc_num2int64(*len_datum, len)))) {
             LOG_WARN("get integer value failed", K(ret));
           }
         } else {
@@ -781,7 +748,6 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
           len = has_len_param ? len_datum->get_int() : len;
         }
         bool do_ascii_optimize_check = storage::can_do_ascii_optimize(expr.datum_meta_.cs_type_);
-        bool is_result_batch_ascii = true;
         for (int64_t j = 0; OB_SUCC(ret) && (j < batch_size); ++j) {
           if (skip.at(j) || eval_flags.at(j)) {
             continue;
@@ -789,10 +755,11 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
             results[j].set_null();
             eval_flags.set(j);
           } else if(!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
-            if (OB_FAIL(substr(output, datum_array[j].get_string(), pos,
+            if (OB_FAIL(substr(output,
+                               datum_array[j].get_string(),
+                               pos,
                                min(len, datum_array[j].get_string().length()),
-                               expr.datum_meta_.cs_type_, do_ascii_optimize_check, false,
-                               is_result_batch_ascii))) {
+                               expr.datum_meta_.cs_type_, do_ascii_optimize_check))) {
               LOG_WARN("get substr failed", K(ret));
             } else {
               if (OB_UNLIKELY(output.length() <= 0)
@@ -819,13 +786,8 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
                                                 input_iter,
                                                 output_result,
                                                 total_byte_len,
-                                                pos,
-                                                len,
-                                                false,
-                                                false,
-                                                is_result_batch_ascii,
-                                                true,
-                                                j))) {
+                                                pos, len,
+                                                true, j))) {
               LOG_WARN("eval substr text failed", K(ret));
             } else {
               eval_flags.set(j);
@@ -839,194 +801,5 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-template <typename ArgVec, typename ResVec>
-int ObExprSubstr::vector_substr(VECTOR_EVAL_FUNC_ARG_DECL)
-{
-  int ret = OB_SUCCESS;
-
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  const bool has_len_param = (expr.arg_cnt_ > 2);
-  const ArgVec *arg0_vec = static_cast<const ArgVec *>(expr.args_[0]->get_vector(ctx));
-  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-  ConstUniformFormat *pos_vec = NULL;
-  ConstUniformFormat *len_vec = NULL;
-  bool is_text_params_all_null = true; // used for mark if all the first params are all null
-  bool is_result_all_null = false;
-  // 1.1 check if result all null according to text param
-  for (int64_t j = bound.start(); is_text_params_all_null && j < bound.end(); ++j) {
-    if (skip.at(j) || eval_flags.at(j)) {
-      continue;
-    } else if (!arg0_vec->is_null(j)) {
-      is_text_params_all_null = false;
-    }
-  }
-  if (is_text_params_all_null) {
-    is_result_all_null = true;
-  } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
-    LOG_WARN("failed to eval vector result args0", K(ret));
-  } else if (has_len_param && OB_FAIL(expr.args_[2]->eval_vector(ctx, skip, bound))) {
-    LOG_WARN("failed to eval vector result args0", K(ret));
-  } else {
-    // 1.2 check if result all null according to pos param and len param
-    pos_vec = static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
-    if (pos_vec->is_null(0)) {
-      is_result_all_null = true;
-    } else if (has_len_param) {
-      len_vec = static_cast<ConstUniformFormat *>(expr.args_[2]->get_vector(ctx));
-      if (len_vec->is_null(0)) {
-        is_result_all_null = true;
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (is_result_all_null) { // any param is null, result is null
-      for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
-        if (skip.at(idx) || eval_flags.at(idx)) {
-          continue;
-        } else {
-          res_vec->set_null(idx);
-          eval_flags.set(idx);
-        }
-      }
-      eval_flags.set_all(bound.start(), bound.end());
-    } else {
-      // 2. calc substr while result is not all null
-      int64_t pos = 0;
-      int64_t len = INT_MAX64;
-      if (is_oracle_mode()) {
-        if (OB_FAIL(ora_get_integer(pos_vec->get_datum(0), *expr.args_[1], pos)) || (NULL != len_vec
-                && OB_FAIL(ora_get_integer(len_vec->get_datum(0), *expr.args_[2], len)))) {
-          LOG_WARN("get integer value failed", K(ret));
-        }
-      } else {
-        pos = pos_vec->get_int(0);
-        len = has_len_param ? len_vec->get_int(0) : len;
-      }
-      bool is_arg_batch_ascii = arg0_vec->is_batch_ascii();
-      bool is_result_batch_ascii = true;
-      bool do_ascii_optimize_check = storage::can_do_ascii_optimize(expr.datum_meta_.cs_type_);
-      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-        if (skip.at(idx) || eval_flags.at(idx)) {
-          continue;
-        } else if (arg0_vec->is_null(idx)) {
-          res_vec->set_null(idx);
-          eval_flags.set(idx);
-        } else {
-          // 2.1 deal with string tc
-          if (!ob_is_text_tc(expr.args_[0]->datum_meta_.type_)) {
-            ObString output;
-            if (OB_FAIL(substr(output, arg0_vec->get_string(idx), pos,
-                               min(len, arg0_vec->get_string(idx).length()),
-                               expr.datum_meta_.cs_type_, do_ascii_optimize_check, is_arg_batch_ascii,
-                               is_result_batch_ascii))) {
-              LOG_WARN("get substr failed", K(ret));
-            } else {
-              if (OB_UNLIKELY(output.length() <= 0) && lib::is_oracle_mode()) {
-                res_vec->set_null(idx);
-              } else {
-                res_vec->set_string(idx, output);
-              }
-              eval_flags.set(idx);
-            }
-          // 2.2 deal with text tc
-          } else {
-            const ObDatumMeta &input_meta = expr.args_[0]->datum_meta_;
-            const bool has_lob_header = expr.args_[0]->obj_meta_.has_lob_header();
-            ObEvalCtx::TempAllocGuard alloc_guard(ctx);
-            ObIAllocator &calc_alloc = alloc_guard.get_allocator();
-            ObTextStringIter input_iter(input_meta.type_, input_meta.cs_type_,
-                                        arg0_vec->get_string(idx), has_lob_header);
-            ObTextStringDatumResult output_result(expr.datum_meta_.type_, &expr, &ctx, res_vec,
-                                                  idx);
-            int64_t total_byte_len = 0;
-            if (OB_FAIL(input_iter.init(0, NULL, &calc_alloc))) {
-              LOG_WARN("init input_iter failed ", K(ret), K(input_iter));
-            } else if (OB_FAIL(input_iter.get_byte_len(total_byte_len))) {
-              LOG_WARN("get input byte len failed", K(ret), K(idx));
-            } else if (OB_FAIL(eval_substr_text(expr.datum_meta_.cs_type_,
-                                                input_iter,
-                                                output_result,
-                                                total_byte_len,
-                                                pos,
-                                                len,
-                                                do_ascii_optimize_check,
-                                                is_arg_batch_ascii,
-                                                is_result_batch_ascii,
-                                                true,
-                                                idx))) {
-              LOG_WARN("eval substr text failed", K(ret));
-            } else {
-              eval_flags.set(idx);
-            }
-          }
-        }
-      }
-      // TODO Set set_is_batch_ascii = true only if bound is a whole batch and there is no skip.
-      /*
-      if (OB_SUCC(ret)) {
-        if (is_result_batch_ascii) {
-          res_vec->set_is_batch_ascii();
-        }
-      } */
-    }
-  }
-  return ret;
-}
-
-int ObExprSubstr::eval_substr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
-    LOG_WARN("failed to eval vector result args0", K(ret));
-  } else {
-    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
-    VectorFormat res_format = expr.get_format(ctx);
-    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == arg_format && VEC_DISCRETE == res_format) {
-      ret = vector_substr<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == arg_format && VEC_UNIFORM == res_format) {
-      ret = vector_substr<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else {
-      ret = vector_substr<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
-    }
-  }
-  if (OB_SUCC(ret)) {
-    SQL_LOG(DEBUG, "expr", K(ToStrVectorHeader(expr.get_vector_header(ctx), expr, &skip, bound)));
-    SQL_LOG(DEBUG, "expr.args_[0]", K(ToStrVectorHeader(expr.args_[0]->get_vector_header(ctx), *expr.args_[0], &skip, bound)));
-  }
-  return ret;
-}
-DEF_SET_LOCAL_SESSION_VARS(ObExprSubstr, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
-  return ret;
-}
-
-int ObExprSubstr::ora_get_integer(const ObDatum &int_datum, const ObExpr &expr, int64_t &v)
-{
-  int ret = OB_SUCCESS;
-  if (ob_is_decimal_int(expr.datum_meta_.type_)) {
-    if (OB_FAIL(ObExprUtil::trunc_decint2int64(
-          int_datum.get_decimal_int(), int_datum.get_int_bytes(), expr.datum_meta_.scale_, v))) {
-      LOG_WARN("get integer failed", K(ret));
-    }
-  } else if (ob_is_number_tc(expr.datum_meta_.type_)) {
-    if (OB_FAIL(ObExprUtil::trunc_num2int64(int_datum, v))) {
-      LOG_WARN("get integer failed", K(ret));
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected datum", K(int_datum), K(expr));
-  }
-  return ret;
-}
 } /* sql */
 } /* oceanbase */

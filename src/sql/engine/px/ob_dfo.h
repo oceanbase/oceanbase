@@ -207,7 +207,6 @@ public:
               qc_id_(common::OB_INVALID_ID),
               sqc_id_(common::OB_INVALID_ID),
               dfo_id_(common::OB_INVALID_ID),
-              branch_id_base_(0),
               access_table_locations_(),
               qc_ch_info_(),
               sqc_ch_info_(),
@@ -369,10 +368,8 @@ public:
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
-  void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
-  int16_t get_branch_id_base() const { return branch_id_base_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
-               K_(branch_id_base), K_(qc_ch_info), K_(sqc_ch_info),
+               K_(qc_ch_info), K_(sqc_ch_info),
                K_(task_count), K_(max_task_count), K_(min_task_count),
                K_(thread_inited), K_(thread_finish), K_(px_int_id),
                K_(transmit_use_interm_result),
@@ -383,9 +380,6 @@ private:
   uint64_t qc_id_;
   int64_t sqc_id_;
   int64_t dfo_id_;
-  // branch id is used to distinguish datas written concurrently by px-workers
-  // for replace and insert update operator, they need branch_id to rollback writes by one px-worker
-  int16_t branch_id_base_;
   ObQCMonitoringInfo monitoring_info_;
   // The partition location information of the all table_scan op and dml op
   // used for px worker execution
@@ -478,7 +472,6 @@ public:
     child_dfos_(),
     has_scan_(false),
     has_dml_op_(false),
-    has_need_branch_id_op_(false),
     has_temp_scan_(false),
     is_active_(false),
     is_scheduled_(false),
@@ -548,8 +541,6 @@ public:
   inline bool has_scan_op() const { return has_scan_; }
   inline void set_dml_op(bool has_dml_op) { has_dml_op_ = has_dml_op; }
   inline bool has_dml_op() { return has_dml_op_; }
-  inline void set_need_branch_id_op(bool has_need_branch_id_op) { has_need_branch_id_op_ = has_need_branch_id_op; }
-  inline bool has_need_branch_id_op() const { return has_need_branch_id_op_; }
   inline void set_temp_table_scan(bool has_scan) { has_temp_scan_ = has_scan; }
   inline bool has_temp_table_scan() const { return has_temp_scan_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
@@ -750,7 +741,6 @@ private:
   common::ObSEArray<ObDfo *, 4> child_dfos_;
   bool has_scan_; // DFO 中包含至少一个 scan 算子，或者仅仅包含一个dml
   bool has_dml_op_; // DFO中可能包含一个dml
-  bool has_need_branch_id_op_; // DFO 中有算子需要分配branch_id
   bool has_temp_scan_;
   bool is_active_;
   bool is_scheduled_;
@@ -916,7 +906,6 @@ public:
       dfo_id_(0),
       sqc_id_(0),
       task_id_(-1),
-      branch_id_(0),
       execution_id_(0),
       task_channel_(NULL),
       sqc_channel_(NULL),
@@ -944,7 +933,6 @@ public:
     dfo_id_ = other.dfo_id_;
     sqc_id_ = other.sqc_id_;
     task_id_ = other.task_id_;
-    branch_id_ = other.branch_id_;
     execution_id_ = other.execution_id_;
     sqc_ch_info_ = other.sqc_ch_info_;
     task_ch_info_ = other.task_ch_info_;
@@ -970,7 +958,6 @@ public:
                K_(dfo_id),
                K_(sqc_id),
                K_(task_id),
-               K_(branch_id),
                K_(execution_id),
                K_(sqc_ch_info),
                K_(task_ch_info),
@@ -999,8 +986,6 @@ public:
   inline bool is_task_state_set(int32_t flag) const { return 0 != (state_ & flag); }
   inline void set_task_id(int64_t task_id) { task_id_ = task_id; }
   inline int64_t get_task_id() const { return task_id_; }
-  inline void set_branch_id(int16_t branch_id) { branch_id_ = branch_id; }
-  inline int16_t get_branch_id() const { return branch_id_; }
   inline void set_qc_id(uint64_t qc_id) { qc_id_ = qc_id; }
   inline int64_t get_qc_id() const { return qc_id_; }
   inline void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
@@ -1044,7 +1029,6 @@ public:
   int64_t dfo_id_;
   int64_t sqc_id_;
   int64_t task_id_;
-  int16_t branch_id_;
   int64_t execution_id_;
   dtl::ObDtlChannelInfo sqc_ch_info_;
   dtl::ObDtlChannelInfo task_ch_info_;

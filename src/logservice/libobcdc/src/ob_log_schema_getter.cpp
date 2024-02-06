@@ -454,6 +454,7 @@ int ObLogSchemaGetter::init(common::ObMySQLProxy &mysql_proxy,
     // refresh Schema
     ObSchemaService::g_ignore_column_retrieve_error_ = true;
     ObSchemaService::g_liboblog_mode_ = true;
+    ObMultiVersionSchemaService::g_skip_resolve_materialized_view_definition_ = true;
     const uint64_t tenant_id = OB_INVALID_TENANT_ID; // to refresh schema of all tenants
     const int64_t timeout = GET_SCHEMA_TIMEOUT_ON_START_UP;
     bool is_init_succ = false;
@@ -924,40 +925,6 @@ int ObLogSchemaGetter::get_tenant_refreshed_schema_version(const uint64_t tenant
     ret = OB_TENANT_HAS_BEEN_DROPPED;
   } else {
     version = refreshed_version;
-  }
-
-  return ret;
-}
-
-int ObLogSchemaGetter::check_if_tenant_is_dropping_or_dropped(
-    const uint64_t tenant_id,
-    bool &is_tenant_dropping_or_dropped,
-    TenantSchemaInfo &tenant_schema_info)
-{
-  int ret = OB_SUCCESS;
-  ObSchemaGetterGuard guard;
-  is_tenant_dropping_or_dropped = false;
-  const ObTenantSchema *tenant_schema = nullptr;
-
-  if (OB_FAIL(schema_service_.get_tenant_schema_guard(OB_SYS_TENANT_ID, guard))) {
-    LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
-    LOG_WARN("get tenant info failed", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(tenant_schema)) {
-    // Double check the tenant status to avoid any potential problems in the schema module.
-    if (OB_FAIL(guard.check_if_tenant_has_been_dropped(tenant_id, is_tenant_dropping_or_dropped))) {
-      LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-    } else {
-      LOG_INFO("tenant info is nullptr, check the tenant status",
-          K(tenant_id), K(is_tenant_dropping_or_dropped));
-    }
-  } else {
-    is_tenant_dropping_or_dropped = tenant_schema->is_dropping();
-    tenant_schema_info.reset(
-        tenant_id,
-        tenant_schema->get_schema_version(),
-        tenant_schema->get_tenant_name(),
-        tenant_schema->is_restore());
   }
 
   return ret;

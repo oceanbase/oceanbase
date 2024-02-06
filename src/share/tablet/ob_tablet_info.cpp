@@ -124,16 +124,6 @@ bool ObTabletReplica::is_equal_for_report(const ObTabletReplica &other) const
   return is_equal;
 }
 
-void ObTabletReplica::fake_for_diagnose(const uint64_t tenant_id,
-                                       const share::ObLSID &ls_id,
-                                       const common::ObTabletID &tablet_id)
-{
-  reset();
-  tenant_id_ = tenant_id;
-  ls_id_ = ls_id;
-  tablet_id_ = tablet_id;
-}
-
 ObTabletInfo::ObTabletInfo()
     : tenant_id_(OB_INVALID_TENANT_ID),
       tablet_id_(),

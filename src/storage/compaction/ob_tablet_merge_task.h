@@ -75,6 +75,11 @@ public:
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
     DAG_FINISH,
+    SEARCH_META_TABLE,
+    CHECK_META_TABLE,
+    SEARCH_CHECKSUM,
+    CHECK_CHECKSUM,
+    SCHEDULER_NEXT_ROUND,
     COMPACTION_EVENT_MAX
   };
   virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
@@ -272,6 +277,7 @@ protected:
   lib::Worker::CompatMode compat_mode_;
   ObBasicTabletMergeCtx *ctx_;
   ObTabletMergeDagParam param_;
+  ObStorageCompactionTimeGuard time_guard_;
   common::ObArenaAllocator allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeDag);
@@ -331,25 +337,18 @@ static void prepare_allocator(
   class DAG_NAME : public ObTabletMergeDag {                                   \
   public:                                                                      \
     DAG_NAME() : ObTabletMergeDag(DAG_TYPE) {}                                 \
-    virtual ~DAG_NAME() = default;                                             \
+    ~DAG_NAME() = default;                                                     \
   };
 
+DEFINE_MERGE_DAG(ObTxTableMergeDag, share::ObDagType::DAG_TYPE_TX_TABLE_MERGE);
 DEFINE_MERGE_DAG(ObTabletMajorMergeDag, share::ObDagType::DAG_TYPE_MAJOR_MERGE);
-
-class ObTxTableMergeDag : public ObTabletMergeDag {
-public:
-  ObTxTableMergeDag()
-    : ObTabletMergeDag(share::ObDagType::DAG_TYPE_TX_TABLE_MERGE)
-  {}
-  virtual ~ObTxTableMergeDag();
-};
 
 class ObTabletMiniMergeDag : public ObTabletMergeDag {
 public:
   ObTabletMiniMergeDag()
     : ObTabletMergeDag(share::ObDagType::DAG_TYPE_MINI_MERGE)
   {}
-  virtual ~ObTabletMiniMergeDag();
+  ~ObTabletMiniMergeDag();
 };
 
 } // namespace compaction

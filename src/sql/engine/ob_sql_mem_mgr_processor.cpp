@@ -46,17 +46,10 @@ int ObSqlMemMgrProcessor::init(
   if (OB_ISNULL(exec_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get exec ctx", K(ret));
-  } else if (OB_ISNULL(allocator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get allocator", K(ret));
   } else if (OB_FAIL(profile_.set_exec_info(*exec_ctx))) {
     LOG_WARN("failed to set exec info", K(ret));
   } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
-    if (OB_NOT_NULL(exec_ctx->get_physical_plan_ctx())
-        && OB_NOT_NULL(exec_ctx->get_physical_plan_ctx()->get_phy_plan())) {
-      profile_.disable_auto_mem_mgr_ = exec_ctx->get_physical_plan_ctx()->get_phy_plan()->is_disable_auto_memory_mgr();
-    }
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
       tmp_enable_auto_mem_mgr = true;
       if (profile_.get_auto_policy()) {
@@ -109,13 +102,6 @@ int ObSqlMemMgrProcessor::init(
   }
   if (!profile_.get_auto_policy()) {
     profile_.set_max_bound(max_mem_size);
-  }
-  if (OB_SUCC(ret) && nullptr == dummy_alloc_) {
-    dummy_alloc_ = allocator;
-    if (OB_ISNULL(dummy_ptr_ = static_cast<char *> (dummy_alloc_->alloc(sizeof(char))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc dummy memory", K(ret));
-    }
   }
   // 如果开启了sql memory manager，但由于预估数据量比较少，不需要注册到manager里，这里限制为MAX_SQL_MEM_SIZE
   origin_max_mem_size_ = max_mem_size;
@@ -309,11 +295,6 @@ void ObSqlMemMgrProcessor::unregister_profile()
     sql_mem_mgr_->unregister_work_area_profile(profile_);
     destroy();
     LOG_DEBUG("trace unregister work area profile", K(profile_));
-  }
-  if (OB_NOT_NULL(dummy_ptr_)) {
-    dummy_alloc_->free(dummy_ptr_);
-    dummy_ptr_ = nullptr;
-    dummy_alloc_ = nullptr;
   }
 }
 

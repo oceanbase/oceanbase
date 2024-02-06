@@ -198,8 +198,7 @@ inline int ObMysqlCompressProtocolProcessor::process_compressed_packet(
               pkt_rec_wrapper.record_recieve_comp_packet(*iraw_pkt, *raw_pkt);
             }
           }
-          // reset all context except the compress packet sequence
-          context.reuse();
+          context.reset();
         }
       }
     }

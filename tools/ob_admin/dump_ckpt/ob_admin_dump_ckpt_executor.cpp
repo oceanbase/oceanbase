@@ -201,16 +201,16 @@ int ObAdminDumpCkptExecutor::dump_all_ls_metas_from_ckpt(const blocksstable::Mac
   ObTenantStorageCheckpointReader tenant_storage_ckpt_reader;
   ObArray<blocksstable::MacroBlockId> meta_block_list;
 
-  ObTenantStorageCheckpointReader::ObStorageMetaOp dump_ls_meta_op =
+  ObTenantStorageCheckpointReader::ObCheckpointMetaOp dump_ls_meta_op =
       std::bind(&ObAdminDumpCkptExecutor::dump_ls_meta,
       this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, stream);
 
   if (fprintf(stream, "======================ls meta=====================\n") < 0) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to fprintf", K(ret));
-  } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_meta_item(
+  } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       entry_block, dump_ls_meta_op, meta_block_list))) {
-    LOG_WARN("fail to iter_read_meta_item", K(ret), K(entry_block));
+    LOG_WARN("fail to iter_read_checkpoint_item", K(ret), K(entry_block));
   } else if (fprintf(stream, "checkpoint_block_id_list: [%s]\n", to_cstring(meta_block_list)) < 0) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to fprintf", K(ret));
@@ -245,16 +245,16 @@ int ObAdminDumpCkptExecutor::dump_all_tablets_from_ckpt(const blocksstable::Macr
   ObTenantStorageCheckpointReader tenant_storage_ckpt_reader;
   ObArray<blocksstable::MacroBlockId> meta_block_list;
 
-  ObTenantStorageCheckpointReader::ObStorageMetaOp dump_tablet_op =
+  ObTenantStorageCheckpointReader::ObCheckpointMetaOp dump_tablet_op =
       std::bind(&ObAdminDumpCkptExecutor::dump_tablet,
       this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, stream);
 
   if (fprintf(stream, "======================tablet=====================\n") < 0) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to fprintf", K(ret));
-  } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_meta_item(
+  } else if (OB_FAIL(tenant_storage_ckpt_reader.iter_read_checkpoint_item(
       entry_block, dump_tablet_op, meta_block_list))) {
-    LOG_WARN("fail to iter_read_meta_item", K(ret), K(entry_block));
+    LOG_WARN("fail to iter_read_checkpoint_item", K(ret), K(entry_block));
   } else if (fprintf(stream, "checkpoint_block_id_list: %s\n", to_cstring(meta_block_list)) < 0) {
     ret = OB_ERR_SYS;
     LOG_WARN("fail to fprintf", K(ret));

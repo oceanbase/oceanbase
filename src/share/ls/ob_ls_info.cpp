@@ -148,7 +148,7 @@ void ObLSReplica::reset()
   replica_type_ = REPLICA_TYPE_FULL;
   proposal_id_ = 0;
   replica_status_ = REPLICA_STATUS_NORMAL;
-  restore_status_ = ObLSRestoreStatus::Status::NONE;
+  restore_status_ = ObLSRestoreStatus::Status::RESTORE_NONE;
   property_.reset();
   //meta related
   unit_id_ = OB_INVALID_ID;

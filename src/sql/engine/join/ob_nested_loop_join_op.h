@@ -94,8 +94,6 @@ public:
   virtual int switch_iterator() override;
   virtual int rescan() override;
   virtual int inner_rescan() override;
-
-
   virtual int inner_get_next_row() override;
   virtual void destroy() override
   {
@@ -123,7 +121,7 @@ public:
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
   int fill_cur_row_rescan_param();
   int calc_other_conds(bool &is_match);
-  int do_drain_exch_multi_lvel_bnlj();
+
 private:
   // state operation and transfer function type.
   typedef int (ObNestedLoopJoinOp::*state_operation_func_type)();
@@ -169,8 +167,6 @@ private:
   // for refactor vectorized end
 
   bool continue_fetching() { return !(left_brs_->end_ || is_full());}
-  virtual int do_drain_exch() override;
-  virtual int inner_drain_exch() { return OB_SUCCESS; }
 public:
   ObJoinState state_;
   // for bnl join

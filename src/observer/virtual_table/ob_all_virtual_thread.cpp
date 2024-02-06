@@ -11,7 +11,6 @@
  */
 
 #include "ob_all_virtual_thread.h"
-#include "lib/file/file_directory_utils.h"
 #include "lib/thread/protected_stack_allocator.h"
 
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
@@ -23,7 +22,7 @@ namespace oceanbase
 using namespace lib;
 namespace observer
 {
-ObAllVirtualThread::ObAllVirtualThread() : is_inited_(false), is_config_cgroup_(false)
+ObAllVirtualThread::ObAllVirtualThread() : is_inited_(false)
 {
 }
 
@@ -52,15 +51,11 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (!is_inited_) {
-    const char *cgroup_path = "cgroup";
-    if (OB_FAIL(FileDirectoryUtils::is_exists(cgroup_path, is_config_cgroup_))) {
-      SERVER_LOG(WARN, "fail check file exist", K(cgroup_path), K(ret));
-    }
     const int64_t col_count = output_column_ids_.count();
     pid_t pid = getpid();
     StackMgr::Guard guard(g_stack_mgr);
-    for (oceanbase::lib::ObStackHeader* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
-      char* thread_base = (char*)(header->pth_);
+    for (auto* header = *guard; OB_NOT_NULL(header); header = guard.next()) {
+      auto* thread_base = (char*)(header->pth_);
       if (OB_NOT_NULL(thread_base)) {
         GET_OTHER_TSI_ADDR(tid, &get_tid_cache());
         {
@@ -224,13 +219,7 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
               break;
             }
             case CGROUP_PATH: {
-              if (!is_config_cgroup_) {
-                cells[i].set_varchar("");
-              } else {
-                int64_t pid = getpid();
-                snprintf(cgroup_path_buf_, PATH_BUFSIZE, "/proc/%ld/task/%ld/cgroup", pid, tid);
-                cells[i].set_varchar(cgroup_path_buf_);
-              }
+              cells[i].set_varchar("");
               break;
             }
             default: {
@@ -261,71 +250,8 @@ int ObAllVirtualThread::inner_get_next_row(common::ObNewRow *&row)
       if (OB_ITER_END != ret) {
         SERVER_LOG(WARN, "fail to get next row", K(ret));
       }
-    } else if (OB_FAIL(read_real_cgroup_path())){
-      SERVER_LOG(WARN, "fail to get cgroup path real path", K(ret));
     } else {
       row = &cur_row_;
-    }
-  }
-  return ret;
-}
-
-int ObAllVirtualThread::read_real_cgroup_path()
-{
-  int ret = OB_SUCCESS;
-  const int64_t col_count = output_column_ids_.count();
-  for (int64_t i = 0; i < col_count && OB_SUCC(ret); ++i) {
-    const uint64_t col_id = output_column_ids_.at(i);
-    ObObj *cells = cur_row_.cells_;
-    if (col_id == CGROUP_PATH) {
-      char path[PATH_BUFSIZE];
-      snprintf(path, cells[i].get_val_len() + 1, "%s", cells[i].get_varchar().ptr());
-      FILE *file = fopen(path, "r");
-      if (NULL == file) {
-        cells[i].set_varchar("");
-      } else {
-        /*
-        file content
-        7:perf_event:/
-        6:cpuset,cpu,cpuacct:/oceanbase/tenant_0001
-        5:blkio:/system.slice/staragentctl.service
-        4:devices:/system.slice/staragentctl.service
-        3:hugetlb:/
-        cgroup_path = /tenant_0001
-        */
-        bool is_find = false;
-        int min_len = 2;
-        int discard_len = 1;
-        char read_buff[PATH_BUFSIZE];
-        cgroup_path_buf_[0] = '\0';
-        while (fgets(read_buff, sizeof(read_buff), file) != NULL && !is_find) {
-          const char* match_begin =  strstr(read_buff, ":/");
-          const char* match_cpu =  strstr(read_buff, "cpu");
-          if (match_begin != NULL && match_cpu != NULL) {
-            is_find = true;
-            match_begin += discard_len;
-            snprintf(cgroup_path_buf_, PATH_BUFSIZE, "%s", match_begin);
-          }
-        }
-        if (is_find) {
-          int cgroup_path_len = strlen(cgroup_path_buf_);
-          if (min_len < cgroup_path_len) {
-            if (cgroup_path_buf_[cgroup_path_len - 1] == '\n') {
-              cgroup_path_buf_[cgroup_path_len - 1] = '\0';
-            }
-            cells[i].set_varchar(cgroup_path_buf_);
-          } else {
-            cells[i].set_varchar("");
-          }
-        } else {
-          cells[i].set_varchar("");
-        }
-      }
-      cells[i].set_collation_type(
-          ObCharset::get_default_collation(ObCharset::get_default_charset()));
-      if (NULL != file) {
-        fclose(file);
-      }
     }
   }
   return ret;

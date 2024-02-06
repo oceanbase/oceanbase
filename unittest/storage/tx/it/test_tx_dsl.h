@@ -53,12 +53,8 @@
     ObTxSEQ sp;                                                         \
     ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp));
 
-#define CREATE_BRANCH_SAVEPOINT(n1, tx, branch, sp) \
-    ObTxSEQ sp;                                                         \
-    ASSERT_EQ(OB_SUCCESS, n1->create_branch_savepoint(tx, branch, sp));
-
 #define ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp, timeout_us)          \
-    n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_us(timeout_us), nullptr)
+    n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_us(timeout_us), nullptr);
 
 #define INJECT_LINK_FAILURE(n1, n2)                                     \
     ASSERT_EQ(OB_SUCCESS, bus_.inject_link_failure(n1->addr_, n2->addr_)); \

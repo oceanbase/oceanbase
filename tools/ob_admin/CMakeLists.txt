@@ -54,14 +54,6 @@ add_executable(ob_admin
   backup_tool/ob_admin_dump_backup_data_executor.h
   backup_tool/ob_admin_dump_backup_data_executor.cpp
 
-  io_bench/task_executor.h
-  io_bench/task_executor.cpp
-  io_bench/ob_admin_io_adapter_bench.h
-  io_bench/ob_admin_io_adapter_bench.cpp
-
-  io_device/ob_admin_test_io_device_executor.h
-  io_device/ob_admin_test_io_device_executor.cpp
-
   #trx_tool/ob_admin_trx_executor.h
   #trx_tool/ob_admin_trx_executor.cpp
 
@@ -123,14 +115,6 @@ add_executable(ob_admin
 
   backup_tool/ob_admin_dump_backup_data_executor.h
   backup_tool/ob_admin_dump_backup_data_executor.cpp
-
-  io_bench/task_executor.h
-  io_bench/task_executor.cpp
-  io_bench/ob_admin_io_adapter_bench.h
-  io_bench/ob_admin_io_adapter_bench.cpp
-
-  io_device/ob_admin_test_io_device_executor.h
-  io_device/ob_admin_test_io_device_executor.cpp
 
   #trx_tool/ob_admin_trx_executor.h
   #trx_tool/ob_admin_trx_executor.cpp

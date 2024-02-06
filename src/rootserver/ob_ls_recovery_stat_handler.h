@@ -17,7 +17,6 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h" //ObGetLSReplayedScnProxy
 #include "share/ls/ob_ls_recovery_stat_operator.h" // ObLSRecoveryStatOperator
 #include "logservice/palf/palf_handle_impl.h"                  // PalfStat
-#include "logservice/palf/log_meta_info.h"//LogConfigVersion
 
 namespace oceanbase
 {
@@ -29,27 +28,6 @@ class ObLS;
 
 namespace rootserver
 {
-struct ObLSReplicaReadableSCN
-{
-public:
-  ObLSReplicaReadableSCN() : server_(), readable_scn_() {}
-  ~ObLSReplicaReadableSCN() {}
-  int init(const common::ObAddr &server, const share::SCN &readable_scn);
-
-  share::SCN get_readable_scn()const
-  {
-    return readable_scn_;
-  }
-  common::ObAddr &get_server()
-  {
-    return server_;
-  }
-   TO_STRING_KV(K_(server), K_(readable_scn));
-private:
-  common::ObAddr server_;
-  share::SCN readable_scn_;
-};
-
 /**
   * @description:
   *    ObLSRecoveryStatHandler exists on the LS of each observer and is responsible for
@@ -70,14 +48,6 @@ public:
    */
   int get_ls_replica_readable_scn(share::SCN &readable_scn);
 
-  /*
-   * @description:
-   * Get the readable_scn of other replicas
-   * @param[out] readable_scn ls readable_scn
-   * @return return code
-   * */
-  int get_all_replica_min_readable_scn(share::SCN &readable_scn);
-
   /**
    * @description:
    *    get ls level recovery_stat by LS leader.
@@ -86,13 +56,6 @@ public:
    * @return return code
    */
   int get_ls_level_recovery_stat(share::ObLSRecoveryStat &ls_recovery_stat);
-
-  int set_add_replica_server(const common::ObAddr &server);
-  /*
-  * @description:
-  * get all ls replica readable and set to replicas_scn_;
-  */
-  int gather_replica_readable_scn();
 
   TO_STRING_KV(K_(tenant_id), K_(ls));
 
@@ -133,9 +96,7 @@ private:
    */
   int get_latest_palf_stat_(
       palf::PalfStat &palf_stat);
-  int do_get_each_replica_readable_scn_(
-      const ObIArray<common::ObAddr> &ob_member_list,
-      ObArray<ObLSReplicaReadableSCN> &replicas_scn);
+
   int get_majority_readable_scn_(
       const share::SCN &leader_readable_scn,
       share::SCN &majority_min_readable_scn);
@@ -144,21 +105,12 @@ private:
       const share::SCN &leader_readable_scn,
       const int64_t need_query_member_cnt,
       share::SCN &majority_min_readable_scn);
-  int do_get_majority_readable_scn_V2_(
-      const ObIArray<common::ObAddr> &ob_member_list,
-      const int64_t need_query_member_cnt,
-      const palf::LogConfigVersion &config_version,
-      share::SCN &majority_min_readable_scn);
   int calc_majority_min_readable_scn_(
       const share::SCN &leader_readable_scn,
       const int64_t majority_cnt,
       const ObIArray<int> &return_code_array,
       const ObGetLSReplayedScnProxy &proxy,
       share::SCN &majority_min_readable_scn);
-  int do_calc_majority_min_readable_scn_(
-    const int64_t majority_cnt,
-    ObArray<SCN> &readable_scn_list,
-    share::SCN &majority_min_readable_scn);
 
   int construct_new_member_list_(
       const common::ObMemberList &member_list_ori,
@@ -167,20 +119,12 @@ private:
       ObIArray<common::ObAddr> &member_list_new,
       int64_t &paxos_replica_number_new);
 
-  int try_reload_and_fix_config_version_(const palf::LogConfigVersion &current_version);
-
   DISALLOW_COPY_AND_ASSIGN(ObLSRecoveryStatHandler);
 
 private:
   bool is_inited_;
   uint64_t tenant_id_;
   ObLS *ls_;
-  common::SpinRWLock lock_;
-  share::SCN readable_scn_in_inner_;//readable_scn of inner_table
-  palf::LogConfigVersion config_version_in_inner_;//config_version in inner_table
-  common::ObAddr extra_server_;//for add replica, need to gather add_replica's readable_scn
-  palf::LogConfigVersion config_version_;
-  ObArray<ObLSReplicaReadableSCN> replicas_scn_;
 };
 
 }

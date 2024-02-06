@@ -28,72 +28,72 @@ class ObTabletToLSTableOperator;
 class ObTabletTableOperator;
 class ObTabletInfo;
 
-class ObTabletMetaIterator
+class ObCompactionTabletMetaIterator
 {
 public:
-  ObTabletMetaIterator();
-  ~ObTabletMetaIterator() { reset(); }
-  virtual void reset();
-  virtual int next(ObTabletInfo &tablet_info);
-protected:
-  int inner_init(
-    const uint64_t tenant_id);
-  virtual int prefetch() = 0;
-protected:
+  ObCompactionTabletMetaIterator();
+  ~ObCompactionTabletMetaIterator() { reset(); }
+  int init(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    share::ObIServerTrace &server_trace,
+    ObIArray<share::ObTabletLSPair> &tablet_ls_pairs);
+  void reset();
+  int next(ObTabletInfo &tablet_info);
+  void set_batch_size(int64_t batch_size) {tablet_table_operator_.set_batch_size(batch_size);}
+
+private:
+  int prefetch();
+  int iter_prefetch_info_finish() const
+  {
+    return prefetch_tablet_idx_ >= prefetched_tablets_.count();
+  }
+  const static int64_t TABLET_META_TABLE_RANGE_GET_SIZE = 150;
+private:
   bool is_inited_;
-  int64_t prefetch_tablet_idx_;
+  bool first_prefetch_;
+  common::ObISQLClient *sql_proxy_;
+  ObTabletTableOperator tablet_table_operator_;
   uint64_t tenant_id_;
+  ObIArray<share::ObTabletLSPair> *tablet_ls_pairs_;
+  int64_t prefetch_tablet_idx_;
   common::ObArray<ObTabletInfo> prefetched_tablets_;
   ObTabletReplicaFilterHolder filters_;
 };
 
-class ObCompactionTabletMetaIterator : public ObTabletMetaIterator
-{
-public:
-  ObCompactionTabletMetaIterator(
-    const bool first_check,
-    const int64_t compaction_scn);
-  ~ObCompactionTabletMetaIterator() { reset(); }
-  int init(
-    const uint64_t tenant_id,
-    const int64_t batch_size,
-    share::ObIServerTrace &server_trace);
-  virtual void reset() override;
-  virtual int next(ObTabletInfo &tablet_info) override;
-
-private:
-   virtual int prefetch() override;
-  const static int64_t TABLET_META_TABLE_RANGE_GET_SIZE = 1500;
-
-  bool first_check_;
-  int64_t compaction_scn_;
-  int64_t batch_size_;
-  ObTabletID end_tablet_id_;
-};
-
-class ObTenantTabletMetaIterator : public ObTabletMetaIterator
+//TOOD @lixia merge ObTenantTabletMetaIterator and ObCompactionTabletMetaIterator
+class ObTenantTabletMetaIterator
 {
 public:
   ObTenantTabletMetaIterator();
   virtual ~ObTenantTabletMetaIterator();
+
   int init(common::ObISQLClient &sql_proxy,
            const uint64_t tenant_id);
-  virtual void reset() override;
+  bool is_inited() const { return is_inited_; }
+  int next(ObTabletInfo &tablet_info);
+  ObTabletReplicaFilterHolder &get_filters() { return filters_; }
   void set_batch_size(int64_t batch_size) {tablet_table_operator_.set_batch_size(batch_size);}
 
 private:
-  virtual int prefetch() override;
+  int prefetch();
   int prefetch_valid_tablet_ids();
   int prefetch_sys_table_tablet_ids();
   int prefetch_user_table_tablet_ids();
   int prefetch_tablets();
 
 private:
-  bool first_prefetch_;
+  bool is_inited_;
   common::ObISQLClient *sql_proxy_;
-  int64_t valid_tablet_ls_pairs_idx_;
-  common::ObArray<ObTabletLSPair> valid_tablet_ls_pairs_;
   ObTabletTableOperator tablet_table_operator_;
+  uint64_t tenant_id_;
+  bool first_prefetch_;
+  common::ObArray<ObTabletInfo> prefetched_tablets_;
+  common::ObArray<ObTabletLSPair> valid_tablet_ls_pairs_;
+  int64_t valid_tablet_ls_pairs_idx_;
+  int64_t prefetch_tablet_idx_;
+  ObTabletReplicaFilterHolder filters_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTenantTabletMetaIterator);
 };

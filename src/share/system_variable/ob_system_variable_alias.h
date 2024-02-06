@@ -113,8 +113,6 @@ namespace share
   static const char* const OB_SV_CTE_MAX_RECURSION_DEPTH = "cte_max_recursion_depth";
   static const char* const OB_SV_REGEXP_STACK_LIMIT = "regexp_stack_limit";
   static const char* const OB_SV_REGEXP_TIME_LIMIT = "regexp_time_limit";
-  static const char* const OB_SV_PROFILING = "profiling";
-  static const char* const OB_SV_PROFILING_HISTORY_SIZE = "profiling_history_size";
   static const char* const OB_SV_INTERM_RESULT_MEM_LIMIT = "ob_interm_result_mem_limit";
   static const char* const OB_SV_PROXY_PARTITION_HIT = "ob_proxy_partition_hit";
   static const char* const OB_SV_LOG_LEVEL = "ob_log_level";
@@ -261,8 +259,6 @@ namespace share
   static const char* const OB_SV_DEFAULT_LOB_INROW_THRESHOLD = "ob_default_lob_inrow_threshold";
   static const char* const OB_SV__ENABLE_STORAGE_CARDINALITY_ESTIMATION = "_enable_storage_cardinality_estimation";
   static const char* const OB_SV_LC_TIME_NAMES = "lc_time_names";
-  static const char* const OB_SV_ACTIVATE_ALL_ROLES_ON_LOGIN = "activate_all_roles_on_login";
-  static const char* const OB_SV__ENABLE_RICH_VECTOR_FORMAT = "_enable_rich_vector_format";
 
 }
 }

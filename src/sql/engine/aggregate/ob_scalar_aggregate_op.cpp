@@ -28,17 +28,14 @@ int ObScalarAggregateOp::inner_open()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObGroupByOp::inner_open())) {
     LOG_WARN("failed to inner_open", K(ret));
+  } else if (OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
+    LOG_WARN("failed to alloc dir id", K(ret));
+  } else if (FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
+  } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
+  } else if (OB_FAIL(aggr_processor_.init_one_group())) {
+    LOG_WARN("failed to init one group",  K(ret));
   } else {
-    bool need_dir_id = aggr_processor_.processor_need_alloc_dir_id();
-    if (need_dir_id && OB_FAIL(ObChunkStoreUtil::alloc_dir_id(dir_id_))) {
-      LOG_WARN("failed to alloc dir id", K(ret));
-    } else if (need_dir_id && FALSE_IT(aggr_processor_.set_dir_id(dir_id_))) {
-    } else if (FALSE_IT(aggr_processor_.set_io_event_observer(&io_event_observer_))) {
-    } else if (OB_FAIL(aggr_processor_.init_one_group())) {
-      LOG_WARN("failed to init one group",  K(ret));
-    } else {
-      started_ = false;
-    }
+    started_ = false;
   }
   return ret;
 }
@@ -151,6 +148,8 @@ int ObScalarAggregateOp::inner_get_next_batch(const int64_t max_row_cnt)
   } else if (OB_ISNULL(group_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("group_row is null", K(ret));
+  } else if (OB_FAIL(aggr_processor_.prepare_in_batch_mode(group_row))) {
+    LOG_WARN("fail to prepare the aggr func", K(ret));
   } else {
     ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
     while (OB_SUCC(ret)

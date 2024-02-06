@@ -159,11 +159,6 @@ int ObDirectLoadSSTable::init(ObDirectLoadSSTableCreateParam &param)
   return ret;
 }
 
-void ObDirectLoadSSTable::release_data()
-{
-  fragments_.reset();
-}
-
 int ObDirectLoadSSTable::copy(const ObDirectLoadSSTable &other)
 {
   int ret = OB_SUCCESS;

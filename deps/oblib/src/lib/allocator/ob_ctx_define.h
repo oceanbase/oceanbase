@@ -27,7 +27,6 @@ struct ObCtxAttr
   bool enable_dirty_list_ = false;
   bool enable_no_log_ = false;
   int parallel_ = DEFAULT_CTX_PARALLEL;
-  bool disable_sync_wash_ = false;
 };
 
 struct ObCtxAttrCenter
@@ -50,10 +49,6 @@ public:
 #define ENABLE_NO_LOG_DEF(name) ctx_attr_[ObCtxIds::name].enable_no_log_ = true;
     ENABLE_NO_LOG_DEF(LOGGER_CTX_ID)
 #undef ENABLE_NO_LOG_DEF
-
-#define DISABLE_SYNC_WASH_DEF(name) ctx_attr_[ObCtxIds::name].disable_sync_wash_ = true;
-    DISABLE_SYNC_WASH_DEF(MERGE_RESERVE_CTX_ID)
-#undef DISABLE_SYNC_WASH_DEF
   }
   static ObCtxAttrCenter &instance();
   ObCtxAttr attr_of_ctx(int64_t ctx_id) const

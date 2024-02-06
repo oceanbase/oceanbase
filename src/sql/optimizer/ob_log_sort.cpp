@@ -136,7 +136,7 @@ int ObLogSort::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
           LOG_WARN("failed to push back expr", K(ret));
         }
       }
-      if (FAILEDx(ObLogicalOperator::get_op_exprs(all_exprs))) {
+      if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
         LOG_WARN("failed to get op exprs", K(ret));
       } else { /*do nothing*/ }
     }
@@ -248,11 +248,7 @@ const char *ObLogSort::get_name() const
 {
   const char *ret = NULL;
   if (NULL != topn_expr_) {
-    if (part_cnt_ > 0) {
-      ret = "PARTITION TOP-N SORT";
-    } else {
-      ret = "TOP-N SORT";
-    }
+    ret = "TOP-N SORT";
   } else if (NULL == topk_limit_expr_ && prefix_pos_ <= 0 && part_cnt_ > 0) {
     ret = "PARTITION SORT";
   }
@@ -272,9 +268,6 @@ int ObLogSort::est_width()
   } else if (!get_plan()->get_candidate_plans().is_final_sort_) {
     width = child->get_width();
     set_width(width);
-    if (OB_FAIL(est_sort_key_width())) {
-      LOG_WARN("failed to est sort key width", K(ret));
-    }
     LOG_TRACE("est width for non-final sort", K(output_exprs), K(width));
   } else if (OB_FAIL(get_sort_output_exprs(output_exprs))) {
     LOG_WARN("failed to get sort output exprs", K(ret));
@@ -283,41 +276,9 @@ int ObLogSort::est_width()
                                                             output_exprs,
                                                             width))) {
     LOG_WARN("failed to estimate width for output orderby exprs", K(ret));
-  } else if (OB_FAIL(est_sort_key_width())) {
-    LOG_WARN("failed to est sort key width", K(ret));
   } else {
     set_width(width);
     LOG_TRACE("est width for final sort", K(output_exprs), K(width));
-  }
-  return ret;
-}
-
-int ObLogSort::est_sort_key_width()
-{
-  int ret = OB_SUCCESS;
-  double width = 0.0;
-  sort_key_width_ = 0.0;
-  ObSEArray<ObRawExpr*, 16> sortkey_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); i++) {
-    if (OB_FAIL(sortkey_exprs.push_back(sort_keys_.at(i).expr_))) {
-      LOG_WARN("failed to add sort key expr", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObOptEstCost::estimate_width_for_exprs(get_plan()->get_basic_table_metas(),
-                                                            get_plan()->get_selectivity_ctx(),
-                                                            sortkey_exprs,
-                                                            width))) {
-    LOG_WARN("failed to estimate width for sortkey orderby exprs", K(ret));
-  } else {
-    if (enable_encode_sortkey_opt()) {
-      // A rough estimate of the memory size used by encode is equal to the size of the sort key.
-      width *= 2;
-    }
-    if (part_cnt_ > 0) {
-      width += sizeof(int64_t);
-    }
-    sort_key_width_ = width;
   }
   return ret;
 }
@@ -378,44 +339,11 @@ int ObLogSort::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     card = param.need_row_count_;
   }
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child) || OB_ISNULL(get_plan()) || OB_ISNULL(get_stmt())
-      || OB_ISNULL(get_stmt()->get_query_ctx())) {
+  if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_1_BP4) {
-    param.need_row_count_ = -1;
-  } else if (-1 == param.need_row_count_) {
-    //do nothing
-  } else if (!is_prefix_sort()) {
-    param.need_row_count_ = -1;
-  } else {
-    ObSEArray<ObRawExpr*, 4> prefix_ordering;
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_prefix_pos(); ++i) {
-      if (OB_FAIL(prefix_ordering.push_back(sort_keys_.at(i).expr_))) {
-        LOG_WARN("push back order key expr failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      double prefix_ndv = 0.0;
-      if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
-                                                        get_plan()->get_selectivity_ctx(),
-                                                        prefix_ordering,
-                                                        child->get_card(),
-                                                        prefix_ndv))) {
-        LOG_WARN("failed to calculate distinct", K(ret));
-      } else if (OB_UNLIKELY(std::fabs(prefix_ndv) < 1.0)) {
-        param.need_row_count_ = -1;
-      } else {
-        double num_rows_per_group = child->get_card() / prefix_ndv;
-        double num_groups = std::ceil(param.need_row_count_ / num_rows_per_group);
-        param.need_row_count_ = num_groups * num_rows_per_group;
-        if (param.need_row_count_ >= child->get_card()) {
-          param.need_row_count_ = -1;
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(param.need_row_count_ = -1)) {
+    //limit N在sort算子被阻塞
   } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(inner_est_cost(parallel, child_card, double_topn_count, op_cost))) {
@@ -472,36 +400,10 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
                              &get_plan()->get_selectivity_ctx(),
                              double_topn_count,
                              part_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx))) {
+    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
     } else if (NULL != topn_expr_) {
-      if (part_cnt_ > 0) {
-        //partition topn sort
-        ObSEArray<ObRawExpr*, 4> part_exprs;
-        for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); ++i) {
-          if (i < cost_info.part_cnt_) {
-            if (OB_FAIL(part_exprs.push_back(sort_keys_.at(i).expr_))) {
-              LOG_WARN("fail to push back expr", K(ret));
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          double child_rows = child_card / parallel;
-          double distinct_parts = child_rows;
-          if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
-                                                            get_plan()->get_selectivity_ctx(),
-                                                            part_exprs,
-                                                            child_rows,
-                                                            distinct_parts))) {
-            LOG_WARN("failed to calculate distinct", K(ret));
-          } else if (OB_UNLIKELY(distinct_parts < 1.0 || distinct_parts > child_rows)) {
-            distinct_parts = child_rows;
-          }
-          double_topn_count = std::min(distinct_parts * double_topn_count * parallel, child_card);
-        }
-      } else {
-        double_topn_count = std::min(double_topn_count * parallel, child_card);
-      }
+      double_topn_count = std::min(double_topn_count * parallel, child_card);
     }
   }
   return ret;

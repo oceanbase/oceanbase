@@ -67,7 +67,7 @@ public:
   char buf_[0];
 };
 
-// only used for more conveniently passing parameters
+// only used for more conveniently passsing parameters
 class ObMemtableData
 {
 public:

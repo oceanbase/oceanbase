@@ -284,9 +284,6 @@ public:
   bool is_iops_weight_valid_for_meta_tenant() const { return is_iops_weight_valid(); }
   bool is_iops_weight_valid_for_user_tenant() const { return is_iops_weight_valid(); }
 
-  ////////////////////////////////////// comparison functions ////////////////////////////////////
-  bool has_expanded_resource_than(const ObUnitResource &other) const;
-  bool has_shrunk_resource_than(const ObUnitResource &other) const;
   ////////////////////////////////////// other functions ////////////////////////////////////
 
   // devide meta tenant resource from self
@@ -308,7 +305,7 @@ public:
 
   // get default LOG_DISK_SIZE based on MEMORY_SIZE
   static int64_t get_default_log_disk_size(const int64_t memory_size)
-  {
+{
     return memory_size * MEMORY_TO_LOG_DISK_FACTOR;
   }
 

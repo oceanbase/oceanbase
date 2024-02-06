@@ -878,6 +878,8 @@ public:
 
   int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
 
+  int set_timeout_ctx(common::ObTimeoutCtx &ctx);
+
   // Fetch increments schemas in DDL trans. This interface won't return the following increment schemas:
   // 1. schema which is dropped in DDL trans.
   // 2. changed inner tables.

@@ -159,18 +159,6 @@ int ObTriggerResolver::resolve_create_trigger_stmt(const ParseNode &parse_node,
   OZ (resolve_sp_definer(is_ora ? nullptr : parse_node.children_[0], trigger_arg));
   OZ (resolve_trigger_source(*parse_node.children_[is_ora ? 0 : 1], trigger_arg));
   if (OB_SUCC(ret)) {
-    const ObTableSchema *table_schema = NULL;
-    CK (OB_NOT_NULL(schema_checker_));
-    CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
-    OZ (schema_checker_->get_schema_guard()->get_table_schema(trigger_arg.trigger_info_.get_tenant_id(),
-                                                              trigger_arg.trigger_info_.get_base_object_id(),
-                                                              table_schema));
-    CK (OB_NOT_NULL(table_schema));
-    OZ (trigger_arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(table_schema->get_table_id(),
-                                                                                 TABLE_SCHEMA,
-                                                                                 table_schema->get_schema_version())));
-  }
-  if (OB_SUCC(ret)) {
     ObErrorInfo &error_info = trigger_arg.error_info_;
     error_info.collect_error_info(&(trigger_arg.trigger_info_));
   }

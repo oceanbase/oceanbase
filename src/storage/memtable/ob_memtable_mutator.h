@@ -103,7 +103,6 @@ enum class MutatorType
 {
   MUTATOR_ROW = 0,
   MUTATOR_TABLE_LOCK = 1,
-  MUTATOR_ROW_EXT_INFO = 2,
 };
 
 const char * get_mutator_type_str(MutatorType mutator_type);
@@ -335,8 +334,8 @@ public:
   const ObMutatorRowHeader &get_row_head();
   const ObMemtableMutatorRow &get_mutator_row();
   const ObMutatorTableLock &get_table_lock_row();
-  transaction::ObTxSEQ get_row_seq_no() const { return row_seq_no_; }
-  TO_STRING_KV(K_(meta), K_(row_seq_no), K(buf_.get_position()),K(buf_.get_limit()));
+
+  TO_STRING_KV(K_(meta),K(buf_.get_position()),K(buf_.get_limit()));
 private:
 
 private:
@@ -345,7 +344,7 @@ private:
   ObMutatorRowHeader row_header_;
   ObMemtableMutatorRow row_;
   ObMutatorTableLock table_lock_;
-  transaction::ObTxSEQ row_seq_no_;
+
   DISALLOW_COPY_AND_ASSIGN(ObMemtableMutatorIterator);
 };
 }//namespace memtable

@@ -88,19 +88,16 @@ class ObTableApiScanRowIterator
 {
 public:
   ObTableApiScanRowIterator()
-      : scan_executor_(nullptr),
-        row_allocator_("TbScanRowIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+      : scan_executor_(nullptr)
   {
   }
   virtual ~ObTableApiScanRowIterator() {};
 public:
   virtual int open(ObTableApiScanExecutor *executor);
-  virtual int get_next_row(ObNewRow *&row);
-  virtual int get_next_row(ObNewRow *&row, common::ObIAllocator &allocator);
+  virtual int get_next_row(common::ObNewRow *&row, bool need_deep_copy = true);
   virtual int close();
 private:
   ObTableApiScanExecutor *scan_executor_;
-  common::ObArenaAllocator row_allocator_; // alloc the memory of result row
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanRowIterator);
 };

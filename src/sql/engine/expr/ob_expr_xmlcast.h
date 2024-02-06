@@ -43,10 +43,6 @@ class ObExprXmlcast : public ObFuncExprOperator
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr)
                       const override;
-#ifdef OB_BUILD_ORACLE_XML
-  DECLARE_SET_LOCAL_SESSION_VARS;
-#endif
-
 private:
   int set_dest_type(ObExprResType &param_type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
 #ifdef OB_BUILD_ORACLE_XML

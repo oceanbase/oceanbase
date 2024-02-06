@@ -13,7 +13,6 @@
 #include "share/config/ob_system_config.h"
 #include "share/config/ob_config.h"
 #include "share/config/ob_server_config.h"
-#include "share/ob_task_define.h"
 
 namespace oceanbase
 {
@@ -316,11 +315,8 @@ int ObSystemConfig::read_str(const ObSystemConfigKey &key,
   return ret;
 }
 
-// tenant_id is OB_INVALID_TENANT_ID(0) means it's cluster parameter
-int ObSystemConfig::read_config(
-    const uint64_t tenant_id,
-    const ObSystemConfigKey &key,
-    ObConfigItem &item) const
+int ObSystemConfig::read_config(const ObSystemConfigKey &key,
+                                ObConfigItem &item) const
 {
   int ret = OB_SUCCESS;
   const ObSystemConfigValue *pvalue = NULL;
@@ -354,17 +350,11 @@ int ObSystemConfig::read_config(
           SHARE_LOG(WARN, "set config item dump value failed",
                     K(ret), K(key.name()), K(pvalue->value()), K(version));
         } else {
+          item.set_value_updated();
           item.set_dump_value_updated();
           item.set_version(version);
-          share::ObTaskController::get().allow_next_syslog();
-          SHARE_LOG(INFO, "[COMPATIBLE] read data_version",
-                    KR(ret), K(tenant_id),
-                    "version", item.version(),
-                    "value", item.str(),
-                    "value_updated", item.value_updated(),
-                    "dump_version", item.dumped_version(),
-                    "dump_value", item.spfile_str(),
-                    "dump_value_updated", item.dump_value_updated());
+          SHARE_LOG(INFO, "set config item dump value success",
+                    K(ret), K(key.name()), K(item.spfile_str()), K(item.str()), K(version));
         }
       } else if (item.reboot_effective()) {
         // 以 STATIC_EFFECTIVE 的 stack_size 举例说明：

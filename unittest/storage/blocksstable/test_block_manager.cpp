@@ -170,7 +170,7 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   ASSERT_EQ(OB_SUCCESS, ret);
   int64_t safe_ts = ObTimeUtility::current_time();
   int64_t hold_cnt = 0;
-  ObBlockManager::GetPendingFreeBlockFunctor functor(1000000, mark_info, hold_cnt);
+  ObBlockManager::GetPendingFreeBlockFunctor functor(mark_info, hold_cnt);
   ret = OB_SERVER_BLOCK_MGR.block_map_.for_each(functor);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(blk_cnt - 1, mark_info.count());

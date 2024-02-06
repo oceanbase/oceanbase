@@ -37,11 +37,9 @@ using namespace oceanbase::common;
 int ObThreeStageAggrInfo::assign(const ObThreeStageAggrInfo &info)
 {
   int ret = OB_SUCCESS;
-  aggr_stage_ = info.aggr_stage_;
   distinct_aggr_count_ = info.distinct_aggr_count_;
   aggr_code_idx_ = info.aggr_code_idx_;
   aggr_code_expr_ = info.aggr_code_expr_;
-  aggr_code_ndv_ = info.aggr_code_ndv_;
   if (OB_FAIL(distinct_exprs_.assign(info.distinct_exprs_))) {
     LOG_WARN("failed to assign distinct exprs", K(ret));
   } else if (OB_FAIL(distinct_aggr_batch_.assign(info.distinct_aggr_batch_))) {
@@ -265,17 +263,14 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
   double selectivity = 1.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   const int64_t parallel = param.need_parallel_;
-  double number_of_copies = get_number_of_copies();
-  if (OB_ISNULL(child) || OB_UNLIKELY(number_of_copies < 1)) {
+  if (OB_ISNULL(child)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(child), K(number_of_copies));
+    LOG_WARN("get unexpected null", K(ret), K(child));
   } else if (OB_FAIL(get_child_est_info(parallel, child_card, child_ndv, selectivity))) {
     LOG_WARN("failed to get chidl est info", K(ret));
   } else {
     double child_cost = child->get_cost();
     double need_ndv = child_ndv;
-    double origin_child_card = child_card;
-    bool need_scale_ndv = false;
     if (param.need_row_count_ >= 0 && 
         child->get_card() > 0 &&
         child_ndv > 0 &&
@@ -286,27 +281,17 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
       }
       if (child_card > 0) {
         param.need_row_count_ = child_card * (1 - std::pow((1 - need_ndv / child_ndv), child_ndv / child_card));
-        param.need_row_count_ /= number_of_copies;
       } else {
         param.need_row_count_ = 0;
       }
     } else {
       param.need_row_count_ = -1;
-      need_scale_ndv = true;
     }
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est child cost", K(ret));
-    } else {
-      // At the first stage, child output will be replicated
-      child_card = child_card * number_of_copies;
-      if (need_scale_ndv) {
-        need_ndv = std::min(child_ndv, ObOptSelectivity::scale_distinct(child_card, origin_child_card, child_ndv));
-      }
-    }
-    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(inner_est_cost(parallel,
                                       child_card,
                                       need_ndv,
@@ -316,9 +301,6 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
     } else {
       cost = child_cost + op_cost;
       card = need_ndv * selectivity;
-      if (param.override_) {
-        set_total_ndv(need_ndv);
-      }
     }
   }
   return ret;
@@ -342,6 +324,9 @@ int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, doub
     LOG_WARN("failed to get group rollup exprs", K(ret));
   } else {
     per_dop_card = child_card / parallel;
+    if (is_first_stage()) {
+      per_dop_card = per_dop_card * three_stage_info_.distinct_aggr_count_;
+    }
     if ((get_group_by_exprs().empty() && get_rollup_exprs().empty()) || SCALAR_AGGREGATE == algo_) {
       per_dop_ndv = 1.0;
     } else if (parallel > 1) {
@@ -359,27 +344,23 @@ int ObLogGroupBy::inner_est_cost(const int64_t parallel, double child_card, doub
     if (SCALAR_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_scalar_group(per_dop_card,
                                                 get_aggr_funcs().count(),
-                                                opt_ctx);
+                                                opt_ctx.get_cost_model_type());
     } else if (MERGE_AGGREGATE == algo_) {
       op_cost = ObOptEstCost::cost_merge_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_rollup_exprs,
                                               get_aggr_funcs().count(),
-                                              opt_ctx);
+                                              opt_ctx.get_cost_model_type());
     } else {
       op_cost = ObOptEstCost::cost_hash_group(per_dop_card,
                                               per_dop_ndv,
                                               child->get_width(),
                                               group_exprs_,
                                               get_aggr_funcs().count(),
-                                              opt_ctx);
+                                              opt_ctx.get_cost_model_type());
     }
-
-    child_ndv = std::min(child_card, per_dop_ndv * parallel);
-    if (SCALAR_AGGREGATE == algo_) {
-      child_ndv = std::max(1.0, child_ndv);
-    }
+    child_ndv = per_dop_ndv * parallel;
   }
   return ret;
 }
@@ -404,8 +385,6 @@ int ObLogGroupBy::get_child_est_info(const int64_t parallel, double &child_card,
   }
   //having filter selectivity
   if (OB_SUCC(ret)) {
-    // At the first stage, child output will be replicated
-    child_card = child_card * get_number_of_copies();
     get_plan()->get_selectivity_ctx().init_row_count(get_origin_child_card(), child_ndv);
     if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
                                                         get_plan()->get_selectivity_ctx(),
@@ -783,77 +762,65 @@ int ObLogGroupBy::set_rollup_info(
   return ret;
 }
 
-int ObThreeStageAggrInfo::set_first_stage_info(ObRawExpr *aggr_code_expr,
-                                               ObIArray<ObDistinctAggrBatch> &batch,
-                                               double aggr_code_ndv)
+int ObLogGroupBy::set_first_stage_info(ObRawExpr *aggr_code_expr,
+                                       ObIArray<ObDistinctAggrBatch> &batch)
 {
   int ret = OB_SUCCESS;
-  reuse();
   aggr_stage_ = ObThreeStageAggrStage::FIRST_STAGE;
-  aggr_code_expr_ = aggr_code_expr;
-  distinct_aggr_count_ = 0;
-  aggr_code_ndv_ = aggr_code_ndv;
-  if (OB_FAIL(distinct_aggr_batch_.assign(batch))) {
+  three_stage_info_.aggr_code_expr_ = aggr_code_expr;
+  three_stage_info_.distinct_aggr_count_ = 0;
+  if (!ObOptimizerUtil::find_item(group_exprs_,
+                                  aggr_code_expr,
+                                  &three_stage_info_.aggr_code_idx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("aggr code expr is not found", K(ret));
+  } else if (OB_FAIL(three_stage_info_.distinct_aggr_batch_.assign(batch))) {
     LOG_WARN("failed to assign batch", K(ret));
   } else {
     for (int64_t i = 0; i < batch.count(); ++i) {
-      distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
+      three_stage_info_.distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
     }
   }
   return ret;
 }
 
-int ObThreeStageAggrInfo::set_second_stage_info(ObRawExpr *aggr_code_expr,
-                                               ObIArray<ObDistinctAggrBatch> &batch,
-                                               ObIArray<ObRawExpr *> &distinct_exprs)
+int ObLogGroupBy::set_second_stage_info(ObRawExpr *aggr_code_expr,
+                                        ObIArray<ObDistinctAggrBatch> &batch,
+                                        ObIArray<ObRawExpr *> &distinct_exprs)
 {
   int ret = OB_SUCCESS;
-  reuse();
   aggr_stage_ = ObThreeStageAggrStage::SECOND_STAGE;
-  aggr_code_expr_ = aggr_code_expr;
-  distinct_aggr_count_ = 0;
-  if (OB_FAIL(distinct_aggr_batch_.assign(batch))) {
+  three_stage_info_.aggr_code_expr_ = aggr_code_expr;
+  three_stage_info_.distinct_aggr_count_ = 0;
+  if (!ObOptimizerUtil::find_item(group_exprs_,
+                                  aggr_code_expr,
+                                  &three_stage_info_.aggr_code_idx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("aggr code expr is not found", K(ret));
+  } else if (OB_FAIL(three_stage_info_.distinct_aggr_batch_.assign(batch))) {
     LOG_WARN("failed to assign batch", K(ret));
-  } else if (OB_FAIL(distinct_exprs_.assign(distinct_exprs))) {
+  } else if (OB_FAIL(three_stage_info_.distinct_exprs_.assign(distinct_exprs))) {
     LOG_WARN("failed to assign distinct", K(ret));
   } else {
     for (int64_t i = 0; i < batch.count(); ++i) {
-      distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
+      three_stage_info_.distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
     }
   }
   return ret;
 }
 
-int ObThreeStageAggrInfo::set_third_stage_info(ObRawExpr *aggr_code_expr,
-                                               ObIArray<ObDistinctAggrBatch> &batch)
+int ObLogGroupBy::set_third_stage_info(ObRawExpr *aggr_code_expr,
+                                       ObIArray<ObDistinctAggrBatch> &batch)
 {
   int ret = OB_SUCCESS;
-  reuse();
   aggr_stage_ = ObThreeStageAggrStage::THIRD_STAGE;
-  aggr_code_expr_ = aggr_code_expr;
-  distinct_aggr_count_ = 0;
-  if (OB_FAIL(distinct_aggr_batch_.assign(batch))) {
+  three_stage_info_.aggr_code_expr_ = aggr_code_expr;
+  three_stage_info_.distinct_aggr_count_ = 0;
+  if (OB_FAIL(three_stage_info_.distinct_aggr_batch_.assign(batch))) {
     LOG_WARN("failed to assign batch", K(ret));
-  } else {
-    for (int64_t i = 0; i < batch.count(); ++i) {
-      distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
-    }
   }
-  return ret;
-}
-
-int ObLogGroupBy::set_three_stage_info(const ObThreeStageAggrInfo &info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(three_stage_info_.assign(info))) {
-    LOG_WARN("failed to assgin", K(ret));
-  } else if (is_third_stage()) {
-    // do nothing
-  } else if (!ObOptimizerUtil::find_item(group_exprs_,
-                                         three_stage_info_.aggr_code_expr_,
-                                         &three_stage_info_.aggr_code_idx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr code expr is not found", K(ret));
+  for (int64_t i = 0; i < batch.count(); ++i) {
+    three_stage_info_.distinct_aggr_count_ += batch.at(i).mocked_aggrs_.count();
   }
   return ret;
 }

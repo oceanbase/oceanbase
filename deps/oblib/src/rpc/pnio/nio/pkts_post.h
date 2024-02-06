@@ -41,24 +41,12 @@ int pkts_resp(pkts_t* io, pkts_req_t* req) {
 static int pkts_handle_req_queue(pkts_t* io) {
   link_t* l = NULL;
   int cnt = 0;
-  int64_t sz = 0;
-  int64_t sc_queue_time = 0;
   while(cnt < 128 && (l = sc_queue_pop(&io->req_queue))) {
     pkts_req_t* req = structof(l, pkts_req_t, link);
-    int64_t cur_time = rk_get_corse_us();
-    int64_t delay_time = cur_time - req->ctime_us;
-    if (delay_time > HANDLE_DELAY_WARN_US && PNIO_REACH_TIME_INTERVAL(500*1000)) {
-      rk_warn("[delay_warn] delay high: %ld", delay_time);
-    }
-    cnt++;
-    sz += req->msg.s;
-    sc_queue_time += delay_time;
-    req->ctime_us = cur_time;
+    PNIO_DELAY_WARN(delay_warn("pkts_handle_req_queue", req->ctime_us, HANDLE_DELAY_WARN_US));
     pkts_post_io(io, req);
+    cnt++;
   }
-  io->diag_info.send_cnt += cnt;
-  io->diag_info.send_size += sz;
-  io->diag_info.sc_queue_time += sc_queue_time;
   return cnt == 0? EAGAIN: 0;
 }
 

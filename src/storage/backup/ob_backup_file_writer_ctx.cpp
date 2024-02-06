@@ -132,6 +132,8 @@ int ObBackupFileWriteCtx::commit_file_()
     LOG_WARN("dev handle should not be null", K(ret));
   } else if (OB_FAIL(flush_buffer_(true /*is_last_part*/))) {
     LOG_WARN("failed to flush buffer", K(ret));
+  } else if (OB_FAIL(dev_handle_->close(io_fd_))) {
+    LOG_WARN("failed to close file", K(ret), K_(io_fd));
   } else {
     LOG_INFO("backup file write ctx commit file");
   }

@@ -48,7 +48,7 @@ int ObStoreRowIterator::init(
     block_row_store_ = access_ctx.block_row_store_;
   }
   if (OB_FAIL(inner_open(iter_param, access_ctx, table, query_range))) {
-    STORAGE_LOG(WARN, "Failed to inner open ObStoreRowIterator", K(ret), K(iter_param), K(access_ctx));
+    STORAGE_LOG(WARN, "Failed to inner open ObStoreRowIterator", K(ret));
   }
   return ret;
 }

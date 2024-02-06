@@ -127,45 +127,16 @@ def set_parameter(cur, parameter, value, timeout = 0):
   cur.execute(sql)
   wait_parameter_sync(cur, False, parameter, value, timeout)
 
-def set_session_timeout(cur, seconds):
-  sql = "set @@session.ob_query_timeout = {0}".format(seconds * 1000 * 1000)
-  logging.info(sql)
-  cur.execute(sql)
-
-def set_default_timeout_by_tenant(cur, timeout, timeout_per_tenant, min_timeout):
-  if timeout > 0:
-    logging.info("use timeout from opt, timeout(s):{0}".format(timeout))
-  else:
-    query_cur = QueryCursor(cur)
-    tenant_id_list = fetch_tenant_ids(query_cur)
-    cal_timeout = len(tenant_id_list) * timeout_per_tenant
-    timeout = (cal_timeout if cal_timeout > min_timeout else min_timeout)
-    logging.info("use default timeout caculated by tenants, "
-                 "timeout(s):{0}, tenant_count:{1}, "
-                 "timeout_per_tenant(s):{2}, min_timeout(s):{3}"
-                 .format(timeout, len(tenant_id_list), timeout_per_tenant, min_timeout))
-
-  return timeout
-
 def set_tenant_parameter(cur, parameter, value, timeout = 0):
-
   tenants_list = []
   if get_min_cluster_version(cur) < get_version("4.2.1.0"):
     tenants_list = ['all']
   else:
     tenants_list = ['sys', 'all_user', 'all_meta']
-
-  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
-
-  set_session_timeout(cur, query_timeout)
-
   for tenants in tenants_list:
     sql = """alter system set {0} = '{1}' tenant = '{2}'""".format(parameter, value, tenants)
     logging.info(sql)
     cur.execute(sql)
-
-  set_session_timeout(cur, 10)
-
   wait_parameter_sync(cur, True, parameter, value, timeout)
 
 def get_ori_enable_ddl(cur, timeout):
@@ -254,20 +225,7 @@ def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
   table_name = "GV$OB_PARAMETERS" if not is_tenant_config else "__all_virtual_tenant_parameter_info"
   sql = """select count(*) as cnt from oceanbase.{0}
            where name = '{1}' and value != '{2}'""".format(table_name, key, value)
-
-  wait_timeout = 0
-  query_timeout = 0
-  if not is_tenant_config or timeout > 0:
-    wait_timeout = (timeout if timeout > 0 else 60)
-    query_timeout = wait_timeout
-  else:
-    # is_tenant_config & timeout not set
-    wait_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
-    query_timeout = set_default_timeout_by_tenant(cur, timeout, 2, 60)
-
-  set_session_timeout(cur, query_timeout)
-
-  times = wait_timeout / 5
+  times = (timeout if timeout > 0 else 60) / 5
   while times >= 0:
     logging.info(sql)
     cur.execute(sql)
@@ -286,8 +244,6 @@ def wait_parameter_sync(cur, is_tenant_config, key, value, timeout):
       logging.exception("""check {0}:{1} sync timeout""".format(key, value))
       raise e
     time.sleep(5)
-
-  set_session_timeout(cur, 10)
 
 def do_begin_upgrade(cur, timeout):
 
@@ -360,18 +316,11 @@ def do_suspend_merge(cur, timeout):
     tenants_list = ['all']
   else:
     tenants_list = ['sys', 'all_user', 'all_meta']
-
-  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
-
-  set_session_timeout(cur, query_timeout)
-
   for tenants in tenants_list:
     action_sql = "alter system suspend merge tenant = {0}".format(tenants)
     rollback_sql = "alter system resume merge tenant = {0}".format(tenants)
     logging.info(action_sql)
     cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
 
 def do_resume_merge(cur, timeout):
   tenants_list = []
@@ -379,18 +328,11 @@ def do_resume_merge(cur, timeout):
     tenants_list = ['all']
   else:
     tenants_list = ['sys', 'all_user', 'all_meta']
-
-  query_timeout = set_default_timeout_by_tenant(cur, timeout, 10, 60)
-
-  set_session_timeout(cur, query_timeout)
-
   for tenants in tenants_list:
     action_sql = "alter system resume merge tenant = {0}".format(tenants)
     rollback_sql = "alter system suspend merge tenant = {0}".format(tenants)
     logging.info(action_sql)
     cur.execute(action_sql)
-
-  set_session_timeout(cur, 10)
 
 class Cursor:
   __cursor = None

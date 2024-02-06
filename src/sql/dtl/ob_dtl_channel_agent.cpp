@@ -32,13 +32,6 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
         msg_writer_ = &row_msg_writer_;
       } else if (DtlWriterType::CHUNK_DATUM_WRITER == msg_writer_map[px_row.get_data_type()]) {
         msg_writer_ = &datum_msg_writer_;
-      } else if (DtlWriterType::VECTOR_FIXED_WRITER == msg_writer_map[px_row.get_data_type()]) {
-        msg_writer_ = &vector_fixed_msg_writer_;
-      } else if (DtlWriterType::VECTOR_ROW_WRITER == msg_writer_map[px_row.get_data_type()]) {
-        msg_writer_ = &vector_row_msg_writer_;
-      } else if (DtlWriterType::VECTOR_WRITER == msg_writer_map[px_row.get_data_type()]) {
-        //TODO : support local channel shuffle in vector mode
-        msg_writer_ = &vector_row_msg_writer_;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unkown msg writer", K(msg.get_type()), K(msg_writer_->type()));
@@ -53,18 +46,18 @@ int ObDtlBufEncoder::switch_writer(const ObDtlMsg &msg)
       }
     }
   } else {
-// #ifndef NDEBUG
-    // if (msg.is_data_msg() && msg_writer_->type() != DtlWriterType::VECTOR_ROW_WRITER) {
-    //   const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
-    //   if (msg_writer_map[px_row.get_data_type()] != msg_writer_->type()) {
-    //     ret = OB_ERR_UNEXPECTED;
-    //   }
-    // } else {
-    //   if (msg_writer_map[msg.get_type()] != msg_writer_->type()) {
-    //     ret = OB_ERR_UNEXPECTED;
-    //   }
-    // }
-// #endif
+#ifndef NDEBUG
+    if (msg.is_data_msg()) {
+      const ObPxNewRow &px_row = static_cast<const ObPxNewRow&>(msg);
+      if (msg_writer_map[px_row.get_data_type()] != msg_writer_->type()) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+    } else {
+      if (msg_writer_map[msg.get_type()] != msg_writer_->type()) {
+        ret = OB_ERR_UNEXPECTED;
+      }
+    }
+#endif
   }
   return ret;
 }

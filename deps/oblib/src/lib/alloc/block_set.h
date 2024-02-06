@@ -20,6 +20,10 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObPageManagerCenter;
+}
 namespace lib
 {
 
@@ -27,7 +31,27 @@ class ObTenantCtxAllocator;
 class ISetLocker;
 class BlockSet
 {
+  friend class common::ObPageManagerCenter;
   friend class ObTenantCtxAllocator;
+  class Lock
+  {
+  public:
+    Lock() : tid_(0) {}
+    ~Lock() { reset(); }
+    void reset() { ATOMIC_STORE(&tid_, 0); }
+    void lock();
+    void unlock() { ATOMIC_STORE(&tid_, 0); }
+  private:
+    int64_t tid_;
+  };
+  class LockGuard
+  {
+  public:
+    LockGuard(Lock &lock) : lock_(lock) { lock_.lock(); }
+    ~LockGuard() { lock_.unlock(); }
+  private:
+    Lock &lock_;
+  };
 public:
   BlockSet();
   ~BlockSet();
@@ -44,12 +68,13 @@ public:
   inline uint64_t get_total_used() const;
 
   void set_tenant_ctx_allocator(ObTenantCtxAllocator &allocator);
+  void set_max_chunk_cache_size(const int64_t max_cache_size)
+  { chunk_free_list_.set_max_chunk_cache_size(max_cache_size); }
   void reset();
   void set_locker(ISetLocker *locker) { locker_ = locker; }
   int64_t sync_wash(int64_t wash_size=INT64_MAX);
   bool check_has_unfree();
   ObTenantCtxAllocator *get_tenant_ctx_allocator() const { return  tallocator_; }
-  void set_chunk_mgr(IChunkMgr *chunk_mgr) { chunk_mgr_ = chunk_mgr; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(BlockSet);
@@ -62,10 +87,7 @@ private:
   void free_chunk(AChunk *const chunk);
 
 private:
-  ObTenantCtxAllocator *tallocator_;
-  ObMemAttr attr_;
-  ISetLocker *locker_;
-  IChunkMgr *chunk_mgr_;
+  lib::ObMutex mutex_;
   // block_list_ can not be initialized, the state is maintained by avail_bm_
   union {
     ABlock *block_list_[BLOCKS_PER_CHUNK+1];
@@ -76,6 +98,11 @@ private:
   uint64_t total_hold_;
   uint64_t total_payload_;
   uint64_t total_used_;
+  ObTenantCtxAllocator *tallocator_;
+  ObMemAttr attr_;
+  lib::AChunkList chunk_free_list_;
+  ISetLocker *locker_;
+  Lock cache_shared_lock_;
 }; // end of class BlockSet
 
 void BlockSet::lock()

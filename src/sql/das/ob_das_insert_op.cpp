@@ -53,22 +53,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
   dml_param_.direct_insert_task_id_ = rtdef.direct_insert_task_id_;
-
-  if (ctdef.table_param_.get_data_table().is_mlog_table()
-      && !ctdef.is_access_mlog_as_master_table_) {
-    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_INSERT);
-    if (OB_FAIL(as->insert_rows(ls_id,
-                                tablet_id,
-                                *tx_desc_,
-                                dml_param_,
-                                ctdef.column_ids_,
-                                &mlog_iter,
-                                affected_rows))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("insert rows to access service failed", K(ret));
-      }
-    }
-  } else if (rtdef.use_put_) {
+  if (rtdef.use_put_) {
     ret = as->put_rows(ls_id,
                        tablet_id,
                        *tx_desc_,
@@ -127,7 +112,6 @@ int ObDASInsertOp::insert_rows()
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator> ins_adaptor;
   ins_adaptor.tx_desc_ = trans_desc_;
   ins_adaptor.snapshot_ = snapshot_;
-  ins_adaptor.write_branch_id_ = write_branch_id_;
   ins_adaptor.ctdef_ = ins_ctdef_;
   ins_adaptor.rtdef_ = ins_rtdef_;
   ins_adaptor.related_ctdefs_ = &related_ctdefs_;
@@ -160,10 +144,10 @@ int ObDASInsertOp::insert_row_with_fetch()
   if (ins_ctdef_->table_rowkey_types_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_rowkey_types is invalid", K(ret));
-  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, write_branch_id_, op_alloc_, dml_param))) {
+  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, op_alloc_, dml_param))) {
     LOG_WARN("init dml param failed", K(ret), KPC_(ins_ctdef), KPC_(ins_rtdef));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to allocate ObDASConflictIterator", K(ret));
   } else {
     result_iter = new(buf) ObDASConflictIterator(ins_ctdef_->table_rowkey_types_,
@@ -211,7 +195,6 @@ int ObDASInsertOp::insert_row_with_fetch()
     } else if (OB_FAIL(ObDMLService::init_dml_param(*index_ins_ctdef,
                                                     *index_ins_rtdef,
                                                     *snapshot_,
-                                                    write_branch_id_,
                                                     op_alloc_,
                                                     dml_param))) {
       LOG_WARN("init index dml param failed", K(ret), KPC(index_ins_ctdef), KPC(index_ins_rtdef));

@@ -27,7 +27,7 @@
 #include "observer/ob_server_struct.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
-#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/ob_select_stmt_printer.h"
 namespace oceanbase
 {
 namespace sql
@@ -66,7 +66,6 @@ void ObTransformerCtx::reset()
   used_trans_hints_.reset();
   groupby_pushdown_stmts_.reset();
   is_spm_outline_ = false;
-  push_down_filters_.reset();
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -85,7 +84,6 @@ int ObTransformerCtx::add_src_hash_val(uint64_t trans_type)
   int ret = OB_SUCCESS;
   const char *str = NULL;
   if (OB_ISNULL(str = get_trans_type_string(trans_type))) {
-    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to convert trans type to src value", K(ret));
   } else {
     uint32_t hash_val = src_hash_val_.empty() ? 0 : src_hash_val_.at(src_hash_val_.count() - 1);
@@ -572,8 +570,7 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
-                                                                ctx_->session_info_))) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -782,8 +779,7 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     // do nothing
   } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
-                                                         ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {
@@ -924,11 +920,7 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
     LOG_WARN("unexpected null query context", K(ret), K(query_ctx));
   } else if (OB_FAIL(query_ctx->query_hint_.recover_qb_names(qb_name_counts_, query_ctx->stmt_count_))) {
     LOG_WARN("failed to revover qb names", K(ret));
-  } else if (NULL != unique_key_provider_
-             && OB_FAIL(unique_key_provider_->recover_useless_unique_for_temp_table())) {
-    LOG_WARN("failed to recover useless unique for temp table", K(ret));
   } else {
-    unique_key_provider_ = NULL;
     query_ctx->available_tb_id_ = available_tb_id_;
     query_ctx->subquery_count_ = subquery_count_;
     query_ctx->temp_table_count_ = temp_table_count_;

@@ -286,26 +286,31 @@ public:
   void reset();
   int assign(const ObTabletLSCache &other);
   bool is_valid() const;
+  // mapping is same with other, ignoring timestamp
+  bool mapping_is_same_with(const ObTabletLSCache &other) const;
   bool operator==(const ObTabletLSCache &other) const;
   bool operator!=(const ObTabletLSCache &other) const;
   inline uint64_t get_tenant_id() const { return cache_key_.get_tenant_id(); }
   inline ObTabletID get_tablet_id() const { return cache_key_.get_tablet_id(); }
   inline ObLSID get_ls_id() const { return ls_id_; }
   inline int64_t get_renew_time() const { return renew_time_; }
+  //inline int64_t get_row_scn() const { return row_scn_; }
+  //void set_last_access_ts(const int64_t ts) { last_access_ts_ = ts; }
+  //int64_t get_last_access_ts() const { return last_access_ts_; }
   const ObTabletLSKey &get_cache_key() const { return cache_key_; }
-  inline int64_t get_transfer_seq() const { return transfer_seq_; }
   int init(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       const ObLSID &ls_id,
       const int64_t renew_time,
-      const int64_t transfer_seq);
-  TO_STRING_KV(K_(cache_key), K_(ls_id), K_(renew_time), K_(transfer_seq));
+      const int64_t row_scn);
+  TO_STRING_KV(K_(cache_key), K_(ls_id), K_(renew_time));
 private:
    ObTabletLSKey cache_key_;
    ObLSID ls_id_;
    int64_t renew_time_;     // renew by sql
-   int64_t transfer_seq_;
+   //int64_t row_scn_;        // used for auto refresh location
+   //int64_t last_access_ts_; // used for ObTabletLSMap
 };
 
 //TODO: Reserved for tableapi. Need remove.

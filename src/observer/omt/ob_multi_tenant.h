@@ -117,7 +117,6 @@ public:
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
   int update_tenant_dag_scheduler_config();
-  int update_tenant_ddl_config();
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
   int get_active_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;
@@ -187,7 +186,6 @@ protected:
 
 private:
   int update_tenant_freezer_config_();
-  int update_throttle_config_(const uint64_t tenant_id);
 protected:
       static const int DEL_TRY_TIMES = 30;
       enum class ObTenantCreateStep {

@@ -26,6 +26,12 @@ using namespace sql;
 namespace common
 {
 
+enum CopyStatType
+{
+  COPY_ALL_STAT,
+  COPY_HYBRID_HIST_STAT
+};
+
 class ObStatsEstimator
 {
 public:
@@ -43,7 +49,7 @@ protected:
 
   int do_estimate(uint64_t tenant_id,
                   const ObString &raw_sql,
-                  bool need_copy_basic_stat,
+                  CopyStatType copy_type,
                   ObOptStat &src_opt_stat,
                   ObIArray<ObOptStat> &dst_opt_stats);
 
@@ -61,7 +67,8 @@ protected:
 
   int fill_sample_info(common::ObIAllocator &alloc,
                        double est_percent,
-                       bool block_sample);
+                       bool block_sample,
+                       ObString &sample_hint);
 
   int fill_sample_info(common::ObIAllocator &alloc,
                        const ObAnalyzeSampleInfo &sample_info);
@@ -73,32 +80,30 @@ protected:
                               const int64_t duration_timeout);
 
   int fill_partition_info(ObIAllocator &allocator,
-                          const ObString &part_nam);
-
-  int fill_partition_info(ObIAllocator &allocator,
-                          const ObIArray<PartInfo> &partition_infos);
+                          const ObTableStatParam &param,
+                          const ObExtraParam &extra);
 
   int add_hint(const ObString &hint_str,
                common::ObIAllocator &alloc);
 
   int fill_group_by_info(ObIAllocator &allocator,
-                         const ObOptStatGatherParam &param,
+                         const ObTableStatParam &param,
+                         const ObExtraParam &extra,
                          ObString &calc_part_id_str);
 
   void reset_select_items() { stat_items_.reset(); select_fields_.reset(); }
-  void reset_sample_hint() { sample_hint_.reset(); }
-  void reset_other_hint() { other_hints_.reset(); }
-
-  int fill_specify_scn_info(common::ObIAllocator &alloc, uint64_t sepcify_scn);
 
 private:
-  int copy_basic_opt_stat(ObOptStat &src_opt_stat,
-                          ObIArray<ObOptStat> &dst_opt_stats);
+  int copy_opt_stat(ObOptStat &src_opt_stat,
+                    ObIArray<ObOptStat> &dst_opt_stats);
 
-  int copy_basic_col_stats(const int64_t cur_row_cnt,
-                           const int64_t total_row_cnt,
-                           ObIArray<ObOptColumnStat *> &src_col_stats,
-                           ObIArray<ObOptColumnStat *> &dst_col_stats);
+  int copy_hybrid_hist_stat(ObOptStat &src_opt_stat,
+                            ObIArray<ObOptStat> &dst_opt_stats);
+
+  int copy_col_stats(const int64_t cur_row_cnt,
+                     const int64_t total_row_cnt,
+                     ObIArray<ObOptColumnStat *> &src_col_stats,
+                     ObIArray<ObOptColumnStat *> &dst_col_stats);
 
 protected:
 
@@ -118,7 +123,6 @@ protected:
   ObArray<ObStatItem *> stat_items_;
   ObArray<ObObj> results_;
   double sample_value_;
-  ObString current_scn_string_;
 };
 
 

@@ -406,10 +406,6 @@ int ObAlterSystemResolverUtil::resolve_tenant(
           affect_all_meta = true;
         } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tmp_tenant_id))) {
           LOG_WARN("tenant not exist", K(tenant_name), KR(ret));
-          if (OB_ERR_INVALID_TENANT_NAME == ret && OB_SYS_TENANT_ID != tenant_id) {
-            ret = OB_ERR_NO_PRIVILEGE;
-            LOG_WARN("change error code, existence of tenant is only accessible to sys tenant", KR(ret));
-          }
         } else {
           int hash_ret = tenant_id_set.exist_refactored(tmp_tenant_id);
           if (OB_HASH_EXIST == hash_ret) {
@@ -518,35 +514,28 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_tablet_id, const ParseNode *opt_rebuild_column_group)
+int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2, const ParseNode *opt_rebuild_column_group)
 {
   int ret = OB_SUCCESS;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
 
-  if (NULL == opt_tenant_list_or_tablet_id) {
-    // if opt_tenant_list_or_tablet_id == NULL, add owned tenant_id
+  if (NULL == opt_tenant_list_v2) {
+    // if opt_tenant_list_v2 == NULL, add owned tenant_id
     if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
       LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
     }
-  } else if (OB_UNLIKELY(nullptr == opt_tenant_list_or_tablet_id->children_ || 0 == opt_tenant_list_or_tablet_id->num_child_)) {
+  } else if (OB_UNLIKELY(nullptr == opt_tenant_list_v2->children_ || 0 == opt_tenant_list_v2->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children of tenant should not be null", KR(ret), KP(opt_tenant_list_or_tablet_id));
-  } else if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_or_tablet_id))) {
+    LOG_WARN("children of tenant should not be null", KR(ret), KP(opt_tenant_list_v2));
+  } else if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_v2))) {
     LOG_WARN("fail to resolve tenant or tablet", KR(ret));
   } else if (OB_UNLIKELY(share::ObLSID::INVALID_LS_ID != freeze_stmt->get_ls_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to specify ls to major freeze", K(ret), "ls_id", freeze_stmt->get_ls_id());
   } else if (freeze_stmt->get_tablet_id().is_valid()) { // tablet major freeze
-    if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
-      if (OB_UNLIKELY(0 != freeze_stmt->get_tenant_ids().count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant ids should be empty for type T_TABLET_ID", K(ret));
-      } else if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) { // if tenant is not explicitly specified, add owned tenant_id
-        LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
-      }
-    } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
+    if (OB_SYS_TENANT_ID != cur_tenant_id) {
       ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("Only sys tenant can add suffix opt of tablet_id after tenant name", KR(ret), K(cur_tenant_id));
+      LOG_WARN("Only sys tenant can add suffix opt of tablet_id", KR(ret), K(cur_tenant_id));
     } else if (1 != freeze_stmt->get_tenant_ids().count()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not suppport to specify several tenant ids or no tenant_id for tablet major freeze", K(ret),
@@ -636,18 +625,6 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
           if (OB_ISNULL(tenant_list_tuple) || OB_ISNULL(ls_id)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tenant_list or ls_id is nullptr", KR(ret), KP(tenant_list_tuple), KP(ls_id), KP(opt_tablet_id));
-          }
-        }
-        break;
-      case T_TABLET_ID:
-        if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid child num", K(ret), K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
-        } else {
-          opt_tablet_id = opt_tenant_list_or_ls_or_tablet_id->children_[0];
-          if (OB_ISNULL(opt_tablet_id)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenant_list or ls_id is nullptr", KR(ret), KP(opt_tablet_id));
           }
         }
         break;
@@ -818,8 +795,7 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else if (OB_ISNULL(sql_id_node)) {
       // do nothing
     // currently, only support plan cache's fine-grained cache evict
-    } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN &&
-               stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PL_OBJ) {
+    } else if (stmt->flush_cache_arg_.cache_type_ != CACHE_TYPE_PLAN) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("only support plan cache's fine-grained cache evict", K(stmt->flush_cache_arg_.cache_type_), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "only support plan cache's fine-grained cache evict, other type");
@@ -828,25 +804,18 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("not supported plan cache's fine-grained cache evict in oracle mode", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "plan cache's fine-grained cache evict in oracle mode is");
     } else if (OB_ISNULL(sql_id_node->children_)
-               || OB_ISNULL(sql_id_node->children_[0])) {
+               || OB_ISNULL(sql_id_node->children_[0])
+               || T_SQL_ID != sql_id_node->type_) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret));
-    } else if (T_SQL_ID == sql_id_node->type_) {
-      if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SQL_ID_LENGTH+1)) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret));
-      } else {
-        stmt->flush_cache_arg_.sql_id_.assign_ptr(
-            sql_id_node->children_[0]->str_value_,
-            static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
-        stmt->flush_cache_arg_.is_fine_grained_ = true;
-      }
-    } else if (T_SCHEMA_ID == sql_id_node->type_) {
-      stmt->flush_cache_arg_.schema_id_ = sql_id_node->children_[0]->value_;
-      stmt->flush_cache_arg_.is_fine_grained_ = true;
+    } else if (sql_id_node->children_[0]->str_len_ > (OB_MAX_SQL_ID_LENGTH+1)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
     } else {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret));
+      stmt->flush_cache_arg_.sql_id_.assign_ptr(
+          sql_id_node->children_[0]->str_value_,
+          static_cast<ObString::obstr_size_t>(sql_id_node->children_[0]->str_len_));
+      stmt->flush_cache_arg_.is_fine_grained_ = true;
     }
 
     // retrive schema guard
@@ -5559,18 +5528,11 @@ int ObRecoverTableResolver::resolve_tenant_(
       LOG_WARN("tenant name node must not be null", K(ret));
     } else {
       ObSchemaGetterGuard schema_guard;
-      ObAllTenantInfo tenant_info;
       ObString tmp_tenant_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
       if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session_tenant_id, schema_guard))) {
         LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
       } else if (OB_FAIL(schema_guard.get_tenant_id(tmp_tenant_name, tenant_id))) {
         LOG_WARN("failed to get tenant id from schema guard", KR(ret), K(tmp_tenant_name));
-      } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_, false/*for update*/, tenant_info))) {
-        LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-      } else if (tenant_info.is_standby()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("dest tenant is standby", K(ret), "tenant_name", tmp_tenant_name);
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "recover table to standby tenant is");
       } else {
         tenant_name = tmp_tenant_name;
       }
@@ -6016,65 +5978,6 @@ int ObAlterSystemResetResolver::resolve(const ParseNode &parse_tree)
           session_info_->get_effective_tenant_id(), session_info_->get_user_id());
     }
   } // if
-  return ret;
-}
-
-int ObCancelCloneResolver::resolve(const ParseNode &parse_tree)
-{
-  int ret = OB_SUCCESS;
-  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
-  ObCancelCloneStmt *mystmt = NULL;
-  ObString tenant_name;
-
-  if (OB_ISNULL(node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid node", KR(ret));
-  } else if (OB_UNLIKELY(T_CANCEL_CLONE != node->type_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid node", KR(ret));
-  } else if (OB_UNLIKELY(1 != node->num_child_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid node", KR(ret));
-  } else if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info should not be null", KR(ret));
-  } else {
-    bool is_compatible = false;
-    const uint64_t tenant_id = session_info_->get_login_tenant_id();
-    if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_tenant(tenant_id, is_compatible))) {
-      LOG_WARN("fail to check compat version", KR(ret), K(tenant_id));
-    } else if (!is_compatible) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant data version is below 4.3", KR(ret), K(tenant_id), K(is_compatible));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel tenant cloning below 4.3");
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(mystmt = create_stmt<ObCancelCloneStmt>())) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("failed to create stmt", KR(ret));
-    } else {
-      stmt_ = mystmt;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(node->children_[0])) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid node", KR(ret));
-    } else if (OB_UNLIKELY(T_IDENT != node->children_[0]->type_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("invalid node", KR(ret));
-    } else {
-      tenant_name.assign_ptr((char *)(node->children_[0]->str_value_),
-                                  static_cast<int32_t>(node->children_[0]->str_len_));
-      if (OB_FAIL(mystmt->set_clone_tenant_name(tenant_name))) {
-        LOG_WARN("set clone tenant name failed", KR(ret), K(tenant_name));
-      }
-    }
-  }
-
   return ret;
 }
 

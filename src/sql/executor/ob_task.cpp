@@ -41,7 +41,6 @@ ObTask::ObTask()
       location_idx_(OB_INVALID_INDEX),
       max_sql_no_(-1)
 {
-  sql_string_[0] = '\0';
 }
 
 ObTask::~ObTask()
@@ -93,7 +92,6 @@ OB_DEF_SERIALIZE(ObTask)
   }
   LST_DO_CODE(OB_UNIS_ENCODE, ranges_);
   LST_DO_CODE(OB_UNIS_ENCODE, max_sql_no_);
-  OB_UNIS_ENCODE(ObString(sql_string_));
   return ret;
 }
 
@@ -155,8 +153,6 @@ OB_DEF_DESERIALIZE(ObTask)
     }
   }
   LST_DO_CODE(OB_UNIS_DECODE, max_sql_no_);
-  ObString sql_string;
-  OB_UNIS_DECODE(sql_string);
   return ret;
 }
 
@@ -188,7 +184,6 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
     LST_DO_CODE(OB_UNIS_ADD_LEN, ranges_);
   }
   LST_DO_CODE(OB_UNIS_ADD_LEN, max_sql_no_);
-  OB_UNIS_ADD_LEN(ObString(sql_string_));
   return len;
 }
 

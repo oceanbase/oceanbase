@@ -93,20 +93,6 @@ public:
   virtual void disconnect() = 0;
   virtual void force_disconnect() = 0;
   virtual int update_last_pkt_pos() = 0;
-
-  /**
-   * read a mysql packet from the socket channel
-   *
-   * Error returned if no message. You need to determine the exact cause of the error to decide
-   * whether to continue to wait for the message or interrupt the service.
-   *
-   * @param mem_pool  The memory manager to hold the `pkt`
-   * @param pkt       The mysql packet received or nullptr if not message came in
-   * @return OB_SUCCESS The socket channel is OK. The `pk` returned may be null is no data came in.
-   *         OB_IO_ERROR Something wrong with the channel, such as it was closed.
-   */
-  virtual int read_packet(obmysql::ObICSMemPool& mem_pool, obmysql::ObMySQLPacket *&pkt) = 0;
-  virtual int release_packet(obmysql::ObMySQLPacket* pkt) = 0;
   virtual int response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session) = 0;
   virtual int send_error_packet(int err,
                                 const char* errmsg,
@@ -131,8 +117,6 @@ public:
   virtual void disconnect() override;
   virtual void force_disconnect() override;
   virtual int update_last_pkt_pos() override;
-  virtual int read_packet(obmysql::ObICSMemPool& mem_pool, obmysql::ObMySQLPacket *&pkt) override;
-  virtual int release_packet(obmysql::ObMySQLPacket* pkt) override;
   virtual int response_packet(obmysql::ObMySQLPacket &pkt, sql::ObSQLSessionInfo* session) override;
   // when connect with proxy, need to append extra ok packet to last statu packet
   int response_compose_packet(obmysql::ObMySQLPacket &pkt,
@@ -150,11 +134,10 @@ public:
   virtual bool need_send_extra_ok_packet() override
   { return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet(); }
   virtual int flush_buffer(const bool is_last);
-  int clone_from(ObMPPacketSender& that, int64_t com_offset = 0/*for prexecute it will be 1*/);
+  int clone_from(ObMPPacketSender& that);
   int init(rpc::ObRequest* req);
   int do_init(rpc::ObRequest *req,
            uint8_t packet_seq,
-           uint8_t comp_seq,
            bool conn_status,
            bool req_has_wokenup,
            int64_t query_receive_ts);
@@ -170,11 +153,6 @@ public:
   int clean_buffer();
   bool has_pl();
   int alloc_ezbuf();
-  int64_t get_comp_seq() { return comp_context_.seq_; }
-
-private:
-  int init_read_handle();
-  int release_read_handle();
 
 private:
   static const int64_t MAX_TRY_STEPS = 8;
@@ -192,7 +170,6 @@ private:
 protected:
   rpc::ObRequest *req_;
   uint8_t seq_;
-  void * read_handle_;
   obmysql::ObCompressionContext comp_context_;
   obmysql::ObProto20Context proto20_context_;
   easy_buf_t *ez_buf_;

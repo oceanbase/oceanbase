@@ -232,10 +232,9 @@ int ObCopyMacroBlockObReader::init(
         if (arg.get_serialize_size() > OB_MALLOC_BIG_BLOCK_SIZE) {
           ret = OB_ERR_SYS;
           LOG_ERROR("rpc arg must not larger than packet size", K(ret), K(arg.get_serialize_size()));
-        } else if (OB_FAIL(param.svr_rpc_proxy_->to(param.src_info_.src_addr_).by(param.tenant_id_).dst_cluster_id(param.src_info_.cluster_id_)
+        } else if (OB_FAIL(param.svr_rpc_proxy_->to(param.src_info_.src_addr_).by(OB_DATA_TENANT_ID).dst_cluster_id(param.src_info_.cluster_id_)
                            .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
                            .timeout(rpc_timeout)
-                           .group_id(share::OBCG_STORAGE_STREAM)
                            .fetch_macro_block(arg, rpc_buffer_, handle_))) {
           LOG_WARN("failed to send fetch macro block rpc", K(param), K(ret));
         } else {
@@ -780,7 +779,6 @@ int ObCopyMacroBlockObProducer::prefetch_()
       read_info.io_desc_.set_group_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
       read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
       read_info.buf_ = io_buf_[handle_idx_];
-      read_info.io_desc_.set_group_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, copy_macro_block_handle_[handle_idx_].read_handle_))) {
         STORAGE_LOG(WARN, "Fail to async read block, ", K(ret), K(read_info));
       }
@@ -823,9 +821,8 @@ int ObCopyTabletInfoObReader::init(
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
   } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(rpc_arg.tenant_id_).timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID).timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                .group_id(share::OBCG_STORAGE_STREAM)
                 .fetch_tablet_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
   } else {
@@ -1091,10 +1088,9 @@ int ObCopySSTableInfoObReader::init(
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
   } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(rpc_arg.tenant_id_)
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
                 .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                .group_id(share::OBCG_STORAGE_STREAM)
                 .fetch_tablet_sstable_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
   } else {
@@ -1691,6 +1687,11 @@ int ObCopySSTableInfoObProducer::init(
   } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_sstable_info));
+  } else if (!tablet_sstable_info.minor_sstable_scn_range_.is_empty()
+      && tablet->get_tablet_meta().clog_checkpoint_scn_ < tablet_sstable_info.minor_sstable_scn_range_.end_scn_) {
+    ret = OB_SSTABLE_NOT_EXIST;
+    LOG_WARN("src tablet clog_checkpoint_scn is smaller than dest needed log ts",
+        K(ret), K(tablet_sstable_info), KPC(tablet));
   } else if (!tablet_sstable_info.ddl_sstable_scn_range_.is_empty()) {
     if (tablet->get_tablet_meta().get_ddl_sstable_start_scn() < tablet_sstable_info.ddl_sstable_scn_range_.start_scn_) {
       ret = OB_ERR_UNEXPECTED;
@@ -1785,7 +1786,13 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
       need_copy_sstable = sstable->get_key().get_snapshot_version()
           > tablet_sstable_info_.max_major_sstable_snapshot_;
     } else if (sstable->is_minor_sstable()) {
-      need_copy_sstable = true;
+      if (tablet_sstable_info_.minor_sstable_scn_range_.is_empty()) {
+        need_copy_sstable = false;
+      } else if (sstable->get_key().scn_range_.end_scn_ <= tablet_sstable_info_.minor_sstable_scn_range_.start_scn_) {
+        need_copy_sstable = false;
+      } else {
+        need_copy_sstable = true;
+      }
     } else if (sstable->is_ddl_dump_sstable()) {
       const SCN ddl_sstable_start_scn = tablet_sstable_info_.ddl_sstable_scn_range_.start_scn_;
       const SCN ddl_sstable_end_scn = tablet_sstable_info_.ddl_sstable_scn_range_.end_scn_;
@@ -1953,10 +1960,9 @@ int ObCopySSTableMacroObReader::init(
   } else if (OB_FAIL(rpc_reader_.init(bandwidth_throttle))) {
     LOG_WARN("fail to init tablet info rpc reader", K(ret));
   } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
-  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(rpc_arg.tenant_id_)
+  } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
                 .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                .group_id(share::OBCG_STORAGE_STREAM)
                 .fetch_sstable_macro_info(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
     LOG_WARN("failed to send fetch tablet info rpc", K(ret), K(src_info), K(rpc_arg));
   } else {
@@ -2484,10 +2490,9 @@ int ObCopyLSViewInfoObReader::init(
         ret = OB_TENANT_HAS_BEEN_DROPPED;
         LOG_WARN("tenant has been stopped, stop send get ls view rpc", K(ret), KPC(ls));
       } else if (FALSE_IT(rpc_timeout = ObStorageHAUtils::get_rpc_timeout())) {
-      } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(rpc_arg.tenant_id_)
+      } else if (OB_FAIL(srv_rpc_proxy.to(src_info.src_addr_).by(OB_DATA_TENANT_ID)
                 .timeout(rpc_timeout).dst_cluster_id(src_info.cluster_id_)
                 .ratelimit(true).bg_flow(obrpc::ObRpcProxy::BACKGROUND_FLOW)
-                .group_id(share::OBCG_STORAGE_STREAM)
                 .fetch_ls_view(rpc_arg, rpc_reader_.get_rpc_buffer(), rpc_reader_.get_handle()))) {
         if (OB_TABLET_GC_LOCK_CONFLICT != ret) {
           LOG_WARN("failed to send fetch ls view info rpc", K(ret), K(src_info), K(rpc_arg));

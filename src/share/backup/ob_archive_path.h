@@ -71,9 +71,6 @@ public:
   static int get_piece_checkpoint_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
 
-  // oss://archive/checkpoint
-  static int get_piece_checkpoint_dir_path(const ObBackupDest &dest, ObBackupPath &path);
-
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
   static int get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObBackupPath &path);
@@ -98,8 +95,6 @@ public:
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/tenant_archive_piece_infos.obarc
   static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
-
-  static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/log/[file_id].obarc
   static int get_ls_archive_file_path(const ObBackupDest &dest, const int64_t dest_id, 

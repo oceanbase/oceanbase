@@ -92,12 +92,12 @@ TEST_F(TestWebServiceRootAddr, fetch_version2)
   ObSEArray<ObRootAddr, 16> readonly_rs_list;
 
   //No master
-  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"SLAVE\",\"RsList\":[{\"address\":\"127.0.0.1:16825\",\"role\":\"LEADER\",\"sql_port\":16860},{\"address\":\"127.0.0.2:16826\",\"role\":\"FOLLOWER\",\"sql_port\":16861}],\"ReadonlyRsList\":[]}]");
+  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"SLAVE\",\"RsList\":[{\"address\":\"10.101.67.165:16825\",\"role\":\"LEADER\",\"sql_port\":16860},{\"address\":\"10.218.253.100:16826\",\"role\":\"FOLLOWER\",\"sql_port\":16861}],\"ReadonlyRsList\":[]}]");
   int ret = ws_.fetch_master_cluster_info(&(initer_.get_config()), rs_list, readonly_rs_list);
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ret);
 
   //Have master
-  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"MASTER\",\"RsList\":[{\"address\":\"127.0.0.1:16825\",\"role\":\"LEADER\",\"sql_port\":16860}],\"ReadonlyRsList\":[]}]");
+  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"MASTER\",\"RsList\":[{\"address\":\"10.101.67.165:16825\",\"role\":\"LEADER\",\"sql_port\":16860}],\"ReadonlyRsList\":[]}]");
   ret = ws_.fetch_master_cluster_info(&(initer_.get_config()), rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(rs_list.count(), 1);
@@ -105,9 +105,9 @@ TEST_F(TestWebServiceRootAddr, fetch_version2)
   ASSERT_EQ(16860, rs_list.at(0).sql_port_);
 
   //Active and standby two clusters
-  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"SLAVE\",\"RsList\":[{\"address\":\"127.0.0.1:16825\",\"role\":\"LEADER\",\"sql_port\":16860},{\"address\":\"127.0.0.2:16826\",\"role\":\"FOLLOWER\",\"sql_port\":16861}],\"ReadonlyRsList\":[]}"
+  set_response_json("[{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":2,\"Type\":\"SLAVE\",\"RsList\":[{\"address\":\"10.101.67.165:16825\",\"role\":\"LEADER\",\"sql_port\":16860},{\"address\":\"10.218.253.100:16826\",\"role\":\"FOLLOWER\",\"sql_port\":16861}],\"ReadonlyRsList\":[]}"
                     ",{\"ObRegion\":\"ob2.rongxuan.lc\",\"ObRegionId\":3,\"Type\":\"MASTER\",\"RsList\":[{\"address\":\"10.101.67.160:16820\",\"role\":\"LEADER\",\"sql_port\":16870},"
-                    "{\"address\":\"127.0.0.3:16825\",\"role\":\"FOLLOWER\",\"sql_port\":16865}],\"ReadonlyRsList\":[]}]");
+                    "{\"address\":\"10.218.253.170:16825\",\"role\":\"FOLLOWER\",\"sql_port\":16865}],\"ReadonlyRsList\":[]}]");
   ret = ws_.fetch_master_cluster_info(&(initer_.get_config()), rs_list, readonly_rs_list);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(rs_list.count(), 2);

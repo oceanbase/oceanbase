@@ -36,13 +36,13 @@ enum {
 
 inline int64_t get_batch_delay_us(const int batch_type)
 {
-  int64_t delay[BATCH_REQ_TYPE_COUNT] = {2 * 1000, 2 * 1000, 500, 0, 0, 0, 0, 0};
+  int64_t delay[BATCH_REQ_TYPE_COUNT] = {2 * 1000, 2 * 1000, 1 * 1000, 0, 0, 0, 0, 0};
   return (batch_type >= 0 && batch_type < BATCH_REQ_TYPE_COUNT) ? delay[batch_type]: 0;
 }
 
 inline int64_t get_batch_buffer_size(const int batch_type)
 {
-  int64_t batch_buffer_size_k[BATCH_REQ_TYPE_COUNT] = {256, 256, 256, 2048, 256, 256, 256, 2048};
+  int64_t batch_buffer_size_k[BATCH_REQ_TYPE_COUNT] = {256, 256, 2048, 2048, 256, 256, 256, 2048};
   return batch_buffer_size_k[batch_type] * 1024;
 }
 

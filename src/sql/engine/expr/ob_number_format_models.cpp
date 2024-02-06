@@ -1696,11 +1696,7 @@ int ObNFMBase::num_str_to_sci(const common::ObString &num_str, const int32_t sca
           if (decimal_appear) {
             buf[digit_start_pos + 1] = '.';
           }
-          if ('-' == pow_str[1]) {
-            --pow_size;
-          } else {
-            ++pow_size;
-          }
+          ++pow_size;
         }
       }
     }

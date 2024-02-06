@@ -74,7 +74,7 @@ ObDASRef::ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx)
 
 DASOpResultIter ObDASRef::begin_result_iter()
 {
-  return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_, enable_rich_format_);
+  return DASOpResultIter(batched_tasks_.begin(), wild_datum_info_);
 }
 
 ObIDASTaskOp* ObDASRef::find_das_task(const ObDASTabletLoc *tablet_loc, ObDASOpType op_type)
@@ -515,7 +515,6 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
   } else {
     task_op->set_trans_desc(session->get_tx_desc());
     task_op->set_snapshot(&get_exec_ctx().get_das_ctx().get_snapshot());
-    task_op->set_write_branch_id(get_exec_ctx().get_das_ctx().get_write_branch_id());
     task_op->set_tenant_id(session->get_effective_tenant_id());
     task_op->set_task_id(task_id);
     task_op->in_stmt_retry_ = session->get_is_in_retry();

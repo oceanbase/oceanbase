@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "lib/oblog/ob_log.h"
+
 #include <string.h>
 #include <sys/uio.h>
 #include <dirent.h>
@@ -38,6 +39,21 @@ namespace oceanbase
 {
 namespace common
 {
+
+int64_t ObSyslogTimeGuard::to_string(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (click_count_ > 0) {
+    ret = databuff_printf(buf, buf_len, pos, "time dist: %s=%d", click_str_[0], click_[0]);
+    for (int i = 1; OB_SUCC(ret) && i < click_count_; i++) {
+      ret = databuff_printf(buf, buf_len, pos, ", %s=%d", click_str_[i], click_[i]);
+    }
+  }
+  if (OB_FAIL(ret)) pos = 0;
+  return pos;
+}
+
 void __attribute__((weak)) allow_next_syslog(int64_t)
 {
   // do nothing
@@ -55,7 +71,6 @@ _RLOCAL(lib::ObRateLimiter*, ObLogger::tl_log_limiter_);
 static const int64_t limiter_initial = 1000;
 static const int64_t limiter_thereafter = 100;
 ObSyslogSampleRateLimiter ObLogger::per_log_limiters_[];
-ObSyslogSampleRateLimiter ObLogger::per_error_log_limiters_[];
 _RLOCAL(int32_t, ObLogger::tl_type_);
 _RLOCAL(uint64_t, ObLogger::curr_logging_seq_);
 _RLOCAL(uint64_t, ObLogger::last_logging_seq_);
@@ -528,15 +543,6 @@ void ObLogger::destroy()
   }
 }
 
-void ObLogger::drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt)
-{
-  ObPLogItem **log_item = reinterpret_cast<ObPLogItem **>(items);
-  for (int64_t i = 0; i < item_cnt; ++i) {
-    free_log_item(log_item[i]);
-    items[i] = NULL;
-  }
-}
-
 void ObLogger::set_trace_mode(bool trace_mode)
 {
   trace_mode_ = trace_mode;
@@ -728,7 +734,7 @@ void ObLogger::rotate_log(const int64_t size, const bool redirect_flag,
   if (OB_LIKELY(size > 0) && max_file_size_ > 0 && log_struct.file_size_ >= max_file_size_) {
     if (OB_LIKELY(0 == pthread_mutex_trylock(&file_size_mutex_))) {
       rotate_log(log_struct.filename_, fd_type, redirect_flag, log_struct.fd_,
-                 log_struct.wf_fd_, file_list_, wf_file_list_);
+                 log_struct.wf_fd_, log_struct.file_list_, log_struct.wf_file_list_);
       (void)ATOMIC_SET(&log_struct.file_size_, 0);
       if (fd_type <= FD_ELEC_FILE) {
         (void)log_new_file_info(log_struct);
@@ -857,7 +863,7 @@ void ObLogger::rotate_log(const char *filename,
 void ObLogger::check_file()
 {
   check_file(log_file_[FD_SVR_FILE], redirect_flag_, open_wf_flag_);
-  check_file(log_file_[FD_RS_FILE], false, open_wf_flag_);
+  check_file(log_file_[FD_RS_FILE], false, false);
   check_file(log_file_[FD_AUDIT_FILE], false, false);
   check_file(log_file_[FD_ELEC_FILE], false, open_wf_flag_);
   check_file(log_file_[FD_TRACE_FILE], false, false);
@@ -1240,16 +1246,16 @@ int ObLogger::record_old_log_file()
   int ret = OB_SUCCESS;
   if (max_file_index_ <= 0 || !rec_old_file_flag_) {
   } else {
-    int tmp_ret = OB_SUCCESS;
-    ObSEArray<FileName, 4> files;
-    ObSEArray<FileName, 4> wf_files;
     for (int type = FD_SVR_FILE; type < FD_AUDIT_FILE; ++type) {
-      if (OB_TMP_FAIL(get_log_files_in_dir(log_file_[type].filename_, &files, &wf_files))) {
+      ObSEArray<FileName, 4> files;
+      ObSEArray<FileName, 4> wf_files;
+      if (OB_FAIL(get_log_files_in_dir(log_file_[type].filename_, &files, &wf_files))) {
         OB_LOG(WARN, "Get log files in log dir error", K(ret));
-      }
-    }
-    if (OB_FAIL(add_files_to_list(&files, &wf_files, file_list_, wf_file_list_))) {
+      } else if (OB_FAIL(add_files_to_list(&files, &wf_files, log_file_[type].file_list_, log_file_[type].wf_file_list_))) {
         OB_LOG(WARN, "Add files to list error", K(ret));
+      } else {
+        // do nothing
+      }
     }
   }
   return ret;
@@ -1333,28 +1339,6 @@ int ObLogger::get_log_files_in_dir(const char *filename, void *files, void *wf_f
   return ret;
 }
 
-int compare_log_filename_by_date_suffix(const void *v1, const void *v2)
-{
-  int ret = 0;
-  if (NULL == v1) {
-    ret = -1;
-  } else if (NULL == v2) {
-    ret = 1;
-  } else {
-    const int DATE_LENGTH = 17;
-    const char *str1 = static_cast<const char *>(v1);
-    const char *str2 = static_cast<const char *>(v2);
-    if (strlen(str1) < DATE_LENGTH) {
-      ret = -1;
-    } else if (strlen(str2) < DATE_LENGTH) {
-      ret = 1;
-    } else {
-      ret = str_cmp(str1 + strlen(str1) - DATE_LENGTH, str2 + strlen(str2) - DATE_LENGTH);
-    }
-  }
-  return ret;
-}
-
 int ObLogger::add_files_to_list(void *files,
                                 void *wf_files,
                                 std::deque<std::string> &file_list,
@@ -1369,10 +1353,10 @@ int ObLogger::add_files_to_list(void *files,
     ObIArray<FileName> *wf_files_arr = static_cast<ObIArray<FileName> *>(wf_files);
     //sort files
     if (files_arr->count() > 0) {
-      qsort(&files_arr->at(0), files_arr->count(), sizeof(FileName), compare_log_filename_by_date_suffix);
+      qsort(&files_arr->at(0), files_arr->count(), sizeof(FileName), str_cmp);
     }
     if (wf_files_arr->count() > 0) {
-      qsort(&wf_files_arr->at(0), wf_files_arr->count(), sizeof(FileName), compare_log_filename_by_date_suffix);
+      qsort(&wf_files_arr->at(0), wf_files_arr->count(), sizeof(FileName), str_cmp);
     }
 
     //Add to file_list
@@ -1422,9 +1406,6 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
   } else {
     for (int i = 0; i < ARRAYSIZEOF(per_log_limiters_); i++) {
       new (&per_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
-    }
-    for (int i = 0; i < ARRAYSIZEOF(per_error_log_limiters_); i++) {
-      new (&per_error_log_limiters_[i])ObSyslogSampleRateLimiter(limiter_initial, limiter_thereafter);
     }
     const int64_t limit = ObBaseLogWriterCfg::DEFAULT_MAX_BUFFER_ITEM_CNT * OB_MALLOC_BIG_BLOCK_SIZE / 8; // 256M
     log_mem_limiter_ = new (buf) ObBlockAllocMgr(limit);
@@ -1518,7 +1499,6 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
       && OB_NOT_NULL(log_item[0])) {
     if (log_item[0]->get_timestamp() > (last_check_disk_ts + DISK_SAMPLE_TIME)) {
       last_check_disk_ts = log_item[0]->get_timestamp();
-      check_file(log_file_[FD_SVR_FILE], redirect_flag_, open_wf_flag_);
       struct statfs disk_info;
       if (0 == statfs(log_file_[FD_SVR_FILE].filename_, &disk_info)) {
         can_print_ = ((disk_info.f_bfree * disk_info.f_bsize) > CAN_PRINT_DISK_SIZE);
@@ -1680,13 +1660,10 @@ int ObLogger::check_tl_log_limiter(const uint64_t location_hash_val,
         if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [bandwidth]"; }
       }
       if (allow) {
-        int n_limiter = (OB_LOG_LEVEL_ERROR == level) ? N_ERROR_LIMITER : N_LIMITER;
-        ObSyslogSampleRateLimiter *log_sample_rate_limiters =
-            (OB_LOG_LEVEL_ERROR == level) ? per_error_log_limiters_ : per_log_limiters_;
-        int64_t idx0 = (location_hash_val >> 32) % n_limiter;
-        int64_t idx1 = ((location_hash_val << 32) >> 32) % n_limiter;
-        bool r0 = OB_SUCCESS == log_sample_rate_limiters[idx0].try_acquire(1, level, errcode);
-        bool r1 = OB_SUCCESS == log_sample_rate_limiters[idx1].try_acquire(1, level, errcode);
+        int64_t idx0 = (location_hash_val >> 32) % N_LIMITER;
+        int64_t idx1 = ((location_hash_val << 32) >> 32) % N_LIMITER;
+        bool r0 = OB_SUCCESS == per_log_limiters_[idx0].try_acquire(1, level, errcode);
+        bool r1 = OB_SUCCESS == per_log_limiters_[idx1].try_acquire(1, level, errcode);
         allow = r0 && r1;
         if (!allow) { limiter_info = " REACH SYSLOG RATE LIMIT [frequency]"; }
       }
@@ -1780,7 +1757,6 @@ int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
 
 int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {
-  ObDisableDiagnoseGuard disable_diagnose_guard;
   UNUSED(level);
   int ret = OB_SUCCESS;
   log_item = NULL;
@@ -1824,7 +1800,6 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
 
 void ObLogger::free_log_item(ObPLogItem *log_item)
 {
-  ObDisableDiagnoseGuard disable_diagnose_guard;
   if (NULL != log_item) {
     const int level = log_item->get_log_level();
     auto *p_alloc = (level == OB_LOG_LEVEL_ERROR

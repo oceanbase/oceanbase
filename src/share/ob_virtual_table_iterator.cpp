@@ -368,13 +368,7 @@ int ObVirtualTableIterator::get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObNewRow *cur_row = NULL;
   row_calc_buf_.reuse();
-  const int64_t abs_timeout_ts = get_scan_param()->timeout_;
-  if (ObClockGenerator::getClock() > abs_timeout_ts) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("iterate virtual table row timeout", KR(ret), KTIME(abs_timeout_ts));
-  } else if (OB_FAIL(THIS_WORKER.check_status())) {
-    LOG_WARN("iterate virtual table row failed", KR(ret), KTIME(abs_timeout_ts));
-  } else if (OB_FAIL(inner_get_next_row(cur_row))) {
+  if (OB_FAIL(inner_get_next_row(cur_row))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       LOG_WARN("fail to inner get next row", K(ret), KPC(scan_param_));
     }

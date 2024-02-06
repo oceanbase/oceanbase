@@ -14,7 +14,6 @@
 
 #include "ob_dict_decoder.h"
 #include "ob_raw_decoder.h"
-#include "ob_vector_decode_util.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/access/ob_pushdown_aggregate.h"
 #include "ob_bit_stream.h"
@@ -565,174 +564,6 @@ bool ObDictDecoder::fast_decode_valid(const ObColumnDecoderCtx &ctx) const
             && dict_var_batch_decode_funcs_inited;
   }
   return valid;
-}
-
-template<bool HAS_NULL>
-int ObDictDecoder::batch_decode_dict(
-    const common::ObObjMeta &schema_obj_meta,
-    const common::ObObjType &stored_obj_type,
-    const int64_t meta_length,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init", K(ret));
-  } else {
-    int64_t fixed_packing_len = 0;
-    const int64_t count = meta_header_->count_;
-    const char *dict_payload = meta_header_->payload_;
-    if (meta_header_->is_fix_length_dict()) {
-      const uint32_t dict_data_size = meta_header_->data_size_;
-      fixed_packing_len = dict_data_size;
-      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-        const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
-        const uint32_t ref = vector_ctx.len_arr_[i];
-        if (HAS_NULL && ref == count) {
-          vector_ctx.ptr_arr_[i] = nullptr;
-        } else {
-          const int64_t data_offset = ref * dict_data_size;
-          vector_ctx.ptr_arr_[i] = dict_payload + data_offset;
-          vector_ctx.len_arr_[i] = dict_data_size;
-        }
-      }
-    } else {
-      const ObIntArrayFuncTable &off_array = ObIntArrayFuncTable::instance(meta_header_->index_byte_);
-      const char* end_of_col_meta = reinterpret_cast<const char *>(meta_header_) + meta_length;
-      const uint32_t last_dict_entry_len = reinterpret_cast<const char *>(meta_header_) + meta_length
-          - (var_data_ + off_array.at_(dict_payload - meta_header_->index_byte_, count - 1));
-      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-        const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
-        const uint32_t ref = vector_ctx.len_arr_[i];
-        if (HAS_NULL && ref == count) {
-          vector_ctx.ptr_arr_[i] = nullptr;
-        } else {
-          const int64_t data_offset = off_array.at_(dict_payload - meta_header_->index_byte_, ref)
-              & (static_cast<int64_t>(ref == 0) - 1);
-          vector_ctx.ptr_arr_[i] = var_data_ + data_offset;
-          // can we remove this condition without modify the storage format ?
-          vector_ctx.len_arr_[i] = (ref == count - 1)
-              ? last_dict_entry_len
-              : off_array.at_(dict_payload - meta_header_->index_byte_, ref + 1) - data_offset;
-        }
-      }
-    }
-
-    DataDiscreteLocator discrete_locator(vector_ctx.ptr_arr_, vector_ctx.len_arr_);
-    if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<DataDiscreteLocator>(
-        schema_obj_meta, stored_obj_type, fixed_packing_len, HAS_NULL,
-        discrete_locator, vector_ctx.row_cap_, vector_ctx.vec_offset_, vector_ctx.vec_header_))) {
-      LOG_WARN("failed to load byte alighed data to vector", K(ret),
-          K(schema_obj_meta), K(stored_obj_type));
-    }
-  }
-  return ret;
-}
-
-int ObDictDecoder::decode_vector(
-    const ObColumnDecoderCtx &decoder_ctx,
-    const ObIRowIndex* row_index,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited())) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("Not init", K(ret));
-  } else if (meta_header_->is_fix_length_dict() && !decoder_ctx.is_bit_packing() && meta_header_->row_ref_size_ <= 2) {
-    // TODO: more generialized fast decode
-    const char *ref_buf = reinterpret_cast<char *>(
-        const_cast<ObDictMetaHeader *>(meta_header_)) + decoder_ctx.col_header_->length_;
-    if (1 == meta_header_->row_ref_size_) {
-      ObFixedDictDataLocator_T<uint8_t> fixed_dict_locator(vector_ctx.row_ids_, meta_header_->payload_,
-        meta_header_->data_size_, meta_header_->count_, ref_buf);
-      if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<ObFixedDictDataLocator_T<uint8_t>>(
-          decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), meta_header_->data_size_,
-          true, fixed_dict_locator, vector_ctx.row_cap_, vector_ctx.vec_offset_, vector_ctx.vec_header_))) {
-        LOG_WARN("failed to load byte aligned data to vector", K(ret));
-      }
-    } else if (2 == meta_header_->row_ref_size_) {
-      ObFixedDictDataLocator_T<uint16_t> fixed_dict_locator(vector_ctx.row_ids_, meta_header_->payload_,
-        meta_header_->data_size_, meta_header_->count_, ref_buf);
-      if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<ObFixedDictDataLocator_T<uint16_t>>(
-          decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), meta_header_->data_size_,
-          true, fixed_dict_locator, vector_ctx.row_cap_, vector_ctx.vec_offset_, vector_ctx.vec_header_))) {
-        LOG_WARN("failed to load byte aligned data to vector", K(ret));
-      }
-    }
-  } else if (!meta_header_->is_fix_length_dict()
-      && meta_header_->index_byte_ <= 2
-      && meta_header_->row_ref_size_ <= 2
-      && !decoder_ctx.is_bit_packing()) {
-    const char *ref_data = reinterpret_cast<char *>(const_cast<ObDictMetaHeader *>(meta_header_)) + decoder_ctx.col_header_->length_;
-    const char *off_data = meta_header_->payload_;
-    const ObIntArrayFuncTable &off_array = ObIntArrayFuncTable::instance(meta_header_->index_byte_);
-    const int64_t last_dict_entry_len = reinterpret_cast<const char *>(meta_header_) + decoder_ctx.col_header_->length_
-        - (var_data_ + off_array.at_(meta_header_->payload_ - meta_header_->index_byte_, meta_header_->count_ - 1));
-    #define VAR_DICT_DECODE_VECTOR_SPEC(ref_type, off_type) \
-      ObVarDictDataLocator_T<ref_type, off_type> var_dict_locator_##ref_type##off_type( \
-          vector_ctx.row_ids_, var_data_, last_dict_entry_len, meta_header_->count_, ref_data, off_data); \
-      ret = ObVecDecodeUtils::load_byte_aligned_vector<ObVarDictDataLocator_T<ref_type, off_type>>( \
-          decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), 0, true, \
-          var_dict_locator_##ref_type##off_type, vector_ctx.row_cap_, vector_ctx.vec_offset_, vector_ctx.vec_header_); \
-
-    if (1 == meta_header_->index_byte_) {
-      if (1 == meta_header_->row_ref_size_) {
-        VAR_DICT_DECODE_VECTOR_SPEC(uint8_t, uint8_t);
-      } else {
-        VAR_DICT_DECODE_VECTOR_SPEC(uint16_t, uint8_t);
-      }
-    } else {
-      if (1 == meta_header_->row_ref_size_) {
-        VAR_DICT_DECODE_VECTOR_SPEC(uint8_t, uint16_t);
-      } else {
-        VAR_DICT_DECODE_VECTOR_SPEC(uint16_t, uint16_t);
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to load var dict byte aligned data to vector", K(ret));
-    }
-
-    #undef VAR_DICT_DECODE_VECTOR_SPEC
-  } else {
-    // Batch read ref to datum.len_
-    const unsigned char *col_data = reinterpret_cast<unsigned char *>(
-        const_cast<ObDictMetaHeader *>(meta_header_)) + decoder_ctx.col_header_->length_;
-    const uint8_t row_ref_size = meta_header_->row_ref_size_;
-    bitstream_unpack unpack_func = ObBitStream::get_unpack_func(row_ref_size);
-    int64_t row_id = 0;
-    bool has_null = false;
-    if (decoder_ctx.is_bit_packing()) {
-      const int64_t bs_len = decoder_ctx.micro_block_header_->row_count_ * row_ref_size;
-      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-        const int64_t row_id = vector_ctx.row_ids_[i];
-        int64_t unpacked_val = 0;
-        unpack_func(col_data, row_id * row_ref_size, row_ref_size, bs_len, unpacked_val);
-        vector_ctx.len_arr_[i] = static_cast<uint32_t>(unpacked_val);
-        has_null |= vector_ctx.len_arr_[i] == meta_header_->count_;
-      }
-    } else {
-      for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-        row_id = vector_ctx.row_ids_[i];
-        vector_ctx.len_arr_[i] = 0;
-        MEMCPY(&vector_ctx.len_arr_[i], col_data + row_id * row_ref_size, row_ref_size);
-        has_null |= vector_ctx.len_arr_[i] == meta_header_->count_;
-      }
-    }
-
-    if (has_null) {
-      ret = batch_decode_dict<true>(decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(),
-          decoder_ctx.col_header_->length_, vector_ctx);
-    } else {
-      ret = batch_decode_dict<false>(decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(),
-          decoder_ctx.col_header_->length_, vector_ctx);
-    }
-
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to batch decode dict to vector", K(ret));
-    }
-  }
-  return ret;
 }
 
 bool ObDictDecoder::fast_eq_ne_operator_valid(
@@ -1293,10 +1124,10 @@ int ObDictDecoder::bt_operator(
         while (OB_SUCC(ret) && traverse_it != end_it) {
           if (OB_FAIL(cmp_func(*traverse_it, datums.at(0), left_cmp_res))) {
             LOG_WARN("Failed to compare datums", K(ret), K(*traverse_it), K(datums.at(0)));
-          } else if (left_cmp_res < 0) {
           } else if (OB_FAIL(cmp_func(*traverse_it, datums.at(1), right_cmp_res))) {
             LOG_WARN("Failed to compare datums", K(ret), K(*traverse_it), K(datums.at(1)));
-          } else if (right_cmp_res <= 0) {
+          } else if ((left_cmp_res >= 0)
+              && (right_cmp_res <= 0)) {
             found = true;
             ref_bitset->set(dict_ref);
           }
@@ -1369,7 +1200,7 @@ int ObDictDecoder::in_operator(
     row_id = offset + pd_filter_info.start_; \
     if (nullptr != parent && parent->can_skip_filter(offset)) { \
       continue; \
-    } else if (OB_FAIL(read_ref<type>(row_id, col_data, ref))) { \
+    } else if (OB_FAIL(read_ref<type>(row_id, col_ctx.is_bit_packing(), col_data, ref))) { \
       LOG_WARN("Failed to read reference for dictionary", K(ret), K(col_data), K(row_id)); \
     } else if (get_cmp_ret(ref - dict_ref) \
         && OB_LIKELY(ref < meta_header_->count_ || sql::WHITE_OP_EQ == cmp_op)) { \
@@ -1494,7 +1325,6 @@ int ObDictDecoder::pushdown_operator(
   UNUSED(row_index);
   int ret = OB_SUCCESS;
   filter_applied = false;
-  const bool enable_rich_format = filter.get_op().enable_rich_format_;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("Dictionary decoder is not inited", K(ret));
@@ -1523,11 +1353,6 @@ int ObDictDecoder::pushdown_operator(
 
     for (int64_t index = 0; OB_SUCC(ret) && index <= meta_header_->count_; ) {
       int64_t upper_bound = MIN(index + pd_filter_info.batch_size_, meta_header_->count_ + 1);
-      // use uniform base currently, support new format later
-      //if (enable_rich_format && OB_FAIL(storage::init_exprs_vector_header(filter.get_filter_node().column_exprs_, filter.get_op().get_eval_ctx(), upper_bound - index))) {
-      //  LOG_WARN("Failed to init exprs vector header", K(ret));
-      //  break;
-      //}
       for (int64_t dict_ref = index; dict_ref < upper_bound; dict_ref++) {
         datums[dict_ref - index].pack_ = dict_ref;
       }
@@ -1646,16 +1471,7 @@ int ObDictDecoder::read_distinct(
     const char **cell_datas,
     storage::ObGroupByCell &group_by_cell) const
 {
-  int ret = OB_SUCCESS;
-  bool has_null = false;
-  if (OB_FAIL(batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell))) {
-    LOG_WARN("Failed to batch read distinct", K(ret));
-  } else if (check_has_null(ctx, ctx.col_header_->length_, has_null)) {
-    LOG_WARN("Failed to check has null", K(ret));
-  } else if (has_null) {
-    group_by_cell.add_distinct_null_value();
-  }
-  return ret;
+  return batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell);
 }
 
 int ObDictDecoder::batch_read_distinct(
@@ -1669,6 +1485,7 @@ int ObDictDecoder::batch_read_distinct(
   const char *dict_payload = meta_header_->payload_;
   const common::ObObjType obj_type = ctx.col_header_->get_store_obj_type();
   common::ObDatum *datums = group_by_cell.get_group_by_col_datums_to_fill();
+  bool has_null = false;
   group_by_cell.set_distinct_cnt(count);
   if (meta_header_->is_fix_length_dict()) {
     const int64_t dict_data_size = meta_header_->data_size_;
@@ -1696,6 +1513,10 @@ int ObDictDecoder::batch_read_distinct(
   }
   if (OB_FAIL(batch_load_data_to_datum(obj_type, cell_datas, count, integer_mask_, datums))) {
     LOG_WARN("Failed to batch load data to datum", K(ret));
+  } else if (check_has_null(ctx, meta_length, has_null)) {
+    LOG_WARN("Failed to check has null", K(ret));
+  } else if (has_null) {
+    group_by_cell.add_distinct_null_value();
   }
   return ret;
 }

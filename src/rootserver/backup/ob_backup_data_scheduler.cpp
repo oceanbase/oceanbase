@@ -141,9 +141,7 @@ int ObBackupDataScheduler::do_get_need_reload_task_(
       ObBackupLSTaskAttr &ls_task = ls_tasks.at(i);
       ObBackupScheduleTask *task = nullptr;
       bool is_dropped = false;
-      if (ObBackupTaskStatus::Status::FINISH == ls_task.status_.status_ && OB_SUCCESS == ls_task.result_) {
-        // do nothing
-      } else if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
+      if (!(job.plus_archivelog_ && set_task_attr.status_.is_backup_log())
           && OB_FAIL(ObBackupDataLSTaskMgr::check_ls_is_dropped(ls_task, *sql_proxy_, is_dropped))) {
         LOG_WARN("failed to check ls is dropped", K(ret), K(ls_task));
       } else if (is_dropped) {
@@ -212,14 +210,6 @@ int ObBackupDataScheduler::build_task_(
   }
   case ObBackupDataTaskType::Type::BACKUP_META: {
     HEAP_VAR(ObBackupDataLSMetaTask, tmp_task) {
-      if (OB_FAIL(do_build_task_(job, set_task_attr, ls_task, allocator, tmp_task, task))) {
-        LOG_WARN("[DATA_BACKUP]failed to do build task", K(ret), K(job), K(ls_task));
-      }
-    }
-    break;
-  }
-  case ObBackupDataTaskType::Type::BACKUP_META_FINISH: {
-    HEAP_VAR(ObBackupDataLSMetaFinishTask, tmp_task) {
       if (OB_FAIL(do_build_task_(job, set_task_attr, ls_task, allocator, tmp_task, task))) {
         LOG_WARN("[DATA_BACKUP]failed to do build task", K(ret), K(job), K(ls_task));
       }
@@ -634,13 +624,12 @@ int ObBackupDataScheduler::persist_backup_version_(common::ObISQLClient &sql_pro
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
   uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
-  // TODO(wangxiaohui.wxh) 4.3, correct the tenant id to user tenant id in backup info
-  if (GCONF.in_upgrade_mode()) {
+  if (GCONF.enable_upgrade_mode) {
     ret = OB_BACKUP_CAN_NOT_START;
     LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "cluster upgrading");
     LOG_WARN("cluster upgrade, can't start backup", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, tenant_id/*user tenant id*/, data_version))) {
-    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(sql_proxy, exec_tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(exec_tenant_id));
   } else if (OB_FAIL(ObLSBackupInfoOperator::set_backup_version(sql_proxy, exec_tenant_id, data_version))) {
     LOG_WARN("failed to set backup version", K(ret), K(exec_tenant_id), K(data_version));
   } else if (OB_FAIL(ObLSBackupInfoOperator::set_cluster_version(sql_proxy, exec_tenant_id, cluster_version))) {
@@ -1271,7 +1260,7 @@ int ObUserTenantBackupJobMgr::check_can_backup_()
   uint64_t exec_tenant_id = gen_meta_tenant_id(job_attr_->tenant_id_);
   if (share::ObBackupStatus::CANCELING == job_attr_->status_.status_) {
     // backup job is canceling, no need to check log archive status
-  } else if (GCONF.in_upgrade_mode()) {
+  } else if (GCONF.enable_upgrade_mode) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("cluster is upgrade, backup can't continue", K(ret), KPC(job_attr_));
   } else if (OB_FAIL(share::ObLSBackupInfoOperator::get_backup_version(*sql_proxy_, exec_tenant_id, data_version))) {
@@ -1281,8 +1270,8 @@ int ObUserTenantBackupJobMgr::check_can_backup_()
   } else if (cluster_version != GET_MIN_CLUSTER_VERSION()) {
     ret = OB_VERSION_NOT_MATCH;
     LOG_WARN("cluster version not match, backup can't continue", K(ret), K(cluster_version));
-  } else if (OB_FAIL(ObBackupUtils::check_tenant_data_version_match(job_attr_->tenant_id_, data_version))) {
-    LOG_WARN("failed to check tenant data version", K(ret), "tenant_id", job_attr_->tenant_id_, K(data_version));
+  } else if (OB_FAIL(ObBackupUtils::check_tenant_data_version_match(exec_tenant_id, data_version))) {
+    LOG_WARN("failed to check tenant data version", K(ret), K(exec_tenant_id), K(data_version));
   } else {
     ObTenantArchiveRoundAttr round_attr;
     if (OB_FAIL(ObTenantArchiveMgr::get_tenant_current_round(job_attr_->tenant_id_, job_attr_->incarnation_id_, round_attr))) {

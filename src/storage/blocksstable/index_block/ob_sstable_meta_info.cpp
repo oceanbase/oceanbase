@@ -288,7 +288,6 @@ int ObRootBlockInfo::read_block_data(
     read_info.io_desc_.set_group_id(ObIOModule::ROOT_BLOCK_IO);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     read_info.buf_ = buf;
-    read_info.io_desc_.set_group_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
     } else if (OB_FAIL(ObBlockManager::read_block(read_info, handle))) {
@@ -956,8 +955,7 @@ int ObSSTableMacroInfo::deserialize_(
     char *reader_buf = nullptr;
     int64_t pos = 0;
     int64_t reader_len = 0;
-    ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
-    if (OB_FAIL(block_reader.init(entry_id_, mem_attr))) {
+    if (OB_FAIL(block_reader.init(entry_id_))) {
       LOG_WARN("fail to initialize reader", K(ret), K(entry_id_));
     } else if (OB_FAIL(block_reader.get_next_item(reader_buf, reader_len, addr))) {// read data ids
       LOG_WARN("fail to get next item", K(ret), K(reader_len), K(addr));
@@ -1003,11 +1001,10 @@ int ObSSTableMacroInfo::read_block_ids(
 {
   int ret = OB_SUCCESS;
   ObLinkedMacroBlockItemReader block_reader;
-  ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
   if (OB_UNLIKELY(!entry_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(entry_id));
-  } else if (OB_FAIL(block_reader.init(entry_id, mem_attr))) {
+  } else if (OB_FAIL(block_reader.init(entry_id))) {
     LOG_WARN("fail to initialize reader", K(ret), K(entry_id));
   } else if (OB_FAIL(read_block_ids(allocator, block_reader, data_blk_ids, data_blk_cnt,
       other_blk_ids, other_blk_cnt))) {
@@ -1121,15 +1118,15 @@ int ObSSTableMacroInfo::write_block_ids(
     MacroBlockId &entry_id) const
 {
   int ret = OB_SUCCESS;
+  const bool need_disk_addr = false;
   const int64_t data_blk_cnt = data_ids.count();
   const int64_t other_blk_cnt = other_ids.count();
-  ObMemAttr mem_attr(MTL_ID(), "SSTableBlockId");
   if (OB_UNLIKELY(0 == data_blk_cnt && 0 == other_blk_cnt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data_blk_cnt and other_blk_cnt shouldn't be both 0", K(ret), K(data_blk_cnt),
         K(other_blk_cnt));
-  } else if (OB_FAIL(writer.init(false /*whether need addr*/, mem_attr))) {
-    LOG_WARN("fail to initialize item writer", K(ret));
+  } else if (OB_FAIL(writer.init(need_disk_addr))) {
+    LOG_WARN("fail to initialize item writer", K(ret), K(need_disk_addr));
   } else if (OB_FAIL(flush_ids(data_ids, writer))) {
     LOG_WARN("fail to flush data block ids", K(ret), K(data_blk_cnt));
   } else if (OB_FAIL(flush_ids(other_ids, writer))) {

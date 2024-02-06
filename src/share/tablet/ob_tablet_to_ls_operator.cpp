@@ -19,7 +19,6 @@
 #include "lib/string/ob_sql_string.h" // ObSqlString
 #include "lib/mysqlclient/ob_mysql_proxy.h" // ObISqlClient, SMART_VAR
 #include "observer/ob_sql_client_decorator.h" // ObSQLClientRetryWeak
-#include "share/transfer/ob_transfer_info.h"
 
 namespace oceanbase
 {
@@ -634,7 +633,7 @@ int ObTabletToLSTableOperator::inner_batch_get_(
     common::ObIArray<ObTabletLSCache> &tablet_ls_caches)
 {
   int ret = OB_SUCCESS;
-  const char *query_column_str = "*";
+  const char *query_column_str = "tablet_id, ls_id, ORA_ROWSCN";
   const bool keep_order = false;
   INNER_BATCH_GET(sql_proxy, tenant_id, tablet_ids, start_idx, end_idx,
       query_column_str, keep_order, tablet_ls_caches);
@@ -652,21 +651,19 @@ int ObTabletToLSTableOperator::construct_results_(
     tablet_ls_cache.reset();
     uint64_t tablet_id = ObTabletID::INVALID_TABLET_ID;
     int64_t ls_id = ObLSID::INVALID_LS_ID;
-    int64_t transfer_seq = OB_INVALID_TRANSFER_SEQ;
+    int64_t row_scn = OB_MIN_SCN_TS_NS;
     EXTRACT_INT_FIELD_MYSQL(res, "tablet_id", tablet_id, uint64_t);
     EXTRACT_INT_FIELD_MYSQL(res, "ls_id", ls_id, int64_t);
-    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(
-      res, "transfer_seq", transfer_seq, int64_t,
-      false/*skip null error*/, true/*skip column error*/, 0 /*default value*/);
+    EXTRACT_INT_FIELD_MYSQL(res, "ORA_ROWSCN", row_scn, int64_t);
     const int64_t now = ObTimeUtility::fast_current_time();
     if (FAILEDx(tablet_ls_cache.init(
         tenant_id,
         ObTabletID(tablet_id),
         ObLSID(ls_id),
         now,
-        transfer_seq))) {
+        row_scn))) {
       LOG_WARN("init tablet_ls_cache failed", KR(ret), K(tenant_id),
-          K(tablet_id), K(ls_id), K(now), K(transfer_seq));
+          K(tablet_id), K(ls_id), K(now), K(row_scn));
     } else if (OB_FAIL(tablet_ls_caches.push_back(tablet_ls_cache))) {
       LOG_WARN("fail to push back", KR(ret), K(tablet_ls_cache));
     }
@@ -713,40 +710,6 @@ int ObTabletToLSTableOperator::inner_batch_get_(
   const bool keep_order = false;
   INNER_BATCH_GET(sql_proxy, tenant_id, tablet_ids, start_idx, end_idx,
       query_column_str, keep_order, tablet_ls_pairs);
-  return ret;
-}
-
-int ObTabletToLSTableOperator::get_tablet_ls_pairs_cnt(
-    common::ObISQLClient &sql_proxy,
-    const uint64_t tenant_id,
-    int64_t &input_cnt)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  input_cnt = 0;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.append_fmt(
-      "select count(*) as cnt from %s",
-      OB_ALL_TABLET_TO_LS_TNAME))) {
-    LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
-  } else {
-    common::sqlclient::ObMySQLResult *result = nullptr;
-    int64_t cnt = 0;
-    SMART_VAR(ObISQLClient::ReadResult, res) {
-      if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("fail to do read", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get result", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_FAIL(result->get_int("cnt", cnt))) {
-        LOG_WARN("failed to get int", KR(ret), K(cnt));
-      } else {
-        input_cnt = cnt;
-      }
-    }
-  }
   return ret;
 }
 

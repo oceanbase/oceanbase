@@ -139,8 +139,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       cascade_indexes   BOOLEAN DEFAULT TRUE,
       statown           VARCHAR(65535) DEFAULT NULL,
       no_invalidate     BOOLEAN DEFAULT FALSE,
-      force             BOOLEAN DEFAULT FALSE,
-      degree            DECIMAL DEFAULT 1
+      force             BOOLEAN DEFAULT FALSE
     );
 
     PROCEDURE delete_column_stats (
@@ -154,8 +153,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       statown          VARCHAR(65535) DEFAULT NULL,
       no_invalidate    BOOLEAN DEFAULT FALSE,
       force            BOOLEAN DEFAULT FALSE,
-      col_stat_type    VARCHAR(65535) DEFAULT 'ALL',
-      degree           DECIMAL DEFAULT 1
+      col_stat_type    VARCHAR(65535) DEFAULT 'ALL'
     );
 
     procedure delete_index_stats(
@@ -169,8 +167,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       no_invalidate    BOOLEAN        DEFAULT FALSE,
       stattype         VARCHAR(65535) DEFAULT 'ALL',
       force            BOOLEAN        DEFAULT FALSE,
-      tabname          VARCHAR(65535) DEFAULT NULL,
-      degree           DECIMAL DEFAULT 1
+      tabname          VARCHAR(65535) DEFAULT NULL
     );
 
     PROCEDURE delete_schema_stats (
@@ -179,8 +176,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       statid            VARCHAR(65535) DEFAULT NULL,
       statown           VARCHAR(65535) DEFAULT NULL,
       no_invalidate     BOOLEAN DEFAULT FALSE,
-      force             BOOLEAN DEFAULT FALSE,
-      degree            DECIMAL DEFAULT 1
+      force             BOOLEAN DEFAULT FALSE
     );
 
     PROCEDURE FLUSH_DATABASE_MONITORING_INFO();
@@ -390,28 +386,6 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       ownname        VARCHAR(65535),
       tabname        VARCHAR(65535),
       pname          VARCHAR(65535)
-    );
-
-    PROCEDURE copy_table_stats (
-      ownname        VARCHAR(65535),
-      tabname        VARCHAR(65535),
-      srcpartname    VARCHAR(65535),
-      dstpartname		 VARCHAR(65535),
-      scale_factor	 DECIMAL DEFAULT 1,
-      flags					 DECIMAL DEFAULT NULL,
-      force          BOOLEAN DEFAULT FALSE
-    );
-
-    PROCEDURE cancel_gather_stats (
-      taskid          VARCHAR(65535)
-    );
-    PROCEDURE GATHER_SYSTEM_STATS();
-
-    PROCEDURE DELETE_SYSTEM_STATS();
-
-    PROCEDURE SET_SYSTEM_STATS (
-      pname          VARCHAR(65535),
-      pvalue         DECIMAL
     );
 
 END dbms_stats;

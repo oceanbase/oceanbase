@@ -232,7 +232,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       FULL(@"SEL$1" "test"."tt2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -249,7 +249,6 @@ Optimization Info:
       pruned_index_name:[idx]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -281,7 +280,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       FULL(@"SEL$1" "test"."tt2"@"SEL$1")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -298,7 +297,6 @@ Optimization Info:
       pruned_index_name:[idx]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -337,7 +335,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."tt2"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -354,7 +352,6 @@ Optimization Info:
       unstable_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -390,7 +387,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."tt2"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -407,7 +404,6 @@ Optimization Info:
       pruned_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -443,7 +439,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."tt2"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -460,7 +456,6 @@ Optimization Info:
       unstable_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -496,7 +491,7 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       INDEX(@"SEL$1" "test"."tt2"@"SEL$1" "idx")
-      OPTIMIZER_FEATURES_ENABLE('')
+      OPTIMIZER_FEATURES_ENABLE('4.0.0.0')
       END_OUTLINE_DATA
   */
 Optimization Info:
@@ -513,7 +508,6 @@ Optimization Info:
       pruned_index_name:[tt2]
       stats version:0
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:

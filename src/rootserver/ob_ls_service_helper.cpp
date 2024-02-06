@@ -683,8 +683,7 @@ int ObLSServiceHelper::revision_to_equal_status_(const ObLSStatusMachineParamete
                                          ls_info.get_ls_group_id(),
                                          ls_info.get_create_scn(),
                                          working_sw_status,
-                                         tenant_ls_info, trans, ls_info.get_ls_flag(),
-                                         OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
+                                         tenant_ls_info, trans, ls_info.get_ls_flag()))) {
         LOG_WARN("failed to create new ls in trans", KR(ret), K(ls_info), K(tenant_ls_info), K(working_sw_status));
       }
       END_TRANSACTION(trans);
@@ -822,8 +821,7 @@ int ObLSServiceHelper::create_new_ls_in_trans(
     const share::ObTenantSwitchoverStatus &working_sw_status,
     ObTenantLSInfo& tenant_ls_info,
     ObMySQLTransaction &trans,
-    const share::ObLSFlag &ls_flag,
-    const uint64_t source_tenant_id)
+    const share::ObLSFlag &ls_flag)
 {
   int ret = OB_SUCCESS;
   int64_t info_index = OB_INVALID_INDEX_INT64;
@@ -847,144 +845,6 @@ int ObLSServiceHelper::create_new_ls_in_trans(
     ObLSLifeAgentManager ls_life_agent(*GCTX.sql_proxy_);
     ObSqlString zone_priority;
     uint64_t unit_group_id = 0;
-    if (OB_INVALID_TENANT_ID == source_tenant_id) {
-      if (OB_FAIL(construct_unit_group_id_and_primary_zone_(
-                      ls_id,
-                      ls_group_id,
-                      ls_flag,
-                      tenant_ls_info,
-                      unit_group_id,
-                      primary_zone))) {
-        LOG_WARN("fail to construct unit group id and primary zone", KR(ret), K(ls_id), K(ls_group_id), K(ls_flag), K(tenant_ls_info));
-      }
-    } else {
-      // for clone tenant
-      if (OB_FAIL(construct_unit_group_id_and_primary_zone_for_clone_tenant_(ls_id, source_tenant_id, tenant_id, unit_group_id, primary_zone))) {
-        LOG_WARN("fail to construct unit group id and primary zone for clone tenant", KR(ret), K(ls_id), K(source_tenant_id), K(tenant_id));
-      }
-    }
-
-    if (FAILEDx(new_info.init(tenant_id, ls_id,
-                              ls_group_id,
-                              share::OB_LS_CREATING,
-                              unit_group_id,
-                              primary_zone, ls_flag))) {
-      LOG_WARN("failed to init new info", KR(ret), K(tenant_id), K(unit_group_id),
-               K(ls_id), K(ls_group_id), K(group_info), K(primary_zone), K(ls_flag));
-    } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(primary_zone,
-            *tenant_ls_info.get_tenant_schema(), zone_priority))) {
-      LOG_WARN("failed to get normalize primary zone", KR(ret), K(primary_zone), K(zone_priority));
-    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_scn,
-            zone_priority.string(), working_sw_status, trans))) {
-      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_scn), K(zone_priority));
-    }
-  }
-  return ret;
-}
-
-int ObLSServiceHelper::construct_unit_group_id_and_primary_zone_for_clone_tenant_(
-    const share::ObLSID &ls_id,
-    const uint64_t source_tenant_id,
-    const uint64_t tenant_id,
-    uint64_t &unit_group_id,
-    ObZone &primary_zone)
-{
-  int ret = OB_SUCCESS;
-  uint64_t source_unit_group_id = OB_INVALID_ID;
-  unit_group_id = OB_INVALID_ID;
-  primary_zone.reset();
-  if (OB_UNLIKELY(!ls_id.is_valid())
-      || OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)
-      || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
-      || OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(source_tenant_id), K(tenant_id), KP(GCTX.sql_proxy_));
-  } else {
-    // construct primary zone
-    share::ObLSStatusInfo ls_status_info;
-    MTL_SWITCH(OB_SYS_TENANT_ID) {
-      share::ObLSStatusOperator ls_status_operator;
-      if (OB_FAIL(ls_status_operator.get_ls_status_info(source_tenant_id, ls_id, ls_status_info, *GCTX.sql_proxy_))) {
-        LOG_WARN("fail to get all ls status", KR(ret), K(source_tenant_id), K(ls_id), K(ls_status_info));
-      } else if (OB_UNLIKELY(!ls_status_info.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("source ls status info is invalid", KR(ret), K(ls_status_info));
-      } else if (OB_FAIL(primary_zone.assign(ls_status_info.primary_zone_))) {
-        LOG_WARN("fail to assign primary zone", KR(ret), K(ls_status_info));
-      } else {
-        source_unit_group_id = ls_status_info.unit_group_id_;
-      }
-    }
-    // construct sql to fetch unit group id
-    ObSqlString sql;
-    const uint64_t exec_tenant_id = OB_SYS_TENANT_ID;
-    if (OB_FAIL(ret)) {
-    } else if (0 == source_unit_group_id) {
-      unit_group_id = 0;
-    } else if (OB_FAIL(sql.assign_fmt("SELECT DISTINCT b.unit_group_id FROM "
-                                      "(SELECT svr_ip, svr_port FROM %s WHERE tenant_id = %ld AND unit_group_id = %ld) as a "
-                                      "INNER JOIN "
-                                      "(SELECT * FROM %s WHERE tenant_id = %ld) as b "
-                                      "ON a.svr_ip = b.svr_ip AND a.svr_port = b.svr_port",
-                                      OB_DBA_OB_UNITS_TNAME, source_tenant_id, source_unit_group_id,
-                                      OB_DBA_OB_UNITS_TNAME, tenant_id))) {
-      LOG_WARN("fail to construct sql to fetch unit group id for new log stream", KR(ret),
-               K(source_tenant_id), K(tenant_id), K(source_unit_group_id));
-    } else {
-      HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
-        common::sqlclient::ObMySQLResult *result = NULL;
-        if (OB_FAIL(GCTX.sql_proxy_->read(res, exec_tenant_id, sql.ptr()))) {
-          LOG_WARN("failed to read", KR(ret), K(exec_tenant_id), K(sql));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to get sql result", KR(ret), K(sql));
-        } else {
-          ret = result->next();
-          if (OB_ITER_END == ret) {
-            ret = OB_ENTRY_NOT_EXIST;
-            LOG_WARN("unit group id not found", KR(ret), K(sql));
-          } else if (OB_FAIL(ret)) {
-            LOG_WARN("failed to get unit group id", KR(ret), K(sql));
-          } else {
-            EXTRACT_INT_FIELD_MYSQL(*result, "unit_group_id", unit_group_id, uint64_t);
-            if (OB_FAIL(ret)) {
-              LOG_WARN("fail to get unit group id from result", KR(ret));
-            } else if (OB_UNLIKELY(OB_INVALID_ID == unit_group_id)) {
-              ret = OB_STATE_NOT_MATCH;
-              LOG_WARN("unexpected unit group id", KR(ret), K(sql), K(unit_group_id));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_ITER_END != result->next()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("expect only one row", KR(ret), K(sql));
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLSServiceHelper::construct_unit_group_id_and_primary_zone_(
-    const share::ObLSID &ls_id,
-    const uint64_t ls_group_id,
-    const share::ObLSFlag &ls_flag,
-    ObTenantLSInfo &tenant_ls_info,
-    uint64_t &unit_group_id,
-    ObZone &primary_zone)
-{
-  int ret = OB_SUCCESS;
-  unit_group_id = 0;
-  primary_zone.reset();
-  if (OB_UNLIKELY(!ls_id.is_valid()
-                  || OB_INVALID_ID == ls_group_id
-                  || !ls_flag.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls id is invalid", KR(ret), K(ls_id), K(ls_group_id), K(ls_flag));
-  } else {
-    ObLSGroupInfo group_info;
     if (0 == ls_group_id) {
       unit_group_id = 0;
       if (!ls_flag.is_duplicate_ls()) {
@@ -1019,6 +879,21 @@ int ObLSServiceHelper::construct_unit_group_id_and_primary_zone_(
       }
     } else {
       LOG_WARN("failed to get ls group info", KR(ret), K(ls_group_id), K(tenant_ls_info));
+    }
+
+    if (FAILEDx(new_info.init(tenant_id, ls_id,
+                              ls_group_id,
+                              share::OB_LS_CREATING,
+                              unit_group_id,
+                              primary_zone, ls_flag))) {
+      LOG_WARN("failed to init new info", KR(ret), K(tenant_id), K(unit_group_id),
+               K(ls_id), K(ls_group_id), K(group_info), K(primary_zone), K(ls_flag));
+    } else if (OB_FAIL(ObTenantThreadHelper::get_zone_priority(primary_zone,
+            *tenant_ls_info.get_tenant_schema(), zone_priority))) {
+      LOG_WARN("failed to get normalize primary zone", KR(ret), K(primary_zone), K(zone_priority));
+    } else if (OB_FAIL(ls_life_agent.create_new_ls_in_trans(new_info, create_scn,
+            zone_priority.string(), working_sw_status, trans))) {
+      LOG_WARN("failed to insert ls info", KR(ret), K(new_info), K(create_scn), K(zone_priority));
     }
   }
   return ret;
@@ -1521,113 +1396,5 @@ int ObTenantLSInfo::get_next_primary_zone(
   }
   return ret;
 }
-int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
-      const share::ObLSID &src_ls,
-      const share::ObLSID &dest_ls,
-      const share::SCN &transfer_scn,
-      bool &replay_finish)
-{
-  int ret = OB_SUCCESS;
-  ObLSStatusOperator ls_operator;
-  share::ObLSStatusInfo ls_status;
-  SCN readble_scn;
-  replay_finish = true;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-        || !src_ls.is_valid() || !dest_ls.is_valid()
-        || !transfer_scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls),
-        K(dest_ls), K(transfer_scn));
-  } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, src_ls, transfer_scn, replay_finish))) {
-    LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(src_ls), K(transfer_scn));
-  } else if (!replay_finish) {
-    LOG_WARN("src ls has not replay transfer finish", K(tenant_id), K(src_ls));
-  } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, src_ls, transfer_scn, replay_finish))) {
-    LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(dest_ls), K(transfer_scn));
-  } else if (!replay_finish) {
-    LOG_WARN("dest ls has not replay transfer finish", K(tenant_id), K(dest_ls));
-  }
-  return ret;
-}
-
-int ObLSServiceHelper::check_ls_transfer_replay_(const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const share::SCN &transfer_scn,
-      bool &replay_finish)
-{
-  int ret = OB_SUCCESS;
-  ObLSStatusOperator ls_operator;
-  share::ObLSStatusInfo ls_status;
-  SCN readable_scn;
-  replay_finish = true;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-        || !ls_id.is_valid()
-        || !transfer_scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(transfer_scn));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(ls_operator.get_ls_status_info(tenant_id, ls_id,
-          ls_status, *GCTX.sql_proxy_))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      LOG_INFO("src ls not exist, no need check", K(tenant_id), K(ls_id));
-    } else {
-      LOG_WARN("failed to get ls status info", KR(ret), K(tenant_id), K(ls_id));
-    }
-  } else if (OB_FAIL(get_ls_all_replica_readable_scn_(tenant_id, ls_id, readable_scn))) {
-    LOG_WARN("failed to get ls all replica readable scn", KR(ret), K(tenant_id), K(ls_id));
-  } else if (readable_scn < transfer_scn) {
-    replay_finish = false;
-    LOG_INFO("need wait, ls has not replay finish transfer", K(tenant_id),
-        K(ls_id), K(readable_scn), K(transfer_scn));
-  }
-  return ret;
-}
-
-int ObLSServiceHelper::get_ls_all_replica_readable_scn_(const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      share::SCN &readable_scn)
-{
-  int ret = OB_SUCCESS;
-  ObTimeoutCtx ctx;
-  if (OB_UNLIKELY(!ls_id.is_valid() || !is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tenant_id));
-  } else if (OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location service is null", KR(ret), KP(GCTX.location_service_),
-        KP(GCTX.srv_rpc_proxy_));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret));
-  } else {
-    obrpc::ObGetLSReplayedScnArg arg;
-    ObAddr leader;
-    ObGetLSReplayedScnRes result;
-    const int64_t timeout = ctx.get_timeout();
-    ObGetLSReplayedScnProxy proxy(
-        *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_replayed_scn);
-    if (OB_FAIL(arg.init(tenant_id, ls_id, true))) {
-      LOG_WARN("failed to init arg", KR(ret), K(tenant_id), K(ls_id));
-    } else if (OB_FAIL(GCTX.location_service_->get_leader(
-            GCONF.cluster_id, tenant_id, ls_id, false, leader))) {
-      LOG_WARN("failed to get leader", KR(ret), K(tenant_id), K(ls_id));
-    } else if (OB_FAIL(proxy.call(leader, timeout, tenant_id, arg))) {
-      LOG_WARN("failed to get ls repalyed scn", KR(ret), K(leader), K(tenant_id),
-          K(timeout), K(arg));
-    } else if (OB_FAIL(proxy.wait())) {
-      LOG_WARN("failed to get wait all rpc", KR(ret), K(tenant_id), K(ls_id), K(leader));
-    } else if (OB_ISNULL(proxy.get_results().at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", KR(ret), K(tenant_id), K(leader), K(ls_id));
-    } else {
-      readable_scn = proxy.get_results().at(0)->get_cur_readable_scn();
-    }
-  }
-  return ret;
-
-}
-
 }//end of rootserver
 }

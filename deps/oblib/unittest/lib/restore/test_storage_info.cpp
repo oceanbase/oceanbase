@@ -104,31 +104,6 @@ TEST(ObObjectStorageInfo, cos)
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
 }
 
-TEST(ObObjectStorageInfo, s3)
-{
-  const char *uri = "s3://backup_dir?host=xxx.com&access_id=111&access_key=222&s3_region=333";
-  ObObjectStorageInfo info1;
-
-  const char *storage_info = "";
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, info1.set(uri, storage_info));
-  storage_info = "host=xxx.com&access_id=111&access_key=222";
-  ASSERT_EQ(OB_INVALID_BACKUP_DEST, info1.set(uri, storage_info));
-
-  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333";
-  ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
-  ASSERT_EQ(0, ::strcmp("s3_region=333", info1.extension_));
-
-  char buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
-  ASSERT_EQ(OB_SUCCESS, info1.get_storage_info_str(buf, sizeof(buf)));
-  ASSERT_STREQ(storage_info, buf);
-
-  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete";
-  info1.reset();
-  ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
-  ASSERT_EQ(OB_SUCCESS, info1.get_storage_info_str(buf, sizeof(buf)));
-  ASSERT_STREQ(storage_info, buf);
-}
-
 int main(int argc, char **argv)
 {
   system("rm -f test_storage_info.log*");

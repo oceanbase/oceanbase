@@ -31,7 +31,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_conv(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   static const int16_t MIN_BASE = 2;
   static const int16_t MAX_BASE = 36;

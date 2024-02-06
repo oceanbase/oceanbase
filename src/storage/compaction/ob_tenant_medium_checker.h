@@ -24,6 +24,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+  class ObScheduleStatistics;
+}
 namespace compaction
 {
 class ObTabletCheckInfo

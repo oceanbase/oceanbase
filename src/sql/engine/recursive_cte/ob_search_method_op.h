@@ -232,9 +232,7 @@ public:
     }
   }
 
-
   virtual int finish_add_row(bool sort) override;
-  virtual void destroy();
   virtual int reuse() override;
   virtual int empty() override { return search_stack_.empty() && input_rows_.empty(); }
 

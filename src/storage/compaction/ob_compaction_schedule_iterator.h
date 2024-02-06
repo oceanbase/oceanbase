@@ -33,9 +33,11 @@ namespace compaction
 class ObCompactionScheduleIterator
 {
 public:
+  static const int64_t SCHEDULE_TABLET_BATCH_CNT = 50 * 1000L; // 5w
   ObCompactionScheduleIterator(
     const bool is_major,
-    storage::ObLSGetMod mod = storage::ObLSGetMod::STORAGE_MOD);
+    storage::ObLSGetMod mod = storage::ObLSGetMod::STORAGE_MOD,
+    const int64_t batch_tablet_cnt = SCHEDULE_TABLET_BATCH_CNT);
   ~ObCompactionScheduleIterator() { reset(); }
   int build_iter(const int64_t schedule_batch_size);
   int get_next_ls(ObLSHandle &ls_handle);

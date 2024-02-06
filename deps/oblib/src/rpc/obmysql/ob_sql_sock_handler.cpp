@@ -130,18 +130,18 @@ int ObSqlSockHandler::on_readable(void* udata)
   if (NULL == sess) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("sess is null!", K(ret));
-  } else if (OB_FAIL(sock_processor_.decode_sql_packet(sess->pool_, *sess, NULL, pkt))) {
-    LOG_WARN("decode sql req fail", K(ret), K(sess->sql_session_id_));
+  } else if (OB_FAIL(sock_processor_.decode_sql_packet(*sess, pkt))) {
+    LOG_WARN("decode sql req fail", K(ret));
   } else if (NULL == pkt) {
     sess->revert_sock();
   } else if (OB_FAIL(sock_processor_.build_sql_req(*sess, pkt, sql_req))) {
-    LOG_WARN("build sql req fail", K(ret), K(sess->sql_session_id_));
+    LOG_WARN("build sql req fail", K(ret));
   }
 
   if (OB_SUCCESS != ret || NULL == sql_req) {
   } else if (FALSE_IT(sess->set_last_decode_succ_and_deliver_time(ObTimeUtility::current_time()))) {
   } else if (OB_FAIL(deliver_->deliver(*sql_req))) {
-    LOG_WARN("deliver sql request fail", K(ret), K(sess->sql_session_id_));
+    LOG_WARN("deliver sql request fail", K(ret));
   }
 
   return ret;

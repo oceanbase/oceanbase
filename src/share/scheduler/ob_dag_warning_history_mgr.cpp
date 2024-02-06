@@ -147,9 +147,6 @@ int ObDagWarningHistoryManager::add_dag_warning_info(ObDagWarningInfo &input_inf
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObDagWarningHistoryManager is not init", K(ret));
-  } else if (OB_ISNULL(input_info.info_param_)) {
-    ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid argument. info param is null", K(ret), K(input_info));
   } else if (OB_FAIL(alloc_and_add(input_info.get_hash(), &input_info))) {
     COMMON_LOG(WARN, "failed to add dag warning info", K(ret));
   }

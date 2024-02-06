@@ -229,8 +229,7 @@ public:
       const share::ObTenantSwitchoverStatus &working_sw_status,
       ObTenantLSInfo& tenant_ls_info,
       common::ObMySQLTransaction &trans,
-      const share::ObLSFlag &ls_flag,
-      const uint64_t source_tenant_id);
+      const share::ObLSFlag &ls_flag);
   static int balance_ls_group(
       const bool need_execute_balance,
       ObTenantLSInfo& tenant_ls_info,
@@ -252,11 +251,6 @@ public:
       ObTenantLSInfo& tenant_ls_info,
       common::ObISQLClient &sql_proxy);
   static int wait_all_tenants_user_ls_sync_scn(common::hash::ObHashMap<uint64_t, share::SCN> &tenants_sys_ls_target_scn);
-  static int check_transfer_task_replay(const uint64_t tenant_id,
-      const share::ObLSID &src_ls,
-      const share::ObLSID &dest_id,
-      const share::SCN &transfer_scn,
-      bool &replay_finish);
 private:
   static int check_if_need_wait_user_ls_sync_scn_(const uint64_t tenant_id, const share::SCN &sys_ls_target_scn);
   static int revision_to_equal_status_(
@@ -274,27 +268,6 @@ private:
       const uint64_t ls_group_id,
       ObUnitGroupInfo &src_info,
       ObUnitGroupInfo &dest_info);
-  static int construct_unit_group_id_and_primary_zone_for_clone_tenant_(
-      const share::ObLSID &ls_id,
-      const uint64_t source_tenant_id,
-      const uint64_t tenant_id,
-      uint64_t &unit_group_id,
-      ObZone &primary_zone);
-
-  static int construct_unit_group_id_and_primary_zone_(
-      const share::ObLSID &ls_id,
-      const uint64_t ls_group_id,
-      const share::ObLSFlag &ls_flag,
-      ObTenantLSInfo &tenant_ls_info,
-      uint64_t &unit_group_id,
-      ObZone &primary_zone);
-  static int get_ls_all_replica_readable_scn_(const uint64_t tenant_id,
-      const share::ObLSID &src_ls,
-      share::SCN &readable_scn);
-  static int check_ls_transfer_replay_(const uint64_t tenant_id,
-      const share::ObLSID &ls_id,
-      const share::SCN &transfer_scn,
-      bool &replay_finish);
 };
 
 

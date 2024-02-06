@@ -72,7 +72,7 @@ int LogIOWorkerWrapper::init(const LogIOWorkerConfig &config,
     LOG_INFO("success to init LogIOWorkerWrapper", K(config), K(tenant_id), KPC(this));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
-    destroy();
+    destory_and_free_log_io_workers_();
   }
   return ret;
 }
@@ -144,7 +144,6 @@ int LogIOWorkerWrapper::create_and_init_log_io_workers_(const LogIOWorkerConfig 
                                                         IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
-  log_writer_parallelism_ = 0;
   const int64_t log_writer_parallelism = config.io_worker_num_;
   log_io_workers_ = reinterpret_cast<LogIOWorker *>(share::mtl_malloc(
     (log_writer_parallelism) * sizeof(LogIOWorker), "LogIOWS"));
@@ -162,15 +161,10 @@ int LogIOWorkerWrapper::create_and_init_log_io_workers_(const LogIOWorkerConfig 
       PALF_LOG(WARN, "init LogIOWorker failed", K(i), K(config), K(tenant_id),
                K(cb_thread_pool_tg_id), KP(allocator), KP(palf_env_impl));
     } else {
-      log_writer_parallelism_++;
       PALF_LOG(INFO, "init LogIOWorker success", K(i), K(config), K(tenant_id),
                K(cb_thread_pool_tg_id), KP(allocator), KP(palf_env_impl), KP(iow),
                KP(log_io_workers_));
     }
-  }
-  if (OB_FAIL(ret)) {
-    destory_and_free_log_io_workers_();
-    log_writer_parallelism_ = -1;
   }
   return ret;
 }

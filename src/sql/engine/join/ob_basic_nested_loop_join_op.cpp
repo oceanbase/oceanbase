@@ -92,7 +92,6 @@ int ObBasicNestedLoopJoinOp::prepare_rescan_params(bool is_group)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected param", K(ret));
       } else {
-        LOG_DEBUG("dynamic param", K(i), K(param));
         ObObjParam copy_res;
         int64_t expr_idx = 0;
         OZ(batch_rescan_ctl->params_.deep_copy_param(*param, copy_res));

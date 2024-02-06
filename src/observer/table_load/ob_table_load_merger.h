@@ -18,7 +18,6 @@
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_merge_task_iterator.h"
-#include "storage/direct_load/ob_direct_load_partition_rescan_task.h"
 #include "storage/direct_load/ob_direct_load_partition_merge_task.h"
 
 namespace oceanbase
@@ -31,9 +30,7 @@ class ObTableLoadStoreCtx;
 class ObTableLoadMerger
 {
   class MergeTaskProcessor;
-  class RescanTaskProcessor;
   class MergeTaskCallback;
-  class RescanTaskCallback;
 public:
   ObTableLoadMerger(ObTableLoadStoreCtx *store_ctx);
   ~ObTableLoadMerger();
@@ -45,15 +42,10 @@ public:
   int collect_dml_stat(table::ObTableLoadDmlStat &dml_stats);
 private:
   int build_merge_ctx();
-  int build_rescan_ctx();
   int start_merge();
-  int start_rescan();
   int get_next_merge_task(storage::ObDirectLoadPartitionMergeTask *&merge_task);
-  int get_next_rescan_task(ObDirectLoadPartitionRescanTask *&rescan_task);
   void handle_merge_task_finish(storage::ObDirectLoadPartitionMergeTask *&merge_task);
   int handle_merge_thread_finish(int ret_code);
-  void handle_rescan_task_finish(ObDirectLoadPartitionRescanTask *&rescan_task);
-  int handle_rescan_thread_finish(const int ret_code);
 private:
   ObTableLoadStoreCtx * const store_ctx_;
   const ObTableLoadParam &param_;
@@ -61,9 +53,7 @@ private:
   storage::ObDirectLoadMergeCtx merge_ctx_;
   mutable lib::ObMutex mutex_;
   ObDirectLoadMergeTaskIterator merge_task_iter_;
-  ObDirectLoadRescanTaskIterator rescan_task_iter_;
   common::ObDList<storage::ObDirectLoadPartitionMergeTask> merging_list_;
-  common::ObDList<storage::ObDirectLoadPartitionRescanTask> rescan_list_;
   int64_t running_thread_count_ CACHE_ALIGNED;
   volatile bool has_error_;
   volatile bool is_stop_;

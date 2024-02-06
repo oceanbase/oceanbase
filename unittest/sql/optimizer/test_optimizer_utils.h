@@ -71,7 +71,6 @@ class TestOptimizerUtils : public TestSqlUtils, public ::testing::Test {
   virtual void init();
   virtual void SetUp();
   virtual void TearDown() {destroy();}
-  virtual void destroy() {}
   // function members
   int generate_logical_plan(ObResultSet &result,//ObIAllocator &allocator,
                             ObString &stmt,

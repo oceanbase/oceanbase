@@ -75,19 +75,18 @@ public:
         has_hidden_rowid_(false),
         stmt_sql_(),
         is_bulk_(false),
-        has_link_table_(false),
-        is_skip_locked_(false) {}
+        has_link_table_(false) {}
     virtual ~ExternalRetrieveInfo() {}
 
     int build(ObStmt &stmt,
               ObSQLSessionInfo &session_info,
               pl::ObPLBlockNS *ns,
               bool is_dynamic_sql,
-              common::ObIArray<ExternalParamInfo> &param_info);
+              common::ObIArray<std::pair<ObRawExpr*, ObConstRawExpr*>> &param_info);
     int build_into_exprs(ObStmt &stmt, pl::ObPLBlockNS *ns, bool is_dynamic_sql);
     int check_into_exprs(ObStmt &stmt, ObArray<ObDataType> &basic_types, ObBitSet<> &basic_into);
     const ObIArray<ObRawExpr*>& get_into_exprs() const { return into_exprs_; }
-    int recount_dynamic_param_info(ObIArray<ExternalParamInfo> &param_info);
+    int recount_dynamic_param_info(ObIArray<std::pair<ObRawExpr*,ObConstRawExpr*>> &param_info);
 
     common::ObIAllocator &allocator_;
     common::ObFixedArray<ObRawExpr*, common::ObIAllocator> external_params_;
@@ -99,7 +98,6 @@ public:
     ObString stmt_sql_;
     bool is_bulk_;
     bool has_link_table_;
-    bool is_skip_locked_;
   };
 
   enum PsMode
@@ -124,10 +122,9 @@ public:
   /// @return OB_ITER_END when no more data available
   int get_next_row(const common::ObNewRow *&row);
   /// close the result set after get all the rows
-  int close() { return do_close(NULL); }
+  int close() { int unused = 0; return close(unused); }
   // close result set and rewrite the client ret
-  int close(int &client_ret) { return do_close(&client_ret); }
-
+  int close(int &client_ret);
   /// get number of rows affected by INSERT/UPDATE/DELETE
   int64_t get_affected_rows() const;
   int64_t get_return_rows() const { return return_rows_; }
@@ -175,7 +172,6 @@ public:
   inline bool has_hidden_rowid();
   inline bool is_bulk();
   inline bool is_link_table();
-  inline bool is_skip_locked();
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
@@ -350,7 +346,7 @@ private:
   int init_cmd_exec_context(ObExecContext &exec_ctx);
   int on_cmd_execute();
   int auto_end_plan_trans(ObPhysicalPlan& plan, int ret, bool &async);
-  int do_close(int *client_ret = NULL);
+
   void store_affected_rows(ObPhysicalPlanCtx &plan_ctx);
   void store_found_rows(ObPhysicalPlanCtx &plan_ctx);
   int store_last_insert_id(ObExecContext &ctx);
@@ -645,11 +641,6 @@ inline bool ObResultSet::is_bulk()
 inline bool ObResultSet::is_link_table()
 {
   return external_retrieve_info_.has_link_table_;
-}
-
-inline bool ObResultSet::is_skip_locked()
-{
-  return external_retrieve_info_.is_skip_locked_;
 }
 
 inline bool ObResultSet::is_with_rows() const

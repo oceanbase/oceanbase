@@ -33,22 +33,18 @@ public:
   void start();
   void stop();
   void destroy();
-  void set_unlimited() { is_unlimited_ = true; }
-  void set_limited() { is_unlimited_ = false; }
   bool is_inited() const;
   bool is_valid() const;
   bool is_stop() const;
-  bool is_unlimited() const;
   int calc_phy_clock(const int64_t current_ts, const double iops_scale, const double weight_scale, ObPhyQueue *phy_queue);
   int dial_back_reservation_clock(const double iops_scale);
   int time_out_dial_back(const double iops_scale, const double weight_scale);
   int dial_back_proportion_clock(const int64_t delta_us);
   int64_t get_proportion_ts() const;
-  TO_STRING_KV(K(is_inited_), K(is_stopped_), K_(reservation_clock), K_(is_unlimited), K_(limitation_clock), K_(proportion_clock));
+  TO_STRING_KV(K(is_inited_), K(is_stopped_), K_(reservation_clock), K_(limitation_clock), K_(proportion_clock));
 private:
   bool is_inited_;
   bool is_stopped_;
-  bool is_unlimited_; // use this flag to send io_req in useless_queue out ASAP
   ObAtomIOClock reservation_clock_;
   ObAtomIOClock limitation_clock_;
   ObAtomIOClock proportion_clock_;
@@ -63,7 +59,7 @@ public:
   int init(const ObTenantIOConfig &io_config, const ObIOUsage *io_usage);
   void destroy();
   int calc_phyqueue_clock(ObPhyQueue *phy_queue, ObIORequest &req);
-  static int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
+  int sync_clocks(ObIArray<ObTenantIOClock *> &io_clocks);
   int sync_tenant_clock(ObTenantIOClock *ioclock);
   int adjust_clocks(ObPhyQueue *phy_queue, ObIORequest &req);
   int adjust_reservation_clock(ObPhyQueue *phy_queue, ObIORequest &req);
@@ -72,7 +68,6 @@ public:
   int update_io_clock(const int64_t index, const ObTenantIOConfig &io_config, const int64_t all_group_num);
   int update_clock_unit_config(const ObTenantIOConfig &io_config);
   int64_t get_min_proportion_ts();
-  bool is_unlimited_config(const ObMClock &clock, const ObTenantIOConfig::GroupConfig &cur_config);
   void stop_clock(const uint64_t index);
   TO_STRING_KV(K(is_inited_), "group_clocks", group_clocks_, "other_clock", other_group_clock_,
       K_(unit_clock), K(io_config_), K(io_usage_));

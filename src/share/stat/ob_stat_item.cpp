@@ -16,7 +16,6 @@
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
-#include "share/stat/ob_topk_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
@@ -118,7 +117,7 @@ int ObStatMaxValue::decode(ObObj &obj, ObIAllocator &allocator)
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(obj, allocator))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_max_value(obj);
@@ -148,7 +147,7 @@ int ObStatMinValue::decode(ObObj &obj, ObIAllocator &allocator)
   if (OB_ISNULL(col_stat_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col stat is not given", K(ret), K(col_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(obj, allocator))) {
+  } else if (OB_FAIL(ObDbmsStatsUtils::shadow_truncate_string_for_opt_stats(obj, allocator))) {
     LOG_WARN("fail to truncate string", K(ret));
   } else {
     col_stat_->set_min_value(obj);
@@ -228,6 +227,7 @@ bool ObStatTopKHist::is_needed() const
 {
   return NULL != col_param_ &&
          col_param_->need_basic_stat() &&
+         !col_param_->is_no_need_histogram() &&
          col_param_->bucket_num_ > 1;
 }
 
@@ -250,13 +250,12 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     double err_rate = 1.0 / (1000 * (bkt_num / MIN_BUCKET_SIZE));
     if (OB_SUCC(ret)) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                  lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld, %ld)" :
-                                  " TOP_K_FRE_HIST(%lf, `%.*s`, %ld, %ld)",
+                                  lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld)" :
+                                  " TOP_K_FRE_HIST(%lf, `%.*s`, %ld)",
                                   err_rate,
                                   col_param_->column_name_.length(),
                                   col_param_->column_name_.ptr(),
-                                  col_param_->bucket_num_,
-                                  max_disuse_cnt_))) {
+                                  col_param_->bucket_num_))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
       }
     }
@@ -702,6 +701,10 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret), K(col_param_));
+  } else if (is_null_item_) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
+      LOG_WARN("failed to print buf", K(ret));
+    } else {/*do nothing*/}
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " HYBRID_HIST(\"%.*s\", %ld)" :
                                      " HYBRID_HIST(`%.*s`, %ld)",
@@ -741,11 +744,6 @@ int ObStatHybridHist::decode(ObObj &obj, ObIAllocator &allocator)
       col_stat_->get_histogram().set_sample_size(hybrid_hist.get_total_count());
       col_stat_->get_histogram().set_pop_frequency(hybrid_hist.get_pop_freq());
       col_stat_->get_histogram().set_pop_count(hybrid_hist.get_pop_count());
-      col_stat_->get_histogram().calc_density(ObHistType::HYBIRD,
-                                              hybrid_hist.get_total_count(),
-                                              hybrid_hist.get_pop_freq(),
-                                              col_stat_->get_num_distinct(),
-                                              hybrid_hist.get_pop_count());
       LOG_TRACE("succeed to build hybrid hist", K(hybrid_hist), K(col_stat_->get_histogram()));
     }
   }

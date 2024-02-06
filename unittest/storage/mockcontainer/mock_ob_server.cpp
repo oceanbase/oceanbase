@@ -85,18 +85,13 @@ int MockObServer::init(const char *schema_file,
       }
     }
 
+    int32_t local_ip = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
+    int32_t local_port = static_cast<int32_t>(config_.rpc_port);
+
     config_.print();
 
-    uint32_t ipv4_net = 0;
-    if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
-      LOG_ERROR("get ipv4 address by devname failed", "devname",
-          config_.devname.get_value(), KR(ret));
-    } else {
-      int32_t local_ip = ntohl(ipv4_net);
-      int32_t local_port = static_cast<int32_t>(config_.rpc_port);
-      // initialize self address
-      self_addr_.set_ipv4_addr(local_ip, local_port);
-    }
+    // initialize self address
+    self_addr_.set_ipv4_addr(local_ip, local_port);
   }
   // init env
   if (OB_SUCC(ret)) {

@@ -155,18 +155,6 @@ void ObDMMultiDlist::pop_active_node(
   }
 }
 
-int ObDetectManager::mtl_new(ObDetectManager *&dm)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  dm = OB_NEW(ObDetectManager, ObMemAttr(tenant_id, "DetectManager"), tenant_id);
-  if (OB_ISNULL(dm)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LIB_LOG(WARN, "[DM] failed to alloc detect manager", K(ret));
-  }
-  return ret;
-}
-
 int ObDetectManager::mtl_init(ObDetectManager *&dm)
 {
   int ret = OB_SUCCESS;
@@ -177,7 +165,11 @@ int ObDetectManager::mtl_init(ObDetectManager *&dm)
   if (is_meta_tenant(tenant_id)) {
     mem_factor = mem_factor * 0.01;
   }
-  if (OB_FAIL(dm->init(GCTX.self_addr(), mem_factor))) {
+  dm = OB_NEW(ObDetectManager, ObMemAttr(tenant_id, "DetectManager"), tenant_id);
+  if (OB_ISNULL(dm)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LIB_LOG(WARN, "[DM] failed to alloc detect manager", K(ret));
+  } else if (OB_FAIL(dm->init(GCTX.self_addr(), mem_factor))) {
     LIB_LOG(WARN, "[DM] failed to init detect manager", K(ret));
   }
   return ret;

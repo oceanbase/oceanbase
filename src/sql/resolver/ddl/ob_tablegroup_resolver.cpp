@@ -17,7 +17,6 @@
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 #include "sql/parser/parse_node.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 namespace oceanbase
 {
@@ -59,9 +58,9 @@ int ObTableGroupResolver::resolve_partition_hash_or_key(ObTablegroupStmt *stmt,
   ObPartitionFuncType partition_func_type = PARTITION_FUNC_TYPE_HASH;
   int64_t partition_num = 0;
   ObPartitionOption *partition_option = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguemnt", K(ret), K(stmt), K(node), K(session_info_));
+    LOG_WARN("invalid arguemnt", K(ret), K(stmt), K(node));
   } else {
     if (is_subpartition) {
       partition_option = &(tablegroup_schema.get_sub_part_option());
@@ -141,8 +140,7 @@ int ObTableGroupResolver::resolve_partition_hash_or_key(ObTablegroupStmt *stmt,
       }
       if (OB_SUCC(ret)) {
         if (tablegroup_schema.get_all_part_num() > (lib::is_oracle_mode()
-             ? OB_MAX_PARTITION_NUM_ORACLE
-             : ObResolverUtils::get_mysql_max_partition_num(session_info_->get_effective_tenant_id()))) {
+             ? OB_MAX_PARTITION_NUM_ORACLE : OB_MAX_PARTITION_NUM_MYSQL)) {
           ret = OB_TOO_MANY_PARTITIONS_ERROR;
         }
       }
@@ -162,8 +160,7 @@ int ObTableGroupResolver::resolve_partition_range(ObTablegroupStmt *tablegroup_s
 {
   int ret = OB_SUCCESS;
   PartitionInfo part_info;
-  if (OB_ISNULL(tablegroup_stmt) || OB_ISNULL(node) ||
-      OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(tablegroup_stmt) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tablegroup_stmt), K(node));
   } else if (OB_FAIL(resolve_partition_range(tablegroup_stmt, node, is_subpartition, tablegroup_schema, part_info))) {
@@ -201,8 +198,7 @@ int ObTableGroupResolver::resolve_partition_range(ObTablegroupStmt *tablegroup_s
     }
     if (OB_SUCC(ret)) {
         if (tablegroup_schema.get_all_part_num() > (lib::is_oracle_mode()
-             ? OB_MAX_PARTITION_NUM_ORACLE
-               : sql::ObResolverUtils::get_mysql_max_partition_num(session_info_->get_effective_tenant_id()))) {
+             ? OB_MAX_PARTITION_NUM_ORACLE : OB_MAX_PARTITION_NUM_MYSQL)) {
         ret = OB_TOO_MANY_PARTITIONS_ERROR;
       }
     }
@@ -367,8 +363,7 @@ int ObTableGroupResolver::resolve_partition_list(ObTablegroupStmt *stmt,
     }
     if (OB_SUCC(ret)) {
         if (tablegroup_schema.get_all_part_num() > (lib::is_oracle_mode()
-             ? OB_MAX_PARTITION_NUM_ORACLE
-               : sql::ObResolverUtils::get_mysql_max_partition_num(session_info_->get_effective_tenant_id()))) {
+             ? OB_MAX_PARTITION_NUM_ORACLE : OB_MAX_PARTITION_NUM_MYSQL)) {
         ret = OB_TOO_MANY_PARTITIONS_ERROR;
       }
     }

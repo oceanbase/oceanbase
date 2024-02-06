@@ -402,7 +402,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       index_attributes_set_ = src_schema.index_attributes_set_;
       session_id_ = src_schema.session_id_;
       compressor_type_ = src_schema.compressor_type_;
-      lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
@@ -426,6 +425,9 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       //view schema
       view_schema_ = src_schema.view_schema_;
 
+      mv_cnt_ = src_schema.mv_cnt_;
+      MEMCPY(mv_tid_array_, src_schema.mv_tid_array_, sizeof(uint64_t) * src_schema.mv_cnt_);
+
       aux_vp_tid_array_ = src_schema.aux_vp_tid_array_;
 
       base_table_ids_ = src_schema.base_table_ids_;
@@ -437,7 +439,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
 
       aux_lob_meta_tid_ = src_schema.aux_lob_meta_tid_;
       aux_lob_piece_tid_ = src_schema.aux_lob_piece_tid_;
-      mlog_tid_ = src_schema.mlog_tid_;
     }
 
     if (OB_SUCC(ret)) {
@@ -580,7 +581,7 @@ int AlterTableSchema::add_alter_column(const AlterColumnSchema &alter_column_sch
   return ret;
 }
 
-int AlterTableSchema::assign_subpartition_key_info(const common::ObPartitionKeyInfo& src_info)
+int AlterTableSchema::assign_subpartiton_key_info(const common::ObPartitionKeyInfo& src_info)
 {
   int ret = OB_SUCCESS;
 

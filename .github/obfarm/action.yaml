@@ -11,7 +11,7 @@ inputs:
   timeout:
     description: 'timeout'
     required: false
-    default: '10800'
+    default: '7200'
 outputs:
   success:
     description: 'the status for the task'

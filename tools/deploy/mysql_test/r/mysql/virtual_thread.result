@@ -23,7 +23,6 @@ STATUS	varchar(32)	NO		NULL
 LATCH_WAIT	varchar(16)	NO		NULL	
 LATCH_HOLD	varchar(256)	NO		NULL	
 TRACE_ID	varchar(40)	NO		NULL	
-CGROUP_PATH	varchar(256)	NO		NULL	
 select count(1) from oceanbase.__all_virtual_thread where tname = "";
 count(1)
 0

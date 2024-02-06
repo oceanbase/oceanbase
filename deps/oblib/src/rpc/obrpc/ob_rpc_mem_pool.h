@@ -28,7 +28,6 @@ public:
   ~ObRpcMemPool() { destroy(); }
   static ObRpcMemPool* create(int64_t tenant_id, const char* label, int64_t req_sz);
   void* alloc(int64_t sz);
-  void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
   void reuse();
   void destroy();
 private:

@@ -13,29 +13,31 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/meta_mem/ob_tablet_handle.h"
-#include "storage/meta_mem/ob_tablet_leak_checker.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 namespace oceanbase
 {
 namespace storage
 {
-ObTabletHandle::ObTabletHandle(const char *file /* __builtin_FILE() */,
-                               const int line /* __builtin_LINE() */,
-                               const char *func /* __builtin_FUNCTION() */)
+ObTabletHandle::ObTabletHandle()
   : Base(),
-    index_(ObTabletHandleIndexMap::LEAK_CHECKER_INITIAL_INDEX),
     wash_priority_(WashTabletPriority::WTP_MAX),
     allow_copy_and_assign_(true)
 {
-  // tablet leak checker related
-  register_into_leak_checker(file, line, func);
   INIT_OBJ_LEAK_DEBUG_NODE(node_, this, share::LEAK_CHECK_OBJ_TABLET_HANDLE, MTL_ID());
+}
+
+ObTabletHandle::ObTabletHandle(
+    const Base &other,
+    const WashTabletPriority priority)
+  : Base(other),
+    wash_priority_(priority),
+    allow_copy_and_assign_(true)
+{
 }
 
 ObTabletHandle::ObTabletHandle(const ObTabletHandle &other)
   : Base(),
-    index_(ObTabletHandleIndexMap::LEAK_CHECKER_INITIAL_INDEX),
     wash_priority_(WashTabletPriority::WTP_MAX),
     allow_copy_and_assign_(true)
 {
@@ -50,39 +52,14 @@ ObTabletHandle::~ObTabletHandle()
 
 ObTabletHandle &ObTabletHandle::operator=(const ObTabletHandle &other)
 {
-  int ret = OB_SUCCESS;
-
   if (this != &other) {
     abort_unless(other.allow_copy_and_assign_);
     reset();
     Base::operator=(other);
-    if (OB_FAIL(inc_ref_in_leak_checker(this->t3m_))) {
-      LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
-    }
     wash_priority_ = other.wash_priority_;
     allow_copy_and_assign_ = other.allow_copy_and_assign_;
   }
   return *this;
-}
-
-void ObTabletHandle::set_obj(ObMetaObj<ObTablet> &obj)
-{
-  Base::set_obj(obj);
-  // tablet leak checker related
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inc_ref_in_leak_checker(obj.t3m_))) {
-    LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
-  }
-}
-
-void ObTabletHandle::set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m)
-{
-  Base::set_obj(obj, allocator, t3m);
-  // tablet leak checker related
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(inc_ref_in_leak_checker(t3m))) {
-    LOG_WARN("failed to inc ref in leak checker", K(ret), K(index_), KP(this->t3m_));
-  }
 }
 
 void ObTabletHandle::reset()
@@ -113,16 +90,11 @@ void ObTabletHandle::reset()
           obj_->dec_macro_ref_cnt();
           obj_->~ObTablet();
           allocator_->free(obj_);
-        } else if (OB_FAIL(t3m_->push_tablet_into_gc_queue(obj_))) {
+        } else if (OB_FAIL(t3m_->gc_tablet(obj_))) {
           STORAGE_LOG(ERROR, "fail to gc tablet", K(ret), KPC_(obj), K_(obj_pool), K_(allocator));
         }
       }
       obj_ = nullptr;
-      // tablet leak checker related
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(dec_ref_in_leak_checker(t3m_))) {
-        LOG_WARN("failed to dec ref in leak checker", K(ret), K(index_), KP(this->t3m_));
-      }
     }
   }
   wash_priority_ = WashTabletPriority::WTP_MAX;
@@ -130,39 +102,6 @@ void ObTabletHandle::reset()
   obj_pool_ = nullptr;
   allocator_ = nullptr;
   t3m_ = nullptr;
-}
-
-int ObTabletHandle::register_into_leak_checker(const char *file, const int line, const char *func)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTenantMetaMemMgr::register_into_tb_map(file, line, func, index_))) {
-    LOG_WARN("fail to ObTabletHandle register into tb map", K(ret), K(file), K(func), K(index_));
-  }
-  return ret;
-}
-
-int ObTabletHandle::inc_ref_in_leak_checker(ObTenantMetaMemMgr *t3m)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(t3m)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get t3m pointer", K(ret), KP(t3m));
-  } else if (OB_FAIL(t3m->inc_ref_in_leak_checker(index_))) {
-    LOG_WARN("fail to inc ref in tb ref map", K(ret), K(index_), KP(t3m));
-  }
-  return ret;
-}
-
-int ObTabletHandle::dec_ref_in_leak_checker(ObTenantMetaMemMgr *t3m)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(t3m)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get t3m pointer", K(ret), KP(t3m));
-  } else if (OB_FAIL(t3m->dec_ref_in_leak_checker(index_))) {
-    LOG_WARN("fail to dec ref in tb ref map", K(ret), K(index_), KP(t3m));
-  }
-  return ret;
 }
 
 int64_t ObTabletHandle::calc_wash_score(const WashTabletPriority priority) const
@@ -195,43 +134,27 @@ int64_t ObTabletHandle::to_string(char *buf, const int64_t buf_len) const
   return pos;
 }
 
-int ObTabletTableIterator::assign(const ObTabletTableIterator& other)
+void ObTabletTableIterator::operator=(const ObTabletTableIterator& other)
 {
-  int ret = OB_SUCCESS;
   if (this != &other) {
     if (other.tablet_handle_.is_valid()) {
       tablet_handle_ = other.tablet_handle_;
     } else if (tablet_handle_.is_valid()) {
       tablet_handle_.reset();
     }
-    if (OB_FAIL(ret)) {
-    } else if (other.table_store_iter_.is_valid()) {
-      if (OB_FAIL(table_store_iter_.assign(other.table_store_iter_))) {
-        LOG_WARN("assign table store iter fail", K(ret));
-      }
+    if (other.table_store_iter_.is_valid()) {
+      table_store_iter_ = other.table_store_iter_;
     } else if (table_store_iter_.is_valid()) {
       table_store_iter_.reset();
     }
-
-    if (OB_FAIL(ret)) {
-    } else {
-      if (OB_UNLIKELY(nullptr != other.transfer_src_handle_)) {
-        if (nullptr == transfer_src_handle_) {
-          void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
-          if (OB_ISNULL(tablet_hdl_buf)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocator memory for handle", K(ret));
-          } else {
-            transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
-          }
-        }
-        if (OB_SUCC(ret)) {
-          *transfer_src_handle_ = *(other.transfer_src_handle_);
-        }
+    if (OB_UNLIKELY(nullptr != other.transfer_src_handle_)) {
+      if (nullptr == transfer_src_handle_) {
+        void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferMetaH"));
+        transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
       }
+      *transfer_src_handle_ = *(other.transfer_src_handle_);
     }
   }
-  return ret;
 }
 
 ObTableStoreIterator *ObTabletTableIterator::table_iter()
@@ -258,7 +181,7 @@ int ObTabletTableIterator::set_transfer_src_tablet_handle(const ObTabletHandle &
     void *tablet_hdl_buf = ob_malloc(sizeof(ObTabletHandle), ObMemAttr(MTL_ID(), "TransferTblH"));
     if (OB_ISNULL(tablet_hdl_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocator memory for handles", K(ret));
+      LOG_WARN("fail to allocator memory for handles");
     } else {
       transfer_src_handle_ = new (tablet_hdl_buf) ObTabletHandle();
     }

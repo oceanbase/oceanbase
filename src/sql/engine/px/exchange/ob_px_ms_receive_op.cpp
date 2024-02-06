@@ -65,10 +65,6 @@ ObPxMSReceiveOp::ObPxMSReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, 
 void ObPxMSReceiveOp::destroy()
 {
   sql_mem_processor_.unregister_profile_if_necessary();
-  if (nullptr != mem_context_) {
-    DESTROY_CONTEXT(mem_context_);
-    mem_context_ = nullptr;
-  }
   merge_inputs_.reset();
   row_heap_.reset();
   //no need to reset interrupt_proc_
@@ -187,6 +183,10 @@ int ObPxMSReceiveOp::inner_close()
   release_channel_ret = erase_dtl_interm_result();
   if (release_channel_ret != common::OB_SUCCESS) {
     LOG_TRACE("release interm result failed", KR(release_channel_ret));
+  }
+  if (nullptr != mem_context_) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = nullptr;
   }
   sql_mem_processor_.unregister_profile();
   return ret;

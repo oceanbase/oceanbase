@@ -127,18 +127,6 @@ public:
                                       bool &ordering_all_used,
                                       common::ObIArray<ObOrderDirection> &directions,
                                       common::ObIArray<int64_t> *match_map = NULL);
-  // when there is no input ordering or interesting ordering, generate a stable ordering use this function
-  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
-                                      ObIArray<ObOrderDirection> &directions);
-  static int generate_stable_ordering(common::ObIArray<ObRawExpr *> &exprs,
-                                      ObIArray<ObOrderDirection> &directions,
-                                      ObBitSet<64> &used_expr_idxs,
-                                      ObIArray<int64_t> &expr_map,
-                                      ObIArray<ObRawExpr*> &adjusted_exprs,
-                                      ObIArray<ObOrderDirection> &adjusted_directions);
-  static bool stable_expr_cmp_func(std::pair<ObRawExpr*,int64_t> l_pair,
-                                   std::pair<ObRawExpr*,int64_t> r_pair);
-  static int cmp_expr(ObRawExpr *l_expr, ObRawExpr *r_expr, int64_t &res);
 
   static int adjust_exprs_by_mapping(const common::ObIArray<ObRawExpr *> &exprs,
                                      const common::ObIArray<int64_t> &match_map,
@@ -154,10 +142,6 @@ public:
 
   static bool is_expr_equivalent(const ObRawExpr *from,
                                  const ObRawExpr *to,
-                                 const EqualSets &equal_sets);
-
-  static bool is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
-                                 const common::ObIArray<ObRawExpr*> &to,
                                  const EqualSets &equal_sets);
 
   static bool is_expr_equivalent(const ObRawExpr *from,
@@ -1534,10 +1518,6 @@ public:
                                          ObSqlTempTableInfo &temp_table_info,
                                          ObRawExpr *&temp_table_filter,
                                          ObSelectStmt *temp_table_query = NULL);
-
-  static int check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false);
-
-  static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
 private:
   //disallow construct
   ObOptimizerUtil();

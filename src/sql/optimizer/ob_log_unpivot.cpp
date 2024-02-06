@@ -230,7 +230,7 @@ int ObLogUnpivot::est_cost()
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     op_cost_ = ObOptEstCost::cost_filter_rows(card_ /parallel, 
                                               get_filter_exprs(),
-                                              opt_ctx);
+                                              opt_ctx.get_cost_model_type());
     cost_ = op_cost_ + child->get_cost();
   }
   return ret;

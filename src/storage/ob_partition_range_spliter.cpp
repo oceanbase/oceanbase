@@ -20,7 +20,7 @@
 #include "access/ob_multiple_scan_merge.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 
 namespace oceanbase
 {
@@ -1834,7 +1834,6 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_store_ctx
   if (OB_FAIL(scn.convert_for_tx(snapshot))) {
     STORAGE_LOG(WARN, "convert for tx fail", K(ret), K(ls_id), K(snapshot));
   } else if (OB_FAIL(store_ctx_.init_for_read(ls_id,
-                                              merge_ctx_.get_tablet_id(),
                                               INT64_MAX,
                                               -1,
                                               scn))) {
@@ -1876,9 +1875,7 @@ int ObPartitionIncrementalRangeSpliter::ObIncrementalIterator::prepare_get_table
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(get_tbl_param_.tablet_iter_.table_iter()->assign(tbls_iter_))) {
-      STORAGE_LOG(WARN, "Failed to assign tablet iterator", KR(ret));
-    }
+    *get_tbl_param_.tablet_iter_.table_iter() = tbls_iter_;
   }
   return ret;
 }

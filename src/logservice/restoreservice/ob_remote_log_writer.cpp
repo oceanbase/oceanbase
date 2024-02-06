@@ -223,10 +223,6 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
   int64_t size = 0;
   LSN lsn;
   const ObLSID id = task.id_;
-  const int64_t proposal_id = task.proposal_id_;
-  int64_t entry_size = 0;
-  LSN max_submit_lsn;
-  SCN max_submit_scn;
   while (OB_SUCC(ret) && ! has_set_stop()) {
     if (OB_FAIL(task.iter_.next(entry, lsn, buf, size))) {
       if (OB_ITER_END != ret) {
@@ -239,31 +235,18 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
       LOG_WARN("entry is invalid", K(entry), K(lsn), K(task));
     } else if (task.cur_lsn_ > lsn) {
       LOG_INFO("repeated log, just skip", K(lsn), K(entry), K(task));
-    } else if (FALSE_IT(entry_size = entry.get_serialize_size())) {
-    } else if (OB_FAIL(submit_log_(id, proposal_id, lsn,
-            entry.get_scn(), buf, entry_size))) {
+    } else if (OB_FAIL(submit_log_(id, task.proposal_id_, lsn,
+            entry.get_scn(), buf, entry.get_serialize_size()))) {
       LOG_WARN("submit log failed", K(buf), K(entry), K(lsn), K(task));
     } else {
-      task.cur_lsn_ = lsn + entry_size;
-      max_submit_lsn = lsn + entry_size;
-      max_submit_scn = entry.get_scn();
+      task.cur_lsn_ = lsn + entry.get_serialize_size();
     }
   } // while
-
   if (OB_ITER_END == ret) {
     if (lsn.is_valid()) {
       LOG_INFO("submit_entries_ succ", K(id), K(lsn), K(entry.get_scn()), K(task));
     }
     ret = OB_SUCCESS;
-  }
-
-  if (max_submit_lsn.is_valid() && max_submit_scn.is_valid()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(update_max_fetch_info_(id, proposal_id, max_submit_lsn, max_submit_scn))) {
-      LOG_WARN("update max fetch info failed", K(id), K(proposal_id), K(max_submit_lsn), K(max_submit_scn));
-    } else {
-      LOG_INFO("update max fetch context succ", K(id), K(proposal_id), K(max_submit_lsn), K(max_submit_scn));
-    }
   }
   return ret;
 }
@@ -294,20 +277,6 @@ int ObRemoteLogWriter::submit_log_(const ObLSID &id,
 
   if (OB_ERR_UNEXPECTED == ret) {
     report_error_(id, ret, lsn, ObLogRestoreErrorContext::ErrorType::SUBMIT_LOG);
-  }
-  return ret;
-}
-
-int ObRemoteLogWriter::update_max_fetch_info_(const ObLSID &id,
-    const int64_t proposal_id,
-    const palf::LSN &lsn,
-    const share::SCN &scn)
-{
-  int ret = OB_SUCCESS;
-  GET_RESTORE_HANDLER_CTX(id) {
-    if (OB_FAIL(restore_handler->update_max_fetch_info(proposal_id, lsn, scn))) {
-      LOG_WARN("update max fetch info failed", K(id), K(proposal_id), K(lsn), K(scn));
-    }
   }
   return ret;
 }

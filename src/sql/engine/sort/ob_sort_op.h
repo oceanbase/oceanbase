@@ -18,8 +18,6 @@
 #include "common/object/ob_object.h"
 #include "share/datum/ob_datum_funcs.h"
 #include "sql/engine/sort/ob_sort_basic_info.h"
-#include "sql/engine/basic/chunk_store/ob_compact_store.h"
-#include "sql/engine/basic/ob_chunk_datum_store.h"
 
 namespace oceanbase
 {
@@ -35,8 +33,7 @@ public:
   INHERIT_TO_STRING_KV("op_spec", ObOpSpec,
     K_(topn_expr), K_(topk_limit_expr), K_(topk_offset_expr), K_(prefix_pos),
     K_(minimum_row_count), K_(topk_precision), K_(prefix_pos), K_(is_local_merge_sort),
-    K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(part_cnt), K_(sort_compact_level),
-    K_(compress_type));
+    K_(prescan_enabled), K_(enable_encode_sortkey_opt), K_(part_cnt));
 public:
   ObExpr *topn_expr_;
   ObExpr *topk_limit_expr_;
@@ -59,8 +56,6 @@ public:
   bool enable_encode_sortkey_opt_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
-  share::SortCompactLevel sort_compact_level_;
-  ObCompressorType compress_type_;
 };
 
 class ObSortOp : public ObOperator

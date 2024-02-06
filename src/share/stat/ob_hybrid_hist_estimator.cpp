@@ -24,228 +24,382 @@ namespace common
 {
 
 ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator)
-  : ObBasicStatsEstimator(ctx, allocator)
+  : ObStatsEstimator(ctx, allocator)
 {}
 
-int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
-                                    ObOptStat &opt_stat)
+template<class T>
+int ObHybridHistEstimator::add_stat_item(const T &item, ObIArray<ObStatItem *> &stat_items)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<const ObColumnStatParam *, 4> hybrid_col_params;
-  ObSEArray<ObOptColumnStat *, 4> hybrid_col_stats;
-  bool need_sample = false;
-  bool is_block_sample = false;
-  double est_percent = 0.0;
+  ObStatItem *cpy = NULL;
+  if (!item.is_needed()) {
+    // do nothing
+  } else if (OB_ISNULL(cpy = copy_stat_item(allocator_, item))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to copy stat item", K(ret));
+  } else if (OB_FAIL(stat_items.push_back(cpy))) {
+    LOG_WARN("failed to push back stat item", K(ret));
+  }
+  return ret;
+}
+
+// select hybrid_hist(c1,20)，hybrid_hist(c2,20)，.... from t1 partition(p0) simple ...
+// union all
+// select hybrid_hist(c1,20)，hybrid_hist(c2,20)，.... from t1 partition(p1) simple ...
+// union all
+// select hybrid_hist(c1,20)，hybrid_hist(c2,20)，.... from t1 partition(p2) simple ...
+// no need to hit plan cache or rewrite
+int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
+                                    ObExtraParam &extra,
+                                    ObIArray<ObOptStat> &dst_opt_stats)
+{
+  int ret = OB_SUCCESS;
+  ObOptTableStat tab_stat;
+  ObOptStat src_opt_stat;
+  src_opt_stat.table_stat_ = &tab_stat;
+  ObIArray<ObOptColumnStat*> &src_col_stats = src_opt_stat.column_stats_;
+  ObArenaAllocator allocator("ObHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
+  ObString raw_sql;
+  ObString refine_raw_sql;
+  int64_t refine_cnt = 0;
+  ObSEArray<ObStatItem *, 4> stat_items;
+  ObSEArray<ObStatItem *, 4> refine_stat_items;
+  ObSEArray<ObOptColumnStat *, 4> refine_col_stats;
   int64_t max_num_buckets = 0;
-  ObSEArray<int64_t, 4> no_sample_idx;
-  ObArenaAllocator allocator("ObHybridHistEst", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
-  ObSqlString raw_sql;
-  int64_t duration_time = -1;
-  ObSEArray<ObOptStat, 1> tmp_opt_stats;
-  if (OB_FAIL(extract_hybrid_hist_col_info(param, opt_stat,
-                                           hybrid_col_params,
-                                           hybrid_col_stats,
-                                           max_num_buckets))) {
-    LOG_WARN("failed to extract hybrid hist col info", K(ret));
-  } else if (hybrid_col_params.empty() || hybrid_col_stats.empty()) {
-    //do nothing
-  } else if (OB_UNLIKELY(hybrid_col_params.count() != hybrid_col_stats.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(hybrid_col_params.count()), K(hybrid_col_stats.count()));
-  } else if (OB_FAIL(compute_estimate_percent(opt_stat.table_stat_->get_row_count(),
-                                              max_num_buckets,
-                                              param.sample_info_,
-                                              need_sample,
-                                              est_percent,
-                                              is_block_sample))) {
-    LOG_WARN("failed to compute estimate percent", K(ret));
-  } else if (need_sample && OB_FAIL(fill_sample_info(allocator,
-                                                     est_percent,
-                                                     is_block_sample))) {
-    LOG_WARN("failed to fill sample info", K(ret));
-  } else if (OB_FAIL(add_hybrid_hist_stat_items(hybrid_col_params,
-                                                hybrid_col_stats,
-                                                opt_stat.table_stat_->get_row_count(),
-                                                need_sample,
+  if (OB_FAIL(ObDbmsStatsUtils::init_col_stats(allocator,
+                                               param.column_params_.count(),
+                                               src_col_stats))) {
+    LOG_WARN("failed init col stats", K(ret));
+  } else if (FALSE_IT(get_max_num_buckets(param.column_params_, max_num_buckets))) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dst_opt_stats.count(); ++i) {
+      ObOptStat &dst_opt_stat = dst_opt_stats.at(i);
+      ObSEArray<int64_t, 4> refine_col_ids;
+      ObString sample_hint;
+      if (OB_ISNULL(dst_opt_stat.table_stat_) ||
+        OB_UNLIKELY(dst_opt_stat.column_stats_.count() != src_col_stats.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column stat is null", K(ret), K(dst_opt_stat.table_stat_),
+                                          K(src_col_stats.count()), K(src_col_stats.count()),
+                                          K(dst_opt_stat.column_stats_.count()));
+      } else {
+        ObSEArray<ObStatItem *, 4> tmp_stat_items;
+        //1.calc sample size
+        bool need_sample = false;
+        bool is_block_sample = false;
+        double est_percent = 0.0;
+        if (OB_FAIL(compute_estimate_percent(dst_opt_stat.table_stat_->get_row_count(),
+                                             max_num_buckets,
+                                             param.sample_info_,
+                                             need_sample,
+                                             est_percent,
+                                             is_block_sample))) {
+            LOG_WARN("failed to compute estimate percent", K(ret));
+        } else if (need_sample && OB_FAIL(fill_sample_info(allocator,
+                                                           est_percent,
+                                                           is_block_sample,
+                                                           sample_hint))) {
+          LOG_WARN("failed to fill sample info", K(ret));
+        } else {/*do nothing*/}
+        //2.add select item
+        bool need_gather_hybrid = false;
+        for (int64_t j = 0; OB_SUCC(ret) && j < param.column_params_.count(); ++j) {
+          const ObColumnStatParam &col_param = param.column_params_.at(j);
+          ObOptColumnStat *src_col_stat = src_col_stats.at(j);
+          ObOptColumnStat *dst_col_stat = dst_opt_stat.column_stats_.at(j);
+          bool is_need = false;
+          bool need_refine = false;
+          if (OB_FAIL(need_add_hybrid_hist_item(dst_col_stat,
+                                                dst_opt_stat.table_stat_,
+                                                col_param,
                                                 est_percent,
-                                                no_sample_idx))) {
-    LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
-    LOG_WARN("failed to fill hints", K(ret));
+                                                need_sample,
+                                                is_need,
+                                                need_refine))) {
+            LOG_WARN("failed to need add truly hybrid hist item", K(ret));
+          } else if (is_need) {
+            if (OB_FAIL(add_stat_item(ObStatHybridHist(&col_param, src_col_stat),
+                                      tmp_stat_items))) {
+              LOG_WARN("failed to add statistic item", K(ret));
+            } else {
+              dst_col_stat->get_histogram().reset();
+              dst_col_stat->get_histogram().set_type(ObHistType::HYBIRD);
+              need_gather_hybrid = true;
+            }
+          } else if (OB_FAIL(add_stat_item(ObStatHybridHist(&col_param, src_col_stat, true),
+                                           tmp_stat_items))) {
+            LOG_WARN("failed to add statistic item", K(ret));
+          } else if (need_refine) {
+            if (OB_FAIL(refine_col_ids.push_back(j))) {
+              LOG_WARN("failed to add statistic item", K(ret));
+            } else {
+              dst_col_stat->get_histogram().reset();
+            }
+          }
+        }
+        //3.add other base info
+        if (OB_SUCC(ret) && need_gather_hybrid) {
+          extra.nth_part_ = i;
+          ObSEArray<ObOptColumnStat *, 4> dummy_col_stats;
+          if (OB_FAIL(gen_query_sql(allocator, param, extra, sample_hint, i + 1, src_opt_stat,
+                                    dst_opt_stat, dst_opt_stats, tmp_stat_items, dummy_col_stats,
+                                    raw_sql))) {
+            LOG_WARN("failed to gen query sql", K(ret));
+          } else if (OB_FAIL(stat_items.assign(tmp_stat_items))) {
+            LOG_WARN("failed to assign", K(ret));
+          } else {/*do nothing*/}
+        }
+        //4.refine hybrid hist
+        if (OB_SUCC(ret) && !refine_col_ids.empty()) {
+          if (OB_FAIL(refine_hybrid_hist(allocator, param, extra, refine_cnt + 1, src_opt_stat,
+                                         dst_opt_stat, dst_opt_stats, refine_col_ids,
+                                         refine_stat_items, refine_col_stats, refine_raw_sql))) {
+            LOG_WARN("failed to refine hybrid hist", K(ret));
+          } else {
+            ++ refine_cnt;
+          }
+        }
+      }
+    }
+    //5.do estimate
+    if (OB_SUCC(ret) && !raw_sql.empty()) {
+      stat_items_.reset();
+      if (OB_FAIL(append(stat_items_, stat_items))) {
+        LOG_WARN("failed to append stat items", K(ret));
+      } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql, COPY_HYBRID_HIST_STAT,
+                                     src_opt_stat, dst_opt_stats))) {
+        LOG_WARN("failed to evaluate basic stats", K(ret));
+      } else {
+        LOG_TRACE("succeed to build hybrid histogram");
+      }
+    }
+    if (OB_SUCC(ret) && !refine_raw_sql.empty()) {
+      stat_items_.reset();
+      if (OB_FAIL(append(stat_items_, refine_stat_items))) {
+        LOG_WARN("failed to append stat items", K(ret));
+      } else if (OB_FAIL(reset_histogram_for_refine_col_stats(refine_col_stats))) {
+        LOG_WARN("failed to reset histogram for refine col stats", K(ret));
+      } else if (OB_FAIL(do_estimate(param.tenant_id_, refine_raw_sql, COPY_HYBRID_HIST_STAT,
+                                     src_opt_stat, dst_opt_stats))) {
+        LOG_WARN("failed to evaluate basic stats", K(ret));
+      } else {
+        refine_col_stats.reset();
+        LOG_TRACE("succeed to build hybrid histogram");
+      }
+    }
+  }
+  return ret;
+}
+
+void ObHybridHistEstimator::get_max_num_buckets(const ObIArray<ObColumnStatParam> &col_params,
+                                                int64_t &max_num_buckets)
+{
+  max_num_buckets = 0;
+  for (int64_t i = 0; i < col_params.count(); ++i) {
+    max_num_buckets = std::max(max_num_buckets, col_params.at(i).bucket_num_);
+  }
+}
+
+int ObHybridHistEstimator::need_add_hybrid_hist_item(ObOptColumnStat *dst_col_stat,
+                                                     ObOptTableStat *dst_tab_stat,
+                                                     const ObColumnStatParam &col_param,
+                                                     double est_percent,
+                                                     bool need_sample,
+                                                     bool &is_need,
+                                                     bool &need_refine)
+{
+  int ret = OB_SUCCESS;
+  is_need = false;
+  need_refine = false;
+  bool is_done = false;
+  if (OB_ISNULL(dst_col_stat) || OB_ISNULL(dst_tab_stat)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(dst_col_stat), K(dst_tab_stat), K(ret));
+  } else if (!dst_col_stat->get_histogram().is_hybrid()) {
+    /*do nothing*/
+  } else if (OB_FAIL(try_build_hybrid_hist(col_param,
+                                           *dst_col_stat,
+                                           *dst_tab_stat,
+                                           is_done))) {
+     LOG_WARN("failed to build hybrid hist from topk hist", K(ret));
+  } else if (is_done) {
+    /*do nothing*/
+  //if col not null cnt is less than expected sample row cnt, then choose full table scan.
+  } else if (need_sample &&
+            dst_col_stat->get_num_not_null() <= dst_tab_stat->get_row_count() * est_percent / 100) {
+    need_refine = true;
+  } else {
+    is_need = true;
+  }
+  return ret;
+}
+
+int ObHybridHistEstimator::refine_hybrid_hist(ObIAllocator &allocator,
+                                              const ObTableStatParam &param,
+                                              ObExtraParam &extra,
+                                              int64_t total_refine_cnt,
+                                              ObOptStat &src_opt_stat,
+                                              ObOptStat &dst_opt_stat,
+                                              ObIArray<ObOptStat> &dst_opt_stats,
+                                              ObIArray<int64_t> &refine_col_ids,
+                                              ObIArray<ObStatItem *> &refine_stat_items,
+                                              ObIArray<ObOptColumnStat *> &refine_col_stats,
+                                              ObString &refine_raw_sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(refine_col_ids.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected empty", K(ret), K(refine_col_ids.empty()));
+  } else {
+    //1.add select item
+    int64_t refine_id = 0;
+    refine_stat_items.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < param.column_params_.count(); ++i) {
+      const ObColumnStatParam &col_param = param.column_params_.at(i);
+      ObOptColumnStat *src_col_stat = src_opt_stat.column_stats_.at(i);
+      ObOptColumnStat *dst_col_stat = dst_opt_stat.column_stats_.at(i);
+      if (refine_id < refine_col_ids.count() && i == refine_col_ids.at(refine_id)) {
+        if (OB_FAIL(add_stat_item(ObStatHybridHist(&col_param, src_col_stat), refine_stat_items))) {
+          LOG_WARN("failed to add statistic item", K(ret));
+        } else if (OB_FAIL(refine_col_stats.push_back(dst_col_stat))) {
+          LOG_WARN("failed to push back col stat", K(ret));
+        } else {
+          ++ refine_id;
+        }
+      } else if (OB_FAIL(add_stat_item(ObStatHybridHist(&col_param, src_col_stat, true),
+                                       refine_stat_items))) {
+        LOG_WARN("failed to add statistic item", K(ret));
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret)) {
+      ObString dummy_simple_hint;
+      if (OB_FAIL(gen_query_sql(allocator, param, extra, dummy_simple_hint, total_refine_cnt,
+                                src_opt_stat, dst_opt_stat, dst_opt_stats, refine_stat_items,
+                                refine_col_stats, refine_raw_sql))) {
+        LOG_WARN("failed to gen query sql", K(ret));
+      } else {/*do nothing*/}
+    }
+  }
+  return ret;
+}
+
+int ObHybridHistEstimator::reset_histogram_for_refine_col_stats(
+                                                      ObIArray<ObOptColumnStat *> &refine_col_stats)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < refine_col_stats.count(); ++i) {
+    if (OB_ISNULL(refine_col_stats.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(refine_col_stats.at(i)));
+    } else {
+      refine_col_stats.at(i)->get_histogram().reset();
+      refine_col_stats.at(i)->get_histogram().set_type(ObHistType::HYBIRD);
+    }
+  }
+  return ret;
+}
+
+int ObHybridHistEstimator::gen_query_sql(ObIAllocator &allocator,
+                                         const ObTableStatParam &param,
+                                         ObExtraParam &extra,
+                                         const ObString &simple_hint,
+                                         int64_t part_cnt,
+                                         ObOptStat &src_opt_stat,
+                                         ObOptStat &dst_opt_stat,
+                                         ObIArray<ObOptStat> &dst_opt_stats,
+                                         ObIArray<ObStatItem *> &stat_items,
+                                         ObIArray<ObOptColumnStat *> &refine_col_stats,
+                                         ObString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString single_raw_sql;
+  ObString empty_str;
+  reset_select_items();
+  sample_hint_ = simple_hint;
+  int64_t duration_time = -1;
+  ObString hint_str("NO_REWRITE USE_PLAN_CACHE(NONE) DBMS_STATS OPT_PARAM('ROWSETS_MAX_ROWS', 256)");
+  //add select items
+  if (OB_ISNULL(dst_opt_stat.table_stat_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(dst_opt_stat.table_stat_));
+  } else if (OB_FAIL(add_hint(hint_str, allocator))) {
+    LOG_WARN("failed to add hint");
+  } else if (OB_FAIL(add_stat_item(ObPartitionId(&param, src_opt_stat.table_stat_, empty_str,
+                                                 dst_opt_stat.table_stat_->get_partition_id()),
+                                   stat_items))) {
+    LOG_WARN("failed to add partition id item", K(ret));
+  } else if (OB_FAIL(append(stat_items_, stat_items))) {
+    LOG_WARN("failed to append stat items", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
-                                                               param.max_duration_time_,
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(extra.start_time_,
+                                                               param.duration_time_,
                                                                duration_time))) {
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
-  } else if (!param.partition_infos_.empty() &&
-             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
-    LOG_WARN("failed to add partition info", K(ret));
-  } else if (OB_FAIL(fill_specify_scn_info(allocator, param.sepcify_scn_))) {
-    LOG_WARN("failed to fill specify scn info", K(ret));
-  } else if (OB_FAIL(pack(raw_sql))) {
-    LOG_WARN("failed to pack", K(ret));
-  } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (get_item_size() > 0 &&
-             OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
-                                 opt_stat, tmp_opt_stats))) {
-    LOG_WARN("failed to do estimate", K(ret));
-  } else if (!no_sample_idx.empty() &&
-             OB_FAIL(estimate_no_sample_col_hydrid_hist(allocator, param, opt_stat,
-                                                        hybrid_col_params, hybrid_col_stats,
-                                                        no_sample_idx))) {
-    LOG_WARN("failed to estimate no sample col hydrid_hist", K(ret));
-  } else {
-    LOG_TRACE("succeed to build hybrid histogram", K(hybrid_col_stats));
+  } else if (OB_FAIL(fill_partition_info(allocator, param, extra))) {
+    LOG_WARN("failed to fill partition info", K(ret));
+  } else if (OB_FAIL(pack(single_raw_sql))) {
+    LOG_WARN("failed to pack sql", K(ret), K(single_raw_sql));
+  } else if (raw_sql.empty()) {
+    char *ptr = NULL;
+    if (OB_ISNULL(ptr = static_cast<char*>(allocator.alloc(single_raw_sql.length() + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("memory is not enough", K(ret), K(ptr));
+    } else {
+      MEMSET(ptr, 0, single_raw_sql.length() + 1);
+      MEMCPY(ptr, single_raw_sql.ptr(), single_raw_sql.length());
+      raw_sql.assign_ptr(ptr, single_raw_sql.length());
+    }
+  } else if (OB_FAIL(gen_union_all_sql(allocator, single_raw_sql.string(), raw_sql, raw_sql))) {
+    LOG_WARN("failed to gen union all sql", K(ret));
+  //Currently union all sql has 1000 queries at most each time, So do estimate.
+  } else if (part_cnt % 1000 == 0) {
+    if (OB_FAIL(reset_histogram_for_refine_col_stats(refine_col_stats))) {
+        LOG_WARN("failed to reset histogram for refine col stats", K(ret));
+    } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql, COPY_HYBRID_HIST_STAT,
+                                   src_opt_stat, dst_opt_stats))) {
+      LOG_WARN("failed to evaluate basic stats", K(ret));
+    } else {
+      LOG_TRACE("succeed to build hybrid histogram", K(raw_sql));
+      raw_sql.reset();
+      stat_items.reset();
+      refine_col_stats.reset();
+      sample_hint_.reset();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    reset_select_items();
+    other_hints_.reset();
   }
   return ret;
 }
 
-int ObHybridHistEstimator::extract_hybrid_hist_col_info(const ObOptStatGatherParam &param,
-                                                        ObOptStat &opt_stat,
-                                                        ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                                        ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                                        int64_t &max_num_buckets)
+int ObHybridHistEstimator::gen_union_all_sql(ObIAllocator &allocator,
+                                             const ObString &raw_sql1,
+                                             const ObString &raw_sql2,
+                                             ObString &merge_raw_sql)
 {
   int ret = OB_SUCCESS;
-  max_num_buckets = 0;
-  if (OB_UNLIKELY(param.column_params_.count() != opt_stat.column_stats_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(param.column_params_), K(opt_stat.column_stats_));
+  ObSqlString tmp_sql_str;
+  char *ptr = NULL;
+  if (OB_FAIL(tmp_sql_str.append_fmt("%.*s union all %.*s",
+                                      raw_sql1.length(),
+                                      raw_sql1.ptr(),
+                                      raw_sql2.length(),
+                                      raw_sql2.ptr()))) {
+    LOG_WARN("failed to build query sql stmt", K(ret));
+  } else if (OB_ISNULL(ptr = static_cast<char*>(allocator.alloc(tmp_sql_str.length() + 1)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("memory is not enough", K(ret), K(ptr));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < opt_stat.column_stats_.count(); ++i) {
-      bool is_done = false;
-      if (OB_ISNULL(opt_stat.table_stat_) ||
-          OB_ISNULL(opt_stat.column_stats_.at(i)) ||
-          OB_UNLIKELY(opt_stat.column_stats_.at(i)->get_column_id() != param.column_params_.at(i).column_id_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), KPC(opt_stat.column_stats_.at(i)),
-                                         K(opt_stat.table_stat_), K(param.column_params_.at(i)));
-      } else if (opt_stat.table_stat_->get_row_count() <=0 ||
-                 !opt_stat.column_stats_.at(i)->get_histogram().is_hybrid()) {
-        //do nothing
-      } else if (OB_FAIL(try_build_hybrid_hist(param.column_params_.at(i),
-                                               *opt_stat.column_stats_.at(i),
-                                               *opt_stat.table_stat_,
-                                               is_done))) {
-        LOG_WARN("failed to try build hybrid hist", K(ret));
-      } else if (is_done) {
-        //do nothing
-      } else if (OB_FAIL(hybrid_col_params.push_back(&param.column_params_.at(i)))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_FAIL(hybrid_col_stats.push_back(opt_stat.column_stats_.at(i)))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        opt_stat.column_stats_.at(i)->get_histogram().reset();
-        opt_stat.column_stats_.at(i)->get_histogram().set_type(ObHistType::HYBIRD);
-        max_num_buckets = std::max(max_num_buckets, param.column_params_.at(i).bucket_num_);
-      }
-    }
-    LOG_TRACE("succeed to extract hybrid hist col info", K(param), K(hybrid_col_params), K(hybrid_col_stats));
-  }
-  return ret;
-}
-
-int ObHybridHistEstimator::add_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                                      ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                                      const int64_t table_row_cnt,
-                                                      const bool need_sample,
-                                                      const double est_percent,
-                                                      ObIArray<int64_t> &no_sample_idx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(hybrid_col_params.count() != hybrid_col_stats.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(hybrid_col_params), K(hybrid_col_stats));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < hybrid_col_stats.count(); ++i) {
-      if (OB_ISNULL(hybrid_col_params.at(i)) || OB_ISNULL(hybrid_col_stats.at(i)) ||
-          OB_UNLIKELY(hybrid_col_params.at(i)->column_id_ != hybrid_col_stats.at(i)->get_column_id())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), KPC(hybrid_col_stats.at(i)), KPC(hybrid_col_params.at(i)));
-      } else if (!need_sample || hybrid_col_stats.at(i)->get_num_not_null() > table_row_cnt * est_percent / 100) {
-        if (OB_FAIL(add_stat_item(ObStatHybridHist(hybrid_col_params.at(i),
-                                                   hybrid_col_stats.at(i))))) {
-          LOG_WARN("failed to add stat item", K(ret));
-        }
-      //if col not null cnt is less than expected sample row cnt, then no need sample.
-      } else if (OB_FAIL(no_sample_idx.push_back(i))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allocator,
-                                                              const ObOptStatGatherParam &param,
-                                                              ObOptStat &opt_stat,
-                                                              ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                                              ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                                              ObIArray<int64_t> &no_sample_idx)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString raw_sql;
-  int64_t duration_time = -1;
-  ObSEArray<ObOptStat, 1> tmp_opt_stats;
-  if (no_sample_idx.empty()) {
-    //do nothing
-  //reset select item if exists;
-  } else if (FALSE_IT(reset_select_items())) {
-  //reset sample hint if exists;
-  } else if (FALSE_IT(reset_sample_hint())) {
-  //reset other hint
-  } else if (FALSE_IT(reset_other_hint())) {
-  //add stat items
-  } else if (OB_FAIL(add_no_sample_hybrid_hist_stat_items(hybrid_col_params,
-                                                          hybrid_col_stats,
-                                                          no_sample_idx))) {
-    LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
-    LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
-                                                               param.max_duration_time_,
-                                                               duration_time))) {
-    LOG_WARN("failed to get valid duration time", K(ret));
-  } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
-    LOG_WARN("failed to fill query timeout info", K(ret));
-  } else if (OB_FAIL(pack(raw_sql))) {
-    LOG_WARN("failed to pack", K(ret));
-  } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
-    LOG_WARN("failed to push back", K(ret));
-  } else if (OB_FAIL(do_estimate(param.tenant_id_, raw_sql.string(), false,
-                                 opt_stat, tmp_opt_stats))) {
-    LOG_WARN("failed to do estimate", K(ret));
-  } else {/*do nothing*/}
-  return ret;
-}
-
-int ObHybridHistEstimator::add_no_sample_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                                                ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                                                ObIArray<int64_t> &no_sample_idx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(no_sample_idx.empty() || hybrid_col_params.count() != hybrid_col_stats.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(no_sample_idx), K(hybrid_col_params), K(hybrid_col_stats));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < no_sample_idx.count(); ++i) {
-      int64_t idx = no_sample_idx.at(i);
-      if (OB_UNLIKELY(idx >= hybrid_col_params.count()) ||
-          OB_ISNULL(hybrid_col_params.at(idx)) || OB_ISNULL(hybrid_col_stats.at(idx)) ||
-          OB_UNLIKELY(hybrid_col_params.at(idx)->column_id_ != hybrid_col_stats.at(idx)->get_column_id())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(idx), K(hybrid_col_stats), K(hybrid_col_params));
-      } else if (OB_FAIL(add_stat_item(ObStatHybridHist(hybrid_col_params.at(idx),
-                                                        hybrid_col_stats.at(idx))))) {
-        LOG_WARN("failed to add stat item", K(ret));
-      }
-    }
+    MEMSET(ptr, 0, tmp_sql_str.length() + 1);
+    MEMCPY(ptr, tmp_sql_str.ptr(), tmp_sql_str.length());
+    merge_raw_sql.assign_ptr(ptr, tmp_sql_str.length());
+    LOG_TRACE("Succeed to gen union all sql", K(merge_raw_sql));
   }
   return ret;
 }
@@ -553,14 +707,7 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
           if (bucket_rows > bucket_size || 0 == i || extra->get_material_row_count() - 1 == i) {
             bucket_rows = 0;
             ObObj ep_val;
-            common::ObArenaAllocator tmp_alloctor("BulidHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-            ObDatum new_datum = row->cells()[0];
-            if (obj_meta.is_lob_storage() &&
-                OB_FAIL(build_prefix_str_datum_for_lob(tmp_alloctor,
-                                                       obj_meta, row->cells()[0],
-                                                       new_datum))) {
-              LOG_WARN("failed to build prefix str datum for lob", K(ret));
-            } else if (OB_FAIL(new_datum.to_obj(ep_val, obj_meta))) {
+            if (OB_FAIL(row->cells()[0].to_obj(ep_val, obj_meta))) {
               LOG_WARN("failed to obj", K(ret));
             } else if (OB_FAIL(ob_write_obj(*alloc, ep_val, ep_val))) {
               LOG_WARN("failed to write obj", K(ret), K(ep_val));
@@ -601,42 +748,6 @@ int ObHybridHistograms::build_hybrid_hist(ObAggregateProcessor::HybridHistExtraR
     pop_freq_ = pop_freq;
     LOG_TRACE("succeed to build hybrid histogram", K(bucket_num), K(bucket_size), K(total_count),
                             K(pop_count), K(pop_freq), K(num_distinct), K(hybrid_buckets_.count()));
-  }
-  return ret;
-}
-
-int ObHybridHistograms::build_prefix_str_datum_for_lob(ObIAllocator &allocator,
-                                                       const ObObjMeta &obj_meta,
-                                                       const ObDatum &old_datum,
-                                                       ObDatum &new_datum)
-{
-  int ret = OB_SUCCESS;
-  if (!obj_meta.is_lob_storage()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(obj_meta));
-  } else {
-    ObObj obj;
-    ObString str;
-    bool can_reuse = false;
-    if (OB_FAIL(old_datum.to_obj(obj, obj_meta))) {
-      LOG_WARN("failed to obj", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::check_text_can_reuse(obj, can_reuse))) {
-      LOG_WARN("failed to check text obj can reuse", K(ret), K(obj));
-    } else if (can_reuse) {
-      new_datum = old_datum;
-    } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(&allocator, obj, str, OPT_STATS_MAX_VALUE_CHAR_LEN))) {
-      LOG_WARN("failed to read prefix string data", K(ret));
-    } else {
-      ObTextStringDatumResult text_result(obj_meta.get_type(), obj_meta.has_lob_header(), &new_datum);
-      if (OB_FAIL(text_result.init(str.length(), &allocator))) {
-        LOG_WARN("init lob result failed");
-      } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-        LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
-      } else {
-        text_result.set_result();
-        LOG_TRACE("Succeed to build_prefix_str_datum_for_lob", K(obj), K(str));
-      }
-    }
   }
   return ret;
 }

@@ -229,10 +229,7 @@ int ObTableApiCacheGuard::append_column_ids(const ObITableEntity *entity,
     const ObColumnSchemaV2 *col_schema = nullptr;
     for (int64_t i = 0; i < properties_names.count(); i++) {
       if (OB_ISNULL(col_schema = table_schema->get_column_schema(properties_names.at(i)))) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        const ObString &column = properties_names.at(i);
-        const ObString &table = table_schema->get_table_name_str();
-        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column.length(), column.ptr(), table.length(), table.ptr());
+        ret = OB_ERR_COLUMN_NOT_FOUND;
         LOG_WARN("fail to get column schema", K(ret), K(i), K(properties_names.at(i)));
       } else if (OB_FAIL(op_column_ids.push_back(col_schema->get_column_id()))) {
         LOG_WARN("fail to push back column id", K(ret), K(i), K(col_schema->get_column_id()));

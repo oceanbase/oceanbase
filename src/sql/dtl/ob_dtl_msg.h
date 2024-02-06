@@ -90,11 +90,7 @@ class ObDtlMsg {
   OB_UNIS_VERSION_PV();
 public:
   virtual ObDtlMsgType get_type() const = 0;
-  inline bool is_data_msg() const { return ObDtlMsgType::PX_NEW_ROW == get_type()
-                                           || ObDtlMsgType::PX_DATUM_ROW == get_type()
-                                           || ObDtlMsgType::PX_VECTOR == get_type()
-                                           || ObDtlMsgType::PX_VECTOR_ROW == get_type()
-                                           || ObDtlMsgType::PX_VECTOR_FIXED == get_type(); }
+  inline bool is_data_msg() const { return ObDtlMsgType::PX_NEW_ROW == get_type(); }
   inline bool is_drain_msg() const { return ObDtlMsgType::DRAIN_DATA_FLOW == get_type(); }
 protected:
   ~ObDtlMsg() = default;

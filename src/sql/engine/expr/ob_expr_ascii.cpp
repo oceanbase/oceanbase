@@ -104,7 +104,7 @@ int ObExprAscii::calc(common::ObObj &obj,
     calc_ascii_inner(obj, expr_ctx, str_val);
   } else {
     ObString str_val = obj1.get_string();
-    if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
+    if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
       LOG_WARN("failed to get string data", K(ret), K(obj1.get_meta()));
     } else {
       calc_ascii_inner(obj, expr_ctx, str_val);
@@ -142,7 +142,7 @@ int ObExprAscii::calc_ascii_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObString str_val = s_datum->get_string();
-      if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(ctx,
+      if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(ctx,
                                                               *s_datum,
                                                               expr.args_[0]->datum_meta_,
                                                               expr.args_[0]->obj_meta_.has_lob_header(),
@@ -242,7 +242,7 @@ int ObExprOrd::calc(common::ObObj &obj,
     ObString str_val = obj1.get_string();
     if (!ob_is_text_tc(obj1.get_type())) {
       ret = calc_ord_inner(type, str_val, cs_type, obj);
-    } else if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
+    } else if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(expr_ctx.calc_buf_, obj1, str_val))) {
       LOG_WARN("failed to get lob data", K(ret), K(obj1.get_meta()));
     } else {
       ret = calc_ord_inner(type, str_val, cs_type, obj);
@@ -319,7 +319,7 @@ int ObExprOrd::calc_ord_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_da
       ObString str_val = s_datum->get_string();
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(ctx,
+      if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(ctx,
                                                               *s_datum,
                                                               expr.args_[0]->datum_meta_,
                                                               expr.args_[0]->obj_meta_.has_lob_header(),

@@ -133,8 +133,6 @@ public:
                                   const ObStmtMapInfo &map_info,
                                   bool &is_match);
 
-  int check_has_for_update(const ObDMLStmt::TempTableInfo &helper, bool &has_for_update);
-
   int remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts);
 
   int get_non_correlated_subquery(ObDMLStmt *stmt,

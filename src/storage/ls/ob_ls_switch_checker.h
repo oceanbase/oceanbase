@@ -25,8 +25,8 @@ class ObLSSwitchChecker
 public:
   ObLSSwitchChecker() : ls_(nullptr), record_switch_epoch_(UINT64_MAX) {}
   int check_online(ObLS *ls);
-  int check_ls_switch_state(ObLS *ls, bool &is_online);
-  int double_check_epoch(bool &is_online) const;
+  int check_ls_switch_state(ObLS *ls, bool &online_state);
+  int double_check_epoch() const;
 private:
   ObLS *ls_;
   uint64_t record_switch_epoch_;

@@ -229,9 +229,6 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
-tools/deploy/tpchobp_test.yaml
-tools/deploy/bmsqlobp_test.yaml
-tools/deploy/oci_test.yaml
 tools/log_parser/slog_parser
 tools/log_tool/log_statistics
 tools/log_tool/log_tool
@@ -287,13 +284,6 @@ tools/deploy/distributed.yaml
 tools/deploy/obd_profile.sh
 tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
-tools/docker/standalone/boot
-tools/docker/standalone/init_store_for_fast_start.py
-tools/rpm/systemd/profile/oceanbase-service.sh
-tools/rpm/systemd/profile/post_install.sh
-tools/rpm/systemd/profile/pre_uninstall.sh
-tools/rpm/systemd/profile/post_uninstall.sh
-tools/rpm/systemd/profile/telemetry.sh
 
 ############# unittest #############
 unittest/**/test_*

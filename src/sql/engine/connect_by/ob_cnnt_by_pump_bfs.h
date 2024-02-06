@@ -128,12 +128,12 @@ private:
   int add_path_node(PumpNode &pump_node);
   int check_cycle_path();
   int free_path_stack();
-  int free_pump_node_stack(ObSegmentArray<PumpNode> &stack);
+  int free_pump_node_stack(ObIArray<PumpNode> &stack);
   void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
 private:
-  common::ObSegmentArray<PumpNode> pump_stack_;
-  common::ObSegmentArray<PathNode> path_stack_;
-  common::ObSegmentArray<PumpNode> sort_stack_;
+  common::ObArray<PumpNode> pump_stack_;
+  common::ObArray<PathNode> path_stack_;
+  common::ObArray<PumpNode> sort_stack_;
   common::ObSEArray<const ObChunkDatumStore::StoredRow *, 2> free_record_;
   //记录connect by后除去prior 常量表达式(如prior 0)的所有表达式
   ObNLConnectByWithIndexOp *connect_by_;

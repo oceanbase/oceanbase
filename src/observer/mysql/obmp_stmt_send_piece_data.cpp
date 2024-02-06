@@ -45,7 +45,7 @@ ObMPStmtSendPieceData::ObMPStmtSendPieceData(const ObGlobalContext &gctx)
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
       stmt_id_(0),
-      param_id_(OB_MAX_PARAM_ID),
+      param_id_(-1),
       buffer_len_(0),
       buffer_(),
       piece_mode_(ObInvalidPiece),
@@ -78,23 +78,19 @@ int ObMPStmtSendPieceData::before_process()
     ObMySQLUtil::get_int1(pos, piece_mode_);
     int8_t is_null = 0;
     ObMySQLUtil::get_int1(pos, is_null);
-    is_null_ = (1 == is_null);
+    1 == is_null ? is_null_ = true : is_null_ = false;
     ObMySQLUtil::get_int8(pos, buffer_len_);
-    if (stmt_id_ < 1 || buffer_len_ < 0) {
+    if (stmt_id_ < 1 || param_id_ < 0 || buffer_len_ < 0) {
       ret = OB_ERR_PARAM_INVALID;
-      LOG_WARN("send_piece receive unexpected params", K(ret), K(stmt_id_), K(buffer_len_));
-    } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
-      LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
-    }
-    if (OB_SUCC(ret)) {
+      LOG_WARN("send long data get error info.", K(stmt_id_), K(param_id_), K(buffer_len_));
+    } else {
       buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
       pos += buffer_len_;
-      LOG_INFO("resolve send_piece protocol packet successfully",
-               K(ret), K(stmt_id_), K(param_id_), K(buffer_len_));
-      LOG_DEBUG("send_piece packet content", K(buffer_));
+      LOG_DEBUG("get info success in send long data protocol.",
+                  K(stmt_id_), K(param_id_));
     }
-    LOG_INFO("resolve send_piece protocol packet",
-             K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(piece_mode_), K(is_null_));
+    LOG_DEBUG("send long data get param",K(stmt_id_), K(param_id_),
+              K(piece_mode_), K(buffer_len_), K(buffer_.length()));
   }
   return ret;
 }
@@ -129,7 +125,6 @@ int ObMPStmtSendPieceData::process()
     THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
-    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -141,8 +136,6 @@ int ObMPStmtSendPieceData::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K_(param_id), K(ret));
-    } else if (OB_FAIL(process_kill_client_session(session))) {
-      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id), K_(param_id),
@@ -335,8 +328,6 @@ int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
                                                       &buffer_))) {
         LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
       } else {
-        LOG_INFO("store piece successfully", K(ret), K(session.get_sessid()),
-                                             K(stmt_id_), K(param_id_));
         if (is_null_) {
           OZ (piece->get_is_null_map().add_member(piece->get_position()));
         }
@@ -375,23 +366,24 @@ int ObPiece::piece_init(ObSQLSessionInfo &session,
   lib::ContextParam param;
   param.set_mem_attr(session.get_effective_tenant_id(),
                       ObModIds::OB_PL_TEMP, ObCtxIds::DEFAULT_CTX_ID);
-  param.set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
+  param.set_page_size(OB_MALLOC_BIG_BLOCK_SIZE);
   if (OB_FAIL((static_cast<ObPieceCache*>(session.get_piece_cache()))
-                    ->mem_context_->CREATE_CONTEXT(entity_, param))) {
+                    ->mem_context_->CREATE_CONTEXT(entity, param))) {
     LOG_WARN("failed to create ref cursor entity", K(ret));
-  } else if (OB_ISNULL(entity_)) {
+  } else if (OB_ISNULL(entity)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc ref cursor entity", K(ret));
   } else {
     void *buf = NULL;
     ObPieceBufferArray *buf_array = NULL;
-    ObIAllocator *alloc = &entity_->get_arena_allocator();
+    ObIAllocator *alloc = &entity->get_arena_allocator();
     OV (OB_NOT_NULL(buf = alloc->alloc(sizeof(ObPieceBufferArray))),
         OB_ALLOCATE_MEMORY_FAILED, sizeof(ObPieceBufferArray));
     OX (MEMSET(buf, 0, sizeof(ObPieceBufferArray)));
     OV (OB_NOT_NULL(buf_array = new (buf) ObPieceBufferArray(alloc)));
-    OZ (buf_array->reserve(OB_MAX_PIECE_BUFFER_COUNT));
+    OZ (buf_array->reserve(OB_MAX_PIECE_COUNT));
     if (OB_SUCC(ret)) {
+        set_allocator(alloc);
         set_buffer_array(buf_array);
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -703,7 +695,7 @@ int ObPieceCache::make_piece_buffer(ObIAllocator *allocator,
   OX (MEMSET(piece_mem, 0, sizeof(ObPieceBuffer)));
   OV (OB_NOT_NULL(piece_buffer = new (piece_mem) ObPieceBuffer(allocator, mode)));
   CK (OB_NOT_NULL(piece_buffer));
-  OZ (piece_buffer->set_piece_buffer(buf));
+  OX (piece_buffer->set_piece_buffer(buf));
   LOG_DEBUG("make piece buffer.", K(ret), K(mode), K(buf->length()));
   return ret;
 }

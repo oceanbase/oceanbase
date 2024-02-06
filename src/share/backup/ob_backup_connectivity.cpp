@@ -326,7 +326,7 @@ int ObBackupCheckFile::compare_check_file_name_(
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
     if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
-    } else if (OB_FAIL(util.adaptively_list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
+    } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_check_file_name(
         *sql_proxy_, tenant_id_, backup_dest, check_file_name))) {
@@ -346,7 +346,7 @@ int ObBackupCheckFile::compare_check_file_name_(
           LOG_WARN("failed to set check file path", K(ret), K(path), K_(tmp_entry.name));
         } else {
           common::ObString uri(del_file_path);
-          if(OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
+          if(OB_FAIL(util.del_file(uri, backup_dest.get_storage_info()))) {
             LOG_WARN("failed to delete check file", K(ret), K_(tenant_id));
           }
         }
@@ -451,7 +451,7 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
     ObDirPrefixEntryNameFilter prefix_op(d_entrys);
     if (OB_FAIL(prefix_op.init(check_file_prefix, static_cast<int32_t>(strlen(check_file_prefix))))) {
       LOG_WARN("failed to init dir prefix", K(ret), K(check_file_prefix), K_(tenant_id));
-    } else if (OB_FAIL(util.adaptively_list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
+    } else if (OB_FAIL(util.list_files(path.get_obstr(), backup_dest.get_storage_info(), prefix_op))) {
       LOG_WARN("failed to list files", K(ret), K_(tenant_id));
     } else {
       char del_file_path[OB_MAX_BACKUP_PATH_LENGTH];
@@ -466,7 +466,7 @@ int ObBackupCheckFile::delete_permission_check_file(const ObBackupDest &backup_d
           LOG_WARN("failed to set delete file path", K(ret), K(path), K_(tmp_entry.name));
         } else {
           common::ObString uri(del_file_path);
-          if(OB_FAIL(util.adaptively_del_file(uri, backup_dest.get_storage_info()))) {
+          if(OB_FAIL(util.del_file(uri, backup_dest.get_storage_info()))) {
             LOG_WARN("failed to delete permission check file", K(ret), K_(tenant_id));
           }
         }
@@ -538,7 +538,7 @@ int ObBackupCheckFile::check_appender_permission_(const ObBackupDest &backup_des
     LOG_WARN("fail to set data", K(ret), K(path.get_ptr()));
   } else if (OB_FAIL(device_handle->write(fd, data, strlen(data),  write_size))) {
     LOG_WARN("fail to write file", K(ret), K(path.get_ptr()), K(data));
-  } else if (OB_FAIL(util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
+  } else if (OB_FAIL(util.del_file(path.get_obstr(), backup_dest.get_storage_info()))) {
     LOG_WARN("failed to del file", K(ret));
   }
 
@@ -596,7 +596,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     }
     LOG_WARN("failed to write single file", K(ret), K_(tenant_id), K(backup_dest));
   } else if (FALSE_IT(write_ok = true)
-      || OB_FAIL(util.adaptively_get_file_length(path.get_obstr(), backup_dest.get_storage_info(), file_len))) {
+      || OB_FAIL(util.get_file_length(path.get_obstr(), backup_dest.get_storage_info(), file_len))) {
     if (is_permission_error_(ret)) { 
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "get file length");
@@ -606,7 +606,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
   } else if (OB_ISNULL(buf = reinterpret_cast<char*>(allocator.alloc(file_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc buf", K(ret), K(file_len));
-  } else if (OB_FAIL(util.adaptively_read_single_file(path.get_obstr(), backup_dest.get_storage_info(), buf, file_len, read_size))) {
+  } else if (OB_FAIL(util.read_single_file(path.get_obstr(), backup_dest.get_storage_info(), buf, file_len, read_size))) {
     if (is_permission_error_(ret)) {
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", ret, "comment", "read single file");
@@ -614,7 +614,7 @@ int ObBackupCheckFile::check_io_permission(const ObBackupDest &backup_dest)
     }
     LOG_WARN("failed to read single file", K(ret));
   }
-  if (write_ok && (OB_SUCCESS != (tmp_ret = util.adaptively_del_file(path.get_obstr(), backup_dest.get_storage_info())))) {
+  if (write_ok && (OB_SUCCESS != (tmp_ret = util.del_file(path.get_obstr(), backup_dest.get_storage_info())))) {
     if (is_permission_error_(tmp_ret)) {
       ROOTSERVICE_EVENT_ADD("connectivity_check", "permission check", 
           "tenant_id", tenant_id_, "error_code", tmp_ret, "comment", "delete file");
@@ -672,7 +672,7 @@ int ObBackupDestCheck::check_check_file_exist_(
   bool need_retry = true;
   is_exist = false;
   while (retry_times--) {
-    if (OB_FAIL(util.adaptively_is_exist(path.get_obstr(), backup_dest.get_storage_info(), is_exist))) {
+    if (OB_FAIL(util.is_exist(path.get_obstr(), backup_dest.get_storage_info(), is_exist))) {
       LOG_WARN("failed to check is_exist", K(ret), K(path), K(backup_dest), K(retry_times));
       ob_usleep(1 * 1000 * 1000L); // 1s 
       continue;

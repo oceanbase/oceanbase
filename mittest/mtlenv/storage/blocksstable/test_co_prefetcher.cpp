@@ -231,6 +231,7 @@ TEST_F(TestCOPrefetcher, test_basic_case)
   // 1. Switch to columnar scan.
   OK(co_prefetcher_.refresh_blockscan_checker_for_column_store(1, border_rowkey_));
 
+  ASSERT_EQ(level_cnt, co_prefetcher_.index_tree_height_);
   ASSERT_EQ(1, co_prefetcher_.get_cur_level_of_block_scan());
   ASSERT_EQ(rows_per_mirco_block_, co_prefetcher_.block_scan_start_row_id_);
   ASSERT_TRUE(OB_INVALID_CS_ROW_ID != co_prefetcher_.block_scan_border_row_id_);
@@ -350,6 +351,7 @@ TEST_F(TestCOPrefetcher, test_all_columnar_scan_case)
   int64_t border_id1 = max_row_cnt_;
   generate_border(border_id1);
   OK(co_prefetcher_.refresh_blockscan_checker_for_column_store(1, border_rowkey_));
+  ASSERT_EQ(level_cnt, co_prefetcher_.index_tree_height_);
   ASSERT_EQ(1, co_prefetcher_.get_cur_level_of_block_scan());
   ASSERT_EQ(rows_per_mirco_block_, co_prefetcher_.block_scan_start_row_id_);
   ASSERT_TRUE(OB_INVALID_CS_ROW_ID != co_prefetcher_.block_scan_border_row_id_);

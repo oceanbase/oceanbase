@@ -113,13 +113,7 @@ TEST_F(TestSSTableRowGetter, get)
   //left border rowkey
   test_one_rowkey(0);
 
-  //end_key of left border
-  test_one_rowkey(15933);
-
-  //first_key of right border
-  test_one_rowkey(64760);
-
-  // end_key of right border
+  // right border rowkey
   test_one_rowkey(row_cnt_ - 1);
 
   // mid border rowkey

@@ -185,21 +185,6 @@ int ObLSTxLogAdapter::get_max_decided_scn(SCN &scn)
   return ret;
 }
 
-int ObLSTxLogAdapter::get_palf_committed_max_scn(share::SCN &scn) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(log_handler_) || !log_handler_->is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(log_handler_));
-  } else if (OB_FAIL(log_handler_->get_max_decided_scn_as_leader(scn))) {
-    TRANS_LOG(WARN, "get palf committed_max_scn fail", K(ret));
-  } else if (!scn.is_valid_and_not_min()) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "get an invalid scn", K(ret), K(scn));
-  }
-  return ret;
-}
-
 int ObLSTxLogAdapter::get_append_mode_initial_scn(share::SCN &ref_scn)
 {
   int ret = OB_SUCCESS;

@@ -33,15 +33,11 @@ static int my_sk_do_flush(my_sk_t* s, int64_t* remain) {
   dlink_t* h = NULL;
   int err = my_wq_flush((sock_t*)s, &s->wq, &h);
   my_t* io = structof(s->fty, my_t, sf);
-  int64_t flushed_time_us = rk_get_us();
   if (0 == err && NULL != h) {
     dlink_t* stop = dqueue_top(&s->wq.queue);
     while(h != stop) {
       my_req_t* req = structof(h, my_req_t, link);
       h = h->next;
-      s->sk_diag_info.write_cnt ++;
-      s->sk_diag_info.write_size += req->msg.s;
-      s->sk_diag_info.write_wait_time += (flushed_time_us - req->ctime_us);
       my_flush_cb_after_flush(io, req);
     }
   }

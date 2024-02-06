@@ -97,6 +97,7 @@ private:
   int count_tenant();
   int count_tenant_slog(const uint64_t tenant_id);
   int count_tenant_clog(const uint64_t tenant_id);
+  int count_tenant_meta(const uint64_t tenant_id);
   int count_tenant_data(const uint64_t tenant_id);
   int count_server_slog();
   int count_server_clog();

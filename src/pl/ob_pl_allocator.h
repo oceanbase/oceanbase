@@ -10,21 +10,6 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifdef  PL_MOD_DEF
-PL_MOD_DEF(OB_PL_ANONY_PARAMETER, "AnonyParam")
-PL_MOD_DEF(OB_PL_SET_VAR, "SetVar")
-PL_MOD_DEF(OB_PL_STATIC_SQL_EXEC, "StaticExec")
-PL_MOD_DEF(OB_PL_DYNAMIC_SQL_EXEC, "DyncmicExec")
-PL_MOD_DEF(OB_PL_BULK_INTO, "BulkInto")
-PL_MOD_DEF(OB_PL_UDT, "Udt")
-PL_MOD_DEF(OB_PL_DEBUG_MOD, "PlDebug")
-PL_MOD_DEF(OB_PL_DEBUG_SYS_MOD, "PlDebugSys")
-PL_MOD_DEF(OB_PL_ANY_DATA, "AnyData")
-PL_MOD_DEF(OB_PL_ANY_TYPE, "AnyType")
-PL_MOD_DEF(OB_PL_CODE_GEN, "PlCodeGen")
-#endif
-
-
 #ifndef  OCEANBASE_SRC_PL_OB_PL_ALLOCATOR_H_
 #define  OCEANBASE_SRC_PL_OB_PL_ALLOCATOR_H_
 
@@ -127,27 +112,6 @@ private:
   ObPLPackageState *state_;
 };
 
-
-enum PL_MOD_IDX {
-  OB_MOD_INVALID = -1,
-#define PL_MOD_DEF(type, name) type,
-#include "pl/ob_pl_allocator.h"
-#undef PL_MOD_DEF
-  PL_MOD_IDX_NUM
-};
-
-static constexpr const char* OB_PL_MOD_DEF[PL_MOD_IDX_NUM] =
-{
-#define PL_MOD_DEF(type, name) name,
-#include "pl/ob_pl_allocator.h"
-#undef PL_MOD_DEF
-};
-
-#define GET_PL_MOD_STRING(type)                                                \
-  (type > oceanbase::pl::OB_MOD_INVALID &&                                     \
-    type < oceanbase::pl::PL_MOD_IDX_NUM)                                      \
-      ? oceanbase::pl::OB_PL_MOD_DEF[type]                                     \
-      : "PlTemp"
 }
 }
 

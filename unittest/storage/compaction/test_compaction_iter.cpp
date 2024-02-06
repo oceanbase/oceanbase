@@ -35,13 +35,12 @@ public:
   MockObCompactionScheduleIterator(const int64_t batch_tablet_cnt)
     : ObCompactionScheduleIterator(
       true/*is_major, no meaning*/,
-      ObLSGetMod::STORAGE_MOD),
+      ObLSGetMod::STORAGE_MOD,
+      batch_tablet_cnt),
       mock_tablet_id_cnt_(0),
       error_tablet_idx_(-1),
       errno_(OB_SUCCESS)
-  {
-    max_batch_tablet_cnt_ = batch_tablet_cnt;
-  }
+  {}
   virtual int get_cur_ls_handle(ObLSHandle &ls_handle) override
   {
     return OB_SUCCESS;
@@ -93,7 +92,6 @@ void TestCompactionIter::test_iter(
 {
   LOG_INFO("test_iter", K(ls_cnt), K(max_batch_tablet_cnt), K(tablet_cnt_per_ls), K(error_tablet_idx), K(input_errno));
   MockObCompactionScheduleIterator iter(max_batch_tablet_cnt);
-  iter.max_batch_tablet_cnt_ = max_batch_tablet_cnt;
   iter.prepare_ls_id_array(ls_cnt);
   iter.mock_tablet_id_cnt_ = tablet_cnt_per_ls;
   iter.error_tablet_idx_ = error_tablet_idx;

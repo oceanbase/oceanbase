@@ -56,11 +56,6 @@ public:
   }
   ~ObPLDbLinkGuard()
   {
-#ifdef OB_BUILD_ORACLE_PL
-    for (int64_t i = 0; i < dblink_infos_.count(); i++) {
-      dblink_infos_.at(i)->~ObPLDbLinkInfo();
-    }
-#endif
     reset();
   }
   void reset()

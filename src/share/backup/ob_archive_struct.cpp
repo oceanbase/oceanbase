@@ -281,7 +281,7 @@ int ObTenantArchiveRoundAttr::generate_next_round(const int64_t incarnation,
   next_round.path_ = path;
 
   next_round.frozen_input_bytes_ = 0;
-  next_round.frozen_output_bytes_ = 0;
+  next_round.frozen_input_bytes_ = 0;
   next_round.active_input_bytes_ = 0;
   next_round.active_output_bytes_ = 0;
 

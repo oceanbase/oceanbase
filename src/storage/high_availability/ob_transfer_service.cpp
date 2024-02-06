@@ -14,7 +14,6 @@
 #include "ob_transfer_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "observer/ob_server_struct.h"
-#include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 
 namespace oceanbase
 {
@@ -131,7 +130,7 @@ void ObTransferService::run1()
 
   while (!has_set_stop()) {
     ls_id_array_.reset();
-    if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
+    if (observer::ObServiceStatus::SS_SERVING != GCTX.status_) {
       ret = OB_SERVER_IS_INIT;
       LOG_WARN("server is not serving", K(ret), K(GCTX.status_));
     } else if (OB_FAIL(get_ls_id_array_())) {
@@ -227,8 +226,6 @@ int ObTransferService::do_transfer_handler_(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (ls->is_offline()) {
-    LOG_INFO("ls is during offline, cannot schedule transfer handler", K(ls_id));
   } else if (OB_FAIL(ls->get_transfer_handler()->process())) {
     LOG_WARN("failed to process transfer", K(ret), KP(ls));
   } else {

@@ -334,10 +334,10 @@ INSERT INTO t1 (g) VALUES
   (ST_GeomFromText('POINT(7 7)', 3294)),
   (ST_GeomFromText('LINESTRING(0 0, 3 3)',3294));
 
-explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
-explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
-explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
-explain select /*+dynamic_sampling(1)*/st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
+explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
+explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);
+explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_within(a.g, b.g);
+explain select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_dwithin(a.g, b.g, 0.1);
 
 select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where _st_covers(a.g, b.g);
 select st_astext(a.g), st_astext(b.g) from t1 a join t1 b where st_contains(a.g, b.g);

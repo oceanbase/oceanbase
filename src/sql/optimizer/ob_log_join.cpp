@@ -20,7 +20,6 @@
 #include "sql/optimizer/ob_log_exchange.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join_filter.h"
-#include "sql/optimizer/ob_log_set.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -1361,8 +1360,6 @@ int ObLogJoin::check_and_set_use_batch()
       can_use_batch_nlj_ = false;
     } else if (OB_FAIL(check_if_disable_batch(get_child(1), can_use_batch_nlj_))) {
       LOG_WARN("failed to check if disable batch", K(ret));
-    } else if (can_use_batch_nlj_ && OB_FAIL(ObOptimizerUtil::check_ancestor_node_support_skip_scan(this, can_use_batch_nlj_))) {
-      LOG_WARN("failed to check whether ancestor node support skip read", K(ret));
     }
   }
   // set use batch
@@ -1373,7 +1370,6 @@ int ObLogJoin::check_and_set_use_batch()
   }
   return ret;
 }
-
 
 int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_batch_nlj)
 {
@@ -1396,8 +1392,6 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       // For the global index lookup, if there is a pushdown filter when scanning the index,
       // batch cannot be used.
       can_use_batch_nlj = false;
-    } else if (ts->get_scan_direction() != default_asc_direction() && ts->get_scan_direction() != ObOrderDirection::UNORDERED) {
-      can_use_batch_nlj = false;
     } else {
       SMART_VAR(ObTablePartitionInfo, tmp_info) {
         ObTablePartitionInfo *tmp_info_ptr = &tmp_info;
@@ -1418,13 +1412,6 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       LOG_WARN("failed to check if disable batch", K(ret));
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
-    ObLogSet *log_set = static_cast<ObLogSet *>(root);
-    if (log_set->get_set_op() != ObSelectStmt::UNION) {
-      //Disable batch nested loop join that contains set operations other than UNION
-      //because other set operations may involve short-circuit operations.
-      //Currently, batch NLJ does not support short-circuit execution.
-      can_use_batch_nlj = false;
-    }
     for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
       if (OB_ISNULL(child)) {
@@ -1435,16 +1422,10 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
       }
     }
   } else if (log_op_def::LOG_JOIN == root->get_type()) {
-    ObLogJoin *join = static_cast<ObLogJoin *>(root);
-    ObSQLSessionInfo *session_info = NULL;
-    ObLogPlan *plan = NULL;
-    if (OB_ISNULL(plan = get_plan())
-        || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+    ObLogJoin *join = NULL;
+    if (OB_ISNULL(join = static_cast<ObLogJoin *>(root))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(plan), K(session_info));
-    } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
-      //Group rescan optimization for nested joins at multiple levels is disabled by default.
-      can_use_batch_nlj = false;
+      LOG_WARN("invalid input", K(ret));
     } else if (!join->can_use_batch_nlj()) {
       can_use_batch_nlj = false;
       LOG_TRACE("child join not support batch_nlj", K(root->get_name()));

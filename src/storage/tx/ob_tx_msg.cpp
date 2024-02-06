@@ -27,8 +27,7 @@ OB_SERIALIZE_MEMBER(ObTxMsg,
                     request_id_,
                     timestamp_,
                     epoch_,
-                    cluster_id_,
-                    transfer_epoch_);
+                    cluster_id_);
 // NOTICE: DO NOT MODIFY FOLLOING MACRO DEFINES, IT IS RESERVED FOR COMPATIBLE WITH OLD <= 4.1.2
 #define ObTxSubPrepareMsg_V1_MEMBERS expire_ts_, xid_, parts_, app_trace_info_
 #define ObTxSubPrepareRespMsg_V1_MEMBERS ret_
@@ -98,13 +97,13 @@ OB_SERIALIZE_MEMBER(ObTxMsg,
     return len;                                                         \
   }
 
-OB_TX_MSG_SERDE(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_, commit_parts_);
+OB_TX_MSG_SERDE(ObTxSubPrepareMsg, ObTxMsg, expire_ts_, xid_, parts_, app_trace_info_);
 OB_TX_MSG_SERDE(ObTxSubPrepareRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubCommitMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubCommitRespMsg, ObTxMsg, ret_);
 OB_TX_MSG_SERDE(ObTxSubRollbackMsg, ObTxMsg, xid_);
 OB_TX_MSG_SERDE(ObTxSubRollbackRespMsg, ObTxMsg, ret_);
-OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_, commit_parts_);
+OB_TX_MSG_SERDE(ObTxCommitMsg, ObTxMsg, expire_ts_, parts_, app_trace_info_, commit_start_scn_);
 OB_TX_MSG_SERDE(ObTxCommitRespMsg, ObTxMsg, ret_, commit_version_);
 OB_TX_MSG_SERDE(ObTxAbortMsg, ObTxMsg, reason_);
 OB_TX_MSG_SERDE(ObTxKeepaliveMsg, ObTxMsg, status_);
@@ -121,19 +120,19 @@ OB_TX_MSG_SERDE(Ob2pcClearReqMsg, ObTxMsg, max_commit_log_scn_);
 OB_TX_MSG_SERDE(Ob2pcClearRespMsg, ObTxMsg);
 OB_TX_MSG_SERDE(Ob2pcPrepareRedoReqMsg, ObTxMsg, xid_, upstream_, app_trace_info_);
 OB_TX_MSG_SERDE(Ob2pcPrepareRedoRespMsg, ObTxMsg);
-OB_TX_MSG_SERDE(Ob2pcPrepareVersionReqMsg, ObTxMsg, upstream_);
+OB_TX_MSG_SERDE(Ob2pcPrepareVersionReqMsg, ObTxMsg);
 OB_TX_MSG_SERDE(Ob2pcPrepareVersionRespMsg, ObTxMsg, prepare_version_, prepare_info_array_);
-OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_, ori_ls_id_, ori_addr_);
+OB_TX_MSG_SERDE(ObAskStateMsg, ObTxMsg, snapshot_);
 OB_TX_MSG_SERDE(ObAskStateRespMsg, ObTxMsg, state_info_array_);
-OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_, check_info_);
-OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_, transfer_parts_);
-OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_, downstream_parts_);
+OB_TX_MSG_SERDE(ObCollectStateMsg, ObTxMsg, snapshot_);
+OB_TX_MSG_SERDE(ObCollectStateRespMsg, ObTxMsg, state_info_);
+OB_SERIALIZE_MEMBER((ObTxRollbackSPRespMsg, ObTxMsg), ret_, orig_epoch_);
 
 OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {
   int len = 0;
   len += ObTxMsg::get_serialize_size();
-  LST_DO_CODE(OB_UNIS_ADD_LEN, savepoint_, op_sn_, tx_seq_base_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, savepoint_, op_sn_, branch_id_);
   if (OB_NOT_NULL(tx_ptr_)) {
     OB_UNIS_ADD_LEN(true);
     OB_UNIS_ADD_LEN(*tx_ptr_);
@@ -141,7 +140,6 @@ OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
     OB_UNIS_ADD_LEN(false);
   }
   OB_UNIS_ADD_LEN(flag_);
-  OB_UNIS_ADD_LEN(specified_from_scn_);
   return len;
 }
 
@@ -149,7 +147,7 @@ OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
 {
   int ret = ObTxMsg::serialize(buf, buf_len, pos);
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, savepoint_, op_sn_, tx_seq_base_);
+    LST_DO_CODE(OB_UNIS_ENCODE, savepoint_, op_sn_, branch_id_);
     if (OB_NOT_NULL(tx_ptr_)) {
       OB_UNIS_ENCODE(true);
       OB_UNIS_ENCODE(*tx_ptr_);
@@ -157,7 +155,6 @@ OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
       OB_UNIS_ENCODE(false);
     }
     OB_UNIS_ENCODE(flag_);
-    OB_UNIS_ENCODE(specified_from_scn_);
   }
   return ret;
 }
@@ -166,7 +163,7 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
 {
   int ret = ObTxMsg::deserialize(buf, data_len, pos);
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, savepoint_, op_sn_, tx_seq_base_);
+    LST_DO_CODE(OB_UNIS_DECODE, savepoint_, op_sn_, branch_id_);
     bool has_tx_ptr = false;
     OB_UNIS_DECODE(has_tx_ptr);
     if (has_tx_ptr) {
@@ -180,7 +177,6 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
       }
     }
     OB_UNIS_DECODE(flag_);
-    OB_UNIS_DECODE(specified_from_scn_);
   }
   return ret;
 }
@@ -337,7 +333,8 @@ bool Ob2pcPrepareRespMsg::is_valid() const
 bool Ob2pcPreCommitReqMsg::is_valid() const
 {
   bool ret = false;
-  if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_REQ) {
+  if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_REQ
+      && commit_version_.is_valid()) {
     ret = true;
   }
   return ret;
@@ -346,7 +343,8 @@ bool Ob2pcPreCommitReqMsg::is_valid() const
 bool Ob2pcPreCommitRespMsg::is_valid() const
 {
   bool ret = false;
-  if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_RESP) {
+  if (ObTxMsg::is_valid() && type_ == TX_2PC_PRE_COMMIT_RESP
+      && commit_version_.is_valid()) {
     ret = true;
   }
   return ret;
@@ -437,9 +435,7 @@ bool Ob2pcPrepareRedoRespMsg::is_valid() const
 bool Ob2pcPrepareVersionReqMsg::is_valid() const
 {
   bool ret = false;
-  if (ObTxMsg::is_valid() && type_ == TX_2PC_PREPARE_VERSION_REQ
-      // open after no version can upgrade from with no upstream
-      /*&& upstream_.is_valid()*/) {
+  if (ObTxMsg::is_valid() && type_ == TX_2PC_PREPARE_VERSION_REQ) {
     ret = true;
   }
   return ret;

@@ -14,7 +14,7 @@
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_DATA_MACRO_BLOCK_MERGE_WRITER_H_
 #include "ob_macro_block_writer.h"
 #include "ob_macro_block.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "index_block/ob_index_block_macro_iterator.h"
 #include "ob_macro_block.h"
 #include "ob_datum_row.h"
 

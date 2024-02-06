@@ -446,7 +446,6 @@ private:
    */
   TplSqlConstCons tpl_sql_const_cons_;
   //***********  end user-defined rules **************
-  bool enable_rich_vector_format_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

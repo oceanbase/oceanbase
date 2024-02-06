@@ -331,11 +331,10 @@ int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other
   int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
-    if (OB_FAIL(set_tenant_id(other.tenant_id_))) {
-      LOG_WARN("failed to set tenant id", KR(ret), K(other));
-    } else if (OB_FAIL(column_meta_.assign(other.column_meta_))) {
+    if (OB_FAIL(column_meta_.assign(other.column_meta_))) {
       LOG_WARN("fail to assign column meta", KR(ret), K(other));
     } else {
+      tenant_id_ = other.tenant_id_;
       tablet_id_ = other.tablet_id_;
       ls_id_ = other.ls_id_;
       server_ = other.server_;
@@ -343,19 +342,6 @@ int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other
       compaction_scn_ = other.compaction_scn_;
       data_checksum_ = other.data_checksum_;
     }
-  }
-  return ret;
-}
-
-int ObTabletReplicaChecksumItem::set_tenant_id(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
-  } else {
-    tenant_id_ = tenant_id;
-    column_meta_.column_checksums_.set_attr(ObMemAttr(tenant_id, "RepCkmItem"));
   }
   return ret;
 }
@@ -497,7 +483,6 @@ int ObTabletReplicaChecksumOperator::batch_get(
   items.reset();
   tablet_items_cnt = 0;
   const int64_t pairs_cnt = pairs.count();
-  const int32_t group_id = share::OBCG_DEFAULT;
   if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt));
@@ -512,7 +497,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
                                               false/*include_larger_than*/, false/*with_compaction_scn*/))) {
         LOG_WARN("fail to construct batch get sql", KR(ret), K(tenant_id), K(pairs),
           K(start_idx), K(end_idx));
-      } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items, tmp_tablet_items_cnt))) {
+      } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items, tmp_tablet_items_cnt))) {
         LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(sql));
       } else {
         start_idx = end_idx;
@@ -542,16 +527,15 @@ int ObTabletReplicaChecksumOperator::batch_get(
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items,
     int64_t &tablet_items_cnt,
-    const bool include_larger_than,
-    const int32_t group_id)
+    const bool include_larger_than)
 {
   int ret = OB_SUCCESS;
   items.reset();
   tablet_items_cnt = 0;
   const int64_t pairs_cnt = pairs.count();
-  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id || group_id < 0)) {
+  if (OB_UNLIKELY(pairs_cnt < 1 || OB_INVALID_TENANT_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt), K(group_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt));
   }
   // Step 2: cut tablet replica checksum items into small batches
   int64_t start_idx = 0;
@@ -564,7 +548,7 @@ int ObTabletReplicaChecksumOperator::batch_get(
                                              sql, include_larger_than, true/*with_compaction_scn*/))) {
       LOG_WARN("fail to construct batch get sql", KR(ret), K(tenant_id), K(compaction_scn), K(pairs),
         K(start_idx), K(end_idx));
-    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_proxy, items, tmp_tablet_items_cnt))) {
+    } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, sql_proxy, items, tmp_tablet_items_cnt))) {
       LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(sql));
     } else {
       start_idx = end_idx;
@@ -587,19 +571,18 @@ int ObTabletReplicaChecksumOperator::batch_get(
 int ObTabletReplicaChecksumOperator::inner_batch_get_by_sql_(
     const uint64_t tenant_id,
     const ObSqlString &sql,
-    const int32_t group_id,
     ObISQLClient &sql_proxy,
     ObIArray<ObTabletReplicaChecksumItem> &items,
     int64_t &tablet_items_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || group_id < 0)) {
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(group_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr(), group_id))) {
+      if (OB_FAIL(sql_proxy.read(result, meta_tenant_id, sql.ptr()))) {
         LOG_WARN("fail to execute sql", KR(ret), K(tenant_id), K(meta_tenant_id), "sql", sql.ptr());
       } else if (OB_ISNULL(result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -668,9 +651,8 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
 
   if (OB_FAIL(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
-  } else if (OB_FAIL(item.set_tenant_id((uint64_t)int_tenant_id))) {
-    LOG_WARN("failed to set tenant id", KR(ret), K(int_tenant_id));
   } else {
+    item.tenant_id_ = (uint64_t)int_tenant_id;
     item.tablet_id_ = (uint64_t)int_tablet_id;
     item.ls_id_ = ls_id;
     if (OB_UNLIKELY(!item.server_.set_ip_addr(ip, static_cast<int32_t>(port)))) {
@@ -795,20 +777,102 @@ int ObTabletReplicaChecksumOperator::inner_batch_insert_or_update_by_sql_(
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
+    const uint64_t tenant_id,
+    const ObSimpleTableSchemaV2 &simple_schema,
+    ObMySQLProxy &sql_proxy,
+    ObIArray<ObTabletLSPair> &pairs)
+{
+  int ret = OB_SUCCESS;
+  if ((!is_valid_tenant_id(tenant_id)) || (!simple_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObArray<ObTabletID>, tablet_ids) {
+      if (OB_FAIL(get_table_all_tablet_ids_(simple_schema, tablet_ids))) {
+        LOG_WARN("fail to get table all tablet ids", KR(ret), K(simple_schema));
+      } else if (tablet_ids.count() > 0) {
+        const uint64_t table_id = simple_schema.get_table_id();
+        if (OB_FAIL(get_tablet_ls_pairs(tenant_id, table_id, sql_proxy, tablet_ids, pairs))) {
+          LOG_WARN("fail to get tablet_ls_pairs", KR(ret), K(tenant_id), K(table_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObMySQLProxy &sql_proxy,
+    const ObIArray<ObTabletID> &tablet_ids,
+    ObIArray<ObTabletLSPair> &pairs)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id) || (tablet_ids.count() < 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_ids.count()));
+  } else {
+    SMART_VAR(ObArray<ObLSID>, ls_ids) {
+      // sys_table's tablet->ls relation won't be written into __all_tablet_to_ls
+      if (is_sys_tenant(tenant_id) || is_sys_table(table_id)) {
+        for (int64_t i = 0; (i < tablet_ids.count()) && OB_SUCC(ret); ++i) {
+          ObLSID tmp_ls_id(ObLSID::SYS_LS_ID);
+          if (OB_FAIL(ls_ids.push_back(tmp_ls_id))) {
+            LOG_WARN("fail to push back ls_id", KR(ret), K(tenant_id), K(table_id));
+          }
+        }
+      } else if (OB_FAIL(ObTabletToLSTableOperator::batch_get_ls(sql_proxy, tenant_id, tablet_ids, ls_ids))) {
+        LOG_WARN("fail to batch get ls", KR(ret), K(tenant_id), K(tablet_ids));
+      }
+
+      const int64_t ls_id_cnt = ls_ids.count();
+      if (OB_SUCC(ret) && (ls_id_cnt != tablet_ids.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("count mismatch", KR(ret), K(ls_id_cnt), K(tablet_ids.count()));
+      }
+
+      for (int64_t i = 0; (i < ls_id_cnt) && OB_SUCC(ret); ++i) {
+        ObTabletLSPair cur_pair;
+        const ObTabletID &cur_tablet_id = tablet_ids.at(i);
+        const ObLSID &cur_ls_id = ls_ids.at(i);
+        if (OB_FAIL(cur_pair.init(cur_tablet_id, cur_ls_id))) {
+          LOG_WARN("fail to init tablet_ls_pair", KR(ret), K(i), K(cur_tablet_id), K(cur_ls_id));
+        } else if (OB_FAIL(pairs.push_back(cur_pair))) {
+          LOG_WARN("fail to push back pair", KR(ret), K(cur_pair));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)){
+    } else if (OB_UNLIKELY(pairs.count() != tablet_ids.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("some unexpected err about tablet_ls_pair count", KR(ret), "tablet_id_cnt",
+               tablet_ids.count(), "pair_cnt", pairs.count());
+    }
+  }
+  return ret;
+}
+
 int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
     const uint64_t tenant_id,
     ObMySQLProxy &sql_proxy,
+    const ObSimpleTableSchemaV2 &simple_schema,
     const SCN &compaction_scn,
-    const ObIArray<ObTabletLSPair> &tablet_pairs,
+    ObIArray<ObTabletLSPair> &tablet_pairs,
     ObIArray<ObTabletReplicaChecksumItem> &items)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+  if ((!is_valid_tenant_id(tenant_id)) || (!simple_schema.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
     int64_t tablet_items_cnt = 0;
-    if (OB_FAIL(batch_get(tenant_id, tablet_pairs, compaction_scn,
+    const uint64_t table_id = simple_schema.get_table_id();
+    if (OB_FAIL(get_tablet_ls_pairs(tenant_id, simple_schema, sql_proxy, tablet_pairs))) {
+      LOG_WARN("fail to get tablet_ls_pairs", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, tablet_pairs, compaction_scn,
         sql_proxy, items, tablet_items_cnt, false/*include_larger_than*/))) {
       LOG_WARN("fail to batch get tablet checksum item", KR(ret), K(tenant_id), K(compaction_scn),
                 "pairs_count", tablet_pairs.count());
@@ -816,6 +880,24 @@ int ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
       ret = OB_ITEM_NOT_MATCH;
       LOG_WARN("fail to get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn),
         K(tablet_items_cnt), K(items));
+    }
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumOperator::get_table_all_tablet_ids_(
+    const ObSimpleTableSchemaV2 &simple_schema,
+    ObIArray<ObTabletID> &schema_tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!simple_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(simple_schema));
+  } else {
+    if (simple_schema.has_tablet()) {
+      if (OB_FAIL(simple_schema.get_tablet_ids(schema_tablet_ids))) {
+        LOG_WARN("fail to get tablet_ids from table schema", KR(ret), K(simple_schema));
+      }
     }
   }
   return ret;

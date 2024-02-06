@@ -66,8 +66,7 @@ int ObAllVirtualIDService::get_next_tenant_id_info_()
 {
   int ret = OB_SUCCESS;
   if (tenant_ids_index_ >= all_tenants_.count()) {
-    if (transaction::ObIDService::MAX_SERVICE_TYPE == service_types_index_ + 1 ||
-        all_tenants_.empty()) {
+    if (transaction::ObIDService::MAX_SERVICE_TYPE == service_types_index_ + 1) {
       ret = OB_ITER_END;
     } else {
       service_types_index_++;

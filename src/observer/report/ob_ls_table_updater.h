@@ -47,6 +47,7 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
+  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
@@ -54,6 +55,7 @@ public:
   virtual bool operator!=(const ObLSTableUpdateTask &other) const;
   virtual bool compare_without_version(const ObLSTableUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
+  virtual int assign_when_equal(const ObLSTableUpdateTask &other);
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline share::ObLSID get_ls_id() const { return ls_id_; }
   inline int64_t get_add_timestamp() const { return add_timestamp_; }

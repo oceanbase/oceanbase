@@ -137,16 +137,6 @@ int ObCodeGenerator::detect_batch_size(
                                    scan_cardinality));
       // overwrite batch size if hint is specified
       OZ(opt_params->get_integer_opt_param(ObOptParamHint::ROWSETS_MAX_ROWS, batch_size));
-
-      int tmp_ret = OB_SUCCESS;
-      tmp_ret = OB_E(EventTable::EN_ENABLE_RANDOM_BATCH_SIZE) OB_SUCCESS;
-      if (OB_SUCCESS != tmp_ret) {
-        static const int64_t min = 1;
-        static const int64_t max = rowsets_max_rows * 2;
-        batch_size = common::ObRandom::rand(min, max);
-      }
-      LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size),
-                K(rowsets_max_rows), K(tmp_ret));
     }
     // TODO qubin.qb: remove the tracelog when rowsets/batch_size is displayed
     // in plan

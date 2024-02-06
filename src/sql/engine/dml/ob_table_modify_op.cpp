@@ -747,7 +747,6 @@ int ObTableModifyOp::inner_open()
   } else {
     init_das_dml_ctx();
   }
-  LOG_TRACE("table_modify_op", K(execute_single_row_));
   return ret;
 }
 

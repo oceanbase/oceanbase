@@ -219,7 +219,6 @@ public:
                                        bool include_hidden,
                                        ColumnItem *&col_item);
   // dot notation
-  int expand_column_in_json_object_star(ParseNode *node);
   int pre_process_json_expr(ParseNode &node);
   int print_json_path(ParseNode *&tmp_path, ObJsonBuffer &res_str);
   int check_depth_obj_access_ref(ParseNode *node, int8_t &depth, bool &exist_fun, ObJsonBuffer &sql_str, bool obj_check = true);  // obj_check : whether need check dot notaion
@@ -238,7 +237,7 @@ public:
                                           common::ObIAllocator &allocator,
                                           int& pos);
   int process_json_agg_node(ParseNode*& node, common::ObIAllocator &allocator);
-  int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str, bool &is_scalar);
+  int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str);
   int check_is_json_constraint(common::ObIAllocator &allocator,
                                ParseNode *col_node,
                                bool& is_json_cst,
@@ -458,7 +457,7 @@ protected:
                                   bool &is_generated);
   virtual int expand_view(TableItem &view_item);
   int do_expand_view(TableItem &view_item, ObChildStmtResolver &view_resolver);
-  int check_pad_generated_column(const ObSQLMode sql_mode,
+  int check_pad_generated_column(const ObSQLSessionInfo &session_info,
                                  const share::schema::ObTableSchema &table_schema,
                                  const share::schema::ObColumnSchemaV2 &column_schema,
                                  bool is_link = false);
@@ -469,12 +468,6 @@ protected:
   int build_padding_expr(const ObSQLSessionInfo *session,
                          const share::schema::ObColumnSchemaV2 *column_schema,
                          ObRawExpr *&expr);
-
-  int build_padding_expr(const ObSQLMode sql_mode,
-                        const share::schema::ObColumnSchemaV2 *column_schema,
-                        ObRawExpr *&expr,
-                        const ObLocalSessionVar *local_vars = NULL,
-                        int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
   // check in sys view or show statement
@@ -722,8 +715,6 @@ protected:
   int add_fake_schema(ObSelectStmt* left_stmt);
   int resolve_basic_table_without_cte(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_basic_table_with_cte(const ParseNode &parse_tree, TableItem *&table_item);
-  int check_is_table_supported_for_mview(const TableItem &table_item, const ObTableSchema &table_schema);
-  int check_is_table_supported_for_mview(const ObItemType table_node_type);
   int resolve_cte_table(const ParseNode &parse_tree, const TableItem *CTE_table_item, TableItem *&table_item);
   int resolve_recursive_cte_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_with_clause_opt_alias_colnames(const ParseNode *parse_tree, TableItem *&table_item);
@@ -878,7 +869,6 @@ private:
   int resolve_pq_map_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_distribute_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_set_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
-  int resolve_pq_subquery_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_filter_hint(const ParseNode &join_node, ObOptHint *&opt_hint);
   int resolve_aggregation_hint(const ParseNode &hint_node, ObOptHint *&hint);
   int resolve_normal_transform_hint(const ParseNode &hint_node, ObTransHint *&hint);
@@ -894,7 +884,7 @@ private:
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
-  int resolve_alloc_ops(const ParseNode &alloc_op_node, ObIArray<ObAllocOpHint> &alloc_op_hints);
+  int resolve_monitor_ids(const ParseNode &tracing_node, ObIArray<ObMonitorHint> &monitoring_ids);
   int resolve_tables_in_leading_hint(const ParseNode *tables_node, ObLeadingTable &leading_table);
   int resolve_simple_table_list_in_hint(const ParseNode *table_list,
                                         common::ObIArray<ObTableInHint> &hint_tables);
@@ -917,8 +907,6 @@ private:
 
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
-  int resolve_table_constraint_items(const TableItem *table_item,
-                                           const ObTableSchema *table_schema);
   int find_table_index_infos(const ObString &index_name,
                              const TableItem *table_item,
                              bool &find_it,
@@ -927,7 +915,7 @@ private:
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
 
   int replace_col_udt_qname(ObQualifiedName& q_name);
-  int check_column_scalar_type(ParseNode *root_node, bool &is_scalar);
+  int check_column_udt_type(ParseNode *root_node);
 
   int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
   bool check_expr_has_colref(ObRawExpr *expr);
@@ -935,16 +923,11 @@ private:
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
   int resolve_table_values_for_select(const ParseNode &table_node,
                                       ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
                                       int64_t &column_cnt);
   int resolve_table_values_for_insert(const ParseNode &table_node,
                                       ObIArray<ObRawExpr*> &table_values,
-                                      ObIArray<ObExprResType> &res_types,
                                       int64_t &column_cnt);
-
-  int gen_values_table_column_items(const int64_t column_cnt,
-                                    const ObIArray<ObExprResType> &res_types,
-                                    TableItem &table_item);
+  int gen_values_table_column_items(const int64_t column_cnt, TableItem &table_item);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObExprResType> &res_types,
@@ -955,8 +938,6 @@ private:
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
-
-  int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

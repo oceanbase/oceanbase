@@ -22,49 +22,11 @@
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
 #include "tx_node.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 namespace oceanbase
 {
 using namespace ::testing;
 using namespace transaction;
 using namespace share;
-
-static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
-
-namespace share {
-
-ObMdsThrottleGuard::~ObMdsThrottleGuard() {}
-ObTxDataThrottleGuard::~ObTxDataThrottleGuard() {}
-
-int ObTenantTxDataAllocator::init(const char *label)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  throttle_tool_ = &(MTL_MEM_ALLOC_MGR.share_resource_throttle_tool());
-  if (OB_FAIL(slice_allocator_.init(
-                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
-    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
-  } else {
-    slice_allocator_.set_nway(ObTenantTxDataAllocator::ALLOC_TX_DATA_MAX_CONCURRENCY);
-    is_inited_ = true;
-  }
-  return ret;
-}
-int ObMemstoreAllocator::init()
-{
-  throttle_tool_ = &MTL_MEM_ALLOC_MGR.share_resource_throttle_tool();
-  return arena_.init();
-}
-int ObMemstoreAllocator::AllocHandle::init()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = 1;
-  ObSharedMemAllocMgr *mtl_alloc_mgr = &MTL_MEM_ALLOC_MGR;
-  ObMemstoreAllocator &host = mtl_alloc_mgr->memstore_allocator();
-  (void)host.init_handle(*this);
-  return ret;
-}
-};  // namespace share
 
 namespace concurrent_control
 {
@@ -109,24 +71,6 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   acquire_from_follower = false;
   return ret;
 }
-
-bool NOTIFY_MDS_ERRSIM = false;
-
-OB_NOINLINE int ObPartTransCtx::errsim_notify_mds_()
-{
-  int ret = OB_SUCCESS;
-
-  if (NOTIFY_MDS_ERRSIM) {
-    ret = OB_ERR_UNEXPECTED;
-  }
-
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "errsim notify mds", K(ret), K(NOTIFY_MDS_ERRSIM));
-  }
-
-  return ret;
-}
-
 class ObTestRegisterMDS : public ::testing::Test
 {
 public:
@@ -140,7 +84,6 @@ public:
     const testing::TestInfo *const test_info =
         testing::UnitTest::GetInstance()->current_test_info();
     auto test_name = test_info->name();
-    MTL_MEM_ALLOC_MGR.init();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }
   virtual void TearDown() override
@@ -219,33 +162,6 @@ TEST_F(ObTestRegisterMDS, basic_big_mds)
 #endif
 }
 
-TEST_F(ObTestRegisterMDS, notify_mds_error)
-{
-  START_TWO_TX_NODE_WITH_LSID(n1, n2, 2005);
-  PREPARE_TX(n1, tx);
-  PREPARE_TX_PARAM(tx_param);
-  const char *mds_str = "register mds basic";
-
-  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
-
-  NOTIFY_MDS_ERRSIM = true;
-  ASSERT_EQ(OB_ERR_UNEXPECTED, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
-                                                      mds_str, strlen(mds_str)));
-  NOTIFY_MDS_ERRSIM = false;
-
-  n2->wait_all_redolog_applied();
-  ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
-
-  n2->set_as_follower_replica(*n1);
-  ReplayLogEntryFunctor functor(n2);
-  ASSERT_EQ(OB_SUCCESS, n2->fake_tx_log_adapter_->replay_all(functor));
-
-  GC_MDS_RETAIN_CTX(n1)
-  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
-
-  GC_MDS_RETAIN_CTX(n2)
-  ASSERT_EQ(OB_SUCCESS, n2->wait_all_tx_ctx_is_destoryed());
-}
 } // namespace oceanbase
 
 int main(int argc, char **argv)

@@ -29,17 +29,6 @@ namespace oceanbase
 namespace sql
 {
 
-struct ObExprRegexpSessionVariables {
-  TO_STRING_KV(K_(regexp_stack_limit), K_(regexp_time_limit));
-  ObExprRegexpSessionVariables():
-    regexp_stack_limit_(0),
-    regexp_time_limit_(0)
-  {}
-  int64_t regexp_stack_limit_;
-  int64_t regexp_time_limit_;
-  OB_UNIS_VERSION(1);
-};
-
 class ObExprRegexContext : public ObExprOperatorCtx
 {
 public:
@@ -54,7 +43,7 @@ public:
   // The previous regex compile result can be used if pattern not change, if %reusable is true.
   // %string_buf must be the same with previous init too if %reusable is true.
   int init(ObExprStringBuf &string_buf,
-           const ObExprRegexpSessionVariables &regex_vars,
+           ObSQLSessionInfo *session_info,
            const ObString &origin_pattern,
            const uint32_t cflags,
            const bool reusable,

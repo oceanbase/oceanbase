@@ -19,21 +19,12 @@
 
 namespace oceanbase
 {
-namespace share
-{
-namespace schema
-{
-class ObColumnParam;
-}
-}
 namespace blocksstable
 {
 struct ObStorageDatum;
 }
 namespace storage
 {
-class ObTableIterParam;
-class ObTableAccessContext;
 
 int pad_column(const ObObjMeta &obj_meta,
                const ObAccuracy accuracy,
@@ -54,62 +45,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
                   int64_t row_count,
                   common::ObDatum *&datums);
 
-int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
-                               const common::ObCollationType cs_type,
-                               const int64_t row_cap,
-                               const int64_t vec_offset,
-                               common::ObIAllocator &padding_alloc,
-                               sql::ObExpr &expr,
-                               sql::ObEvalCtx &eval_ctx);
-
-int fill_datums_lob_locator(const ObTableIterParam &iter_param,
-                            const ObTableAccessContext &context,
-                            const share::schema::ObColumnParam &col_param,
-                            const int64_t row_cap,
-                            ObDatum *datums,
-                            bool reuse_lob_locator = true);
-
-int fill_exprs_lob_locator(const ObTableIterParam &iter_param,
-                           const ObTableAccessContext &context,
-                           const share::schema::ObColumnParam &col_param,
-                           sql::ObExpr &expr,
-                           sql::ObEvalCtx &eval_ctx,
-                           const int64_t vec_offset,
-                           const int64_t row_cap);
-
-
 int cast_obj(const common::ObObjMeta &src_meta, common::ObIAllocator &cast_allocator, common::ObObj &obj);
-
-int init_expr_vector_header(
-    sql::ObExpr &expr,
-    sql::ObEvalCtx &eval_ctx,
-    const int64_t size,
-    const VectorFormat format = VectorFormat::VEC_UNIFORM);
-
-OB_INLINE int init_exprs_uniform_header(
-    const sql::ObExprPtrIArray *exprs,
-    sql::ObEvalCtx &eval_ctx,
-    const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (nullptr != exprs) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < exprs->count(); ++i) {
-      sql::ObExpr *expr = exprs->at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "Unexpected null expr", K(ret), KPC(exprs));
-      } else if (OB_FAIL(init_expr_vector_header(*expr, eval_ctx, size))) {
-        STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(expr));
-      }
-    }
-  }
-  return ret;
-}
-
-int init_exprs_new_format_header(
-    const common::ObIArray<int32_t> &cols_projector,
-    const sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx);
 
 OB_INLINE bool can_do_ascii_optimize(common::ObCollationType cs_type)
 {

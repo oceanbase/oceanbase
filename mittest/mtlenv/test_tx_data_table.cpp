@@ -124,6 +124,7 @@ public:
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
     OB_ASSERT(OB_SUCCESS == ObTxDataTable::init(&ls, &tx_ctx_table_));
     OB_ASSERT(OB_SUCCESS == mgr_.init(tablet_id, this, &freezer_, t3m));
+    mgr_.set_slice_allocator(get_slice_allocator());
 
     return ret;
   }
@@ -244,7 +245,7 @@ void TestTxDataTable::insert_tx_data_()
 
     ObTxDataGuard tx_data_guard;
     tx_data_guard.reset();
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
@@ -281,7 +282,7 @@ void TestTxDataTable::insert_rollback_tx_data_()
   for (int i = 0; i < 200; i++) {
     ObTxDataGuard tx_data_guard;
     ObTxData *tx_data = nullptr;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
@@ -309,7 +310,7 @@ void TestTxDataTable::insert_abort_tx_data_()
   tx_id = INT64_MAX - 3;
 
   ObTxDataGuard tx_data_guard;
-  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
   ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
   // fill in data
@@ -458,7 +459,7 @@ void TestTxDataTable::do_undo_status_test()
   {
     ObTxData *tx_data = nullptr;
     ObTxDataGuard tx_data_guard;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     tx_data->tx_id_ = rand();
@@ -484,7 +485,7 @@ void TestTxDataTable::do_undo_status_test()
     // so the undo status just have one undo status node
     ObTxData *tx_data = nullptr;
   ObTxDataGuard tx_data_guard;
-  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+  ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
   ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
     tx_data->tx_id_ = rand();
 
@@ -510,7 +511,7 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
 {
     ObTxData *tx_data = nullptr;
     ObTxDataGuard tx_data_guard;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
     tx_data->tx_id_ = transaction::ObTransID(269381);
     tx_data->commit_version_.convert_for_logservice(ObTimeUtil::current_time_ns());
@@ -539,12 +540,12 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
 
     ObTxData *new_tx_data = nullptr;
     ObTxDataGuard new_tx_data_guard;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(new_tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(new_tx_data_guard));
     ASSERT_NE(nullptr, new_tx_data = new_tx_data_guard.tx_data());
     new_tx_data->tx_id_ = transaction::ObTransID(269381);
     pos = 0;
     ASSERT_EQ(OB_SUCCESS, new_tx_data->deserialize(buf, serialize_size, pos,
-                                                   *tx_data_table_.get_tx_data_allocator()));
+                                                   *tx_data_table_.get_slice_allocator()));
     ASSERT_TRUE(new_tx_data->equals_(*tx_data));
     tx_data->dec_ref();
     new_tx_data->dec_ref();
@@ -645,7 +646,7 @@ void TestTxDataTable::do_repeat_insert_test() {
     tx_id = transaction::ObTransID(269381);
     tx_data = nullptr;
     ObTxDataGuard tx_data_guard;
-    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
 
     // fill in data
@@ -675,7 +676,7 @@ void TestTxDataTable::fake_ls_(ObLS &ls)
   ls.ls_meta_.ls_id_.id_ = 1001;
   ls.ls_meta_.gc_state_ = logservice::LSGCState::NORMAL;
   ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
-  ls.ls_meta_.restore_status_ = ObLSRestoreStatus::NONE;
+  ls.ls_meta_.restore_status_ = ObLSRestoreStatus::RESTORE_NONE;
   ls.ls_meta_.rebuild_seq_ = 0;
 }
 
@@ -749,7 +750,9 @@ int main(int argc, char **argv)
   // TEST_LOG("GCONF.syslog_io_bandwidth_limit %ld ", GCONF.syslog_io_bandwidth_limit.get_value());
   // LOG_INFO("GCONF.syslog_io_bandwidth_limit ", K(GCONF.syslog_io_bandwidth_limit.get_value()));
 
-  {
+  if (OB_SUCCESS != ObClockGenerator::init()) {
+    TRANS_LOG(WARN, "ObClockGenerator::init error!");
+  } else {
     if (argc > 1) {
       const_data_num = atoi(argv[1]);
     } else {

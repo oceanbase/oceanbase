@@ -127,8 +127,9 @@ public:
       const ObTabletComplexAddr<share::ObTabletAutoincSeq> &complex_addr,
       share::ObTabletAutoincSeq *&auto_inc_seq);
   static int load_aux_tablet_info(
+      common::ObIAllocator &allocator,
       const ObTabletComplexAddr<mds::MdsDumpKV> &complex_addr,
-      ObTabletBindingMdsUserData &aux_tablet_info);
+      ObTabletBindingMdsUserData *&aux_tablet_info);
   static int build_tablet_status(
       common::ObArenaAllocator &allocator,
       const ObTabletTxMultiSourceDataUnit &tx_data,

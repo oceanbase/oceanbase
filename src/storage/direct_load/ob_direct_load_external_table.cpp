@@ -103,11 +103,6 @@ int ObDirectLoadExternalTable::init(const ObDirectLoadExternalTableCreateParam &
   return ret;
 }
 
-void ObDirectLoadExternalTable::release_data()
-{
-  fragments_.reset();
-}
-
 int ObDirectLoadExternalTable::copy(const ObDirectLoadExternalTable &other)
 {
   int ret = OB_SUCCESS;

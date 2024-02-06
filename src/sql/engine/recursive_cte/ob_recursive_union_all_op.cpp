@@ -90,7 +90,7 @@ int ObRecursiveUnionAllOp::inner_open()
   } else if (OB_ISNULL(op_kit = ctx_.get_operator_kit(MY_SPEC.pump_operator_id_))
               || OB_ISNULL(op_kit->op_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get ObOperator from exec ctx failed", K(MY_SPEC.pump_operator_id_), K(op_kit), K(MY_SPEC.search_expr_), K(MY_SPEC.strategy_));
+    LOG_WARN("get ObOperater from exec ctx failed", K(MY_SPEC.pump_operator_id_), K(op_kit), K(MY_SPEC.search_expr_), K(MY_SPEC.strategy_));
   } else {
     inner_data_.set_left_child(left_);
     inner_data_.set_right_child(right_);

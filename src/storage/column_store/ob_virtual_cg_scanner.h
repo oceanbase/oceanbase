@@ -31,11 +31,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override final;
+      ObCGTableWrapper &wrapper) override final;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override final;
+      ObCGTableWrapper &wrapper) override final;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override final;
@@ -81,11 +81,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override;
@@ -105,7 +105,7 @@ public:
 private:
 	int init_datum_infos_and_default_row(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
   int init_cg_agg_cells(const ObTableIterParam &iter_param, ObTableAccessContext &access_ctx);
-  int do_filter(sql::ObPushdownFilterExecutor *filter, const sql::ObBitVector &skip_bit, bool &result);
+  int do_filter(sql::ObPushdownFilterExecutor *filter, bool &result);
   int add_lob_header_if_need(
       const share::schema::ObColumnParam &column_param,
       ObIAllocator &allocator,
@@ -133,10 +133,10 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual int init_group_by_info() override;
   virtual ObCGIterType get_type() override
-  { return OB_CG_GROUP_BY_DEFAULT_SCANNER; }
+  { return OB_CG_GROUP_BY_SCANNER; }
   virtual int decide_group_size(int64_t &group_size) override;
   virtual int decide_can_group_by(
       const int32_t group_by_col,

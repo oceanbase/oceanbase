@@ -1,0 +1,63 @@
+obagent:
+  # The list of servers to be monitored. This list is consistent with the servers in oceanbase-ce.
+  servers:
+    - 127.0.0.1
+  # Set dependent components for the component.
+  # When the associated configurations are not done, OBD will automatically get the these configurations from the dependent components.
+  depends:
+    - oceanbase-ce
+  global:
+    # The working directory for obagent. obagent is started under this directory. This is a required field.
+    home_path: /root/obagent
+    # The port that pulls and manages the metrics. The default port number is 8088.
+    monagent_http_port: 8088
+    # Debug port for pprof. The default port number is 8089.
+    mgragent_http_port: 8089
+    # Log level. The default value is INFO.
+    log_level: INFO
+    # Log path. The default value is log/monagent.log.
+    log_path: log/monagent.log
+    # Encryption method. OBD supports aes and plain. The default value is plain.
+    crypto_method: plain
+    # Path to store the crypto key. The default value is conf/.config_secret.key.
+    # crypto_path: conf/.config_secret.key
+    # Size for a single log file. Log size is measured in Megabytes. The default value is 30M.
+    log_size: 30
+    # Expiration time for logs. The default value is 7 days.
+    log_expire_day: 7
+    # The maximum number for log files. The default value is 10.
+    log_file_count: 10
+    # Whether to use local time for log files. The default value is true.
+    # log_use_localtime: true
+    # Whether to enable log compression. The default value is true.
+    # log_compress: true
+    # Username for HTTP authentication. The default value is admin.
+    http_basic_auth_user: admin
+    # Password for HTTP authentication. The default value is root.
+    http_basic_auth_password: root
+    # Username for debug service. The default value is admin.
+    pprof_basic_auth_user: admin
+    # Password for debug service. The default value is root.
+    pprof_basic_auth_password: root
+    # Monitor username for OceanBase Database. The user must have read access to OceanBase Database as a system tenant. The default value is root.
+    # monitor_user: root
+    # Monitor password for OceanBase Database. The default value is empty. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the root_password in oceanbase-ce.
+    # monitor_password:
+    # The SQL port for observer. The default value is 2881. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the mysql_port in oceanbase-ce.
+    # sql_port: 2881
+    # The RPC port for observer. The default value is 2882. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the rpc_port in oceanbase-ce.
+    # rpc_port: 2882
+    # Cluster name for OceanBase Database. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the appname in oceanbase-ce.
+    cluster_name: @OB_CLUSTER_NAME@
+    # Cluster ID for OceanBase Database. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the cluster_id in oceanbase-ce.
+    # cluster_id: 1
+    # Zone name for your observer. The default value is zone1. When a depends exists, OBD gets this value from the oceanbase-ce of the depends. The value is the same as the zone name in oceanbase-ce.
+    # zone_name: zone1
+    # Monitor status for OceanBase Database.  Active is to enable. Inactive is to disable. The default value is active. When you deploy an cluster automatically, OBD decides whether to enable this parameter based on depends.
+    ob_monitor_status: active
+    # Monitor status for your host. Active is to enable. Inactive is to disable. The default value is active.
+    host_monitor_status: active
+    # Whether to disable the basic authentication for HTTP service. True is to disable. False is to enable. The default value is false.
+    disable_http_basic_auth: true
+    # Whether to disable the basic authentication for the debug interface. True is to disable. False is to enable. The default value is false.
+    disable_pprof_basic_auth: true

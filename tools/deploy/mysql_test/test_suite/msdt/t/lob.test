@@ -21,20 +21,6 @@ let $report_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_v
 let $unit_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_unit where tenant_id = $tenant_id1, cnt, 1);
 
 --disable_query_log
-
-let $__i__= 120;
-while($__i__ > 0)
-{
-    sleep 1;
-    dec $__i__;
-    let $report_cnt1 = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_tablet_meta_table where tenant_id = $tenant_id1 and ls_id = $ls_id1 and tablet_id = $tablet_id1, cnt, 1);
-    if($report_cnt1 == $unit_cnt1)
-    {
-      let $__i__ = -1;
-    }
-}
-
-
 eval select $report_cnt1 = $unit_cnt1 as result;
 --enable_query_log
 

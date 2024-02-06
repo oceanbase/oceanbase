@@ -330,8 +330,7 @@ struct ObLoadDataStat
                      insert_rt_sum_(0),
                      total_wait_secs_(0),
                      max_allowed_error_rows_(0),
-                     detected_error_rows_(0),
-                     message_() {}
+                     detected_error_rows_(0) {}
   int64_t aquire() {
     return ATOMIC_AAF(&ref_cnt_, 1);
   }
@@ -378,7 +377,6 @@ struct ObLoadDataStat
     common::ObString status_ = "none";
     common::ObString trans_status_ = "none";
   } store;
-  char message_[common::MAX_LOAD_DATA_MESSAGE_LENGTH];
 
   TO_STRING_KV(K(tenant_id_), K(job_id_), K(job_type_),
       K(table_name_), K(file_path_), K(table_column_), K(file_column_),
@@ -391,7 +389,7 @@ struct ObLoadDataStat
       K(coordinator.received_rows_), K(coordinator.last_commit_segment_id_),
       K(coordinator.status_), K(coordinator.trans_status_),
       K(store.processed_rows_), K(store.last_commit_segment_id_),
-      K(store.status_), K(store.trans_status_), K(message_));
+      K(store.status_), K(store.trans_status_));
 };
 
 class ObGetAllJobStatusOp

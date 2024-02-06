@@ -135,6 +135,7 @@ private:
       LogEntryType &log_group_entry,
       LSN &lsn,
       ClientLSCtx &ctx);
+  int init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id);
   // Check whether has reached time limit
   inline bool is_time_up_(const int64_t scan_round, const int64_t end_tstamp)
   {

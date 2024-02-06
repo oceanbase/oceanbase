@@ -166,7 +166,7 @@ int ObAllVirtualMacroBlockMarkerStatus::inner_get_next_row(common::ObNewRow *&ro
       }
       case OB_APP_MIN_COLUMN_ID + 18: {
         // whether finished marking
-        cur_row_.cells_[i].set_bool(true);
+        cur_row_.cells_[i].set_bool(marker_status_.mark_finished_);
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 19: {

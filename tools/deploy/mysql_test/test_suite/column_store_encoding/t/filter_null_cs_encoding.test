@@ -10,13 +10,12 @@ connect (default,$OBMYSQL_MS0,admin@mysql,admin,test,$OBMYSQL_PORT);
 set @@recyclebin = off;
 set ob_query_timeout=1000000000;
 set ob_trx_timeout=1000000000;
-set session _enable_rich_vector_format = true;
 
 --disable_warnings
 drop table if exists t1;
 --enable_warnings
 
-create table t1 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group (all columns, each column);
+create table t1 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group for all columns, each column;
 insert into t1 (b, c, d) values(1, "a", repeat('a', 1000));
 insert into t1 (b, c, d) values(2, "ab", repeat("ab", 500));
 insert into t1 (b, c, d) values(3, "ab ", repeat("ab", 500));

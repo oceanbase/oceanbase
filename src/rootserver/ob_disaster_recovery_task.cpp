@@ -103,7 +103,6 @@ static const char* disaster_recovery_task_ret_comment_strs[] = {
   "[rs] task can not execute because fail to check paxos replica number",
   "[rs] task can not execute because replica is not in service",
   "[rs] task can not execute because server is permanent offline",
-  "[rs] task can not persist because conflict with clone operation",
   ""/*default max*/
 };
 

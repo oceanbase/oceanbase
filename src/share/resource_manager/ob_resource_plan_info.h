@@ -36,7 +36,6 @@ enum ObFunctionType
   PRIO_HA_LOW = 5,
   PRIO_DDL = 6,
   PRIO_DDL_HIGH = 7,
-  PRIO_OTHER_BACKGROUND = 8,
   MAX_FUNCTION_NUM
 };
 

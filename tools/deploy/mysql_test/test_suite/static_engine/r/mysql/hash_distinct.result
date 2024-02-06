@@ -277,17 +277,15 @@ Query Plan
 ============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil)
+  0 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)],
+       [T_FUN_COUNT(.c7)]), filter(nil)
       limit(1), offset(nil)
-  1 - output([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)]), filter(nil)
-      group(nil), agg_func([T_FUN_SUM(ANONYMOUS_VIEW1.c0)], [T_FUN_SUM(length(ANONYMOUS_VIEW1.c1))], [T_FUN_COUNT(ANONYMOUS_VIEW1.c2)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c3)],
-       [T_FUN_COUNT(ANONYMOUS_VIEW1.c4)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c5)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c6)], [T_FUN_COUNT(ANONYMOUS_VIEW1.c7)])
-  2 - output([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
-       [ANONYMOUS_VIEW1.c7]), filter(nil)
-      access([ANONYMOUS_VIEW1.c0], [ANONYMOUS_VIEW1.c1], [ANONYMOUS_VIEW1.c2], [ANONYMOUS_VIEW1.c3], [ANONYMOUS_VIEW1.c4], [ANONYMOUS_VIEW1.c5], [ANONYMOUS_VIEW1.c6],
-       [ANONYMOUS_VIEW1.c7])
+  1 - output([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)],
+       [T_FUN_COUNT(.c7)]), filter(nil)
+      group(nil), agg_func([T_FUN_SUM(.c0)], [T_FUN_SUM(length(.c1))], [T_FUN_COUNT(.c2)], [T_FUN_COUNT(.c3)], [T_FUN_COUNT(.c4)], [T_FUN_COUNT(.c5)], [T_FUN_COUNT(.c6)],
+       [T_FUN_COUNT(.c7)])
+  2 - output([.c0], [.c1], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7]), filter(nil)
+      access([.c0], [.c1], [.c2], [.c3], [.c4], [.c5], [.c6], [.c7])
   3 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil)
       distinct([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7])
   4 - output([t111_var.c0], [t111_var.c1], [t111_var.c2], [t111_var.c3], [t111_var.c4], [t111_var.c5], [t111_var.c6], [t111_var.c7]), filter(nil)
@@ -5964,7 +5962,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output(nil), filter([concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [result.t2c0 = 1489403758], [concat(result.t0c0, '') IS NULL], [result.t0c1 = 398204275]), rowset=256
+  1 - output(nil), filter([concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [result.t0c1 = 398204275], [result.t2c0 = 1489403758], [concat(result.t0c0, '') 
+      IS NULL]), rowset=256
       access([result.t0c0], [result.t0c1], [result.t2c0], [result.t1c0])
   2 - output([t0.c0], [t0.c1], [t2.c0], [t1.c0]), filter(nil), rowset=256
       limit(2147483647), offset(0)
@@ -6020,7 +6019,8 @@ Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
       group(nil), agg_func([T_FUN_COUNT(*)])
-  1 - output(nil), filter([concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [result.t2c0 = 1489403758], [concat(result.t0c0, '') IS NULL], [result.t0c1 = 398204275]), rowset=256
+  1 - output(nil), filter([concat(result.t1c0, '') = 'q6h]zjLt)|[?S*C'], [result.t0c1 = 398204275], [result.t2c0 = 1489403758], [concat(result.t0c0, '') 
+      IS NULL]), rowset=256
       access([result.t0c0], [result.t0c1], [result.t2c0], [result.t1c0])
   2 - output([t0.c0], [t0.c1], [t2.c0], [t1.c0]), filter(nil), rowset=256
       limit(2147483647), offset(0)

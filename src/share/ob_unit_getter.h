@@ -51,9 +51,6 @@ public:
     return UNIT_DELETING_IN_OBSERVER != status && UNIT_ERROR_STAT != status;
   }
 
-  static bool is_unit_will_be_deleted_in_observer(const ObUnitStatus status) {
-    return UNIT_WAIT_GC_IN_OBSERVER == status || UNIT_DELETING_IN_OBSERVER == status; }
-
   struct ObTenantConfig
   {
     OB_UNIS_VERSION(1);

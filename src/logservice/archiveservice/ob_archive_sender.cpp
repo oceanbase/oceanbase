@@ -583,7 +583,6 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
   char *filled_data = NULL;
   int64_t filled_data_len = 0;
   const bool is_full_file = (task.get_end_lsn() - task.get_start_lsn()) == MAX_ARCHIVE_FILE_SIZE;
-  const bool is_can_seal = 0 == task.get_end_lsn().val_ % MAX_ARCHIVE_FILE_SIZE;
   const int64_t start_ts = common::ObTimeUtility::current_time();
   // 1. decide archive file
   if (OB_FAIL(decide_archive_file_(task, arg.cur_file_id_, arg.cur_file_offset_,
@@ -613,8 +612,8 @@ int ObArchiveSender::archive_log_(const ObBackupDest &backup_dest,
     ARCHIVE_LOG(WARN, "fill file header if needed failed", K(ret));
   }
   // 6. push log
-  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), is_full_file,
-          is_can_seal, new_file ? file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
+  else if (OB_FAIL(push_log_(id, path.get_obstr(), backup_dest.get_storage_info(), is_full_file, new_file ?
+          file_offset : file_offset + ARCHIVE_FILE_HEADER_SIZE,
           new_file ? filled_data : origin_data, new_file ? filled_data_len : origin_data_len))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret), K(task));
   // 7. 更新日志流归档任务archive file info
@@ -724,7 +723,6 @@ int ObArchiveSender::push_log_(const ObLSID &id,
     const ObString &uri,
     const share::ObBackupStorageInfo *storage_info,
     const bool is_full_file,
-    const bool is_can_seal,
     const int64_t offset,
     char *data,
     const int64_t data_len)
@@ -732,7 +730,7 @@ int ObArchiveSender::push_log_(const ObLSID &id,
   int ret = OB_SUCCESS;
   ObArchiveIO archive_io;
 
-  if (OB_FAIL(archive_io.push_log(uri, storage_info, data, data_len, offset, is_full_file, is_can_seal))) {
+  if (OB_FAIL(archive_io.push_log(uri, storage_info, data, data_len, offset, is_full_file))) {
     ARCHIVE_LOG(WARN, "push log failed", K(ret));
   } else {
     ARCHIVE_LOG(INFO, "push log succ", K(id));

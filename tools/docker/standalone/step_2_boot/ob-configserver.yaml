@@ -1,7 +1,0 @@
-ob-configserver:
-  servers:
-    - @OB_SERVER_IP@
-  global:
-    listen_port: 8080
-    server_ip: 0.0.0.0
-    home_path: /home/admin/obconfigserver

@@ -114,7 +114,7 @@ void MultiThreadSingleGet::run(obsys::CThread *thread, void *arg)
   int ret = OB_SUCCESS;
   ObStoragePerfRead read;
   read.assign_read_cols(read_cols_);
- // const int partition_num = config_.get_total_partition_num();
+ // const int partiton_num = config_.get_total_partition_num();
   if(OB_FAIL(read.init(&config_, (int64_t)arg, &cache_suite_, restore_schema_,
           schema_service_, data_.get_partition_storage(), &barrier_))){
     STORAGE_LOG(WARN, "fail to init read", K(ret));
@@ -136,7 +136,7 @@ void MultiThreadMultiGet::run(obsys::CThread *thread, void *arg)
 
   int ret = OB_SUCCESS;
   ObStoragePerfRead read;
- // const int partition_num = config_.get_total_partition_num();
+ // const int partiton_num = config_.get_total_partition_num();
   read.assign_read_cols(this->read_cols_);
   if(OB_FAIL(read.init(&config_, (int64_t)arg, &cache_suite_, restore_schema_,
           schema_service_, data_.get_partition_storage(), &barrier_))){
@@ -158,7 +158,7 @@ void MultiThreadScan::run(obsys::CThread *thread, void *arg)
 {
 
   int ret = OB_SUCCESS;
-  //const int partition_num = config_.get_total_partition_num();
+  //const int partiton_num = config_.get_total_partition_num();
 
   ObStoragePerfRead read;
   read.assign_read_cols(this->read_cols_);

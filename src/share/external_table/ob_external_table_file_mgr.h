@@ -17,9 +17,6 @@
 #include "observer/ob_server_struct.h"
 
 namespace oceanbase {
-namespace sql {
-class ObExprRegexpSessionVariables;
-}
 
 namespace share {
 
@@ -127,13 +124,11 @@ public:
       const uint64_t table_id,
       ObMySQLTransaction &trans);
 
-  int get_external_file_list_on_device(const common::ObString &location,
-                                       const common::ObString &pattern,
-                                       const sql::ObExprRegexpSessionVariables &regexp_vars,
-                                       common::ObIArray<common::ObString> &file_urls,
-                                       common::ObIArray<int64_t> &file_sizes,
-                                       const common::ObString &access_info,
-                                       common::ObIAllocator &allocator);
+  int get_external_file_list_on_device(const ObString &location,
+                            ObIArray<ObString> &file_urls,
+                            ObIArray<int64_t> &file_sizes,
+                            const ObString &access_info,
+                            ObIAllocator &allocator);
 
 private:
 

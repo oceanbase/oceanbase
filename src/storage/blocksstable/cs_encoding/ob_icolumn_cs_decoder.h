@@ -20,7 +20,6 @@
 #include "storage/ob_storage_util.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/blocksstable/ob_micro_block_header.h"
-#include "storage/blocksstable/encoding/ob_icolumn_decoder.h"
 #include "ob_column_encoding_struct.h"
 
 namespace oceanbase
@@ -59,15 +58,6 @@ public:
     UNUSEDx(ctx, row_ids, row_cap, datums);
     return common::OB_NOT_SUPPORTED;
   }
-
-  virtual int decode_vector(
-      const ObColumnCSDecoderCtx &ctx,
-      ObVectorDecodeCtx &vector_ctx) const
-  {
-    UNUSEDx(ctx, vector_ctx);
-    return common::OB_NOT_SUPPORTED;
-  }
-
   virtual int pushdown_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnCSDecoderCtx &col_ctx,

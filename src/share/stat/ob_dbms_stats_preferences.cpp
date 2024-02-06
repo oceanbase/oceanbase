@@ -328,7 +328,7 @@ int ObDbmsStatsPreferences::get_sys_default_stat_options(ObExecContext &ctx,
   } else if (OB_FAIL(get_no_acquired_prefs(stat_prefs, no_acquired_prefs))) {
     LOG_WARN("failed to get no acquired prefs", K(ret));
   } else if (no_acquired_prefs.empty()) {//have got all expected sys prefs from user prefs sys table
-    LOG_TRACE("succeed to get sys default stat options", K(param));
+    LOG_TRACE("succeed to get sys default stat options", K(stat_prefs), K(param));
   } else {//try get sys prefs from global prefs sys table
     raw_sql.reset();
     sname_list.reset();
@@ -631,7 +631,7 @@ int ObDbmsStatsPreferences::do_get_sys_perfs(ObExecContext &ctx,
           LOG_WARN("failed to get result", K(ret));
         } else {
           ret = OB_SUCCESS;
-          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(param));
+          LOG_TRACE("Succeed to do get sys perfs", K(raw_sql), K(need_acquired_prefs));
         }
       }
       int tmp_ret = OB_SUCCESS;
@@ -787,7 +787,6 @@ int ObCascadePrefs::check_pref_value_validity(ObTableStatParam *param/*default n
 int ObDegreePrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
 {
   int ret = OB_SUCCESS;
-  int64_t degree = 1;
   if (!pvalue_.empty()) {
     ObObj src_obj;
     ObObj dest_obj;
@@ -797,20 +796,19 @@ int ObDegreePrefs::check_pref_value_validity(ObTableStatParam *param/*default nu
     number::ObNumber num_degree;
     if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
       LOG_WARN("failed to type", K(ret), K(src_obj));
+    } else if (OB_ISNULL(param)) {
     } else if (OB_FAIL(dest_obj.get_number(num_degree))) {
       LOG_WARN("failed to get degree", K(ret));
-    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(degree))) {
+    } else if (OB_FAIL(num_degree.extract_valid_int64_with_trunc(param->degree_))) {
       LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_degree));
     } else {/*do noting*/}
-  }
-  if (OB_SUCC(ret)) {
-    if (param != NULL) {
-      param->degree_ = degree;
+    if (OB_FAIL(ret)) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal degree", K(ret), K(pvalue_));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal degree");
     }
-  } else {
-    ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("Illegal degree", K(ret), K(pvalue_));
-    LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal degree");
+  } else if (param != NULL) {
+    param->degree_ = 1;
   }
   return ret;
 }

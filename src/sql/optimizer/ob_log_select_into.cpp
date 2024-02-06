@@ -35,7 +35,7 @@ int ObLogSelectInto::est_cost()
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     set_op_cost(ObOptEstCost::cost_get_rows(child->get_card() / parallel, 
-                                            opt_ctx));
+                                            opt_ctx.get_cost_model_type()));
     set_cost(op_cost_ + child->get_cost());
     set_card(child->get_card());
   }

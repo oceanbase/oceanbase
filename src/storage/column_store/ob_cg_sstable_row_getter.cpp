@@ -48,7 +48,7 @@ void ObCGGetter::reuse()
 int ObCGGetter::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObSSTableWrapper &wrapper,
+    ObCGTableWrapper &wrapper,
     const blocksstable::ObDatumRowkey &idx_key)
 {
   int ret = OB_SUCCESS;
@@ -57,7 +57,7 @@ int ObCGGetter::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGGetter has been inited", K(ret));
   } else if (OB_UNLIKELY(!wrapper.is_valid() ||
-                         !wrapper.get_sstable()->is_normal_cg_sstable() ||
+                         !wrapper.cg_sstable_->is_normal_cg_sstable() ||
                          !iter_param.is_valid() ||
                          1 != idx_key.get_datum_cnt())) {
     ret = OB_INVALID_ARGUMENT;
@@ -334,7 +334,7 @@ int ObCGSSTableRowGetter::prepare_cg_row_getter(const ObCSRowId row_id, const Ob
     const ObColumnIndexArray &cols_index = read_info->get_columns_index();
     int64_t column_cnt = (nullptr == nop_pos) ? iter_param_->get_out_col_cnt() : nop_pos->count();
     int64_t column_group_cnt = co_sstable_->get_cs_meta().get_column_group_count();
-    ObSSTableWrapper table_wrapper;
+    ObCGTableWrapper table_wrapper;
     ObTableIterParam* cg_param = nullptr;
     int32_t cg_idx = INT32_MAX;
     row_idx_datum_.reuse();

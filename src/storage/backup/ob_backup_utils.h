@@ -33,7 +33,6 @@ namespace oceanbase {
 namespace storage
 {
 struct ObBackupLSMetaInfosDesc;
-class ObSSTableWrapper;
 }
 namespace share
 {
@@ -48,7 +47,7 @@ class ObBackupMacroBlockIndexStore;
 class ObBackupUtils {
 public:
   static int get_sstables_by_data_type(const storage::ObTabletHandle &tablet_handle, const share::ObBackupDataType &backup_data_type,
-      const storage::ObTabletTableStore &table_store, common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+      const storage::ObTabletTableStore &table_store, common::ObIArray<storage::ObITable *> &sstable_array);
   static int check_tablet_with_major_sstable(const storage::ObTabletHandle &tablet_handle, bool &with_major);
   static int fetch_macro_block_logic_id_list(const storage::ObTabletHandle &tablet_handle,
       const blocksstable::ObSSTable &sstable, common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
@@ -62,9 +61,9 @@ public:
       share::SCN &start_replay_scn);
 private:
   static int check_tablet_minor_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
-      const common::ObIArray<storage::ObSSTableWrapper> &minor_sstable_array);
+      const common::ObIArray<storage::ObITable *> &minor_sstable_array);
   static int check_tablet_ddl_sstable_validity_(const storage::ObTabletHandle &tablet_handle,
-      const common::ObIArray<storage::ObSSTableWrapper> &ddl_sstable_array);
+      const common::ObIArray<storage::ObITable *> &ddl_sstable_array);
   static int get_ls_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader);
   static int fetch_ls_member_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObAddr &leader_addr, common::ObIArray<common::ObAddr> &addr_list);
@@ -101,7 +100,7 @@ public:
   int init(const uint64_t tenant_id, const int64_t backup_set_id, const share::ObLSID &ls_id,
       const share::ObBackupDataType &backup_data_type);
   int prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
-      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+      const storage::ObTabletHandle &tablet_handle, const common::ObIArray<storage::ObITable *> &sstable_array);
   int mark_items_pending(
       const share::ObBackupDataType &backup_data_type, const common::ObIArray<ObBackupProviderItem> &items);
   int mark_items_reused(const share::ObBackupDataType &backup_data_type,
@@ -293,7 +292,7 @@ private:
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
-      common::ObIArray<storage::ObSSTableWrapper> &sstable_array);
+      common::ObIArray<storage::ObITable *> &sstable_array);
   int prepare_tablet_logic_id_reader_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const storage::ObITable::TableKey &table_key, const blocksstable::ObSSTable &sstable,
       ObITabletLogicMacroIdReader *&reader);

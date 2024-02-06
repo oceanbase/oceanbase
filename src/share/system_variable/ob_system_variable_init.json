@@ -277,7 +277,7 @@
     "base_value": "+08:00",
     "data_type": "varchar",
     "info": " ",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN| NEED_SERIALIZE",
+    "flags": "GLOBAL | SESSION | NEED_SERIALIZE",
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_time_zone",
     "base_class": "ObTimeZoneSysVar",
     "publish_version": "",
@@ -837,7 +837,7 @@
   "have_profiling": {
     "id": 55,
     "name": "have_profiling",
-    "default_value": "NO",
+    "default_value": "YES",
     "base_value": "YES",
     "data_type": "varchar",
     "info": "",
@@ -1400,36 +1400,6 @@
     "min_val": "0",
     "max_val": "2147483647",
     "publish_version": "410",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "profiling": {
-    "id": 97,
-    "name": "profiling",
-    "default_value": "0",
-    "base_value": "0",
-    "data_type": "enum",
-    "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
-    "enum_names": [
-      "OFF",
-      "ON"
-    ],
-    "publish_version": "",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "profiling_history_size": {
-    "id": 98,
-    "name": "profiling_history_size",
-    "default_value": "15",
-    "base_value": "15",
-    "data_type": "int",
-    "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
-    "publish_version": "",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -2202,7 +2172,7 @@
     "base_value": "DD-MON-RR",
     "data_type": "varchar",
     "info": "specifies the default date format to use with the TO_CHAR and TO_DATE functions, (YYYY-MM-DD HH24:MI:SS) is Common value",
-    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | ORACLE_ONLY",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2215,7 +2185,7 @@
     "base_value": "DD-MON-RR HH.MI.SSXFF AM",
     "data_type": "varchar",
     "info": "specifies the default date format to use with the TO_CHAR and TO_TIMESTAMP functions, (YYYY-MM-DD HH24:MI:SS.FF) is Common value",
-    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | ORACLE_ONLY",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2228,7 +2198,7 @@
     "base_value": "DD-MON-RR HH.MI.SSXFF AM TZR",
     "data_type": "varchar",
     "info": "specifies the default timestamp with time zone format to use with the TO_CHAR and TO_TIMESTAMP_TZ functions, (YYYY-MM-DD HH24:MI:SS.FF TZR TZD) is common value",
-    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | ORACLE_ONLY",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE | ORACLE_ONLY",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
@@ -2409,7 +2379,7 @@
   "_nlj_batching_enabled": {
     "id": 10080,
     "name": "_nlj_batching_enabled",
-    "default_value": "0",
+    "default_value": "1",
     "base_value": "1",
     "data_type": "bool",
     "info": "enable batching of the RHS IO in NLJ",
@@ -3343,7 +3313,7 @@
   "optimizer_features_enable": {
     "id": 10150,
     "name": "optimizer_features_enable",
-    "default_value": "4.3.0.0",
+    "default_value": "",
     "base_value": "",
     "data_type": "varchar",
     "info": "enabling a series of optimizer features based on an OceanBase release number",
@@ -3392,7 +3362,7 @@
     "data_type": "int",
     "info": "the server automatically grants the EXECUTE and ALTER ROUTINE privileges to the creator of a stored routine",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "422",
+    "publish_version": "420",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -3405,7 +3375,7 @@
     "data_type": "varchar",
     "info": "enabling a series of privilege features based on an OceanBase release number",
     "flags": "GLOBAL | NEED_SERIALIZE",
-    "publish_version": "422",
+    "publish_version": "420",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -3418,7 +3388,7 @@
     "data_type": "varchar",
     "info": "whether turn on mysql privilege check",
     "flags": "GLOBAL | NEED_SERIALIZE",
-    "publish_version": "422",
+    "publish_version": "420",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -3431,7 +3401,7 @@
     "data_type": "bool",
     "info": "specifies whether check the mysql routine priv",
     "flags": "GLOBAL | NEED_SERIALIZE",
-    "publish_version": "422",
+    "publish_version": "420",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
@@ -3476,7 +3446,7 @@
     "background_cn": "",
     "ref_url": ""
   },
-  "lc_time_names": {
+    "lc_time_names": {
     "id": 10160,
     "name": "lc_time_names",
     "default_value": "en_US",
@@ -3487,32 +3457,6 @@
     "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_locale_type_is_valid",
     "publish_version": "422",
     "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "activate_all_roles_on_login": {
-    "id": 10161,
-    "name": "activate_all_roles_on_login",
-    "default_value": "0",
-    "base_value": "0",
-    "data_type": "bool",
-    "info": "whether to enable automatic activation of all granted roles when users log in to the server",
-    "flags": "GLOBAL",
-    "publish_version": "430",
-    "info_cn": "",
-    "background_cn": "",
-    "ref_url": ""
-  },
-  "_enable_rich_vector_format": {
-    "id": 10162,
-    "name": "_enable_rich_vector_format",
-    "default_value": "1",
-    "base_value": "1",
-    "data_type": "bool",
-    "info": "whether use rich vector format in vectorized execution engine",
-    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | INVISIBLE",
-    "publish_version": "430",
-    "info_cn": "在向量化引擎中, 开启/关闭使用多种列格式描述功能",
     "background_cn": "",
     "ref_url": ""
   }

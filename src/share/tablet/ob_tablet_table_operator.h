@@ -49,7 +49,6 @@ public:
   ObTabletTableOperator();
   virtual ~ObTabletTableOperator();
   int init(common::ObISQLClient &sql_proxy_);
-  int init(const int32_t group_id, common::ObISQLClient &sql_proxy);
   void reset();
   void set_batch_size(int64_t batch_size) {batch_size_ = batch_size;}
   int get(
@@ -137,15 +136,11 @@ public:
       const ObAddr &server,
       const int64_t limit,
       int64_t &affected_rows);
-  static int construct_tablet_infos(
-      common::sqlclient::ObMySQLResult &res,
-      ObIArray<ObTabletInfo> &tablet_infos);
 public:
   static int batch_get_tablet_info(
       common::ObISQLClient *sql_proxy,
       const uint64_t tenant_id,
       const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
-      const int32_t group_id,
       ObIArray<ObTabletInfo> &tablet_infos);
 private:
   static int inner_batch_get_tablet_by_sql_(
@@ -154,7 +149,6 @@ private:
       const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
       const int64_t start_idx,
       const int64_t end_idx,
-      const int32_t group_id,
       ObIArray<ObTabletInfo> &tablet_infos);
   static int inner_batch_get_by_sql_(
       ObISQLClient &sql_client,
@@ -169,6 +163,9 @@ private:
       const int64_t start_idx,
       const int64_t end_idx,
       common::ObISQLClient &sql_client);
+  static int construct_tablet_infos_(
+      common::sqlclient::ObMySQLResult &res,
+      ObIArray<ObTabletInfo> &tablet_infos);
   static int construct_tablet_replica_(
       common::sqlclient::ObMySQLResult &res,
       ObTabletReplica &replica);
@@ -188,7 +185,6 @@ private:
   bool inited_;
   common::ObISQLClient *sql_proxy_;
   int64_t batch_size_;
-  int32_t group_id_;
 };
 } // end namespace share
 } // end namespace oceanbase

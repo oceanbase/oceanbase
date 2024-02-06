@@ -21,8 +21,6 @@ namespace oceanbase
 namespace storage
 {
 class ObSSTableInsertRowIterator;
-typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletIDPair;
-struct ObInsertMonitor;
 }
 
 namespace sql
@@ -65,15 +63,12 @@ public:
                                ObOpInput *input)
     : ObPxMultiPartInsertOp(exec_ctx, spec, input),
       allocator_("SSTABLE_INS"),
-      participants_(),
       tablet_store_map_(),
       tablet_seq_caches_(),
       curr_tablet_store_iter_(),
       curr_tablet_idx_(-1),
       count_rows_finish_(false),
-      is_all_partition_finished_(false),
-      curr_part_idx_(0),
-      snapshot_version_(0)
+      curr_part_idx_(0)
   {}
   virtual ~ObPxMultiPartSSTableInsertOp() { destroy(); }
   const ObPxMultiPartSSTableInsertSpec &get_spec() const;
@@ -85,20 +80,6 @@ public:
                              const int64_t part_id_idx,
                              common::ObTabletID &tablet_id);
 private:
-  struct ObLSTabletIDPairCmp final
-  {
-    public:
-      ObLSTabletIDPairCmp() { }
-      OB_INLINE bool operator() (const LSTabletIDPair &left, const LSTabletIDPair &right)
-      {
-        if (left.second == right.second) {
-          return left.first < right.first;
-        } else {
-          return left.second < right.second;
-        }
-      }
-  };
-private:
   int get_all_rows_and_count();
   int create_tablet_store(common::ObTabletID &tablet_id, ObChunkDatumStore *&tablet_store);
   bool need_count_rows() const { return MY_SPEC.regenerate_heap_table_pk_ && !count_rows_finish_; }      
@@ -109,15 +90,12 @@ private:
   static const uint64_t TABLET_STORE_MEM_LIMIT = 2 * 1024 * 1024; // 2M
   typedef common::hash::ObHashMap<common::ObTabletID, ObChunkDatumStore*, common::hash::NoPthreadDefendMode> TabletStoreMap;
   common::ObArenaAllocator allocator_;
-  common::ObArray<LSTabletIDPair> participants_;
   TabletStoreMap tablet_store_map_;
   ObArray<share::ObTabletCacheInterval> tablet_seq_caches_;
   ObChunkDatumStore::Iterator curr_tablet_store_iter_;
   int64_t curr_tablet_idx_;
   bool count_rows_finish_;
-  bool is_all_partition_finished_;
   int64_t curr_part_idx_;
-  int64_t snapshot_version_; // ddl snapshot version.
   DISALLOW_COPY_AND_ASSIGN(ObPxMultiPartSSTableInsertOp);
 };
 

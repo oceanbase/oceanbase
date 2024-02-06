@@ -32,16 +32,6 @@ namespace schema
 class ObMergeSchema;
 }
 }
-
-/*
-  ObStaticDataStoreDesc : record static info
-  ObColDataStoreDesc : record column related info
-  ObDataStoreDesc : ObStaticDataStoreDesc & ObColDataStoreDesc ptr
-  ObWholeDataStoreDesc : ObStaticDataStoreDesc & ObColDataStoreDesc object
-
-  for compaction, ObDataStoreDesc will record a common ObStaticDataStoreDesc ptr and a special ObColDataStoreDesc object for each table/cg
-  for other situation, use ObWholeDataStoreDesc instead of ObDataStoreDesc
-*/
 namespace blocksstable {
 class ObSSTableIndexBuilder;
 struct ObSSTableBasicMeta;
@@ -134,7 +124,6 @@ struct ObColDataStoreDesc
                K_(col_default_checksum_array), K_(agg_meta_array));
 
 private:
-  // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
       const share::schema::ObMergeSchema &schema,
       const storage::ObStorageColumnGroupSchema *cg_schema);

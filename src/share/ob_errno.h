@@ -266,9 +266,6 @@ constexpr int OB_ENCODING_EST_SIZE_OVERFLOW = -4397;
 constexpr int OB_INVALID_SUB_PARTITION_TYPE = -4398;
 constexpr int OB_ERR_UNEXPECTED_UNIT_STATUS = -4399;
 constexpr int OB_AUTOINC_CACHE_NOT_EQUAL = -4400;
-constexpr int OB_ERR_KILL_CLIENT_SESSION = -4401;
-constexpr int OB_ERR_KILL_CLIENT_SESSION_FAILED = -4402;
-constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -462,8 +459,6 @@ constexpr int OB_SKIP_CHECKING_LS_STATUS = -4762;
 constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
 constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_LS_NOT_LEADER = -4767;
-constexpr int OB_CONFLICT_WITH_CLONE = -4770;
-constexpr int OB_BREAK_BY_TEST = -4771;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -794,7 +789,6 @@ constexpr int OB_TABLE_DEFINITION_CHANGED = -5386;
 constexpr int OB_ERR_NO_ROUTINE_PRIVILEGE = -5387;
 constexpr int OB_ERR_USER_REFFERD_AS_DEFINER = -5388;
 constexpr int OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER = -5389;
-constexpr int OB_ERR_NO_COLUMN_PRIVILEGE = -5390;
 constexpr int OB_ERR_OBJECT_STRING_DOES_NOT_EXIST = -5400;
 constexpr int OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED = -5401;
 constexpr int OB_ERR_GET_STACKED_DIAGNOSTICS = -5402;
@@ -879,7 +873,6 @@ constexpr int OB_JSON_PROCESSING_ERROR = -5514;
 constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
 constexpr int OB_ERR_NON_STRING_NOT_SUPPORT = -5517;
-constexpr int OB_ERR_DEPRECATED_SYNTAX_NO_REP = -5518;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1384,11 +1377,6 @@ constexpr int OB_CLOG_SLIDE_TIMEOUT = -6322;
 constexpr int OB_LOG_REPLAY_ERROR = -6323;
 constexpr int OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT = -6324;
 constexpr int OB_CLOG_DISK_HANG = -6325;
-constexpr int OB_TABLE_LOCK_SPLIT_TWICE = -6326;
-constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
-constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
-constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
-constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1446,9 +1434,6 @@ constexpr int OB_TABLET_GC_LOCK_CONFLICT = -7120;
 constexpr int OB_SEQUENCE_NOT_MATCH = -7121;
 constexpr int OB_SEQUENCE_TOO_SMALL = -7122;
 constexpr int OB_TRANSFER_CANNOT_START = -7123;
-constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
-constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
-constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -1467,15 +1452,13 @@ constexpr int OB_ERR_NULL_FOR_XML_CONSTRUCTOR = -7416;
 constexpr int OB_ERR_XML_INDEX = -7417;
 constexpr int OB_ERR_UPDATE_XML_WITH_INVALID_NODE = -7418;
 constexpr int OB_LOB_VALUE_NOT_EXIST = -7419;
-constexpr int OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = -7420;
 constexpr int OB_ERR_XQUERY_MULTI_VALUE = -7421;
 constexpr int OB_ERR_LACK_XQUERY_LITERAL = -7423;
 constexpr int OB_ERR_XQUERY_TYPE_MISMATCH = -7425;
 constexpr int OB_ERR_XQUERY_UNSUPPORTED = -7428;
 constexpr int OB_ERR_INVALID_XML_CHILD_NAME = -7429;
 constexpr int OB_ERR_XML_NOT_SUPPORT_OPERATION = -7430;
-constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
-constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
+constexpr int OB_ERR_JSON_FUN_UNSUPPORTED_TYPE = -7431;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -1537,6 +1520,8 @@ constexpr int OB_ESI_IO_ERROR = -9075;
 constexpr int OB_ARCHIVE_ROUND_NOT_CONTINUOUS = -9077;
 constexpr int OB_ARCHIVE_LOG_TO_END = -9078;
 constexpr int OB_ARCHIVE_LOG_RECYCLED = -9079;
+constexpr int OB_BACKUP_FORMAT_FILE_NOT_EXIST = -9080;
+constexpr int OB_BACKUP_FORMAT_FILE_NOT_MATCH = -9081;
 constexpr int OB_BACKUP_MAJOR_NOT_COVER_MINOR = -9085;
 constexpr int OB_BACKUP_ADVANCE_CHECKPOINT_TIMEOUT = -9086;
 constexpr int OB_CLOG_RECYCLE_BEFORE_ARCHIVE = -9087;
@@ -1554,7 +1539,6 @@ constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
 constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
-constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -1817,38 +1801,12 @@ constexpr int OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH = -9760;
 constexpr int OB_ERR_MVIEW_NEVER_REFRESH = -9761;
 constexpr int OB_ERR_CLIENT_LOCAL_FILES_DISABLED = -9762;
 constexpr int OB_ERR_OUT_PARAM_NOT_BIND_VAR = -9763;
-constexpr int OB_ERR_TIME_EARLIER_THAN_SYSDATE = -9764;
-constexpr int OB_ERR_NOT_FUNC_NAME = -9765;
-constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
-constexpr int OB_TTL_NOT_ENABLE = -10501;
-constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
-constexpr int OB_TTL_COLUMN_TYPE_NOT_SUPPORTED = -10503;
-constexpr int OB_TTL_CMD_NOT_ALLOWED = -10504;
-constexpr int OB_TTL_NO_TASK_RUNNING = -10505;
-constexpr int OB_TTL_TENANT_IS_RESTORE = -10506;
-constexpr int OB_TTL_INVALID_HBASE_TTL = -10507;
-constexpr int OB_TTL_INVALID_HBASE_MAXVERSIONS = -10508;
-constexpr int OB_KV_CREDENTIAL_NOT_MATCH = -10509;
-constexpr int OB_KV_ROWKEY_COUNT_NOT_MATCH = -10510;
-constexpr int OB_KV_COLUMN_TYPE_NOT_MATCH = -10511;
-constexpr int OB_KV_COLLATION_MISMATCH = -10512;
-constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
-constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
 constexpr int OB_WRONG_PARTITION_NAME = -11002;
 constexpr int OB_ERR_PLUGIN_IS_NOT_LOADED = -11003;
-constexpr int OB_EST_DEVIA_TOO_LARGE = -11004;
 constexpr int OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT = -11005;
 constexpr int OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT = -11006;
-constexpr int OB_ERR_UNKNOWN_AUTHID = -11007;
-constexpr int OB_ERR_NO_GRANT_DEFINED_FOR_USER = -11008;
-constexpr int OB_ERR_USER_ALREADY_EXISTS = -11009;
-constexpr int OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR = -11010;
-constexpr int OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED = -11011;
-constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
-constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
-constexpr int OB_ERR_FT_COLUMN_NOT_INDEXED = -11014;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -2017,7 +1975,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEARCH_NOT_FOUND__USER_ERROR_MSG "Value not found"
 #define OB_BEYOND_THE_RANGE__USER_ERROR_MSG "Key out of range"
 #define OB_SERVER_OUTOF_DISK_SPACE__USER_ERROR_MSG "Server out of disk space"
-#define OB_COLUMN_GROUP_NOT_FOUND__USER_ERROR_MSG "Column group \'%.*s\' not found"
+#define OB_COLUMN_GROUP_NOT_FOUND__USER_ERROR_MSG "Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__USER_ERROR_MSG "Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__USER_ERROR_MSG "Item not match"
 #define OB_SCHEDULER_TASK_CNT_MISMATCH__USER_ERROR_MSG "Running task cnt and unfinished task cnt not consistent"
@@ -2221,9 +2179,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_SUB_PARTITION_TYPE__USER_ERROR_MSG "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__USER_ERROR_MSG "Unit status is not expected"
 #define OB_AUTOINC_CACHE_NOT_EQUAL__USER_ERROR_MSG "Autoinc cache's autoinc version is not equal to request's autoinc version"
-#define OB_ERR_KILL_CLIENT_SESSION__USER_ERROR_MSG "Client Session need be killed"
-#define OB_ERR_KILL_CLIENT_SESSION_FAILED__USER_ERROR_MSG "Kill Client Session failed"
-#define OB_IMPROPER_OS_PARAM__USER_ERROR_MSG "OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -2424,8 +2379,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__USER_ERROR_MSG "log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__USER_ERROR_MSG "ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__USER_ERROR_MSG "%s"
-#define OB_CONFLICT_WITH_CLONE__USER_ERROR_MSG "Tenant (%ld) is in %s procedure, %s not allowed now"
-#define OB_BREAK_BY_TEST__USER_ERROR_MSG "process is breaked by test case"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -2790,7 +2743,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__USER_ERROR_MSG "User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__USER_ERROR_MSG "Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
-#define OB_ERR_NO_COLUMN_PRIVILEGE__USER_ERROR_MSG "%.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__USER_ERROR_MSG "object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__USER_ERROR_MSG "resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__USER_ERROR_MSG "GET STACKED DIAGNOSTICS when handler not active"
@@ -2909,7 +2861,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_WITHOUT_ALIAS__USER_ERROR_MSG "Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
-#define OB_ERR_DEPRECATED_SYNTAX_NO_REP__USER_ERROR_MSG "%s is deprecated and will be removed in a future release"
 #define OB_ERR_SESSION_VAR_CHANGED__USER_ERROR_MSG "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
@@ -3337,7 +3288,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_DESC_FOR_POS__USER_ERROR_MSG "no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__USER_ERROR_MSG "object specified is incompatible with the flag specified"
 #define OB_ERR_DBLINK_REMOTE_ECODE__USER_ERROR_MSG "\ndblink remote error code: %d,\nremote error msg: %.*s"
-#define OB_ERR_DBLINK_NO_LIB__USER_ERROR_MSG "can not find the expected version of OCI LIB: %.*s"
+#define OB_ERR_DBLINK_NO_LIB__USER_ERROR_MSG "oci lib not founded"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__USER_ERROR_MSG "partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__USER_ERROR_MSG "not all variables bound"
 #define OB_ERR_BIND_VARIABLE_NOT_EXIST__USER_ERROR_MSG "bind variable does not exist"
@@ -3475,11 +3426,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_REPLAY_ERROR__USER_ERROR_MSG "log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__USER_ERROR_MSG "ob trying to lock config change conflicts"
 #define OB_CLOG_DISK_HANG__USER_ERROR_MSG "ob clog disk hang"
-#define OB_TABLE_LOCK_SPLIT_TWICE__USER_ERROR_MSG "table lock has been splitted before, can not be splitted again"
-#define OB_TABLE_LOCK_IS_SPLITTING__USER_ERROR_MSG "table lock is being splitted, can not be splitted again"
-#define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
-#define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
-#define OB_USER_OUTOF_DATA_DISK_SPACE__USER_ERROR_MSG "user data disk is almost full"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3625,14 +3571,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_VALUE__USER_ERROR_MSG "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__USER_ERROR_MSG "Unknown WKB type(%d)! Full WKB type number was (%d)."
 #define OB_ERR_FTS_MUST_HAVE_TEXT_COL__USER_ERROR_MSG "A FTS index may only contain a text type column."
-#define OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE__USER_ERROR_MSG "dimension number is out of range"
-#define OB_ERR_INVALID_GTYPE_IN_SDO_GEROMETRY__USER_ERROR_MSG "Invalid Gtype in the SDO_GEOMETRY object"
-#define OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY__USER_ERROR_MSG "Invalid SRID in the SDO_GEOMETRY object"
-#define OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT__USER_ERROR_MSG "Invalid Gtype in the SDO_GEOMETRY object for point object"
-#define OB_ERR_INVALID_NULL_SDO_GEOMETRY__USER_ERROR_MSG "Invalid NULL  SDO_GEOMETRY object"
-#define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
-#define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
-#define OB_ERR_VALUE_NOT_ALLOWED__USER_ERROR_MSG "value not allowed"
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "invalid xpath expression"
@@ -3651,7 +3589,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__USER_ERROR_MSG "cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__USER_ERROR_MSG "XML nodes must be updated with valid nodes and of the same type'"
 #define OB_LOB_VALUE_NOT_EXIST__USER_ERROR_MSG "LOB value does not exist"
-#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__USER_ERROR_MSG "Input to JSON generation function has unsupported data type"
+#define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_XQUERY_MULTI_VALUE__USER_ERROR_MSG "XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
 #define OB_ERR_PARSE_XQUERY_EXPR__USER_ERROR_MSG "XPST0003 - error during parsing the XQuery expression : %.*s"
 #define OB_ERR_LACK_XQUERY_LITERAL__USER_ERROR_MSG "XQuery string literal expected"
@@ -3662,9 +3600,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XQUERY_UNSUPPORTED__USER_ERROR_MSG "unsupported XQuery expression"
 #define OB_ERR_INVALID_XML_CHILD_NAME__USER_ERROR_MSG "The document being inserted does not conform to specified child name"
 #define OB_ERR_XML_NOT_SUPPORT_OPERATION__USER_ERROR_MSG "XML node '' (type=%s) does not support this operation"
-#define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
-#define OB_ERR_COMPARE_VARRAY_LOB_ATTR__USER_ERROR_MSG "cannot compare VARRAY or LOB attributes of an object type"
-#define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %.*s"
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__USER_ERROR_MSG "Input to JSON generation function has unsupported data type"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -3744,8 +3680,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARCHIVE_ROUND_NOT_CONTINUOUS__USER_ERROR_MSG "log discontinuous between two archive rounds"
 #define OB_ARCHIVE_LOG_TO_END__USER_ERROR_MSG "archive log is to end"
 #define OB_ARCHIVE_LOG_RECYCLED__USER_ERROR_MSG "archive log had been recycled"
-#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__USER_ERROR_MSG "format file does not exist%s"
-#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__USER_ERROR_MSG "format file does not match%s"
+#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__USER_ERROR_MSG "the format file does not exist under the destination"
+#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__USER_ERROR_MSG "the content of the format file at the destination does not match"
 #define OB_BACKUP_DEVICE_OUT_OF_SPACE__USER_ERROR_MSG "backup device out of space"
 #define OB_BACKUP_PWRITE_OFFSET_NOT_MATCH__USER_ERROR_MSG "the pwrite offset of the object storage is inconsistent"
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__USER_ERROR_MSG "the contents of pwrite are inconsistent"
@@ -3763,20 +3699,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESTORE_STANDBY_VERSION_LAG__USER_ERROR_MSG "standby binary version is lower than primary data version, standby need upgrade"
 #define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__USER_ERROR_MSG "primary tenant has been dropped"
 #define OB_CLOUD_OBJECT_NOT_APPENDABLE__USER_ERROR_MSG "normal object in object_storage(oss,cos,etc.) can't be appended content"
-#define OB_RESTORE_TENANT_FAILED__USER_ERROR_MSG "%s restore failed, %s"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__USER_ERROR_MSG "too many open files"
-#define OB_DIRECT_LOAD_COMMIT_ERROR__USER_ERROR_MSG "fail to commit direct load"
-#define OB_S3_ERROR__USER_ERROR_MSG "S3 error"
-#define OB_TENANT_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' does not exist"
-#define OB_TENANT_SNAPSHOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' already exist"
-#define OB_TENANT_SNAPSHOT_TIMEOUT__USER_ERROR_MSG "Tenant snapshot task timeout. %.*s"
-#define OB_CLONE_TENANT_TIMEOUT__USER_ERROR_MSG "Clone tenant timeout. %.*s"
-#define OB_ERR_CLONE_TENANT__USER_ERROR_MSG "%.*s"
-#define OB_ERR_TENANT_SNAPSHOT__USER_ERROR_MSG "%.*s"
-#define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__USER_ERROR_MSG "%s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4041,38 +3967,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_NEVER_REFRESH__USER_ERROR_MSG "cannot explicitly refresh a NEVER REFRESH materialized view (`%s`)"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__USER_ERROR_MSG "Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_OUT_PARAM_NOT_BIND_VAR__USER_ERROR_MSG "output parameter not a bind variable"
-#define OB_ERR_TIME_EARLIER_THAN_SYSDATE__USER_ERROR_MSG "the parameter %s must evaluate to a time in the future"
-#define OB_ERR_NOT_FUNC_NAME__USER_ERROR_MSG "object '%.*s' must be of type function or array to be used this way"
-#define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
-#define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
-#define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
-#define OB_TTL_COLUMN_TYPE_NOT_SUPPORTED__USER_ERROR_MSG "Column type of '%.*s' is not supported for TTL definition"
-#define OB_TTL_CMD_NOT_ALLOWED__USER_ERROR_MSG "TTL command is not allowed, current TTL status is '%s'"
-#define OB_TTL_NO_TASK_RUNNING__USER_ERROR_MSG "No TTL task is running, please try trigger a new TTL task"
-#define OB_TTL_TENANT_IS_RESTORE__USER_ERROR_MSG "Cannot execute TTL task during tenant is restore"
-#define OB_TTL_INVALID_HBASE_TTL__USER_ERROR_MSG "Time to live of hbase table must be greater than 0"
-#define OB_TTL_INVALID_HBASE_MAXVERSIONS__USER_ERROR_MSG "MaxVersions of hbase table must be greater than 0"
-#define OB_KV_CREDENTIAL_NOT_MATCH__USER_ERROR_MSG "Access denied, credential '%.*s' not match '%.*s'"
-#define OB_KV_ROWKEY_COUNT_NOT_MATCH__USER_ERROR_MSG "Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'"
-#define OB_KV_COLUMN_TYPE_NOT_MATCH__USER_ERROR_MSG "Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
-#define OB_KV_COLLATION_MISMATCH__USER_ERROR_MSG "Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
-#define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
-#define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
 #define OB_WRONG_PARTITION_NAME__USER_ERROR_MSG "Incorrect partition name '%.*s'"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__USER_ERROR_MSG "Plugin '%.*s' is not loaded"
-#define OB_EST_DEVIA_TOO_LARGE__USER_ERROR_MSG "Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__USER_ERROR_MSG "cannot replace a type with table dependents"
-#define OB_ERR_UNKNOWN_AUTHID__USER_ERROR_MSG "Unknown authorization ID `%.*s`@`%.*s`"
-#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__USER_ERROR_MSG "There is no such grant defined for user '%.*s' on host '%.*s'"
-#define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
-#define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
-#define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__USER_ERROR_MSG "query range memory exhausted"
-#define OB_CANNOT_USER_IF_EXISTS__USER_ERROR_MSG "User %.*s does not exist"
-#define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
-#define OB_ERR_FT_COLUMN_NOT_INDEXED__USER_ERROR_MSG "Can't find FULLTEXT index matching the column list"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4241,7 +4141,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEARCH_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4182, Value not found"
 #define OB_BEYOND_THE_RANGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4183, Key out of range"
 #define OB_SERVER_OUTOF_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4184, Server out of disk space"
-#define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group \'%.*s\' not found"
+#define OB_COLUMN_GROUP_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4185, Column group not found"
 #define OB_CS_COMPRESS_LIB_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4186, Server failed to get compress library"
 #define OB_ITEM_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4187, Item not match"
 #define OB_SCHEDULER_TASK_CNT_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4188, Running task cnt and unfinished task cnt not consistent"
@@ -4445,9 +4345,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_SUB_PARTITION_TYPE__ORA_USER_ERROR_MSG "ORA-14020: this physical attribute may not be specified for a table partition"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4399, Unit status is not expected"
 #define OB_AUTOINC_CACHE_NOT_EQUAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
-#define OB_ERR_KILL_CLIENT_SESSION__ORA_USER_ERROR_MSG "ORA-04401: Client Session need be killed"
-#define OB_ERR_KILL_CLIENT_SESSION_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4402, Kill Client Session failed"
-#define OB_IMPROPER_OS_PARAM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -4648,8 +4545,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4767, log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4768, ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4769, %s"
-#define OB_CONFLICT_WITH_CLONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4770, Tenant (%ld) is in %s procedure, %s not allowed now"
-#define OB_BREAK_BY_TEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4771, process is breaked by test case"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -5014,7 +4909,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_ROUTINE_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5387, %.*s command denied to user '%.*s'@'%.*s' for routine '%.*s'"
 #define OB_ERR_USER_REFFERD_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5388, User '%.*s'@'%.*s' is referenced as a definer account in a stored routine."
 #define OB_ERR_OPERATION_ON_USER_REFERRED_AS_DEFINER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5389, Operation %.*s failed for '%.*s'@'%.*s' as it is referenced as a definer account in a stored routine."
-#define OB_ERR_NO_COLUMN_PRIVILEGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5390, %.*s command denied to user '%.*s'@'%.*s' for column '%.*s' in table '%.*s'"
 #define OB_ERR_OBJECT_STRING_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-04043: object %.*s does not exist"
 #define OB_ERR_RESULTANT_DATA_TYPE_OF_VIRTUAL_COLUMN_IS_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-54004: resultant data type of virtual column is not supported"
 #define OB_ERR_GET_STACKED_DIAGNOSTICS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5402, GET STACKED DIAGNOSTICS when handler not active"
@@ -5133,7 +5027,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_WITHOUT_ALIAS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5515, Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5517, This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
-#define OB_ERR_DEPRECATED_SYNTAX_NO_REP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5518, %s is deprecated and will be removed in a future release"
 #define OB_ERR_SESSION_VAR_CHANGED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5540, System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
@@ -5561,7 +5454,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_DESC_FOR_POS__ORA_USER_ERROR_MSG "ORA-24334: no descriptor for this position"
 #define OB_ERR_ILL_OBJ_FLAG__ORA_USER_ERROR_MSG "ORA-04047: object specified is incompatible with the flag specified"
 #define OB_ERR_DBLINK_REMOTE_ECODE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5975, \ndblink remote error code: %d,\nremote error msg: %.*s"
-#define OB_ERR_DBLINK_NO_LIB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, can not find the expected version of OCI LIB: %.*s"
+#define OB_ERR_DBLINK_NO_LIB__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5976, oci lib not founded"
 #define OB_ERR_PARTITION_EXTENDED_ON_VIEW__ORA_USER_ERROR_MSG "ORA-14109: partition-extended object names may only be used with tables and editioning views"
 #define OB_ERR_NOT_ALL_VARIABLE_BIND__ORA_USER_ERROR_MSG "ORA-01008: not all variables bound"
 #define OB_ERR_BIND_VARIABLE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-01006: bind variable does not exist"
@@ -5699,11 +5592,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LOG_REPLAY_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6323, log replay error"
 #define OB_TRY_LOCK_CONFIG_CHANGE_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6324, ob trying to lock config change conflicts"
 #define OB_CLOG_DISK_HANG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6325, ob clog disk hang"
-#define OB_TABLE_LOCK_SPLIT_TWICE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6326, table lock has been splitted before, can not be splitted again"
-#define OB_TABLE_LOCK_IS_SPLITTING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6327, table lock is being splitted, can not be splitted again"
-#define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
-#define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
-#define OB_USER_OUTOF_DATA_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6330, user data disk is almost full"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -5849,14 +5737,6 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_OPTION_VALUE__ORA_USER_ERROR_MSG "ORA-00600: Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'."
 #define OB_ERR_INVALID_GEOMETRY_TYPE__ORA_USER_ERROR_MSG "ORA-00600: Unknown WKB type(%d)! Full WKB type number was (%d)."
 #define OB_ERR_FTS_MUST_HAVE_TEXT_COL__ORA_USER_ERROR_MSG "ORA-00600: A FTS index may only contain a text type column."
-#define OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-13000: dimension number is out of range"
-#define OB_ERR_INVALID_GTYPE_IN_SDO_GEROMETRY__ORA_USER_ERROR_MSG "ORA-13028: Invalid Gtype in the SDO_GEOMETRY object"
-#define OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY__ORA_USER_ERROR_MSG "ORA-13029: Invalid SRID in the SDO_GEOMETRY object"
-#define OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT__ORA_USER_ERROR_MSG "ORA-13031: Invalid Gtype in the SDO_GEOMETRY object for point object"
-#define OB_ERR_INVALID_NULL_SDO_GEOMETRY__ORA_USER_ERROR_MSG "ORA-13032: Invalid NULL  SDO_GEOMETRY object"
-#define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__ORA_USER_ERROR_MSG "ORA-13033: Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
-#define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__ORA_USER_ERROR_MSG "ORA-13034: Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
-#define OB_ERR_VALUE_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-24323: value not allowed"
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -5875,7 +5755,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_INDEX__ORA_USER_ERROR_MSG "ORA-02327: cannot create index on expression with datatype ADT '%.*s'"
 #define OB_ERR_UPDATE_XML_WITH_INVALID_NODE__ORA_USER_ERROR_MSG "ORA-31067: XML nodes must be updated with valid nodes and of the same type"
 #define OB_LOB_VALUE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-22922: LOB value does not exist"
-#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__ORA_USER_ERROR_MSG "ORA-40654: Input to JSON generation function has unsupported data type"
+#define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_XQUERY_MULTI_VALUE__ORA_USER_ERROR_MSG "ORA-19279: XPTY0004 - XQuery dynamic type mismatch: expected singleton sequence - got multi-item sequence"
 #define OB_ERR_PARSE_XQUERY_EXPR__ORA_USER_ERROR_MSG "ORA-19114: XPST0003 - error during parsing the XQuery expression : %.*s"
 #define OB_ERR_LACK_XQUERY_LITERAL__ORA_USER_ERROR_MSG "ORA-19102: XQuery string literal expected"
@@ -5886,9 +5766,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XQUERY_UNSUPPORTED__ORA_USER_ERROR_MSG "ORA-19110: unsupported XQuery expression"
 #define OB_ERR_INVALID_XML_CHILD_NAME__ORA_USER_ERROR_MSG "ORA-31056: The document being inserted does not conform to specified child name"
 #define OB_ERR_XML_NOT_SUPPORT_OPERATION__ORA_USER_ERROR_MSG "ORA-31195: XML node '' (type=%s) does not support this operation"
-#define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
-#define OB_ERR_COMPARE_VARRAY_LOB_ATTR__ORA_USER_ERROR_MSG "ORA-22901: cannot compare VARRAY or LOB attributes of an object type"
-#define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__ORA_USER_ERROR_MSG "ORA-31003: Parent %.*s already contains child entry %.*s"
+#define OB_ERR_JSON_FUN_UNSUPPORTED_TYPE__ORA_USER_ERROR_MSG "ORA-40654: Input to JSON generation function has unsupported data type"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8003, Packet checksum error"
@@ -5968,8 +5846,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ARCHIVE_ROUND_NOT_CONTINUOUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9077, log discontinuous between two archive rounds"
 #define OB_ARCHIVE_LOG_TO_END__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9078, archive log is to end"
 #define OB_ARCHIVE_LOG_RECYCLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9079, archive log had been recycled"
-#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9080, format file does not exist%s"
-#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9081, format file does not match%s"
+#define OB_BACKUP_FORMAT_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9080, the format file does not exist under the destination"
+#define OB_BACKUP_FORMAT_FILE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9081, the content of the format file at the destination does not match"
 #define OB_BACKUP_DEVICE_OUT_OF_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9082, backup device out of space"
 #define OB_BACKUP_PWRITE_OFFSET_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9083, the pwrite offset of the object storage is inconsistent"
 #define OB_BACKUP_PWRITE_CONTENT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9084, the contents of pwrite are inconsistent"
@@ -5987,20 +5865,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESTORE_STANDBY_VERSION_LAG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade"
 #define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped"
 #define OB_CLOUD_OBJECT_NOT_APPENDABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9098, normal object in object_storage(oss,cos,etc.) can't be appended content"
-#define OB_RESTORE_TENANT_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9099, %s restore failed, %s"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9103, too many open files"
-#define OB_DIRECT_LOAD_COMMIT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9104, fail to commit direct load"
-#define OB_S3_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9105, S3 error"
-#define OB_TENANT_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9106, Tenant snapshot \'%.*s\' does not exist"
-#define OB_TENANT_SNAPSHOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9107, Tenant snapshot \'%.*s\' already exist"
-#define OB_TENANT_SNAPSHOT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9108, Tenant snapshot task timeout. %.*s"
-#define OB_CLONE_TENANT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9109, Clone tenant timeout. %.*s"
-#define OB_ERR_CLONE_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9110, %.*s"
-#define OB_ERR_TENANT_SNAPSHOT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9111, %.*s"
-#define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9112, %s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6265,38 +6133,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_MVIEW_NEVER_REFRESH__ORA_USER_ERROR_MSG "ORA-23538: cannot explicitly refresh a NEVER REFRESH materialized view (%s)"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9762, Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_OUT_PARAM_NOT_BIND_VAR__ORA_USER_ERROR_MSG "ORA-06577: output parameter not a bind variable"
-#define OB_ERR_TIME_EARLIER_THAN_SYSDATE__ORA_USER_ERROR_MSG "ORA-23420: the parameter %s must evaluate to a time in the future"
-#define OB_ERR_NOT_FUNC_NAME__ORA_USER_ERROR_MSG "PLS-00224: object '%.*s' must be of type function or array to be used this way"
-#define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
-#define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
-#define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
-#define OB_TTL_COLUMN_TYPE_NOT_SUPPORTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10503, Column type of '%.*s' is not supported for TTL definition"
-#define OB_TTL_CMD_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10504, TTL command is not allowed, current TTL status is '%s'"
-#define OB_TTL_NO_TASK_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10505, No TTL task is running, please try trigger a new TTL task"
-#define OB_TTL_TENANT_IS_RESTORE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10506, Cannot execute TTL task during tenant is restore"
-#define OB_TTL_INVALID_HBASE_TTL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10507, Time to live of hbase table must be greater than 0"
-#define OB_TTL_INVALID_HBASE_MAXVERSIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10508, MaxVersions of hbase table must be greater than 0"
-#define OB_KV_CREDENTIAL_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10509, Access denied, credential '%.*s' not match '%.*s'"
-#define OB_KV_ROWKEY_COUNT_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10510, Rowkey column count not match, schema rowkey count is '%ld', input rowkey count is '%ld'"
-#define OB_KV_COLUMN_TYPE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10511, Column type for '%.*s' not match, schema column type is '%.*s', input column type is '%.*s'"
-#define OB_KV_COLLATION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10512, Collation type for '%.*s' not match, schema collation type is '%.*s', input collation type is '%.*s'"
-#define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
-#define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
-#define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-20000: '%.*s' invalid partition name"
+#define OB_WRONG_PARTITION_NAME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11002, Incorrect partition name '%.*s'"
 #define OB_ERR_PLUGIN_IS_NOT_LOADED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11003, Plugin '%.*s' is not loaded"
-#define OB_EST_DEVIA_TOO_LARGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11004, Optimizer estimate deviation is too large 'Operator: %d.%.*s EST:%.ld -> REAL:%ld'"
 #define OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-02303: cannot drop or replace a type with type or table dependents"
 #define OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22866: cannot replace a type with table dependents"
-#define OB_ERR_UNKNOWN_AUTHID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11007, Unknown authorization ID `%.*s`@`%.*s`"
-#define OB_ERR_NO_GRANT_DEFINED_FOR_USER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11008, There is no such grant defined for user '%.*s' on host '%.*s'"
-#define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
-#define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
-#define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11011, query range memory exhausted"
-#define OB_CANNOT_USER_IF_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11012, User %.*s does not exist"
-#define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
-#define OB_ERR_FT_COLUMN_NOT_INDEXED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11014, Can't find FULLTEXT index matching the column list"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6307,7 +6149,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2220];
+extern int g_all_ob_errnos[2162];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

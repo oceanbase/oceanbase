@@ -184,7 +184,6 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
   ObExpr *json_arg = expr.args_[index];
   ObObjType val_type = json_arg->datum_meta_.type_;
   ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
-  ObScale dec_scale = json_arg->datum_meta_.scale_;
 
   if (OB_UNLIKELY(OB_FAIL(json_arg->eval(ctx, json_datum)))) {
     LOG_WARN("eval json arg failed", K(ret));
@@ -274,24 +273,15 @@ int ObExprJsonExists::get_var_data(const ObExpr &expr, ObEvalCtx &ctx, common::O
         j_base = tmp_ans;
       }
     }
-  } else if ((ObNumberType <= val_type && val_type <= ObUNumberType) || (val_type == ObDecimalIntType)) {
+  } else if (ObNumberType <= val_type && val_type <= ObUNumberType) {
     // decimal
     ObJsonDecimal* tmp_ans = static_cast<ObJsonDecimal*> (allocator.alloc(sizeof(ObJsonDecimal)));
     if (OB_ISNULL(tmp_ans)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate row buffer failed at ObJsonDecimal", K(ret));
-    } else if (val_type != ObDecimalIntType){
+    } else {
       tmp_ans = new (tmp_ans) ObJsonDecimal(json_datum->get_number());
       j_base = tmp_ans;
-    } else {
-      ObNumber tmp_nmb;
-      if (OB_FAIL(wide::to_number(json_datum->get_decimal_int(), json_datum->get_int_bytes(),
-                                  dec_scale, allocator, tmp_nmb))) {
-        LOG_WARN("to number faile", K(ret));
-      } else {
-        tmp_ans = new (tmp_ans) ObJsonDecimal(tmp_nmb);
-        j_base = tmp_ans;
-      }
     }
   } else if (val_type == ObDateTimeType || val_type == ObDateType || val_type == ObTimeType) {
     // datetime

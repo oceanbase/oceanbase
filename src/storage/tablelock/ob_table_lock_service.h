@@ -143,9 +143,8 @@ private:
     // TODO: yanyuan.cxf we need better performance.
     // share::ObLSArray ls_list_; // related ls list
     int64_t schema_version_;             // the schema version of the table to be locked
-    bool tx_is_killed_;                  // used to kill a trans.
+    bool tx_is_killed_;                   // used to kill a trans.
     bool is_from_sql_;
-    int ret_code_before_end_stmt_or_tx_;  // used to mark this lock is still conflict while lock request exiting
 
     // use to kill the whole lock table stmt.
     transaction::ObTxSEQ stmt_savepoint_;
@@ -156,7 +155,7 @@ private:
                  K(abs_timeout_ts_), KPC(tx_desc_), K(tx_param_),
                  K(current_savepoint_), K(need_rollback_ls_),
                  K(schema_version_), K(tx_is_killed_),
-                 K(is_from_sql_), K(ret_code_before_end_stmt_or_tx_), K(stmt_savepoint_));
+                 K(is_from_sql_), K(stmt_savepoint_));
   };
   class ObRetryCtx
   {
@@ -346,10 +345,8 @@ private:
   bool need_retry_part_rpc_task_(const int ret,
                                  const ObTableLockTaskResult *result) const;
   bool need_renew_location_(const int64_t ret) const;
-  int rewrite_return_code_(const int ret, const int ret_code_before_end_stmt_or_tx = OB_SUCCESS, const bool is_from_sql = false) const;
-  bool is_lock_conflict_ret_code_(const int ret) const;
-  bool is_timeout_ret_code_(const int ret) const;
-  bool is_can_retry_err_(const int ret) const;
+  int rewrite_return_code_(const int ret) const;
+  int is_timeout_ret_code_(const int ret) const;
   int process_lock_task_(ObTableLockCtx &ctx,
                          const ObTableLockMode lock_mode,
                          const ObTableLockOwnerID lock_owner);
@@ -482,11 +479,6 @@ private:
                      const ObTableLockMode lock_mode,
                      const ObTableLockOwnerID lock_owner,
                      ObRetryCtx &retry_ctx);
-  template<class RpcProxy, class LockRequest>
-  int rpc_call_(RpcProxy &proxy_batch,
-                const ObAddr &addr,
-                const int64_t timeout_us,
-                const LockRequest &request);
   int get_retry_lock_ids_(const ObLockIDArray &lock_ids,
                           const int64_t start_pos,
                           ObLockIDArray &retry_lock_ids);

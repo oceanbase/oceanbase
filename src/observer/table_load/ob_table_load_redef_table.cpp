@@ -38,6 +38,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     ObCreateHiddenTableArg create_table_arg;
     ObCreateHiddenTableRes create_table_res;
+    int64_t snapshot_version = OB_INVALID_VERSION;
     create_table_arg.reset();
     create_table_arg.exec_tenant_id_ = arg.tenant_id_;
     create_table_arg.tenant_id_ = arg.tenant_id_;
@@ -54,16 +55,16 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
     create_table_arg.consumer_group_id_ = THIS_WORKER.get_group_id();
     if (OB_FAIL(create_table_arg.tz_info_wrap_.deep_copy(session_info.get_tz_info_wrap()))) {
       LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
-    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,
-        res.snapshot_version_, res.data_format_version_, session_info))) {
+    } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res, snapshot_version, session_info))) {
       LOG_WARN("failed to create hidden table", KR(ret), K(create_table_arg));
-    } else if (OB_UNLIKELY(res.snapshot_version_ <= 0 || res.data_format_version_ <= 0)) {
+    } else if (OB_UNLIKELY(snapshot_version <= 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid snapshot version", K(ret), K(res));
+      LOG_WARN("invalid snapshot version", K(ret));
     } else {
       res.dest_table_id_ = create_table_res.dest_table_id_;
       res.task_id_ = create_table_res.task_id_;
       res.schema_version_ = create_table_res.schema_version_;
+      res.snapshot_version_ = snapshot_version;
       LOG_INFO("succeed to create hidden table", K(arg), K(res));
     }
     THIS_WORKER.set_timeout_ts(origin_timeout_ts);
@@ -112,9 +113,6 @@ int ObTableLoadRedefTable::finish(const ObTableLoadRedefTableFinishArg &arg,
       if (OB_FAIL(ObDDLServerClient::finish_redef_table(
             finish_redef_table_arg, build_single_replica_response_arg, session_info))) {
         LOG_WARN("failed to finish redef table", KR(ret), K(finish_redef_table_arg));
-        if (ret == OB_NOT_MASTER) { //sql cannot be retried here, so change errcode
-          ret = OB_DIRECT_LOAD_COMMIT_ERROR;
-        }
       } else {
         LOG_INFO("succeed to finish redef table", KR(ret), K(finish_redef_table_arg));
       }

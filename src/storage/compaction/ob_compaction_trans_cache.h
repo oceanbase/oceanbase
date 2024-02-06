@@ -67,26 +67,29 @@ struct ObMergeCachedTransState {
     : key_(),
       trans_version_(INVALID_TRANS_VERSION),
       trans_state_(INT32_MAX),
-      can_read_(INVALID_BOOL_VALUE)
+      can_read_(INVALID_BOOL_VALUE),
+      is_determined_state_(INVALID_BOOL_VALUE)
   {}
   ObMergeCachedTransState(
     transaction::ObTransID trans_id,
     transaction::ObTxSEQ sql_sequence,
     int64_t trans_version,
     int32_t trans_state,
-    int16_t can_read)
+    int16_t can_read,
+    int16_t is_determined_state)
     : key_(trans_id, sql_sequence),
       trans_version_(trans_version),
       trans_state_(trans_state),
-      can_read_(can_read)
+      can_read_(can_read),
+      is_determined_state_(is_determined_state)
   {}
   virtual ~ObMergeCachedTransState() {}
   inline bool is_valid() const
   {
     return key_.is_valid() && INVALID_TRANS_VERSION != trans_version_ && INT32_MAX != trans_state_ &&
-      INVALID_BOOL_VALUE != can_read_;
+      INVALID_BOOL_VALUE != can_read_ && INVALID_BOOL_VALUE != is_determined_state_;
   }
-  TO_STRING_KV(K_(key), K_(trans_state), K_(trans_version), K_(can_read));
+  TO_STRING_KV(K_(key), K_(trans_state), K_(trans_version), K_(can_read), K_(is_determined_state));
 
   static const int16_t INVALID_BOOL_VALUE = -1;
   static const int64_t INVALID_TRANS_VERSION = -1;
@@ -94,6 +97,7 @@ struct ObMergeCachedTransState {
   int64_t trans_version_;
   int32_t trans_state_;
   int16_t can_read_; // 0 false; 1 true
+  int16_t is_determined_state_; // 0 false; 1 true
 };
 
 class ObCachedTransStateMgr {
@@ -114,7 +118,8 @@ public:
     const transaction::ObTxSEQ &sql_seq,
     const int64_t trans_version,
     const int32_t trans_state,
-    const int16_t can_read);
+    const int16_t can_read,
+    const int16_t is_determined_state);
 private:
   bool is_inited_;
   int64_t max_cnt_;

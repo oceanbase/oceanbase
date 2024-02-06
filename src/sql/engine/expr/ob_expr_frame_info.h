@@ -34,23 +34,20 @@ public:
                   frame_idx_(0),
                   frame_size_(0),
                   zero_init_pos_(0),
-                  zero_init_size_(0),
-                  use_rich_format_(false)
+                  zero_init_size_(0)
   {}
   virtual ~ObFrameInfo() = default;
 
   ObFrameInfo(uint64_t expr_cnt, uint32_t frame_idx, uint64_t frame_size,
-              uint32_t zero_init_pos, uint32_t zero_init_size, bool use_rich_format)
+              uint32_t zero_init_pos, uint32_t zero_init_size)
     : expr_cnt_(expr_cnt),
       frame_idx_(frame_idx),
       frame_size_(frame_size),
       zero_init_pos_(zero_init_pos),
-      zero_init_size_(zero_init_size),
-      use_rich_format_(use_rich_format)
+      zero_init_size_(zero_init_size)
   {}
 
-  TO_STRING_KV(K_(expr_cnt), K_(frame_idx), K_(frame_size), K_(zero_init_pos),
-               K_(zero_init_size), K_(use_rich_format));
+  TO_STRING_KV(K_(expr_cnt), K_(frame_idx), K_(frame_size), K_(zero_init_pos), K_(zero_init_size));
 
 public:
   uint64_t expr_cnt_;       // 当前frame中expr个数
@@ -58,7 +55,6 @@ public:
   uint64_t frame_size_;     // 当前frame大小
   uint32_t zero_init_pos_;
   uint32_t zero_init_size_;
-  bool use_rich_format_;
 };
 
 struct ObExprFrameInfo

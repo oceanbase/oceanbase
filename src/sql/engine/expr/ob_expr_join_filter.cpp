@@ -46,74 +46,6 @@ namespace sql
           } else {\
             ob_usleep(1000);\
           }
-
-template <typename ResVec>
-static int proc_if_das(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound);
-
-template <>
-int proc_if_das<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                               const EvalBound &bound)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
-            res_vec->set_int(idx, 1);
-            return OB_SUCCESS;
-          }))) {
-    LOG_WARN("fail to do for each operation", K(ret));
-  }
-  return ret;
-}
-
-template <>
-int proc_if_das<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                 const EvalBound &bound)
-{
-  int ret = OB_SUCCESS;
-  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
-  return ret;
-}
-
-template <typename ResVec>
-static int proc_by_pass(ResVec *res_vec, const ObBitVector &skip, const EvalBound &bound,
-                        ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx);
-
-template <>
-int proc_by_pass<IntegerUniVec>(IntegerUniVec *res_vec, const ObBitVector &skip,
-                                const EvalBound &bound,
-                                ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
-{
-  int ret = OB_SUCCESS;
-  int valid_cnt = 0;
-  if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
-            ++valid_cnt;
-            res_vec->set_int(idx, 1);
-            return OB_SUCCESS;
-          }))) {}
-  join_filter_ctx->n_times_ += valid_cnt;
-  join_filter_ctx->total_count_ += valid_cnt;
-  ObExprJoinFilter::collect_sample_info_batch(*join_filter_ctx, 0, valid_cnt);
-  return ret;
-}
-
-template <>
-int proc_by_pass<IntegerFixedVec>(IntegerFixedVec *res_vec, const ObBitVector &skip,
-                                  const EvalBound &bound,
-                                  ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx)
-{
-  int ret = OB_SUCCESS;
-  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data + bound.start(), 1, (bound.range_size() * res_vec->get_length(0)));
-
-  int64_t valid_cnt = bound.range_size() - skip.accumulate_bit_cnt(bound);
-  join_filter_ctx->n_times_ += valid_cnt;
-  join_filter_ctx->total_count_ += valid_cnt;
-  ObExprJoinFilter::collect_sample_info_batch(*join_filter_ctx, 0, valid_cnt);
-  return ret;
-}
-
 ObExprJoinFilter::ObExprJoinFilterContext::~ObExprJoinFilterContext()
 {
   if (OB_NOT_NULL(rf_msg_)) {
@@ -135,16 +67,6 @@ void ObExprJoinFilter::ObExprJoinFilterContext::reset_monitor_info()
   ready_ts_ = 0;
   dynamic_disable_ = false;
   is_ready_ = false;
-}
-
-void ObExprJoinFilter::ObExprJoinFilterContext::collect_monitor_info(
-    const int64_t filtered_rows_count,
-    const int64_t check_rows_count,
-    const int64_t total_rows_count)
-{
-  filter_count_ += filtered_rows_count;
-  check_count_ += check_rows_count;
-  total_count_ += total_rows_count;
 }
 
 ObExprJoinFilter::ObExprJoinFilter(ObIAllocator& alloc)
@@ -184,19 +106,16 @@ int ObExprJoinFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     case RuntimeFilterType::BLOOM_FILTER: {
       rt_expr.eval_func_ = eval_bloom_filter;
       rt_expr.eval_batch_func_ = eval_bloom_filter_batch;
-      rt_expr.eval_vector_func_ = eval_bloom_filter_vector;
       break;
     }
     case RuntimeFilterType::RANGE: {
       rt_expr.eval_func_ = eval_range_filter;
       rt_expr.eval_batch_func_ = eval_range_filter_batch;
-      rt_expr.eval_vector_func_ = eval_range_filter_vector;
       break;
     }
     case RuntimeFilterType::IN: {
       rt_expr.eval_func_ = eval_in_filter;
       rt_expr.eval_batch_func_ = eval_in_filter_batch;
-      rt_expr.eval_vector_func_ = eval_in_filter_vector;
       break;
     }
     default: {
@@ -274,42 +193,6 @@ void ObExprJoinFilter::collect_sample_info(
       join_filter_ctx->partial_total_count_++;
     }
   }
-}
-
-int ObExprJoinFilter::prepare_storage_white_filter_data(const ObExpr &expr,
-                                ObDynamicFilterExecutor &dynamic_filter,
-                                ObEvalCtx &eval_ctx,
-                                ObRuntimeFilterParams &params,
-                                bool &is_data_prepared)
-{
-  int ret = OB_SUCCESS;
-  is_data_prepared = false;
-  uint64_t op_id = expr.expr_ctx_id_;
-  ObExecContext &exec_ctx = eval_ctx.exec_ctx_;
-  ObExprJoinFilterContext *join_filter_ctx = NULL;
-  // get expr ctx from exec ctx
-  if (OB_ISNULL(join_filter_ctx = static_cast<ObExprJoinFilterContext *>(
-            exec_ctx.get_expr_op_ctx(op_id)))) {
-    // join filter ctx may be null in das.
-    dynamic_filter.set_filter_action(DynamicFilterAction::PASS_ALL);
-  } else {
-    if (join_filter_ctx->is_first_) {
-      join_filter_ctx->start_time_ = ObTimeUtility::current_time();
-      join_filter_ctx->is_first_ = false;
-    }
-    if (OB_FAIL(check_rf_ready(exec_ctx, join_filter_ctx))) {
-       LOG_WARN("fail to check bf ready", K(ret));
-    } else if (OB_ISNULL(join_filter_ctx->rf_msg_)) {
-    } else if (!join_filter_ctx->is_ready() || join_filter_ctx->dynamic_disable()) {
-    } else if (OB_FAIL(join_filter_ctx->rf_msg_->prepare_storage_white_filter_data(
-        dynamic_filter, eval_ctx, params, is_data_prepared))) {
-      LOG_WARN("fail to prepare_storage_white_filter_data", K(ret));
-    } else {
-      dynamic_filter.cmp_func_ =
-          join_filter_ctx->cmp_funcs_.at(dynamic_filter.get_col_idx()).cmp_func_;
-    }
-  }
-  return ret;
 }
 
 void ObExprJoinFilter::check_need_dynamic_diable_bf(
@@ -505,78 +388,6 @@ int ObExprJoinFilter::eval_filter_batch_internal(
   return ret;
 }
 
-
-int ObExprJoinFilter::eval_bloom_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound)
-{
-  return eval_filter_vector_internal(expr, ctx, skip, bound);
-}
-
-int ObExprJoinFilter::eval_range_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound)
-{
-  return eval_filter_vector_internal(expr, ctx, skip, bound);
-}
-
-int ObExprJoinFilter::eval_in_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound)
-{
-  return eval_filter_vector_internal(expr, ctx, skip, bound);
-}
-
-int ObExprJoinFilter::eval_filter_vector_internal(
-    const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound)
-{
-  int ret = OB_SUCCESS;
-  uint64_t op_id = expr.expr_ctx_id_;
-  ObExecContext &exec_ctx = ctx.exec_ctx_;
-  ObExprJoinFilterContext *join_filter_ctx = NULL;
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx); // for batch
-  VectorFormat res_format = expr.get_format(ctx);
-  if (OB_ISNULL(join_filter_ctx = static_cast<ObExprJoinFilterContext *>(
-            exec_ctx.get_expr_op_ctx(op_id)))) {
-    // join filter ctx may be null in das.
-    if (VEC_UNIFORM == res_format) {
-      IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-      ret = proc_if_das(res_vec, skip, bound);
-    } else if (VEC_FIXED == res_format) {
-      IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-      ret = proc_if_das(res_vec, skip, bound);
-    }
-    eval_flags.set_all(true);
-  } else {
-    if (join_filter_ctx->is_first_) {
-      join_filter_ctx->start_time_ = ObTimeUtility::current_time();
-      join_filter_ctx->is_first_ = false;
-    }
-    if (OB_FAIL(check_rf_ready(exec_ctx, join_filter_ctx))) {
-      LOG_WARN("fail to check bf ready", K(ret));
-    } else if (OB_ISNULL(join_filter_ctx->rf_msg_) || !join_filter_ctx->is_ready()
-               || join_filter_ctx->dynamic_disable()) {
-      // rf_msg_ is null: no msg arrived yet
-      // rf_msg_ not ready: not all msgs arrived
-      // rf_msg_ dynamic_disable: disable filter when filter rate < 0.5
-      if (VEC_UNIFORM == res_format) {
-        IntegerUniVec *res_vec = static_cast<IntegerUniVec *>(expr.get_vector(ctx));
-        ret = proc_by_pass(res_vec, skip, bound, join_filter_ctx);
-      } else if (VEC_FIXED == res_format) {
-        IntegerFixedVec *res_vec = static_cast<IntegerFixedVec *>(expr.get_vector(ctx));
-        ret = proc_by_pass(res_vec, skip, bound, join_filter_ctx);
-      }
-      eval_flags.set_all(true);
-    } else if (OB_FAIL(join_filter_ctx->rf_msg_->might_contain_vector(expr, ctx, skip, bound,
-                                                                      *join_filter_ctx))) {
-      LOG_WARN("fail to might contain batch");
-    }
-  }
-  return ret;
-}
 
 }
 }

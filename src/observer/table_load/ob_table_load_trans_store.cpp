@@ -210,14 +210,13 @@ int ObTableLoadTransStoreWriter::init_session_ctx_array()
   param.table_data_desc_ = *table_data_desc_;
   param.datum_utils_ = &(trans_ctx_->ctx_->schema_.datum_utils_);
   param.col_descs_ = &(trans_ctx_->ctx_->schema_.column_descs_);
-  param.lob_column_cnt_ = trans_ctx_->ctx_->schema_.lob_column_cnt_;
   param.cmp_funcs_ = &(trans_ctx_->ctx_->schema_.cmp_funcs_);
   param.file_mgr_ = trans_ctx_->ctx_->store_ctx_->tmp_file_mgr_;
   param.is_multiple_mode_ = trans_ctx_->ctx_->store_ctx_->is_multiple_mode_;
   param.is_fast_heap_table_ = trans_ctx_->ctx_->store_ctx_->is_fast_heap_table_;
   param.online_opt_stat_gather_ = trans_ctx_->ctx_->param_.online_opt_stat_gather_;
-  param.px_mode_ = trans_ctx_->ctx_->param_.px_mode_;
   param.insert_table_ctx_ = trans_ctx_->ctx_->store_ctx_->insert_table_ctx_;
+  param.fast_heap_table_ctx_ = trans_ctx_->ctx_->store_ctx_->fast_heap_table_ctx_;
   param.dml_row_handler_ = trans_ctx_->ctx_->store_ctx_->error_row_handler_;
   for (int64_t i = 0; OB_SUCC(ret) && i < session_count; ++i) {
     SessionContext *session_ctx = session_ctx_array_ + i;

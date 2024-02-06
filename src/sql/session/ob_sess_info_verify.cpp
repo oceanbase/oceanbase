@@ -13,7 +13,6 @@
 
 #define USING_LOG_PREFIX SERVER
 
-#include <math.h>
 #include "sql/session/ob_sess_info_verify.h"
 #include "share/ob_define.h"
 #include "share/system_variable/ob_system_variable_factory.h"
@@ -218,7 +217,7 @@ int ObSessInfoVerify::compare_verify_session_info(sql::ObSQLSessionInfo &sess,
         LOG_WARN("info type is not consistent", K(ret), K(info_type1), K(info_type2));
       } else if (OB_FAIL(sess.get_sess_encoder(SessionSyncInfoType(info_type1), encoder))) {
         LOG_WARN("failed to get session encoder", K(ret));
-      } else if (OB_FAIL(encoder->compare_sess_info(sess, buf1 + pos1, info_len1,
+      } else if (OB_FAIL(encoder->compare_sess_info(buf1 + pos1, info_len1,
                                   buf2 + pos2, info_len2))) {
         LOG_ERROR("fail to compare session info", K(ret),
                     K(sess.get_sessid()),
@@ -359,12 +358,10 @@ int ObSessInfoVerify::deserialize_sess_info_veri_id(sql::ObSQLSessionInfo &sess,
       char* ptr = NULL;
       ObAddr addr;
       char ip_buf[MAX_IP_ADDR_LENGTH] = "";
-      uint64_t length = v_len;
       if (OB_FAIL(ObProtoTransUtil::get_str(buf, len, pos, v_len, ptr))) {
         OB_LOG(WARN,"failed to resolve veri level", K(ret));
-      } else if (FALSE_IT(length = std::min(length, uint64_t(MAX_IP_ADDR_LENGTH - 1)))) {
-      } else if (FALSE_IT(memcpy(ip_buf, ptr, length))) {
-      } else if (FALSE_IT(ip_buf[length] = '\0')) {
+      } else if (FALSE_IT(memcpy(ip_buf, ptr, v_len))) {
+      } else if (FALSE_IT(ip_buf[v_len] = '\0')) {
       } else if (OB_FAIL(addr.parse_from_cstring(ip_buf))) {
         OB_LOG(WARN,"failed to parse from cstring", K(ret));
       } else if (OB_FAIL(sess_info_verification.set_verify_info_addr(addr))) {

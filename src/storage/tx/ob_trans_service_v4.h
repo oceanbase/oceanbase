@@ -101,8 +101,7 @@ int handle_sp_rollback_resp(const share::ObLSID &ls_id,
                             const int status,
                             const int64_t request_id,
                             const int64_t ret_epoch,
-                            const ObAddr &ret_addr,
-                            const ObIArray<ObTxLSEpochPair> &downstream_parts);
+                            const ObAddr &ret_addr);
 int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const share::ObLSID &receiver_ls_id,
                               const ObTransID &tx_id,
@@ -177,7 +176,8 @@ int check_for_standby(const share::ObLSID &ls_id,
                       const ObTransID &tx_id,
                       const SCN &snapshot,
                       bool &can_read,
-                      SCN &trans_version);
+                      SCN &trans_version,
+                      bool &is_determined_state);
 void register_standby_cleanup_task();
 int do_standby_cleanup();
 void handle_defer_abort(ObTxDesc &tx);
@@ -189,13 +189,11 @@ int ask_tx_state_for_4377(const ObLSID ls_id,
 int handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &msg,
                                  bool &is_alive);
 
-int check_ls_status(const share::ObLSID &ls_id);
-
 TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(this));
 
 private:
 int check_ls_status_(const share::ObLSID &ls_id, bool &leader);
-int init_tx_(ObTxDesc &tx, const uint32_t session_id);
+void init_tx_(ObTxDesc &tx, const uint32_t session_id);
 int start_tx_(ObTxDesc &tx);
 int abort_tx_(ObTxDesc &tx, const int cause, bool cleanup = true);
 void abort_tx__(ObTxDesc &tx, const bool cleanup);
@@ -208,16 +206,13 @@ int rollback_savepoint_(ObTxDesc &tx,
                         const ObTxSEQ savepoint,
                         int64_t expire_ts);
 int rollback_savepoint_slowpath_(ObTxDesc &tx,
-                                 ObTxRollbackParts &rollback_parts,
-                                 const ObTxSEQ specified_from_scn,
+                                 const ObTxPartRefList &parts,
                                  const ObTxSEQ scn,
                                  const int64_t expire_ts);
-void on_sp_rollback_succ_(const ObTxExecPart &part,
+void on_sp_rollback_succ_(const ObTxLSEpochPair &part,
                           ObTxDesc &tx,
                           const int64_t born_epoch,
                           const ObAddr &addr);
-int merge_rollback_downstream_parts_(ObTxDesc &tx,
-                                    const ObIArray<ObTxLSEpochPair> &downstream_parts);
 int create_tx_ctx_(const share::ObLSID &ls_id,
                    const ObTxDesc &tx,
                    ObPartTransCtx *&ctx);
@@ -269,7 +264,7 @@ int acquire_global_snapshot__(const int64_t expire_ts,
                               ObFunction<bool()> interrupt_checker);
 int batch_post_rollback_savepoint_msg_(ObTxDesc &tx,
                                        ObTxRollbackSPMsg &msg,
-                                       const ObTxRollbackParts &list,
+                                       const ObIArray<ObTxLSEpochPair> &list,
                                        int &post_succ_num);
 int post_tx_commit_msg_(ObTxDesc &tx_desc,
                         ObTxCommitMsg &msg,
@@ -296,12 +291,11 @@ int handle_tx_commit_result_(ObTxDesc &tx,
 int decide_tx_commit_info_(ObTxDesc &tx, ObTxPart *&coord);
 int local_ls_commit_tx_(const ObTransID &tx_id,
                         const share::ObLSID &coord,
-                        const ObTxCommitParts &parts,
+                        const share::ObLSArray &parts,
                         const int64_t &expire_ts,
                         const common::ObString &app_trace_info,
                         const int64_t &request_id,
                         const share::SCN commit_start_scn,
-                        const int64_t epoch,
                         share::SCN &commit_version,
                         const common::ObAddr &caller);
 int get_tx_state_from_tx_table_(const share::ObLSID &lsid,
@@ -325,7 +319,7 @@ int build_tx_sub_commit_msg_(const ObTxDesc &tx, ObTxSubCommitMsg &msg);
 int build_tx_sub_rollback_msg_(const ObTxDesc &tx, ObTxSubRollbackMsg &msg);
 int sub_prepare_local_ls_(const ObTransID &tx_id,
                           const share::ObLSID &coord,
-                          const ObTxCommitParts &parts,
+                          const share::ObLSArray &parts,
                           const int64_t &expire_ts,
                           const common::ObString & app_trace_info,
                           const int64_t &request_id,
@@ -353,16 +347,12 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const int64_t verify_epoch,
                               const int64_t op_sn,
                               const ObTxSEQ savepoint,
-                              const int64_t tx_seq_base,
                               int64_t &ctx_born_epoch,
                               const ObTxDesc *tx,
-                              const bool for_transfer,
-                              const ObTxSEQ from_scn,
-                              ObIArray<ObTxLSEpochPair> &downstream_parts,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
                               ObTxRollbackSPMsg &msg,
-                              RollbackMaskSet &mask_set,
+                              const ObTxDesc::MaskSet &mask_set,
                               int64_t expire_ts,
                               const int64_t max_retry_interval,
                               int &retries);
@@ -378,20 +368,14 @@ int rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            const ObTxSEQ savepoint,
                                            const int64_t expire_ts,
-                                           const share::ObLSArray *extra_touched_ls,
-                                           const int exec_errcode);
+                                           const share::ObLSArray *extra_touched_ls);
 int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const ObTxSEQ savepoint,
                                  const int64_t op_sn,
-                                 const int64_t tx_seq_base,
-                                 const int64_t expire_ts,
-                                 const ObTxSEQ specified_from_scn,
-                                 ObIArray<ObTxLSEpochPair> &downstream_parts);
+                                 const int64_t expire_ts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
-// in_stmt means stmt is executing
-int tx_sanity_check_(ObTxDesc &tx, const bool in_stmt = false);
-bool tx_need_reset_(const int error_code) const;
+int tx_sanity_check_(ObTxDesc &tx);
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,
                         ObTxTableGuard &guard);

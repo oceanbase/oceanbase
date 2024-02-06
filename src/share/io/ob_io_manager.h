@@ -68,13 +68,11 @@ public:
   int get_device_channel(const ObIODevice *device_handle, ObDeviceChannel *&device_channel);
 
   // tenant management
+  int add_tenant_io_manager(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
+  int remove_tenant_io_manager(const uint64_t tenant_id);
   int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);
   int get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder);
-  int modify_group_io_config(const uint64_t tenant_id,
-                             const uint64_t index,
-                             const int64_t min_percent,
-                             const int64_t max_percent,
-                             const int64_t weight_percent);
+  int get_tenant_ids(ObIArray<uint64_t> &tenant_ids);
   ObIOScheduler *get_scheduler();
 
 private:
@@ -95,13 +93,13 @@ private:
   hash::ObHashMap<int64_t /*device_handle*/, ObDeviceChannel *> channel_map_;
   ObIOFaultDetector fault_detector_;
   ObIOScheduler io_scheduler_;
-  ObTenantIOManager *server_io_manager_;
+  DRWLock tenant_map_lock_;
+  hash::ObHashMap<uint64_t /*tenant_id*/, ObTenantIOManager *> tenant_map_;
 };
 
 class ObTenantIOManager final
 {
 public:
-  static int mtl_new(ObTenantIOManager *&io_service);
   static int mtl_init(ObTenantIOManager *&io_service);
   static void mtl_destroy(ObTenantIOManager *&io_service);
 public:

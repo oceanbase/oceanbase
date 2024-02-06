@@ -63,7 +63,6 @@ class Election
 public:
   virtual ~Election() {}
   virtual void stop() = 0;
-  virtual int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const = 0;
   // 设置成员列表
   virtual int set_memberlist(const MemberList &new_member_list) = 0;
   // 获取选举当前的角色

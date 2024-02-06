@@ -36,10 +36,11 @@ int ObUtlFileHandler::fopen(const char *dir, const char *filename, const char *o
                             const int64_t max_line_size, int64_t &fd)
 {
   int ret = OB_SUCCESS;
+  size_t dir_len = 0;
   size_t filename_len = 0;
   const char *real_filename = NULL;
   bool dir_included = false;
-  if (OB_UNLIKELY(!is_valid_path(dir))) {
+  if (OB_UNLIKELY(!is_valid_path(dir, dir_len))) {
     ret = OB_UTL_FILE_INVALID_PATH;
     LOG_WARN("invalid dir", K(ret), K(dir));
   } else if (OB_UNLIKELY(!is_valid_path(filename, filename_len))) {
@@ -77,7 +78,7 @@ int ObUtlFileHandler::fopen(const char *dir, const char *filename, const char *o
       ObIOFd io_fd;
       int p_ret = 0;
       if (dir_included) {
-        p_ret = snprintf(full_path, sizeof(full_path), "%s/%s", dir, real_filename);
+        p_ret = snprintf(full_path, sizeof(full_path), "%s/%s", filename, real_filename);
       } else {
         p_ret = snprintf(full_path, sizeof(full_path), "%s/%s", dir, filename);
       }
@@ -297,37 +298,14 @@ int ObUtlFileHandler::fseek(const int64_t &fd, const int64_t *abs_offset, const 
 int ObUtlFileHandler::fremove(const char *dir, const char *filename)
 {
   int ret = OB_SUCCESS;
-  size_t filename_len = 0;
-  const char *real_filename = NULL;
-  bool dir_included = false;
   SMART_VAR(char[ObUtlFileConstants::UTL_PATH_SIZE_LIMIT * 2], full_path) {
     if (OB_UNLIKELY(!is_valid_path(dir))) {
       ret = OB_UTL_FILE_INVALID_PATH;
       LOG_WARN("invalid dir", K(ret), K(dir));
-    } else if (OB_UNLIKELY(!is_valid_path(filename, filename_len))) {
+    } else if (OB_UNLIKELY(!is_valid_path(filename))) {
       ret = OB_UTL_FILE_INVALID_FILENAME;
       LOG_WARN("invalid filename", K(ret), K(filename));
-    } else if ('/' == filename[filename_len - 1]) {
-      // check dir and filename
-      // filename ends with '/', invalid filename
-      ret = OB_UTL_FILE_INVALID_FILENAME;
-      LOG_WARN("invalid filename, should not end with '/'", K(ret), K(filename));
-    } else {
-      // check whether filename includes '/', which means filename has directory path inside it
-      // should ignore directory path
-      const char *last_slash = NULL;
-      if (NULL != (last_slash = STRRCHR(filename, '/'))) {
-        LOG_INFO("dir is part of filename, should ignore dir in full path",
-            K(dir), K(filename));
-        dir_included = true;
-        real_filename = last_slash + 1;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (dir_included && OB_FAIL(format_full_path(full_path, sizeof(full_path), dir, real_filename))) {
-      LOG_WARN("fail to format full path", K(ret), K(dir), K(real_filename));
-    } else if (!dir_included && OB_FAIL(format_full_path(full_path, sizeof(full_path), dir, filename))) {
+    } else if (OB_FAIL(format_full_path(full_path, sizeof(full_path), dir, filename))) {
       LOG_WARN("fail to format full path", K(ret), K(dir), K(filename));
     } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.unlink(full_path))) {
       LOG_WARN("fail to unlink file", K(ret), K(full_path));

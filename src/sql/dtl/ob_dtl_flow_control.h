@@ -36,6 +36,7 @@ class ObDtlChannel;
 class ObDtlChannelLoop;
 class ObDtlFlowControl;
 class ObDtlBasicChannel;
+class ObDtlLocalFirstBufferCache;
 
 // Receive op send unblocking msg to transimit op, and transmit op will going
 class ObDtlUnblockingMsg
@@ -86,7 +87,7 @@ public:
   tenant_id_(OB_INVALID_ID), timeout_ts_(0), communicate_flag_(0),
   compressor_type_(common::ObCompressorType::NONE_COMPRESSOR), is_init_(false), block_ch_cnt_(0),
   total_memory_size_(0), total_buffer_cnt_(0), accumulated_blocked_cnt_(0), blocks_(), chans_(), drain_ch_cnt_(0),
-  dfo_key_(), op_metric_(nullptr),
+  dfo_key_(), op_metric_(nullptr), first_buf_cache_(nullptr),
   chan_loop_(nullptr), ch_info_(nullptr)
   { }
 
@@ -207,6 +208,11 @@ public:
   ObDtlSqcInfo &get_sender_sqc_info() { return sender_sqc_info_; }
   void set_sender_sqc_info(ObDtlSqcInfo &sqc_info) { sender_sqc_info_ = sqc_info; }
 
+  ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return first_buf_cache_; }
+  void set_first_buffer_cache(ObDtlLocalFirstBufferCache *first_buf_cache)
+  {
+    first_buf_cache_ = first_buf_cache;
+  }
   void set_dtl_channel_watcher(ObDtlChannelLoop *dtl_watcher)
   {
     chan_loop_ = dtl_watcher;
@@ -247,6 +253,7 @@ private:
   ObDtlSqcInfo sender_sqc_info_;
   sql::ObOpMetric *op_metric_;
 
+  ObDtlLocalFirstBufferCache *first_buf_cache_;
   // for dtl channel notify
   ObDtlChannelLoop *chan_loop_;
 

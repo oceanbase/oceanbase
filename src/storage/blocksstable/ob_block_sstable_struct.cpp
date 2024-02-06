@@ -514,6 +514,7 @@ ObMacroBlockMarkerStatus::ObMacroBlockMarkerStatus()
     sweep_cost_time_(0),
     start_time_(0),
     last_end_time_(0),
+    mark_finished_(false),
     hold_info_()
 {
 }
@@ -560,6 +561,7 @@ void ObMacroBlockMarkerStatus::reuse()
   sweep_cost_time_ = 0;
   start_time_ = 0;
   last_end_time_ = 0;
+  mark_finished_ = false;
   hold_info_.reset();
 }
 
@@ -798,35 +800,17 @@ int ObRecordHeaderV3::deserialize(const char *buf, int64_t buf_len, int64_t &pos
 }
 
 ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
-  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_(SCN::min_scn()),
-    data_format_version_(0/*for compatibility*/), end_row_id_(-1)
+  : table_key_(), data_buffer_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE), start_scn_(SCN::min_scn())
 {
-}
-
-void ObDDLMacroBlockRedoInfo::reset()
-{
-  table_key_.reset();
-  data_buffer_.reset();
-  block_type_ = ObDDLMacroBlockType::DDL_MB_INVALID_TYPE;
-  logic_id_.reset();
-  start_scn_ = SCN::min_scn();
-  data_format_version_ = 0;
-  end_row_id_ = -1;
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
   return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
-         && logic_id_.is_valid() && start_scn_.is_valid_and_not_min() && data_format_version_ >= 0;
+         && logic_id_.is_valid() && start_scn_.is_valid_and_not_min();
 }
 
-bool ObDDLMacroBlockRedoInfo::is_column_group_info_valid() const
-{
-  return table_key_.is_column_store_sstable() && end_row_id_ >= 0;
-}
-
-OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_,
-    start_scn_, data_format_version_, end_row_id_);
+OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo, table_key_, data_buffer_, block_type_, logic_id_, start_scn_);
 
 constexpr uint8_t ObColClusterInfoMask::BYTES_TYPE_TO_LEN[];
 

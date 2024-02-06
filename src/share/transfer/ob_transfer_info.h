@@ -28,14 +28,6 @@
 
 namespace oceanbase
 {
-namespace transaction
-{
-namespace tablelock
-{
-class ObLockAloneTabletRequest;
-}
-}
-
 namespace share
 {
 namespace schema
@@ -97,65 +89,6 @@ struct ObTransferStatusHelper
       const ObTransferStatus &old_status,
       const ObTransferStatus &new_status,
       bool &can_change);
-};
-
-/////////////// ObTransferRefreshStatus///////////////
-// For auto refresh tablet location
-class ObTransferRefreshStatus final
-{
-public:
- enum STATUS : uint8_t
- {
-   UNKNOWN = 0,
-   DOING = 1,
-   DONE = 2,
-   INVALID
- };
- ObTransferRefreshStatus() : status_(INVALID) {}
- ~ObTransferRefreshStatus() {}
- explicit ObTransferRefreshStatus(const ObTransferRefreshStatus &other) : status_(other.status_) {}
- explicit ObTransferRefreshStatus(const ObTransferRefreshStatus::STATUS &status) : status_(status) {}
-
- ObTransferRefreshStatus &operator=(const ObTransferRefreshStatus &other);
- ObTransferRefreshStatus &operator=(const ObTransferRefreshStatus::STATUS &status);
-
- bool is_valid() const { return UNKNOWN <= status_ && status_ < INVALID; }
- void reset() { status_ = INVALID; }
- const char *str() const;
-
- bool is_unknown_status() const { return UNKNOWN == status_; }
- bool is_doing_status() const { return DOING == status_; }
- bool is_done_status() const { return DONE == status_; }
-
- void convert_from(const ObTransferStatus &status);
- void update(const ObTransferRefreshStatus &other, bool &changed);
-
- TO_STRING_KV(K_(status), "status", str());
-private:
-  STATUS status_;
-};
-
-class ObTransferRefreshInfo final
-{
-public:
-  ObTransferRefreshInfo() : task_id_(), status_() {}
-  ~ObTransferRefreshInfo() {}
-
-  int init(const ObTransferTaskID &task_id,
-           const ObTransferRefreshStatus &status);
-  void reset();
-
-  const ObTransferTaskID &get_task_id() const { return task_id_; }
-  ObTransferRefreshStatus &get_status() { return status_; }
-  const ObTransferRefreshStatus &get_status() const { return status_; }
-
-  static bool less_than(const ObTransferRefreshInfo &left, const ObTransferRefreshInfo &right)
-  { return left.task_id_ < right.task_id_; }
-
-  TO_STRING_KV(K_(task_id), K_(status));
-private:
-  ObTransferTaskID task_id_;
-  ObTransferRefreshStatus status_;
 };
 
 /////////////// ObTransferTabletInfo ///////////////
@@ -405,7 +338,7 @@ struct ObTransferTaskInfo final
   bool is_valid() const;
   int convert_from(const uint64_t tenant_id, const ObTransferTask &task);
   int assign(const ObTransferTaskInfo &task_info);
-  int fill_tablet_ids(ObIArray<ObTabletID> &tablet_ids) const;
+
   TO_STRING_KV(K_(tenant_id), K_(src_ls_id), K_(dest_ls_id), K_(task_id), K_(trace_id),
       K_(status), K_(table_lock_owner_id), K_(table_lock_tablet_list), K_(tablet_list),
       K_(start_scn), K_(finish_scn), K_(result));
@@ -463,13 +396,14 @@ public:
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       const ObDisplayTabletList &table_lock_tablet_list);
 private:
+  template<typename LockArg>
   static int process_table_lock_on_tablets_(
       ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       const ObDisplayTabletList &table_lock_tablet_list,
-      transaction::tablelock::ObLockAloneTabletRequest &lock_arg);
+      LockArg &lock_arg);
 };
 
 } // end namespace share

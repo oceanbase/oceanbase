@@ -21,7 +21,6 @@
 #include "lib/list/ob_dlist.h"
 #include "lib/queue/ob_dedup_queue.h"
 #include "lib/lock/ob_thread_cond.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "share/ob_thread_pool.h"
 #include "share/ob_debug_sync.h"
 #include "share/ob_debug_sync_point.h"
@@ -75,6 +74,8 @@ public:
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   virtual bool compare_without_version(const Task &other) const = 0;
   // The following two interfaces are used to update the waiting tasks with same key.
+  virtual bool need_assign_when_equal() const = 0;
+  virtual int assign_when_equal(const Task &other) = 0;
   // get_group_id() is used for classifying tasks and batch processing
   virtual uint64_t get_group_id() const = 0;
   // for diagnose
@@ -334,8 +335,17 @@ int ObUniqTaskQueue<Task, Process>::add(const Task &task)
       const Task *stored_task = NULL;
       if (OB_FAIL(task_set_.set_refactored(task, 0))) {
         if (common::OB_HASH_EXIST == ret) {
-          ret = common::OB_EAGAIN;
-          SERVER_LOG(TRACE, "same task exist", K(ret), K(task));
+          if (task.need_assign_when_equal()) {
+            if (NULL == (stored_task = task_set_.get(task))) {
+              ret = common::OB_ERR_SYS;
+              SERVER_LOG(WARN, "get inserted task failed", K(ret), K(task));
+            } else if (OB_FAIL(const_cast<Task *>(stored_task)->assign_when_equal(task))) {
+              SERVER_LOG(WARN, "assign task failed", K(ret), K(task));
+            }
+          } else {
+            ret = common::OB_EAGAIN;
+            SERVER_LOG(TRACE, "same task exist", K(task));
+          }
         } else {
           SERVER_LOG(WARN, "insert into hash failed", K(ret), K(task));
         }
@@ -346,19 +356,13 @@ int ObUniqTaskQueue<Task, Process>::add(const Task &task)
         Group *group = NULL;
         const uint64_t group_id = task.get_group_id();
         if (OB_FAIL(get_group(group_id, group))) {
-          SERVER_LOG(WARN, "get group failed", K(ret), K(group_id));
-          int tmp_ret = OB_SUCCESS;
-          if (OB_TMP_FAIL(task_set_.erase_refactored(*stored_task))) {
-            SERVER_LOG(ERROR, "fail to erase task from uniq queue", K(tmp_ret), K(task));
-          } else {
-            stored_task = NULL;
-          }
+          SERVER_LOG(WARN, "get group failed", K(group_id), K(ret));
         } else if (NULL == group) {
           ret = common::OB_ERR_UNEXPECTED;
-          SERVER_LOG(WARN, "group is null", K(ret), K(group_id));
+          SERVER_LOG(WARN, "group is null", K(group_id), K(ret));
         } else if (!group->list_.add_last(const_cast<Task *>(stored_task))) {
           ret = common::OB_ERR_SYS;
-          SERVER_LOG(ERROR, "add task to list failed", K(ret));
+          SERVER_LOG(WARN, "add task to list failed", K(ret));
         } else {
           ++task_count_;
           int tmp_ret = common::OB_SUCCESS;
@@ -421,12 +425,12 @@ void ObUniqTaskQueue<Task, Process>::run1()
                   SERVER_LOG(WARN, "remove first return null", K(ret));
                 } else if (OB_FAIL(tasks.push_back(*t))) {
                   SERVER_LOG(WARN, "push_back failed", K(ret));
-                } else if (OB_FAIL(task_set_.erase_refactored(*t))) {
-                  SERVER_LOG(ERROR, "erase task from task map failed",
-                             K(ret), "task", tasks.at(tasks.count() - 1));
                 } else {
-                  t = NULL;
-                  --task_count_;
+                  if (OB_FAIL(task_set_.erase_refactored(*t))) {
+                    SERVER_LOG(WARN, "erase task from task map failed", K(ret), "task", *t);
+                  } else {
+                    --task_count_;
+                  }
                 }
                 if (OB_SUCC(ret)
                     && tasks.at(tasks.count() - 1).need_process_alone()) {
@@ -614,9 +618,6 @@ int ObUniqTaskQueue<Task, Process>::get_group(const uint64_t group_id, Group *&g
   } else if (common::OB_INVALID_ID == group_id) {
     ret = common::OB_INVALID_ARGUMENT;
     SERVER_LOG(WARN, "invalid group_id", K(group_id), K(ret));
-  } else if (OB_UNLIKELY(EVENT_CALL(EventTable::EN_UNIQ_TASK_QUEUE_GET_GROUP_FAIL))) {
-    ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    SERVER_LOG(WARN, "inject error when uniq task queue get_group() failed", K(ret));
   } else {
     Group new_group;
     if (OB_FAIL(group_map_.set_refactored(group_id, new_group)) && common::OB_HASH_EXIST != ret) {

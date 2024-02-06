@@ -136,6 +136,7 @@ int ObFullTabletCreator::create_tablet(ObTabletHandle &tablet_handle)
       ObArenaAllocator, (&tiny_allocator_), mstx_mem_ctx_->get_malloc_allocator(), page_size))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to new arena allocator", K(ret));
+  /* TODO(zhuixin.gsy) rm these set_xx after merge master*/
   } else if (FALSE_IT(allocator->set_label("MSTXAllocator"))) {
   } else if (FALSE_IT(allocator->set_tenant_id(MTL_ID()))) {
   } else if (FALSE_IT(allocator->set_ctx_id(ObCtxIds::DEFAULT_CTX_ID))) {

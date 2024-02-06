@@ -51,7 +51,7 @@ typedef void (*dict_cmp_ref_func)(
                   const sql::PushdownFilterInfo &pd_filter_info,
                   sql::ObBitVector &result);
 
-class ObDictDecoder final : public ObIColumnDecoder
+class ObDictDecoder : public ObIColumnDecoder
 {
 public:
   static const ObColumnHeader::Type type_ = ObColumnHeader::DICT;
@@ -76,11 +76,6 @@ public:
       const int64_t row_cap,
       common::ObDatum *datums) const override;
 
-  virtual int decode_vector(
-      const ObColumnDecoderCtx &ctx,
-      const ObIRowIndex* row_index,
-      ObVectorDecodeCtx &vector_ctx) const override;
-
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
@@ -98,12 +93,6 @@ public:
       const int64_t row_cap,
       const int64_t meta_length,
       common::ObDatum *datums) const;
-  template<bool HAS_NULL>
-  int batch_decode_dict(
-      const common::ObObjMeta &schema_obj_meta,
-      const common::ObObjType &stored_obj_type,
-      const int64_t meta_length,
-      ObVectorDecodeCtx &vector_ctx) const;
 
   void reset() { this->~ObDictDecoder(); new (this) ObDictDecoder(); }
   OB_INLINE void reuse();
@@ -149,7 +138,6 @@ public:
       const char **cell_datas,
       const int64_t meta_length,
       storage::ObGroupByCell &group_by_cell) const;
-
 public:
   ObDictDecoderIterator begin(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
   ObDictDecoderIterator end(const ObColumnDecoderCtx *ctx, int64_t meta_length) const;
@@ -279,6 +267,7 @@ private:
   template <ObReadRefType type>
   OB_INLINE int read_ref(
       const int64_t row_id,
+      const bool is_bit_packing,
       const unsigned char *col_data,
       int64_t &ref) const;
 
@@ -299,81 +288,6 @@ private:
   uint64_t integer_mask_;
   const ObDictMetaHeader *meta_header_;
   const char *var_data_;
-};
-
-template <typename RefType>
-struct ObFixedDictDataLocator_T
-{
-  explicit ObFixedDictDataLocator_T(
-      const int64_t *row_ids,
-      const char *dict_payload,
-      const int64_t dict_len,
-      const int64_t dict_cnt,
-      const char *ref_buf)
-    : row_ids_(row_ids), dict_payload_(dict_payload), dict_cnt_(dict_cnt), dict_len_(dict_len)
-    {
-      ref_arr_ = reinterpret_cast<const RefType *>(ref_buf);
-    }
-  ~ObFixedDictDataLocator_T() = default;
-  inline void get_data(const int64_t idx, const char *&__restrict data_ptr, uint32_t &__restrict len) const
-  {
-    bool is_null;
-    get_data(idx, data_ptr, len, is_null);
-  }
-  inline void get_data(const int64_t idx, const char *&__restrict data_ptr, uint32_t &__restrict len, bool &__restrict is_null) const
-  {
-    const int64_t row_id = row_ids_[idx];
-    const int64_t ref = ref_arr_[row_id];
-    const int64_t data_offset = ref * dict_len_;
-    data_ptr = dict_payload_ + data_offset;
-    len = dict_len_;
-    is_null = ref == dict_cnt_;
-  }
-
-  const int64_t *__restrict row_ids_;
-  const char *__restrict dict_payload_;
-  const int64_t dict_cnt_;
-  const int64_t dict_len_;
-  const RefType *__restrict ref_arr_;
-};
-
-template <typename RefType, typename OffType>
-struct ObVarDictDataLocator_T
-{
-  explicit ObVarDictDataLocator_T(
-      const int64_t *row_ids,
-      const char *dict_payload,
-      const int64_t last_dict_entry_len,
-      const int64_t dict_cnt,
-      const char *ref_buf,
-      const char *off_buf)
-    : row_ids_(row_ids), dict_payload_(dict_payload), dict_cnt_(dict_cnt), last_dict_entry_len_(last_dict_entry_len)
-  {
-    ref_arr_ = reinterpret_cast<const RefType *>(ref_buf);
-    off_arr_ = reinterpret_cast<const OffType *>(off_buf);
-  }
-  ~ObVarDictDataLocator_T() = default;
-  inline void get_data(const int64_t idx, const char *&__restrict data_ptr, uint32_t &__restrict len) const
-  {
-    bool is_null;
-    get_data(idx, data_ptr, len, is_null);
-  }
-  inline void get_data(const int64_t idx, const char *&__restrict data_ptr, uint32_t &__restrict len, bool &__restrict is_null) const
-  {
-    const int64_t row_id = row_ids_[idx];
-    const int64_t ref = ref_arr_[row_id];
-    const int64_t offset = (0 == ref) ? 0 : off_arr_[ref - 1];
-    len = (ref == dict_cnt_ - 1) ? last_dict_entry_len_ : off_arr_[ref] - offset;
-    data_ptr = dict_payload_ + offset;
-    is_null = ref == dict_cnt_;
-  }
-
-  const int64_t *__restrict row_ids_;
-  const char *__restrict dict_payload_;
-  const int64_t dict_cnt_;
-  const int64_t last_dict_entry_len_;
-  const RefType *__restrict ref_arr_;
-  const OffType *__restrict off_arr_;
 };
 
 OB_INLINE int ObDictDecoder::init(
@@ -450,6 +364,7 @@ OB_INLINE int ObDictDecoder::read_ref(
 template <>
 OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_10>(
     const int64_t row_id,
+    const bool is_bit_packing,
     const unsigned char *col_data,
     int64_t &ref) const
 {
@@ -461,6 +376,7 @@ OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_10>(
 template <>
 OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_26>(
     const int64_t row_id,
+    const bool is_bit_packing,
     const unsigned char *col_data,
     int64_t &ref) const
 {
@@ -472,6 +388,7 @@ OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::PACKED_LEN_LESS_THAN_26>(
 template <>
 OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::DEFAULT_BIT_PACKED>(
     const int64_t row_id,
+    const bool is_bit_packing,
     const unsigned char *col_data,
     int64_t &ref) const
 {
@@ -483,6 +400,7 @@ OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::DEFAULT_BIT_PACKED>(
 template <>
 OB_INLINE int ObDictDecoder::read_ref<ObDictDecoder::NOT_BIT_PACKED>(
     const int64_t row_id,
+    const bool is_bit_packing,
     const unsigned char *col_data,
     int64_t &ref) const
 {

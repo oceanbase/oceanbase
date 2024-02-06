@@ -15,7 +15,6 @@
 #include "share/config/ob_server_config.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/ob_zone_merge_info.h"
-#include "storage/tablet/ob_tablet.h"
 #include "share/tablet/ob_tablet_table_operator.h"
 #include "share/ob_global_merge_table_operator.h"
 #include "share/ob_tablet_replica_checksum_operator.h"
@@ -34,7 +33,6 @@
 #include "rootserver/ob_tenant_info_loader.h"
 #include "src/observer/omt/ob_tenant_config.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
-#include "common/ob_role.h"
 
 using namespace oceanbase::share;
 
@@ -173,7 +171,7 @@ int ObStorageHAUtils::fetch_src_tablet_meta_info_(const uint64_t tenant_id, cons
   int ret = OB_SUCCESS;
   ObTabletTableOperator op;
   ObTabletReplica tablet_replica;
-  if (OB_FAIL(op.init(share::OBCG_STORAGE, sql_client))) {
+  if (OB_FAIL(op.init(sql_client))) {
     LOG_WARN("failed to init operator", K(ret));
   } else if (OB_FAIL(op.get(tenant_id, tablet_id, ls_id, src_addr, tablet_replica))) {
     LOG_WARN("failed to get tablet meta info", K(ret), K(tenant_id), K(tablet_id), K(ls_id), K(src_addr));
@@ -190,13 +188,11 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
   ObArray<ObTabletReplicaChecksumItem> items;
   ObArray<ObTabletLSPair> pairs;
   ObTabletLSPair pair;
-  int64_t tablet_items_cnt = 0;
   if (OB_FAIL(pair.init(tablet_id, ls_id))) {
     LOG_WARN("failed to init pair", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(pairs.push_back(pair))) {
     LOG_WARN("failed to push back", K(ret), K(pair));
-  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn,
-      sql_client, items, tablet_items_cnt, false/*include_larger_than*/, share::OBCG_STORAGE/*group_id*/))) {
+  } else if (OB_FAIL(ObTabletReplicaChecksumOperator::batch_get(tenant_id, pairs, compaction_scn, sql_client, items))) {
     LOG_WARN("failed to batch get replica checksum item", K(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     ObArray<share::ObTabletReplicaChecksumItem> filter_items;
@@ -343,97 +339,6 @@ int ObStorageHAUtils::check_disk_space()
   const int64_t required_size = 0;
   if (OB_FAIL(THE_IO_DEVICE->check_space_full(required_size))) {
     LOG_WARN("failed to check is disk full, cannot transfer in", K(ret));
-  }
-  return ret;
-}
-
-int ObStorageHAUtils::calc_tablet_sstable_macro_block_cnt(
-    const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count)
-{
-  int ret = OB_SUCCESS;
-  data_macro_block_count = 0;
-  storage::ObTableStoreIterator table_store_iter;
-  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_store_iter))) {
-    LOG_WARN("failed to get all tables", K(ret), K(tablet_handle));
-  } else if (0 == table_store_iter.count()) {
-    // do nothing
-  } else {
-    ObITable *table_ptr = NULL;
-    while (OB_SUCC(ret)) {
-      table_ptr = NULL;
-      if (OB_FAIL(table_store_iter.get_next(table_ptr))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next", K(ret));
-        }
-      } else if (OB_ISNULL(table_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table should not be null", K(ret));
-      } else if (!table_ptr->is_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table is not sstable", K(ret), KPC(table_ptr));
-      } else {
-        data_macro_block_count += static_cast<blocksstable::ObSSTable *>(table_ptr)->get_data_macro_block_count();
-      }
-    }
-  }
-  return ret;
-}
-
-int ObStorageHAUtils::check_ls_is_leader(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    bool &is_leader)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_srv = NULL;
-  common::ObRole role = common::ObRole::INVALID_ROLE;
-  int64_t proposal_id = 0;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  is_leader = false;
-  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls_srv = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    LOG_WARN("ls should not be null", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
-    LOG_WARN("failed to get role", K(ret), KP(ls));
-  } else if (is_strong_leader(role)) {
-    is_leader = true;
-  } else {
-    is_leader = false;
-  }
-  return ret;
-}
-
-int ObStorageHAUtils::check_tenant_will_be_deleted(
-    bool &is_deleted)
-{
-  int ret = OB_SUCCESS;
-  is_deleted = false;
-
-  share::ObTenantBase *tenant_base = MTL_CTX();
-  omt::ObTenant *tenant = nullptr;
-  ObUnitInfoGetter::ObUnitStatus unit_status;
-  if (OB_ISNULL(tenant_base)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant base should not be NULL", K(ret), KP(tenant_base));
-  } else if (FALSE_IT(tenant = static_cast<omt::ObTenant *>(tenant_base))) {
-  } else if (FALSE_IT(unit_status = tenant->get_unit_status())) {
-  } else if (ObUnitInfoGetter::is_unit_will_be_deleted_in_observer(unit_status)) {
-    is_deleted = true;
-    FLOG_INFO("unit wait gc in observer, allow gc", K(tenant->id()), K(unit_status));
   }
   return ret;
 }
@@ -598,107 +503,6 @@ void ObTransferUtils::clear_transfer_module()
     THIS_WORKER.set_module_type(type);
   }
 #endif
-}
-
-int ObTransferUtils::get_need_check_member(
-    const common::ObIArray<ObAddr> &total_member_addr_list,
-    const common::ObIArray<ObAddr> &finished_member_addr_list,
-    common::ObIArray<ObAddr> &member_addr_list)
-{
-  int ret = OB_SUCCESS;
-  member_addr_list.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < total_member_addr_list.count(); ++i) {
-    const ObAddr &addr = total_member_addr_list.at(i);
-    bool need_add = true;
-    for (int64_t j = 0; OB_SUCC(ret) && j < finished_member_addr_list.count(); ++j) {
-      if (finished_member_addr_list.at(j) == addr) {
-        need_add = false;
-        break;
-      }
-    }
-
-    if (OB_SUCC(ret) && need_add) {
-      if (OB_FAIL(member_addr_list.push_back(addr))) {
-        LOG_WARN("failed to push addr into array", K(ret), K(addr));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObTransferUtils::check_ls_replay_scn(
-    const uint64_t tenant_id,
-    const share::ObLSID &ls_id,
-    const share::SCN &check_scn,
-    const int32_t group_id,
-    const common::ObIArray<ObAddr> &member_addr_list,
-    ObTimeoutCtx &timeout_ctx,
-    common::ObIArray<ObAddr> &finished_addr_list)
-{
-  int ret = OB_SUCCESS;
-  storage::ObFetchLSReplayScnProxy batch_proxy(
-      *(GCTX.storage_rpc_proxy_), &obrpc::ObStorageRpcProxy::fetch_ls_replay_scn);
-  ObFetchLSReplayScnArg arg;
-  const int64_t timeout = 10 * 1000 * 1000; //10s
-  const int64_t cluster_id = GCONF.cluster_id;
-
-  if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !check_scn.is_valid() || group_id < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check transfer in tablet abort get invalid argument", K(ret), K(tenant_id), K(ls_id), K(check_scn), K(group_id));
-  } else {
-    arg.tenant_id_ = tenant_id;
-    arg.ls_id_ = ls_id;
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
-      const ObAddr &addr = member_addr_list.at(i);
-      if (timeout_ctx.is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("check transfer in tablet abort already timeout", K(ret), K(tenant_id), K(ls_id));
-        break;
-      } else if (OB_FAIL(batch_proxy.call(
-          addr,
-          timeout,
-          cluster_id,
-          arg.tenant_id_,
-          group_id,
-          arg))) {
-        LOG_WARN("failed to send fetch ls replay scn request", K(ret), K(addr), K(tenant_id), K(ls_id));
-      } else {
-        LOG_INFO("fetch ls replay scn complete", K(arg), K(addr));
-      }
-    }
-
-    ObArray<int> return_code_array;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(batch_proxy.wait_all(return_code_array))) {
-      LOG_WARN("fail to wait all batch result", KR(ret), KR(tmp_ret));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (return_code_array.count() != member_addr_list.count()
-        || return_code_array.count() != batch_proxy.get_results().count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cnt not match", K(ret),
-               "return_cnt", return_code_array.count(),
-               "result_cnt", batch_proxy.get_results().count(),
-               "server_cnt", member_addr_list.count());
-    } else {
-      ARRAY_FOREACH_X(batch_proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-        const obrpc::ObFetchLSReplayScnRes *response = batch_proxy.get_results().at(idx);
-        const int res_ret = return_code_array.at(idx);
-        if (OB_SUCCESS != res_ret) {
-          ret = res_ret;
-          LOG_WARN("rpc execute failed", KR(ret), K(idx));
-        } else if (OB_ISNULL(response)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("response is null", K(ret));
-        } else if (response->replay_scn_ >= check_scn && OB_FAIL(finished_addr_list.push_back(member_addr_list.at(idx)))) {
-          LOG_WARN("failed to push member addr into list", K(ret), K(idx), K(member_addr_list));
-        }
-      }
-    }
-  }
-  return ret;
 }
 
 } // end namespace storage

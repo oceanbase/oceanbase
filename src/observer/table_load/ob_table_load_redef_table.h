@@ -57,7 +57,7 @@ struct ObTableLoadRedefTableStartRes
 {
 public:
   ObTableLoadRedefTableStartRes()
-    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0), data_format_version_(0)
+    : dest_table_id_(common::OB_INVALID_ID), task_id_(0), schema_version_(0), snapshot_version_(0)
   {
   }
   ~ObTableLoadRedefTableStartRes() = default;
@@ -67,15 +67,13 @@ public:
     task_id_ = 0;
     schema_version_ = 0;
     snapshot_version_ = 0;
-    data_format_version_ = 0;
   }
-  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version), K_(data_format_version));
+  TO_STRING_KV(K_(dest_table_id), K_(task_id), K_(schema_version), K_(snapshot_version));
 public:
   uint64_t dest_table_id_;
   int64_t task_id_;
   int64_t schema_version_;
   int64_t snapshot_version_;
-  uint64_t data_format_version_;
 };
 
 struct ObTableLoadRedefTableFinishArg

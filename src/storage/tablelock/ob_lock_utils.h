@@ -36,8 +36,7 @@ public:
   static bool in_inner_table_lock_white_list(const uint64_t inner_table_id)
   {
     bool b_ret = share::OB_ALL_BALANCE_JOB_TID == inner_table_id
-              || share::OB_ALL_RECOVER_TABLE_JOB_TID == inner_table_id
-              || share::OB_ALL_LS_REPLICA_TASK_TID == inner_table_id;
+              || share::OB_ALL_RECOVER_TABLE_JOB_TID == inner_table_id;
     return b_ret;
   }
   /*
@@ -47,7 +46,6 @@ public:
    * @param[in] tenant_id:       tenant_id of the inner table
    * @param[in] inner_table_id:  inner table id which you want to lock
    * @param[in] lock_mode:       table lock mode
-   * @param[in] is_from_sql:     is from sql table_lock can retry
    * @return
    * - OB_SUCCESS:               lock inner table successfully
    * - OB_TRY_LOCK_ROW_CONFLICT: lock conflict
@@ -57,8 +55,7 @@ public:
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const uint64_t inner_table_id,
-      const ObTableLockMode &lock_mode,
-      const bool is_from_sql);
+      const ObTableLockMode &lock_mode);
 };
 
 class ObLSObjLockUtil

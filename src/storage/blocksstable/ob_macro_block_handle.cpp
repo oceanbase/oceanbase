@@ -141,8 +141,6 @@ int ObMacroBlockHandle::async_read(const ObMacroBlockReadInfo &read_info)
     const int64_t real_timeout_ms = min(read_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
     io_info.user_data_buf_ = read_info.buf_;
-    // resource manager level is higher than default
-    io_info.flag_.set_group_id(read_info.io_desc_.get_io_module());
 
     io_info.flag_.set_read();
     if (OB_FAIL(ObIOManager::get_instance().aio_read(io_info, io_handle_))) {
@@ -172,7 +170,6 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
     io_info.flag_.set_group_id(write_info.io_desc_.get_io_module());
     const int64_t real_timeout_ms = min(write_info.io_timeout_ms_, GCONF._data_storage_io_timeout / 1000L);
     io_info.timeout_us_ = real_timeout_ms * 1000L;
-    io_info.flag_.set_group_id(write_info.io_desc_.get_io_module());
 
     io_info.flag_.set_write();
     if (OB_FAIL(ObIOManager::get_instance().aio_write(io_info, io_handle_))) {

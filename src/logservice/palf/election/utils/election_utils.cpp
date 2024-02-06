@@ -271,13 +271,13 @@ int64_t MemberListWithStates::to_string(char *buf, const int64_t buf_len) const
       }
     }
     if (is_synced && !v.empty()) {
-      int64_t map_wall_clock_ts = v[0] - get_monotonic_ts() + ObClockGenerator::getClock();
+      int64_t map_wall_clock_ts = v[0] - get_monotonic_ts() + ObClockGenerator::getCurrentTime();
       common::databuff_printf(buf, buf_len, pos, "accept_ok_promised_ts:%s, ",
                                                  v[0] != 0 ? common::ObTime2Str::ob_timestamp_str_range<HOUR, MSECOND>(map_wall_clock_ts) : "invalid");
     } else {
       common::databuff_printf(buf, buf_len, pos, "accept_ok_promised_ts:[");
       for (int64_t idx = 0; idx < v.count(); ++idx) {
-        int64_t map_wall_clock_ts = v[idx] - get_monotonic_ts() + ObClockGenerator::getClock();
+        int64_t map_wall_clock_ts = v[idx] - get_monotonic_ts() + ObClockGenerator::getCurrentTime();
         if (idx == v.count() - 1) {
           common::databuff_printf(buf, buf_len, pos, "%s]", v[idx] != 0 ?
             common::ObTime2Str::ob_timestamp_str_range<HOUR, MSECOND>(map_wall_clock_ts) : "invalid");

@@ -88,7 +88,7 @@ class ObTableOperationRequest final
 public:
   ObTableOperationRequest() : credential_(), table_name_(), table_id_(common::OB_INVALID_ID),
       tablet_id_(), entity_type_(), table_operation_(),
-      consistency_level_(), option_flag_(OB_TABLE_OPTION_DEFAULT), returning_affected_entity_(false),
+      consistency_level_(), returning_rowkey_(false), returning_affected_entity_(false),
       returning_affected_rows_(false),
       binlog_row_image_type_(ObBinlogRowImageType::FULL)
       {}
@@ -101,14 +101,9 @@ public:
                K_(entity_type),
                K_(table_operation),
                K_(consistency_level),
-               K_(option_flag),
+               K_(returning_rowkey),
                K_(returning_affected_entity),
                K_(returning_affected_rows));
-public:
-  OB_INLINE bool use_put() const { return option_flag_ & OB_TABLE_OPTION_USE_PUT; }
-  OB_INLINE bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
-  OB_INLINE uint8_t get_option_flag() const { return option_flag_; }
-  OB_INLINE bool returning_affected_entity() const { return returning_affected_entity_; }
 public:
   /// the credential returned when login.
   ObString credential_;
@@ -124,8 +119,8 @@ public:
   ObTableOperation table_operation_;
   /// read consistency level. currently only support STRONG.
   ObTableConsistencyLevel consistency_level_;
-  /// option flag, specific option switch.
-  uint8_t option_flag_;
+  /// Whether return the rowkey, currently the value MUST be false (In the case of Append/Increment the value could be true).
+  bool returning_rowkey_;
   /// Whether return the row which has been modified, currently the value MUST be false (In the case of Append/Increment, the value could be true)
   bool returning_affected_entity_;
   /// Whether return affected_rows
@@ -149,7 +144,7 @@ public:
         entity_type_(),
         batch_operation_(),
         consistency_level_(),
-        option_flag_(OB_TABLE_OPTION_DEFAULT),
+        returning_rowkey_(false),
         returning_affected_entity_(false),
         returning_affected_rows_(false),
         batch_operation_as_atomic_(false),
@@ -164,14 +159,10 @@ public:
                K_(entity_type),
                K_(batch_operation),
                K_(consistency_level),
-               K_(option_flag),
+               K_(returning_rowkey),
                K_(returning_affected_entity),
                K_(returning_affected_rows),
                K_(batch_operation_as_atomic));
-public:
-  OB_INLINE bool use_put() const { return option_flag_ & OB_TABLE_OPTION_USE_PUT; }
-  OB_INLINE bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
-  OB_INLINE bool returning_affected_entity() const { return returning_affected_entity_; }
 public:
   ObString credential_;
   ObString table_name_;
@@ -182,8 +173,8 @@ public:
   ObTableBatchOperation batch_operation_;
   // Only support STRONG
   ObTableConsistencyLevel consistency_level_;
-  // option flag, specific option switch.
-  uint8_t option_flag_;
+  // Only support false (Support true for only Append/Increment)
+  bool returning_rowkey_;
   // Only support false (Support true for only Append/Increment)
   bool returning_affected_entity_;
   /// whether return affected_rows

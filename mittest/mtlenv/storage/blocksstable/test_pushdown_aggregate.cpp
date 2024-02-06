@@ -539,13 +539,6 @@ TEST_F(TestPushdownAggregate, test_decide_use_group_by2)
   ASSERT_TRUE(use_group_by);
   ASSERT_TRUE(nullptr != group_by_cell.distinct_projector_buf_);
   ASSERT_TRUE(nullptr != group_by_cell.tmp_group_by_datum_buf_);
-
-  group_by_cell.set_row_capacity(eval_ctx_.batch_size_ - 1);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.decide_use_group_by(row_count, row_count, distinct_count, &bitmap, use_group_by));
-  ASSERT_FALSE(use_group_by);
-  group_by_cell.set_row_capacity(eval_ctx_.batch_size_);
-  ASSERT_EQ(OB_SUCCESS, group_by_cell.decide_use_group_by(row_count, row_count, distinct_count, &bitmap, use_group_by));
-  ASSERT_TRUE(use_group_by);
 }
 
 TEST_F(TestPushdownAggregate, test_eval_batch)

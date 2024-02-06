@@ -73,53 +73,36 @@ void LogIOTask::reset()
   submit_seq_ = 0;
 }
 
-// NB: if do_task failed, the caller(LogIOWorker) is responsible for freeing LogIOTask.
+// NB: if do_task failed, the caller is responsible for freeing LogIOTask.
 int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
 	int64_t do_task_ts = ObTimeUtility::current_time();
   const int64_t delay_ts = do_task_ts - init_task_ts_;
 	constexpr int64_t MAX_DELAY_TIME = 100 * 1000;
-	IPalfHandleImplGuard guard;
-	int64_t palf_epoch = -1;
 	if (delay_ts >= MAX_DELAY_TIME) {
 		PALF_LOG(INFO, "[io delay]", K(do_task_ts), K(delay_ts));
 	}
-	if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
-	  PALF_LOG(WARN, "get_palf_handle_impl failed", KPC(this));
-	} else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
-	  PALF_LOG(WARN, "get_palf_epoch failed", KPC(this));
-	} else if (palf_epoch != palf_epoch_) {
-	  ret = OB_STATE_NOT_MATCH;
-	  PALF_LOG(WARN, "palf_epoch has been changed, drop task", KPC(this), K(palf_epoch));
-	} else if (OB_FAIL(do_task_(tg_id, guard))) {
+
+	if (OB_FAIL(do_task_(tg_id, palf_env_impl))) {
 		PALF_LOG(WARN, "do_task_ failed", K(ret), K(tg_id), KPC(palf_env_impl));
-	} else {}
+	}
 	return ret;
 }
 
-// NB: after after_consume, the caller(LogIOCb) needs free LogIOTask.
+// NB: after after_consume, the caller needs free LogIOTask.
 int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
 	int64_t after_consume_ts = ObTimeUtility::current_time();
   const int64_t delay_ts = after_consume_ts - push_cb_into_cb_pool_ts_;
-  int64_t palf_epoch = -1;
-  IPalfHandleImplGuard guard;
+	if (OB_FAIL(after_consume_(palf_env_impl))) {
+		PALF_LOG(WARN, "after_consume_ failed", K(ret), KPC(palf_env_impl));
+	}
 	constexpr int64_t MAX_DELAY_TIME = 100 * 1000;
 	if (delay_ts >= MAX_DELAY_TIME) {
 		PALF_LOG(INFO, "[io delay]", K(after_consume_ts), K(delay_ts));
 	}
-  if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
-    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
-  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
-    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
-  } else if (palf_epoch != palf_epoch_) {
-    ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), KPC(this));
-  } else if (OB_FAIL(after_consume_(guard))) {
-		PALF_LOG(WARN, "after_consume_ failed", K(ret), KPC(palf_env_impl));
-	} else {}
 	return ret;
 }
 
@@ -191,13 +174,22 @@ void LogIOFlushLogTask::destroy()
   }
 }
 
-int LogIOFlushLogTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOFlushLogTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   const LSN flush_log_end_lsn = flush_log_cb_ctx_.lsn_ + flush_log_cb_ctx_.total_len_;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlusLoghTask not inited", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(flush_log_cb_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_log(
                  flush_log_cb_ctx_.lsn_, write_buf_, flush_log_cb_ctx_.scn_))) {
     PALF_LOG(ERROR, "LogEngine pwrite failed", K(ret), K(write_buf_));
@@ -211,13 +203,25 @@ int LogIOFlushLogTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   return ret;
 }
 
-int LogIOFlushLogTask::after_consume_(IPalfHandleImplGuard &guard)
+// NB: the memory of 'this' will be release
+int LogIOFlushLogTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   common::ObTimeGuard time_guard("after_consume log", 10 * 1000);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushLogTask not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(flush_log_cb_ctx_));
+    // NB: the memory of 'this' has released after 'inner_after_flush_log', don't use any
+    // fields about 'this'.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_after_flush_log(flush_log_cb_ctx_))) {
     PALF_LOG(WARN, "PalfHandleImpl after_flush_log failed", K(ret));
   } else {
@@ -266,11 +270,20 @@ void LogIOTruncateLogTask::destroy()
   }
 }
 
-int LogIOTruncateLogTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOTruncateLogTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(truncate_log_cb_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_truncate_log(truncate_log_cb_ctx_.lsn_))) {
     PALF_LOG(WARN, "PalfHandleImpl inner_truncate_log failed", K(ret), K(palf_id_),
              K_(truncate_log_cb_ctx));
@@ -281,13 +294,23 @@ int LogIOTruncateLogTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   return ret;
 }
 
-int LogIOTruncateLogTask::after_consume_(IPalfHandleImplGuard &guard)
+int LogIOTruncateLogTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
   int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogITruncateLogTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+    // NB: the memory of 'this' has released after 'inner_after_truncate_log', don't use any
+    // fields about 'this'.
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(truncate_log_cb_ctx_));
   } else if (OB_FAIL(
                  guard.get_palf_handle_impl()->inner_after_truncate_log(truncate_log_cb_ctx_))) {
     PALF_LOG(WARN, "PalfHandleImpl inner_after_truncate_log failed", K(ret));
@@ -350,12 +373,21 @@ void LogIOFlushMetaTask::destroy()
   }
 }
 
-int LogIOFlushMetaTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOFlushMetaTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(flush_meta_cb_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_append_meta(buf_, buf_len_))) {
     PALF_LOG(ERROR, "PalfHandleImpl inner_append_meta failed", K(ret), K(palf_id_));
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
@@ -365,12 +397,23 @@ int LogIOFlushMetaTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   return ret;
 }
 
-int LogIOFlushMetaTask::after_consume_(IPalfHandleImplGuard &guard)
+int LogIOFlushMetaTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(flush_meta_cb_ctx_));
+    // NB: the memory of 'this' has released after 'inner_after_flush_meta', don't use any
+    // fields about 'this'.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_after_flush_meta(flush_meta_cb_ctx_))) {
     PALF_LOG(WARN, "PalfHandleImpl after_flush_meta failed", K(ret), KP(this));
   } else {
@@ -417,12 +460,21 @@ void LogIOTruncatePrefixBlocksTask::destroy()
   }
 }
 
-int LogIOTruncatePrefixBlocksTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOTruncatePrefixBlocksTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOTruncatePrefixBlocksTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(truncate_prefix_blocks_ctx_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_truncate_prefix_blocks(
                  truncate_prefix_blocks_ctx_.lsn_))) {
     PALF_LOG(ERROR, "PalfHandleImpl inner_truncate_prefix_blocks failed", K(ret), K(palf_id_));
@@ -433,12 +485,23 @@ int LogIOTruncatePrefixBlocksTask::do_task_(int tg_id, IPalfHandleImplGuard &gua
   return ret;
 }
 
-int LogIOTruncatePrefixBlocksTask::after_consume_(IPalfHandleImplGuard &guard)
+int LogIOTruncatePrefixBlocksTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  int64_t palf_epoch = -1;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+  } else if (OB_FAIL(guard.get_palf_handle_impl()->get_palf_epoch(palf_epoch))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_epoch failed", K(ret), K(palf_id_));
+  } else if (palf_epoch != palf_epoch_) {
+    PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
+             K(truncate_prefix_blocks_ctx_));
+    // NB: the memory of 'this' has released after 'inner_after_truncate_prefix_blocks', don't use
+    // any fields about 'this'.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_after_truncate_prefix_blocks(
                  truncate_prefix_blocks_ctx_))) {
     PALF_LOG(WARN, "PalfHandleImpl inner_after_truncate_prefix_blocks failed", K(ret));
@@ -536,6 +599,7 @@ int BatchLogIOFlushLogTask::push_back(LogIOFlushLogTask *task)
 int BatchLogIOFlushLogTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  // 释放内存
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret), KPC(this));
@@ -602,8 +666,6 @@ int BatchLogIOFlushLogTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
       } else if (palf_epoch != io_task->get_palf_epoch()) {
         PALF_LOG(WARN, "palf_epoch has changed, drop task", K(ret), K(palf_id_), K(palf_epoch),
                  KPC(io_task), KPC(io_task));
-        io_task->free_this(palf_env_impl);
-        io_task_array_[i] = NULL;
       } else if (OB_FAIL(log_write_buf_array_.push_back(&io_task->write_buf_))) {
         PALF_LOG(ERROR, "log_write_buf_array_ push_back failed, unexpected error!!!", K(ret),
                  KPC(this));
@@ -640,8 +702,7 @@ void BatchLogIOFlushLogTask::clear_memory_(IPalfEnvImpl *palf_env_impl)
   for (int64_t i = 0; i < count; i++) {
     LogIOFlushLogTask *task = io_task_array_[i];
     if (NULL != task) {
-      task->free_this(palf_env_impl);
-      io_task_array_[i] = NULL;
+      palf_env_impl->get_log_allocator()->free_log_io_flush_log_task(task);
     }
   }
 }
@@ -685,27 +746,37 @@ void LogIOFlashbackTask::destroy()
   }
 }
 
-int LogIOFlashbackTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOFlashbackTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
+  UNUSED(tg_id);
   int ret = OB_SUCCESS;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlashbackTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl( palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_flashback(flashback_ctx_.flashback_scn_))) {
-    PALF_LOG(WARN, "inner_flashback failed", KPC(this));
+    PALF_LOG(ERROR, "PalfHandleImpl inner_flashback failed", K(ret), K(palf_id_));
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
-    PALF_LOG(WARN, "push_flush_cb_to_thread_pool_ failed", K(ret));
+    PALF_LOG(WARN, "LogIOFlashbackTask after_consume", K(ret), KPC(palf_env_impl));
   } else {
+    PALF_LOG(INFO, "LogIOFlashbackTask do_task success", K(ret), K(palf_id_));
   }
   return ret;
 }
 
-int LogIOFlashbackTask::after_consume_(IPalfHandleImplGuard &guard)
+int LogIOFlashbackTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
   int ret = OB_SUCCESS;
+  IPalfHandleImplGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogIOFlushMetaTask not inited!!!", K(ret));
+  } else if (OB_FAIL(palf_env_impl->get_palf_handle_impl(palf_id_, guard))) {
+    PALF_LOG(WARN, "IPalfEnvImpl get_palf_handle_impl failed", K(ret), K(palf_id_));
+    // NB: the memory of 'this' has released after 'inner_after_flush_meta', don't use any
+    // fields about 'this'.
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_after_flashback(flashback_ctx_))) {
     PALF_LOG(ERROR, "PalfHandleImpl inner_after_flashback failed", K(ret));
   } else {
@@ -758,17 +829,21 @@ int LogIOPurgeThrottlingTask::init(const PurgeThrottlingCbCtx & purge_ctx)
   return ret;
 }
 
-int LogIOPurgeThrottlingTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
+int LogIOPurgeThrottlingTask::do_task_(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
-  UNUSED(guard);
   int ret = OB_SUCCESS;
-  ret = push_task_into_cb_thread_pool_(tg_id, this);
+  PALF_LOG(INFO, "process PurgeThrottlingTask", KPC(this));
+  if (OB_ISNULL(palf_env_impl->get_log_allocator())) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "log_allocator is NULL", KPC(this));
+  } else {
+    palf_env_impl->get_log_allocator()->free_log_io_purge_throttling_task(this);
+  }
   return ret;
 }
 
-int LogIOPurgeThrottlingTask::after_consume_(IPalfHandleImplGuard &guard)
+int LogIOPurgeThrottlingTask::after_consume_(IPalfEnvImpl *palf_env_impl)
 {
-  UNUSED(guard);
   return OB_SUCCESS;
 }
 
@@ -777,7 +852,7 @@ void LogIOPurgeThrottlingTask::free_this_(IPalfEnvImpl *palf_env_impl)
   if (OB_ISNULL(palf_env_impl) || OB_ISNULL(palf_env_impl->get_log_allocator())) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "palf_env_impl or log_allocator is NULL", KPC(this), KP(palf_env_impl))
   } else {
-    palf_env_impl->get_log_allocator()->free_log_io_purge_throttling_task(this);
+     palf_env_impl->get_log_allocator()->free_log_io_purge_throttling_task(this);
   }
 }
 

@@ -123,12 +123,5 @@ int ObExprMakeSet::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   return ret;
 }
 
-DEF_SET_LOCAL_SESSION_VARS(ObExprMakeSet, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
-  return ret;
-}
-
 } /* namespace sql */
 } /* namespace oceanbase */

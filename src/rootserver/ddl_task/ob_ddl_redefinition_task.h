@@ -38,23 +38,17 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       const bool use_heap_table_ddl_plan,
-      const bool is_mview_complete_refresh,
-      const int64_t mview_table_id,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr,
-      const int64_t data_format_version = 0);
+      const common::ObAddr &inner_sql_exec_addr);
   int init(
       const ObTableSchema &orig_table_schema,
-      const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
-      const ObTimeZoneInfoWrap &tz_info_wrap,
-      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
+      const ObTimeZoneInfoWrap &tz_info_wrap);
   ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
   virtual ~ObDDLRedefinitionSSTableBuildTask() = default;
   virtual int process() override;
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
-  void add_event_info(const int ret, const ObString &ddl_event_stmt);
 private:
   bool is_inited_;
   uint64_t tenant_id_;
@@ -71,12 +65,8 @@ private:
   common::ObCurTraceId::TraceId trace_id_;
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
-  bool is_mview_complete_refresh_;
-  int64_t mview_table_id_;
-  common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
-  int64_t data_format_version_;
 };
 
 class ObSyncTabletAutoincSeqCtx final

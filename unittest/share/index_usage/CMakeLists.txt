@@ -1,1 +1,0 @@
-ob_unittest(test_index_usage)

@@ -17,7 +17,7 @@
 TEST(TestWorker, CompatMode)
 {
   using oceanbase::lib::Worker;
-  set_compat_mode(oceanbase::lib::Worker::CompatMode::MYSQL);
+
   // MySQL Mode as default.
   EXPECT_EQ(oceanbase::lib::Worker::CompatMode::MYSQL, THIS_WORKER.get_compatibility_mode());
   EXPECT_TRUE(oceanbase::lib::is_mysql_mode());

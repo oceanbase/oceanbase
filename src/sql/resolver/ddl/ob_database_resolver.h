@@ -160,9 +160,6 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObS
           } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type,
                                                                             session_info->get_effective_tenant_id()))) {
             OB_LOG(WARN, "failed to check charset data version valid", K(ret));
-          } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(collation_type,
-                                                                              session_info->get_effective_tenant_id()))) {
-            OB_LOG(WARN, "failed to check collation data version valid", K(ret));
           } else if (OB_UNLIKELY(collation_already_set_
                               && stmt->get_charset_type() != charset_type)) {
             // mysql执行下面这条sql时会报错，为了行为与mysql一致，resolve时即检查collation/charset不一致的问题
@@ -184,12 +181,6 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObS
             ret = common::OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "all valid collation types should have corresponding charset type",
                             K(ret), K(charset_type), K(collation_type));
-          } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(charset_type,
-                                                                            session_info->get_effective_tenant_id()))) {
-            OB_LOG(WARN, "failed to check charset data version valid", K(ret));
-          } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(collation_type,
-                                                                              session_info->get_effective_tenant_id()))) {
-            OB_LOG(WARN, "failed to check collation data version valid", K(ret));
           } else if (OB_UNLIKELY(collation_already_set_
                               && stmt->get_charset_type() != charset_type)) {
             ret = OB_ERR_COLLATION_MISMATCH;

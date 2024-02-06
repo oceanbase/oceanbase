@@ -786,16 +786,13 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
         switch (func_node->get_node_type()) {
           case JPN_BOOLEAN :
           case JPN_BOOL_ONLY : {
-            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) { // do nothing
-            } else {
-              ret_node.type_ = T_CAST_ARGUMENT;
-              ret_node.value_ = 0;
-              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 20;
-              ret_node.length_semantics_ = 0;
-              ret_node.is_hidden_const_ = 1;
-            }
+            ret_node.type_ = T_CAST_ARGUMENT;
+            ret_node.value_ = 0;
+            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 20;
+            ret_node.length_semantics_ = 0;
+            ret_node.is_hidden_const_ = 1;
             break;
           }
           case JPN_DATE : {
@@ -827,16 +824,14 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
           case JPN_NUMBER :
           case JPN_FLOOR :
           case JPN_CEILING : {
-            if (ret_node.type_ == T_NULL
-            || (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON)) {
-              ret_node.value_ = 0;
+            ret_node.value_ = 0;
+            if (ret_node.type_ == T_NULL) {
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
               ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
               ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
               ret_node.length_semantics_ = 0;
               ret_node.is_hidden_const_ = 1;
             } else {
-              ret_node.value_ = 0;
               ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_NUMBER;
               ret_node.int16_values_[OB_NODE_CAST_N_PREC_IDX] = -1;    /* precision */
               ret_node.int16_values_[OB_NODE_CAST_N_SCALE_IDX] = -85;    /* scale */
@@ -860,29 +855,24 @@ int ObJsonPath::change_json_expr_res_type_if_need(common::ObIAllocator &allocato
           case JPN_TYPE:
           case JPN_STR_ONLY :
           case JPN_STRING : {
-            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
-            } else {
-              ret_node.type_ = T_CAST_ARGUMENT;
-              ret_node.value_ = 0;
-              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-              ret_node.length_semantics_ = 0;
-              ret_node.is_hidden_const_ = 1;
-            }
+            ret_node.type_ = T_CAST_ARGUMENT;
+            ret_node.value_ = 0;
+            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
+            ret_node.length_semantics_ = 0;
+            ret_node.is_hidden_const_ = 1;
           }
           case JPN_UPPER:
           case JPN_LOWER: {
-            if (json_expr_flag == OPT_JSON_QUERY && ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] == T_JSON) {
-            } else {
-              ret_node.type_ = T_CAST_ARGUMENT;
-              ret_node.value_ = 0;
-              ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-              ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
-              ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 75;
-              ret_node.length_semantics_ = 0;
-              ret_node.is_hidden_const_ = 1;
-            }
+            ret_node.type_ = T_CAST_ARGUMENT;
+            ret_node.value_ = 0;
+            ret_node.int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+            ret_node.int16_values_[OB_NODE_CAST_COLL_IDX] = 0;
+            ret_node.int32_values_[OB_NODE_CAST_C_LEN_IDX] = 75;
+            ret_node.length_semantics_ = 0;
+            ret_node.is_hidden_const_ = 1;
+            break;
             break;
           }
           default : {
@@ -2133,7 +2123,7 @@ int ObJsonPath::parse_name_with_rapidjson(char*& str, uint64_t& len)
 }
 
 // if keyname without double quote, end with ' ', '.', '[', '*'
-bool ObJsonPathUtil::is_key_name_terminator(char ch)
+bool ObJsonPathUtil::is_mysql_terminator(char ch)
 {
   bool ret_bool = false;
   switch (ch) {
@@ -2153,23 +2143,103 @@ bool ObJsonPathUtil::is_key_name_terminator(char ch)
       ret_bool = true;
       break;
     }
-    case '(': {
-      ret_bool = true;
-      break;
-    }
-    case '?': {
-      ret_bool = true;
-      break;
-    }
-    case '-': {
-      ret_bool = true;
-      break;
-    }
     default: {
       break;
     }
   }
   return ret_bool;
+}
+
+// process JPN_MEMBER get keyname
+// @param[in,out] name  Keyname
+// @param[in] is_quoted
+// @return  the error code.
+int ObJsonPath::get_mysql_origin_key_name(char*& str, uint64_t& length, bool is_quoted)
+{
+  INIT_SUCC(ret);
+  uint64_t start = 0;
+  uint64_t end = 0;
+
+  int len = expression_.length();
+
+  if (index_ < len) {
+    if (is_quoted) {
+      // with quote, check quote
+      if (expression_[index_] == ObJsonPathItem::DOUBLE_QUOTE) {
+        start = index_;
+        ++index_;
+
+        while (index_ < len && end == 0) {
+          if (expression_[index_] == '\\') {
+            index_ += 2;
+          } else if (expression_[index_] == ObJsonPathItem::DOUBLE_QUOTE) {
+            end = index_;
+            ++index_;
+          } else {
+            ++index_;
+          }
+        }
+
+        if (end == 0 && index_ == len) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("should end with DOUBLE_QUOTE!", K(ret), K(index_), K(expression_));
+        }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("should start with DOUBLE_QUOTE!", K(ret), K(index_), K(expression_));
+      }
+    } else {
+      start = index_;
+      while (index_ < len && end == 0) {
+        if (ObJsonPathUtil::is_mysql_terminator(expression_[index_])) {
+          end = index_ - 1;
+        } else {
+          ++index_;
+        }
+      }
+      if (index_ == len) {
+        end = index_ - 1;
+      }
+    }
+  } else {
+    ret = OB_ARRAY_OUT_OF_RANGE;
+    LOG_WARN("index out of range!", K(ret), K(index_), K(expression_));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (end < start) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("get keyname: end<start", K(ret), K(start), K(end), K(expression_));
+    } else {
+      len = end - start + 1;
+      char* start_ptr = expression_.ptr() + start;
+      if (!is_quoted) {
+        length = len + 2;
+        str = static_cast<char*> (allocator_->alloc(length));
+        if (OB_ISNULL(str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for member_name.",
+              K(ret), K(len),KCSTRING(start_ptr));
+        } else {
+          str[0] = ObJsonPathItem::DOUBLE_QUOTE;
+          MEMCPY(str + 1, start_ptr, len);
+          str[len + 1] = ObJsonPathItem::DOUBLE_QUOTE;
+        }
+      } else {
+        length = len;
+        str = static_cast<char*> (allocator_->alloc(length));
+        if (OB_ISNULL(str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory for member_name.",
+                K(ret), K(len),KCSTRING(start_ptr));
+        } else {
+          MEMCPY(str, start_ptr, len);
+        }
+      }
+    }
+  }
+
+  return ret;
 }
 
 // parse JPN_MEMBER_WILDCARD
@@ -2261,11 +2331,9 @@ int ObJsonPath::parse_mysql_member_node()
 
         char* name = nullptr;
         uint64_t name_len = 0;
-        bool is_func = false;
-        bool with_escape = false;
         // get name 
         // add double quote for rapidjson requires
-        if (OB_FAIL(get_origin_key_name(name, name_len, is_quoted, is_func, with_escape))) {
+        if (OB_FAIL(get_mysql_origin_key_name(name, name_len, is_quoted))) {
           LOG_WARN("fail to get keyname!", K(ret), K(index_), K(expression_));
         } else {
           if (OB_FAIL(parse_name_with_rapidjson(name, name_len))) {
@@ -2362,31 +2430,6 @@ bool ObJsonPathUtil::is_scalar(const ObJsonPathNodeType node_type)
   }
   return ret_bool;
 }
-
-bool ObJsonPathUtil::is_escape(char ch)
-{
-  return (('\n' == ch) || (ch == '\t') || (ch == '\r') || (ch == '\f') || (ch == '\e'));
-}
-int ObJsonPathUtil::append_character_of_escape(ObJsonBuffer& buf, char ch)
-{
-  INIT_SUCC(ret);
-  if ('\n' == ch) {
-    ret = buf.append("n");
-  } else if ('\t' == ch) {
-    ret = buf.append("t");
-  } else if ('\r' == ch) {
-    ret = buf.append("r");
-  } else if ('\f' == ch) {
-    ret = buf.append("f");
-  } else if ('\e' == ch) {
-    ret = buf.append("e");
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("should be escape", K(ch), K(ret));
-  }
-  return ret;
-}
-
 
 void ObJsonPathUtil::skip_whitespace(const ObString &path, uint64_t& idx)
 {
@@ -2996,7 +3039,7 @@ bool ObJsonPathUtil::is_oracle_keyname(const char* name, uint64_t length)
 // @param[in,out] name  Keyname
 // @param[in] is_quoted
 // @return  the error code.
-int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted, bool& is_func, bool& with_escape)
+int ObJsonPath::get_oracle_origin_key_name(char*& str, uint64_t& length, bool is_quoted, bool& is_func)
 {
   INIT_SUCC(ret);
   uint64_t start = 0;
@@ -3017,9 +3060,6 @@ int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted
           } else if (expression_[index_] == ObJsonPathItem::DOUBLE_QUOTE) {
             end = index_;
             ++index_;
-          } else if (ObJsonPathUtil::is_escape(expression_[index_])) {
-            with_escape = true;
-            ++index_;
           } else {
             ++index_;
           }
@@ -3034,28 +3074,35 @@ int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted
         LOG_WARN("should start with DOUBLE_QUOTE!", K(ret), K(index_), K(expression_));
       }
     } else {
-      start = index_;
-      if (ObJsonPathUtil::is_digit(expression_[index_])) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("shouldn't start with number!", K(ret), K(index_), K(expression_));
-      } else {
-         while (index_ < len && end == 0) {
-          if (ObJsonPathUtil::is_key_name_terminator(expression_[index_])) {
+      if (ObJsonPathUtil::letter_or_not(expression_[index_]) || (expression_[index_] == '_')) {
+      // without '""'
+        start = index_;
+        ++index_;
+        while (index_ < len) {
+          if (!(ObJsonPathUtil::letter_or_not(expression_[index_])
+                || ObJsonPathUtil::is_digit(expression_[index_])
+                || (expression_[index_] == '_'))) {
             end = index_ - 1;
             break;
           } else {
             ++index_;
           }
         }
+
         if (index_ == len) {
           end = index_ - 1;
         } else {
           ObJsonPathUtil::skip_whitespace(expression_, index_);
           // fun_name + ()
-          if (index_ < expression_.length() && expression_[index_] == '(') {
+          if (index_ < expression_.length()) {
+            if (expression_[index_] == '(') {
               is_func = true;
-          }
+            }
+          }//now, index could equal to len
         }
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("wrong keyname!", K(ret), K(start), K(end), K(expression_));
       }
     }
   } else {
@@ -3068,11 +3115,11 @@ int ObJsonPath::get_origin_key_name(char*& str, uint64_t& length, bool is_quoted
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get keyname: end<start", K(ret), K(start), K(end), K(expression_));
     } else {
-      len = end - start + 1;
+      len = end-start + 1;
       char* start_ptr = expression_.ptr() + start;
       // no "", could be function name
       if ((!is_quoted) && (!is_func)) {
-        length = len + 2;
+        length = len+2;
         str = static_cast<char*> (allocator_->alloc(length));
         if (OB_ISNULL(str)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3135,31 +3182,6 @@ int ObJsonPath::parse_func_node(char*& name, uint64_t& len)
   return ret;
 }
 
-int ObJsonPath::deal_with_escape(char* &str, uint64_t& len)
-{
-  INIT_SUCC(ret);
-  ObJsonBuffer buf(allocator_);
-  for (int i = 0; i < len && OB_SUCC(ret); ++i) {
-    char* tmp = str + i;
-    if (OB_ISNULL(tmp)) {
-    } else if (ObJsonPathUtil::is_escape(*tmp)) {
-      if (OB_FAIL(buf.append("\\"))) {
-        LOG_WARN("fail to append \\.", K(i), K(ret));
-      } else if (OB_FAIL(ObJsonPathUtil::append_character_of_escape(buf, *tmp))) {
-        LOG_WARN("fail to append_character_of_escape.", K(*tmp), K(i), K(ret));
-      }
-    } else {
-      ret = buf.append(tmp, 1);
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    str = buf.ptr();
-    len = buf.length();
-  }
-  return ret;
-}
-
 // parse JPN_ORACLE_MEMBER
 // @return  the error code.
 int ObJsonPath::parse_oracle_member_node()
@@ -3169,7 +3191,6 @@ int ObJsonPath::parse_oracle_member_node()
   if (index_ < expression_.length()) {
     bool is_quoted  = false;
     bool is_func = false;
-    bool with_escape = false;
 
     // check double quote
     if (expression_[index_] == ObJsonPathItem::DOUBLE_QUOTE) is_quoted = true;
@@ -3178,19 +3199,12 @@ int ObJsonPath::parse_oracle_member_node()
     uint64_t name_len = 0;
     // get name
     // add double quote for rapidjson requires
-    if (OB_FAIL(get_origin_key_name(name, name_len, is_quoted, is_func, with_escape))) {
+    if (OB_FAIL(get_oracle_origin_key_name(name, name_len, is_quoted, is_func))) {
       LOG_WARN("fail to get keyname!", K(ret), K(index_), K(expression_));
     } else if (is_quoted || (!is_func)) {
-      if (lib::is_oracle_mode() && with_escape && OB_FAIL(ObJsonPath::deal_with_escape(name, name_len))) {
-        LOG_WARN("fail to deal escape!", K(ret), K(index_), K(expression_));
-      } else if (OB_FAIL(parse_name_with_rapidjson(name, name_len))) {
-        LOG_WARN("fail to parse name with rapidjson",
-        K(ret), K(index_), K(expression_),KCSTRING(name));
-      } else if (!is_quoted) {
-        if (!ObJsonPathUtil::is_ecmascript_identifier(name, name_len)) {
-          LOG_WARN("the key name isn't ECMAScript identifier!",
-            K(ret), KCSTRING(name));
-        }
+      // with "", must be member node
+      if (OB_FAIL(parse_name_with_rapidjson(name, name_len))) {
+        LOG_WARN("fail to parse name with rapidjson",K(ret), K(index_), K(expression_),K(name));
       }
 
       if (OB_SUCC(ret)) {
@@ -3918,8 +3932,7 @@ int ObJsonPath::parse_comp_string_num(ObJsonPathFilterNode* filter_comp_node, bo
     char* str = nullptr;
     uint64_t name_len = 0;
     bool is_func = false;
-    bool with_escape = false;
-    if (OB_FAIL(get_origin_key_name(str, name_len, true, is_func, with_escape))) {
+    if (OB_FAIL(get_oracle_origin_key_name(str, name_len, true, is_func))) {
       LOG_WARN("fail to get string scalar",K(ret), K(index_), K(expression_),K(str));
     } else {
       if (OB_ISNULL(str)) {

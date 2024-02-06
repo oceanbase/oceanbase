@@ -49,7 +49,7 @@ private:
   static bool is_wild_match(const common::ObString &client_ip, const common::ObString &host_name);
 public:
   static int get_local_addr_ipv6(const char *dev_name, char *ipv6, int len, bool *is_linklocal = nullptr);
-  static int get_local_addr_ipv4(const char *dev_name, uint32_t &addr);
+  static uint32_t get_local_addr_ipv4(const char *dev_name);
   static std::string addr_to_string(uint64_t ipport);
   static uint64_t ip_to_addr(uint32_t ip, int port);
   // get ipv4 by hostname, no need free the returned value

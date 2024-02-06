@@ -225,19 +225,14 @@ int ObDupTableLSLeaseMgr::deserialize_lease_log(DupTableLeaseItemArray &lease_he
         } else if (OB_FAIL(lease_header_array.push_back(DupTableLeaseItem(
                        lease_log_header, leader_lease_info.confirmed_lease_info_)))) {
           DUP_TABLE_LOG(WARN, "push back leader_lease_info failed", K(ret), K(leader_lease_info));
-        } else {
-          if (lease_header_array.count() == 1) {
-            //rewrite all leader lease infos on a follower by the new lease log
-            leader_lease_map_.reuse();
-          }
-          leader_lease_info.lease_expired_ts_ =
-              leader_lease_info.confirmed_lease_info_.request_ts_
-              + leader_lease_info.confirmed_lease_info_.lease_interval_us_;
-          if (OB_FAIL(leader_lease_map_.set_refactored(lease_log_header.get_lease_owner(),
-                                                       leader_lease_info, 1))) {
-            DUP_TABLE_LOG(WARN, "insert into leader_lease_map_ for replay failed", K(ret),
-                          K(lease_log_header), K(leader_lease_info));
-          }
+        } else if (OB_FALSE_IT(leader_lease_info.lease_expired_ts_ =
+                                   leader_lease_info.confirmed_lease_info_.request_ts_
+                                   + leader_lease_info.confirmed_lease_info_.lease_interval_us_)) {
+          // do nothing
+        } else if (OB_FAIL(leader_lease_map_.set_refactored(lease_log_header.get_lease_owner(),
+                                                            leader_lease_info, 1))) {
+          DUP_TABLE_LOG(WARN, "insert into leader_lease_map_ for replay failed", K(ret),
+                        K(lease_log_header), K(leader_lease_info));
         }
       }
     }
@@ -762,7 +757,6 @@ bool ObDupTableLSLeaseMgr::LeaseReqCacheHandler::operator()(
     item.durable_lease_.request_ts_ = hash_pair.second.cache_lease_req_.request_ts_;
     item.durable_lease_.lease_interval_us_ = hash_pair.second.cache_lease_req_.lease_interval_us_;
   } else if (loop_start_time_ >= hash_pair.second.lease_expired_ts_) {
-    renew_lease_count_++;
     DUP_TABLE_LOG(INFO, "remove expired lease follower from map", K(ret), K(will_remove),
                   K(hash_pair.first), K(hash_pair.second));
     will_remove = true;

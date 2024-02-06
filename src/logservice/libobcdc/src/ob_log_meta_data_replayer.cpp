@@ -14,8 +14,8 @@
 #include "ob_log_meta_data_replayer.h"
 #include "ob_log_part_trans_task.h"
 
-#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
-#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
+#define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPALYER] " fmt, ##args)
+#define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPALYER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
 #define ISTAT(fmt, args...) STAT(INFO, fmt, ##args)
 #define _DSTAT(fmt, args...) _STAT(DEBUG, fmt, ##args)
@@ -139,7 +139,7 @@ int ObLogMetaDataReplayer::replay(
         "TRANS_COUNT(TOTAL=%ld DDL_TRANS=%ld/%ld LS_OP=%ld)",
         tenant_id, start_timestamp_ns, NTS_TO_STR(start_timestamp_ns),
         replay_info_stat.total_part_trans_task_count_,
-        replay_info_stat.ddl_part_trans_task_replayed_count_,
+        replay_info_stat.ddl_part_trans_task_repalyed_count_,
         replay_info_stat.ddl_part_trans_task_toal_count_,
         replay_info_stat.ls_op_part_trans_task_count_);
   }
@@ -165,7 +165,7 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
     // Only DDL transactions less than or equal to the start timestamp need to be replayed
     if (trans_commit_version <= start_timestamp_ns) {
       DSTAT("handle DDL_TRANS to be replayed", K(part_trans_task));
-      replay_info_stat.ddl_part_trans_task_replayed_count_++;
+      replay_info_stat.ddl_part_trans_task_repalyed_count_++;
 
       if (OB_FAIL(part_trans_task.parse_multi_data_source_data_for_ddl("ObLogMetaDataReplayer"))) {
         LOG_ERROR("parse_multi_data_source_data_for_ddl failed", KR(ret), K(part_trans_task));

@@ -20,7 +20,6 @@ namespace oceanbase
 namespace sql
 {
 class ObAnalyzeStmt;
-class ObAnalyzeTableInfo;
 
 class ObAnalyzeStmtResolver: public ObDDLResolver
 {
@@ -41,16 +40,14 @@ private:
                                        ObAnalyzeStmt &analyze_stmt);
   int resolve_table_info(const ParseNode *table_node,
                          ObAnalyzeStmt &analyze_stmt);
-  int recursive_resolve_table_info(const ParseNode *table_list_node,
-                                  ObAnalyzeStmt &analyze_stmt);
   int resolve_partition_info(const ParseNode *part_node,
-                             ObAnalyzeStmt &analyze_stmt);
-  int inner_resolve_partition_info(const ParseNode *part_node,
-                                  const uint64_t tenant_id,
-                                  ObAnalyzeTableInfo &table_info);
+                             ObAnalyzeStmt &analyze_stmt,
+                             bool &is_hist_subpart);
   int resolve_statistic_info(const ParseNode *statistic_node,
+                             const bool is_hist_subpart,
                              ObAnalyzeStmt &analyze_stmt);
   int resolve_for_clause_info(const ParseNode *for_clause_node,
+                              const bool is_hist_subpart,
                               ObAnalyzeStmt &analyze_stmt);
   int resolve_for_clause_element(const ParseNode *for_clause_node,
                                  const bool is_hist_subpart,

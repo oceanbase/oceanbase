@@ -23,7 +23,6 @@
 #include "sql/plan_cache/ob_plan_cache_util.h"
 #include "sql/engine/user_defined_function/ob_udf_ctx_mgr.h"
 #include "sql/engine/expr/ob_expr.h"
-#include "sql/engine/ob_subschema_ctx.h"
 namespace oceanbase
 {
 namespace sql
@@ -459,21 +458,13 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   common::ObCurTraceId::TraceId &get_last_trace_id() { return last_trace_id_; }
   void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
-  void set_rich_format(bool v) { enable_rich_format_ = v; }
-  bool is_rich_format() const { return enable_rich_format_; }
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
-  int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
-  int get_local_session_vars(int64_t idx, const ObLocalSessionVar *&local_vars);
 private:
-  int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
   int reserve_param_frame(const int64_t capacity);
-  void get_param_frame_info(int64_t param_idx,
-                            ObDatum *&datum,
-                            ObEvalInfo *&eval_info,
-                            VectorHeader *&vec_header);
+  void get_param_frame_info(int64_t param_idx, ObDatum *&datum, ObEvalInfo *&eval_info);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalPlanCtx);
 private:
@@ -603,10 +594,6 @@ private:
   bool is_ps_rewrite_sql_;
   // timeout use by spm, don't need to serialize
   int64_t spm_ts_timeout_us_;
-  ObSubSchemaCtx subschema_ctx_;
-  bool enable_rich_format_;
-  // for dependant exprs of generated columns
-  common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
 };
 
 }

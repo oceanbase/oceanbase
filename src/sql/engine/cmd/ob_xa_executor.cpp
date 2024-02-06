@@ -66,9 +66,6 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     ret = OB_TRANS_XA_OUTSIDE;
     LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
         K(tx_desc->get_xid()));
-  } else if (true == my_session->is_for_trigger_package()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support xa start in trigger", K(ret), K(xid));
   } else if (OB_FAIL(get_org_cluster_id_(my_session, org_cluster_id))) {
   } else if (OB_FAIL(my_session->get_tx_timeout(tx_timeout))) {
     LOG_ERROR("fail to get trans timeout ts", K(ret));
@@ -195,9 +192,6 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   } else if (!my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in a trans", K(ret));
-  } else if (true == my_session->is_for_trigger_package()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support xa end in trigger", K(ret), K(xid));
   } else if (my_session->get_xid().empty()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in xa trans", K(ret));

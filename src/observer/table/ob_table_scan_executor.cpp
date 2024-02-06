@@ -14,7 +14,6 @@
 #include "ob_table_scan_executor.h"
 #include "ob_table_context.h"
 #include "sql/das/ob_das_utils.h"
-#include "share/index_usage/ob_index_usage_info_mgr.h"
 
 namespace oceanbase
 {
@@ -277,15 +276,6 @@ int ObTableApiScanExecutor::close()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    oceanbase::share::ObIndexUsageInfoMgr *mgr = MTL(oceanbase::share::ObIndexUsageInfoMgr *);
-    if (tb_ctx_.get_table_id() == tb_ctx_.get_ref_table_id()) {
-      // skip // use primary key, do nothing
-    } else if (OB_NOT_NULL(mgr)) {
-      mgr->update(tb_ctx_.get_tenant_id(), tb_ctx_.get_index_table_id());
-    }
-  }
-
   return ret;
 }
 
@@ -305,18 +295,17 @@ int ObTableApiScanRowIterator::open(ObTableApiScanExecutor *executor)
   return ret;
 }
 
-// Memory of row is owned by iterator, and row cannot be used after iterator close
-// or get_next_row next time unless you use deep copy.
-int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
+// Memory of row is owned by iterator, and row cannot be used beyond iterator, unless you use deep copy.
+int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, bool need_deep_copy /* =true */)
 {
   int ret = OB_SUCCESS;
   ObNewRow *tmp_row = nullptr;
   char *row_buf = nullptr;
   ObObj *cells = nullptr;
   const ObTableCtx &tb_ctx = scan_executor_->get_table_ctx();
+  ObIAllocator &allocator = tb_ctx.get_allocator();
   const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().output_exprs_;
   const int64_t cells_cnt = output_exprs.count();
-  row_allocator_.reuse();
 
   if (OB_ISNULL(scan_executor_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -325,10 +314,10 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next row by scan executor", K(ret));
     }
-  } else if (OB_ISNULL(row_buf = static_cast<char*>(row_allocator_.alloc(sizeof(ObNewRow))))) {
+  } else if (OB_ISNULL(row_buf = static_cast<char*>(allocator.alloc(sizeof(ObNewRow))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc ObNewRow buffer", K(ret));
-  } else if (OB_ISNULL(cells = static_cast<ObObj*>(row_allocator_.alloc(sizeof(ObObj) * cells_cnt)))) {
+  } else if (OB_ISNULL(cells = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * cells_cnt)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc cells buffer", K(ret), K(cells_cnt));
   } else {
@@ -350,8 +339,10 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("fail to eval datum", K(ret));
         } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(idx)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(idx)->obj_meta_), K(i), K(idx));
-        } else {
+        } else if (!need_deep_copy) {
           cells[i] = tmp_obj;
+        } else if (ob_write_obj(allocator, tmp_obj, cells[i])) { // need_deep_copy
+          LOG_WARN("fail to deep copy ObObj", K(ret), K(tmp_obj));
         }
       }
     } else {
@@ -360,8 +351,10 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
           LOG_WARN("fail to eval datum", K(ret));
         } else if (OB_FAIL(datum->to_obj(tmp_obj, output_exprs.at(i)->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(output_exprs.at(i)->obj_meta_));
-        } else {
+        } else if (!need_deep_copy) {
           cells[i] = tmp_obj;
+        } else if (ob_write_obj(allocator, tmp_obj, cells[i])) { // need_deep_copy
+          LOG_WARN("fail to deep copy ObObj", K(ret), K(tmp_obj));
         }
       }
     }
@@ -374,36 +367,6 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   return ret;
 }
 
-// deep copy the new row using given allocator
-int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, common::ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  ObNewRow *inner_row = nullptr;
-  if (OB_FAIL(get_next_row(inner_row))) {
-    LOG_WARN("fail to get next row", KR(ret));
-  } else if (OB_ISNULL(inner_row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("new row is null", KR(ret));
-  } else {
-    ObNewRow *tmp_row = nullptr;
-    int64_t buf_size = inner_row->get_deep_copy_size() + sizeof(ObNewRow);
-    char *tmp_row_buf = static_cast<char *>(allocator.alloc(buf_size));
-    if (OB_ISNULL(tmp_row_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc new row", KR(ret));
-    } else {
-      tmp_row = new(tmp_row_buf)ObNewRow();
-      int64_t pos = sizeof(ObNewRow);
-      if (OB_FAIL(tmp_row->deep_copy(*inner_row, tmp_row_buf, buf_size, pos))) {
-        LOG_WARN("fail to deep copy new row", KR(ret));
-      } else {
-        row = tmp_row;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTableApiScanRowIterator::close()
 {
   int ret = OB_SUCCESS;
@@ -413,8 +376,6 @@ int ObTableApiScanRowIterator::close()
     LOG_WARN("scan executor is null", K(ret));
   } else if (OB_FAIL(scan_executor_->close())) {
     LOG_WARN("fail to close scan executor", K(ret));
-  } else {
-    row_allocator_.reset();
   }
 
   return ret;

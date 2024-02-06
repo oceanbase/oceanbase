@@ -103,7 +103,6 @@ int ObTableComparator::compare_to(const ObIArray<ObString> &select_columns,
       } else {
         // not support others
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "only for int and string, other column type");
         LOG_WARN("do not support other column type, only for int, string", K(ret), K(column_type));
       }
     } else {
@@ -250,7 +249,7 @@ int ObNormalTableQueryResultIterator::get_aggregate_result(table::ObTableQueryRe
     LOG_WARN("one_result_ should not be null", K(ret));
   } else {
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (OB_FAIL(agg_calculator_.aggregate(*row))) {
         LOG_WARN("fail to aggregate", K(ret), K(*row));
       }
@@ -294,10 +293,10 @@ int ObNormalTableQueryResultIterator::get_normal_result(table::ObTableQueryResul
   if (OB_SUCC(ret)) {
     next_result = one_result_;
     ObNewRow *row = nullptr;
-    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row))) {
+    while (OB_SUCC(ret) && OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       LOG_DEBUG("[yzfdebug] scan result", "row", *row);
       if (OB_FAIL(one_result_->add_row(*row))) {
-        if (OB_BUF_NOT_ENOUGH == ret) {
+        if (OB_SIZE_OVERFLOW == ret) {
           ret = OB_SUCCESS;
           last_row_ = row;
           break;
@@ -351,53 +350,6 @@ int ObTableFilterOperator::check_limit_param()
   return ret;
 }
 
-int ObTableFilterOperator::init_full_column_name(const ObIArray<ObString>& col_arr)
-{
-  int ret = OB_SUCCESS;
-  bool is_select_column_empty = query_->get_select_columns().empty(); // query select column is empty when do queryAndMutate
-  if (is_aggregate_query()) {
-    // do nothing
-  } else if (OB_FAIL(full_column_name_.assign(col_arr))) {
-    LOG_WARN("fail to assign full column name", K(ret));
-  } else if (!is_select_column_empty) {
-    one_result_->reset_property_names();
-    // why need deep copy, query_ is owned to query session when do sync query, and query session destroy before property_names serialize.
-    if (OB_FAIL(one_result_->deep_copy_property_names(query_->get_select_columns()))) { // normal query should reset select column
-      LOG_WARN("fail to assign query column name", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTableFilterOperator::add_row(table::ObTableQueryResult *next_result, ObNewRow *row)
-{
-  int ret = OB_SUCCESS;
-  ObNewRow new_row;
-  const ObIArray<ObString> &select_columns = query_->get_select_columns();
-  if (!select_columns.empty()) {
-    size_t new_size = select_columns.count();
-    size_t old_size = full_column_name_.count();
-    ObObj cell_arr[new_size];
-    new_row.assign(cell_arr, new_size);
-    for (size_t i = 0; i < old_size; i ++) {
-      int64_t idx = -1;
-      if (!has_exist_in_array(select_columns, full_column_name_.at(i), &idx)) {
-        // do nothing
-      } else {
-        cell_arr[idx] = row->get_cell(i);
-      }
-    }
-    if (OB_FAIL(next_result->add_row(new_row))) {
-      LOG_WARN("failed to add row", K(ret));
-    }
-  } else { // query select column is empty when do queryAndMutate
-    if (OB_FAIL(next_result->add_row(*row))) {
-      LOG_WARN("failed to add row", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
@@ -440,7 +392,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
     const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
     const int64_t N = select_columns.count();
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row))) {
+           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
@@ -501,7 +453,7 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
 
   if (OB_SUCC(ret)) {
     if (NULL != last_row_) {
-      if (OB_FAIL(add_row(one_result_, last_row_))) {
+      if (OB_FAIL(one_result_->add_row(*last_row_))) {
         LOG_WARN("failed to add row", K(ret));
       } else {
         row_idx_++;
@@ -517,11 +469,11 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
     bool has_reach_limit = (row_idx_ >= offset + limit);
     next_result = one_result_;
     ObNewRow *row = nullptr;
-    const ObIArray<ObString> &select_columns = full_column_name_;
+    const ObIArray<ObString> &select_columns = one_result_->get_select_columns();
     const int64_t N = select_columns.count();
 
     while (OB_SUCC(ret) && (!has_limit || !has_reach_limit) &&
-           OB_SUCC(scan_result_->get_next_row(row))) {
+           OB_SUCC(scan_result_->get_next_row(row, false/*need_deep_copy*/))) {
       if (N != row->get_count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select column count is not equal to row cells count", K(ret), K(select_columns), K(*row));
@@ -538,8 +490,8 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
 
       if (has_limit && row_idx_ < offset) {
         row_idx_++;
-      } else if (OB_FAIL(add_row(one_result_, row))) {
-        if (OB_BUF_NOT_ENOUGH == ret) {
+      } else if (OB_FAIL(one_result_->add_row(*row))) {
+        if (OB_SIZE_OVERFLOW == ret) {
           ret = OB_SUCCESS;
           last_row_ = row;
           break;

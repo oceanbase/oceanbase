@@ -524,7 +524,7 @@ int ObLSBalanceTaskHelper::generate_task_for_shrink_(
     for (int64_t i = 0; OB_SUCC(ret) && i < src_split_param.count(); ++i) {
       const ObSplitLSParam &param = src_split_param.at(i);
       ObLSID merge_ls_id;
-      if (fabs(param.get_current_factor() - 1.0) < OB_DOUBLE_EPSINON) {
+      if (1 == param.get_current_factor()) {
         //nothing
         merge_ls_id = param.get_ls_info()->ls_id_;
       } else {
@@ -623,7 +623,7 @@ int ObLSBalanceTaskHelper::construct_shrink_src_param_(const int64_t target_coun
       for (int64_t j = 0; OB_SUCC(ret) && j < src_ls.count() && need_factor > OB_DOUBLE_EPSINON; ++j) {
         ObSplitLSParam &param = src_ls.at(j);
         double get_factor = param.reduce_enough_factor(need_factor);
-        if (!(get_factor)) { // strictly equal to zero
+        if (0 == get_factor) {
           //empty
         } else if (OB_DOUBLE_EPSINON >= get_factor) {
           ret = OB_ERR_UNEXPECTED;

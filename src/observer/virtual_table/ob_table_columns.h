@@ -86,9 +86,7 @@ public:
                                       sql::ObSQLSessionInfo *session,
                                       char *column_type_str,
                                       int64_t column_type_str_len,
-                                      ColumnAttributes &column_attributes,
-                                      bool skip_type_str);  // skip_type_str : when use ObTableColumns::deduce_column_attributes in create_view_resolver,
-                                                            // no field column_type_str, skip
+                                      ColumnAttributes &column_attributes);
 private:
 
   enum DESC_COLUMN {

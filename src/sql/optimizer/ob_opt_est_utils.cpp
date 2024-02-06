@@ -198,12 +198,10 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
                                                   const ObRawExpr *esp_expr,
                                                   ObExecContext *exec_ctx,
                                                   ObIAllocator &allocator,
-                                                  bool &is_start_with,
-                                                  bool &all_is_percent_sign)
+                                                  bool &is_start_with)
 {
   int ret = OB_SUCCESS;
   is_start_with = false;
-  all_is_percent_sign = false;
   bool get_value = false;
   bool empty_escape = false;
   char escape;
@@ -235,15 +233,6 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
         is_start_with = (escape != start_c && ('%' == start_c || '_' == start_c));
       }
     } else { /* do nothing */ }
-  }
-  if (OB_SUCC(ret) && is_start_with) {
-    all_is_percent_sign = true;
-    const ObString &expr_str = value.get_string();
-    for (int64_t i = 0; all_is_percent_sign && i < expr_str.length(); i++) {
-      if (expr_str[i] != '%') {
-        all_is_percent_sign = false;
-      }
-    }
   }
   return ret;
 }
@@ -401,7 +390,7 @@ double ObOptEstObjToScalar::convert_obj_to_scalar(const ObObj *obj)
         scalar = static_cast<double>(obj->get_utinyint());
         break;
     case ObUSmallIntType:               // uint16
-        scalar = static_cast<double>(obj->get_usmallint());
+        scalar = static_cast<double>(obj->get_smallint());
         break;
     case ObUMediumIntType:              // uint24
         scalar = static_cast<double>(obj->get_umediumint());

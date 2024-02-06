@@ -327,7 +327,6 @@ int ObTransformSemiToInner::do_transform_by_rewrite_form(ObDMLStmt* stmt,
         TableItem *right_table = view_stmt->get_table_item_by_id(semi_info->right_table_id_);
         ObSelectStmt* right_stmt = NULL;
         if (OB_ISNULL(right_table)) {
-          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (right_table->is_generated_table()) {
           if (OB_ISNULL(right_stmt = right_table->ref_query_)) {
@@ -624,8 +623,7 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     trans_param.need_add_gby_ = (left_exprs.count() != 0);
     ctx.is_multi_join_cond_ = is_multi_join_cond;
     need_check_cost = true;
-  } else if (!stmt.has_for_update()) {
-    // If there is FOR UPDATE, can not use TO_INNER_GBY
+  } else {
     // TO_INNER_GBY : for following cases:
     // 1. there are more than one compare-join-conditions
     // 2. non-standard correlated condition(s) exist
@@ -717,8 +715,7 @@ int ObTransformSemiToInner::collect_unique_property_of_from_items(ObTransformerC
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null table", K(ret), K(table));
-      // lijinmao todo: fix bug here, need generate unique from table except basic table
-      } else if (OB_FAIL(ObTransformUtils::generate_unique_key_for_basic_table(ctx, stmt, table, pkeys))) {
+      } else if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx, stmt, table, pkeys))) {
         LOG_WARN("failed to generate unique key", K(ret));
       } else if (pkeys.empty()) {
         ret = OB_ERR_UNEXPECTED;

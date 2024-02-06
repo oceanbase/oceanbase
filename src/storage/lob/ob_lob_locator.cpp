@@ -19,7 +19,6 @@
 #include "storage/tx/ob_trans_define_v4.h"
 #include "storage/tx/ob_trans_service.h"
 #include "share/ob_lob_access_utils.h"
-#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -39,8 +38,7 @@ ObLobLocatorHelper::ObLobLocatorHelper()
     locator_allocator_(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     rowkey_str_(),
     enable_locator_v2_(),
-    is_inited_(false),
-    scan_flag_()
+    is_inited_(false)
 {
 }
 
@@ -98,7 +96,6 @@ int ObLobLocatorHelper::init(const ObTableScanParam &scan_param,
       ls_id_ = ls_id.id();
       read_snapshot_ = ctx.mvcc_acc_ctx_.snapshot_;
       enable_locator_v2_ = table_param.enable_lob_locator_v2();
-      scan_flag_ = scan_param.scan_flag_;
       if (snapshot_version != read_snapshot_.version_.get_val_for_tx()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "snapshot version mismatch",
@@ -313,7 +310,6 @@ int ObLobLocatorHelper::fuse_mem_lob_header(ObObj &def_obj, uint64_t col_id, boo
       // mysql inrow lobs & systable lobs do not have extern fields
       bool has_extern = (lib::is_oracle_mode() && !is_systable);
       ObMemLobExternFlags extern_flags(has_extern);
-      extern_flags.has_retry_info_ = 0; // default obj should only be inrow, no need retry info
       ObLobCommon lob_common;
       int64_t full_loc_size = ObLobLocatorV2::calc_locator_full_len(extern_flags,
                                                                     rowkey_str_.length(),
@@ -548,14 +544,6 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
         ObMemLobTxInfo tx_info(read_snapshot_.version_.get_val_for_tx(),
                                read_snapshot_.tx_id_.get_id(),
                                read_snapshot_.scn_.cast_to_int());
-        ObMemLobRetryInfo retry_info;
-        retry_info.addr_ = MYADDR;
-        retry_info.is_select_leader_ = true;
-        retry_info.read_latest_ = scan_flag_.read_latest_;
-        retry_info.timeout_ = access_ctx.timeout_;
-        if (retry_info.read_latest_) {
-          tx_info.snapshot_seq_ = ObSequence::get_max_seq_no();
-        }
         ObMemLobLocationInfo location_info(tablet_id_, ls_id_, cs_type);
         if (has_extern && OB_FAIL(locator.set_table_info(table_id_, column_id))) { // should be column idx
           STORAGE_LOG(WARN, "Lob: set table info failed", K(ret), K(table_id_), K(column_id));
@@ -563,8 +551,6 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
           STORAGE_LOG(WARN, "Lob: set transaction info failed", K(ret), K(tx_info));
         } else if (extern_flags.has_location_info_ && OB_FAIL(locator.set_location_info(location_info))) {
           STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(location_info));
-        } else if (extern_flags.has_retry_info_ && OB_FAIL(locator.set_retry_info(retry_info))) {
-          STORAGE_LOG(WARN, "Lob: set location info failed", K(ret), K(retry_info));
         }
       }
 
@@ -630,27 +616,17 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL(lob_mngr->query(param, output_data))) {
               COMMON_LOG(WARN,"Lob: falied to query lob tablets.", K(ret), K(param));
-            } else {
-              if (output_data.length() != param.byte_size_) {
+            } else if (padding_char_size) {
+              ObString data_str;
+              if (OB_FAIL(locator.get_inrow_data(data_str))) {
+                STORAGE_LOG(WARN, "Lob: read lob data failed",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else if (OB_ISNULL(char_len_ptr)) {
                 ret = OB_ERR_UNEXPECTED;
-                ObLobData ld;
-                if (lob_common->is_init_) {
-                  ld = *(ObLobData*)lob_common->buffer_;
-                }
-                STORAGE_LOG(WARN, "Lob: read full data size not expected", K(ret), K(*lob_common),
-                            K(ld), K(output_data.length()), K(param.byte_size_));
-              } else if (padding_char_size) {
-                ObString data_str;
-                if (OB_FAIL(locator.get_inrow_data(data_str))) {
-                  STORAGE_LOG(WARN, "Lob: read lob data failed",
-                    K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
-                } else if (OB_ISNULL(char_len_ptr)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
-                    K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
-                } else {
-                  *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
-                }
+                STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
+                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+              } else {
+                *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
               }
             }
           }

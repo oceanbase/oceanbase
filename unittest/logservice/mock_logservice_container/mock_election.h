@@ -36,12 +36,6 @@ public:
   }
   void stop() override final
   {}
-  int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final
-  {
-    int ret = OB_SUCCESS;
-    UNUSED(new_config_version);
-    return ret;
-  }
   // 设置成员列表
   int set_memberlist(const MemberList &new_member_list) override final
   {

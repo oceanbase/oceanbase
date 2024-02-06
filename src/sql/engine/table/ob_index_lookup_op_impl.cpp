@@ -157,8 +157,7 @@ int ObIndexLookupOpImpl::get_next_rows(int64_t &count, int64_t capacity)
         } else {
           got_next_row = true;
           update_state_in_output_rows_state(count);
-          const ObBitVector *skip = NULL;
-          PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count, skip,
+          PRINT_VECTORIZED_ROWS(SQL, DEBUG, get_eval_ctx(), get_output_expr(), count,
                                 K(ret), K(lookup_row_cnt_), K(lookup_rowkey_cnt_),
                                 K(lookup_group_cnt_), K(index_group_cnt_));
         }

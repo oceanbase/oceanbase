@@ -36,33 +36,6 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
-namespace share
-{
-int ObTenantTxDataAllocator::init(const char* label)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  if (OB_FAIL(slice_allocator_.init(
-                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr))) {
-    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
-  } else {
-    slice_allocator_.set_nway(ALLOC_TX_DATA_MAX_CONCURRENCY);
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-void *ObTenantTxDataAllocator::alloc(const bool enable_throttle, const int64_t abs_expire_time)
-{
-  void *res = slice_allocator_.alloc();
-  return res;
-}
-};
-
-int storage::ObTenantMetaMemMgr::fetch_tenant_config()
-{
-  return OB_SUCCESS;
-}
 
 namespace unittest
 {
@@ -166,7 +139,7 @@ protected:
   }
   virtual void TearDown() override
   {
-    ctx_mt_mgr_->destroy();
+    ctx_mt_mgr_->reset();
     ls_tx_ctx_mgr_.reset();
     delete mt_mgr_;
     mt_mgr_ = NULL;
@@ -189,7 +162,6 @@ public:
   ObTenantMetaMemMgr t3m_;
   ObIMemtableMgr *mt_mgr_;
   ObTxCtxMemtableMgr *ctx_mt_mgr_;
-  ObTenantTxDataAllocator tx_data_allocator_;
 
   ObTenantBase tenant_base_;
 };
@@ -248,7 +220,6 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   context.store_ctx_ = &store_ctx;
   context.allocator_ = &allocator;
   context.stmt_allocator_ = &allocator;
-  context.merge_scn_.convert_from_ts(996);
   context.is_inited_ = true;
 
   ObDatumRange key_range;
@@ -275,8 +246,6 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx1.is_inited_ = true;
   ctx1.ls_id_ = ls_id;
   ctx1.exec_info_.max_applying_log_ts_.convert_from_ts(1);
-  ctx1.replay_completeness_.set(true);
-  ctx1.rec_log_ts_.convert_from_ts(996);
   ObTxData data1;
   // ctx1.tx_data_ = &data1;
   ctx1.ctx_tx_data_.test_init(data1, &ls_tx_ctx_mgr_);
@@ -288,8 +257,6 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx2.is_inited_ = true;
   ctx2.ls_id_ = ls_id;
   ctx2.exec_info_.max_applying_log_ts_.convert_from_ts(2);
-  ctx2.replay_completeness_.set(true);
-  ctx2.rec_log_ts_.convert_from_ts(996);
   ObTxData data2;
   // ctx2.tx_data_ = &data2;
   ctx2.ctx_tx_data_.test_init(data2, &ls_tx_ctx_mgr_);
@@ -304,8 +271,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObTxDataTable tx_data_table;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  tx_data_allocator_.init("test");
-  tx_data_table.tx_data_allocator_ = &tx_data_allocator_;
+  tx_data_table.slice_allocator_.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
                            (transaction::ObDupTableLSHandler *)(0x02));

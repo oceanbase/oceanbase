@@ -642,44 +642,6 @@ int ob_urowid_str(char *buff, int64_t buff_length, int64_t &pos, int64_t length,
   return databuff_printf(buff, buff_length, pos, "urowid(%ld)", length);
 }
 
-bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
-                                                    const common::ObObjMeta& dst_meta)
-{
-  bool is_online_ddl  = false;
-  if ((((src_meta.is_signed_integer() && dst_meta.is_signed_integer())
-        || (src_meta.is_unsigned_integer() && dst_meta.is_unsigned_integer())) // both are singed or unsigned integer
-        && src_meta.get_type() <= dst_meta.get_type())) { // (unsigned) integer can be changed into larger by online ddl
-    is_online_ddl = true;
-  }
-  return is_online_ddl;
-}
-
-bool is_match_alter_string_column_online_ddl_rules(const common::ObObjMeta& src_meta,
-                                                   const common::ObObjMeta& dst_meta,
-                                                   const int32_t src_len,
-                                                   const int32_t dst_len)
-{
-  bool is_online_ddl = false;
-  if (src_len > dst_len
-    || src_meta.get_charset_type() != dst_meta.get_charset_type()
-    || src_meta.get_collation_type() != dst_meta.get_collation_type()) {
-    // is_online_ddl = false;
-  } else if ((src_meta.is_varbinary() && dst_meta.is_blob() && ObTinyTextType == dst_meta.get_type())     // varbinary -> tinyblob;   depended by generated column
-          || (src_meta.is_varchar()   && dst_meta.is_text() && ObTinyTextType == dst_meta.get_type())     // varchar   -> tinytext;   depended by generated column
-          || (dst_meta.is_varbinary() && src_meta.is_blob() && ObTinyTextType == src_meta.get_type())     // tinyblob  -> varbinary;  depended by generated column
-          || (dst_meta.is_varchar()   && src_meta.is_text() && ObTinyTextType == src_meta.get_type())) {  // tinytext  -> varchar;    depended by generated column
-    // support online ddl with generated column depended:
-    // varbinary -> tinyblob, varchar -> tinytext, tinyblob -> varbinary and tinytext -> varchar in version 4.3
-    is_online_ddl = true;
-  } else if (((src_meta.is_blob() && ObTinyTextType != src_meta.get_type() && dst_meta.is_blob() && ObTinyTextType != dst_meta.get_type())      // tinyblob -x-> blob ---> mediumblob ---> logblob
-           || (src_meta.is_text() && ObTinyTextType != src_meta.get_type() && dst_meta.is_text() && ObTinyTextType != dst_meta.get_type()))) {  // tinytext -x-> text ---> mediumtext ---> longtext
-    // support online ddl with generated column depended:
-    // smaller lob -> larger lob;
-    is_online_ddl = true;
-  }
-  return is_online_ddl;
-}
-
 int ob_sql_type_str(char *buff,
     int64_t buff_length,
     int64_t &pos,

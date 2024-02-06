@@ -50,14 +50,6 @@ public:
   ElectionProposer(ElectionImpl *election);
   int init(const int64_t restart_counter);
   /**
-   * @description: whether the new config version can be set to the election module
-   * @param {LogConfigVersion} &new_config_version
-   * @return {int} OB_INVALID_ARGUMENT : invalid or too small config_version
-                   OB_OP_NOT_ALLOWED : current config_version hasn't been synchronized to any majority
-   * @Date: 2021-12-23 11:33:50
-   */
-  int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const;
-  /**
    * @description: 为选举设置新的成员列表
    * @param {MemberList} &new_member_list
    * @return {int} OB_INVALID_ARGUMENT : 新成员列表的版本号比当前成员列表的版本号更小

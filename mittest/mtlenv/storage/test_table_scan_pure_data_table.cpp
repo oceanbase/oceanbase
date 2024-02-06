@@ -263,7 +263,7 @@ TEST_F(TestTableScanPureDataTable, table_scan_pure_data_table)
   // for exist
   // the iter has store ctx and store ctx has one ls handle.
   iter->reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_, false));
 }
 } // namespace storage
 } // namespace oceanbase

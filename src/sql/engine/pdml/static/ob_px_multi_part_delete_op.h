@@ -76,6 +76,7 @@ public:
 
 class ObPxMultiPartDeleteOp : public ObDMLOpDataReader,
                             public ObDMLOpDataWriter,
+                            public ObDMLOpUniqueRowChecker,
                             public ObTableModifyOp
 {
   OB_UNIS_VERSION(1);
@@ -95,8 +96,7 @@ public:
   // 同时还负责计算出这一行对应的 partition_id
   int read_row(ObExecContext &ctx,
                const ObExprPtrIArray *&row,
-               common::ObTabletID &tablet_id,
-               bool &is_skipped) override;
+               common::ObTabletID &tablet_id) override;
   // impl. ObDMLDataWriter
   // 将缓存的数据批量写入到存储层
   int write_rows(ObExecContext &ctx,
@@ -107,6 +107,9 @@ public:
   virtual int inner_get_next_row();
   virtual int inner_open();
   virtual int inner_close();
+
+private:
+  int check_rowkey_distinct(const ObExprPtrIArray &row, bool &is_distinct) override;
 private:
   ObPDMLOpDataDriver data_driver_;
   ObDelRtDef del_rtdef_;

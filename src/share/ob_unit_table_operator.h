@@ -41,8 +41,7 @@ public:
   virtual int get_units(const common::ObIArray<uint64_t> &pool_ids,
                         common::ObIArray<ObUnit> &units) const;
   virtual int update_unit(common::ObISQLClient &client,
-                          const ObUnit &unit,
-                          const bool need_check_conflict_with_clone);
+                          const ObUnit &unit);
   virtual int remove_units(common::ObISQLClient &client,
                            const uint64_t resource_pool_id);
   virtual int remove_unit(common::ObISQLClient &client,
@@ -61,8 +60,7 @@ public:
                         const bool select_for_update,
                         ObResourcePool &resource_pool) const;
   virtual int update_resource_pool(common::ObISQLClient &client,
-                                   const ObResourcePool &resource_pool,
-                                   const bool need_check_conflict_with_clone);
+                                   const ObResourcePool &resource_pool);
   virtual int remove_resource_pool(common::ObISQLClient &client,
                                    const uint64_t resource_pool_id);
 
@@ -79,16 +77,6 @@ public:
 
   int get_units_by_unit_group_id(const uint64_t unit_group_id,
                                      common::ObIArray<ObUnit> &units);
-
-  // get unit in specific unit_group and zone, if such a unit does not exist,
-  // then return ret == OB_ENTRY_NOT_EXIST
-  // @param [in] unit_group_id, target unit_group_id
-  // @param [in] zone, target zone
-  // @param [out] unit, unit in specific unit_group_id and zone
-  int get_unit_in_group(const uint64_t unit_group_id,
-                        const common::ObZone &zone,
-                        share::ObUnit &unit);
-
   int get_units_by_resource_pools(const ObIArray<share::ObResourcePoolName> &pools,
                                       common::ObIArray<ObUnit> &units);
   int get_units_by_tenant(const uint64_t tenant_id,
@@ -98,14 +86,13 @@ public:
 
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
-  static int read_unit(const common::sqlclient::ObMySQLResult &result, ObUnit &unit);
-  virtual int check_server_empty(const common::ObAddr &server, bool &is_empty);
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);
   static int str2zone_list(const char *str,
                            common::ObIArray<common::ObZone> &zone_list);
 
+  int read_unit(const common::sqlclient::ObMySQLResult &result, ObUnit &unit) const;
   int read_units(common::ObSqlString &sql,
                  common::ObIArray<ObUnit> &units) const;
   int read_unit_config(const common::sqlclient::ObMySQLResult &result,

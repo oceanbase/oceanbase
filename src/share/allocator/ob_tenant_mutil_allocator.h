@@ -25,7 +25,6 @@ namespace oceanbase
 namespace palf
 {
 class LogIOFlushLogTask;
-class LogHandleSubmitTask;
 class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
 class LogIOTruncatePrefixBlocksTask;
@@ -45,7 +44,7 @@ class ObTraceProfile;
 class ObILogAllocator : public ObIAllocator
 {
 public:
-  ObILogAllocator() : flying_log_task_(0), flying_log_handle_submit_task_(0), flying_meta_task_(0) {}
+  ObILogAllocator() : flying_log_task_(0), flying_meta_task_(0) {}
   virtual ~ObILogAllocator() {}
 
 public:
@@ -55,8 +54,6 @@ public:
   virtual void *ge_alloc(const int64_t size) = 0;
   virtual void ge_free(void *ptr) = 0;
   virtual const ObBlockAllocMgr &get_clog_blk_alloc_mgr() const = 0;
-  virtual palf::LogHandleSubmitTask *alloc_log_handle_submit_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
-  virtual void free_log_handle_submit_task(palf::LogHandleSubmitTask *ptr) = 0;
   virtual palf::LogIOFlushLogTask *alloc_log_io_flush_log_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
   virtual void free_log_io_flush_log_task(palf::LogIOFlushLogTask *ptr) = 0;
   virtual palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task(const int64_t palf_id, const int64_t palf_epoch) = 0;
@@ -79,7 +76,6 @@ public:
 
 protected:
   int64_t flying_log_task_;
-  int64_t flying_log_handle_submit_task_;
   int64_t flying_meta_task_;
 };
 
@@ -122,8 +118,6 @@ public:
   // V4.0
   palf::LogIOFlushLogTask *alloc_log_io_flush_log_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_flush_log_task(palf::LogIOFlushLogTask *ptr);
-  palf::LogHandleSubmitTask *alloc_log_handle_submit_task(const int64_t palf_id, const int64_t palf_epoch);
-  void free_log_handle_submit_task(palf::LogHandleSubmitTask *ptr);
   palf::LogIOTruncateLogTask *alloc_log_io_truncate_log_task(const int64_t palf_id, const int64_t palf_epoch);
   void free_log_io_truncate_log_task(palf::LogIOTruncateLogTask *ptr);
   palf::LogIOFlushMetaTask *alloc_log_io_flush_meta_task(const int64_t palf_id, const int64_t palf_epoch);
@@ -145,7 +139,6 @@ private:
   uint64_t tenant_id_ CACHE_ALIGNED;
   int64_t total_limit_;
   int64_t pending_replay_mutator_size_;
-  const int LOG_HANDLE_SUBMIT_TASK_SIZE;
   const int LOG_IO_FLUSH_LOG_TASK_SIZE;
   const int LOG_IO_TRUNCATE_LOG_TASK_SIZE;
   const int LOG_IO_FLUSH_META_TASK_SIZE;
@@ -158,7 +151,6 @@ private:
   ObBlockAllocMgr unlimited_blk_alloc_;
   ObBlockAllocMgr replay_log_task_blk_alloc_;
   ObVSliceAlloc clog_ge_alloc_;
-  ObSliceAlloc log_handle_submit_task_alloc_;
   ObSliceAlloc log_io_flush_log_task_alloc_;
   ObSliceAlloc log_io_truncate_log_task_alloc_;
   ObSliceAlloc log_io_flush_meta_task_alloc_;

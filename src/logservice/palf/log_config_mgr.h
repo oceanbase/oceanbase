@@ -180,12 +180,6 @@ inline bool is_may_change_replica_num(const LogConfigChangeType type)
   return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
 }
 
-inline bool is_must_not_change_replica_num(const LogConfigChangeType type)
-{
-  return ADD_LEARNER == type || REMOVE_LEARNER == type || REPLACE_LEARNERS == type ||
-      TRY_LOCK_CONFIG_CHANGE == type || UNLOCK_CONFIG_CHANGE == type;
-}
-
 inline bool is_paxos_member_list_change(const LogConfigChangeType type)
 {
   return (ADD_MEMBER == type || REMOVE_MEMBER == type
@@ -468,11 +462,8 @@ public:
 
   // for PalfHandleImpl::ack_config_log
   virtual int ack_config_log(const common::ObAddr &sender,
-                             const int64_t proposal_id,
-                             const LogConfigVersion &config_version,
-                             bool &is_majority);
-  virtual int after_config_log_majority(const int64_t proposal_id,
-                                        const LogConfigVersion &config_version);
+                     const int64_t proposal_id,
+                     const LogConfigVersion &config_version);
   int wait_config_log_persistence(const LogConfigVersion &config_version) const;
   // broadcast leader info to global learners, only called in leader active
   virtual int submit_broadcast_leader_info(const int64_t proposal_id) const;
@@ -486,7 +477,6 @@ public:
   int sync_meta_for_arb_election_leader();
   void set_sync_to_degraded_learners();
   bool is_sync_to_degraded_learners() const;
-  int forward_initial_config_meta_to_arb();
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();
@@ -605,8 +595,6 @@ private:
   int pre_sync_config_log_and_mode_meta_(const common::ObMember &server,
                                          const int64_t proposal_id,
                                          const bool is_arb_replica);
-  int after_config_log_majority_(const int64_t proposal_id,
-                                 const LogConfigVersion &config_version);
 
 private:
   // inner_config_meta_ is protected by RWLock in PalfHandleImpl,
@@ -692,7 +680,6 @@ private:
   mutable int64_t last_wait_barrier_time_us_;
   mutable LSN last_wait_committed_end_lsn_;
   int64_t last_sync_meta_for_arb_election_leader_time_us_;
-  int64_t forwarding_config_proposal_id_;
   // ================= Config Change =================
   // ==================== Child ========================
   mutable common::ObSpinLock parent_lock_;

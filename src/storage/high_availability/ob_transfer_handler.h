@@ -134,31 +134,6 @@ private:
       const palf::LogConfigVersion &config_version,
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
-  int do_trans_transfer_start_prepare_(
-      const share::ObTransferTaskInfo &task_info,
-      ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
-  int wait_tablet_write_end_(
-      const share::ObTransferTaskInfo &task_info,
-      SCN &data_end_scn,
-      ObTimeoutCtx &timeout_ctx);
-  int do_trans_transfer_start_v2_(
-      const share::ObTransferTaskInfo &task_info,
-      ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
-  int do_trans_transfer_dest_prepare_(
-      const share::ObTransferTaskInfo &task_info,
-      ObMySQLTransaction &trans);
-  int wait_src_ls_advance_weak_read_ts_(
-      const share::ObTransferTaskInfo &task_info,
-      ObTimeoutCtx &timeout_ctx);
-  int do_move_tx_to_dest_ls_(
-      const share::ObTransferTaskInfo &task_info,
-      ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans,
-      const SCN data_end_scn,
-      const SCN transfer_scn,
-      int64_t &move_tx_count);
   int start_trans_(
       ObTimeoutCtx &timeout_ctx,
       ObMySQLTransaction &trans);
@@ -168,9 +143,7 @@ private:
 
   int do_tx_start_transfer_out_(
       const share::ObTransferTaskInfo &task_info,
-      common::ObMySQLTransaction &trans,
-      const transaction::ObTxDataSourceType data_source_type,
-      SCN data_end_scn = SCN::min_scn());
+      common::ObMySQLTransaction &trans);
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
       common::ObISQLClient &trans);
@@ -184,12 +157,14 @@ private:
       ObTimeoutCtx &timeout_ctx,
       share::SCN &start_scn);
   int wait_ls_replay_event_(
-      const share::ObLSID &ls_id,
       const share::ObTransferTaskInfo &task_info,
       const common::ObArray<ObAddr> &member_addr_list,
       const share::SCN &check_scn,
-      const int32_t group_id,
       ObTimeoutCtx &timeout_ctx);
+  int inner_get_scn_for_wait_event_(
+      const share::ObTransferTaskInfo &task_info,
+      const ObStorageHASrcInfo &src_info,
+      share::SCN &replica_scn);
   int precheck_ls_replay_scn_(
       const share::ObTransferTaskInfo &task_info);
   int get_max_decided_scn_(
@@ -261,8 +236,8 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
-  int clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &tablet_ids);
-  int stop_tablets_schedule_medium_(const ObIArray<ObTabletID> &tablet_ids, bool &succ_stop);
+  int clear_prohibit_medium_flag_(const share::ObLSID &ls_id);
+  int stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop);
   int get_next_tablet_info_(
       const share::ObLSID &dest_ls_id,
       const ObTransferTabletInfo &transfer_tablet_info,
@@ -270,7 +245,6 @@ private:
       obrpc::ObCopyTabletInfo &tablet_info);
   int clear_prohibit_(
       const share::ObTransferTaskInfo &task_info,
-      const ObIArray<ObTabletID> &tablet_ids,
       const bool is_block_tx,
       const bool is_medium_stop);
   int get_config_version_(
@@ -283,17 +257,10 @@ private:
       bool &task_exist) const;
   int get_src_ls_member_list_(
       common::ObMemberList &member_list);
-  int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
 
-  int register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
-                                  const SCN transfer_scn,
-                                  ObMySQLTransaction &trans,
-                                  CollectTxCtxInfo &collect_batch,
-                                  int64_t &batch_len);
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;
-  static const int64_t MOVE_TX_BATCH = 2000;
 private:
   bool is_inited_;
   ObLS *ls_;
@@ -306,14 +273,8 @@ private:
   ObTransferWorkerMgr transfer_worker_mgr_;
   int64_t round_;
   share::SCN gts_seq_;
-  common::SpinRWLock transfer_handler_lock_;
-  bool transfer_handler_enabled_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };
-
-
-int enable_new_transfer(bool &enable);
-
 }
 }
 #endif

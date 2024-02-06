@@ -57,7 +57,6 @@ class ObILogReplayService
 {
 public:
   virtual int is_replay_done(const share::ObLSID &id, const palf::LSN &end_lsn, bool &is_done) = 0;
-  virtual int is_submit_task_clear(const share::ObLSID &id, bool &is_clear) = 0;
   virtual int switch_to_follower(const share::ObLSID &id, const palf::LSN &begin_lsn) = 0;
   virtual int switch_to_leader(const share::ObLSID &id) = 0;
 };
@@ -148,7 +147,6 @@ public:
   int is_replay_done(const share::ObLSID &id,
                      const palf::LSN &end_lsn,
                      bool &is_done);
-  int is_submit_task_clear(const share::ObLSID &id, bool &is_clear);
   int get_max_replayed_scn(const share::ObLSID &id, share::SCN &scn);
   int submit_task(ObReplayServiceTask *task);
   int update_replayable_point(const share::SCN &replayable_scn);
@@ -211,7 +209,6 @@ private:
   void on_replay_error_();
   // 析构前调用,归还所有日志流的replay status计数
   int remove_all_ls_();
-  share::SCN inner_get_replayable_point_() const;
 private:
   const int64_t MAX_REPLAY_TIME_PER_ROUND = 10 * 1000; //10ms
   const int64_t MAX_SUBMIT_TIME_PER_ROUND = 100 * 1000; //100ms

@@ -18,8 +18,6 @@
 #include "storage/blocksstable/ob_datum_row.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/lob/ob_lob_manager.h"
-#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {
@@ -385,7 +383,6 @@ ObAggCell::ObAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator 
       basic_info_(basic_info),
       result_datum_(),
       def_datum_(),
-      skip_index_datum_(),
       allocator_(allocator),
       is_lob_col_(false),
       aggregated_(false),
@@ -406,7 +403,6 @@ void ObAggCell::reset()
   agg_type_ = ObPDAggType::PD_MAX_TYPE;
   basic_info_.reset();
   result_datum_.reset();
-  skip_index_datum_.reset();
   is_lob_col_ = false;
   aggregated_ = false;
   if (nullptr != agg_datum_buf_) {
@@ -430,8 +426,6 @@ void ObAggCell::reuse()
   aggregated_ = false;
   result_datum_.reuse();
   result_datum_.set_null();
-  skip_index_datum_.reuse();
-  skip_index_datum_.set_null();
   group_by_result_cnt_ = 0;
   if (nullptr != col_datums_) {
     for (int64_t i = 0; i < basic_info_.batch_size_; ++i) {
@@ -481,22 +475,18 @@ int ObAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
 }
 
 int ObAggCell::eval_micro_block(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
     const int64_t *row_ids,
     const int64_t row_count)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(basic_info_.col_param_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null col param", K(ret));
-  } else if (OB_FAIL(ObAggDatumBuf::new_agg_datum_buf(basic_info_.batch_size_, true, allocator_, agg_datum_buf_))) {
+  if (OB_FAIL(ObAggDatumBuf::new_agg_datum_buf(basic_info_.batch_size_, true, allocator_, agg_datum_buf_))) {
     LOG_WARN("Failed to alloc agg datum buf", K(ret));
-  } else if (OB_FAIL(reader->get_aggregate_result(iter_param, context, col_offset, *basic_info_.col_param_, row_ids, row_count, *agg_datum_buf_, *this))) {
+  } else if (OB_FAIL(reader->get_aggregate_result(col_offset, basic_info_.col_param_, row_ids, row_count, *agg_datum_buf_, *this))) {
     LOG_WARN("Failed to get aggregate result", K(ret));
   }
+  LOG_DEBUG("eval_micro_block", K(ret), KPC(this));
   return ret;
 }
 
@@ -506,12 +496,15 @@ int ObAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info,
   if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
-  } else if (OB_FAIL(eval(skip_index_datum_))) {
-    LOG_WARN("Failed to process datum", K(ret), K(skip_index_datum_), KPC(this));
+  } else {
+    blocksstable::ObStorageDatum agg_datum;
+    if (OB_FAIL(read_agg_datum(index_info, is_cg, agg_datum))) {
+      LOG_WARN("Failed to read agg row", K(ret));
+    } else if (OB_FAIL(eval(agg_datum))) {
+      LOG_WARN("Failed to process datum", K(ret), K(agg_datum), KPC(this));
+    }
   }
+  LOG_DEBUG("eval_index_info", K(ret), KPC(this));
   return ret;
 }
 
@@ -548,22 +541,6 @@ int ObAggCell::copy_output_rows(const int32_t datum_offset)
           col_datums_[i], basic_info_.agg_expr_->obj_datum_map_))) {
         LOG_WARN("Failed to clone datum", K(ret), K(i), K(col_datums_[i]), K(basic_info_.agg_expr_->obj_datum_map_));
       }
-    }
-  }
-  return ret;
-}
-
-int ObAggCell::copy_single_output_row(sql::ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(basic_info_.agg_expr_->args_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null args of agg expr", K(ret), KPC(basic_info_.agg_expr_));
-  } else {
-    sql::ObDatum &datum = basic_info_.agg_expr_->args_[0]->locate_expr_datum(ctx);
-    common::ObDatum &result_datum = basic_info_.agg_expr_->locate_datum_for_write(ctx);
-    if (OB_FAIL(result_datum.from_storage_datum(datum, basic_info_.agg_expr_->obj_datum_map_))) {
-      LOG_WARN("Failed to clone datum", K(ret), K(datum), K(basic_info_.agg_expr_->obj_datum_map_));
     }
   }
   return ret;
@@ -705,24 +682,10 @@ int ObAggCell::deep_copy_datum(const blocksstable::ObStorageDatum &src, common::
   return ret;
 }
 
-int ObAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
-    const bool is_cg, bool &can_agg)
-{
-  int ret = OB_SUCCESS;
-  if (index_info.has_agg_data() && can_use_index_info()) {
-    if (OB_FAIL(read_agg_datum(index_info, is_cg))) {
-      LOG_WARN("fail to read agg datum", K(ret), K(is_cg), K(index_info));
-    } else {
-      can_agg = !skip_index_datum_.is_null();
-    }
-  } else {
-    can_agg = false;
-  }
-  return ret;
-}
-
 int ObAggCell::read_agg_datum(
-    const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
+    const blocksstable::ObMicroIndexInfo &index_info,
+    const bool is_cg,
+    blocksstable::ObStorageDatum &agg_datum)
 {
   int ret = OB_SUCCESS;
   if (nullptr == agg_row_reader_) {
@@ -735,8 +698,7 @@ int ObAggCell::read_agg_datum(
     }
   }
   if (OB_SUCC(ret)) {
-    skip_index_datum_.reuse();
-    skip_index_datum_.set_null();
+    agg_datum.set_null();
     blocksstable::ObSkipIndexColMeta meta;
     // TODO: @luhaopeng.lhp fix col_index in cg, use 0 temporarily
     meta.col_idx_ = is_cg ? 0 : static_cast<uint32_t>(basic_info_.col_index_);
@@ -753,10 +715,6 @@ int ObAggCell::read_agg_datum(
         meta.col_type_ = blocksstable::SK_IDX_MAX;
         break;
       }
-      case ObPDAggType::PD_SUM: {
-        meta.col_type_ = blocksstable::SK_IDX_SUM;
-        break;
-      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected agg type", K(agg_type_));
@@ -765,11 +723,11 @@ int ObAggCell::read_agg_datum(
     agg_row_reader_->reset();
     if (OB_FAIL(agg_row_reader_->init(index_info.agg_row_buf_, index_info.agg_buf_size_))) {
       LOG_WARN("Fail to init aggregate row reader", K(ret));
-    } else if (OB_FAIL(agg_row_reader_->read(meta, skip_index_datum_))) {
+    } else if (OB_FAIL(agg_row_reader_->read(meta, agg_datum))) {
       LOG_WARN("Failed read aggregate row", K(ret), K(meta));
-    } else if (ObPDAggType::PD_COUNT == agg_type_ && skip_index_datum_.is_null()) {
+    } else if (ObPDAggType::PD_COUNT == agg_type_ && agg_datum.is_null()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected, skip index datum is null", K(ret), K(meta), K(index_info));
+      LOG_WARN("unexpected, agg_datum is null", K(ret), K(meta), K(index_info));
     }
   }
   return ret;
@@ -882,8 +840,6 @@ int ObCountAggCell::eval_batch(const common::ObDatum *datums, const int64_t row_
 }
 
 int ObCountAggCell::eval_micro_block(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
     const int64_t *row_ids,
@@ -916,11 +872,13 @@ int ObCountAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_
     LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret));
   } else if (!exclude_null_) {
     row_count_ += index_info.get_row_count();
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
   } else {
-    row_count_ += index_info.get_row_count() - skip_index_datum_.get_int();
+    blocksstable::ObStorageDatum null_count;
+    if (OB_FAIL(read_agg_datum(index_info, is_cg, null_count))) {
+      LOG_WARN("Failed to read agg row", K(ret));
+    } else {
+      row_count_ += index_info.get_row_count() - null_count.get_int();
+    }
   }
   aggregated_ = true;
   LOG_DEBUG("eval_index_info", K(ret), K(index_info.get_row_count()), K(row_count_));
@@ -1066,28 +1024,6 @@ int ObCountAggCell::copy_output_rows(const int32_t datum_offset)
     LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(datum_offset),
         K(common::ObArrayWrap<common::ObDatum>(col_datums_, datum_offset)),
         K(common::ObArrayWrap<common::ObDatum>(result_datums, datum_offset)));
-  }
-  return ret;
-}
-
-int ObCountAggCell::copy_single_output_row(sql::ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  common::ObDatum &result_datum = basic_info_.agg_expr_->locate_datum_for_write(ctx);
-  if (exclude_null_) {
-    if (OB_ISNULL(basic_info_.agg_expr_->args_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected null args of agg expr", K(ret), KPC(basic_info_.agg_expr_));
-    } else {
-      sql::ObDatum &datum = basic_info_.agg_expr_->args_[0]->locate_expr_datum(ctx);
-      if (!datum.is_null()) {
-        lib::is_oracle_mode() ? result_datum.set_number(ObDummyNumber::number_one_) : result_datum.set_int(1);
-      } else {
-        lib::is_oracle_mode() ? result_datum.set_number(ObDummyNumber::number_zero_) : result_datum.set_int(0);
-      }
-    }
-  } else {
-    lib::is_oracle_mode() ? result_datum.set_number(ObDummyNumber::number_one_) : result_datum.set_int(1);
   }
   return ret;
 }
@@ -1283,11 +1219,12 @@ int ObMinAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
+        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
@@ -1439,11 +1376,12 @@ int ObMaxAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
+        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
@@ -1468,9 +1406,7 @@ ObSumAggCell::ObSumAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllo
       eval_func_(nullptr),
       eval_batch_func_(nullptr),
       copy_datum_func_(nullptr),
-      cast_datum_(),
-      sum_temp_buffer_(nullptr),
-      cast_temp_buffer_(nullptr)
+      sum_temp_buffer_(nullptr)
 {
   agg_type_ = ObPDAggType::PD_SUM;
   result_datum_.set_null();
@@ -1487,17 +1423,10 @@ void ObSumAggCell::reset()
   eval_batch_func_ = nullptr;
   copy_datum_func_ = nullptr;
   if (is_sum_use_temp_buf_) {
-    if (nullptr != sum_temp_buffer_) {
-      allocator_.free(sum_temp_buffer_);
-      sum_temp_buffer_ = nullptr;
-    }
-    if (nullptr != cast_temp_buffer_) {
-      allocator_.free(cast_temp_buffer_);
-      cast_temp_buffer_ = nullptr;
-    }
+    allocator_.free(sum_temp_buffer_);
+    sum_temp_buffer_ = nullptr;
     is_sum_use_temp_buf_ = false;
   }
-  cast_datum_.reset();
   ObAggCell::reset();
 }
 
@@ -1506,7 +1435,6 @@ void ObSumAggCell::reuse()
   ObAggCell::reuse();
   if (is_sum_use_temp_buf_) {
     result_datum_.ptr_ = sum_temp_buffer_;
-    cast_datum_.ptr_ = cast_temp_buffer_;
   }
   sum_use_int_flag_ = false;
   num_int_ = 0;
@@ -1553,7 +1481,6 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
     obj_tc_ = ob_obj_type_class(basic_info_.agg_expr_->args_[0]->datum_meta_.type_);
     const ObObjTypeClass res_tc = ob_obj_type_class(basic_info_.agg_expr_->datum_meta_.type_);
     const int16_t precision = basic_info_.agg_expr_->datum_meta_.precision_;
-    eval_skip_index_func_ = nullptr;
     switch (obj_tc_) {
       case ObObjTypeClass::ObIntTC: {
         switch (res_tc) {
@@ -1561,7 +1488,6 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
             eval_func_ = &ObSumAggCell::eval_int<number::ObNumber>;
             eval_batch_func_ = &ObSumAggCell::eval_int_batch<number::ObNumber>;
             copy_datum_func_ = &ObSumAggCell::copy_int_to_number;
-            eval_skip_index_func_ = &ObSumAggCell::eval_number;
             break;
           }
           case ObObjTypeClass::ObDecimalIntTC: {
@@ -1594,7 +1520,6 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
             eval_func_ = &ObSumAggCell::eval_uint<number::ObNumber>;
             eval_batch_func_ = &ObSumAggCell::eval_uint_batch<number::ObNumber>;
             copy_datum_func_ = &ObSumAggCell::copy_uint_to_number;
-            eval_skip_index_func_ = &ObSumAggCell::eval_number;
             break;
           }
           case ObObjTypeClass::ObDecimalIntTC: {
@@ -1625,21 +1550,18 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
         eval_func_ = &ObSumAggCell::eval_float;
         eval_batch_func_ = &ObSumAggCell::eval_float_batch;
         copy_datum_func_ = &ObSumAggCell::copy_float;
-        eval_skip_index_func_ = &ObSumAggCell::eval_float;
         break;
       }
       case ObObjTypeClass::ObDoubleTC: {
         eval_func_ = &ObSumAggCell::eval_double;
         eval_batch_func_ = &ObSumAggCell::eval_double_batch;
         copy_datum_func_ = &ObSumAggCell::copy_double;
-        eval_skip_index_func_ = &ObSumAggCell::eval_double;
         break;
       }
       case ObObjTypeClass::ObNumberTC: {
         eval_func_ = &ObSumAggCell::eval_number;
         eval_batch_func_ = &ObSumAggCell::eval_number_batch;
         copy_datum_func_ = &ObSumAggCell::copy_number;
-        eval_skip_index_func_ = &ObSumAggCell::eval_number;
         break;
       }
       case ObObjTypeClass::ObDecimalIntTC: {
@@ -1653,10 +1575,7 @@ int ObSumAggCell::init(const bool is_group_by, sql::ObEvalCtx *eval_ctx)
       }
     }
   }
-  if (OB_FAIL(ret)) {
-  } else if (eval_skip_index_func_ == nullptr && OB_FAIL(init_eval_skip_index_func_for_decimal())) {
-    LOG_WARN("fail to init eval with skip index for decimal", K(ret));
-  } else if (is_group_by) {
+  if (OB_SUCC(ret) && is_group_by) {
     const int64_t datum_size = is_sum_use_temp_buf_ ? common::OBJ_DATUM_DECIMALINT_MAX_RES_SIZE : common::OBJ_DATUM_NUMBER_RES_SIZE;
     group_by_result_datum_buf_->set_item_size(datum_size);
     if (ObObjTypeClass::ObIntTC == obj_tc_ || ObObjTypeClass::ObUIntTC == obj_tc_) {
@@ -1778,14 +1697,10 @@ int ObSumAggCell::init_decimal_int_func()
   const int arg_type = static_cast<int>(get_decimalint_type(arg_prec));
   const bool need_cast = (buffer_prec < MAX_PRECISION_DECIMAL_INT_64) &&
                            get_scale_factor<int64_t>(buffer_prec) < basic_info_.batch_size_;
-  if (OB_UNLIKELY(arg_type > 3 || arg_type < 0)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected arg type", K(ret), K(arg_type));
-  } else if (ObObjTypeClass::ObNumberTC == res_tc) {
+  if (ObObjTypeClass::ObNumberTC == res_tc) {
     eval_func_ = AGG_FUNCS[arg_type][2];
     eval_batch_func_ = AGG_BATCH_FUNCS[arg_type][2][need_cast];
     copy_datum_func_ = COPY_FUNCS[arg_type][2];
-    eval_skip_index_func_ = &ObSumAggCell::eval_number;
   } else {
     const int res_type = static_cast<int>(get_decimalint_type(res_prec));
     int res_func_idx = 0;
@@ -1825,23 +1740,8 @@ int ObSumAggCell::init_decimal_int_func()
       if (OB_ISNULL(sum_temp_buffer_ = static_cast<char*>(allocator_.alloc(sizeof(int512_t))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memory", K(ret));
-      } else if (OB_ISNULL(cast_temp_buffer_ = static_cast<char*>(allocator_.alloc(sizeof(int512_t))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc memory", K(ret));
       } else {
         result_datum_.ptr_ = sum_temp_buffer_;
-        cast_datum_.ptr_ = cast_temp_buffer_;
-      }
-
-      if (OB_FAIL(ret)) {
-        if (nullptr != sum_temp_buffer_) {
-          allocator_.free(sum_temp_buffer_);
-          sum_temp_buffer_ = nullptr;
-        }
-        if (nullptr != cast_temp_buffer_) {
-          allocator_.free(cast_temp_buffer_);
-          cast_temp_buffer_ = nullptr;
-        }
       }
     }
   }
@@ -1877,25 +1777,6 @@ int ObSumAggCell::eval_batch(const common::ObDatum *datums, const int64_t count)
   return ret;
 }
 
-int ObSumAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg)
-{
-  int ret = OB_SUCCESS;
-  if (!is_cg && (!index_info.can_blockscan(is_lob_col()) || index_info.is_left_border() || index_info.is_right_border())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected, the micro index info must can blockscan and not border", K(ret), K(index_info));
-  } else if (OB_UNLIKELY(skip_index_datum_.is_null())){
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
-  } else if (OB_FAIL((this->*eval_skip_index_func_)(skip_index_datum_, DEFAULT_DATUM_OFFSET))) {
-    LOG_WARN("Fail to eval", K(ret), K(obj_tc_));
-  } else {
-    aggregated_ = true;
-    LOG_DEBUG("[SKIP INDEX] sum agg eval_index_info", K(ret), K(skip_index_datum_),
-        KPC(this), K(index_info), K(is_cg));
-  }
-  return ret;
-}
-
 int ObSumAggCell::eval_batch_in_group_by(
     const common::ObDatum *datums,
     const int64_t count,
@@ -1920,13 +1801,6 @@ int ObSumAggCell::eval_batch_in_group_by(
     }
   }
   return ret;
-}
-
-bool ObSumAggCell::can_use_index_info() const
-{
-  bool res = false;
-  res = nullptr != basic_info_.col_param_ && basic_info_.col_param_->get_meta_type().is_numeric_type();
-  return res;
 }
 
 int ObSumAggCell::copy_output_row(const int32_t datum_offset)
@@ -1967,24 +1841,6 @@ int ObSumAggCell::copy_output_rows(const int32_t datum_offset)
     LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(datum_offset),
         K(common::ObArrayWrap<common::ObDatum>(col_datums_, datum_offset)),
         K(common::ObArrayWrap<common::ObDatum>(result_datums, datum_offset)));
-  }
-  return ret;
-}
-
-int ObSumAggCell::copy_single_output_row(sql::ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(basic_info_.agg_expr_->args_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null args of agg expr", K(ret), KPC(basic_info_.agg_expr_));
-  } else {
-    sql::ObDatum &datum = basic_info_.agg_expr_->args_[0]->locate_expr_datum(ctx);
-    common::ObDatum &result_datum = basic_info_.agg_expr_->locate_datum_for_write(ctx);
-    if (datum.is_null()) {
-      result_datum.set_null();
-    } else if (OB_FAIL((this->*copy_datum_func_)(datum, result_datum))) {
-      LOG_WARN("Failed to copy output datum", K(ret));
-    }
   }
   return ret;
 }
@@ -2206,63 +2062,6 @@ int ObSumAggCell::eval_number(const common::ObDatum &datum, const int32_t datum_
     } else {
       result_datum.set_number(result_nmb);
     }
-  }
-  return ret;
-}
-
-int ObSumAggCell::init_eval_skip_index_func_for_decimal()
-{
-  int ret = OB_SUCCESS;
-  const ObObjTypeClass res_tc = ob_obj_type_class(basic_info_.agg_expr_->datum_meta_.type_);
-  const int16_t res_prec = basic_info_.agg_expr_->datum_meta_.precision_;
-  const int res_type = static_cast<int>(get_decimalint_type(res_prec));
-  switch (res_type) {
-    case DECIMAL_INT_128:
-      eval_skip_index_func_ = &ObSumAggCell::eval_number_decimal_int<int128_t>;
-      break;
-    case DECIMAL_INT_256:
-      eval_skip_index_func_ = &ObSumAggCell::eval_number_decimal_int<int256_t>;
-      break;
-    case DECIMAL_INT_512:
-      eval_skip_index_func_ = &ObSumAggCell::eval_number_decimal_int<int512_t>;
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect result decimal type", K(ret),
-          K(res_type), K(basic_info_.agg_expr_->datum_meta_));
-  }
-  return ret;
-}
-
-template<typename RES_T>
-int ObSumAggCell::eval_number_decimal_int(const common::ObDatum &datum, const int32_t datum_offset)
-{
-  int ret = OB_SUCCESS;
-  //cast number to decimal
-  int16_t out_scale = basic_info_.agg_expr_->datum_meta_.scale_;
-  ObDecimalIntBuilder tmp_alloc;
-  ObDecimalInt *decint = nullptr;
-  int32_t int_bytes = 0;
-  const number::ObNumber nmb(datum.get_number());
-  const ObScale in_scale = nmb.get_scale();
-  const ObPrecision out_prec = basic_info_.agg_expr_->datum_meta_.precision_;
-  int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
-  if (OB_FAIL(wide::from_number(nmb, tmp_alloc, in_scale, decint, int_bytes))) {
-    LOG_WARN("from_number failed", K(ret), K(out_scale));
-  } else if (sql::ObDatumCast::need_scale_decimalint(in_scale, int_bytes, out_scale, out_bytes)) {
-    // upcasting
-    ObDecimalIntBuilder res_val;
-    if (OB_FAIL(sql::ObDatumCast::common_scale_decimalint(decint, int_bytes, in_scale, out_scale, out_prec,
-                                        basic_info_.agg_expr_->extra_, res_val))) {
-      LOG_WARN("scale decimal int failed", K(ret), K(in_scale), K(out_scale));
-    } else {
-      cast_datum_.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
-    }
-  } else {
-    cast_datum_.set_decimal_int(decint, int_bytes);
-  }
-  if (FAILEDx((eval_decimal_int<RES_T, RES_T>(cast_datum_, datum_offset)))) {
-    LOG_WARN(" fail to eval decimal int", K(ret));
   }
   return ret;
 }
@@ -2576,7 +2375,6 @@ int ObSumAggCell::collect_result_to_decimal_int(
 
 ObFirstRowAggCell::ObFirstRowAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator &allocator)
     : ObAggCell(basic_info, allocator),
-      is_determined_value_(false),
       aggregated_flag_cnt_(0),
       aggregated_flag_buf_(),
       datum_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
@@ -2586,7 +2384,6 @@ ObFirstRowAggCell::ObFirstRowAggCell(const ObAggCellBasicInfo &basic_info, commo
 
 void ObFirstRowAggCell::reset()
 {
-  is_determined_value_ = false;
   aggregated_flag_cnt_ = 0;
   free_group_by_buf(allocator_, aggregated_flag_buf_);
   if (nullptr != agg_datum_buf_) {
@@ -2603,9 +2400,6 @@ void ObFirstRowAggCell::reuse()
   ObAggCell::reuse();
   aggregated_flag_cnt_ = 0;
   datum_allocator_.reuse();
-  if (is_determined_value_) {
-    set_determined_value();
-  }
 }
 
 void ObFirstRowAggCell::clear_group_by_info()
@@ -2651,8 +2445,6 @@ int ObFirstRowAggCell::eval(blocksstable::ObStorageDatum &datum, const int64_t r
 }
 
 int ObFirstRowAggCell::eval_micro_block(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
     const int32_t col_offset,
     blocksstable::ObIMicroBlockReader *reader,
     const int64_t *row_ids,
@@ -2660,12 +2452,12 @@ int ObFirstRowAggCell::eval_micro_block(
 {
   int ret = OB_SUCCESS;
   if (!aggregated_) {
-    if (OB_UNLIKELY(nullptr == row_ids || 0 == row_count || nullptr == basic_info_.col_param_)) {
+    if (OB_UNLIKELY(nullptr == row_ids || 0 == row_count)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("Invalid argument", K(ret), KP(row_ids), K(row_count), K(basic_info_.col_param_));
+      LOG_WARN("Invalid argument", K(ret), KP(row_ids), K(row_count));
     } else {
       blocksstable::ObStorageDatum datum;
-      if (OB_FAIL(reader->get_column_datum(iter_param, context, *basic_info_.col_param_, col_offset, row_ids[0], datum))) {
+      if (OB_FAIL(reader->get_column_datum(col_offset, row_ids[0], datum))) {
         LOG_WARN("Failed to get first datum", K(ret), K(col_offset), K(row_ids[0]), K(row_count));
       } else if (OB_FAIL(result_datum_.deep_copy(datum, datum_allocator_))) {
         LOG_WARN("Failed to deep copy datum", K(ret), K(datum));
@@ -2685,14 +2477,6 @@ int ObFirstRowAggCell::eval_index_info(const blocksstable::ObMicroIndexInfo &ind
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, must be aggregated in single/batch rows", K(ret));
   }
-  return ret;
-}
-
-int ObFirstRowAggCell::can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info,
-    const bool is_cg, bool &can_agg)
-{
-  int ret = OB_SUCCESS;
-  can_agg = can_use_index_info();
   return ret;
 }
 
@@ -2891,7 +2675,6 @@ void ObPDAggFactory::release(common::ObIArray<ObAggCell*> &agg_cells)
 
 ObGroupByCell::ObGroupByCell(const int64_t batch_size, common::ObIAllocator &allocator)
   : batch_size_(batch_size),
-    row_capacity_(batch_size),
     group_by_col_offset_(-1),
     group_by_col_expr_(nullptr),
     group_by_col_datum_buf_(nullptr),
@@ -2913,7 +2696,6 @@ ObGroupByCell::ObGroupByCell(const int64_t batch_size, common::ObIAllocator &all
 void ObGroupByCell::reset()
 {
   batch_size_ = 0;
-  row_capacity_ = 0;
   group_by_col_offset_ = -1;
   group_by_col_expr_ = nullptr;
   agg_cell_factory_.release(agg_cells_);
@@ -2993,9 +2775,25 @@ int ObGroupByCell::init(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ct
     } else if (OB_ISNULL(group_by_col_datums)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected group by col datums", K(ret), K(param));
-    } else if (OB_FAIL(init_agg_cells(param, eval_ctx, false))) {
-      LOG_WARN("Failed to init agg_cells", K(ret));
     } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < param.aggregate_exprs_->count(); ++i) {
+        int32_t col_offset = param.iter_param_.agg_cols_project_->at(i);
+        int32_t col_index = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? -1 : param.iter_param_.read_info_->get_columns_index().at(col_offset);
+        const share::schema::ObColumnParam *col_param = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : out_cols_param->at(col_offset);
+        sql::ObExpr *agg_expr = param.aggregate_exprs_->at(i);
+        bool exclude_null = false;
+        if (T_FUN_COUNT == agg_expr->type_) {
+          if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
+            exclude_null = col_param->is_nullable_for_write();
+          }
+        }
+        ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, agg_expr, batch_size_);
+        if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_, exclude_null, true, &eval_ctx))) {
+          LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (agg_cells_.count() > 2) {
         std::sort(agg_cells_.begin(), agg_cells_.end(),
                   [](ObAggCell *a, ObAggCell *b) { return a->get_col_offset() < b->get_col_offset(); });
@@ -3010,20 +2808,6 @@ int ObGroupByCell::init(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ct
     }
   }
   LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), KPC(this));
-  return ret;
-}
-
-int ObGroupByCell::init_for_single_row(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == param.iter_param_.group_by_cols_project_ ||
-                  0 == param.iter_param_.group_by_cols_project_->count() ||
-                  nullptr ==  param.iter_param_.get_col_params())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param.iter_param_));
-  } else if (OB_FAIL(init_agg_cells(param, eval_ctx, true))) {
-    LOG_WARN("Failed to init agg_cells", K(ret));
-  }
   return ret;
 }
 
@@ -3080,18 +2864,6 @@ int ObGroupByCell::copy_output_rows(const int64_t batch_idx)
   }
   if (OB_SUCC(ret)) {
     set_distinct_cnt(batch_idx);
-  }
-  return ret;
-}
-
-int ObGroupByCell::copy_single_output_row(sql::ObEvalCtx &ctx)
-{
-  int ret = OB_SUCCESS;
-  // just shallow copy output datum to agg
-  for (int64_t i = 0; OB_SUCC(ret) && i < agg_cells_.count(); ++i) {
-    if (OB_FAIL(agg_cells_.at(i)->copy_single_output_row(ctx))) {
-      LOG_WARN("Failed to copy output row", K(ret));
-    }
   }
   return ret;
 }
@@ -3172,13 +2944,10 @@ int ObGroupByCell::output_extra_group_by_result(int64_t &count)
   if (OB_UNLIKELY(!group_by_col_datum_buf_->is_use_extra_buf())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state", K(ret), KPC(group_by_col_datum_buf_));
-  } else if (OB_UNLIKELY(0 == projected_cnt_ && row_capacity_ != batch_size_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected row_capacity, must be equal with batch_size at first", K(ret), K(row_capacity_), K(batch_size_));
   } else if (projected_cnt_ >= distinct_cnt_) {
     ret = OB_ITER_END;
   } else {
-    count = MIN(row_capacity_, distinct_cnt_ - projected_cnt_);
+    count = MIN(batch_size_, distinct_cnt_ - projected_cnt_);
     common::ObDatum *result_datum = nullptr;
     common::ObDatum *sql_result_datums = group_by_col_datum_buf_->get_sql_result_datums();
     common::ObDatum *extra_result_datums = group_by_col_datum_buf_->get_extra_result_datums();
@@ -3203,7 +2972,7 @@ int ObGroupByCell::output_extra_group_by_result(int64_t &count)
       ret = OB_ITER_END;
     }
   }
-  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(count), K(projected_cnt_), K(distinct_cnt_), K(row_capacity_));
+  LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(count), K(projected_cnt_), K(distinct_cnt_));
   return ret;
 }
 
@@ -3225,9 +2994,12 @@ int ObGroupByCell::extract_distinct()
         int16_t &distinct_projector = distinct_projector_buf_->at(ref);
         if (-1 == distinct_projector) {
           // distinct val is not extracted yet
-          if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
+          if (ob_is_decimal_int(group_by_col_expr_->datum_meta_.type_)) {
+            group_by_col_datums[distinct_cnt_].set_decimal_int(tmp_group_by_datums[ref].get_decimal_int(), tmp_group_by_datums[ref].len_);
+          } else if (OB_FAIL(group_by_col_datums[distinct_cnt_].from_storage_datum(tmp_group_by_datums[ref], group_by_col_expr_->obj_datum_map_))) {
             LOG_WARN("Failed to clone datum", K(ret), K(tmp_group_by_datums[ref]), K(group_by_col_expr_->obj_datum_map_));
-          } else {
+          }
+          if (OB_SUCC(ret)) {
             distinct_projector = distinct_cnt_;
             ref = distinct_cnt_;
             distinct_cnt_++;
@@ -3279,50 +3051,11 @@ int ObGroupByCell::check_distinct_and_ref_valid()
   return ret;
 }
 
-int ObGroupByCell::init_uniform_header(
-    const sql::ObExprPtrIArray *output_exprs,
-    const sql::ObExprPtrIArray *agg_exprs,
-    sql::ObEvalCtx &eval_ctx,
-    const bool init_output)
-{
-  int ret = OB_SUCCESS;
-  if (init_output && OB_FAIL(init_exprs_uniform_header(output_exprs, eval_ctx, eval_ctx.max_batch_size_))) {
-    LOG_WARN("Failed to init uniform header for output exprs", K(ret));
-  } else if (OB_FAIL(init_exprs_uniform_header(agg_exprs, eval_ctx, eval_ctx.max_batch_size_))) {
-    LOG_WARN("Failed to init uniform header for agg exprs", K(ret));
-  }
-  return ret;
-}
-
-int ObGroupByCell::init_agg_cells(const ObTableAccessParam &param, sql::ObEvalCtx &eval_ctx, const bool is_for_single_row)
-{
-  int ret = OB_SUCCESS;
-  const common::ObIArray<share::schema::ObColumnParam *> *out_cols_param = param.iter_param_.get_col_params();
-  for (int64_t i = 0; OB_SUCC(ret) && i < param.aggregate_exprs_->count(); ++i) {
-    int32_t col_offset = param.iter_param_.agg_cols_project_->at(i);
-    int32_t col_index = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? -1 : param.iter_param_.read_info_->get_columns_index().at(col_offset);
-    const share::schema::ObColumnParam *col_param = OB_COUNT_AGG_PD_COLUMN_ID == col_offset ? nullptr : out_cols_param->at(col_offset);
-    sql::ObExpr *agg_expr = param.aggregate_exprs_->at(i);
-    bool exclude_null = false;
-    if (T_FUN_COUNT == agg_expr->type_) {
-      if (OB_COUNT_AGG_PD_COLUMN_ID != col_offset) {
-        exclude_null = col_param->is_nullable_for_write();
-      }
-    }
-    ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, agg_expr, batch_size_);
-    if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_, exclude_null, !is_for_single_row, &eval_ctx))) {
-      LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
-    }
-  }
-  return ret;
-}
-
 int64_t ObGroupByCell::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(batch_size),
-       K_(row_capacity),
        K_(group_by_col_offset),
        KP_(group_by_col_expr),
        K_(agg_cells),

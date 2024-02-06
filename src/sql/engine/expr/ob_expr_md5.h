@@ -34,7 +34,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_md5(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int calc_md5(common::ObObj &result,
                const common::ObString &str,

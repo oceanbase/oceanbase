@@ -406,7 +406,6 @@ public:
 
   OB_INLINE void set_collation_level(ObCollationLevel cs_level) { cs_level_ = cs_level; }
   OB_INLINE void set_collation_type(ObCollationType cs_type) { cs_type_ = cs_type; }
-  OB_INLINE ObCollationType get_collation_type() { return static_cast<ObCollationType>(cs_type_); }
   OB_INLINE void set_default_collation_type() { set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())); }
   OB_INLINE ObCollationLevel get_collation_level() const { return static_cast<ObCollationLevel>(cs_level_); }
   OB_INLINE ObCollationType get_collation_type() const {
@@ -454,11 +453,6 @@ public:
   }
   OB_INLINE bool is_user_defined_sql_type() const { return ObUserDefinedSQLType == type_; }
   OB_INLINE bool is_xml_sql_type() const { return (ObUserDefinedSQLType == type_ && get_subschema_id() == ObXMLSqlType); }
-  OB_INLINE bool is_calc_end_space() const {
-    return ((type_ == ObNVarchar2Type)
-             || (type_ == ObVarcharType && cs_type_ != CS_TYPE_BINARY))
-           && lib::is_oracle_mode();
-  }
 
   void set_stored_precision(int16_t precision)
   {
@@ -507,7 +501,6 @@ struct ObLobId
   bool operator >(const ObLobId &other) const;
   TO_STRING_KV(K_(tablet_id), K_(lob_id));
   void reset();
-  inline bool is_valid() const {return tablet_id_ != 0 && lob_id_ != 0;}
   uint64_t tablet_id_;
   uint64_t lob_id_;
 };
@@ -522,7 +515,6 @@ struct ObLobDataOutRowCtx
     WRITE,
     ERASE,
     EMPTY_SQL, // lob col not change in full sql update, out row ctx is empty
-    DIFF,
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -538,8 +530,7 @@ struct ObLobDataOutRowCtx
   uint32_t seq_no_cnt_;
   uint32_t del_seq_no_cnt_; // for sql update
   uint64_t modified_len_;
-  uint32_t first_meta_offset_ : 24;
-  uint32_t chunk_size_ : 8;   // unit is kb
+  uint32_t first_meta_offset_;
 };
 
 struct ObLobData
@@ -781,11 +772,11 @@ struct ObMemLobCommon
 struct ObMemLobExternFlags
 {
   ObMemLobExternFlags() :
-    has_tx_info_(1), has_location_info_(1), has_retry_info_(1), reserved_(0)
+    has_tx_info_(1), has_location_info_(1), reserved_(0)
   {}
 
   ObMemLobExternFlags(bool enable) :
-    has_tx_info_(enable), has_location_info_(enable), has_retry_info_(enable), reserved_(0)
+    has_tx_info_(enable), has_location_info_(enable), reserved_(0)
   {}
 
   ObMemLobExternFlags(const ObMemLobExternFlags &flags) { *this = flags; }
@@ -800,12 +791,11 @@ struct ObMemLobExternFlags
     return (*(reinterpret_cast<uint16_t *>(this)) = 0);
   }
 
-  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(has_retry_info), K_(reserved));
+  TO_STRING_KV(K_(has_tx_info), K_(has_location_info), K_(reserved));
 
   uint16_t has_tx_info_ : 1; // Indicate whether tx info exists
   uint16_t has_location_info_ : 1; // Indicate whether has cid exists (reserved)
-  uint16_t has_retry_info_ : 1; // Indicate whether has retry info exists
-  uint16_t reserved_ : 13;
+  uint16_t reserved_ : 14;
 };
 
 // Memory Locator V2, Extern Header:
@@ -874,17 +864,6 @@ struct ObMemLobLocationInfo
   char data_[0];
 };
 
-struct ObMemLobRetryInfo
-{
-  ObMemLobRetryInfo() : is_select_leader_(true), read_latest_(false), reserved_(0), addr_(), timeout_(0) {}
-  TO_STRING_KV(K_(is_select_leader), K_(read_latest), K_(reserved), K_(addr), K_(timeout));
-  int64_t is_select_leader_ : 1;
-  int64_t read_latest_ : 1;
-  int64_t reserved_ : 62;
-  ObAddr addr_;
-  uint64_t timeout_;
-};
-
 OB_INLINE void validate_has_lob_header(const bool &has_header)
 {
 #ifdef VALIDATE_LOB_HEADER
@@ -909,7 +888,6 @@ public:
   static const uint32_t MEM_LOB_EXTERN_HEADER_LEN = sizeof(ObMemLobExternHeader);
   static const uint32_t MEM_LOB_EXTERN_TXINFO_LEN = sizeof(ObMemLobTxInfo);
   static const uint32_t MEM_LOB_EXTERN_LOCATIONINFO_LEN = sizeof(ObMemLobLocationInfo);
-  static const uint32_t MEM_LOB_EXTERN_RETRYINFO_LEN = sizeof(ObMemLobRetryInfo);
   static const uint16_t MEM_LOB_EXTERN_SIZE_LEN = sizeof(uint16_t);
   static const uint32_t MEM_LOB_ADDR_LEN = 0; // reserved for temp lob address
 
@@ -1021,7 +999,6 @@ public:
   int set_payload_data(const ObLobCommon *lob_comm, const ObString& payload);
   int set_tx_info(const ObMemLobTxInfo &tx_info);
   int set_location_info(const ObMemLobLocationInfo &location_info);
-  int set_retry_info(const ObMemLobRetryInfo &retry_info);
 
   // interfaces for read
   // Notice: all the following functions should be called after is_valid() or fill()
@@ -1036,7 +1013,6 @@ public:
   int get_table_info(uint64_t &table_id, uint32_t &column_idex);
   int get_tx_info(ObMemLobTxInfo *&tx_info) const;
   int get_location_info(ObMemLobLocationInfo *&location_info) const;
-  int get_retry_info(ObMemLobRetryInfo *&retry_info) const;
   int get_real_locator_len(int64_t &real_len) const;
 
   bool is_empty_lob() const;
@@ -1241,7 +1217,7 @@ public:
   explicit ObObj(ObObjType type);
   inline void reset();
   //when in not strict sql mode, build default value refer to data type
-  int build_not_strict_default_value(int16_t precision);
+  int build_not_strict_default_value();
   static ObObj make_min_obj();
   static ObObj make_max_obj();
   static ObObj make_nop_obj();
@@ -4165,10 +4141,6 @@ struct ObSqlArrayObj
   }
   typedef common::ObArrayWrap<common::ObObjParam> DataArray;
   static ObSqlArrayObj *alloc(common::ObIAllocator &allocator, int64_t count);
-  static int do_real_deserialize(common::ObIAllocator &allocator, char *buf, int64_t data_len, ObSqlArrayObj *&array_obj);
-  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
-  int deserialize(common::ObIAllocator &allocator, const char* buf, const int64_t data_len, int64_t& pos);
-  int64_t get_serialize_size(void) const;
   TO_STRING_KV("data", DataArray(data_, count_), K_(count), K_(element));
   common::ObObjParam *data_;
   int64_t count_;

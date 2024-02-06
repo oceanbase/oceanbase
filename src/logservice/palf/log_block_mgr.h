@@ -92,7 +92,7 @@ private:
   int do_scan_dir_(const char *dir, const block_id_t initial_block_id, ILogBlockPool *log_block_pool);
   int do_rename_and_fsync_(const char *block_path, const char *tmp_block_path);
   bool empty_() const;
-  int try_recovery_last_block_(const char *log_dir, const int64_t log_block_size);
+  int try_recovery_last_block_(const char *log_dir);
 
   int check_after_truncate_(const char *block_path, const offset_t offset);
   const int64_t SLEEP_TS_US = 1 * 1000;

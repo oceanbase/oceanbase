@@ -49,15 +49,33 @@ struct ObLSReplicaAddr
 {
   common::ObAddr addr_;
   common::ObReplicaType replica_type_;
+  common::ObReplicaProperty replica_property_;
+  uint64_t unit_group_id_;
+  uint64_t unit_id_;
+  common::ObZone zone_;
 
   ObLSReplicaAddr()
       : addr_(),
-        replica_type_(common::REPLICA_TYPE_MAX) {}
+        replica_type_(common::REPLICA_TYPE_MAX),
+        replica_property_(),
+        unit_group_id_(common::OB_INVALID_ID),
+        unit_id_(common::OB_INVALID_ID),
+        zone_() {}
   void reset() { *this = ObLSReplicaAddr(); }
   int init(const common::ObAddr &addr,
-           const common::ObReplicaType replica_type);
+           const common::ObReplicaType replica_type,
+           const common::ObReplicaProperty &replica_property,
+           const uint64_t unit_group_id,
+           const uint64_t unit_id,
+           const common::ObZone &zone);
+  int64_t get_memstore_percent() const {return replica_property_.get_memstore_percent();}
+  int set_memstore_percent(const int64_t mp) {return replica_property_.set_memstore_percent(mp);}
   TO_STRING_KV(K_(addr),
-               K_(replica_type));
+               K_(replica_type),
+               K_(replica_property),
+               K_(unit_group_id),
+               K_(unit_id),
+               K_(zone));
 
 };
 typedef common::ObArray<ObLSReplicaAddr> ObLSAddr;
@@ -82,23 +100,18 @@ public:
               const common::ObCompatibilityMode &compat_mode,
               const ObString &zone_priority,
               const bool create_with_palf,
-              const palf::PalfBaseInfo &palf_base_info,
-              const uint64_t source_tenant_id);
+              const palf::PalfBaseInfo &palf_base_info);
   int create_user_ls(const share::ObLSStatusInfo &status_info,
                      const int64_t paxos_replica_num,
                      const share::schema::ZoneLocalityIArray &zone_locality,
                      const SCN &create_scn,
                      const common::ObCompatibilityMode &compat_mode,
                      const bool create_with_palf,
-                     const palf::PalfBaseInfo &palf_base_info,
-                     const uint64_t source_tenant_id);
+                     const palf::PalfBaseInfo &palf_base_info);
   int create_sys_tenant_ls(const obrpc::ObServerInfoList &rs_list,
       const common::ObIArray<share::ObUnit> &unit_array);
   bool is_valid();
-
 private:
- int construct_clone_tenant_ls_addrs_(const uint64_t source_tenant_id,
-                                      ObLSAddr &addr);
  int do_create_ls_(const ObLSAddr &addr,
                    ObMember &arbitration_service,
                    const share::ObLSStatusInfo &info,
@@ -125,16 +138,8 @@ private:
  int check_member_list_and_learner_list_all_in_meta_table_(
                 const common::ObMemberList &member_list,
                 const common::GlobalLearnerList &learner_list);
- int inner_check_member_list_and_learner_list_(
-                const common::ObMemberList &member_list,
-                const common::GlobalLearnerList &learner_list);
- int construct_paxos_replica_number_to_persist_(
-                const int64_t paxos_replica_num,
-                const int64_t arb_replica_num,
-                const common::ObMemberList &member_list,
-                int64_t &paxos_replica_number_to_persist);
  int set_member_list_(const common::ObMemberList &member_list,
-                      const common::ObMember &arb_replica,
+                      const common::ObMember &arbitration_service,
                       const int64_t paxos_replica_num,
                       const common::GlobalLearnerList &learner_list);
 #ifdef OB_BUILD_ARBITRATION
@@ -148,13 +153,6 @@ private:
                              const common::GlobalLearnerList &learner_list);
 
  // interface for oceanbase 4.0
- int construct_ls_addrs_according_to_locality_(
-     const share::schema::ZoneLocalityIArray &zone_locality_array,
-     const common::ObIArray<share::ObUnit> &unit_info_array,
-     const bool is_sys_ls,
-     const bool is_duplicate_ls,
-     ObILSAddr &ls_addr);
-
  int alloc_sys_ls_addr(const uint64_t tenant_id,
                        const ObIArray<share::ObResourcePoolName> &pools,
                        const share::schema::ZoneLocalityIArray &zone_locality,
@@ -180,9 +178,7 @@ private:
  int check_create_ls_result_(const int64_t paxos_replica_num,
                              const ObIArray<int> &return_code_array,
                              common::ObMemberList &member_list,
-                             common::GlobalLearnerList &learner_list,
-                             const bool with_arbitration_service,
-                             const int64_t arb_replica_num);
+                             common::GlobalLearnerList &learner_list);
  int check_set_memberlist_result_(const ObIArray<int> &return_code_array,
                                   const int64_t paxos_replica_num);
 

@@ -190,9 +190,7 @@ TEST_F(TestRefCnt, test_inc_and_dec_ref)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   ObMacroBlockInfo block_info;
-  ObMacroBlockHandle block_handle;
-  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info, block_handle);
-  block_handle.reset();
+  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, block_info.ref_cnt_);
 }
@@ -231,9 +229,7 @@ TEST_F(TestRefCnt, test_overmuch_dec_ref)
   }
   ASSERT_EQ(OB_ERR_SYS, ret);
   ObMacroBlockInfo block_info;
-  ObMacroBlockHandle block_handle;
-  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info, block_handle);
-  block_handle.reset();
+  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(0, block_info.ref_cnt_);
 }
@@ -254,9 +250,7 @@ TEST_F(TestRefCnt, test_1_0_1)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
   ObMacroBlockInfo block_info;
-  ObMacroBlockHandle block_handle;
-  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info, block_handle);
-  block_handle.reset();
+  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, block_info.ref_cnt_);
 
@@ -271,9 +265,7 @@ TEST_F(TestRefCnt, test_1_0_1)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
-  ObMacroBlockHandle tmp_block_handle;
-  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info, tmp_block_handle);
-  tmp_block_handle.reset();
+  ret = OB_SERVER_BLOCK_MGR.get_macro_block_info(macro_id, block_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(1, block_info.ref_cnt_);
 

@@ -386,8 +386,6 @@ public:
     return map(remove_if);
   }
 
-  const AllocHandle& get_alloc_handle() const { return alloc_handle_; }
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLinkHashMap);
   static int err_code_map(int err)

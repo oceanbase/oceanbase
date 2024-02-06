@@ -39,7 +39,6 @@ void ObStmtMapInfo::reset()
   select_item_map_.reset();
   is_select_item_equal_ = false;
   is_distinct_equal_ = false;
-  is_qualify_filter_equal_ = false;
   equal_param_map_.reset();
   view_select_item_map_.reset();
 }
@@ -75,7 +74,6 @@ int ObStmtMapInfo::assign(const ObStmtMapInfo& other)
     is_order_equal_ = other.is_order_equal_;
     is_select_item_equal_ = other.is_select_item_equal_;
     is_distinct_equal_ = other.is_distinct_equal_;
-    is_qualify_filter_equal_ = other.is_qualify_filter_equal_;
   }
   return ret;
 }
@@ -247,19 +245,14 @@ bool ObStmtCompareContext::compare_query(const ObQueryRefRawExpr &first,
   int ret = OB_SUCCESS;
   ObStmtMapInfo stmt_map_info;
   QueryRelation relation = QueryRelation::QUERY_UNCOMPARABLE;
-  const ObSelectStmt *first_sel = NULL;
-  const ObSelectStmt *second_sel = NULL;
   if (&first == &second) {
     bret = true;
-  } else if (first.is_set() != second.is_set() || first.is_multiset() != second.is_multiset() ||
-             OB_ISNULL(first_sel = first.get_ref_stmt()) ||
-             OB_ISNULL(second_sel = second.get_ref_stmt())) {
+  } else if (first.is_set() != second.is_set() || first.is_multiset() != second.is_multiset()) {
     bret = false;
-  } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_sel,
-                                                            second_sel,
+  } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first.get_ref_stmt(),
+                                                            second.get_ref_stmt(),
                                                             stmt_map_info,
-                                                            relation,
-                                                            true))) {
+                                                            relation))) {
     LOG_WARN("failed to compute stmt relationship", K(ret));
     err_code_ = ret;
   } else if (stmt_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {
@@ -388,8 +381,7 @@ int ObStmtComparer::is_same_from(const ObDMLStmt *first,
 int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                            const ObDMLStmt *second,
                                            ObStmtMapInfo &map_info,
-                                           QueryRelation &relation,
-                                           bool is_strict_select_list)
+                                           QueryRelation &relation)
 {
   int ret = OB_SUCCESS;
   int64_t first_count = 0;
@@ -592,21 +584,6 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
       }
     }
 
-    // check qualify filters
-    if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
-      first_count = first_sel->get_qualify_filters_count();
-      second_count = second_sel->get_qualify_filters_count();
-      if (0 == first_count && 0 == second_count) {
-        map_info.is_qualify_filter_equal_ = true;
-      } else if (!ObOptimizerUtil::same_exprs(first_sel->get_qualify_filters(),
-                                              second_sel->get_qualify_filters())) {
-        relation = QueryRelation::QUERY_UNCOMPARABLE;
-        LOG_TRACE("succeed to check qualify filters", K(relation), K(map_info));
-      } else {
-        map_info.is_qualify_filter_equal_ = true;
-      }
-    }
-
     // check distinct exprs
     if (OB_SUCC(ret) && QueryRelation::QUERY_UNCOMPARABLE != relation) {
       if ((!first_sel->has_distinct() && !second_sel->has_distinct()) ||
@@ -687,8 +664,7 @@ int ObStmtComparer::check_stmt_containment(const ObDMLStmt *first,
                                                 second_exprs,
                                                 map_info,
                                                 map_info.select_item_map_,
-                                                match_count,
-                                                is_strict_select_list))) {
+                                                match_count))) {
         LOG_WARN("failed to compute output expr map", K(ret));
       } else if (match_count == first_exprs.count() && match_count == second_exprs.count()) {
         map_info.is_select_item_equal_ = true;
@@ -757,8 +733,7 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
                                            const ObIArray<ObRawExpr*> &second_exprs,
                                            ObStmtMapInfo &map_info,
                                            ObIArray<int64_t> &condition_map,
-                                           int64_t &match_count,
-                                           bool is_same_by_order)
+                                           int64_t &match_count)
 {
   int ret = OB_SUCCESS;
   ObSqlBitSet<> matched_items;
@@ -773,45 +748,23 @@ int ObStmtComparer::compute_conditions_map(const ObDMLStmt *first,
     for (int64_t i = 0; OB_SUCC(ret) && i < first_exprs.count(); ++i) {
       bool is_match = false;
       condition_map.at(i) = OB_INVALID_ID;
-      if (!is_same_by_order) {
-        // is same to any one
-        for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_exprs.count(); ++j) {
-          if (matched_items.has_member(j)) {
-            // do nothing
-          } else if (OB_FAIL(is_same_condition(first_exprs.at(i),
-                                              second_exprs.at(j),
-                                              context,
-                                              is_match))) {
-            LOG_WARN("failed to check is condition equal", K(ret));
-          } else if (!is_match) {
-            // do nothing
-          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          } else if (OB_FAIL(matched_items.add_member(j))) {
-            LOG_WARN("failed to add member", K(ret));
-          } else {
-            match_count++;
-            condition_map.at(i) = j;
-          }
-        }
-      } else {
-        // is same by order
-        if (i < second_exprs.count()) {
-          if (OB_FAIL(is_same_condition(first_exprs.at(i),
-                                        second_exprs.at(i),
-                                        context,
-                                        is_match))) {
-            LOG_WARN("failed to check is condition equal", K(ret));
-          } else if (!is_match) {
-            // do nothing
-          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-            LOG_WARN("failed to append exprs", K(ret));
-          } else if (OB_FAIL(matched_items.add_member(i))) {
-            LOG_WARN("failed to add member", K(ret));
-          } else {
-            match_count++;
-            condition_map.at(i) = i;
-          }
+      for (int64_t j = 0; OB_SUCC(ret) && !is_match && j < second_exprs.count(); ++j) {
+        if (matched_items.has_member(j)) {
+          // do nothing
+        } else if (OB_FAIL(is_same_condition(first_exprs.at(i),
+                                             second_exprs.at(j),
+                                             context,
+                                             is_match))) {
+          LOG_WARN("failed to check is condition equal", K(ret));
+        } else if (!is_match) {
+          // do nothing
+        } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
+          LOG_WARN("failed to append exprs", K(ret));
+        } else if (OB_FAIL(matched_items.add_member(j))) {
+          LOG_WARN("failed to add member", K(ret));
+        } else {
+          match_count++;
+          condition_map.at(i) = j;
         }
       }
     }
@@ -1196,8 +1149,6 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
   } else if (map_info.view_select_item_map_.count() < first->get_table_size() &&
              OB_FAIL(map_info.view_select_item_map_.prepare_allocate(first->get_table_size()))) {
     LOG_WARN("failed to pre-allocate generated table map", K(ret));
-  } else if (first_table->for_update_ || second_table->for_update_) {
-    relation = QueryRelation::QUERY_UNCOMPARABLE;
   } else if (first_table->is_temp_table() && second_table->is_temp_table()) {
     if (first_table->ref_query_ == second_table->ref_query_) {
       relation = QueryRelation::QUERY_EQUAL;

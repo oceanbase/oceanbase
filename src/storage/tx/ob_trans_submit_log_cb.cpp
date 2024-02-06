@@ -148,9 +148,20 @@ int ObTxLogCb::on_success()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ctx is null", K(ret), K(tx_id), KP(ctx_));
   } else {
-    ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
-    if (OB_FAIL(part_ctx->on_success(this))) {
-      TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id));
+    // make sure set log type to log callback successfully
+    ctx_->test_lock(this);
+    if (cb_arg_array_.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(tx_id), KP(ctx_));
+      ctx_->print_trace_log();
+    } else {
+      TRANS_LOG(DEBUG, "get last log type success", K(tx_id));
+      // TODO. iterate all log type
+      ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+
+      if (OB_FAIL(part_ctx->on_success(this))) {
+        TRANS_LOG(WARN, "sync log success callback error", K(ret), K(tx_id));
+      }
     }
   }
 
@@ -168,9 +179,19 @@ int ObTxLogCb::on_failure()
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ctx is null", KR(ret), K(*this));
   } else {
-    ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
-    if (OB_FAIL(part_ctx->on_failure(this))) {
-      TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(tx_id));
+    // make sure set log type to log callback successfully
+    ctx_->test_lock(this);
+    if (cb_arg_array_.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "cb arg array is empty", K(ret));
+    } else {
+      TRANS_LOG(DEBUG, "get last log type success", K(tx_id));
+      // TODO. iterate all log type
+      ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx_);
+
+      if (OB_FAIL(part_ctx->on_failure(this))) {
+        TRANS_LOG(WARN, "sync log success callback error", KR(ret), K(tx_id));
+      }
     }
   }
   TRANS_LOG(INFO, "ObTxLogCb::on_failure end", KR(ret), K(tx_id));
@@ -187,11 +208,11 @@ int ObTxLogCb::copy(const ObTxLogCb &other)
   ls_id_ = other.ls_id_;
   trans_id_ = other.trans_id_;
   ctx_ = other.ctx_;
-  if (OB_FAIL(callbacks_.assign(other.callbacks_))) {
-    TRANS_LOG(WARN, "assign callbacks failed", K(ret), KPC(this));
-  } else if (FALSE_IT(is_callbacked_ = other.is_callbacked_)) {
+  callbacks_ = other.callbacks_;
+  is_callbacked_ = other.is_callbacked_;
+
   // without txdata
-  } else if (OB_FAIL(mds_range_.assign(other.mds_range_))) {
+  if (OB_FAIL(mds_range_.assign(other.mds_range_))) {
     TRANS_LOG(WARN, "assign mds range failed", K(ret), KPC(this));
   } else if (OB_FAIL(cb_arg_array_.assign(other.cb_arg_array_))) {
     TRANS_LOG(WARN, "assign cb_arg_array_ failed", K(ret), KPC(this));

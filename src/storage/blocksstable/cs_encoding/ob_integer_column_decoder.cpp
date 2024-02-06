@@ -13,7 +13,6 @@
 
 #include "ob_integer_column_decoder.h"
 #include "ob_integer_stream_decoder.h"
-#include "ob_integer_stream_vector_decoder.h"
 #include "ob_cs_decoding_util.h"
 #include "storage/blocksstable/encoding/ob_raw_decoder.h"
 
@@ -52,18 +51,6 @@ int ObIntegerColumnDecoder::batch_decode(const ObColumnCSDecoderCtx &ctx,
       [integer_ctx.null_flag_]
       [integer_ctx.ctx_->meta_.is_decimal_int()];
   convert_func(integer_ctx, integer_ctx.data_, *integer_ctx.ctx_, nullptr, row_ids, row_cap, datums);
-  return ret;
-}
-
-int ObIntegerColumnDecoder::decode_vector(
-    const ObColumnCSDecoderCtx &ctx, ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const ObIntegerColumnDecoderCtx &integer_ctx = ctx.integer_ctx_;
-  if (OB_FAIL(ObIntegerStreamVecDecoder::decode_vector(integer_ctx, integer_ctx.data_,
-      *integer_ctx.ctx_, nullptr, ObVecDecodeRefWidth::VDRW_NOT_REF, vector_ctx))) {
-    LOG_WARN("fail to decode_vector", K(ret), K(integer_ctx), K(vector_ctx));
-  }
   return ret;
 }
 
@@ -115,6 +102,8 @@ int ObIntegerColumnDecoder::pushdown_operator(
   if (OB_UNLIKELY(row_cnt < 1 || row_cnt != result_bitmap.size())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(row_cnt), K(result_bitmap.size()));
+  } else if (!GCONF.enable_cs_encoding_filter) {
+    ret = OB_NOT_SUPPORTED;
   } else {
     if (integer_ctx.has_null_bitmap()) {
       for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {
@@ -165,7 +154,7 @@ int ObIntegerColumnDecoder::pushdown_operator(
         }
       }
     }
-    LOG_TRACE("integer white filter pushdown", K(ret), K(integer_ctx),
+    LOG_DEBUG("integer white filter pushdown", K(ret), K(integer_ctx),
         K(filter.get_op_type()), K(pd_filter_info), K(result_bitmap.popcnt()));
   }
   return ret;
@@ -400,7 +389,7 @@ int ObIntegerColumnDecoder::between_operator(
           // skip
         } else if (OB_TMP_FAIL(type_cmp_func(cur_datum, filter.get_datums().at(1), le_ret))) {
           LOG_WARN("fail to compare datums", K(tmp_ret), K(cur_datum), K(filter.get_datums()));
-        } else if (!get_le_cmp_ret(le_ret)) {
+        } else if (!get_ge_cmp_ret(le_ret)) {
           // skip
         } else if (OB_TMP_FAIL(result_bitmap.set(idx))) {
           LOG_WARN("fail to set result bitmap", KR(tmp_ret), K(idx));
@@ -428,9 +417,9 @@ int ObIntegerColumnDecoder::tranverse_integer_between_op(
   const ObObjType store_col_type = ctx.col_header_->get_store_obj_type();
   const bool is_col_signed = ObCSDecodingUtil::is_signed_object_type(store_col_type);
 
-  const sql::ObPushdownWhiteFilterNode &filter_node = filter.get_filter_node();
-  ObObjType left_filter_type = filter_node.get_filter_arg_obj_type(0);
-  ObObjType right_filter_type = filter_node.get_filter_arg_obj_type(1);
+  const sql::ObPushdownWhiteFilterNode filter_node = filter.get_filter_node();
+  const ObObjType left_filter_type = filter_node.expr_->args_[0]->obj_meta_.get_type();
+  const ObObjType right_filter_type = filter_node.expr_->args_[1]->obj_meta_.get_type();
   bool is_left_signed = false;
   bool is_right_signed = false;
   int64_t left_filter_size = 0;
@@ -570,9 +559,9 @@ int ObIntegerColumnDecoder::tranverse_integer_in_op(
     const bool is_col_signed = ObCSDecodingUtil::is_signed_object_type(store_col_type);
 
     MEMSET(filter_vals_valid, 1, datum_cnt);
-    const sql::ObPushdownWhiteFilterNode &filter_node = filter.get_filter_node();
+    const sql::ObPushdownWhiteFilterNode filter_node = filter.get_filter_node();
     for (int64_t i = 0; i < datum_cnt; ++i) {
-      const ObObjType filter_type = filter_node.get_filter_arg_obj_type(i);
+      const ObObjType filter_type = filter_node.expr_->args_[i]->obj_meta_.get_type();
       uint64_t filter_val = 0;
       int64_t filter_val_size = 0;
       bool is_filter_signed = false;

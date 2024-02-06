@@ -53,7 +53,7 @@ public:
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const = 0;
   Dimension get_dim_type() const { return dim_type_; }
   static const int64_t DIM_COUNT = static_cast<int64_t>(MAX_DIM);;
-  VIRTUAL_TO_STRING_KV(K(dim_type_));
+  TO_STRING_KV(K(dim_type_));
 private:
   const Dimension dim_type_;
 };
@@ -61,7 +61,6 @@ private:
 class ObIndexBackDim : public ObSkylineDim
 {
 public:
-  friend class ObOptimizerTraceImpl;
   ObIndexBackDim() : ObSkylineDim(INDEX_BACK), need_index_back_(false),
     has_interesting_order_(true),
     can_extract_range_(true),
@@ -76,7 +75,7 @@ public:
   void set_index_column_cnt(const int64_t size) { index_column_cnt_ = size; }
   int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  VIRTUAL_TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range),
+  TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range),
                K_(index_column_cnt),
                "restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
 private:
@@ -101,7 +100,6 @@ private:
 class ObInterestOrderDim : public ObSkylineDim
 {
 public:
-  friend class ObOptimizerTraceImpl;
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
     is_interesting_order_(false),
     column_cnt_(0),
@@ -118,7 +116,7 @@ public:
   void set_extract_range(const bool can) { can_extract_range_ = can; }
   int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
+  TO_STRING_KV(K_(is_interesting_order),
                K_(column_cnt),
                "column_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_),
                K_(need_index_back),
@@ -147,21 +145,17 @@ private:
 class ObQueryRangeDim: public ObSkylineDim
 {
 public:
-  friend class ObOptimizerTraceImpl;
   ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
-    column_cnt_(0),
-    contain_always_false_(false)
+    column_cnt_(0)
   { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);}
   virtual ~ObQueryRangeDim() {}
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   int add_rowkey_ids(const common::ObIArray<uint64_t> &column_ids);
-  void set_contain_always_false(bool contain_always_false) { contain_always_false_ = contain_always_false; }
-  VIRTUAL_TO_STRING_KV(K_(column_cnt), K_(contain_always_false),
+  TO_STRING_KV(K_(column_cnt),
                "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
 private:
   int64_t column_cnt_;
   uint64_t column_ids_[common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER];
-  bool contain_always_false_;
 };
 
 struct KeyPrefixComp
@@ -219,8 +213,7 @@ public:
                                 const common::ObIArray<bool> &const_column_info,
                                 common::ObIAllocator &allocator);
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,
-                          common::ObIAllocator &allocator,
-                          bool contain_always_false);
+                          common::ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }
   void set_can_prunning(const bool can) { can_prunning_ = can; }
   TO_STRING_KV(K_(index_id), K_(dim_count),

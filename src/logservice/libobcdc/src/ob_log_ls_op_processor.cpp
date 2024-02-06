@@ -34,7 +34,7 @@ int ObLogLSOpProcessor::process_ls_op(
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("ls attr is invalid", KR(ret), K(ls_attr));
   } else if (OB_FAIL(TCTX.get_tenant_guard(tenant_id, guard))) {
-    LOG_WARN("get_tenant fail", KR(ret), K(tenant_id), K(guard));
+    LOG_ERROR("get_tenant fail", KR(ret), K(tenant_id), K(guard));
   } else if (OB_ISNULL(tenant = guard.get_tenant())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get tenant fail, tenant is NULL", KR(ret), K(tenant_id));

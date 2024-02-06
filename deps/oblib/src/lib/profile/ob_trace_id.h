@@ -52,7 +52,6 @@ struct ObCurTraceId
       id_.is_user_request_ = 0;
       id_.is_ipv6_ = ip_port.using_ipv6();
       id_.reserved_ = 0;
-      id_.sub_task_ = 0;
       id_.port_ = static_cast<uint16_t>(ip_port.get_port());
       if (ip_port.using_ipv6()) {
         id_.ipv6_[0] = ip_port.get_ipv6_low();
@@ -158,11 +157,6 @@ struct ObCurTraceId
       return ret;
     }
 
-    inline void set_sub_id(const int32_t sub_id)
-    {
-      id_.sub_task_ = sub_id & ((1 << 12) - 1);
-    }
-
     inline int64_t hash() const
     {
       int64_t hash_value = 0;
@@ -187,9 +181,8 @@ struct ObCurTraceId
         uint32_t ip_: 32;
         uint16_t port_: 16;
         uint8_t is_user_request_: 1;
-        uint8_t is_ipv6_: 1;
-        uint16_t reserved_: 2;
-        uint16_t sub_task_: 12;
+        uint8_t is_ipv6_:1;
+        uint16_t reserved_: 14;
         uint64_t seq_: 64;
         uint64_t ipv6_[2];
       } id_;
@@ -218,14 +211,6 @@ struct ObCurTraceId
     TraceId *trace_id = get_trace_id();
     if (NULL != trace_id) {
       trace_id->set(new_trace_id);
-    }
-  }
-
-  inline static void set_sub_id(const int32_t sub_id)
-  {
-    TraceId *trace_id = get_trace_id();
-    if (NULL != trace_id) {
-      trace_id->set_sub_id(sub_id);
     }
   }
 

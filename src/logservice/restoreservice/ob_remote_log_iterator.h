@@ -35,7 +35,6 @@
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/archiveservice/large_buffer_pool.h"
 #include "logservice/ob_log_external_storage_handler.h"       // ObLogExternalHandler
-#include "logservice/archiveservice/ob_archive_define.h"
 
 namespace oceanbase
 {

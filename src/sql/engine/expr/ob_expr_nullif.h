@@ -41,9 +41,8 @@ public:
   static int eval_nullif_enumset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   int set_extra_info(ObExprCGCtx &expr_cg_ctx, const ObObjType cmp_type,
                      const ObCollationType cmp_cs_type,
-                     ObSQLMode sql_mode, ObExpr &rt_expr) const;
+                     ObExpr &rt_expr) const;
   void set_first_param_flag(bool flag) { first_param_can_be_null_ = flag; }
-  DECLARE_SET_LOCAL_SESSION_VARS;
 protected:
   bool first_param_can_be_null_;
 private:

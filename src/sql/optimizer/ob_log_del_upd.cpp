@@ -41,7 +41,6 @@ int IndexDMLInfo::deep_copy(ObIRawExprCopier &expr_copier, const IndexDMLInfo &o
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
-  is_update_primary_key_ = other.is_update_primary_key_;
   assignments_.reset();
   if (OB_FAIL(expr_copier.copy(other.column_exprs_, column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -84,7 +83,6 @@ int IndexDMLInfo::assign_basic(const IndexDMLInfo &other)
   is_primary_index_ = other.is_primary_index_;
   is_update_unique_key_ = other.is_update_unique_key_;
   is_update_part_key_ = other.is_update_part_key_;
-  is_update_primary_key_ = other.is_update_primary_key_;
   trans_info_expr_ = other.trans_info_expr_;
   if (OB_FAIL(column_exprs_.assign(other.column_exprs_))) {
     LOG_WARN("failed to assign column exprs", K(ret));
@@ -556,7 +554,7 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator *op,
   } else {
     if (OB_SUCC(ret) && NULL == producer && op->get_type() == log_op_def::LOG_EXCHANGE
         && static_cast<ObLogExchange*>(op)->is_producer()) {
-      // find the first exchange below dml, use this exchange generate partition id for pdml insert
+      // find the first exchange below dml, use this exchange generate partiton id for pdml insert
       producer = static_cast<ObLogExchange*>(op);
     }
     for (int64_t i = 0; OB_SUCC(ret) && NULL == src_tsc && i < op->get_num_of_child(); i++) {
@@ -566,7 +564,7 @@ int ObLogDelUpd::find_pdml_part_id_producer(ObLogicalOperator *op,
     }
     if (OB_SUCC(ret) && NULL != src_tsc && op->get_type() == log_op_def::LOG_EXCHANGE
         && static_cast<ObLogExchange*>(op)->is_producer()) {
-      // generate partition id by exchange above dml target table scan
+      // generate partiton id by exchange above dml target table scan
       producer = static_cast<ObLogExchange*>(op);
     }
   }
@@ -818,7 +816,7 @@ int ObLogDelUpd::est_cost()
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card_ = child->get_card();
-    op_cost_ = ObOptEstCost::cost_get_rows(child->get_card(), opt_ctx);
+    op_cost_ = ObOptEstCost::cost_get_rows(child->get_card(), opt_ctx.get_cost_model_type());
     cost_ = op_cost_ + child->get_cost();
   }
   return ret;
@@ -1360,7 +1358,7 @@ int ObLogDelUpd::generate_fk_lookup_part_id_expr(IndexDMLInfo &index_dml_info)
         } else if (OB_FAIL(parent_table_schema->get_fk_check_index_tid(*schema_guard, fk_info.parent_column_ids_, scan_index_tid))) {
           LOG_WARN("failed to get index tid used to build scan das task for foreign key checks", K(ret));
         } else if (OB_INVALID_ID == scan_index_tid) {
-          ret = OB_ERR_CANNOT_ADD_FOREIGN;
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid table id to build das scan task for foreign key checks", K(ret));
         } else {
           ObRawExpr* fk_look_up_part_id_expr = nullptr;

@@ -190,7 +190,7 @@ void DmlRedoLogNode::reset()
   ATOMIC_SET(&is_readed_, false);
   row_head_ = NULL;
   row_tail_ = NULL;
-  ATOMIC_SET(&valid_row_num_, 0);
+  valid_row_num_ = 0;
   ATOMIC_SET(&is_parsed_, false);
   ATOMIC_SET(&is_formatted_, false);
   reserve_field_ = 0;

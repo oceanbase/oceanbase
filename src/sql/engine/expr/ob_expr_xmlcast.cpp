@@ -196,8 +196,6 @@ int ObExprXmlcast::cast_to_res(ObIAllocator &allocator, ObString &xml_content, c
   } else {
     src_obj.set_string(ObVarcharType, xml_content);
     src_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN);
-    ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-    ObDataTypeCastParams dtc_params;
     // to type
     if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
@@ -205,12 +203,11 @@ int ObExprXmlcast::cast_to_res(ObIAllocator &allocator, ObString &xml_content, c
     } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
                                                   session, def_cm))) {
       LOG_WARN("get_default_cast_mode failed", K(ret));
-    } else if (OB_FAIL(helper.get_dtc_params(dtc_params))) {
-      LOG_WARN("get dtc params failed", K(ret));
     } else {
       ObObjType obj_type = expr.datum_meta_.type_;
       ObCollationType cs_type = expr.datum_meta_.cs_type_;
       ObPhysicalPlanCtx *phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
       ObCastCtx cast_ctx(&allocator, &dtc_params, get_cur_time(phy_plan_ctx), def_cm,
                          cs_type, NULL, NULL);
       if (OB_FAIL(ObObjCaster::to_type(obj_type, cs_type, cast_ctx, src_obj, dst_obj))) {
@@ -330,17 +327,6 @@ void ObExprXmlcast::get_accuracy_from_expr(const ObExpr &expr, ObAccuracy &accur
   } else {
     accuracy.set_precision(expr.datum_meta_.precision_);
   }
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprXmlcast, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(5);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
-  return ret;
 }
 #endif
 } // sql

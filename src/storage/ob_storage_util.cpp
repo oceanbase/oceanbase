@@ -12,9 +12,7 @@
 
 #include "ob_storage_util.h"
 #include "lib/worker.h"
-#include "share/datum/ob_datum.h"
 #include "share/object/ob_obj_cast.h"
-#include "share/vector/ob_discrete_format.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/blocksstable/ob_datum_row.h"
 
@@ -51,20 +49,19 @@ OB_INLINE static void append_padding_pattern(const ObString &space_pattern,
 OB_INLINE static int pad_datum_on_local_buf(const ObString &space_pattern,
                                             int32_t pad_whitespace_length,
                                             common::ObIAllocator &padding_alloc,
-                                            const char *&data_ptr,
-                                            uint32_t &data_len)
+                                            common::ObDatum &datum)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
-  const int32_t buf_len = data_len + pad_whitespace_length * space_pattern.length();
+  const int32_t buf_len = datum.pack_ + pad_whitespace_length * space_pattern.length();
   if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
-    MEMCPY(buf, data_ptr, data_len);
-    append_padding_pattern(space_pattern, data_len, buf_len, buf);
-    data_ptr = buf;
-    data_len = buf_len;
+    MEMCPY(buf, datum.ptr_, datum.pack_);
+    append_padding_pattern(space_pattern, datum.pack_, buf_len, buf);
+    datum.ptr_ = buf;
+    datum.pack_ = buf_len;
   }
   return ret;
 }
@@ -134,7 +131,7 @@ int pad_column(const ObObjMeta &obj_meta, const ObAccuracy accuracy, common::ObI
       cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
     }
     if (cur_len < length &&
-        OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+        OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
       STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
     }
   }
@@ -226,7 +223,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           } else {
             int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
             if (cur_len < length &&
-                OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+                OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
               STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
             }
           }
@@ -246,96 +243,8 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
         }
         if (cur_len < length &&
-            OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+            OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum))) {
           STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
-                               const common::ObCollationType cs_type,
-                               const int64_t row_count,
-                               const int64_t vec_offset,
-                               common::ObIAllocator &padding_alloc,
-                               sql::ObExpr &expr,
-                               sql::ObEvalCtx &eval_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(VectorFormat::VEC_DISCRETE != expr.get_format(eval_ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected vector format for padding column", K(expr.get_format(eval_ctx)));
-  } else {
-    ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr.get_vector(eval_ctx));
-    ObLength *lens = discrete_format->get_lens();
-    char **ptrs = discrete_format->get_ptrs();
-    sql::ObBitVector *nulls = discrete_format->get_nulls();
-    ObLength length = accuracy.get_length(); // byte or char length
-    const ObString space_pattern = get_padding_str(cs_type);
-    bool is_oracle_byte = is_oracle_byte_length(lib::is_oracle_mode(), accuracy.get_length_semantics());
-    char *buf = nullptr;
-    if (1 == length) {
-      int32_t buf_len = space_pattern.length();
-      if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "no memory", K(ret));
-      } else {
-        append_padding_pattern(space_pattern, 0, buf_len, buf);
-        for (int64_t i = vec_offset; i < vec_offset + row_count; i++) {
-          if (nulls->at(i)) {
-            // do nothing
-          } else if (0 == lens[i]){
-            ptrs[i] = buf;
-            lens[i] = buf_len;
-          }
-        }
-      }
-    } else if (can_do_ascii_optimize(cs_type)) {
-      int32_t buf_len = length * space_pattern.length() * row_count;
-      if (OB_ISNULL(buf = (char*) padding_alloc.alloc(buf_len))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "no memory", K(ret));
-      } else {
-        char *ptr = buf;
-        MEMSET(buf, OB_PADDING_CHAR, buf_len);
-        for (int64_t i = vec_offset; OB_SUCC(ret) && i < vec_offset + row_count; i++) {
-          if (nulls->at(i)) {
-            // do nothing
-          } else {
-            if (is_oracle_byte || is_ascii_str(ptrs[i], lens[i])) {
-              if (lens[i] < length) {
-                MEMCPY(ptr, ptrs[i], lens[i]);
-                ptrs[i] = ptr;
-                lens[i] = length;
-                ptr = ptr + length;
-              }
-            } else {
-              int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
-              if (cur_len < length &&
-                  OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
-                STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
-              }
-            }
-          }
-        }
-      }
-    } else {
-      for (int64_t i = vec_offset; OB_SUCC(ret) && i < vec_offset + row_count; i++) {
-        if (nulls->at(i)) {
-          // do nothing
-        } else {
-          int32_t cur_len = 0; // byte or char length
-          if (is_oracle_byte) {
-            cur_len = lens[i];
-          } else {
-            cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
-          }
-          if (cur_len < length &&
-              OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
-            STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
-          }
         }
       }
     }
@@ -412,100 +321,6 @@ int cast_obj(const common::ObObjMeta &src_meta,
             K(ret), K(ori_obj), K(obj), K(ori_obj.get_type()),
             K(ob_obj_type_str(ori_obj.get_type())),
             K(src_meta.get_type()), K(ob_obj_type_str(src_meta.get_type())));
-      }
-    }
-  }
-  return ret;
-}
-
-int init_expr_vector_header(
-    sql::ObExpr &expr,
-    sql::ObEvalCtx &eval_ctx,
-    const int64_t size,
-    const VectorFormat format)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.init_vector(eval_ctx, format, size, true))) {
-    STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(expr));
-  }
-  return ret;
-}
-
-int init_exprs_new_format_header(
-    const common::ObIArray<int32_t> &cols_projector,
-    const sql::ObExprPtrIArray &exprs,
-    sql::ObEvalCtx &eval_ctx)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < cols_projector.count(); ++i) {
-    sql::ObExpr *expr = exprs.at(i);
-    if (OB_FAIL(expr->init_vector_default(eval_ctx, eval_ctx.max_batch_size_))) {
-      STORAGE_LOG(WARN, "Failed to init vector", K(ret), K(i), KPC(exprs.at(i)));
-    }
-  }
-  return ret;
-}
-
-int fill_datums_lob_locator(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
-    const share::schema::ObColumnParam &col_param,
-    const int64_t row_cap,
-    ObDatum *datums,
-    bool reuse_lob_locator)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!col_param.get_meta_type().is_lob_storage() ||
-                  nullptr == context.lob_locator_helper_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected param", K(ret), K(col_param.get_meta_type()), K(context.lob_locator_helper_));
-  } else {
-    if (reuse_lob_locator) {
-      context.lob_locator_helper_->reuse();
-    }
-    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_cap; ++row_idx) {
-      ObDatum &datum = datums[row_idx];
-      if (!datum.is_null() && !datum.get_lob_data().in_row_) {
-        if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
-          STORAGE_LOG(WARN, "Failed to fill lob loactor", K(ret), K(row_idx), K(datum), K(context), K(iter_param));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int fill_exprs_lob_locator(
-    const ObTableIterParam &iter_param,
-    const ObTableAccessContext &context,
-    const share::schema::ObColumnParam &col_param,
-    sql::ObExpr &expr,
-    sql::ObEvalCtx &eval_ctx,
-    const int64_t vector_offset,
-    const int64_t row_cap)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!col_param.get_meta_type().is_lob_storage() ||
-                  nullptr == context.lob_locator_helper_ ||
-                  VectorFormat::VEC_DISCRETE != expr.get_format(eval_ctx))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "Unexpected param", K(ret), K(col_param.get_meta_type()),
-                K(context.lob_locator_helper_), K(expr.get_format(eval_ctx)));
-  } else {
-    ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr.get_vector(eval_ctx));
-    ObDatum datum;
-    ObLength length;
-    for (int64_t row_idx = vector_offset; OB_SUCC(ret) && (row_idx < row_cap + vector_offset); ++row_idx) {
-      if (!discrete_format->is_null(row_idx)) {
-        discrete_format->get_payload(row_idx, datum.ptr_, length);
-        datum.len_ = static_cast<uint32_t>(length);
-        if (!datum.get_lob_data().in_row_) {
-          if (OB_FAIL(context.lob_locator_helper_->fill_lob_locator_v2(datum, col_param, iter_param, context))) {
-            STORAGE_LOG(WARN, "Failed to fill lob loactor", K(ret), K(row_idx), K(datum), K(context), K(iter_param));
-          } else {
-            discrete_format->set_datum(row_idx, datum);
-          }
-        }
       }
     }
   }

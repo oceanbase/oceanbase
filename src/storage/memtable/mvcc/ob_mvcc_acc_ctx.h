@@ -43,8 +43,8 @@ class ObMvccAccessCtx
 public:
   ObMvccAccessCtx()
     : type_(T::INVL),
-      abs_lock_timeout_ts_(-1),
-      tx_lock_timeout_us_(-1),
+      abs_lock_timeout_(-1),
+      tx_lock_timeout_(-1),
       snapshot_(),
       tx_table_guards_(),
       tx_id_(),
@@ -59,8 +59,8 @@ public:
   {}
   ~ObMvccAccessCtx() {
     type_ = T::INVL;
-    abs_lock_timeout_ts_ = -1;
-    tx_lock_timeout_us_ = -1;
+    abs_lock_timeout_ = -1;
+    tx_lock_timeout_ = -1;
     tx_id_.reset();
     tx_desc_ = NULL;
     tx_ctx_ = NULL;
@@ -75,8 +75,8 @@ public:
       warn_tx_ctx_leaky_();
     }
     type_ = T::INVL;
-    abs_lock_timeout_ts_ = -1;
-    tx_lock_timeout_us_ = -1;
+    abs_lock_timeout_ = -1;
+    tx_lock_timeout_ = -1;
     snapshot_.reset();
     tx_table_guards_.reset();
     tx_id_.reset();
@@ -98,7 +98,7 @@ public:
     }
   }
   bool is_write_valid__() const {
-    return abs_lock_timeout_ts_ >= 0
+    return abs_lock_timeout_ >= 0
       && snapshot_.is_valid()
       && tx_ctx_
       && mem_ctx_
@@ -112,7 +112,7 @@ public:
       && tx_id_.is_valid();
   }
   bool is_read_valid__() const {
-    return abs_lock_timeout_ts_ >= 0
+    return abs_lock_timeout_ >= 0
       && snapshot_.is_valid()
       && tx_table_guards_.is_valid()
       && (!tx_ctx_ || mem_ctx_);
@@ -131,8 +131,8 @@ public:
     mem_ctx_ = mem_ctx;
     tx_table_guards_.tx_table_guard_ = tx_table_guard;
     snapshot_ = snapshot;
-    abs_lock_timeout_ts_ = abs_lock_timeout;
-    tx_lock_timeout_us_ = tx_lock_timeout;
+    abs_lock_timeout_ = abs_lock_timeout;
+    tx_lock_timeout_ = tx_lock_timeout;
   }
   // light read, used by storage background merge/compaction routine
   void init_read(const storage::ObTxTableGuard &tx_table_guard,
@@ -164,14 +164,18 @@ public:
     tx_desc_ = &tx_desc;
     tx_table_guards_.tx_table_guard_ = tx_table_guard;
     snapshot_ = snapshot;
-    abs_lock_timeout_ts_ = abs_lock_timeout;
-    tx_lock_timeout_us_ = tx_lock_timeout;
+    abs_lock_timeout_ = abs_lock_timeout;
+    tx_lock_timeout_ = tx_lock_timeout;
     write_flag_ = write_flag;
   }
 
   void set_src_tx_table_guard(const storage::ObTxTableGuard &tx_table_guard)
   {
     tx_table_guards_.src_tx_table_guard_ = tx_table_guard;
+  }
+  void set_transfer_scn(const share::SCN transfer_scn)
+  {
+    tx_table_guards_.transfer_start_scn_ = transfer_scn;
   }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
@@ -208,23 +212,26 @@ public:
   bool is_replay() const { return type_ == T::REPLAY; }
   int64_t eval_lock_expire_ts(int64_t lock_wait_start_ts = 0) const {
     int64_t expire_ts = OB_INVALID_TIMESTAMP;
-    if (tx_lock_timeout_us_ >= 0) {
-      // Case 1: When tx_lock_timeout_us is not less than 0, we need to calculate the timeout timestamp for waiting for
-      // the lock (by adding tx_lock_timeout_us to the timestamp of when we start waiting for the lock, i.e.
-      // lock_wait_start_ts), and take the minimum value between this timeout timestamp and abs_lock_timeout_ts (which
-      // is calcualted from select-for-update timeout and ob_query_timeout) as the value for absolute timeout timestamp.
-      lock_wait_start_ts = lock_wait_start_ts > 0 ? lock_wait_start_ts : ObTimeUtility::current_time();
-      expire_ts = MIN(lock_wait_start_ts + tx_lock_timeout_us_, abs_lock_timeout_ts_);
+    if (tx_lock_timeout_ >= 0) {
+      // Case 1: When tx_lock_timeout is bigger than 0, we use the minimum of
+      //         the tx_lock_timeout plus remaining time(defined from system
+      //         variable) and abs_lock_timeout(calcualted from select-for-update
+      //         timeout).
+      // Case 2: When tx_lock_timeout is euqal to 0, we use the remaining time
+      //         as timeout(And it must trigger timeout when write-write conflict)
+      lock_wait_start_ts = lock_wait_start_ts > 0 ?
+        lock_wait_start_ts : ObTimeUtility::current_time();
+      expire_ts = MIN(lock_wait_start_ts + tx_lock_timeout_, abs_lock_timeout_);
     } else {
-      // Case 2: When tx_lock_timeout_us is less than 0, we use abs_lock_timeout_ts (which is calcualted from
-      // select-for-update timeout and ob_query_timeout) as absolute timeout timestamp .
-      expire_ts = abs_lock_timeout_ts_;
+      // Case 2: When tx_lock_timeout is smaller than 0, we use abs_lock_timeout
+      //         as timeout(calcualted from select-for-update timeout).
+      expire_ts = abs_lock_timeout_;
     }
     return expire_ts;
   }
   TO_STRING_KV(K_(type),
-               K_(abs_lock_timeout_ts),
-               K_(tx_lock_timeout_us),
+               K_(abs_lock_timeout),
+               K_(tx_lock_timeout),
                K_(snapshot),
                K_(tx_table_guards),
                K_(tx_id),
@@ -239,11 +246,10 @@ private:
   void warn_tx_ctx_leaky_();
 public: // NOTE: those field should only be accessed by txn relative routine
   enum class T { INVL, STRONG_READ, WEAK_READ, WRITE, REPLAY } type_;
-  // abs_lock_timeout_ts is the minimum value between the timeout timestamp of
-  // the 'select for update' SQL statement and the timeout timestamp of the
-  // dml_param / scan_param (which is calculated from ob_query_timeout).
-  int64_t abs_lock_timeout_ts_;
-  // tx_lock_timeout_us is defined as a system variable `ob_trx_lock_timeout`,
+  // abs_lock_timeout is calculated from the minimum of the wait time of the
+  // select_for_update and timeout in dml_param / scan_param
+  int64_t abs_lock_timeout_;
+  // tx_lock_timeout is defined as a system variable `ob_trx_lock_timeout`,
   // as the timeout of waiting on the WW conflict. it timeout reached
   // return OB_ERR_EXCLUSIVE_LOCK_CONFLICT error to SQL
   // SQL will stop retry, otherwise return OB_TRY_LOCK_ROW_CONFLICT, SQL will
@@ -253,7 +259,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   // - When ob_trx_lock_timeout is bigger than 0, the timeout is equal to the
   //   minimum between ob_query_timeout and ob_trx_lock_timeout
   // - When ob_trx_lock_timeout is equal to 0, it means never wait
-  int64_t tx_lock_timeout_us_;
+  int64_t tx_lock_timeout_;
   transaction::ObTxSnapshot snapshot_;
   storage::ObTxTableGuards tx_table_guards_;  // for transfer query
   // specials for MvccWrite
@@ -264,7 +270,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   transaction::ObTxSEQ tx_scn_;                             // the change's number of this modify
   concurrent_control::ObWriteFlag write_flag_; // the write flag of the write process
 
-  // this was used for runtime metric
+  // this was used for runtime mertic
   int64_t handle_start_time_;
 
   bool is_standby_read_;

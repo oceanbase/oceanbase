@@ -1168,7 +1168,7 @@ int Iterator<BtreeKey, BtreeVal>::iter_next_batch_level_node(int64_t &element_co
             is_iter_end_ = true;
           }
         } else if (cmp == 0) {
-          // the last leaf, all the values in this leaf are satisfied
+          // the last leaf, all the values in this leaf are satified
           is_iter_end_ = true;
         }
       }
@@ -1233,7 +1233,7 @@ int BtreeIterator<BtreeKey, BtreeVal>::KVQueue::pop(BtreeKV &data)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeIterator<BtreeKey, BtreeVal>::init(const ObKeyBtree &btree)
+int BtreeIterator<BtreeKey, BtreeVal>::init(ObKeyBtree &btree)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
@@ -1434,7 +1434,7 @@ int BtreeNodeAllocator<BtreeKey, BtreeVal>::pop(BtreeNode*& p)
 }
 
 template<typename BtreeKey, typename BtreeVal>
-int BtreeRawIterator<BtreeKey, BtreeVal>::init(const ObKeyBtree &btree)
+int BtreeRawIterator<BtreeKey, BtreeVal>::init(ObKeyBtree &btree)
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
@@ -1535,21 +1535,15 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
       for (int64_t iter_node_count = 0; OB_SUCC(ret) && iter_node_count < btree_node_cnt_in_this_range;
            iter_node_count++) {
         if (OB_FAIL(iter_->next_on_level(level, key, val))) {
-          if (OB_ITER_END == ret) {
-            // It is not atomic between find_split_range_level and split_range,
-            // so split_range need retry if iterate end on the specific level
-            ret = OB_EAGAIN;
-          } else {
-            OB_LOG(WARN,
-                   "iterate btree node on level failed",
-                   KR(ret),
-                   K(level),
-                   K(iter_node_count),
-                   K(btree_node_cnt_in_this_range),
-                   K(remaining_btree_node_count),
-                   K(range_count),
-                   K(range_idx));
-          }
+          OB_LOG(WARN,
+                 "iterate btree node on level failed",
+                 KR(ret),
+                 K(level),
+                 K(iter_node_count),
+                 K(btree_node_cnt_in_this_range),
+                 K(remaining_btree_node_count),
+                 K(range_count),
+                 K(range_idx));
         }
       }
 
@@ -1567,10 +1561,8 @@ int BtreeRawIterator<BtreeKey, BtreeVal>::split_range(int64_t top_level,
       }
     }
 
-    if (OB_EAGAIN == ret) {
-      // do nothing
-    } else if (OB_FAIL(ret) || range_idx < range_count) {
-      ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+    if (range_idx < range_count) {
+      ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN,
              "btree split range: can not get enough sub range",
              K(btree_node_count),
@@ -1671,7 +1663,6 @@ int ObKeyBtree<BtreeKey, BtreeVal>::destroy(const bool is_batch_destroy)
     WaitQuiescent(get_qsync());
     tg.click();
   }
-  split_info_ = 0;
   return OB_SUCCESS;
 }
 
@@ -1786,7 +1777,7 @@ int ObKeyBtree<BtreeKey, BtreeVal>::get(const BtreeKey key, BtreeVal &value)
 
 template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version) const
+                              const BtreeKey max_key, const bool end_exclude, int64_t version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {
@@ -1799,7 +1790,7 @@ int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeIterator &iter, const Btr
 
 template<typename BtreeKey, typename BtreeVal>
 int ObKeyBtree<BtreeKey, BtreeVal>::set_key_range(BtreeRawIterator &iter, const BtreeKey min_key, const bool start_exclude,
-                              const BtreeKey max_key, const bool end_exclude, int64_t version) const
+                              const BtreeKey max_key, const bool end_exclude, int64_t version)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(iter.init(*this))) {

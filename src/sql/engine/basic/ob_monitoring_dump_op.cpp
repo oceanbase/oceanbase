@@ -53,7 +53,7 @@ int ObMonitoringDumpOp::inner_open()
     LOG_WARN("unexpected status: child is null", K(ret));
   } else {
     ObObj val;
-    const char* name = get_phy_op_name(spec_.get_left()->type_, spec_.use_rich_format_);
+    const char* name = get_phy_op_name(spec_.get_left()->type_);
     op_name_.set_string(name, strlen(name));
     if (OB_FAIL(ctx_.get_my_session()->get_sys_variable(SYS_VAR_TRACEFILE_IDENTIFIER, val))) {
       LOG_WARN("Get sys variable error", K(ret));
@@ -76,7 +76,7 @@ int ObMonitoringDumpOp::inner_open()
 int ObMonitoringDumpOp::inner_close()
 {
   int ret = OB_SUCCESS;
-  if (MY_SPEC.flags_ & ObAllocOpHint::OB_MONITOR_STAT) {
+  if (MY_SPEC.flags_ & ObMonitorHint::OB_MONITOR_STAT) {
     uint64_t CLOSE_TIME = ObTimeUtility::current_time();
     if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
       LOG_INFO("", K(tracefile_identifier_), K(op_name_), K(rows_), K(open_time_),
@@ -133,7 +133,7 @@ int ObMonitoringDumpOp::inner_get_next_row()
     if (OB_FAIL(calc_hash_value())) {
       LOG_WARN("calc hash value failed", K(ret));
     } else  {
-      if (MY_SPEC.flags_ & ObAllocOpHint::OB_MONITOR_TRACING) {
+      if (MY_SPEC.flags_ & ObMonitorHint::OB_MONITOR_TRACING) {
         if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
           LOG_INFO("", K(tracefile_identifier_.get_string()), K(op_name_.get_string()),
             K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)), K(MY_SPEC.dst_op_id_));
@@ -196,7 +196,7 @@ int ObMonitoringDumpOp::inner_get_next_batch(const int64_t max_row_cnt)
         if (OB_FAIL(calc_hash_value())) {
           LOG_WARN("calc hash value failed", K(ret));
         } else {
-          if (MY_SPEC.flags_ & ObAllocOpHint::OB_MONITOR_TRACING) {
+          if (MY_SPEC.flags_ & ObMonitorHint::OB_MONITOR_TRACING) {
             if (!tracefile_identifier_.null_ && tracefile_identifier_.len_ > 0) {
               LOG_INFO("", K(tracefile_identifier_.get_string()), K(op_name_.get_string()),
                 K(ObToStringExprRow(eval_ctx_, MY_SPEC.output_)), K(MY_SPEC.dst_op_id_));

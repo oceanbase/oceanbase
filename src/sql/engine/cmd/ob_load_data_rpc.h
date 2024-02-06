@@ -236,7 +236,6 @@ public:
     }
     return ret;
   }
-  TO_STRING_KV(KP(ptr_value_));
 
 private:
   union {

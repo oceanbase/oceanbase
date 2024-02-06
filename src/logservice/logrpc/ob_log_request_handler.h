@@ -58,9 +58,7 @@ private:
   int get_rpc_proxy_(obrpc::ObLogServiceRpcProxy *&rpc_proxy) const;
   int get_flashback_service_(ObLogFlashbackService *&flashback_srv) const;
   int get_replay_service_(ObLogReplayService *&replay_srv) const;
-  int get_log_handler_(const int64_t palf_id,
-                       storage::ObLSHandle &ls_handle,
-                       logservice::ObLogHandler *&log_handler) const;
+  int get_log_handler_(const int64_t palf_id, logservice::ObLogHandler *&log_handler) const;
   int change_access_mode_(const LogChangeAccessModeCmd &req);
 };
 

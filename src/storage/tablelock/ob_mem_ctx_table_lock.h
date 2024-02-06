@@ -32,13 +32,19 @@ class ObMemCtxLockOpLinkNode : public common::ObDLinkBase<ObMemCtxLockOpLinkNode
 {
 public:
   ObMemCtxLockOpLinkNode()
-    : lock_op_()
+    : lock_op_(),
+      logged_(false)
   {}
+  void set_logged() { logged_ = true; }
+  bool is_logged() const { return logged_; }
   int init(const ObTableLockOp &op_info);
   bool is_valid() const { return lock_op_.is_valid(); }
-  TO_STRING_KV(K_(lock_op));
+  TO_STRING_KV(K_(lock_op), K_(logged));
 public:
   ObTableLockOp lock_op_;
+  struct {
+    bool logged_;
+  };
 };
 
 typedef common::ObDList<ObMemCtxLockOpLinkNode> ObLockNodeList;
@@ -56,16 +62,18 @@ public:
       lock_list_(),
       is_killed_(false),
       max_durable_scn_(),
-      memtable_handle_(),
-      add_lock_latch_() {}
+      memtable_handle_() {}
   ObLockMemCtx() = delete;
   ~ObLockMemCtx() { reset(); }
   int init(storage::ObTableHandleV2 &handle);
   int get_lock_memtable(ObLockMemtable *&memtable);
   void reset();
+  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const share::SCN &scn);
+
   int add_lock_record(
       const ObTableLockOp &lock_op,
-      ObMemCtxLockOpLinkNode *&lock_op_node);
+      ObMemCtxLockOpLinkNode *&lock_op_node,
+      const bool logged = false);
   void remove_lock_record(
       const ObTableLockOp &lock_op);
   void remove_lock_record(
@@ -94,47 +102,22 @@ public:
       const bool is_committed,
       const share::SCN &commit_version,
       const share::SCN &commit_scn);
-  int rollback_table_lock(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no);
+  int rollback_table_lock(const ObTxSEQ seq_no);
   void *alloc_lock_op_callback();
   void free_lock_op_callback(void *cb);
-  int sync_log_succ(const share::SCN &scn);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
-  int get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list);
   // used by deadlock detector to kill the trans.
   void set_killed()
   { is_killed_ = true; }
   // used to check whether the tx is killed by deadlock detector.
   bool is_killed() const
   { return is_killed_; }
-
-public:
- class AddLockGuard
- {
-   // use to serialize multi thread try to add one lock for same transaction
- public:
-   AddLockGuard(ObLockMemCtx &ctx): ctx_(NULL)
-   {
-     if (OB_SUCCESS == (ret_ = ctx.add_lock_latch_.lock())) {
-       ctx_ = &ctx;
-     }
-   }
-   ~AddLockGuard()
-   {
-     if (ctx_) {
-       ctx_->add_lock_latch_.unlock();
-     }
-   }
-   int ret() const { return ret_; }
- private:
-   int ret_;
-   ObLockMemCtx *ctx_;
- };
 private:
   void *alloc_lock_op();
   void free_lock_op(void *op);
   void free_lock_op_(void *op);
   void print() const;
-  int rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no);
+  void rollback_table_lock_(const ObTxSEQ seq_no);
   int commit_table_lock_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void abort_table_lock_();
 private:
@@ -151,9 +134,6 @@ private:
   share::SCN max_durable_scn_;
   // the lock memtable pointer point to LS lock table's memtable.
   storage::ObTableHandleV2 memtable_handle_;
-protected:
-  // serialze multiple thread try add lock for same transaction
-  ObSpinLock add_lock_latch_;
 };
 
 }

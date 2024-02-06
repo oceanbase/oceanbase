@@ -6,7 +6,7 @@ delete from t1 where c1 > 5
 select * from t1,t2 where t1.c1+1= t2.c1
 select t1.c1, t2.c2, t2.c3 from t1,t2 where t1.c1 > t2.c1 + t2.c2
 update t1 vt1 set c2=c1+1 where c1 > 1 order by c1 desc limit 0, 10
-UPDATE oceanbase.__all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND svr_ip = '127.0.0.1' AND svr_port = 51951;
+UPDATE oceanbase.__all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND svr_ip = '10.232.36.175' AND svr_port = 51951;
 select distinct c2, c1+c2 from t1;
 select * from t1 union select * from t2;
 select * from t1 union all select * from t2;

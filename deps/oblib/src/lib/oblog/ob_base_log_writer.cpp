@@ -168,22 +168,6 @@ void ObBaseLogWriter::destroy()
     }
     log_write_cond_->signal(UINT32_MAX);
     log_flush_cond_->signal(UINT32_MAX);
-
-    if (max_buffer_item_cnt_){
-      int64_t pop_idx = ATOMIC_LOAD(&log_item_pop_idx_) % max_buffer_item_cnt_;
-      int64_t i = pop_idx;
-      // process to the end of array at most
-      while (i < max_buffer_item_cnt_ && OB_NOT_NULL(ATOMIC_LOAD(log_items_ + i))) {
-        ++i;
-      }
-      int64_t process_item_cnt = i - pop_idx;
-      // guarantee all item in process was not null.
-      if (process_item_cnt > 0) {
-        drop_log_items(log_items_ + pop_idx, process_item_cnt);
-        memset((void *)(log_items_ + pop_idx), 0, sizeof(ObIBaseLogItem *) * process_item_cnt);
-      }
-    }
-
   }
   is_inited_ = false;
 
@@ -197,17 +181,8 @@ void ObBaseLogWriter::destroy()
   if (OB_NOT_NULL(log_flush_cond_)) {
     OB_DELETE(SimpleCond, "BaseLogWriter", log_flush_cond_);
   }
-
   max_buffer_item_cnt_ = 0;
   has_stopped_ = true;
-}
-
-void ObBaseLogWriter::drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt)
-{
-  ObPLogItem **log_item = reinterpret_cast<ObPLogItem **>(items);
-  for (int64_t i = 0; i < item_cnt; ++i) {
-    items[i] = NULL;
-  }
 }
 
 int ObBaseLogWriter::append_log(ObIBaseLogItem &log_item, const uint64_t timeout_us)
@@ -216,9 +191,6 @@ int ObBaseLogWriter::append_log(ObIBaseLogItem &log_item, const uint64_t timeout
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_STDERR("The ObBaseLogWriter has not been inited.\n");
-  } else if (has_stopped_) {
-    ret = OB_NOT_RUNNING;
-    LOG_STDERR("The ObBaseLogWriter is not running.\n");
   } else {
     int64_t abs_time = ObTimeUtility::current_time() + timeout_us;
     while (OB_SUCC(ret)) {

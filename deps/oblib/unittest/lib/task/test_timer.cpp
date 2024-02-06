@@ -144,8 +144,7 @@ TEST(TestTimer, task_cancel_wait)
     task.exec_time_ = 1000000;
     int64_t cur_time = ObTimeUtility::current_time();
     ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 0, true));
-    // it must sleep for enough time to ensure that the task has started running
-    usleep(50000);
+    usleep(10000);
     ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));
     // repeat cancel
     ASSERT_EQ(OB_SUCCESS, timer.cancel_task(task));

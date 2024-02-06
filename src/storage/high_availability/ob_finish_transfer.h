@@ -112,11 +112,18 @@ private:
   // @param[in]: server addr
   // @param[in]: dest_ls_scn
   // @param[in]: current scn
-  // @param[in]: timeout_ctx
-  // @param[in/out]: finished_addr_list
+  // @param[bool]: check passed
   int check_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
-      ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list);
+      const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &member_addr_list, const share::SCN &finish_scn,
+      const int64_t quorum, bool &check_passed);
+
+  // param[in]: tenant_id,
+  // param[in]: ls_id
+  // param[in]: server addr
+  // param[in]: finish_scn
+  // param[out]: is the check passed
+  int inner_check_ls_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
+      const share::ObLSID &ls_id, const common::ObAddr &addr, const share::SCN &finish_scn, bool &passed_scn);
 
 private:
   /* helper functions */
@@ -201,6 +208,9 @@ private:
   int report_result_(const share::ObTransferTaskID &task_id, const int64_t result, obrpc::ObSrvRpcProxy *rs_rpc_proxy);
 
 private:
+  /*rpc section*/
+  int fetch_ls_replay_scn_(const share::ObTransferTaskID &task_id, const int64_t cluster_id,
+      const common::ObAddr &server_addr, const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &finish_scn);
 
   // check self is leader
   // @param[in]: ls_id
@@ -261,16 +271,14 @@ private:
   int record_server_event_(
       const int32_t result,
       const bool is_ready,
-      const int64_t round,
-      const share::SCN &start_scn) const;
+      const int64_t round) const;
   int write_server_event_(
       const int32_t result,
       const ObSqlString &extra_info,
       const share::ObTransferStatus &status) const;
 
 private:
-  static const int64_t DEFAULT_WAIT_INTERVAL_US = 10_ms;
-  static const int64_t TASK_EXECUTE_LONG_WARNING_THRESHOLD = 60_min;
+  static const int64_t DEFAULT_WAIT_INTERVAL_US = 10 * 1000;        // 10ms
 
 private:
   bool is_inited_;

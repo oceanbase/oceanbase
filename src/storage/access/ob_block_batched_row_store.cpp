@@ -39,7 +39,6 @@ ObBlockBatchedRowStore::ObBlockBatchedRowStore(
       row_capacity_(batch_size),
       cell_data_ptrs_(nullptr),
       row_ids_(nullptr),
-      len_array_(nullptr),
       eval_ctx_(eval_ctx)
 {}
 
@@ -52,7 +51,6 @@ int ObBlockBatchedRowStore::init(const ObTableAccessParam &param)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  void *len_array_buf = nullptr;
   if (OB_FAIL(ObBlockRowStore::init(param))) {
     LOG_WARN("fail to init block row store", K(ret));
   } else if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(char *) * batch_size_))) {
@@ -62,12 +60,8 @@ int ObBlockBatchedRowStore::init(const ObTableAccessParam &param)
   } else if (OB_ISNULL(buf = context_.stmt_allocator_->alloc(sizeof(int64_t) * batch_size_))) {
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc row_ids", K(ret), K(batch_size_));
-  } else if (OB_ISNULL(len_array_buf = context_.stmt_allocator_->alloc(sizeof(uint32_t) * batch_size_))) {
-    ret = common::OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc len_array_buf", K(ret), K_(batch_size));
   } else {
     row_ids_ = reinterpret_cast<int64_t *>(buf);
-    len_array_ = reinterpret_cast<uint32_t *>(len_array_buf);
   }
   return ret;
 }
@@ -82,16 +76,12 @@ void ObBlockBatchedRowStore::reset()
     if (nullptr != row_ids_) {
       context_.stmt_allocator_->free(row_ids_);
     }
-    if (nullptr != len_array_) {
-      context_.stmt_allocator_->free(len_array_);
-    }
   }
   iter_end_flag_ = IterEndState::PROCESSING;
   batch_size_ = 0;
   row_capacity_ = 0;
   cell_data_ptrs_ = nullptr;
   row_ids_ = nullptr;
-  len_array_ = nullptr;
 }
 
 int ObBlockBatchedRowStore::reuse_capacity(const int64_t capacity)

@@ -40,10 +40,9 @@
 #include "sql/parser/ob_parser.h"
 #include "share/system_variable/ob_sys_var_class_type.h"
 
-#include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/ob_select_stmt_printer.h"
 #include "observer/ob_server_struct.h"
 #include "observer/ob_server.h"
-#include "observer/ob_server_event_history_table_operator.h"
 #include "lib/worker.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_file_task.h"
@@ -56,7 +55,6 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_utils.h"
-#include "storage/mview/cmd/ob_mview_executor_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -485,19 +483,6 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
       } else {
         LOG_DEBUG("table exists, no need to CTAS", K(create_table_res.table_id_));
       }
-      if (OB_NOT_NULL(common_rpc_proxy)) {
-        char table_info_buffer[256];
-        snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
-                  alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
-        SERVER_EVENT_ADD("ddl", "create table as select execute finish",
-          "tenant_id", MTL_ID(),
-          "ret", ret,
-          "trace_id", *ObCurTraceId::get_trace_id(),
-          "rpc_dst", common_rpc_proxy->get_server(),
-          "table_info", table_info_buffer,
-          "schema_version", create_table_res.schema_version_);
-      }
-      SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
     }
     OZ(my_session->store_query_string(cur_query));
   }
@@ -575,18 +560,16 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         }
       } else {
-        DEBUG_SYNC(BEFORE_SEND_PARALLEL_CREATE_TABLE);
         int64_t start_time = ObTimeUtility::current_time();
         ObTimeoutCtx ctx;
-        create_table_arg.is_parallel_ = true;
-        if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
-          LOG_WARN("fail to set timeout ctx", K(ret));
+        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
+          LOG_WARN("fail to set timeout ctx", KR(ret));
         } else if (OB_FAIL(common_rpc_proxy->parallel_create_table(create_table_arg, res))) {
           LOG_WARN("rpc proxy create table failed", KR(ret), "dst", common_rpc_proxy->get_server());
         } else {
           int64_t refresh_time = ObTimeUtility::current_time();
           if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-              ctx, my_session, tenant_id, res.schema_version_))) {
+              ctx, tenant_id, res.schema_version_))) {
             LOG_WARN("fail to check paralleld ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();
@@ -597,34 +580,14 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
                    "table_name", create_table_arg.schema_.get_table_name());
         }
       }
-      if (OB_SUCC(ret)) {
-        if (create_table_arg.schema_.is_materialized_view()) {
-          ObSQLSessionInfo *session_info = ctx.get_my_session();
-          if (session_info == nullptr) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("session_info should not be nullptr", KR(ret));
-          } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(
-                       tenant_id, res.task_id_, session_info, common_rpc_proxy, true))) {
-            if (storage::ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(ret)) {
-              LOG_WARN("retry create mview", KR(ret), K(tenant_id), "task_id", res.task_id_);
-              ret = OB_EAGAIN;
-            } else {
-              LOG_WARN("fail to create mview", KR(ret), K(tenant_id), "task_id", res.task_id_);
-            }
-          }
-        }
-      }
-
       if (OB_SUCC(ret) && table_schema.is_external_table()) {
         //auto refresh after create external table
-        ObExprRegexpSessionVariables regexp_vars;
-        OZ (my_session->get_regexp_session_vars(regexp_vars));
         OZ (ObAlterTableExecutor::update_external_file_list(
               table_schema.get_tenant_id(), res.table_id_,
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
               table_schema.get_external_file_pattern(),
-              regexp_vars));
+              ctx));
       }
     } else {
       if (table_schema.is_external_table()) {
@@ -634,16 +597,6 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
         LOG_WARN("execute create table as select failed", KR(ret));
       }
     }
-    if (OB_NOT_NULL(common_rpc_proxy)) {
-      SERVER_EVENT_ADD("ddl", "create table execute finish",
-        "tenant_id", MTL_ID(),
-        "ret", ret,
-        "trace_id", *ObCurTraceId::get_trace_id(),
-        "rpc_dst", common_rpc_proxy->get_server(),
-        "table_info", res.table_id_,
-        "schema_version", res.schema_version_);
-    }
-    SQL_ENG_LOG(INFO, "finish create table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
 
     // only CTAS or create temporary table will make session_id != 0. If such table detected, set
     // need ctas cleanup task anyway to do some cleanup jobs
@@ -900,8 +853,35 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   return ret;
 }
 
-int ObAlterTableExecutor::sort_external_files(ObIArray<ObString> &file_urls,
-                                              ObIArray<int64_t> &file_sizes) {
+int ObAlterTableExecutor::get_external_file_list(const ObString &location,
+                                                 ObIArray<ObString> &file_urls,
+                                                 ObIArray<int64_t> &file_sizes,
+                                                 const ObString &access_info,
+                                                 ObIAllocator &allocator,
+                                                 common::ObStorageType &storage_type)
+{
+  int ret = OB_SUCCESS;
+  ObExternalDataAccessDriver driver;
+  if (OB_FAIL(driver.init(location, access_info))) {
+    LOG_WARN("init external data access driver failed", K(ret));
+  } else if (OB_FAIL(driver.get_file_list(location, file_urls, allocator))) {
+    LOG_WARN("get file urls failed", K(ret));
+  } else if (OB_FAIL(driver.get_file_sizes(location, file_urls, file_sizes))) {
+    LOG_WARN("get file sizes failed", K(ret));
+  }
+  if (driver.is_opened()) {
+    storage_type = driver.get_storage_type();
+    driver.close();
+  }
+
+  LOG_DEBUG("show external table files", K(file_urls), K(storage_type), K(access_info));
+  return ret;
+}
+
+int ObAlterTableExecutor::filter_and_sort_external_files(const ObString &pattern,
+                                                         ObExecContext &exec_ctx,
+                                                         ObIArray<ObString> &file_urls,
+                                                         ObIArray<int64_t> &file_sizes) {
   int ret = OB_SUCCESS;
   const int64_t count = file_urls.count();
   ObSEArray<int64_t, 8> tmp_file_sizes;
@@ -917,6 +897,11 @@ int ObAlterTableExecutor::sort_external_files(ObIArray<ObString> &file_urls,
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_FAIL(file_map.set_refactored(file_urls.at(i), file_sizes.at(i)))) {
         LOG_WARN("failed to set refactored to file_map", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObExternalTableUtils::filter_external_table_files(pattern, exec_ctx, file_urls))) {
+        LOG_WARN("failed to filter external table files");
       }
     }
     if (OB_SUCC(ret)) {
@@ -1009,8 +994,6 @@ int ObAlterTableExecutor::flush_external_file_cache(
 int ObAlterTableExecutor::collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
-    const ObString &pattern,
-    const ObExprRegexpSessionVariables &regexp_vars,
     ObIArray<ObAddr> &all_servers,
     ObIArray<ObString> &file_urls,
     ObIArray<int64_t> &file_sizes,
@@ -1066,8 +1049,6 @@ int ObAlterTableExecutor::collect_local_files_on_servers(
       ObRpcAsyncLoadExternalTableFileCallBack* async_cb = nullptr;
       ObLoadExternalFileListReq req;
       req.location_ = location;
-      req.pattern_ = pattern;
-      req.regexp_vars_ = regexp_vars;
 
       if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncLoadExternalTableFileCallBack, (&allocator), (&context)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1128,25 +1109,23 @@ int ObAlterTableExecutor::update_external_file_list(
     const ObString &location,
     const ObString &access_info,
     const ObString &pattern,
-    const ObExprRegexpSessionVariables &regexp_vars)
+    ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 8> file_urls;
   ObSEArray<int64_t, 8> file_sizes;
   ObArenaAllocator allocator;
   ObSEArray<ObAddr, 8> all_servers;
-
   OZ (GCTX.location_service_->external_table_get(tenant_id, table_id, all_servers));
 
   if (ObSQLUtils::is_external_files_on_local_disk(location)) {
-    OZ (collect_local_files_on_servers(tenant_id, location, pattern, regexp_vars,
-                                       all_servers, file_urls, file_sizes, allocator));
+    OZ (collect_local_files_on_servers(tenant_id, location, all_servers, file_urls, file_sizes, allocator));
   } else {
     OZ (ObExternalTableFileManager::get_instance().get_external_file_list_on_device(
-          location, pattern, regexp_vars, file_urls, file_sizes, access_info, allocator));
+          location, file_urls, file_sizes, access_info, allocator));
   }
 
-  OZ (sort_external_files(file_urls, file_sizes));
+  OZ (filter_and_sort_external_files(pattern, exec_ctx, file_urls, file_sizes));
 
   //TODO [External Table] opt performance
   OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(tenant_id, table_id, file_urls, file_sizes));
@@ -1162,15 +1141,12 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
   int64_t option = stmt.get_alter_external_table_type();
   switch (option) {
     case T_ALTER_REFRESH_EXTERNAL_TABLE: {
-      ObExprRegexpSessionVariables regexp_vars;
-      CK (ctx.get_my_session());
-      OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
       OZ (update_external_file_list(stmt.get_tenant_id(),
                                   arg.alter_table_schema_.get_table_id(),
                                   arg.alter_table_schema_.get_external_file_location(),
                                   arg.alter_table_schema_.get_external_file_location_access_info(),
                                   arg.alter_table_schema_.get_external_file_pattern(),
-                                  regexp_vars));
+                                  ctx));
       break;
     }
     default: {
@@ -1308,19 +1284,6 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         }
       }
     }
-    char table_info_buffer[256];
-    snprintf(table_info_buffer, sizeof(table_info_buffer), "table_id:%ld, hidden_table_id:%ld",
-              alter_table_arg.table_id_, alter_table_arg.hidden_table_id_);
-
-    SERVER_EVENT_ADD("ddl", "alter table execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "task_id", res.task_id_,
-      "table_info", table_info_buffer,
-      "schema_version", res.schema_version_,
-      alter_table_arg.inner_sql_exec_addr_);
-    SQL_ENG_LOG(INFO, "finish alter table execute.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(first_stmt));
   }
   return ret;
 }
@@ -2093,13 +2056,6 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
       //do nothing
     }
   }
-  SERVER_EVENT_ADD("ddl", "drop table execute finish",
-    "tenant_id", res.tenant_id_,
-    "ret", ret,
-    "trace_id", *ObCurTraceId::get_trace_id(),
-    "task_id", res.task_id_,
-    "schema_id", res.schema_id_);
-    SQL_ENG_LOG(INFO, "finish drop table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -2227,8 +2183,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       } else {
         // new parallel truncate
         ObTimeoutCtx ctx;
-        tmp_arg.is_parallel_ = true;
-        if (OB_FAIL(ctx.set_timeout(common_rpc_proxy->get_timeout()))) {
+        if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, (static_cast<obrpc::ObRpcProxy*>(common_rpc_proxy))->timeout()))) {
           LOG_WARN("fail to set timeout ctx", K(ret));
         } else {
           int64_t start_time = ObTimeUtility::current_time();
@@ -2254,7 +2209,7 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("truncate invalid ddl_res", KR(ret), K(res));
           } else if (OB_FAIL(ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
-                     ctx, my_session, tenant_id, res.task_id_))) {
+                     ctx, tenant_id, res.task_id_))) {
             LOG_WARN("fail to check parallel ddl schema in sync", KR(ret), K(res));
           }
           int64_t end_time = ObTimeUtility::current_time();
@@ -2293,14 +2248,6 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                  K(query_timeout), K(THIS_WORKER.get_timeout_remain()));
       }
     }
-    SERVER_EVENT_ADD("ddl", "truncate table execute finish",
-      "tenant_id", MTL_ID(),
-      "ret", ret,
-      "trace_id", *ObCurTraceId::get_trace_id(),
-      "task_id", res.task_id_,
-      "table_info", truncate_table_arg.table_name_,
-      "schema_id", res.schema_id_);
-    SQL_ENG_LOG(INFO, "finish truncate table execute.", K(ret), "ddl_event_info", ObDDLEventInfo());
   }
   return ret;
 }

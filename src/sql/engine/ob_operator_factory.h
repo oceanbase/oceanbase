@@ -67,13 +67,6 @@ public:
            (G_OB_VERSION_ARRAY_[type] <= GET_MIN_CLUSTER_VERSION());
   }
 
-  static inline bool support_rich_format(const ObPhyOperatorType type)
-  {
-    // consider upgrade case: disable vectorize if high version observer support
-    // vectorization, while low version observer does NOT
-    return type >= 0 && type < PHY_END && G_SUPPORT_RICH_FMT_ARRAY_[type];
-  }
-
   struct AllocFun
   {
     __typeof__(&ObOperatorFactory::alloc_op_spec) spec_func_;
@@ -85,7 +78,6 @@ private:
   static AllocFun *G_ALL_ALLOC_FUNS_;
   static bool *G_VECTORIZED_OP_ARRAY_;
   static uint64_t *G_OB_VERSION_ARRAY_;
-  static bool *G_SUPPORT_RICH_FMT_ARRAY_;
 };
 
 } // end namespace sql

@@ -200,7 +200,7 @@ int ObStorageHASrcProvider::inner_choose_ob_src_(const uint64_t tenant_id, const
       LOG_INFO("do not choose this src", K(tenant_id), K(ls_id), K(addr), K(ls_info));
     } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
       LOG_WARN("failed to get restore status", K(ret), K(ls_info));
-    } else if (restore_status.is_failed()) {
+    } else if (restore_status.is_restore_failed()) {
       choose_member_idx = -1;
       LOG_INFO("some ls replica restore failed, can not migrate", K(ls_info));
       break;

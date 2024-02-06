@@ -227,9 +227,7 @@ public:
       rd_sort_cmp_funcs_(alloc),
       rd_pby_sort_cnt_(0),
       role_type_(0),
-      wf_aggr_status_expr_(NULL),
-      input_rows_mem_bound_ratio_(0.5),
-      estimated_part_cnt_(1)
+      wf_aggr_status_expr_(NULL)
   {
   }
   DECLARE_VIRTUAL_TO_STRING;
@@ -290,9 +288,6 @@ public:
   int64_t rd_pby_sort_cnt_;
   int64_t role_type_;
   ObExpr *wf_aggr_status_expr_;
-  // The percentage of memory used by input_rows to the total memory used by input_rows and res_rows
-  double input_rows_mem_bound_ratio_;
-  int64_t estimated_part_cnt_;
 
 private:
   // disallow copy

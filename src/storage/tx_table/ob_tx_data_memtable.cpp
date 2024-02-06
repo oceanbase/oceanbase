@@ -37,6 +37,7 @@ namespace storage
 int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 1000LL * 1000LL * 1000LL;
 
 int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
+                           SliceAllocator *slice_allocator,
                            ObTxDataMemtableMgr *memtable_mgr,
                            storage::ObFreezer *freezer,
                            const int64_t buckets_cnt)
@@ -46,9 +47,9 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "init tx data memtable twice", KR(ret), K(table_key), KPC(memtable_mgr));
-  } else if (OB_ISNULL(memtable_mgr)) {
+  } else if (OB_ISNULL(slice_allocator) || OB_ISNULL(memtable_mgr)) {
     ret = OB_ERR_NULL_VALUE;
-    STORAGE_LOG(WARN, "the tx_data_allocator is nullptr", KR(ret), K(table_key), KPC(memtable_mgr));
+    STORAGE_LOG(WARN, "the slice_allocator is nullptr", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (OB_FAIL(ObITable::init(table_key))) {
     STORAGE_LOG(WARN, "ObITable::init fail", KR(ret), K(table_key), KPC(memtable_mgr));
   } else if (FALSE_IT(init_arena_allocator_())) {
@@ -77,6 +78,7 @@ int ObTxDataMemtable::init(const ObITable::TableKey &table_key,
     stat_change_ts_.reset();
     state_ = ObTxDataMemtable::State::ACTIVE;
     sort_list_head_.reset();
+    slice_allocator_ = slice_allocator;
     memtable_mgr_ = memtable_mgr;
     row_key_array_.reuse();
 
@@ -143,6 +145,7 @@ void ObTxDataMemtable::reset()
     arena_allocator_.free(tx_data_map_);
     tx_data_map_ = nullptr;
   }
+  slice_allocator_ = nullptr;
   memtable_mgr_ = nullptr;
   buf_.reset();
   arena_allocator_.reset();
@@ -201,7 +204,7 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
 
 void ObTxDataMemtable::atomic_update_(ObTxData *tx_data)
 {
-  int64_t thread_idx = common::get_itid() & MAX_CONCURRENCY_MOD_MASK;
+  int64_t thread_idx = ::get_itid() & MAX_CONCURRENCY_MOD_MASK;
   min_tx_scn_[thread_idx].dec_update(tx_data->end_scn_);
   min_start_scn_[thread_idx].dec_update(tx_data->start_scn_);
   int64_t tx_data_size = TX_DATA_SLICE_SIZE * (1LL + tx_data->undo_status_list_.undo_node_cnt_);
@@ -238,7 +241,7 @@ int ObTxDataMemtable::pre_process_for_merge()
     // only do pre process for frozen tx data memtable
   } else if (pre_process_done_) {
     STORAGE_LOG(INFO, "call pre process more than once. skip pre process.");
-  } else if (OB_FAIL(memtable_mgr_->get_tx_data_table()->alloc_tx_data(fake_tx_data_guard, false /* enable_throttle */))) {
+  } else if (OB_FAIL(memtable_mgr_->get_tx_data_table()->alloc_tx_data(fake_tx_data_guard))) {
     STORAGE_LOG(WARN, "allocate tx data from tx data table failed.", KR(ret), KPC(this));
   } else if (OB_FAIL(prepare_tx_data_list())) {
     STORAGE_LOG(WARN, "prepare tx data list failed.", KR(ret), KPC(this));
@@ -329,7 +332,7 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   ObCommitVersionsArray past_commit_versions;
   ObCommitVersionsArray merged_commit_versions;
 
-  int64_t current_time = ObClockGenerator::getClock();
+  int64_t current_time = ObClockGenerator::getCurrentTime();
   int64_t prev_recycle_time = memtable_mgr_->get_mini_merge_recycle_commit_versions_ts();
   if (current_time - prev_recycle_time < MINI_RECYCLE_COMMIT_VERSIONS_INTERVAL_US) {
     // tx data mini merge do not recycle commit versions array every time

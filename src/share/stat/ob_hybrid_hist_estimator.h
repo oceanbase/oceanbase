@@ -77,10 +77,6 @@ public:
                         int64_t pop_count,
                         int64_t pop_freq,
                         const ObObjMeta &obj_meta);
-  static int build_prefix_str_datum_for_lob(ObIAllocator &allocator,
-                                            const ObObjMeta &obj_meta,
-                                            const ObDatum &old_datum,
-                                            ObDatum &new_datum);
   TO_STRING_KV(K_(total_count),
                K_(num_distinct),
                K_(pop_count),
@@ -94,13 +90,18 @@ private:
 };
 
 
-class ObHybridHistEstimator : public ObBasicStatsEstimator
+class ObHybridHistEstimator : public ObStatsEstimator
 {
 public:
   explicit ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
-  int estimate(const ObOptStatGatherParam &param,
-               ObOptStat &opt_stat);
+  int estimate(const ObTableStatParam &param,
+               ObExtraParam &extra,
+               ObIArray<ObOptStat> &dst_opt_stats);
+
+  template <class T>
+  int add_stat_item(const T &item, ObIArray<ObStatItem *> &stat_items);
+
 private:
 
   int try_build_hybrid_hist(const ObColumnStatParam &param,
@@ -115,31 +116,51 @@ private:
                                double &est_percent,
                                bool &is_block_sample);
 
+  int gen_union_all_sql(ObIAllocator &allocator,
+                        const ObString &raw_sql1,
+                        const ObString &raw_sql2,
+                        ObString &merge_raw_sql);
+
+  int refine_hybrid_hist(ObIAllocator &allocator,
+                         const ObTableStatParam &param,
+                         ObExtraParam &extra,
+                         int64_t total_refine_cnt,
+                         ObOptStat &src_opt_stat,
+                         ObOptStat &dst_opt_stat,
+                         ObIArray<ObOptStat> &dst_opt_stats,
+                         ObIArray<int64_t> &refine_col_ids,
+                         ObIArray<ObStatItem *> &refine_stat_items,
+                         ObIArray<ObOptColumnStat *> &refine_col_stats,
+                         ObString &refine_raw_sql);
+
+  int gen_query_sql(ObIAllocator &allocator,
+                    const ObTableStatParam &param,
+                    ObExtraParam &extra,
+                    const ObString &simple_hint,
+                    int64_t part_cnt,
+                    ObOptStat &src_opt_stat,
+                    ObOptStat &dst_opt_stat,
+                    ObIArray<ObOptStat> &dst_opt_stats,
+                    ObIArray<ObStatItem *> &stat_items,
+                    ObIArray<ObOptColumnStat *> &refine_col_stats,
+                    ObString &raw_sql);
+
   int reset_histogram_for_refine_col_stats(ObIArray<ObOptColumnStat *> &refine_col_stats);
 
-  int extract_hybrid_hist_col_info(const ObOptStatGatherParam &param,
-                                   ObOptStat &opt_stat,
-                                   ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                   ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                   int64_t &max_num_buckets);
+  int need_add_hybrid_hist_item(ObOptColumnStat *dst_col_stat,
+                                ObOptTableStat *dst_tab_stat,
+                                const ObColumnStatParam &col_param,
+                                double est_percent,
+                                bool need_sample,
+                                bool &is_need,
+                                bool &need_refine);
 
-  int add_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                 ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                 const int64_t table_row_cnt,
-                                 const bool need_sample,
-                                 const double est_percent,
-                                 ObIArray<int64_t> &no_sample_idx);
+  void get_max_num_buckets(const ObIArray<ObColumnStatParam> &col_params,
+                           int64_t &max_num_buckets);
 
-  int estimate_no_sample_col_hydrid_hist(ObIAllocator &allocator,
-                                         const ObOptStatGatherParam &param,
-                                         ObOptStat &opt_stat,
-                                         ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                         ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                         ObIArray<int64_t> &no_sample_idx);
-
-   int add_no_sample_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                            ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                            ObIArray<int64_t> &no_sample_idx);
+private:
+  /// a magic number
+  static const int64_t AUTO_SAMPLE_SIZE;
 };
 
 }

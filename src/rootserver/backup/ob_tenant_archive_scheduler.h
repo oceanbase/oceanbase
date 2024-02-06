@@ -66,10 +66,8 @@ private:
   int do_checkpoint_(share::ObTenantArchiveRoundAttr &round_info);
   int check_archive_dest_validity_(const int64_t dest_no);
   int get_max_checkpoint_scn_(const uint64_t tenant_id, share::SCN &max_checkpoint_scn) const;
-  int check_allow_force_stop_(const ObTenantArchiveRoundAttr &round, bool &allow_force_stop) const;
 
 private:
-  static const int64_t ALLOW_FORCE_STOP_THRESHOLD = 10_min;
   bool is_inited_;
   uint64_t tenant_id_; // user tenant id
   obrpc::ObSrvRpcProxy *rpc_proxy_;

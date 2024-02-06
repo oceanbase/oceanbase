@@ -342,7 +342,7 @@ public:
                           ObStmtExprVisitor &visitor);
   int iterate_rollup_items(ObIArray<ObRollupItem> &rollup_items, ObStmtExprVisitor &visitor);
   int iterate_cube_items(ObIArray<ObCubeItem> &cube_items, ObStmtExprVisitor &visitor);
-  int update_stmt_table_id(ObIAllocator *allocator, const ObSelectStmt &other);
+  int update_stmt_table_id(const ObSelectStmt &other);
   int64_t get_select_item_size() const { return select_items_.count(); }
   int64_t get_group_expr_size() const { return group_exprs_.count(); }
   int64_t get_rollup_expr_size() const { return rollup_exprs_.count(); }
@@ -437,8 +437,8 @@ public:
   bool is_from_pivot() const { return is_from_pivot_; }
   bool has_hidden_rowid() const;
   virtual int clear_sharable_expr_reference() override;
-  virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                           ObSQLSessionInfo *session_info) override;
+  virtual int remove_useless_sharable_expr() override;
+  int maintain_scala_group_by_ref();
 
   const common::ObIArray<OrderItem>& get_search_by_items() const { return search_by_items_; }
   const common::ObIArray<ColumnItem>& get_cycle_items() const { return cycle_by_items_; }
@@ -511,7 +511,6 @@ public:
   }
   int add_having_expr(ObRawExpr *expr) { return having_exprs_.push_back(expr); }
   bool has_for_update() const;
-  bool is_skip_locked() const;
   common::ObIArray<ObColumnRefRawExpr*> &get_for_update_columns() { return for_update_columns_; }
   const common::ObIArray<ObColumnRefRawExpr *> &get_for_update_columns() const { return for_update_columns_; }
   bool contain_ab_param() const { return contain_ab_param_; }
@@ -574,11 +573,6 @@ public:
   ObWinFunRawExpr* get_window_func_expr(int64_t i) { return win_func_exprs_.at(i); }
   int64_t get_window_func_count() const { return win_func_exprs_.count(); }
   int remove_window_func_expr(ObWinFunRawExpr *expr);
-  const common::ObIArray<ObRawExpr *> &get_qualify_filters() const { return qualify_filters_; };
-  common::ObIArray<ObRawExpr *> &get_qualify_filters() { return qualify_filters_; };
-  int64_t get_qualify_filters_count() const { return qualify_filters_.count(); };
-  bool has_window_function_filter() const { return qualify_filters_.count() != 0; }
-  int set_qualify_filters(common::ObIArray<ObRawExpr *> &exprs);
   void set_children_swapped() { children_swapped_ = true; }
   bool get_children_swapped() const { return children_swapped_; }
   const ObString* get_select_alias(const char *col_name, uint64_t table_id, uint64_t col_id);
@@ -608,7 +602,7 @@ public:
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
-  bool check_is_select_item_expr(const ObRawExpr *expr) const;
+  bool check_is_select_item_expr(const ObRawExpr *expr);
   bool contain_nested_aggr() const;
 
   int get_set_stmt_size(int64_t &size) const;
@@ -629,7 +623,6 @@ public:
   bool has_external_table() const;
   int get_pure_set_exprs(ObIArray<ObRawExpr*> &pure_set_exprs) const;
   static ObRawExpr* get_pure_set_expr(ObRawExpr *expr);
-  int get_all_group_by_exprs(ObIArray<ObRawExpr*> &group_by_exprs) const;
 
 private:
   SetOperator set_op_;
@@ -650,8 +643,6 @@ private:
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> having_exprs_;
   common::ObSEArray<ObAggFunRawExpr*, 8, common::ModulePageAllocator, true> agg_items_;
   common::ObSEArray<ObWinFunRawExpr*, 8, common::ModulePageAllocator, true> win_func_exprs_;
-  //a child set of the filters in the parent stmts, only used for partition topn sort
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> qualify_filters_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> start_with_exprs_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_exprs_;
   common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> connect_by_prior_exprs_;

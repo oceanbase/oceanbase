@@ -166,7 +166,6 @@ private:
   const ObITableReadInfo *read_info_;
   ObMultipleScanMerge *scan_merge_;
   int64_t block_num_;
-  int64_t sample_block_cnt_;
   common::ObArenaAllocator range_allocator_;
   ObBlockSampleRangeIterator range_iterator_;
   blocksstable::ObDatumRange micro_range_;

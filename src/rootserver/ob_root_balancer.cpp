@@ -79,7 +79,7 @@ int ObRootBalancer::init(common::ObServerConfig &cfg,
   } else if (OB_FAIL(create(root_balancer_thread_cnt, "RootBalance"))) {
     LOG_WARN("create root balancer thread failed", K(ret), K(root_balancer_thread_cnt));
   } else if (OB_FAIL(disaster_recovery_worker_.init(
-          self_addr, cfg, zone_mgr,
+          self_addr, cfg, unit_mgr, zone_mgr,
           dr_task_mgr, *GCTX.lst_operator_, schema_service, rpc_proxy, sql_proxy))) {
     LOG_WARN("fail to init disaster recovery worker", KR(ret));
   } else if (OB_FAIL(rootservice_util_checker_.init(

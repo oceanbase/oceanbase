@@ -170,14 +170,11 @@ int calc_char_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
       res_str[res_len] = '\0';
       bool is_null = false;
       ObString checked_res_str;
-      ObSQLMode sql_mode = 0;
-      ObSolidifiedVarsGetter helper(expr, ctx, session);
-      if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-        LOG_WARN("failed to get local sql mode", K(ret));
-      } else if (OB_FAIL(ObSQLUtils::check_well_formed_str(ObString(res_len, res_str),
+      bool is_strict = is_strict_mode(session->get_sql_mode());
+      if (OB_FAIL(ObSQLUtils::check_well_formed_str(ObString(res_len, res_str),
                                                     expr.datum_meta_.cs_type_,
                                                     checked_res_str, is_null,
-                                                    is_strict_mode(sql_mode)))) {
+                                                    is_strict))) {
         LOG_WARN("check_well_formed_str failed", K(ret), K(res_str),
                   K(expr.datum_meta_));
       } else if (is_null) {
@@ -197,13 +194,6 @@ int ObExprChar::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_char_expr;
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprChar, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
   return ret;
 }
 

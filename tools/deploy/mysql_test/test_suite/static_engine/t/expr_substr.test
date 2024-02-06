@@ -47,17 +47,5 @@ select substr(3.14159, 2.9, 2.9) from dual;
 select substr(3.14159, 2.1, 2.1) from dual;
 --enable_warnings
 
-# bug: 
-select substr(1, 1, 9223372036854775807);
-select substr(123, 2, 9223372036854775806);
---disable_warnings
-drop view if exists v1;
---enable_warnings
-create view v1 as select substr(123, 2, 9223372036854775807);
-desc v1;
-select * from v1;
-drop view v1;
-SELECT NULL ORDER BY SUBSTR ( 9223372036854775807 FROM @@ob_query_timeout FOR 9223372036854775807 );
-
 connection syscon;
 --sleep 2

@@ -12,15 +12,17 @@
 #pragma once
 
 #include "common/ob_tablet_id.h"
+#include "storage/direct_load/ob_direct_load_fast_heap_table_ctx.h"
 #include "storage/direct_load/ob_direct_load_i_table.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
-#include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
-#include "storage/direct_load/ob_direct_load_lob_builder.h"
 #include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
-#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 
 namespace oceanbase
 {
+namespace table
+{
+class ObTableLoadResultInfo;
+} // namespace table
 namespace common
 {
 class ObOptOSGColumnStat;
@@ -28,7 +30,9 @@ class ObOptOSGColumnStat;
 namespace storage
 {
 class ObDirectLoadInsertTableContext;
+class ObSSTableInsertSliceWriter;
 class ObDirectLoadDMLRowHandler;
+
 struct ObDirectLoadFastHeapTableBuildParam
 {
 public:
@@ -36,20 +40,19 @@ public:
   ~ObDirectLoadFastHeapTableBuildParam();
   bool is_valid() const;
   TO_STRING_KV(K_(tablet_id), K_(snapshot_version), K_(table_data_desc), KP_(datum_utils),
-               KP_(col_descs), KP_(lob_column_cnt), KP_(cmp_funcs), KP_(dml_row_handler),
-               K_(online_opt_stat_gather), K_(px_mode));
+               KP_(col_descs), KP_(cmp_funcs), KP_(insert_table_ctx), KP_(fast_heap_table_ctx),
+               KP_(dml_row_handler), K_(online_opt_stat_gather));
 public:
   common::ObTabletID tablet_id_;
   int64_t snapshot_version_;
-  int64_t lob_column_cnt_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
+  ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   bool online_opt_stat_gather_;
-  bool px_mode_;
 };
 
 class ObDirectLoadFastHeapTableBuilder : public ObIDirectLoadPartitionTableBuilder
@@ -68,36 +71,18 @@ public:
                  common::ObIAllocator &allocator) override;
 private:
   int init_sql_statistics();
-  int init_lob_builder();
+  int collect_obj(const blocksstable::ObDatumRow &datum_row);
   int init_sstable_slice_ctx();
   int switch_sstable_slice();
 private:
-  class RowIterator : public ObDirectLoadInsertTableRowIterator
-    {
-    public:
-      RowIterator();
-      virtual ~RowIterator();
-      void reuse();
-      void reset();
-      int init(const ObDirectLoadFastHeapTableBuildParam &param, blocksstable::ObDatumRow &row,
-              common::ObIArray<ObOptOSGColumnStat*> &column_stat_array, ObDirectLoadLobBuilder &lob_builder);
-    protected:
-      int inner_get_next_row(blocksstable::ObDatumRow *&row) override;
-    private:
-      blocksstable::ObDatumRow *datum_row_;
-      bool iter_end_;
-      bool is_inited_;
-    };
-private:
   ObDirectLoadFastHeapTableBuildParam param_;
   common::ObArenaAllocator allocator_;
-  ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
-  ObDirectLoadInsertTabletWriteCtx write_ctx_;
+  common::ObArenaAllocator slice_writer_allocator_;
+  ObDirectLoadFastHeapTableTabletContext *fast_heap_table_tablet_ctx_;
+  ObSSTableInsertSliceWriter *slice_writer_;
+  ObDirectLoadFastHeapTableTabletWriteCtx write_ctx_;
   blocksstable::ObDatumRow datum_row_;
   common::ObArray<ObOptOSGColumnStat *> column_stat_array_;
-  ObDirectLoadLobBuilder lob_builder_;
-  RowIterator row_iter_;
-  int64_t current_slice_id_;
   int64_t row_count_;
   bool is_closed_;
   bool is_inited_;

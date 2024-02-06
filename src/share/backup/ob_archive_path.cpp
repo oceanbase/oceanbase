@@ -207,20 +207,6 @@ int ObArchivePathUtil::get_piece_checkpoint_dir_path(const ObBackupDest &dest, c
   return ret;
 }
 
-// oss://archive/checkpoint
-int ObArchivePathUtil::get_piece_checkpoint_dir_path(
-    const ObBackupDest &dest, ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(path.init(dest.get_root_path()))) {
-    LOG_WARN("failed to assign dest path", K(ret), K(dest));
-  } else if (OB_FAIL(path.join("checkpoint", ObBackupFileSuffix::NONE))) {
-    LOG_WARN("failed to join checkpoint dir path", K(ret), K(path));
-  }
-  return ret;
-}
-
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
 int ObArchivePathUtil::get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObBackupPath &path)
@@ -324,19 +310,6 @@ int ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(const ObBackupDe
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_piece_dir_path(dest, dest_id, round_id, piece_id, path))) {
     LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(round_id), K(dest_id), K(piece_id));
-  } else if (OB_FAIL(path.join("tenant_archive_piece_infos", ObBackupFileSuffix::ARCHIVE))) {
-    LOG_WARN("failed to join tenant_archive_piece_infos file", K(ret), K(path));
-  }
-  return ret;
-}
-
-// oss://archive/tenant_archive_piece_infos.obarc
-int ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, ObBackupPath &path)
-{
-  int ret = OB_SUCCESS;
-  path.reset();
-  if (OB_FAIL(path.init(dest.get_root_path()))) {
-    LOG_WARN("failed to assign dest path", K(ret), K(dest));
   } else if (OB_FAIL(path.join("tenant_archive_piece_infos", ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join tenant_archive_piece_infos file", K(ret), K(path));
   }

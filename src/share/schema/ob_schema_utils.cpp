@@ -25,7 +25,6 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server_struct.h"
-#include "sql/engine/cmd/ob_ddl_executor_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -443,8 +442,7 @@ int ObSchemaUtils::add_sys_table_lob_aux_table(
 // construct inner table schemas in tenant space
 int ObSchemaUtils::construct_inner_table_schemas(
     const uint64_t tenant_id,
-    ObSArray<ObTableSchema> &tables,
-    ObIAllocator &allocator)
+    ObIArray<ObTableSchema> &tables)
 {
   int ret = OB_SUCCESS;
   if (is_sys_tenant(tenant_id)) {
@@ -458,16 +456,6 @@ int ObSchemaUtils::construct_inner_table_schemas(
       virtual_table_schema_creators,
       sys_view_schema_creators
     };
-    int64_t capacity = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
-      for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
-           OB_SUCC(ret) && OB_NOT_NULL(*creator_ptr); ++creator_ptr) {
-        ++capacity;
-      }
-    }
-    if (FAILEDx(tables.prepare_allocate_and_keep_count(capacity, &allocator))) {
-      LOG_WARN("fail to prepare allocate table schemas", KR(ret), K(tenant_id), K(capacity));
-    }
     HEAP_VARS_2((ObTableSchema, table_schema), (ObTableSchema, data_schema)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(creator_ptr_arrays); ++i) {
         for (const schema_create_func *creator_ptr = creator_ptr_arrays[i];
@@ -507,7 +495,6 @@ int ObSchemaUtils::construct_inner_table_schemas(
 
 int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     const ObTimeoutCtx &ctx,
-    sql::ObSQLSessionInfo *session,
     const uint64_t tenant_id,
     const int64_t schema_version)
 {
@@ -519,27 +506,19 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
   if (tenant_config.is_valid()) {
     consensus_timeout = tenant_config->_wait_interval_after_parallel_ddl;
   }
-  if (OB_ISNULL(session) || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
       || schema_version <= 0
       || consensus_timeout < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", KR(ret), KP(session), K(tenant_id), K(schema_version), K(consensus_timeout));
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(schema_version), K(consensus_timeout));
   } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", KR(ret));
   }
-  bool is_dropped = false;
   while (OB_SUCC(ret) && ctx.get_timeout() > 0) {
     int64_t refreshed_schema_version = OB_INVALID_VERSION;
     int64_t consensus_schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(schema_service->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-      LOG_WARN("fail to check if tenant has been dropped", KR(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(is_dropped)) {
-      ret = OB_TENANT_HAS_BEEN_DROPPED;
-      LOG_WARN("tenant has been dropped", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(ObDDLExecutorUtil::handle_session_exception(*session))) {
-      LOG_WARN("fail to handle session exception", KR(ret));
-    } else if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
+    if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("get refreshed schema_version fail", KR(ret), K(tenant_id));
     } else if (OB_FAIL(schema_service->get_tenant_broadcast_consensus_version(tenant_id, consensus_schema_version))) {
       LOG_WARN("get consensus schema_version fail", KR(ret), K(tenant_id));
@@ -555,60 +534,6 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
                  K(refreshed_schema_version), K(consensus_schema_version), K(schema_version));
       }
       ob_usleep(10 * 1000L); // 10ms
-    }
-  }
-  return ret;
-}
-
-int ObSchemaUtils::build_column_group(
-    const ObTableSchema &table_schema,
-    const uint64_t tenant_id,
-    const ObColumnGroupType &cg_type,
-    const ObString &cg_name,
-    const ObIArray<uint64_t> &column_ids,
-    const uint64_t cg_id,
-    ObColumnGroupSchema &column_group)
-{
-  int ret = OB_SUCCESS;
-  lib::Worker::CompatMode mode = lib::Worker::CompatMode::INVALID;
-  column_group.reset();
-  if (!is_valid_tenant_id(tenant_id) || /*table_schema may be not valid*/
-      cg_name.empty() || (cg_type >= ObColumnGroupType::MAX_COLUMN_GROUP)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",K(table_schema), KR(ret), K(cg_name), K(cg_type), "column_id_cnt", column_ids.count());
-  } else if(OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, mode))) {
-    LOG_WARN("fail to check if oralce mode", K(ret), K(table_schema));
-  } else {
-    column_group.set_column_group_id(cg_id);
-    column_group.set_column_group_type(cg_type);
-    column_group.set_block_size(table_schema.get_block_size());
-    column_group.set_compressor_type(table_schema.get_compressor_type());
-    const ObStoreFormatType store_format = table_schema.get_store_format();
-    bool is_flat = lib::Worker::CompatMode::ORACLE == mode ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
-                                            || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
-                                            || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
-                                         : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
-                                            || (OB_STORE_FORMAT_COMPACT_MYSQL == store_format));
-    if (is_flat) {
-      // use the encoding type according to the row format
-      column_group.set_row_store_type(table_schema.get_row_store_type());
-    } else {
-      // row_store encoding type according to the row format; column_store uses cs_encoding
-      if ((cg_type == ObColumnGroupType::DEFAULT_COLUMN_GROUP) || (cg_type == ObColumnGroupType::ALL_COLUMN_GROUP)) {
-        column_group.set_row_store_type(table_schema.get_row_store_type());
-      } else {
-        column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(column_group.set_column_group_name(cg_name))) {
-        LOG_WARN("fail to set column group name", KR(ret), K(cg_name));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
-      if (OB_FAIL(column_group.add_column_id(column_ids.at(i)))) {
-        LOG_WARN("fail to add column_id into column_group", KR(ret), K(i), "column_id", column_ids.at(i));
-      }
     }
   }
   return ret;
@@ -668,124 +593,6 @@ int ObSchemaUtils::batch_get_latest_table_schemas(
     if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table_schema can't be null", KR(ret), K(idx), K(table_ids), K(table_schemas));
-    }
-  }
-  return ret;
-}
-
-int ObSchemaUtils::build_single_column_group(
-    const share::schema::ObTableSchema &table_schema,
-    share::schema::ObColumnSchemaV2 *column_schema,
-    const uint64_t tenant_id,
-    const uint64_t column_group_id,
-    share::schema::ObColumnGroupSchema &column_group_schema)
-{
-  /* check and build single_column_group for the column*/
-  /* table schema may be not fully constructed and do not check here*/
-  int ret = OB_SUCCESS;
-  column_group_schema.reset();
-  if (OB_ISNULL(column_schema) || column_group_id < COLUMN_GROUP_START_ID
-      || column_schema->is_virtual_generated_column()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, column is null or virtual column or invalid column group id",
-             K(ret), KPC(column_schema), K(column_group_id));
-  } else {
-    ObArray<uint64_t> column_ids;
-    char cg_name_ptr[OB_MAX_COLUMN_GROUP_NAME_LENGTH] = {'\0'};
-    ObString cg_name(sizeof(cg_name_ptr), 0 /*length*/, cg_name_ptr);
-    column_ids.reset();
-    if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
-      LOG_WARN("fail to add column group", K(ret));
-    } else if (OB_FAIL(column_schema->get_each_column_group_name(cg_name))){
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to format column group_name", K(ret));
-    } else if (OB_FAIL(build_column_group(table_schema, tenant_id,
-                                          ObColumnGroupType::SINGLE_COLUMN_GROUP,
-                                          cg_name, column_ids, column_group_id, column_group_schema))) {
-      LOG_WARN("fail to build column group for single column", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObSchemaUtils::build_all_column_group(
-    const share::schema::ObTableSchema &table_schema,
-    const uint64_t tenant_id,
-    const uint64_t column_group_id,
-    share::schema::ObColumnGroupSchema &column_group_schema)
-{
-  int ret = OB_SUCCESS;
-  column_group_schema.reset();
-  /* table_schema_ is constructed by resolver and is not valid*/
-  if (column_group_id < COLUMN_GROUP_START_ID) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, table schema or column group_id is invalid",
-             K(ret), K(table_schema), K(column_group_id));
-  } else{
-    ObArray<uint64_t> column_ids;
-    if (OB_FAIL(table_schema.get_all_column_ids(column_ids))) {
-      LOG_WARN("fail to get all column id in table schema", K(ret));
-    } else {
-      const ObString cg_name = OB_ALL_COLUMN_GROUP_NAME;
-      if (column_ids.count() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("number of available columns should not be zeror", K(ret));
-
-      } else if (OB_FAIL(build_column_group(table_schema, tenant_id,
-                                            ObColumnGroupType::ALL_COLUMN_GROUP, cg_name,
-                                            column_ids, column_group_id, column_group_schema))) {
-        LOG_WARN("fail to build column group", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObSchemaUtils::mock_default_cg(
-    const uint64_t tenant_id,
-    share::schema::ObTableSchema &new_table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObColumnGroupSchema* default_cg = nullptr;
-  /* for table update from less than 4.2, default cg may not exist
-   *  mock a default cg
-  */
-  uint64_t compat_version = 0;
-
-  if (OB_INVALID == tenant_id || new_table_schema.get_table_id() == OB_INVALID_ID) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant_id", K(ret), K(new_table_schema), K(tenant_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get tenant, data_version", K(ret));
-  } else if (compat_version < DATA_VERSION_4_3_0_0) {
-    /* skip, do nothing*/
-  } else if (!(new_table_schema.is_user_table() || new_table_schema.is_tmp_table() || new_table_schema.is_index_table())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("should not mock inner table", K(ret), K(new_table_schema));
-  } else {
-    new_table_schema.set_column_store(true);
-    if (OB_FAIL(new_table_schema.get_column_group_by_name(OB_DEFAULT_COLUMN_GROUP_NAME, default_cg))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        default_cg = nullptr;
-      } else {
-        LOG_WARN("fail to get default column group", K(ret), K(new_table_schema));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(default_cg)) {
-      ObColumnGroupSchema tmp_cg;
-      ObArray<uint64_t> column_ids;
-      if (OB_FAIL(new_table_schema.get_all_column_ids(column_ids))) {
-        LOG_WARN("fail to get column ids", K(ret), K(new_table_schema));
-      } else if (OB_FAIL(ObSchemaUtils::build_column_group(new_table_schema, new_table_schema.get_tenant_id(),
-                                        ObColumnGroupType::DEFAULT_COLUMN_GROUP,
-                                        OB_DEFAULT_COLUMN_GROUP_NAME, column_ids,
-                                        DEFAULT_TYPE_COLUMN_GROUP_ID, tmp_cg))) {
-        LOG_WARN("fail to build column group", K(ret));
-      } else if (OB_FAIL(new_table_schema.add_column_group(tmp_cg))) {
-        LOG_WARN("failt to add default column group", K(ret));
-      }
     }
   }
   return ret;

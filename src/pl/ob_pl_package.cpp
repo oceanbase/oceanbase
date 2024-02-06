@@ -183,62 +183,61 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     const ObPLVar *var = var_table_.at(var_idx);
     const ObPLDataType &var_type = var->get_type();
     const ObObj *ser_value = NULL;
-    bool need_deserialize = false;
     key.reset();
     value.reset();
     if (OB_ISNULL(var)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("variable is null", K(ret), KPC(var), K(var_idx));
-    } else if (var_type.is_cursor_type()
-        && OB_FAIL(resolve_ctx.session_info_.init_cursor_cache())) {
-      LOG_WARN("failed to init cursor cache", K(ret));
-    } else if (package_state.get_serially_reusable()) {
-      // do nothing ...
-    } else if (OB_FAIL(package_state.make_pkg_var_kv_key(resolve_ctx.allocator_, var_idx, VARIABLE, key))) {
-      LOG_WARN("make package var name failed", K(ret));
-    } else if (OB_NOT_NULL(ser_value = resolve_ctx.session_info_.get_user_variable_value(key))) {
-      need_deserialize = true;
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(var_type.init_session_var(resolve_ctx,
-                                                 var_type.is_cursor_type() ?
-                                                   package_state.get_pkg_cursor_allocator()
-                                                   : package_state.get_pkg_allocator(),
-                                                 exec_ctx,
-                                                 (var->is_formal_param() || need_deserialize) ? NULL : get_default_expr(var->get_default()),
-                                                 var->is_default_construct(),
-                                                 value))) {
-      LOG_WARN("init sesssion var failed", K(ret));
-    } else if (value.is_null_oracle() && var_type.is_not_null()) {
-      ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
-      LOG_WARN("cannot assign null to var with not null attribution", K(ret));
-    } else if (need_deserialize) {
-      if (var_type.is_cursor_type()) {
-        OV (ser_value->is_tinyint() || ser_value->is_number(),
-            OB_ERR_UNEXPECTED, KPC(ser_value), K(lbt()));
-        if (OB_SUCC(ret)
-            && ser_value->is_tinyint() ? ser_value->get_bool() : !ser_value->is_zero_number()) {
-          ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(value.get_ext());
-          CK (OB_NOT_NULL(cursor));
-          OX (cursor->set_sync_cursor());
+      LOG_WARN("var is null", K(ret), K(var), K(var_idx));
+    } else {
+      if (var_type.is_cursor_type()
+          && OB_FAIL(resolve_ctx.session_info_.init_cursor_cache())) {
+        LOG_WARN("failed to init cursor cache", K(ret));
+      } else if (OB_FAIL(var_type.init_session_var(resolve_ctx,
+                                            var_type.is_cursor_type() ?
+                                              package_state.get_pkg_cursor_allocator()
+                                              : package_state.get_pkg_allocator(),
+                                            exec_ctx,
+                                            var->is_formal_param() ? NULL : get_default_expr(var->get_default()),
+                                            var->is_default_construct(),
+                                            value))) {
+        LOG_WARN("init sesssion var failed", K(ret));
+      } else if (value.is_null_oracle() && var_type.is_not_null()) {
+        ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+        LOG_WARN("cannot assign null to var with not null attribution", K(ret));
+      } else if (OB_FAIL(package_state.make_pkg_var_kv_key(resolve_ctx.allocator_, var_idx, VARIABLE, key))) {
+        LOG_WARN("make package var name failed", K(ret));
+      } else if (OB_NOT_NULL(ser_value = resolve_ctx.session_info_.get_user_variable_value(key))) {
+        if (package_state.get_serially_reusable()) {
+          // do not sync serially package variable !
+        } else {
+          if (var_type.is_cursor_type()) {
+            OV (ser_value->is_tinyint() || ser_value->is_number(),
+                OB_ERR_UNEXPECTED, KPC(ser_value), K(lbt()));
+            if (OB_SUCC(ret)
+                && ser_value->is_tinyint() ? ser_value->get_bool() : !ser_value->is_zero_number()) {
+              ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(value.get_ext());
+              CK (OB_NOT_NULL(cursor));
+              OX (cursor->set_sync_cursor());
+            }
+          } else {
+            // sync other server modify for this server! (from porxy or distribute plan)
+            OZ (var_type.deserialize(resolve_ctx,
+                                    var_type.is_cursor_type() ?
+                                      package_state.get_pkg_cursor_allocator()
+                                      : package_state.get_pkg_allocator(),
+                                    ser_value->get_hex_string().ptr(),
+                                    ser_value->get_hex_string().length(),
+                                    value));
+          }
+          // record sync variable, avoid to sync tiwce!
+          if (OB_NOT_NULL(resolve_ctx.session_info_.get_pl_sync_pkg_vars())) {
+            OZ (resolve_ctx.session_info_.get_pl_sync_pkg_vars()->set_refactored(key));
+          }
         }
-      } else {
-        // sync other server modify for this server! (from porxy or distribute plan)
-        OZ (var_type.deserialize(resolve_ctx,
-                                var_type.is_cursor_type() ?
-                                  package_state.get_pkg_cursor_allocator()
-                                  : package_state.get_pkg_allocator(),
-                                ser_value->get_hex_string().ptr(),
-                                ser_value->get_hex_string().length(),
-                                value));
       }
-      // record sync variable, avoid to sync tiwce!
-      if (OB_NOT_NULL(resolve_ctx.session_info_.get_pl_sync_pkg_vars())) {
-        OZ (resolve_ctx.session_info_.get_pl_sync_pkg_vars()->set_refactored(key));
-      }
+      //NOTE: do not remove package user variable! distribute plan will sync it to remote if needed!
+      OZ (package_state.add_package_var_val(value, var_type.get_type()));
     }
-    //NOTE: do not remove package user variable! distribute plan will sync it to remote if needed!
-    OZ (package_state.add_package_var_val(value, var_type.get_type()));
   }
   if (OB_SUCC(ret) && !resolve_ctx.is_sync_package_var_) {
     if (OB_FAIL(execute_init_routine(resolve_ctx.allocator_, exec_ctx))) {

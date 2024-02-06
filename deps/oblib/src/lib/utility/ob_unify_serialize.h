@@ -15,32 +15,8 @@
 
 #include "lib/utility/serialization.h"
 
-namespace oceanbase
-{
-namespace lib
-{
-
-#ifdef ENABLE_SERIALIZATION_CHECK
-enum ObSerializationCheckStatus
-{
-  CHECK_STATUS_WATING = 0,
-  CHECK_STATUS_RECORDING = 1,
-  CHECK_STATUS_COMPARING = 2
-};
-static constexpr int MAX_SERIALIZE_RECORD_LENGTH = 256;
-struct SerializeDiagnoseRecord
-{
-  uint8_t encoded_lens[MAX_SERIALIZE_RECORD_LENGTH];
-  int count = -1;
-  int check_index = -1;
-  int flag = CHECK_STATUS_WATING;
-};
-RLOCAL_EXTERN(SerializeDiagnoseRecord, ser_diag_record);
-void begin_record_serialization();
-void finish_record_serialization();
-void begin_check_serialization();
-void finish_check_serialization();
-#endif
+namespace oceanbase {
+namespace lib {
 
 #define SERIAL_PARAMS char *buf, const int64_t buf_len, int64_t &pos
 #define DESERIAL_PARAMS const char *buf, const int64_t data_len, int64_t &pos
@@ -75,6 +51,14 @@ void finish_check_serialization();
     }                                                                    \
   }
 
+#define OB_UNIS_DECODEx(obj)                                             \
+  if (OB_SUCC(ret)) {                                                    \
+    if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                 \
+      RPC_WARN("decode object fail",                                     \
+               "name", MSTR(obj), K(data_len), K(pos), K(ret));          \
+    }                                                                    \
+  }
+
 #define OB_UNIS_DECODE(obj)                                              \
   if (OB_SUCC(ret) && pos < data_len) {                                  \
     if (OB_FAIL(NS_::decode(buf, data_len, pos, obj))) {                 \
@@ -83,42 +67,8 @@ void finish_check_serialization();
     }                                                                    \
   }
 
-#ifdef ENABLE_SERIALIZATION_CHECK
-
-#define IF_TYPE_MATCH(obj, type) \
-        std::is_same<type, decltype(obj)>::value || std::is_same<type &, decltype(obj)>::value
-
-#define IF_NEED_TO_CHECK_SERIALIZATION(obj)       \
-        !(std::is_const<decltype(obj)>::value ||  \
-        IF_TYPE_MATCH(obj, uint8_t) ||            \
-        IF_TYPE_MATCH(obj, int8_t) ||             \
-        IF_TYPE_MATCH(obj, bool) ||               \
-        IF_TYPE_MATCH(obj, char))
-
-#define OB_UNIS_ADD_LEN(obj)                                                                                        \
-  {                                                                                                                 \
-    int64_t this_len = NS_::encoded_length(obj);                                                                    \
-    if (IF_NEED_TO_CHECK_SERIALIZATION(obj)) {                                                                      \
-      if (oceanbase::lib::CHECK_STATUS_RECORDING == oceanbase::lib::ser_diag_record.flag &&                         \
-          oceanbase::lib::ser_diag_record.count < oceanbase::lib::MAX_SERIALIZE_RECORD_LENGTH) {                    \
-        oceanbase::lib::ser_diag_record.encoded_lens[oceanbase::lib::ser_diag_record.count++] =                     \
-            static_cast<uint8_t>(this_len);                                                                         \
-      } else if (oceanbase::lib::CHECK_STATUS_COMPARING == oceanbase::lib::ser_diag_record.flag &&                  \
-                 oceanbase::lib::ser_diag_record.check_index < oceanbase::lib::ser_diag_record.count) {             \
-        int ret = OB_ERR_UNEXPECTED;                                                                                \
-        int record_len = oceanbase::lib::ser_diag_record.encoded_lens[oceanbase::lib::ser_diag_record.check_index]; \
-        if (this_len != record_len) {                                                                               \
-          OB_LOG(ERROR, "encoded length not match", "name", MSTR(obj), K(this_len), K(record_len), "value", obj);   \
-        }                                                                                                           \
-        oceanbase::lib::ser_diag_record.check_index++;                                                              \
-      }                                                                                                             \
-    }                                                                                                               \
-    len += this_len;                                                                                                \
-  }
-#else
 #define OB_UNIS_ADD_LEN(obj)                                             \
   len += NS_::encoded_length(obj)
-#endif
 //-----------------------------------------------------------------------
 
 // serialize_ no header
@@ -227,8 +177,8 @@ struct EmptyUnisStruct
     int64_t version = 0;                                                 \
     int64_t len = 0;                                                     \
     if (OB_SUCC(ret)) {                                                 \
-      OB_UNIS_DECODE(version);                                         \
-      OB_UNIS_DECODE(len);                                             \
+      OB_UNIS_DECODEx(version);                                         \
+      OB_UNIS_DECODEx(len);                                             \
       CHECK_VERSION_LENGTH(CLS, version, len);                          \
     }                                                                   \
     if (OB_SUCC(ret)) {                                                 \
@@ -366,7 +316,6 @@ inline uint64_t &get_unis_compat_version()
 }
 
 #define UNIS_VERSION_GUARD(x)
-}  // namespace lib
-}  // namespace oceanbase
+}} // namespace oceanbase::lib
 
 #endif /* _OCEABASE_LIB_UTILITY_OB_UNIFY_SERIALIZE_H_ */

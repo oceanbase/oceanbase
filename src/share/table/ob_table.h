@@ -29,8 +29,6 @@
 #include "share/table/ob_table_ttl_common.h"
 #include "common/rowkey/ob_rowkey.h"
 #include "common/ob_role.h"
-#include "common/row/ob_row.h"
-#include "lib/oblog/ob_warning_buffer.h"
 namespace oceanbase
 {
 namespace common
@@ -40,11 +38,6 @@ class ObNewRow;
 
 namespace table
 {
-
-#define OB_TABLE_OPTION_DEFAULT INT64_C(0)
-#define OB_TABLE_OPTION_RETURNING_ROWKEY (INT64_C(1) << 0)
-#define OB_TABLE_OPTION_USE_PUT (INT64_C(1) << 1)
-
 using common::ObString;
 using common::ObRowkey;
 using common::ObObj;
@@ -248,7 +241,6 @@ struct ObTableOperationType
     APPEND = 7,
     SCAN = 8,
     TTL = 9, // internal type for ttl executor cache key
-    CHECK_AND_INSERT_UP = 10,
     INVALID = 15
   };
 };
@@ -347,10 +339,10 @@ class ObTableTTLOperation
 {
 public:
   ObTableTTLOperation(uint64_t tenant_id, uint64_t table_id, const ObTTLTaskParam &para,
-                      uint64_t del_row_limit, ObRowkey start_rowkey, uint64_t hbase_cur_version)
+                      uint64_t del_row_limit, ObRowkey start_rowkey)
   : tenant_id_(tenant_id), table_id_(table_id), max_version_(para.max_version_),
     time_to_live_(para.ttl_), is_htable_(para.is_htable_), del_row_limit_(del_row_limit),
-    start_rowkey_(start_rowkey), hbase_cur_version_(hbase_cur_version)
+    start_rowkey_(start_rowkey)
   {}
 
   ~ObTableTTLOperation() {}
@@ -368,7 +360,6 @@ public:
   bool is_htable_;
   uint64_t del_row_limit_;
   ObRowkey start_rowkey_;
-  uint64_t hbase_cur_version_;
 };
 
 /// common result for ObTable
@@ -383,16 +374,6 @@ public:
     msg_[0] = '\0';
   }
   ~ObTableResult() = default;
-  void set_err(int err)
-  {
-    errno_ = err;
-    if (err != common::OB_SUCCESS) {
-      common::ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
-      if (OB_NOT_NULL(wb)) {
-        (void)snprintf(msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", wb->get_err_msg());
-      }
-    }
-  }
   void set_errno(int err) { errno_ = err; }
   int get_errno() const { return errno_; }
   int assign(const ObTableResult &other);
@@ -424,7 +405,6 @@ public:
   int get_entity(ObITableEntity *&entity);
   ObITableEntity *get_entity() { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
-  int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
 
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
@@ -488,27 +468,21 @@ public:
   ObIRetryPolicy* retry_policy() { return retry_policy_; }
   void set_returning_affected_rows(bool returning) { returning_affected_rows_ = returning; }
   bool returning_affected_rows() const { return returning_affected_rows_; }
-  void set_returning_rowkey(bool returning)
-  {
-    if (returning) {
-      option_flag_ |= OB_TABLE_OPTION_RETURNING_ROWKEY;
-    }
-  }
-  bool returning_rowkey() const { return option_flag_ & OB_TABLE_OPTION_RETURNING_ROWKEY; }
+  void set_returning_rowkey(bool returning) { returning_rowkey_ = returning; }
+  bool returning_rowkey() const { return returning_rowkey_; }
   void set_returning_affected_entity(bool returning) { returning_affected_entity_ = returning; }
   bool returning_affected_entity() const { return returning_affected_entity_; }
   void set_batch_operation_as_atomic(bool atomic) { batch_operation_as_atomic_ = atomic; }
   bool batch_operation_as_atomic() const { return batch_operation_as_atomic_; }
   void set_binlog_row_image_type(ObBinlogRowImageType type) { binlog_row_image_type_ = type; }
   ObBinlogRowImageType binlog_row_image_type() const { return binlog_row_image_type_; }
-  uint8_t get_option_flag() const { return option_flag_; }
 private:
   ObTableConsistencyLevel consistency_level_;
   int64_t server_timeout_us_;
   int64_t max_execution_time_us_;
   ObIRetryPolicy *retry_policy_;
   bool returning_affected_rows_;  // default: false
-  uint8_t option_flag_; // default: 0
+  bool returning_rowkey_;         // default: false
   bool returning_affected_entity_;  // default: false
   bool batch_operation_as_atomic_;  // default: false
   // int route_policy
@@ -844,8 +818,7 @@ public:
   uint64_t get_checksum();
 
   TO_STRING_KV(K_(query),
-               K_(mutations),
-               K_(return_affected_entity));
+               K_(mutations));
 private:
   ObTableQuery query_;
   ObTableBatchOperation mutations_;
@@ -890,26 +863,14 @@ public:
   const common::ObIArray<common::ObString>& get_select_columns() const { return properties_names_; };
   static int64_t get_max_packet_buffer_length() { return obrpc::get_max_rpc_packet_size() - (1<<20); }
   static int64_t get_max_buf_block_size() { return get_max_packet_buffer_length() - (1024*1024LL); }
-  TO_STRING_KV(K(properties_names_), K(row_count_), K(buf_.get_position()));
 private:
   static const int64_t DEFAULT_BUF_BLOCK_SIZE = common::OB_MALLOC_BIG_BLOCK_SIZE - (1024*1024LL);
   int alloc_buf_if_need(const int64_t size);
-  OB_INLINE int64_t get_lob_storage_count(const common::ObNewRow &row) const
-  {
-    int64_t count = 0;
-    for (int64_t i = 0; i < row.get_count(); ++i) {
-      if (is_lob_storage(row.get_cell(i).get_type())) {
-        count++;
-      }
-    }
-    return count;
-  }
 private:
   common::ObSEArray<ObString, 16> properties_names_;  // serialize
   int64_t row_count_;                                 // serialize
   common::ObDataBuffer buf_;                          // serialize
   common::ObArenaAllocator allocator_;
-  common::ObArenaAllocator prop_name_allocator_;
   int64_t fixed_result_size_;
   // for deserialize and read
   int64_t curr_idx_;
@@ -984,8 +945,7 @@ public:
     : ttl_del_rows_(0),
       max_version_del_rows_(0),
       scan_rows_(0),
-      end_rowkey_(),
-      iter_end_ts_(0)
+      end_rowkey_()
     {}
   ~ObTableTTLOperationResult() {}
   uint64_t get_ttl_del_row() { return ttl_del_rows_; }
@@ -993,14 +953,12 @@ public:
   uint64_t get_del_row() { return ttl_del_rows_ + max_version_del_rows_; }
   uint64_t get_scan_row() { return scan_rows_; }
   common::ObString get_end_rowkey() { return end_rowkey_; }
-  int64_t get_end_ts() { return iter_end_ts_; }
-  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(scan_rows), K_(end_rowkey), K_(iter_end_ts));
+  TO_STRING_KV(K_(ttl_del_rows), K_(max_version_del_rows), K_(scan_rows), K_(end_rowkey));
 public:
   uint64_t ttl_del_rows_;
   uint64_t max_version_del_rows_;
   uint64_t scan_rows_;
   common::ObString end_rowkey_;
-  int64_t iter_end_ts_;
 };
 
 struct ObTableMoveReplicaInfo final

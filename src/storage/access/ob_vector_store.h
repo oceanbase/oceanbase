@@ -43,7 +43,7 @@ public:
   // shallow copy
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockReader *reader,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) override;
@@ -62,10 +62,10 @@ public:
   virtual bool is_empty() const override final { return 0 == count_; }
   DECLARE_TO_STRING;
 private:
-  int fill_group_idx(const int64_t group_idx);
+  void fill_group_idx(const int64_t group_idx);
   int fill_output_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockReader *reader,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res);
@@ -95,10 +95,10 @@ private:
   common::ObFixedArray<int32_t, common::ObIAllocator> cols_projector_;
   common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
+  blocksstable::ObDatumRow row_buf_;
   sql::ObExpr *group_idx_expr_;
   blocksstable::ObDatumRow default_row_;
   ObGroupByCell *group_by_cell_;
-  const ObTableIterParam *iter_param_;
 };
 
 }

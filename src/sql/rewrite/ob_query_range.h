@@ -457,6 +457,7 @@ public:
     }
     return bret;
   }
+  int is_at_most_one_row(bool &is_one_row) const;
   int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
   bool is_precise_get() const { return table_graph_.is_precise_get_; }
@@ -899,9 +900,6 @@ private:
   int check_null_param_compare_in_row(const ObRawExpr *l_expr,
                                       const ObRawExpr *r_expr,
                                       ObKeyPart *&out_key_part);
-  int check_inner_row_cmp_type(const ObRawExpr *l_expr,
-                               const ObRawExpr *r_expr,
-                               bool &use_ori_cmp_type);
 private:
   static const int64_t RANGE_BUCKET_SIZE = 1000;
   static const int64_t MAX_RANGE_SIZE_OLD = 10000;

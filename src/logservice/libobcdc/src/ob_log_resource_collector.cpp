@@ -299,7 +299,7 @@ int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_tas
 
     const bool is_test_mode_on = TCONF.test_mode_on != 0;
     if (is_test_mode_on) {
-      LOG_INFO("LogEntryTask-free", "LogEntryTask", *log_entry_task, "addr", log_entry_task, K(data_len), K(is_log_entry_stored));
+      LOG_INFO("LogEntryTask-free", "LogEntryTask", *log_entry_task, "addr", log_entry_task, K(data_len));
     }
 
     if (is_log_entry_stored) {
@@ -336,7 +336,7 @@ int ObLogResourceCollector::del_store_service_data_(const uint64_t tenant_id,
     LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id));
   } else {
     tenant = guard.get_tenant();
-    column_family_handle = tenant->get_redo_storage_cf_handle();
+    column_family_handle = tenant->get_cf();
   }
 
   if (OB_SUCC(ret) && ! RCThread::is_stoped()) {
@@ -698,7 +698,6 @@ int ObLogResourceCollector::revert_dml_binlog_record_(ObLogBR &br, volatile bool
   return ret;
 }
 
-// @deperate: should not use it case redo_storage_key don't contain trans_id anymore
 int ObLogResourceCollector::del_trans_(const uint64_t tenant_id,
     const ObString &trans_id_str)
 {
@@ -719,7 +718,7 @@ int ObLogResourceCollector::del_trans_(const uint64_t tenant_id,
     LOG_ERROR("get_tenant_guard fail", KR(ret), K(tenant_id));
   } else {
     tenant = guard.get_tenant();
-    column_family_handle = tenant->get_redo_storage_cf_handle();
+    column_family_handle = tenant->get_cf();
   }
 
   if (OB_SUCC(ret)) {
@@ -749,13 +748,10 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
     LOG_ERROR("part_trans_task is NULL", KPC(log_entry_task));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    const int64_t row_ref_cnt = log_entry_task->dec_row_ref_cnt();
-    const bool need_revert_log_entry_task = (row_ref_cnt == 0);
-
     if (TCONF.test_mode_on) {
-      // print while revert each row
-      LOG_INFO("revert_dml_binlog_record", KP(&br), K(br), KP(log_entry_task), K(need_revert_log_entry_task), KPC(log_entry_task));
+      LOG_INFO("revert_dml_binlog_record", KP(&br), K(br), KP(log_entry_task), KPC(log_entry_task));
     }
+    const bool need_revert_log_entry_task = (log_entry_task->dec_row_ref_cnt() == 0);
 
     if (need_revert_log_entry_task) {
       if (OB_FAIL(revert_log_entry_task_(log_entry_task))) {

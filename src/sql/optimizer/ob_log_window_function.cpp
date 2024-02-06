@@ -236,63 +236,27 @@ uint64_t ObLogWindowFunction::hash(uint64_t seed) const
   return seed;
 }
 
-int ObLogWindowFunction::inner_est_cost(double child_card, double child_width, double &op_cost)
-{
-  int ret = OB_SUCCESS;
-  int64_t parallel = 0;
-  op_cost = 0.0;
-  if (OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan is null", K(ret));
-  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret)); 
-  } else if (OB_FAIL(ObOptEstCost::cost_window_function(child_card / parallel,
-                                                        child_width,
-                                                        win_exprs_.count(),
-                                                        op_cost,
-                                                        get_plan()->get_optimizer_context()))) {
-    LOG_WARN("calculate cost of window function failed", K(ret));
-  } else {
-    ObSEArray<ObBasicCostInfo, 1> cost_infos;
-    double filter_op_cost = 0.0;
-    if (OB_SUCC(ret) && !filter_exprs_.empty()) {
-      if (OB_FAIL(cost_infos.push_back(ObBasicCostInfo(child_card, get_cost(), get_width(),is_exchange_allocated())))) {
-        LOG_WARN("push back cost info failed.", K(ret));
-      } else {
-        common::ObBitSet<> dummy_onetime;
-        common::ObBitSet<> dummy_init;
-        ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-        ObSubplanFilterCostInfo info(cost_infos, dummy_onetime, dummy_init);
-        if (OB_FAIL(ObOptEstCost::cost_subplan_filter(info, filter_op_cost, opt_ctx))) {
-          LOG_WARN("failed to calculate  the cost of subplan filter", K(ret));
-        }
-      }
-    }
-    op_cost += filter_op_cost;
-  }
-  return ret;
-}
-
 int ObLogWindowFunction::est_cost()
 {
   int ret = OB_SUCCESS;
+  int64_t parallel = 0;
   ObLogicalOperator *first_child = NULL;
-  double child_card = 0.0;
-  double child_width = 0.0;
-  double sel = 0.0;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(first_child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("first child is null", K(ret), K(first_child));
-  } else if (OB_FAIL(get_child_est_info(child_card, child_width, sel))) {
-    LOG_WARN("get child est info failed", K(ret));
-  } else if (OB_FAIL(inner_est_cost(child_card, child_width, op_cost_))) {
+  } else if (OB_UNLIKELY((parallel = get_parallel()) < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parallel degree", K(parallel), K(ret));
+  } else if (OB_FAIL(ObOptEstCost::cost_window_function(first_child->get_card() / parallel,
+                                                        first_child->get_width(),
+                                                        win_exprs_.count(),
+                                                        op_cost_,
+                                                        get_plan()->get_optimizer_context().get_cost_model_type()))) {
     LOG_WARN("calculate cost of window function failed", K(ret));
   } else {
+    set_card(first_child->get_card());
     set_cost(first_child->get_cost() + op_cost_);
-    set_op_cost(op_cost_);
-    set_card(child_card * sel);
   }
   return ret;
 }
@@ -302,72 +266,28 @@ int ObLogWindowFunction::do_re_est_cost(EstimateCostInfo &param, double &card, d
   int ret = OB_SUCCESS;
   const int64_t parallel = param.need_parallel_;
   ObLogicalOperator *child = NULL;
-  double child_card = 0.0;
-  double child_width = 0.0;
-  double sel = 0.0;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(child), K(ret));
-  } else if (OB_FAIL(get_child_est_info(child_card, child_width, sel))) {
-    LOG_WARN("get child est info failed", K(ret));
   } else {
+    double child_card = child->get_card();
     double child_cost = child->get_cost();
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (is_block_op()) {
       param.need_row_count_ = -1; //reset need row count
     }
-     else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= sel * child_card) {
-      param.need_row_count_ = -1;
-    } else if (param.need_row_count_ > 0) {
-      param.need_row_count_ /= sel;
-    }
-    if (OB_FAIL(ret)) {
-      //do nothing
-    } else if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
+    if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
-    } else if (OB_FAIL(inner_est_cost(child_card, child_width, op_cost))) {
+    } else if (OB_FAIL(ObOptEstCost::cost_window_function(child_card / parallel,
+                                                          child->get_width(),
+                                                          win_exprs_.count(),
+                                                          op_cost,
+                                                          opt_ctx.get_cost_model_type()))) {
       LOG_WARN("calculate cost of window function failed", K(ret));
     } else {
       cost = child_cost + op_cost;
-      card = sel * child_card;
-    }
-  }
-  return ret;
-}
-
-int ObLogWindowFunction::get_child_est_info(double &child_card, double &child_width, double &selectivity)
-{
-  int ret = OB_SUCCESS;
-  selectivity = 1.0;
-  ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
-  if (OB_ISNULL(child) || OB_ISNULL(get_plan())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(child));
-  } else {
-    child_card = child->get_card();
-    child_width = child->get_width();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (0 == child_card) {
-    selectivity = 1.0;
-  } else if (!filter_exprs_.empty()) {
-    if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&get_output_equal_sets(),
-                                                                  use_topn_sort_ ? origin_sort_card_ : get_card()))) {
-    } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
-                                                              get_plan()->get_selectivity_ctx(),
-                                                              filter_exprs_,
-                                                              selectivity,
-                                                              get_plan()->get_predicate_selectivities()))) {
-      LOG_WARN("failed to calc selectivity", K(ret));
-    } else if (use_topn_sort_) {
-      //calc the card of window func operator without pushing down the topn filter first.
-      //win_card / child_card is the precise selectivity
-      double win_card = selectivity * origin_sort_card_;
-      selectivity = win_card / child_card;
-      if (selectivity > 1.0) {
-        selectivity = 1.0;
-      }
+      card = child_card;
     }
   }
   return ret;
@@ -516,8 +436,7 @@ int ObLogWindowFunction::add_win_dist_options(const ObLogicalOperator *op,
                                                          win_func->get_window_exprs(),
                                                          win_func->get_win_dist_algo(),
                                                          win_func->is_push_down(),
-                                                         win_func->get_use_hash_sort(),
-                                                         win_func->get_use_topn_sort()))) {
+                                                         win_func->get_use_hash_sort()))) {
       LOG_WARN("failed to add win dist option", K(ret));
     }
   }
@@ -551,7 +470,6 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
         hint_match = hint_opt.algo_ == outline_opt.algo_
                     && hint_opt.use_hash_sort_ == outline_opt.use_hash_sort_
                     && hint_opt.is_push_down_ == outline_opt.is_push_down_
-                    && hint_opt.use_topn_sort_ == outline_opt.use_topn_sort_
                     && (hint_opt.win_func_idxs_.empty()
                         || is_array_equal(hint_opt.win_func_idxs_, outline_opt.win_func_idxs_));
       }

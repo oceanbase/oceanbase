@@ -55,16 +55,6 @@ public:
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) override;
-  virtual int get_rows(
-      const common::ObIArray<int32_t> &cols,
-      const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const int64_t *row_ids,
-      const int64_t row_cap,
-      const char **cell_datas,
-      const int64_t vec_offset,
-      uint32_t *len_array,
-      sql::ObEvalCtx &eval_ctx,
-      sql::ObExprPtrIArray &exprs) = 0;
 
 protected:
   virtual int find_bound(const ObDatumRange &range, const int64_t begin_idx, int64_t &row_idx,

@@ -119,14 +119,6 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
           if (params_type_.at(i).get_collation_type() == CS_TYPE_ANY) {
             if (types[i].is_string_or_lob_locator_type()) {
               types[i].set_calc_collation_type(types[i].get_collation_type());
-              if (lib::is_oracle_mode() && types[i].get_calc_meta().is_clob()) {
-                ObCollationType dest_collation = ob_is_nstring_type(types[i].get_calc_meta().get_type()) ?
-                                                  type_ctx.get_session()->get_nls_collation_nation()
-                                                : type_ctx.get_session()->get_nls_collation();
-                if (CS_TYPE_INVALID != dest_collation) {
-                  types[i].set_calc_collation_type(dest_collation);
-                }
-              }
             } else {
               types[i].set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
             }
@@ -285,10 +277,9 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
   CK (iparams.count() == params_desc.count());
   CK (0 == nocopy_params.count() || nocopy_params.count() == iparams.count());
   // 先处理NoCopy参数
-  ObSEArray<bool, 16> dones;
   for (int64_t i = 0; OB_SUCC(ret) && i < iparams.count(); ++i) {
     if (!params_desc.at(i).is_out()) {
-      OZ (dones.push_back(true));
+      // do nothing ...
     } else if (params_desc.at(i).is_local_out() && nocopy_params.at(i) != OB_INVALID_INDEX) {
       const ParamStore &param_store = exec_ctx.get_physical_plan_ctx()->get_param_store();
       int64_t position = params_desc.at(i).get_index();
@@ -303,281 +294,94 @@ int ObExprUDF::process_out_params(const ObObj *objs_stack,
                                          result));
       OX (result.copy_value_or_obj(*modify, true));
       OX (modify->set_param_meta());
-      if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
-        modify->set_is_ref_cursor_type(true);
-      }
-      OZ (dones.push_back(true));
-    } else {
-      OZ (dones.push_back(false));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < iparams.count(); ++i) {
-    OZ (process_singal_out_param(i,
-                                 dones,
-                                 objs_stack,
-                                 param_num,
-                                 iparams,
-                                 alloc,
-                                 exec_ctx,
-                                 nocopy_params,
-                                 params_desc,
-                                 params_type));
-  }
-  return ret;
-}
-
-int ObExprUDF::process_singal_out_param(int64_t i,
-                                        ObIArray<bool> &dones,
-                                        const ObObj *objs_stack,
-                                        int64_t param_num,
-                                        ParamStore& iparams,
-                                        ObIAllocator &alloc,
-                                        ObExecContext &exec_ctx,
-                                        const ObIArray<int64_t> &nocopy_params,
-                                        const ObIArray<ObUDFParamDesc> &params_desc,
-                                        const ObIArray<ObExprResType> &params_type)
-{
-  int ret = OB_SUCCESS;
-  if (dones.at(i)) {
-    // already process, do nothing
-  } else if (params_desc.at(i).is_local_out()) { //out param in paramstore of caller
-    if (nocopy_params.count() > 0 && nocopy_params.at(i) != OB_INVALID_INDEX) {
-      // nocopy parameter already process before, do nothing ....
-    } else {
-      const ParamStore &param_store = exec_ctx.get_physical_plan_ctx()->get_param_store();
-      int64_t position = params_desc.at(i).get_index();
-      ObObjParam *modify = NULL;
-      ObObjParam result;
-      CK (position < param_store.count());
-      CK (OB_NOT_NULL(modify = const_cast<ObObjParam*>(&(param_store.at(position)))));
-      // ext type cannot convert. just copy it.
-      if (iparams.at(i).is_ext()) {
-        // caller param may ref cursor, which may not allocated.
-        if (modify->is_null()) {
-          OX (iparams.at(i).copy_value_or_obj(*modify, true));
-          if (iparams.at(i).is_ref_cursor_type()) {
-            modify->set_is_ref_cursor_type(true);
+    if (!params_desc.at(i).is_out()) {
+      // do nothing ...
+    } else if (params_desc.at(i).is_local_out()) { //out param in paramstore of caller
+      if (nocopy_params.count() > 0 && nocopy_params.at(i) != OB_INVALID_INDEX) {
+        // nocopy parameter already process before, do nothing ....
+      } else {
+        const ParamStore &param_store = exec_ctx.get_physical_plan_ctx()->get_param_store();
+        int64_t position = params_desc.at(i).get_index();
+        ObObjParam *modify = NULL;
+        ObObjParam result;
+        CK (position < param_store.count());
+        CK (OB_NOT_NULL(modify = const_cast<ObObjParam*>(&(param_store.at(position)))));
+        // ext type cannot convert. just copy it.
+        if (iparams.at(i).is_ext()) {
+          // caller param may ref cursor, which may not allocated.
+          if (modify->is_null()) {
+            OX (iparams.at(i).copy_value_or_obj(*modify, true));
+            if (iparams.at(i).is_ref_cursor_type()) {
+              modify->set_is_ref_cursor_type(true);
+            }
+            OX (modify->set_param_meta());
+          } else if (!modify->is_ext()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("process function out param failed, type mismatch", K(ret),
+                                                                   K(iparams.at(i)), K(*modify));
+          } else {
+            OX (iparams.at(i).copy_value_or_obj(*modify, true));
+            OX (modify->set_param_meta());
           }
-          OX (modify->set_param_meta());
-        } else if (!modify->is_ext()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("process function out param failed, type mismatch", K(ret),
-                                                                 K(iparams.at(i)), K(*modify));
         } else {
-          OX (iparams.at(i).copy_value_or_obj(*modify, true));
+          OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
+                                             &alloc,
+                                             iparams.at(i),
+                                             params_type.at(i),
+                                             result));
+          OX (result.copy_value_or_obj(*modify, true));
           OX (modify->set_param_meta());
-          if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
-            modify->set_is_ref_cursor_type(true);
-          }
-        }
-      } else {
-        OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
-                                           &alloc,
-                                           iparams.at(i),
-                                           params_type.at(i),
-                                           result));
-        OX (result.copy_value_or_obj(*modify, true));
-        OX (modify->set_param_meta());
-        if (OB_SUCC(ret) && iparams.at(i).is_ref_cursor_type()) {
-          modify->set_is_ref_cursor_type(true);
         }
       }
-      OX (dones.at(i) = true);
-    }
-  } else if (params_desc.at(i).is_package_var_out()) {
-    OZ (ObSPIService::spi_set_package_variable(
-      &exec_ctx,
-      NULL,
-      params_desc.at(i).get_package_id(),
-      params_desc.at(i).get_index(),
-      iparams.at(i)));
-    OX (dones.at(i) = true);
-  } else if (params_desc.at(i).is_subprogram_var_out()) {
-    OZ (pl::ObPLContext::set_subprogram_var_from_local(
-      *exec_ctx.get_my_session(),
-      params_desc.at(i).get_package_id(),
-      params_desc.at(i).get_subprogram_id(),
-      params_desc.at(i).get_index(),
-      iparams.at(i)));
-    OX (dones.at(i) = true);
-  } else if (params_desc.at(i).is_obj_access_out() &&
-             OB_INVALID_ID != params_desc.at(i).get_package_id() &&
-             OB_INVALID_ID != params_desc.at(i).get_index()) {
-    OZ (SMART_CALL(process_package_out_param(
-      i, dones, objs_stack, param_num, iparams, alloc, exec_ctx, nocopy_params, params_desc, params_type)));
-  } else if (!params_type.at(i).is_ext()) {
-    void *ptr = NULL;
-    ObObj *obj = NULL;
-    ObObjParam result;
-    CK (objs_stack[i].is_ext());
-    OX (ptr = reinterpret_cast<void*>(objs_stack[i].get_ext()));
-    CK (OB_NOT_NULL(ptr));
-    OX (obj = reinterpret_cast<ObObj*>(ptr));
-    CK (OB_NOT_NULL(obj));
-    OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
-                                       &alloc, iparams.at(i),
-                                       params_type.at(i),
-                                       result));
-    OX (result.copy_value_or_obj(*obj, true));
-    OX (result.set_param_meta());
-    OX (dones.at(i) = true);
-  }
-  return ret;
-}
-
-int ObExprUDF::process_package_out_param(int64_t idx,
-                                         ObIArray<bool> &dones,
-                                         const ObObj *objs_stack,
-                                         int64_t param_num,
-                                         ParamStore& iparams,
-                                         ObIAllocator &alloc,
-                                         ObExecContext &exec_ctx,
-                                         const ObIArray<int64_t> &nocopy_params,
-                                         const ObIArray<ObUDFParamDesc> &params_desc,
-                                         const ObIArray<ObExprResType> &params_type)
-{
-  int ret = OB_SUCCESS;
-  // check if left out parameter is child of current
-  for (int64_t i = idx + 1; OB_SUCC(ret) && i < iparams.count(); ++i) {
-    if (!dones.at(i) && iparams.at(i).is_ext()) {
-      bool is_child = false;
-      OZ (is_child_of(iparams.at(idx), iparams.at(i), is_child));
-      if (OB_SUCC(ret) && is_child) {
-        OZ (SMART_CALL(process_singal_out_param(
-          i, dones, objs_stack, param_num, iparams, alloc, exec_ctx, nocopy_params, params_desc, params_type)));
-      }
-    }
-  }
-
-  ObIAllocator *pkg_allocator = NULL;
-  pl::ObPLExecCtx plctx(nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
-  OZ (ObSPIService::spi_get_package_allocator(&plctx, params_desc.at(idx).get_package_id(), pkg_allocator));
-
-  if (OB_FAIL(ret)) {
-  } else if (!params_type.at(idx).is_ext()) {
-    void *ptr = NULL;
-    ObObj *obj = NULL;
-    ObObjParam result;
-    CK (objs_stack[idx].is_ext());
-    OX (ptr = reinterpret_cast<void*>(objs_stack[idx].get_ext()));
-    CK (OB_NOT_NULL(ptr));
-    OX (obj = reinterpret_cast<ObObj*>(ptr));
-    CK (OB_NOT_NULL(obj));
-    OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
-                                       pkg_allocator != NULL ? pkg_allocator : &alloc,
-                                       iparams.at(idx),
-                                       params_type.at(idx),
-                                       result));
-    OX (result.copy_value_or_obj(*obj, true));
-    OX (result.set_param_meta());
-  } else {
-    ObObj &obj = iparams.at(idx);
-    if (OB_SUCC(ret) && nullptr != pkg_allocator) {
-      if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
-        OZ (pl::ObUserDefinedType::deep_copy_obj(*pkg_allocator, obj, obj, true));
-      } else {
-        OZ (deep_copy_obj(*pkg_allocator, obj, obj));
-      }
-    }
-    if (OB_FAIL(ret)) {
-      int tmp = pl::ObUserDefinedType::destruct_obj(obj, exec_ctx.get_my_session());
-      if (OB_SUCCESS != tmp) {
-        LOG_WARN("fail to destruct param of udf", K(ret), K(tmp));
-      }
-    }
-  }
-  OZ (ObSPIService::spi_update_package_change_info(
-    &plctx, params_desc.at(idx).get_package_id(), params_desc.at(idx).get_index()));
-  OX (dones.at(idx) = true);
-  return ret;
-}
-
-int ObExprUDF::is_child_of(ObObj &parent, ObObj &child, bool &is_child)
-{
-  int ret = OB_SUCCESS;
-  if (parent.is_ext() && child.is_ext() && parent.get_ext() == child.get_ext()) {
-    is_child = true;
-  } else if (parent.is_pl_extend() && parent.get_ext() != 0) {
-    switch (parent.get_meta().get_extend_type()) {
-      case pl::PL_NESTED_TABLE_TYPE:
-      case pl::PL_ASSOCIATIVE_ARRAY_TYPE:
-      case pl::PL_VARRAY_TYPE: {
-        pl::ObPLCollection* coll = reinterpret_cast<pl::ObPLCollection*>(parent.get_ext());
-        CK (OB_NOT_NULL(coll));
-        CK (coll->get_data());
-        for (int64_t i = 0; OB_SUCC(ret) && i < coll->get_count(); ++i) {
-          if (!(coll->get_data()[i]).is_ext()) {
-            ObObj tmp;
-            tmp.set_ext(reinterpret_cast<int64_t>(&(coll->get_data()[i])));
-            OZ (SMART_CALL(is_child_of(tmp, child, is_child)));
-          } else {
-            OZ (SMART_CALL(is_child_of(coll->get_data()[i], child, is_child)));
-          }
+    } else if (params_desc.at(i).is_package_var_out()) {
+      OZ (ObSPIService::spi_set_package_variable(
+        &exec_ctx,
+        NULL,
+        params_desc.at(i).get_package_id(),
+        params_desc.at(i).get_index(),
+        iparams.at(i)));
+    } else if (params_desc.at(i).is_subprogram_var_out()) {
+      OZ (pl::ObPLContext::set_subprogram_var_from_local(
+        *exec_ctx.get_my_session(),
+        params_desc.at(i).get_package_id(),
+        params_desc.at(i).get_subprogram_id(),
+        params_desc.at(i).get_index(),
+        iparams.at(i)));
+    } else if (!params_type.at(i).is_ext()) {
+      void *ptr = NULL;
+      ObObj *obj = NULL;
+      ObObjParam result;
+      CK (objs_stack[i].is_ext());
+      OX (ptr = reinterpret_cast<void*>(objs_stack[i].get_ext()));
+      CK (OB_NOT_NULL(ptr));
+      OX (obj = reinterpret_cast<ObObj*>(ptr));
+      CK (OB_NOT_NULL(obj));
+      OZ (sql::ObSPIService::spi_convert(exec_ctx.get_my_session(),
+                                         &alloc, iparams.at(i),
+                                         params_type.at(i),
+                                         result));
+      OX (result.copy_value_or_obj(*obj, true));
+      OX (result.set_param_meta());
+    } else if (params_desc.at(i).is_obj_access_out() &&
+               OB_INVALID_ID != params_desc.at(i).get_package_id() &&
+               OB_INVALID_ID != params_desc.at(i).get_index()) {
+      ObIAllocator *pkg_allocator = NULL;
+      pl::ObPLExecCtx plctx(nullptr, &exec_ctx, nullptr,nullptr,nullptr,nullptr);
+      ObObj &obj = iparams.at(i);
+      OZ (ObSPIService::spi_get_package_allocator(&plctx, params_desc.at(i).get_package_id(), pkg_allocator));
+      if (OB_SUCC(ret) && nullptr != pkg_allocator) {
+        if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(*pkg_allocator, obj, obj, true));
+        } else {
+          OZ (deep_copy_obj(*pkg_allocator, obj, obj));
         }
-      } break;
-      case pl::PL_RECORD_TYPE: {
-        pl::ObPLRecord* record = reinterpret_cast<pl::ObPLRecord*>(parent.get_ext());
-        CK (OB_NOT_NULL(record));
-        for (int64_t i = 0; OB_SUCC(ret) && i < record->get_count(); ++i) {
-          ObObj *obj = NULL;
-          OZ (record->get_element(i, obj));
-          CK (OB_NOT_NULL(obj));
-          if (OB_FAIL(ret)) {
-          } else if (!obj->is_ext()) {
-            ObObj tmp;
-            tmp.set_ext(reinterpret_cast<int64_t>(obj));
-            OZ (SMART_CALL(is_child_of(tmp, child, is_child)));
-          } else {
-            OZ (SMART_CALL(is_child_of(*obj, child, is_child)));
-          }
-        }
-      } break;
-      default: {
-      } break;
+      }
+      OZ (ObSPIService::spi_update_package_change_info(&plctx, params_desc.at(i).get_package_id(),
+                                                       params_desc.at(i).get_index()));
     }
-  }
-  return ret;
-}
-
-int ObExprUDF::before_calc_result(share::schema::ObSchemaGetterGuard &schema_guard,
-                                  ObSqlCtx &sql_ctx,
-                                  ObExecContext &exec_ctx)
-{
-  int ret = OB_SUCCESS;
-  // 通过SPI执行的UDF可能会存在exec_ctx_中的schema_guard是空的情况
-  // 这里根据task_ctx中记录的schema_version重新获取schema_guard
-  if (OB_ISNULL(exec_ctx.get_sql_ctx())
-      || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
-    sql::ObTaskExecutorCtx &task_ctx = exec_ctx.get_task_exec_ctx();
-    const observer::ObGlobalContext &gctx = observer::ObServer::get_instance().get_gctx();
-    if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(
-                exec_ctx.get_my_session()->get_effective_tenant_id(),
-                schema_guard,
-                task_ctx.get_query_tenant_begin_schema_version(),
-                task_ctx.get_query_sys_begin_schema_version()))) {
-      LOG_WARN("get schema guard failed", K(ret));
-    }
-  }
-  // 通过分布式计划执行的function没有sqlctx信息, 构造一个
-  if (OB_ISNULL(exec_ctx.get_sql_ctx())) {
-    sql_ctx.session_info_ = exec_ctx.get_my_session();
-    sql_ctx.schema_guard_ = &schema_guard;
-    exec_ctx.set_sql_ctx(&sql_ctx);
-  } else if (OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
-    exec_ctx.get_sql_ctx()->schema_guard_ = &schema_guard;
-  }
-  return ret;
-}
-
-int ObExprUDF::after_calc_result(share::schema::ObSchemaGetterGuard &schema_guard,
-                                 ObSqlCtx &sql_ctx,
-                                 ObExecContext &exec_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (exec_ctx.get_sql_ctx() == &sql_ctx) {
-    exec_ctx.set_sql_ctx(NULL);
-  } else if (exec_ctx.get_sql_ctx()->schema_guard_ == &schema_guard) {
-    exec_ctx.get_sql_ctx()->schema_guard_ = NULL;
   }
   return ret;
 }
@@ -668,7 +472,6 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
     // do nothing ...
   } else {
     bool need_end_stmt = false;
-    bool need_free_udt = false;
     stmt::StmtType parent_stmt = ctx.exec_ctx_.get_sql_ctx()->stmt_type_;
     if (!session->has_start_stmt() && stmt::StmtType::T_SELECT == parent_stmt) {
       need_end_stmt = true;
@@ -695,17 +498,6 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         objs, expr.arg_cnt_, info->params_desc_, info->params_type_, *udf_params, alloc, &deep_in_objs));
     }
 
-    share::schema::ObSchemaGetterGuard schema_guard;
-    ObSqlCtx sql_ctx;
-    OZ (before_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
-
-    // restore ctx.exec_ctx_ only when ctx.exec_ctx_ is successfully changed
-    NAMED_DEFER(need_restore_exec_ctx,
-                after_calc_result(schema_guard, sql_ctx, ctx.exec_ctx_));
-    if (OB_FAIL(ret)) {
-      need_restore_exec_ctx.deactivate();
-    }
-
     if (OB_SUCC(ret) && info->is_udt_cons_) {
       pl::ObPLUDTNS ns(*ctx.exec_ctx_.get_sql_ctx()->schema_guard_);
       pl::ObPLDataType pl_type;
@@ -713,7 +505,6 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       pl_type.set_type_from(pl::PL_TYPE_UDT);
       CK (0 < udf_params->count());
       OZ (ns.init_complex_obj(alloc, pl_type, udf_params->at(0), false, false));
-      OX (need_free_udt = true);
     }
     try {
       int64_t package_id = info->is_udt_udf_ ?
@@ -844,12 +635,9 @@ int ObExprUDF::eval_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                               ctx.exec_ctx_.get_allocator(), res));
       }
       OZ(expr.deep_copy_datum(ctx, res));
-    }
-    if (need_free_udt && info->is_udt_cons_) {
-      int tmp = OB_SUCCESS;
-      tmp = pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session());
-      if (OB_SUCCESS != tmp) {
-        LOG_WARN("fail to free udt self memory", K(ret), K(tmp));
+
+      if (OB_SUCC(ret) && info->is_udt_cons_) {
+        OZ (pl::ObUserDefinedType::destruct_obj(udf_params->at(0), ctx.exec_ctx_.get_my_session()));
       }
     }
     if (deep_in_objs.count() > 0) {

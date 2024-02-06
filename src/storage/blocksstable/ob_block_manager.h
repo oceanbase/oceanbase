@@ -24,7 +24,6 @@
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "storage/blocksstable/ob_super_block_buffer_holder.h"
 #include "storage/ob_super_block_struct.h"
-#include "storage/tablet/ob_tablet_block_aggregated_info.h"
 
 namespace oceanbase
 {
@@ -33,7 +32,6 @@ namespace storage
 {
 class ObTenantCheckpointSlogHandler;
 class ObTabletHandle;
-struct ObTabletBlockInfo;
 }
 
 namespace blocksstable
@@ -300,11 +298,9 @@ private:
   {
   public:
     GetPendingFreeBlockFunctor(
-        const int64_t max_free_blk_cnt,
         MacroBlkIdMap &blk_map,
         int64_t &hold_count)
       : ret_code_(common::OB_SUCCESS),
-        max_free_blk_cnt_(max_free_blk_cnt),
         blk_map_(blk_map),
         hold_count_(hold_count)
     {}
@@ -315,33 +311,29 @@ private:
 
   private:
     int ret_code_;
-    int64_t max_free_blk_cnt_;
     MacroBlkIdMap &blk_map_;
     int64_t &hold_count_;
   };
 
-  class DoBlockSweepFunctor final
+  class CopyBlockToArrayFunctor final
   {
   public:
-    DoBlockSweepFunctor(ObBlockManager& block_manager)
+    CopyBlockToArrayFunctor(common::ObIArray<MacroBlockId> &block_ids)
       : ret_code_(common::OB_SUCCESS),
-        block_manager_(block_manager)
+        block_ids_(block_ids)
     {}
-    ~DoBlockSweepFunctor() = default;
+    ~CopyBlockToArrayFunctor() = default;
 
     bool operator()(const MacroBlockId &macro_id, const bool can_free);
     int get_ret_code() const { return ret_code_; }
 
   private:
     int ret_code_;
-    ObBlockManager& block_manager_;
+    common::ObIArray<MacroBlockId> &block_ids_;
   };
 
 private:
-  void update_partial_status(const ObMacroBlockMarkerStatus &tmp_status);
-  int get_macro_block_info(const MacroBlockId &macro_id,
-                           ObMacroBlockInfo &macro_block_info,
-                           ObMacroBlockHandle &macro_block_handle);
+  int get_macro_block_info(const MacroBlockId &macro_id, ObMacroBlockInfo &macro_block_info) const;
   bool is_bad_block(const MacroBlockId &macro_block_id);
   int mark_macro_blocks(
       MacroBlkIdMap &mark_info,
@@ -353,16 +345,6 @@ private:
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
   int mark_tenant_blocks(
-      MacroBlkIdMap &mark_info,
-      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
-      ObMacroBlockMarkerStatus &tmp_status);
-  int mark_tablet_block(
-      MacroBlkIdMap &mark_info,
-      storage::ObTabletHandle &handle,
-      common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
-      ObMacroBlockMarkerStatus &tmp_status);
-  int do_mark_tablet_block(
-      const ObTabletBlockInfo &block_info,
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
@@ -394,9 +376,8 @@ private:
       MacroBlkIdMap &mark_info,
       common::hash::ObHashSet<MacroBlockId, common::hash::NoPthreadDefendMode> &macro_id_set,
       ObMacroBlockMarkerStatus &tmp_status);
-  int set_group_id(const uint64_t tenant_id);
+  bool continue_mark();
   int do_sweep(MacroBlkIdMap &mark_info);
-  int sweep_one_block(const MacroBlockId& macro_id);
 
   int update_mark_info(
       const common::ObIArray<MacroBlockId> &macro_block_list,
@@ -454,7 +435,7 @@ private:
     void reset();
 
   private:
-    int check_block(ObMacroBlockHandle &macro_block_handle);
+    int check_block(const MacroBlockId &macro_id);
     void inspect_bad_block();
 
   private:
@@ -496,9 +477,6 @@ private:
   ObMacroBlockSeqGenerator blk_seq_generator_;
   int64_t alloc_num_;
   lib::ObMutex resize_file_lock_;
-
-  // for resource_isolation
-  uint64_t group_id_;
 
   bool is_inited_;
   bool is_started_;

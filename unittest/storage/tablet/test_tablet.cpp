@@ -390,7 +390,7 @@ public:
   virtual ~TestTablet();
   virtual void SetUp();
   virtual void TearDown();
-  void pull_ddl_memtables(ObIArray<ObDDLKV *> &ddl_kvs)
+  void pull_ddl_memtables(ObIArray<ObITable *> &ddl_kvs)
   {
     for (int64_t i = 0; i < ddl_kv_count_; ++i) {
       ASSERT_EQ(OB_SUCCESS, ddl_kvs.push_back(ddl_kvs_[i]));
@@ -400,7 +400,7 @@ public:
   void reproducing_bug();
 private:
   ObArenaAllocator allocator_;
-  ObDDLKV **ddl_kvs_;
+  ObITable **ddl_kvs_;
   volatile int64_t ddl_kv_count_;
 };
 
@@ -544,7 +544,7 @@ public:
   int init(ObArenaAllocator &allocator, TestTablet &tablet)
   {
     int ret = OB_SUCCESS;
-    ObArray<ObDDLKV *> ddl_kvs;
+    ObArray<ObITable *> ddl_kvs;
     tablet.pull_ddl_memtables(ddl_kvs);
     ret = ddl_kvs_.init(allocator, ddl_kvs);
     const int64_t count = ddl_kvs_.count();
@@ -554,9 +554,10 @@ public:
   }
   void reproducing_bug(ObArenaAllocator &allocator)
   {
-    ObArray<ObDDLKV *> ddl_kvs;
+    ObArray<ObITable *> ddl_kvs;
     for (int64_t i = 0; i < 3; ++i) {
-      ObDDLKV *ddl_kv = new ObDDLKV();
+      ObITable *ddl_kv = new ObDDLKV();
+      ddl_kv->key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
       ddl_kvs.push_back(ddl_kv);
     }
     ddl_kvs_.init(allocator, ddl_kvs);
@@ -572,11 +573,14 @@ void TestTablet::reproducing_bug()
 {
   int ret = OB_SUCCESS;
   ObTabletComplexAddr<TestTableStore> table_store_addr;
-  ddl_kvs_ = static_cast<ObDDLKV**>(allocator_.alloc(sizeof(ObDDLKV*) * ObTablet::DDL_KV_ARRAY_SIZE));
+  ddl_kvs_ = static_cast<ObITable**>(allocator_.alloc(sizeof(ObITable*) * ObTablet::DDL_KV_ARRAY_SIZE));
   ASSERT_TRUE(nullptr != ddl_kvs_);
   ddl_kvs_[0] = new ObDDLKV();
+  ddl_kvs_[0]->key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
   ddl_kvs_[1] = new ObDDLKV();
+  ddl_kvs_[1]->key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
   ddl_kvs_[2] = new ObDDLKV();
+  ddl_kvs_[2]->key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
   std::cout<< "reproducing_bug 1:" << ddl_kv_count_ << std::endl;
   ddl_kv_count_ = 3;
   std::cout<< "reproducing_bug 2:" << ddl_kv_count_ << std::endl;

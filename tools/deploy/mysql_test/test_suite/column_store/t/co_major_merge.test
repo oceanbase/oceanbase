@@ -12,9 +12,9 @@ drop table if exists t3;
 --enable_warnings
 --enable_query_log
 
-create table t1(a int, b varchar(3048), primary key (a)) with column group (all columns, each column);
-create table t2(c0 int, c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, c11 int, c12 int) with column group (all columns, each column);
-create table t3(a int, b varchar(3048), primary key (a)) with column group (all columns, each column);
+create table t1(a int, b varchar(3048), primary key (a)) with column group for all columns, each column;
+create table t2(c0 int, c1 int, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, c11 int, c12 int) with column group for all columns, each column;
+create table t3(a int, b varchar(3048), primary key (a)) with column group for all columns, each column;
 sleep 10;
 insert into t1 values(1, 1);
 insert into t2 values(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);

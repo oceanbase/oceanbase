@@ -167,7 +167,6 @@ int RegexStringComparator::compare_to(const ObString &b)
 {
   // @todo
   UNUSED(b);
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "regexstring comparator");
   LOG_WARN_RET(OB_NOT_SUPPORTED, "regexstring comparator not supported yet");
   return 0;
 }

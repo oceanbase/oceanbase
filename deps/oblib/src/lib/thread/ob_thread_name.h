@@ -32,8 +32,7 @@ inline void set_thread_name(const char* type, uint64_t idx)
 {
   char *name = ob_get_tname();
   uint64_t tenant_id = ob_get_tenant_id();
-  char *ori_tname = ob_get_origin_thread_name();
-  STRNCPY(ori_tname, type, oceanbase::OB_THREAD_NAME_BUF_LEN);
+  ob_get_origin_thread_name() = type;
   if (tenant_id == 0) {
     snprintf(name, OB_THREAD_NAME_BUF_LEN, "%s%ld", type, idx);
   } else {
@@ -46,8 +45,7 @@ inline void set_thread_name(const char* type)
 {
   char *name = ob_get_tname();
   uint64_t tenant_id = ob_get_tenant_id();
-  char *ori_tname = ob_get_origin_thread_name();
-  STRNCPY(ori_tname, type, oceanbase::OB_THREAD_NAME_BUF_LEN);
+  ob_get_origin_thread_name() = type;
   if (tenant_id == 0) {
     snprintf(name, OB_THREAD_NAME_BUF_LEN, "%s", type);
   } else {

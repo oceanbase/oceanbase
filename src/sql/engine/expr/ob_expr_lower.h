@@ -36,29 +36,17 @@ public:
                               common::ObExprTypeCtx &type_ctx) const;
   static int calc_common(const ObExpr &expr, ObEvalCtx &ctx,
                          ObDatum &expr_datum, bool lower, common::ObCollationType cs_type);
-  template <char CA, char CZ>
-  static void calc_common_inner_optimized(char *buf, const int32_t &buf_len,
-                                          const ObString &m_text);
-  template <bool lower>
-  static int calc_common_vector(const ObExpr &expr, ObEvalCtx &ctx,
-      const ObBitVector &skip, const EvalBound &bound, common::ObCollationType cs_type);
-
   static int calc_nls_common(const ObExpr &expr, ObEvalCtx &ctx,
                              ObDatum &expr_datum, bool lower);
   int cg_expr_common(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const;
   int cg_expr_nls_common(ObExprCGCtx &op_cg_ctx,
                          const ObRawExpr &raw_expr,
                          ObExpr &rt_expr) const;
-  DECLARE_SET_LOCAL_SESSION_VARS;
-
 protected:
   virtual int calc(const common::ObCollationType cs_type, char *src, int32_t src_len,
                    char *dest, int32_t det_len, int32_t &out_len) const = 0;
   virtual int32_t get_case_mutiply(const common::ObCollationType cs_type) const = 0;
-
 private:
-  template <typename ArgVec, typename ResVec, bool lower>
-  static int vector_lower_upper(VECTOR_EVAL_FUNC_ARG_DECL, common::ObCollationType cs_type);
   int calc(common::ObObj &result,
            const common::ObString &text,
            common::ObCollationType cs_type,
@@ -78,7 +66,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_lower(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  static int eval_lower_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprLower);
 };
@@ -95,7 +82,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int calc_upper(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  static int eval_upper_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUpper);
 };

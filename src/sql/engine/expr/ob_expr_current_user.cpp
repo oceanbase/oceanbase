@@ -56,49 +56,12 @@ int ObExprCurrentUser::eval_current_user(const ObExpr &expr, ObEvalCtx &ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(expr);
-  const ObSQLSessionInfo *session_info = NULL;
+  const ObBasicSessionInfo *session_info = NULL;
   if (OB_ISNULL(session_info = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
-    ObSchemaGetterGuard schema_guard;
-    uint64_t tenant_id = session_info->get_effective_tenant_id();
-    uint64_t priv_user_id = session_info->get_priv_user_id();
-    const ObUserInfo *user_info = nullptr;
-    if (OB_ISNULL(GCTX.schema_service_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL GCTX.schema_service_", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-                   tenant_id, schema_guard))) {
-      LOG_WARN("failed to get tenant schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.get_user_info(tenant_id,
-                                                  priv_user_id,
-                                                  user_info))) {
-      LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(priv_user_id));
-    } else if (OB_ISNULL(user_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL user_info", K(ret), K(tenant_id), K(priv_user_id));
-    } else {
-      const ObString &user_name = user_info->get_user_name_str();
-      const ObString &hostname = user_info->get_host_name_str();
-      size_t buf_len = user_name.length() + hostname.length() + 2;
-      size_t pos=0;
-
-      char *buf = static_cast<char *>(
-                    ctx.get_expr_res_alloc().alloc(buf_len));
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory for result buf", K(ret), K(user_info));
-      } else if (OB_UNLIKELY(
-                     (pos = snprintf(buf, buf_len, "%.*s@%.*s",
-                                     user_name.length(), user_name.ptr(),
-                                     hostname.length(), hostname.ptr())) < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to snprintf", K(ret), K(user_info), K(buf_len));
-      } else {
-        expr_datum.set_string(buf, pos);
-      }
-    }
+    expr_datum.set_string(session_info->get_user_at_host());
   }
   return ret;
 }

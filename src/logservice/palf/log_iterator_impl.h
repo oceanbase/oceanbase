@@ -205,7 +205,7 @@ private:
       if (OB_FAIL(curr_entry_.deserialize(buf_, curr_read_buf_end_pos_, pos))) {
       }
     } else {
-      ret = OB_INVALID_DATA;
+      ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "parse LogMetaEntry failed, unexpected error", K(ret), KPC(this));
     }
     return ret;

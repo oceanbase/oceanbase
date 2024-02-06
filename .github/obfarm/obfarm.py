@@ -4,12 +4,11 @@ import os
 import sys
 import traceback
 import time
+
 import json
 import requests
 from enum import Enum
 from http import HTTPStatus
-
-from art import text2art
 
 OUTPUT = {}
 RESULT_FILE_KEY = "farm/ob_results/"
@@ -170,8 +169,6 @@ def get_task_res(oss_proxy: OssProxy, github_pipeline_id):
 def main(pipeline_id, project, timeout):
     print("create a new task")
     print("working....")
-    logo = text2art('OceanBase  Farm')
-    print(logo)
     oss_proxy = OssProxy("https://obfarm-ce.oss-cn-hongkong.aliyuncs.com")
     github_proxy = GithubProxy()
     job_info = github_proxy.get_job_by_id(project, pipeline_id)

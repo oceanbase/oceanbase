@@ -727,8 +727,7 @@ int ObRebuildService::check_can_rebuild_(
     if (ObLSRebuildType::CLOG == rebuild_ctx.type_
         && is_primary_tenant
         && member_list.contains(self_addr)) {
-      LOG_ERROR("paxos member lost clog, need rebuild", "tenant_id", ls->get_tenant_id(),
-          "ls_id", ls->get_ls_id(), K(role));
+      LOG_ERROR("paxos member lost clog, need rebuild", "ls_id", ls->get_ls_id(), K(role));
     }
   }
   return ret;
@@ -1057,7 +1056,9 @@ int ObLSRebuildMgr::generate_rebuild_task_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(rebuild_ctx_));
   } else {
-    if (OB_FAIL(get_ls_info_(cluster_id, tenant_id, ls->get_ls_id(), ls_info))) {
+    if (OB_FAIL(ls->get_paxos_member_list(member_list, paxos_replica_num))) {
+      LOG_WARN("failed to get paxos member list", K(ret), KPC(ls));
+    } else if (OB_FAIL(get_ls_info_(cluster_id, tenant_id, ls->get_ls_id(), ls_info))) {
       LOG_WARN("failed to get ls info", K(ret), K(cluster_id), K(tenant_id), KPC(ls));
       //overwrite ret
       if (OB_FAIL(ls->get_log_handler()->get_election_leader(leader_addr))) {
@@ -1072,7 +1073,6 @@ int ObLSRebuildMgr::generate_rebuild_task_()
         const ObLSReplica &replica = replica_array.at(i);
         if (replica.is_strong_leader()) {
           leader_addr = replica.get_server();
-          paxos_replica_num = replica.get_paxos_replica_number();
           break;
         }
       }

@@ -25,7 +25,6 @@
 #include "lib/utility/ob_unify_serialize.h" //OB_SERIALIZE_MEMBER
 #include "observer/ob_inner_sql_connection.h"//ObInnerSQLConnection
 #include "observer/ob_inner_sql_connection_pool.h"//ObInnerSQLConnectionPool
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "share/rc/ob_tenant_base.h"//MTL_WITH_CHECK_TENANT
 #include "storage/tx/ob_trans_define.h"//MonotonicTs
 #include "storage/tx/ob_ts_mgr.h"//GET_GTS
@@ -39,7 +38,6 @@
 
 using namespace oceanbase;
 using namespace oceanbase::common;
-using namespace oceanbase::rootserver;
 namespace oceanbase
 {
 using namespace transaction;
@@ -301,7 +299,6 @@ int ObLSAttrOperator::operator_ls_in_trans_(
     ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
-  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
   if (OB_UNLIKELY(!ls_attr.is_valid()
                    || sql.empty()
                    || !trans.is_started())) {
@@ -323,8 +320,6 @@ int ObLSAttrOperator::operator_ls_in_trans_(
        only update ls table on normal switchover status */
     } else if (OB_FAIL(get_ls_attr(SYS_LS, for_update, trans, sys_ls_attr))) {
       LOG_WARN("failed to load sys ls status", KR(ret));
-    } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id_, case_to_check))) {
-      LOG_WARN("fail to check whether tenant is cloning", KR(ret), K_(tenant_id), K(case_to_check));
     } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id_, proxy_, false /* for_update */, tenant_info))) {
       LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
     } else if (working_sw_status != tenant_info.get_switchover_status()) {
@@ -847,18 +842,12 @@ int ObLSAttrOperator::alter_ls_group_in_trans(const ObLSAttr &ls_info,
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObLSAttr lock_ls_attr;
-  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
   if (OB_UNLIKELY(!ls_info.is_valid()
                   || OB_INVALID_ID == new_ls_group_id
                   || !trans.is_started())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid_argument", KR(ret), K(ls_info),
              K(new_ls_group_id), "trans_started", trans.is_started());
-  } else if (OB_FAIL(get_ls_attr(ls_info.get_ls_id(), true/*for_update*/, trans, lock_ls_attr))) {
-    LOG_WARN("failed to lock ls status for clone conflict check", KR(ret), K(ls_info));
-  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id_, case_to_check))) {
-    LOG_WARN("fail to check whether tenant is cloning", KR(ret), K_(tenant_id), K(case_to_check));
   } else if (OB_FAIL(sql.assign_fmt(
           "UPDATE %s set ls_group_id = %lu where ls_id = %ld and ls_group_id = %lu",
           OB_ALL_LS_TNAME, new_ls_group_id, ls_info.get_ls_id().id(), ls_info.get_ls_group_id()))) {
@@ -886,8 +875,6 @@ int ObLSAttrOperator::update_ls_flag_in_trans(const ObLSID &id,
   ObSqlString sql;
   ObLSFlagStr old_flag_str;
   ObLSFlagStr new_flag_str;
-  ObLSAttr lock_ls_attr;
-  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::MODIFY_LS);
 
   if (OB_UNLIKELY(!id.is_valid()
                   || !new_flag.is_valid()
@@ -902,10 +889,6 @@ int ObLSAttrOperator::update_ls_flag_in_trans(const ObLSID &id,
       id,
       EXCLUSIVE))) {
     LOG_WARN("lock ls in trans failed", KR(ret), K_(tenant_id), K(id));
-  } else if (OB_FAIL(get_ls_attr(id, true/*for_update*/, trans, lock_ls_attr))) {
-    LOG_WARN("failed to lock ls status for clone conflict check", KR(ret), K(id));
-  } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id_, case_to_check))) {
-    LOG_WARN("fail to check whether tenant is cloning", KR(ret), K_(tenant_id), K(case_to_check));
   } else {
     DEBUG_SYNC(AFTER_LOCK_LS_AND_BEFORE_CHANGE_LS_FLAG);
     if (OB_FAIL(new_flag.flag_to_str(new_flag_str))) {

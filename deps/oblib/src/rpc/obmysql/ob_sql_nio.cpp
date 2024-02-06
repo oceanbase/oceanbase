@@ -48,8 +48,6 @@ namespace oceanbase
 {
 namespace obmysql
 {
-static const char *MEMORY_MODEL_NAME = "SqlNio";
-
 class ObDList
 {
 
@@ -137,63 +135,13 @@ private:
   int32_t ready_ CACHE_ALIGNED;
 };
 
-class SocketReader
-{
-public:
-  SocketReader(int fd)
-      : fd_(fd),
-        has_EAGAIN_(false)
-  {}
-
-  ~SocketReader()
-  {
-  }
-
-  TO_STRING_KV(K_(fd));
-
-  void set_fd(int fd) { fd_ = fd; }
-  int  get_fd() const { return fd_; }
-  bool has_EAGAIN() const { return has_EAGAIN_; }
-  void clear_EAGAIN() { has_EAGAIN_ = false; }
-
-  int read(char* buf, int64_t buf_size, int64_t& read_size)
-  {
-    int ret = OB_SUCCESS;
-    int64_t read_ret = ob_read_regard_ssl(fd_, buf, buf_size);
-    if (read_ret > 0) {
-      read_size = read_ret;
-    } else if (0 == read_ret) {
-      LOG_INFO("read fd return EOF", K_(fd));
-      has_EAGAIN_ = true;
-      ret = OB_IO_ERROR;
-    } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
-      has_EAGAIN_ = true;
-    } else if (EINTR == errno) {
-      // pass
-    } else {
-      ret = OB_IO_ERROR;
-      LOG_WARN("read fd has error", K_(fd), K(errno));
-    }
-    return ret;
-  }
-
-private:
-  int  fd_;
-  bool has_EAGAIN_;
-};
-
 class ReadBuffer
 {
 public:
   enum { IO_BUFFER_SIZE = (1<<15) - 128};
-  ReadBuffer(SocketReader& reader)
-      : reader_(reader),
-        request_more_data_(false),
-        alloc_buf_(NULL),
-        buf_end_(NULL),
-        cur_buf_(NULL),
-        data_end_(NULL),
-        consume_sz_(0)
+  ReadBuffer(int fd): fd_(fd), has_EAGAIN_(false), request_more_data_(false),
+                alloc_buf_(NULL), buf_end_(NULL), cur_buf_(NULL), data_end_(NULL),
+                consume_sz_(0)
   {}
   ~ReadBuffer()
   {
@@ -202,18 +150,18 @@ public:
     }
   }
   int64_t get_remain_sz() const { return remain(); }
-
+  void set_fd(int fd) { fd_ = fd; }
   int peek_data(int64_t limit, const char*& buf, int64_t& sz) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(try_read_fd(limit))) {
-      LOG_WARN("read fail", K(ret), K_(reader), K(limit));
+      LOG_WARN("read fail", K(ret), K_(fd), K(limit));
     } else {
       buf = cur_buf_;
       sz = remain();
       if (sz < limit) {
         request_more_data_ = true;
       }
-      LOG_DEBUG("peek data", K_(reader), K(limit), K(sz));
+      LOG_DEBUG("peek data", K_(fd), K(limit), K(sz));
     }
     return ret;
   }
@@ -222,16 +170,16 @@ public:
     if (sz > 0 && sz <= remain()) {
       cur_buf_ += sz;
       consume_sz_ += sz;
-      LOG_DEBUG("consume data", K_(reader), K(sz));
+      LOG_DEBUG("consume data", K_(fd), K(sz));
     } else {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("consume data, invalid argument", K_(reader), K(sz));
+      LOG_WARN("consume data, invalid argument", K_(fd), K(sz));
     }
     return ret;
   }
   bool clear_EAGAIN() {
-    bool ret = (reader_.has_EAGAIN() && (remain() <= 0 || request_more_data_));
-    reader_.clear_EAGAIN();
+    bool ret = (has_EAGAIN_ && (remain() <= 0 || request_more_data_));
+    has_EAGAIN_ = false;
     request_more_data_ = false;
     return ret;
   }
@@ -244,9 +192,9 @@ private:
     } else if (remain() >= limit) {
 
     } else if (cur_buf_ + limit > buf_end_ && OB_FAIL(switch_buffer(limit))) {
-      LOG_ERROR("alloc read buffer fail", K_(reader), K(ret));
+      LOG_ERROR("alloc read buffer fail", K_(fd), K(ret));
     } else if (OB_FAIL(do_read_fd(limit))) {
-      LOG_WARN("do_read_fd fail", K(ret), K_(reader), K(limit));
+      LOG_WARN("do_read_fd fail", K(ret), K_(fd), K(limit));
     }
     return ret;
   }
@@ -262,7 +210,7 @@ private:
       data_end_ = cur_buf_ + rsz;
     } else if (NULL == (new_buf = (char*)alloc_io_buffer(alloc_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc buffer fail", K(ret), K(alloc_size), K_(reader), K(alloc_size));
+      LOG_WARN("alloc buffer fail", K(ret), K_(fd), K(alloc_size));
     } else {
       char* old_buffer = alloc_buf_;
       int64_t rsz = remain();
@@ -280,10 +228,10 @@ private:
   int do_read_fd(int64_t sz) {
     int ret = OB_SUCCESS;
     const int MAX_SSL_REQ_PKT_SIZE = 36;
-    while(remain() < sz && OB_SUCCESS == ret && !reader_.has_EAGAIN()) {
+    while(remain() < sz && OB_SUCCESS == ret) {
       int64_t rbytes = 0;
       size_t read_size = 0;
-      if (OB_UNLIKELY(0 == consume_sz_) && data_end_ == alloc_buf_) {
+      if (OB_UNLIKELY(0 == consume_sz_)) {
         /*
           set read size for ssl, when client want to open ssl, it will send a 36 bytes
           incomplete Login Request packet and then do SSL_connect, the data flow will be
@@ -294,9 +242,21 @@ private:
       } else {
         read_size = buf_end_ - data_end_;
       }
-      ret = reader_.read(data_end_, read_size, rbytes);
-      if (OB_SUCC(ret)) {
+      if ((rbytes = ob_read_regard_ssl(fd_, data_end_, read_size)) > 0) {
         data_end_ += rbytes;
+      } else if (0 == rbytes) {
+        LOG_INFO("read fd return EOF", K_(fd));
+        has_EAGAIN_ = true;
+        ret = OB_IO_ERROR; // for mysql protocol, it is not prossible
+        break;
+      } else if (EAGAIN == errno || EWOULDBLOCK == errno) {
+        has_EAGAIN_ = true;
+        break;
+      } else if (EINTR == errno) {
+        // pass
+      } else {
+        ret = OB_IO_ERROR;
+        LOG_WARN("read fd has error", K_(fd), K(errno));
       }
     }
     return ret;
@@ -308,7 +268,8 @@ private:
   }
   static void direct_free(void* p) { ob_free(p); }
 private:
-  SocketReader& reader_;
+  int fd_;
+  bool has_EAGAIN_;
   bool request_more_data_;
   char* alloc_buf_;
   char* buf_end_;
@@ -380,8 +341,8 @@ private:
 class ObSqlSock: public ObLink
 {
 public:
-  ObSqlSock(ObSqlNioImpl *nio, int fd): dlink_(), all_list_link_(), write_task_link_(), nio_impl_(nio), fd_(fd),
-            err_(0), reader_(fd), read_buffer_(reader_), need_epoll_trigger_write_(false), may_handling_(true),
+  ObSqlSock(ObSqlNioImpl *nio, int fd): dlink_(), all_list_link_(), write_task_link_(), nio_impl_(nio),
+            fd_(fd), err_(0), read_buffer_(fd), need_epoll_trigger_write_(false), may_handling_(true),
             handler_close_flag_(false), need_shutdown_(false), last_decode_time_(0), last_write_time_(0),
             sql_session_info_(NULL), tls_verion_option_(SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3) {
     memset(sess_, 0, sizeof(sess_));
@@ -389,7 +350,7 @@ public:
   ~ObSqlSock() {}
   int64_t get_remain_sz() const { return read_buffer_.get_remain_sz(); }
   TO_STRING_KV(KP(this), "session_id", get_sql_session_id(), "trace_id", get_trace_id(), "sql_handling_stage", get_sql_request_execute_state(), "sql_initiative_shutdown", need_shutdown_,
-              K_(reader), K_(err), K_(last_decode_time), K_(last_write_time), K_(pending_write_task), K_(need_epoll_trigger_write),
+              K_(fd), K_(err), K_(last_decode_time), K_(last_write_time), K_(pending_write_task), K_(need_epoll_trigger_write),
               "consume_size", read_buffer_.get_consume_sz(), "pending_flag", get_pending_flag(), "may_handling_flag", get_may_handling_flag(), K_(handler_close_flag));
   ObSqlNioImpl *get_nio_impl() { return nio_impl_; }
   void set_nio_impl(ObSqlNioImpl *impl) { nio_impl_ = impl; }
@@ -400,57 +361,20 @@ public:
     if (fd_ >= 0) {
       ob_fd_disable_ssl(fd_);
       close(fd_);
-      reader_.set_fd(-1);
+      read_buffer_.set_fd(-1);
       fd_ = -1;
     }
   }
   void set_last_decode_succ_time(int64_t time) { last_decode_time_ = time;  }
   int64_t get_consume_sz() { return read_buffer_.get_consume_sz(); }
 
-  int peek_data(void* read_handle, int64_t limit, const char*& buf, int64_t& sz)
-  {
-    ReadBuffer *read_buffer = &read_buffer_;
-    if (OB_UNLIKELY(OB_NOT_NULL(read_handle))) {
-      read_buffer = static_cast<ReadBuffer *>(read_handle);
-      // The application layer try to read packet but it may failed as the EAGAIN flag is set.
-      read_buffer->clear_EAGAIN();
-    }
-    return read_buffer->peek_data(limit, buf, sz);
+  int peek_data(int64_t limit, const char*& buf, int64_t& sz) {
+    return  read_buffer_.peek_data(limit ,buf, sz);
   }
-
-  int consume_data(void* read_handle, int64_t sz)
-  {
-    ReadBuffer *read_buffer = (OB_ISNULL(read_handle)) ? &read_buffer_ : static_cast<ReadBuffer *>(read_handle);
-    return read_buffer->consume_data(sz);
-   }
+  int consume_data(int64_t sz) { return read_buffer_.consume_data(sz); }
   void init_write_task(const char* buf, int64_t sz) {
     pending_write_task_.init(buf, sz);
   }
-
-  int create_read_handle(void *& handle)
-  {
-    int ret = OB_SUCCESS;
-    ReadBuffer * buffer = OB_NEW(ReadBuffer, MEMORY_MODEL_NAME, reader_);
-    if (OB_ISNULL(buffer)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      handle = static_cast<void *>(buffer);
-    }
-    return ret;
-  }
-
-  int release_read_handle(void * handle)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(handle)) {
-      ret = OB_INVALID_ARGUMENT;
-    } else {
-      ReadBuffer* read_handle = static_cast<ReadBuffer*>(handle);
-      OB_DELETE(ReadBuffer, MEMORY_MODEL_NAME, read_handle);
-    }
-    return ret;
-  }
-
 
   bool is_need_epoll_trigger_write() const { return need_epoll_trigger_write_; }
   int do_pending_write(bool& become_clean) {
@@ -529,7 +453,6 @@ private:
   ObSqlNioImpl *nio_impl_;
   int fd_;
   int err_;
-  SocketReader reader_;
   ReadBuffer read_buffer_;
   ReadyFlag ready_flag_;
   SingleWaitCond write_cond_;
@@ -582,7 +505,7 @@ int ObSqlSock::set_ssl_enabled()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ob_fd_enable_ssl_for_server(fd_, OB_SSL_CTX_ID_SQL_NIO, tls_verion_option_))) {
-    LOG_WARN("sqlnio enable ssl for server failed", K(ret), K(reader_));
+    LOG_WARN("sqlnio enable ssl for server failed", K(ret), K(fd_));
   }
   return ret;
 }
@@ -606,7 +529,7 @@ int ObSqlSock::write_handshake_packet(const char* buf, int64_t sz) {
       //will be treated as error
       IGNORE_RETURN(set_error(EIO));
       ret = OB_IO_ERROR;
-      LOG_WARN("write data error", K(fd_), K(errno));
+      LOG_WARN("write data error", K_(fd), K(errno));
     }
   }
   last_write_time_ = ObTimeUtility::current_time();
@@ -844,7 +767,7 @@ public:
       LOG_TRACE("revert_sock: sock still readable", K(*s));
       int ret = OB_SUCCESS;
       if (OB_FAIL(handler_.on_readable(s->sess_))) {
-        LOG_WARN("push to omt queue fail, will close socket", K(ret), K(*s));
+        LOG_TRACE("push to omt queue fail", K(ret), K(*s));
         push_close_req(s);
         s->disable_may_handling_flag();
       }
@@ -1236,23 +1159,14 @@ bool ObSqlNio::has_error(void* sess)
   return sess2sock(sess)->has_error();
 }
 
-int ObSqlNio::create_read_handle(void* sess, void*& read_handle)
+int ObSqlNio::peek_data(void* sess, int64_t limit, const char*& buf, int64_t& sz)
 {
-  return sess2sock(sess)->create_read_handle(read_handle);
-}
-int ObSqlNio::release_read_handle(void* sess, void* read_handle)
-{
-  return sess2sock(sess)->release_read_handle(read_handle);
+  return sess2sock(sess)->peek_data(limit, buf, sz);
 }
 
-int ObSqlNio::peek_data(void* sess, void* read_handle, int64_t limit, const char*& buf, int64_t& sz)
+int ObSqlNio::consume_data(void* sess, int64_t sz)
 {
- return sess2sock(sess)->peek_data(read_handle, limit, buf, sz);
-}
-
-int ObSqlNio::consume_data(void* sess, void* read_handle, int64_t sz)
-{
- return sess2sock(sess)->consume_data(read_handle, sz);
+  return sess2sock(sess)->consume_data(sz);
 }
 
 int ObSqlNio::write_data(void* sess, const char* buf, int64_t sz)

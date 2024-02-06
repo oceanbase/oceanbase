@@ -421,7 +421,7 @@ int run_test() {
     if(!config.is_test_write()) {
       STORAGE_LOG(WARN, "no thread, cannot start write bench");
     } else {
-      const int thread_no = config.get_total_partition_num();//one partition one write thread
+      const int thread_no = config.get_total_partition_num();//one partiton one write thread
       MultiThreadWrite write(thread_no);
       if(OB_FAIL(write.init(schema_service, &restore_schema, config))){
         STORAGE_LOG(WARN, "fail to init query", K(ret));
@@ -459,8 +459,8 @@ int run_test() {
 
   if (OB_SUCC(ret)) {
     //multi thread single get speed test
-    const int partition_num = config.get_total_partition_num();
-    const int thread_no = config.get_single_get_thread_count() * partition_num;
+    const int partiton_num = config.get_total_partition_num();
+    const int thread_no = config.get_single_get_thread_count() * partiton_num;
     if(thread_no <= 0) {
       STORAGE_LOG(WARN, "no thread, cannot start single get bench");
     } else {
@@ -490,8 +490,8 @@ int run_test() {
 
   if (OB_SUCC(ret)) {
     //multi thread multi get speed test
-    const int partition_num = config.get_total_partition_num();
-    int thread_no = config.get_multi_get_thread_count() * partition_num;
+    const int partiton_num = config.get_total_partition_num();
+    int thread_no = config.get_multi_get_thread_count() * partiton_num;
     if(thread_no <= 0) {
       STORAGE_LOG(WARN, "no thread, cannot start multi get bench");
     } else {
@@ -521,8 +521,8 @@ int run_test() {
 
   if (OB_SUCC(ret)) {
     //multi thread scan speed test
-    const int partition_num = config.get_total_partition_num();
-    int thread_no = config.get_scan_thread_count() * partition_num;
+    const int partiton_num = config.get_total_partition_num();
+    int thread_no = config.get_scan_thread_count() * partiton_num;
     if(thread_no <= 0) {
       STORAGE_LOG(WARN, "no thread, cannot start scan speed bench");
     } else {

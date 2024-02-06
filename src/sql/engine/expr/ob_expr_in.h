@@ -264,23 +264,17 @@ public:
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
-  int cg_expr_without_row(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+  int cg_expr_without_row(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
                           ObExpr &rt_expr) const;
-  int cg_expr_with_row(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+  int cg_expr_with_row(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const;
   // like "select 1 from dual where (select 1, 2) in ((1,2), (3,4))"
-  int cg_expr_with_subquery(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+  int cg_expr_with_subquery(common::ObIAllocator &allocator, const ObRawExpr &raw_expr,
                        ObExpr &rt_expr) const;
   static void set_datum_result(const bool is_expr_in,
                                const bool is_exist,
                                const bool param_exists_null,
                                ObDatum &result);
-  template<typename ResVec>
-  static void set_vector_result(const bool is_expr_in,
-                                const bool is_exist,
-                                const bool param_exist_null,
-                                ResVec *res_vec,
-                                const int64_t &idx);
   virtual bool need_rt_ctx() const override { return true; }
 public:
   static int eval_in_with_row(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
@@ -301,24 +295,6 @@ public:
                                        ObEvalCtx &ctx,
                                        const ObBitVector &skip,
                                        const int64_t batch_size);
-  template <typename LeftVec, typename ResVec>
-  static int inner_eval_vector_in_without_row_fallback(const ObExpr &expr,
-                                                ObEvalCtx &ctx,
-                                                const ObBitVector &skip,
-                                                const EvalBound &bound);
-  template <typename LeftVec, typename ResVec>
-  static int inner_eval_vector_in_without_row(const ObExpr &expr,
-                                        ObEvalCtx &ctx,
-                                        const ObBitVector &skip,
-                                        const EvalBound &bound);
-  static int eval_vector_in_without_row_fallback(const ObExpr &expr,
-                                                ObEvalCtx &ctx,
-                                                const ObBitVector &skip,
-                                                const EvalBound &bound);
-  static int eval_vector_in_without_row(const ObExpr &expr,
-                                        ObEvalCtx &ctx,
-                                        const ObBitVector &skip,
-                                        const EvalBound &bound);
   // like "select 1 from dual where (select 1, 2) in ((1,2), (3,4))"
   static int eval_in_with_subquery(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_for_row_static_engine(const ObExpr &expr,
@@ -367,11 +343,6 @@ protected:
                                      const ObBitVector &skip, 
                                      const ObBitVector &eval_flags, 
                                      const int64_t batch_size,
-                                     bool &can_cmp_mem);
-  static void check_left_can_cmp_mem(const ObExpr &expr,
-                                     const ObBitVector &skip,
-                                     const ObBitVector &eval_flags,
-                                     const EvalBound &bound,
                                      bool &can_cmp_mem);
 protected:
   typedef uint32_t ObExprInParamFlag;

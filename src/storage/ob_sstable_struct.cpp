@@ -117,7 +117,6 @@ ObSSTableMergeInfo::ObSSTableMergeInfo()
     : compaction::ObIDiagnoseInfo(),
       ls_id_(),
       tablet_id_(),
-      is_fake_(false),
       compaction_scn_(0),
       merge_type_(INVALID_MERGE_TYPE),
       merge_start_time_(0),
@@ -141,8 +140,7 @@ ObSSTableMergeInfo::ObSSTableMergeInfo()
       macro_bloomfilter_count_(0),
       start_cg_idx_(0),
       end_cg_idx_(0),
-      suspect_add_time_(0),
-      early_create_time_(0),
+      add_time_(0),
       dag_ret_(OB_SUCCESS),
       retry_cnt_(0),
       task_id_(),
@@ -198,7 +196,6 @@ void ObSSTableMergeInfo::reset()
   tenant_id_ = 0;
   ls_id_.reset();
   tablet_id_.reset();
-  is_fake_ = false;
   compaction_scn_ = 0;
   merge_type_ = INVALID_MERGE_TYPE;
   merge_start_time_ = 0;
@@ -221,8 +218,7 @@ void ObSSTableMergeInfo::reset()
   macro_bloomfilter_count_ = 0;
   start_cg_idx_ = 0;
   end_cg_idx_ = 0;
-  suspect_add_time_ = 0;
-  early_create_time_ = 0;
+  add_time_ = 0;
   dag_ret_ = OB_SUCCESS;
   retry_cnt_ = 0;
   task_id_.reset();
@@ -254,20 +250,18 @@ int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len, const cha
   int ret = OB_SUCCESS;
   compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
         "comment", comment_);
-  if (0 != suspect_add_time_) {
+  if (0 != add_time_) {
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "[suspect info=");
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, other_info);
     compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
-        "add_time", suspect_add_time_);
+        "add_time", add_time_);
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "]"); // finish add suspect info
   }
   if (0 != dag_ret_) {
     compaction::ADD_COMPACTION_INFO_PARAM(buf, buf_len,
         "[dag warning info=latest_error_code", dag_ret_,
-        "early_create_time", early_create_time_,
         "latest_error_trace", task_id_,
-        "retry_cnt", retry_cnt_,
-        "location", error_location_);
+        "retry_cnt", retry_cnt_);
     compaction::ObIDiagnoseInfoMgr::add_compaction_info_param(buf, buf_len, "]"); // finish add dag warning info
   }
   return ret;
@@ -275,7 +269,7 @@ int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len, const cha
 
 void ObSSTableMergeInfo::update_start_time()
 {
-  int64_t current_time = ObTimeUtility::fast_current_time();
+  int64_t current_time = fast_current_time();
   (void)ATOMIC_CAS(&merge_start_time_, 0, current_time);
 }
 
@@ -287,7 +281,6 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
     priority_ = info->priority_;
     ls_id_ = info->ls_id_;
     tablet_id_ = info->tablet_id_;
-    is_fake_ = info->is_fake_;
     compaction_scn_ = info->compaction_scn_;
     merge_type_ = info->merge_type_;
     merge_start_time_ = info->merge_start_time_;
@@ -314,7 +307,7 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
     dag_ret_ = info->dag_ret_;
     task_id_ = info->task_id_;
     retry_cnt_ = info->retry_cnt_;
-    suspect_add_time_ = info->suspect_add_time_;
+    add_time_ = info->add_time_;
     parallel_merge_info_ = info->parallel_merge_info_;
     filter_statistics_ = info->filter_statistics_;
     participant_table_info_ = info->participant_table_info_;

@@ -230,7 +230,7 @@ int ObPxMSCoordOp::setup_readers()
     } else {
       reader_cnt_ = task_channels_.count();
       for (int64_t i = 0; i < reader_cnt_; i++) {
-        new (&readers_[i]) ObReceiveRowReader(get_spec().id_);
+        new (&readers_[i]) ObReceiveRowReader();
       }
     }
   }

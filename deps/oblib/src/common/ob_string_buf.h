@@ -34,10 +34,6 @@ public:
   explicit ObStringBufT(const lib::ObLabel &label = ObModIds::OB_STRING_BUF,
                         const int64_t block_size = DEF_MEM_BLOCK_SIZE)
     : ObStringBufT(lib::ObMemAttr(OB_SERVER_TENANT_ID, label), block_size) {}
-  explicit ObStringBufT(const int64_t tenant_id,
-                        const lib::ObLabel &label = ObModIds::OB_STRING_BUF,
-                        const int64_t block_size = DEF_MEM_BLOCK_SIZE)
-    : ObStringBufT(lib::ObMemAttr(tenant_id, label), block_size) {}
   explicit ObStringBufT(PageArenaT &arena);
   ~ObStringBufT();
   int reset();

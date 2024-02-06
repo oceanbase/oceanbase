@@ -120,7 +120,7 @@ public:
   void set_progress(int64_t progress) { client_progress_ = progress; }
   int64_t get_progress() const { return client_progress_; }
 
-  TO_STRING_KV(KP_(source),
+  TO_STRING_KV(K_(source),
                K_(fetch_mode),
                K_(last_touch_ts),
                K_(client_progress))

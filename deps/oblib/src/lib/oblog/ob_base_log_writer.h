@@ -96,7 +96,6 @@ private:
   static void *flush_log_thread(void *arg);
   void do_flush_log();
   bool need_flush();
-  virtual void drop_log_items(ObIBaseLogItem **items, const int64_t item_cnt);
 
 protected:
   bool has_stopped_;

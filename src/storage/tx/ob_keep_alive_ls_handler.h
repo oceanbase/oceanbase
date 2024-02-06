@@ -46,15 +46,11 @@ public:
 
 public:
   ObKeepAliveLogBody()
-    : compat_bit_(1), min_start_scn_(),
-    min_start_status_(MinStartScnStatus::UNKOWN)
+      : compat_bit_(1), min_start_scn_(),
+        min_start_status_(MinStartScnStatus::UNKOWN)
   {}
-  ObKeepAliveLogBody(int64_t compat_bit,
-                     const share::SCN &min_start_scn,
-                     MinStartScnStatus min_status)
-    : compat_bit_(compat_bit),
-    min_start_scn_(min_start_scn),
-    min_start_status_(min_status)
+  ObKeepAliveLogBody(int64_t compat_bit, const share::SCN &min_start_scn, MinStartScnStatus min_status)
+      : compat_bit_(compat_bit), min_start_scn_(min_start_scn), min_start_status_(min_status)
   {}
 
   static int64_t get_max_serialize_size();
@@ -172,11 +168,8 @@ public:
   share::SCN get_rec_scn() { return share::SCN::max_scn(); }
   int flush(share::SCN &rec_scn) { return OB_SUCCESS;}
 
-  void get_min_start_scn(share::SCN &min_start_scn,
-                         share::SCN &keep_alive_scn,
-                         MinStartScnStatus &status);
+  void get_min_start_scn(share::SCN &min_start_scn, share::SCN &keep_alive_scn, MinStartScnStatus &status);
   void set_sys_ls_end_scn(const share::SCN &sys_ls_end_scn) { sys_ls_end_scn_.inc_update(sys_ls_end_scn);}
-
 private:
   bool check_gts_();
   int serialize_keep_alive_log_(const share::SCN &min_start_scn, MinStartScnStatus status);

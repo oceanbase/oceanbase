@@ -123,12 +123,6 @@ public:
     is_multi_pkt_ = false;
   }
 
-  void reuse()
-  {
-    // keep the last_pkt_seq_ here
-    is_multi_pkt_ = false;
-  }
-
   TO_STRING_KV(K_(last_pkt_seq),
                K_(is_multi_pkt));
 

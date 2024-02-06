@@ -28,7 +28,6 @@ namespace storage
 class ObLobMetaUtil {
 public:
   static const uint64_t LOB_META_COLUMN_CNT = 6;
-  static const uint64_t LOB_META_SCHEMA_ROWKEY_COL_CNT = 2;
   static const uint64_t LOB_ID_COL_ID = 0;
   static const uint64_t SEQ_ID_COL_ID = 1;
   static const uint64_t BYTE_LEN_COL_ID = 2;
@@ -37,26 +36,15 @@ public:
   static const uint64_t LOB_DATA_COL_ID = 5;
   static const uint64_t LOB_META_INLINE_PIECE_ID = UINT64_MAX - 1;
   static const uint64_t LOB_OPER_PIECE_DATA_SIZE = 256 * 1024; // 256K
-  static const uint64_t SKIP_INVALID_COLUMN = 2;
 public:
-  static int transform_from_info_to_row(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
-  static int transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
+  static int transform(blocksstable::ObDatumRow *row, ObLobMetaInfo &info);
 private:
-  // from_row_to_info.
-  static int transform_lob_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info);
-  static int transform_seq_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info);
-  static int transform_byte_len(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
-  static int transform_char_len(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
-  static int transform_piece_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
-  static int transform_lob_data(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
-
-  // from_info_to_row.
-  static int transform_lob_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row);
-  static int transform_seq_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row);
-  static int transform_byte_len(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
-  static int transform_char_len(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
-  static int transform_piece_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
-  static int transform_lob_data(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
+  static int transform_lob_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_seq_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_byte_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_char_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_piece_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
+  static int transform_lob_data(blocksstable::ObDatumRow* row, ObLobMetaInfo &info);
 };
 
 struct ObLobMetaScanResult {
@@ -105,9 +93,7 @@ struct ObLobMetaWriteResult {
 
 class ObLobMetaWriteIter {
 public:
-  ObLobMetaWriteIter(ObIAllocator* allocator);
   ObLobMetaWriteIter(const ObString& data, ObIAllocator* allocator, uint32_t piece_block_size);
-  ~ObLobMetaWriteIter() { close(); }
   int open(ObLobAccessParam &param,
            uint64_t padding_size,
            ObString &post_data,
@@ -123,15 +109,8 @@ public:
            ObString &remain_buf,
            ObString &seq_id_st,
            ObString &seq_id_end);
-  int open(ObLobAccessParam &param,
-           void *iter, // ObLobQueryIter
-           void *read_param, // ObLobAccessParam
-           ObString &read_buf);
   int get_next_row(ObLobMetaWriteResult &row);
   int close();
-  void set_end() { is_end_ = true; }
-  void reuse();
-  void set_data(const ObString& data);
   TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
                K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info));
 private:
@@ -164,10 +143,6 @@ private:
   ObIAllocator* allocator_;
   ObLobMetaInfo last_info_;
   void *iter_; // ObLobQueryIter
-  uint64_t iter_fill_size_;
-  void *read_param_; // ObLobAccessParam
-  void* lob_common_; // ObLobCommon
-  bool is_end_;
 };
  
 class ObLobMetaManager {

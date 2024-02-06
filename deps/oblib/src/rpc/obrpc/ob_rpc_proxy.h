@@ -130,7 +130,6 @@ public:
   void destroy()                                { init_ = false; }
   bool is_inited() const                        { return init_; }
   void set_timeout(int64_t timeout)             { timeout_ = timeout; }
-  int64_t get_timeout() const                   { return timeout_; }
   void set_trace_time(const bool is_trace_time) { is_trace_time_ = is_trace_time; }
   void set_ratelimit(const bool do_ratelimit)   { do_ratelimit_ = do_ratelimit; }
   void set_bg_flow(const int8_t is_bg_flow)    { is_bg_flow_ = is_bg_flow;}
@@ -147,7 +146,7 @@ public:
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   void set_dst_cluster(int64_t dst_cluster_id) { dst_cluster_id_ = dst_cluster_id; }
   void set_transport_impl(int transport_impl) { transport_impl_ = transport_impl; }
-  void set_result_code(const ObRpcResultCode &retcode) {
+  void set_result_code(const ObRpcResultCode retcode) {
     rcode_.rcode_ = retcode.rcode_;
     snprintf(rcode_.msg_, common::OB_MAX_ERROR_MSG_LEN, "%s", retcode.msg_);
     rcode_.warnings_.reset();

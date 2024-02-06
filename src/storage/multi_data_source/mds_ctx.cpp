@@ -25,8 +25,8 @@ namespace mds
 MdsCtx::MdsCtx() : state_(TwoPhaseCommitState::STATE_INIT) {}
 
 MdsCtx::MdsCtx(const MdsWriter &writer)
-  : state_(TwoPhaseCommitState::STATE_INIT),
-    writer_(writer){}
+: writer_(writer),
+state_(TwoPhaseCommitState::STATE_INIT) {}
 
 MdsCtx::~MdsCtx()
 {

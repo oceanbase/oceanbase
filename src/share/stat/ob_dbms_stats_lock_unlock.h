@@ -65,12 +65,13 @@ private:
                                      int64_t &idx);
 
   static int get_stats_history_sql(ObExecContext &ctx,
-                                   ObMySQLTransaction &trans,
                                    const ObTableStatParam &param,
                                    bool set_locked,
                                    bool &need_update_lock,
                                    ObIArray<int64_t> &no_stats_partition_ids,
-                                   ObIArray<uint64_t> &part_stattypes);
+                                   ObIArray<uint64_t> &part_stattypes,
+                                   ObIArray<ObOptTableStatHandle> &history_tab_handles,
+                                   ObIArray<ObOptColumnStatHandle> &history_col_handles);
 
   static int get_no_stats_partition_ids(const StatTypeLocked stattype,
                                         const ObIArray<int64_t> &all_partition_ids,

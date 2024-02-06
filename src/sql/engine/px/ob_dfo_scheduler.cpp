@@ -584,19 +584,6 @@ int ObSerialDfoScheduler::do_schedule_dfo(ObExecContext &ctx, ObDfo &dfo) const
     }
   }
 
-  // 2. allocate branch_id for DML: replace, insert update, select for update
-  if (OB_SUCC(ret) && dfo.has_need_branch_id_op()) {
-    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-      int16_t branch_id = 0;
-      const int64_t max_task_count = sqcs.at(idx)->get_max_task_count();
-      if (OB_FAIL(ObSqlTransControl::alloc_branch_id(ctx, max_task_count, branch_id))) {
-        LOG_WARN("alloc branch id fail", KR(ret), K(max_task_count));
-      } else {
-        sqcs.at(idx)->set_branch_id_base(branch_id);
-        LOG_TRACE("alloc branch id", K(max_task_count), K(branch_id), KPC(sqcs.at(idx)));
-      }
-    }
-  }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(dispatch_sqcs(ctx, dfo, sqcs))) {
@@ -627,10 +614,7 @@ void ObSerialDfoScheduler::clean_dtl_interm_result(ObExecContext &exec_ctx)
   int ret = OB_SUCCESS;
   const ObIArray<ObDfo *> &all_dfos = coord_info_.dfo_mgr_.get_all_dfos();
   ObDfo *last_dfo = all_dfos.at(all_dfos.count() - 1);
-  int clean_ret = OB_E(EventTable::EN_ENABLE_CLEAN_INTERM_RES) OB_SUCCESS;
-  if (clean_ret != OB_SUCCESS) {
-    // Fault injection: Do not clean up interm results.
-  } else if (OB_NOT_NULL(last_dfo) && last_dfo->is_scheduled() && OB_NOT_NULL(last_dfo->parent())
+  if (OB_NOT_NULL(last_dfo) && last_dfo->is_scheduled() && OB_NOT_NULL(last_dfo->parent())
       && last_dfo->parent()->is_root_dfo()) {
     // all dfo scheduled, do nothing.
     LOG_TRACE("all dfo scheduled.");
@@ -768,20 +752,6 @@ int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo)
       sqc.set_sqc_count(sqcs.count());
       LOG_TRACE("link qc-sqc channel and registered to qc msg loop. ready to receive sqc ctrl msg",
                 K(idx), K(cnt), K(*ch), K(dfo), K(sqc));
-    }
-  }
-
-  // 2. allocate branch_id for DML: replace, insert update, select for update
-  if (OB_SUCC(ret) && dfo.has_need_branch_id_op()) {
-    ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
-      int16_t branch_id = 0;
-      const int64_t max_task_count = sqcs.at(idx)->get_max_task_count();
-      if (OB_FAIL(ObSqlTransControl::alloc_branch_id(exec_ctx, max_task_count, branch_id))) {
-        LOG_WARN("alloc branch id fail", KR(ret), K(max_task_count));
-      } else {
-        sqcs.at(idx)->set_branch_id_base(branch_id);
-        LOG_TRACE("alloc branch id", K(max_task_count), K(branch_id), KPC(sqcs.at(idx)));
-      }
     }
   }
 
@@ -1217,11 +1187,15 @@ int ObParallelDfoScheduler::dispatch_sqc(ObExecContext &exec_ctx,
           LOG_WARN("[DM] fail to push back dtl channels", K(push_ret), K(sqc.get_sqc_addr()),
               K(dfo.get_px_detectable_ids().sqc_detectable_id_));
         }
-      } else {
+      } else if (!cb->is_processed()) {
         // if init_sqc_msg is not processed and the msg may be sent successfully, set server not alive.
         // then when qc waiting_all_dfo_exit, it will push sqc.access_table_locations into trans_result,
         // and the query can be retried.
-        sqc.set_server_not_alive(true);
+        bool msg_not_send_out = (cb->get_error() == EASY_TIMEOUT_NOT_SENT_OUT
+                                || cb->get_error() == EASY_DISCONNECT_NOT_SENT_OUT);
+        if (!msg_not_send_out) {
+          sqc.set_server_not_alive(true);
+        }
       }
     }
   };

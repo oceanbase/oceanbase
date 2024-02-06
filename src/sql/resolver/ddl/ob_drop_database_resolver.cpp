@@ -43,8 +43,7 @@ int ObDropDatabaseResolver::resolve(const ParseNode &parse_tree)
   if (OB_ISNULL(node)
     || OB_UNLIKELY(node->type_ != T_DROP_DATABASE)
     || OB_UNLIKELY(node->num_child_ != DB_NODE_COUNT)
-    || OB_ISNULL(node->children_)
-    || OB_ISNULL(allocator_)) {
+    || OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse tree", K(ret), K(node));
   } else if (OB_ISNULL(session_info_)) {
@@ -93,16 +92,12 @@ int ObDropDatabaseResolver::resolve(const ParseNode &parse_tree)
                       cs_type, perserve_lettercase, database_name))) {
             LOG_WARN("fail to check and convert database name", K(database_name), K(ret));
           } else {
-            ObString deep_copy_database_name;
             CK (OB_NOT_NULL(schema_checker_));
             CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
             OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                                session_info_,
                                                database_name));
-            OZ (deep_copy_ob_string(*allocator_,
-                                    database_name,
-                                    deep_copy_database_name), database_name);
-            OX (drop_database_stmt->set_database_name(deep_copy_database_name));
+            OX (drop_database_stmt->set_database_name(database_name));
           }
         }
       }

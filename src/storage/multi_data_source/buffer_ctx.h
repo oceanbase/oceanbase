@@ -32,12 +32,10 @@ namespace mds
 class BufferCtx
 {
 public:
-  BufferCtx() : binding_type_id_(INVALID_VALUE),is_incomplete_replay_(false) {}
+  BufferCtx() : binding_type_id_(INVALID_VALUE) {}
   virtual ~BufferCtx() {}
   void set_binding_type_id(const int64_t type_id) { binding_type_id_ = type_id; }
   int64_t get_binding_type_id() const { return binding_type_id_; }
-  void set_incomplete_replay(const bool incomplete_replay) { is_incomplete_replay_ = incomplete_replay; }
-  bool is_incomplete_replay() const { return is_incomplete_replay_; }
   // 允许用户重写的方法
   virtual const MdsWriter get_writer() const = 0;
   virtual void on_redo(const share::SCN &redo_scn) {}
@@ -56,7 +54,6 @@ public:
   virtual int64_t get_serialize_size(void) const = 0;
 private:
   int64_t binding_type_id_;
-  bool is_incomplete_replay_;
 };
 
 // 该结构嵌入事务上下文中，与多数据源的BufferNode一一对应，同事务状态一起持久化以及恢复

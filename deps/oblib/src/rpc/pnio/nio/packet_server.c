@@ -13,19 +13,13 @@
 typedef struct pkts_msg_t {
   int64_t sz;
   char* payload;
-  int64_t ctime_us;
 } pkts_msg_t;
 
 static int64_t pkts_decode(char* b, int64_t s) { return eh_decode(b, s);}
 
 void pkts_flush_cb(pkts_t* io, pkts_req_t* req) {
-  pkts_sk_t* sk = (typeof(sk))idm_get(&io->sk_map, req->sock_id);
   PNIO_DELAY_WARN(delay_warn("pkts_flush_cb", req->ctime_us, FLUSH_DELAY_WARN_US));
   req->flush_cb(req);
-  if (sk) {
-    sk->sk_diag_info.doing_cnt --;
-    sk->sk_diag_info.done_cnt ++;
-  }
 }
 
 static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes) {
@@ -34,7 +28,6 @@ static int pkts_sk_read(void** b, pkts_sk_t* s, int64_t sz, int64_t* avail_bytes
 
 static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
   pkts_t* pkts = structof(s->fty, pkts_t, sf);
-  s->sk_diag_info.doing_cnt ++;
   int ret = pkts->on_req(pkts, s->ib.b, msg->payload, msg->sz, s->id);
   ib_consumed(&s->ib, msg->sz);
   return ret;
@@ -42,15 +35,14 @@ static int pkts_sk_handle_msg(pkts_sk_t* s, pkts_msg_t* msg) {
 
 static int pkts_wq_flush(sock_t* s, write_queue_t* wq, dlink_t** old_head) {
   // delete response req that has reached expired time
-  if (PNIO_REACH_TIME_INTERVAL(100*1000)) {
+  if (PNIO_REACH_TIME_INTERVAL(10*1000)) {
     int64_t cur_time = rk_get_us();
-    pkts_t* io = structof(s->fty, pkts_t, sf);
     dlink_for(&wq->queue.head, p) {
       pkts_req_t* req = structof(p, pkts_req_t, link);
       if (req->expire_us > 0 && cur_time >= req->expire_us) {
         if (PNIO_OK == wq_delete(wq, p)) {
           rk_warn("rpc resp is expired, expire_us=%ld, sock_id=%ld", req->expire_us, req->sock_id);
-          pkts_flush_cb(io, req);
+          pkts_flush_cb(NULL, req);
         }
       }
     }
@@ -80,7 +72,6 @@ int pkts_init(pkts_t* io, eloop_t* ep, pkts_cfg_t* cfg) {
   rk_info("pkts listen at %s", T2S(addr, cfg->addr));
   idm_init(&io->sk_map, arrlen(io->sk_table));
   io->on_req = cfg->handle_func;
-  dlink_init(&io->sk_list);
   el();
   return err;
 }

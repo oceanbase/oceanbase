@@ -75,7 +75,7 @@ public:
 
 typedef common::ObSEArray<SingleRowDefensiveRecord *, 12> ObSingleRowDefensiveRecordArray;
 
-class ObSingleTabletDefensiveCheckInfo : public share::ObLightHashLink<ObSingleTabletDefensiveCheckInfo>
+class ObSingleTabletDefensiveCheckInfo : public ObTransHashLink<ObSingleTabletDefensiveCheckInfo>
 {
 public:
   ObSingleTabletDefensiveCheckInfo() { }
@@ -112,7 +112,7 @@ public:
   }
 };
 
-typedef share::ObLightHashMap<ObTransID,
+typedef ObTransHashMap<ObTransID,
                        ObSingleTabletDefensiveCheckInfo,
                        ObSingleTabletDefensiveCheckInfoAlloc,
                        common::SpinRWLock, 2 << 16 /*bucket_num*/> ObTxDefensiveCheckInfoMap;

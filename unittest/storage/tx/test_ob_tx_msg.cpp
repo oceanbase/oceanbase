@@ -121,7 +121,7 @@ public:
     msg.request_id_ = op_sn_;
     msg.savepoint_ = ObTxSEQ(1, 0);
     msg.op_sn_ = op_sn_;
-    msg.tx_seq_base_ = 10000000001;
+    msg.branch_id_ = 1;
     msg.tx_ptr_ = tx;
   }
   void build_tx_keepalive_msg(ObTxKeepaliveMsg &msg)
@@ -432,7 +432,7 @@ TEST_F(TestObTxMsg, trans_rollback_sp_msg)
   EXPECT_EQ(msg.cluster_id_, msg1.cluster_id_);
   EXPECT_EQ(msg.savepoint_, msg1.savepoint_);
   EXPECT_EQ(msg.op_sn_, msg1.op_sn_);
-  EXPECT_EQ(msg.tx_seq_base_, msg1.tx_seq_base_);
+  EXPECT_EQ(msg.branch_id_, msg1.branch_id_);
   EXPECT_EQ(msg.tx_ptr_->parts_[0].id_, msg1.tx_ptr_->parts_[0].id_);
   if (OB_NOT_NULL(msg.tx_ptr_)) {
     msg.tx_ptr_ = NULL;

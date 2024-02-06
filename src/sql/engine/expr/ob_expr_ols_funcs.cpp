@@ -1652,7 +1652,7 @@ int ObExprOLSLabelToChar::calc_result_type1(ObExprResType &type,
   type1.set_calc_type(ObIntType);
 
   type.set_varchar();
-  type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
+  type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
 
   return ret;
 }

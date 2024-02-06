@@ -25,6 +25,7 @@ namespace oceanbase
 namespace storage
 {
 class ObDirectLoadInsertTableContext;
+class ObDirectLoadFastHeapTableContext;
 class ObDirectLoadTmpFileManager;
 }  // namespace storage
 namespace share
@@ -145,6 +146,7 @@ public:
   storage::ObDirectLoadInsertTableContext *insert_table_ctx_;
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
+  storage::ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
   ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;

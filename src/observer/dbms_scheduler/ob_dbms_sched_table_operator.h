@@ -46,20 +46,14 @@ class ObDBMSSchedTableOperator
 public:
   ObDBMSSchedTableOperator() : sql_proxy_(NULL) {}
   virtual ~ObDBMSSchedTableOperator() {};
-  static constexpr int64_t JOB_NAME_MAX_SIZE = 128;
-  static const int64_t JOB_ID_OFFSET = (1LL<<50);
 
   int init(common::ObISQLClient *sql_proxy) { sql_proxy_ = sql_proxy; return common::OB_SUCCESS; }
 
-  int update_next_date(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
-
   int update_for_start(
-    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int64_t next_date);
+    uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, bool update_nextdate = true);
   int update_for_end(
     uint64_t tenant_id, ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
-
-  int seperate_job_id_from_name(common::ObString &job_name, int64_t &job_id);
+  int update_nextdate(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
 
   int get_dbms_sched_job_info(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
@@ -79,7 +73,14 @@ public:
     sqlclient::ObMySQLResult &result, int64_t tenant_id, bool is_oracle_tenant,
     ObIAllocator &allocator, ObDBMSSchedJobClassInfo &job_class_info);
 
-  int check_job_can_running(int64_t tenant_id, int64_t alive_job_count, bool &can_running);
+  int calc_execute_at(
+    ObDBMSSchedJobInfo &job_info, int64_t &execute_at, int64_t &delay, bool ignore_nextdate = false);
+
+  int check_job_can_running(int64_t tenant_id, bool &can_running);
+
+  int check_job_timeout(ObDBMSSchedJobInfo &job_info);
+
+  int check_auto_drop(ObDBMSSchedJobInfo &job_info);
 
   int register_default_job_class(uint64_t tenant_id);
   int purge_run_detail_histroy(uint64_t tenant_id);

@@ -293,7 +293,7 @@ int ObLSMemberListService::get_config_version_and_transfer_scn_(
   arg.need_get_config_version_ = need_get_config_version;
   const int64_t cluster_id = GCONF.cluster_id;
   const int64_t timeout = GCONF.sys_bkgd_migration_change_member_list_timeout;
-  const uint64_t group_id = share::OBCG_STORAGE;
+  const uint64_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
   if (OB_FAIL(proxy.call(addr,
                          timeout,
                          cluster_id,

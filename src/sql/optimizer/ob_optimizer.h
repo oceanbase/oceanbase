@@ -81,6 +81,7 @@ namespace sql
      * it must support rescan
      */
     PX_RESCAN,
+    ALLOC_MONITORING_DUMP,
     PX_ESTIMATE_SIZE,
     RUNTIME_FILTER,
 
@@ -88,7 +89,6 @@ namespace sql
     ADJUST_SHARED_EXPR,
 
     COLLECT_BATCH_EXEC_PARAM,
-    ALLOC_OP,
     TRAVERSE_OP_END
   };
 
@@ -221,7 +221,6 @@ namespace sql
                              int64_t flag);
     int check_whether_contain_nested_sql(const ObDMLStmt &stmt);
     int check_force_default_stat();
-    int init_system_stat();
     int calc_link_stmt_count(const ObDMLStmt &stmt, int64_t &count);
 
   private:

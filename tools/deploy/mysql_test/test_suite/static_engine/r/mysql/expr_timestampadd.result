@@ -20473,7 +20473,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c1)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c1)]), filter(nil), rowset=16
       access([t1.c17], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20492,7 +20492,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c1)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c1)]), filter(nil), rowset=16
       access([t1.c17], [t1.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20531,7 +20531,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c2)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c2)]), filter(nil), rowset=16
       access([t1.c17], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20550,7 +20550,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c2)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c2)]), filter(nil), rowset=16
       access([t1.c17], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20589,7 +20589,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c3)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c3)]), filter(nil), rowset=16
       access([t1.c17], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20608,7 +20608,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c3)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c3)]), filter(nil), rowset=16
       access([t1.c17], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20647,7 +20647,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c4)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c4)]), filter(nil), rowset=16
       access([t1.c17], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20666,7 +20666,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c4)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c4)]), filter(nil), rowset=16
       access([t1.c17], [t1.c4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20705,7 +20705,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c5)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c5)]), filter(nil), rowset=16
       access([t1.c17], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20724,7 +20724,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c5)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c5)]), filter(nil), rowset=16
       access([t1.c17], [t1.c5]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20763,7 +20763,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c6)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c6)]), filter(nil), rowset=16
       access([t1.c17], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20782,7 +20782,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c6)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c6)]), filter(nil), rowset=16
       access([t1.c17], [t1.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20821,7 +20821,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c7)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c7)]), filter(nil), rowset=16
       access([t1.c17], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20840,7 +20840,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c7)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c7)]), filter(nil), rowset=16
       access([t1.c17], [t1.c7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20879,7 +20879,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c8)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c8)]), filter(nil), rowset=16
       access([t1.c17], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20898,7 +20898,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c8)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c8)]), filter(nil), rowset=16
       access([t1.c17], [t1.c8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20937,7 +20937,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c9)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c9)]), filter(nil), rowset=16
       access([t1.c17], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20956,7 +20956,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c9)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c9)]), filter(nil), rowset=16
       access([t1.c17], [t1.c9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20995,7 +20995,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c10)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c10)]), filter(nil), rowset=16
       access([t1.c17], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21014,7 +21014,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c10)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c10)]), filter(nil), rowset=16
       access([t1.c17], [t1.c10]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21053,7 +21053,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c11)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c11)]), filter(nil), rowset=16
       access([t1.c17], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21072,7 +21072,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c11)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c11)]), filter(nil), rowset=16
       access([t1.c17], [t1.c11]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21111,7 +21111,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c12)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c12)]), filter(nil), rowset=16
       access([t1.c17], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21130,7 +21130,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c12)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c12)]), filter(nil), rowset=16
       access([t1.c17], [t1.c12]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21169,7 +21169,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c13)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c13)]), filter(nil), rowset=16
       access([t1.c17], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21188,7 +21188,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c13)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c13)]), filter(nil), rowset=16
       access([t1.c17], [t1.c13]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21227,7 +21227,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c14)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c14)]), filter(nil), rowset=16
       access([t1.c17], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21246,7 +21246,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c14)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c14)]), filter(nil), rowset=16
       access([t1.c17], [t1.c14]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21285,7 +21285,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c15)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c15)]), filter(nil), rowset=16
       access([t1.c17], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21304,7 +21304,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c15)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c15)]), filter(nil), rowset=16
       access([t1.c17], [t1.c15]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21343,7 +21343,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c16)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c16)]), filter(nil), rowset=16
       access([t1.c17], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21362,7 +21362,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c16)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c16)]), filter(nil), rowset=16
       access([t1.c17], [t1.c16]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21401,7 +21401,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c17)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c17)]), filter(nil), rowset=16
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21420,7 +21420,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c17)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c17)]), filter(nil), rowset=16
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21459,7 +21459,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c18)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c18)]), filter(nil), rowset=16
       access([t1.c17], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21478,7 +21478,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c18)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c18)]), filter(nil), rowset=16
       access([t1.c17], [t1.c18]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21517,7 +21517,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c19)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c19)]), filter(nil), rowset=16
       access([t1.c17], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21536,7 +21536,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c19)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c19)]), filter(nil), rowset=16
       access([t1.c17], [t1.c19]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21575,7 +21575,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c20)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c20)]), filter(nil), rowset=16
       access([t1.c17], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21594,7 +21594,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c20)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c20)]), filter(nil), rowset=16
       access([t1.c17], [t1.c20]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21633,7 +21633,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c21)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c21)]), filter(nil), rowset=16
       access([t1.c17], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21652,7 +21652,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c21)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c21)]), filter(nil), rowset=16
       access([t1.c17], [t1.c21]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21691,7 +21691,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(1, cast(t1.c17, BIGINT(10, 0)), t1.c22)]), filter(nil), rowset=16
+  0 - output([timestampadd(1, cast(t1.c17, BIGINT(-1, 0)), t1.c22)]), filter(nil), rowset=16
       access([t1.c17], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -21710,7 +21710,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([timestampadd(8, cast(t1.c17, BIGINT(10, 0)), t1.c22)]), filter(nil), rowset=16
+  0 - output([timestampadd(8, cast(t1.c17, BIGINT(-1, 0)), t1.c22)]), filter(nil), rowset=16
       access([t1.c17], [t1.c22]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

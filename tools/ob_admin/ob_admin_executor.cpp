@@ -128,6 +128,8 @@ int ObAdminExecutor::prepare_io()
   } else if (OB_FAIL(ObIOManager::get_instance().add_device_channel(THE_IO_DEVICE,
       async_io_thread_count, sync_io_thread_count, max_io_depth))) {
     LOG_WARN("add device channel failed", K(ret));
+  } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, tenant_io_config))) {
+    LOG_WARN("add server tenant io manager failed", K(ret));
   } else if (OB_FAIL(ObIOManager::get_instance().start())) {
     LOG_WARN("fail to start io manager", K(ret));
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE, storage_env_.default_block_size_))) {
@@ -181,16 +183,10 @@ int ObAdminExecutor::load_config()
       tmp_addr.set_ip_addr(ipv6, local_port);
       GCTX.self_addr_seq_.set_addr(tmp_addr);
     } else {
-      uint32_t ipv4_net = 0;
-      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config.devname, ipv4_net))) {
-        LOG_ERROR("get ipv4 address by devname failed", "devname",
-            config.devname.get_value(), KR(ret));
-      } else {
-        int32_t ipv4 = ntohl(ipv4_net);
-        ObAddr tmp_addr = GCTX.self_addr();
-        tmp_addr.set_ipv4_addr(ipv4, local_port);
-        GCTX.self_addr_seq_.set_addr(tmp_addr);
-      }
+      int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config.devname));
+      ObAddr tmp_addr = GCTX.self_addr();
+      tmp_addr.set_ipv4_addr(ipv4, local_port);
+      GCTX.self_addr_seq_.set_addr(tmp_addr);
     }
   }
 

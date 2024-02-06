@@ -20,7 +20,6 @@
 #include "storage/checkpoint/ob_common_checkpoint.h"
 #include "storage/multi_data_source/runtime_utility/list_helper.h"
 #include "lib/hash/ob_linear_hash_map.h"
-#include "mds_table_order_flusher.h"
 
 namespace oceanbase {
 namespace storage {
@@ -52,6 +51,7 @@ private:
 
 class ObMdsTableMgr final : public checkpoint::ObCommonCheckpoint
 {
+  using MdsTableMap = common::ObLinearHashMap<common::ObTabletID, MdsTableBase*>;
   friend MdsTableFreezeGuard;
 public:
   ObMdsTableMgr()
@@ -63,7 +63,6 @@ public:
         mds_table_map_(),
         removed_mds_table_recorder_() {}
   ~ObMdsTableMgr() { destroy(); }
-  DECLARE_TO_STRING;
 
   int init(ObLS *ls);
   int reset();
@@ -85,25 +84,19 @@ public:
     removed_mds_table_recorder_.for_each(op_wrapper);
     return ret;
   }
-  template <typename OP>
-  struct OpWrapper {
-    template <typename T>
-    OpWrapper(T &&op) : op_(op) {}
-    bool operator()(const common::ObTabletID &k, MdsTableBase* &v) {
+  template <typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(MdsTableBase &))>// if op return FAIL, break for-each
+  int for_each_in_t3m_mds_table(OP &&op) {
+    auto op_wrapper = [&op](const common::ObTabletID &k, MdsTableBase* &v) -> bool {
       bool keep_iterating = true;// means keep iterating next mds_table
       int ret = OB_SUCCESS;
-      if (OB_FAIL(op_(*v))) {
+      if (OB_FAIL(op(*v))) {
         keep_iterating = false;
       }
       return keep_iterating;
-    }
-    OP op_;
-  };
-  template <typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(MdsTableBase &))>// if op return FAIL, break for-each
-  int for_each_in_t3m_mds_table(OP &&op) {
-    OpWrapper<OP> wrapper(std::forward<OP>(op));
-    return mds_table_map_.for_each(wrapper);
+    };
+    return mds_table_map_.for_each(op_wrapper);
   }
+  DECLARE_TO_STRING;
 
 public: // derived from ObCommonCheckpoint
   share::SCN get_freezing_scn() const;
@@ -119,9 +112,9 @@ public: // getter and setter
   int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
 
 private:
-  void order_flush_(FlusherForSome &order_flusher_for_some,
-                    share::SCN freezing_scn,
-                    share::SCN max_consequent_callbacked_scn);
+  int first_scan_to_get_min_rec_scn_(share::SCN &min_rec_scn, ObIArray<ObTabletID> &min_rec_scn_ids);
+  int second_scan_to_do_flush_(share::SCN min_rec_scn);
+
 private:
   bool is_inited_;
   bool is_freezing_;

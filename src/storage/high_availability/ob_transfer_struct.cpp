@@ -29,8 +29,7 @@ using namespace storage;
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
     dest_ls_id_(),
-    tablet_list_(),
-    data_end_scn_()
+    tablet_list_()
 {
 }
 
@@ -39,16 +38,13 @@ void ObTXStartTransferOutInfo::reset()
   src_ls_id_.reset();
   dest_ls_id_.reset();
   tablet_list_.reset();
-  data_end_scn_.reset();
-  transfer_epoch_ = 0;
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
-      && !tablet_list_.empty()
-      && transfer_epoch_ > 0;
+      && !tablet_list_.empty();
 }
 
 int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_transfer_out_info)
@@ -62,13 +58,12 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
-    data_end_scn_ = start_transfer_out_info.data_end_scn_;
-    transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, data_end_scn_, transfer_epoch_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_);
+
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
@@ -336,6 +331,7 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
+  ObIMemtableMgr *memtable_mgr = nullptr;
   ObArray<ObTableHandleV2> memtables;
   ObTabletID tablet_id = tablet->get_tablet_meta().tablet_id_;
   SCN weak_read_scn;
@@ -352,8 +348,11 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
   } else if (ObScnRange::MIN_SCN == weak_read_scn) {
     ret = OB_EAGAIN;
     LOG_WARN("weak read service not inited, need to wait for weak read scn to advance", K(ret), K(ls_id), K(weak_read_scn));
-  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
-    LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
+  } else if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
+  } else if (CLICK_FAIL(memtable_mgr->get_all_memtables(memtables))) {
+    LOG_WARN("failed to get all memtables", K(ret), K(tablet_id));
   } else {
     CLICK();
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
@@ -424,7 +423,7 @@ int ObTXTransferUtils::build_empty_minor_sstable_param_(
     param.table_key_.tablet_id_ = tablet_id;
     param.table_key_.scn_range_.start_scn_ = start_scn;
     param.table_key_.scn_range_.end_scn_ = end_scn;
-    param.max_merged_trans_version_ = 0;
+    param.max_merged_trans_version_ = INT64_MAX; //Set max merged trans version avoild sstable recycle;
 
     param.schema_version_ = table_schema.get_schema_version();
     param.create_snapshot_version_ = 0;

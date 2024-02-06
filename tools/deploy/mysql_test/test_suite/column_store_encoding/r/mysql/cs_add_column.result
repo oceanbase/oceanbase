@@ -1,4 +1,4 @@
-create table t1(a int, b varchar(3048), primary key (a), c int) row_format = compressed with column group (all columns, each column);
+create table t1(a int, b varchar(3048), primary key (a), c int) row_format = compressed with column group for all columns, each column;
 select count(*) from t1;
 count(*)
 150

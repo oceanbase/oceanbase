@@ -77,8 +77,9 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     if (OB_FAIL(abort_active_trans(ctx))) {
       LOG_WARN("fail to abort active trans", KR(ret));
     }
-    ctx->store_ctx_->insert_table_ctx_->cancel();
+    // 4. stop merger
     ctx->store_ctx_->merger_->stop();
+    // 5. stop task_scheduler
     ctx->store_ctx_->task_scheduler_->stop();
     is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped();
   }
@@ -310,6 +311,8 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
     ObTableLoadSqlStatistics sql_statistics;
     if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
+    } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit())) {
+      LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
     } else if (param_.online_opt_stat_gather_ &&
@@ -955,29 +958,6 @@ int ObTableLoadStore::px_finish_trans(const ObTableLoadTransId &trans_id)
     if (OB_NOT_NULL(trans)) {
       store_ctx_->put_trans(trans);
       trans = nullptr;
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadStore::px_check_for_write(const ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
-  } else {
-    bool is_exist = false;
-    for (int64_t i = 0; i < store_ctx_->ls_partition_ids_.count(); ++i) {
-      const ObTableLoadLSIdAndPartitionId &ls_part_id = store_ctx_->ls_partition_ids_.at(i);
-      if (ls_part_id.part_tablet_id_.tablet_id_ == tablet_id) {
-        is_exist = true;
-        break;
-      }
-    }
-    if (OB_UNLIKELY(!is_exist)) {
-      ret = OB_NOT_MASTER;
-      LOG_WARN("not partition master", KR(ret), K(tablet_id), K(store_ctx_->ls_partition_ids_));
     }
   }
   return ret;

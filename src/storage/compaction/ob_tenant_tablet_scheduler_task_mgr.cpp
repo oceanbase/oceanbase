@@ -139,9 +139,6 @@ void ObTenantTabletSchedulerTaskMgr::InfoPoolResizeTask::runTimerTask()
   if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->gc_cg_info_array())) {
     LOG_WARN("Fail to gc info", K(ret));
   }
-  if (OB_FAIL(MTL(ObTenantTabletScheduler *)->refresh_tenant_status())) {
-    LOG_WARN("Fail to refresh tenant status", K(ret));
-  }
   cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
   LOG_INFO("InfoPoolResizeTask", K(cost_ts));
 }

@@ -431,8 +431,7 @@ public:
 
   static int flatten_expr(ObRawExpr *expr,
                           common::ObIArray<ObRawExpr*> &flattened_exprs);
-  static int flatten_and_or_xor(ObTransformerCtx *ctx, ObIArray<ObRawExpr*> &conditions, bool *trans_happened = NULL);
-  static int flatten_and_or_xor(ObRawExpr* expr, bool *trans_happened = NULL);
+
   static int find_not_null_expr(const ObDMLStmt &stmt,
                                 ObRawExpr *&not_null_expr,
                                 bool &is_valid,
@@ -917,8 +916,7 @@ public:
                                         ObSEArray<ColumnItem, 4>& column_list,
                                         bool all_tab,
                                         bool &tab_has_alias,
-                                        TableItem *&tab_item,
-                                        bool &is_empty_table);
+                                        TableItem *&tab_item);
   static int add_column_expr_for_json_object_node(ObTransformerCtx *ctx,
                                                   ObDMLStmt *stmt,
                                                   ColumnItem& col_item,
@@ -927,8 +925,6 @@ public:
                                        ObDMLStmt *stmt,
                                        ObRawExpr *param_expr,
                                        ObSEArray<ObRawExpr *, 1>& param_array);
-  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
-                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   // end json object with star
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
@@ -1038,10 +1034,21 @@ public:
                                 ObIArray<ObRawExpr *> &targets,
                                 ObIArray<ObRawExprPointer> &parents);
 
-  static int generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
-                                                 ObDMLStmt *stmt,
-                                                 TableItem *item,
-                                                 ObIArray<ObRawExpr *> &unique_keys);
+  static int generate_unique_key(ObTransformerCtx *ctx,
+                                 ObDMLStmt *stmt,
+                                 TableItem *item,
+                                 ObIArray<ObRawExpr *> &unique_keys);
+
+  /**
+   * @brief generate_unique_key
+   * 可以对stmt生成唯一键，需要调用
+   * check_can_set_stmt_unique
+   * 确认stmt有唯一键
+   */
+  static int generate_unique_key(ObTransformerCtx *ctx,
+                                ObDMLStmt *stmt,
+                                ObSqlBitSet<> &ignore_tables,
+                                ObIArray<ObRawExpr *> &unique_keys);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
@@ -1245,18 +1252,6 @@ public:
                                   ObRawExpr *default_expr,
                                   ObRawExpr *&out_expr,
                                   ObTransformerCtx *ctx);
-  static int build_case_when_expr(ObTransformerCtx *ctx,
-                                  ObIArray<ObRawExpr*> &when_exprs,
-                                  ObIArray<ObRawExpr*> &then_exprs,
-                                  ObRawExpr *default_expr,
-                                  ObCaseOpRawExpr *&case_expr);
-  /**
-   * @brief check_error_free_expr
-   * Judging whether an expression has a high risk of reporting errors during execution.
-   * @note The rules are mainly based on historical experience, results are not guaranteed to be accurate.
-   *       Please use with care.
-   */
-  static int check_error_free_expr(ObRawExpr *expr, bool &is_error_free);
   static int build_row_expr(ObRawExprFactory& expr_factory,
                             common::ObIArray<ObRawExpr*>& param_exprs,
                             ObOpRawExpr*& row_expr);
@@ -1353,6 +1348,17 @@ public:
                                        ObRawExpr *limit_count,
                                        ObRawExpr *limit_offset,
                                        ObRawExpr *&pushdown_limit_count);
+
+  static int recursive_set_stmt_unique(ObSelectStmt *select_stmt,
+                                       ObTransformerCtx *ctx,
+                                       bool ignore_check_unique = false,
+                                       common::ObIArray<ObRawExpr *> *unique_keys = NULL);
+  static int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
+                                              ObRawExprFactory *expr_factory,
+                                              ObIArray<ObRawExpr*> &unique_keys,
+                                              ObIArray<ObRawExpr*> &added_unique_keys);
+  static int check_can_set_stmt_unique(ObDMLStmt *stmt,
+                                       bool &can_set_unique);
 
   static int get_rel_ids_from_tables(const ObDMLStmt *stmt,
                                      const ObIArray<TableItem*> &table_items,
@@ -1820,8 +1826,6 @@ public:
                                    const ObIArray<ObRawExpr *> &group_exprs,
                                    bool &bret);
 
-  static int check_expand_temp_table_valid(ObSelectStmt *stmt, bool &is_valid);
-
   static int expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTableInfo& table_info);
 
   static int get_stmt_map_after_copy(ObDMLStmt *origin_stmt,
@@ -1864,14 +1868,6 @@ public:
   static int check_child_projection_validity(const ObSelectStmt *child_stmt,
                                              ObRawExpr *expr,
                                              bool &is_valid);
-  static int is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
-                                    ObRawExpr *filter,
-                                    bool &is_topn_filter,
-                                    ObRawExpr * &topn_const_expr,
-                                    bool &is_fetch_with_ties,
-                                    ObWinFunRawExpr *&win_expr);
-  static int pushdown_qualify_filters(ObSelectStmt *stmt);
-
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1900,6 +1896,9 @@ private:
                             ObIArray<ObRawExpr*> &from_exprs, 
                             ObIArray<ObRawExpr*> &view_exprs);
 
+  static int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
+                                            ObIArray<ObRawExpr*> &org_select_exprs);
+
   static int extract_shared_exprs(ObDMLStmt *parent,
                                   ObSelectStmt *view_stmt,
                                   ObIArray<ObRawExpr *> &common_exprs,
@@ -1923,51 +1922,6 @@ private:
                                          bool &is_safe);
 };
 
-class StmtUniqueKeyProvider
-{
-public:
-  StmtUniqueKeyProvider(bool for_costed_trans = true) :
-    for_costed_trans_(for_costed_trans),
-    in_temp_table_(false)
-  {}
-  virtual ~StmtUniqueKeyProvider() {}
-
-  static int check_can_set_stmt_unique(ObDMLStmt *stmt,
-                                       bool &can_set_unique);
-  int recursive_set_stmt_unique(ObSelectStmt *select_stmt,
-                                ObTransformerCtx *ctx,
-                                bool ignore_check_unique = false,
-                                common::ObIArray<ObRawExpr *> *unique_keys = NULL);
-  /**
-   * @brief generate_unique_key
-   * generate unique key for stmt, need call check_can_set_stmt_unique before to ensure unique key can be generated
-   */
-  int generate_unique_key(ObTransformerCtx *ctx,
-                          ObDMLStmt *stmt,
-                          ObSqlBitSet<> &ignore_tables,
-                          ObIArray<ObRawExpr *> &unique_keys);
-  int recover_useless_unique_for_temp_table();
-private:
-  int get_unique_keys_from_unique_stmt(const ObSelectStmt *select_stmt,
-                                       ObRawExprFactory *expr_factory,
-                                       ObIArray<ObRawExpr*> &unique_keys,
-                                       ObIArray<ObRawExpr*> &added_unique_keys);
-  int try_push_back_modified_info(ObSelectStmt *select_stmt,
-                                  int64_t sel_item_count,
-                                  int64_t col_item_count);
-  int add_non_duplicated_select_expr(ObIArray<ObRawExpr*> &add_select_exprs,
-                                     ObIArray<ObRawExpr*> &org_select_exprs);
-
-private:
-    DISALLOW_COPY_AND_ASSIGN(StmtUniqueKeyProvider);
-    const bool for_costed_trans_;
-    bool in_temp_table_;
-    // select items in temp tables may be appended by recursive_set_stmt_unique, store some information to recover them.
-    // ordering in array below must be maintained by this class
-    common::ObSEArray<ObSelectStmt*, 4> sel_stmts_;
-    common::ObSEArray<int64_t, 4> sel_item_counts_;
-    common::ObSEArray<int64_t, 4> col_item_counts_;
-};
 
 template <typename T>
 int ObTransformUtils::replace_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,

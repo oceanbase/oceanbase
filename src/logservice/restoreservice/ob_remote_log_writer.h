@@ -61,8 +61,6 @@ private:
   int submit_entries_(ObFetchLogTask &task);
   int submit_log_(const share::ObLSID &id, const int64_t proposal_id, const palf::LSN &lsn,
       const share::SCN &scn, const char *buf, const int64_t buf_size);
-  int update_max_fetch_info_(const share::ObLSID &id, const int64_t proposal_id,
-      const palf::LSN &lsn, const share::SCN &scn);
   int try_retire_(ObFetchLogTask *&task);
   void inner_free_task_(ObFetchLogTask &task);
   void report_error_(const share::ObLSID &id,

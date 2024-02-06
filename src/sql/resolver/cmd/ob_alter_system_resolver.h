@@ -304,7 +304,6 @@ private:
 };
 
 DEF_SIMPLE_CMD_RESOLVER(ObTableTTLResolver);
-DEF_SIMPLE_CMD_RESOLVER(ObCancelCloneResolver);
 
 #undef DEF_SIMPLE_CMD_RESOLVER
 

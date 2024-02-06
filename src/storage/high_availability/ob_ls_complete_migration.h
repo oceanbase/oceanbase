@@ -99,8 +99,6 @@ private:
       ObLS &ls,
       const ObMigrationStatus &current_migration_status,
       ObMigrationStatus &new_migration_status);
-  int check_tenant_is_dropped_(
-      bool &is_tenan_dropped);
 
 private:
   bool is_inited_;

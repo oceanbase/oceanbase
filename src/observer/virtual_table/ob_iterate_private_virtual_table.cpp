@@ -223,20 +223,6 @@ int ObIteratePrivateVirtualTable::add_extra_condition(common::ObSqlString &sql)
   if (OB_FAIL(sql.append_fmt(" AND tenant_id = %lu", cur_tenant_id_))) {
     LOG_WARN("append sql failed", KR(ret), K_(cur_tenant_id));
   }
-
-  /*
-  * add filter for sensitive data, do not let this to influence other condition or
-  * be influenced by other
-  */
-  if (OB_SUCC(ret)) {
-    if (!is_sys_tenant(effective_tenant_id_)) {
-      if (OB_TENANT_PARAMETER_TID == base_table_id_) {
-        if (OB_FAIL(sql.append_fmt(" AND name not in ('external_kms_info')"))) {
-          LOG_WARN("append filter sql failed", KR(ret), K_(cur_tenant_id), K_(base_table_id));
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -346,27 +332,5 @@ uint64_t ObIteratePrivateVirtualTable::get_exec_tenant_id_(const uint64_t tenant
   return exec_tenant_id;
 }
 
-static int varchar_to_empty_string(const ObObj &src, ObObj &dst, ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  dst = src;
-  dst.set_varchar("");
-  return ret;
-}
-
-int ObIteratePrivateVirtualTable::set_convert_func(convert_func_t &func,
-            const schema::ObColumnSchemaV2 &col, const schema::ObColumnSchemaV2 &base_col)
-{
-  int ret = OB_SUCCESS;
-  if (!is_sys_tenant(effective_tenant_id_)) {
-    if (OB_ALL_RECOVER_TABLE_JOB_TID == base_table_id_ ||
-        OB_ALL_RECOVER_TABLE_JOB_HISTORY_TID == base_table_id_) {
-      if (base_col.get_column_name_str() == ObString::make_string("external_kms_info")) {
-        func = varchar_to_empty_string;
-      }
-    }
-  }
-  return ret;
-}
 } // end namespace observer
 } // end namespace oceanbase

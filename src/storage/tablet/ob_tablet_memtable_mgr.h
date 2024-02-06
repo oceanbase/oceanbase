@@ -56,7 +56,6 @@ public:
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
   virtual void destroy() override;
-  void reset();
   uint32_t get_ls_freeze_clock();
 
   bool has_active_memtable();
@@ -126,12 +125,12 @@ private:
   int get_first_frozen_memtable_(ObTableHandleV2 &handle) const;
   void clean_tail_memtable_();
   int get_last_frozen_memtable_(ObTableHandleV2 &handle) const;
-  int try_resolve_boundary_on_create_memtable_for_leader_(memtable::ObMemtable *last_frozen_memtable,
-                                               memtable::ObMemtable *new_memtable);
   int resolve_left_boundary_for_active_memtable(memtable::ObIMemtable *memtable,
                                                 share::SCN start_scn,
                                                 share::SCN snapshot_version);
   int unset_logging_blocked_for_active_memtable(memtable::ObIMemtable *memtable);
+  void unlink_memtable_mgr_and_memtable_(memtable::ObMemtable *memtable);
+  void wait_memtable_mgr_op_cnt_(memtable::ObMemtable *memtable);
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMemtableMgr);
 
@@ -145,39 +144,6 @@ private:
   ObStorageSchemaRecorder schema_recorder_; // 120B
   compaction::ObTabletMediumCompactionInfoRecorder medium_info_recorder_; // 96B
 };
-
-class ObTabletMemtableMgrPool
-{
-public:
-  ObTabletMemtableMgrPool()
-    : allocator_(sizeof(ObTabletMemtableMgr), lib::ObMemAttr(MTL_ID(), "TltMemtablMgr")),
-      count_(0) {}
-  static int mtl_init(ObTabletMemtableMgrPool* &m) { return OB_SUCCESS; }
-  void destroy() {}
-  ObTabletMemtableMgr* acquire()
-  {
-    void *ptr = allocator_.alloc();
-    ObTabletMemtableMgr *ret = NULL;
-    if (OB_NOT_NULL(ptr)) {
-      ret = new(ptr)ObTabletMemtableMgr();
-      ATOMIC_INC(&count_);
-    }
-    return ret;
-  }
-  void release(ObTabletMemtableMgr *mgr)
-  {
-    OB_ASSERT(OB_NOT_NULL(mgr));
-    mgr->~ObTabletMemtableMgr();
-    allocator_.free(static_cast<void*>(mgr));
-    ATOMIC_DEC(&count_);
-  }
-
-  int64_t get_count() { return ATOMIC_LOAD(&count_); }
-private:
-  common::ObSliceAlloc allocator_;
-  int64_t count_;
-};
-
 }
 }
 

@@ -18,12 +18,6 @@
 
 namespace oceanbase
 {
-namespace blocksstable
-{
-class ObSSTableMetaHandle;
-class ObSSTable;
-}
-
 namespace storage
 {
 
@@ -32,7 +26,7 @@ class ObTableHandleV2;
 class ObSSTableArray;
 class ObMemtableArray;
 
-class ObTableStoreIterator final
+class ObTableStoreIterator
 {
 // TODO: currently, we will load all related tables into memory on initializetion of iterator,
 // maybe we should init with sstable address and prefetch sstable on iteratring for more smooth memory usage
@@ -54,7 +48,8 @@ public:
   typedef common::ObSEArray<ObStorageMetaHandle, DEFAULT_TABLE_HANDLE_CNT> SSTableHandleArray;
   typedef common::ObSEArray<TablePtr, DEFAULT_TABLE_CNT> TableArray;
   ObTableStoreIterator(const bool is_reverse = false, const bool need_load_sstable = true);
-  int assign(const ObTableStoreIterator& other);
+  ObTableStoreIterator(const ObTableStoreIterator& other) { *this = other; } ;
+  void operator=(const ObTableStoreIterator& other);
   virtual ~ObTableStoreIterator();
 
   OB_INLINE bool is_valid() const { return table_ptr_array_.count() > 0; }
@@ -88,14 +83,7 @@ public:
       K_(need_load_sstable), K_(table_store_handle), KPC_(transfer_src_table_store_handle));
 private:
   int inner_move_idx_to_next();
-  int get_table_ptr_with_meta_handle(
-      const blocksstable::ObSSTable *table,
-      TablePtr &table_ptr);
   int add_tables(const ObMemtableArray &memtable_array, const int64_t start_pos = 0);
-  int add_cg_tables(
-      const ObSSTableArray &sstable_array,
-      const bool is_loaded_co_table,
-      const blocksstable::ObSSTableMetaHandle &co_meta_handle);
   int get_ith_table(const int64_t pos, ObITable *&table);
 private:
   friend class ObTablet; // TODO: remove this friend class when possible
@@ -108,7 +96,6 @@ private:
   int64_t step_;
   bool * memstore_retired_;
   ObStorageMetaHandle *transfer_src_table_store_handle_;
-  DISALLOW_COPY_AND_ASSIGN(ObTableStoreIterator);
 };
 
 

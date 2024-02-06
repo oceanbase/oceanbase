@@ -62,10 +62,8 @@ public:
   OB_INLINE bool is_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   OB_INLINE bool is_materialized_view() const
   { return ObTableSchema::is_materialized_view(table_type_); }
-  OB_INLINE bool is_mlog_table() const
-  { return ObTableSchema::is_mlog_table(table_type_); }
   OB_INLINE bool is_storage_index_table() const
-  { return is_index_table(); }
+  { return is_index_table() || is_materialized_view(); }
   OB_INLINE bool can_read_index() const { return ObTableSchema::can_read_index(index_status_); }
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }

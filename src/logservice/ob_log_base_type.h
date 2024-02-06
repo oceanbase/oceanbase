@@ -128,20 +128,6 @@ enum ObLogBaseType
 
   // for table load resource manager
   TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE = 40,
-
-  // for tenant snapshot
-  SNAPSHOT_SCHEDULER_LOG_BASE_TYPE = 41,
-  //for tenant clone
-  CLONE_SCHEDULER_LOG_BASE_TYPE = 42,
-
-  // for mview maintenance service
-  MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE = 43,
-
-  // for share storage net throt
-  SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE = 44,
-
-  // for DBMS_SCHEDULER
-  DBMS_SCHEDULER_LOG_BASE_TYPE = 45,
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -232,22 +218,12 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"COMMON_LS_SERVICE", str_len);
   } else if (log_type == LS_BLOCK_TX_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"BLOCK_TX_SERVICE", str_len);
-  } else if (log_type == DBMS_SCHEDULER_LOG_BASE_TYPE) {
-    strncpy(str ,"DBMS_SCHEDULER", str_len);
   } else if (log_type == WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"WORKLOAD_REPOSITORY_SERVICE", str_len);
   } else if (log_type == TTL_LOG_BASE_TYPE) {
     strncpy(str ,"TTL_SERVICE", str_len);
-  } else if (log_type == SNAPSHOT_SCHEDULER_LOG_BASE_TYPE) {
-    strncpy(str ,"SNAPSHOT_SCHEDULER", str_len);
-  } else if (log_type == CLONE_SCHEDULER_LOG_BASE_TYPE) {
-    strncpy(str ,"CLONE_SCHEDULER", str_len);
   } else if (log_type == TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"TABLE_LOAD_RESOURCE_SERVICE", str_len);
-  } else if (log_type == MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE) {
-    strncpy(str, "MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE", str_len);
-  } else if (log_type == SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE) {
-    strncpy(str ,"SHARE_STORAGE_NRT_THROT_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

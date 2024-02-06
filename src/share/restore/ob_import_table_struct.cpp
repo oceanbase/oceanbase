@@ -422,7 +422,7 @@ int ObImportTableTask::fill_dml(share::ObDMLSqlSplicer &dml) const
   if (OB_SUCC(ret) && status_.is_finish()) {
     if (FAILEDx(dml.add_column(OB_STR_RESULT, result_.get_result_str()))) {
       LOG_WARN("failed to add column", K(ret));
-    } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(result_.get_comment_str())))) {
+    } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, result_.get_comment()))) {
       LOG_WARN("failed to add column", K(ret));
     }
   }
@@ -726,7 +726,7 @@ int ObImportTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column("import_all", import_all))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(result_.get_comment())))) {
+  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, result_.get_comment()))) {
     LOG_WARN("failed to add column", K(ret));
   }
   FILL_INT_COLUMN(initiator_tenant_id)
@@ -1298,7 +1298,7 @@ int ObRecoverTableJob::fill_dml(share::ObDMLSqlSplicer &dml) const
   if (OB_SUCC(ret) && status_.is_finish()) {
     if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_.get_result_str()))) {
       LOG_WARN("failed to add column", K(ret));
-    } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(result_.get_comment())))) {
+    } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, result_.get_comment()))) {
       LOG_WARN("failed to add column", K(ret));
     }
   }

@@ -159,17 +159,19 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
                                   bool is_allow_incomplete_dates,
                                   ObEvalCtx &ctx,
                                   ObTime &ot,
-                                  bool has_lob_header,
-                                  const common::ObTimeZoneInfo *tz_info,
-                                  ObSQLMode sql_mode)
+                                  bool has_lob_header)
 {
   int ret = OB_SUCCESS;
-  if (with_date) {
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (with_date) {
     ObTime ot2;
     ObDateSqlMode date_sql_mode;
-    date_sql_mode.init(sql_mode);
+    date_sql_mode.init(session->get_sql_mode());
     date_sql_mode.allow_incomplete_dates_ = is_allow_incomplete_dates;
-    if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, scale, tz_info,
+    if (OB_FAIL(ob_datum_to_ob_time_with_date(datum, type, scale, get_timezone_info(session),
         ot2, get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), date_sql_mode,
         has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
@@ -178,7 +180,7 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     }
   } else {
     ObTime ot2(DT_TYPE_TIME);
-    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, scale, tz_info,
+    if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, scale, get_timezone_info(session),
                                                  ot2, has_lob_header))) {
       LOG_WARN("cast to ob time failed", K(ret));
     } else {
@@ -194,33 +196,22 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
   int ret = OB_SUCCESS;
   ObDatum *param_datum = NULL;
   const ObSQLSessionInfo *session = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
-  const ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, param_datum))) {
     LOG_WARN("eval param value failed");
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("failed to get time zone info", K(ret));
   } else if (OB_UNLIKELY(param_datum->is_null())) {
     expr_datum.set_null();
   } else {
     ObTime ot;
     if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_,
                                         expr.args_[0]->datum_meta_.scale_, with_date, is_allow_incomplete_dates,
-                                        ctx, ot, expr.args_[0]->obj_meta_.has_lob_header(),
-                                        tz_info, sql_mode))) {
+                                        ctx, ot, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast to ob time failed", K(ret), K(lbt()), K(session->get_stmt_type()));
       LOG_USER_WARN(OB_ERR_CAST_VARCHAR_TO_TIME);
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                        session->is_ignore_stmt(),
-                                        sql_mode,
-                                        cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
       if (CM_IS_WARN_ON_FAIL(cast_mode) || CM_IS_WARN_ON_FAIL(expr.args_[0]->extra_)) {
         ret = OB_SUCCESS;
         expr_datum.set_null();
@@ -270,16 +261,6 @@ int ObExprTimeBase::is_valid_for_generated_column(const ObRawExpr*expr, const co
     is_valid = is_valid_for_generated_col_;
   } else if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprTimeBase, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(2);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
   }
   return ret;
 }

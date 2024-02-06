@@ -594,7 +594,7 @@ int ObPlanCache::get_plan(common::ObIAllocator &allocator,
         if (GCONF.enable_perf_event) {
           uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
           bool read_only = false;
-          if (pc_ctx.sql_ctx_.session_info_->is_inner()) {
+          if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
             // do nothing
           } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id,
                                                                                  read_only))) {
@@ -1342,8 +1342,6 @@ int ObPlanCache::foreach_cache_evict(CallBack &cb)
 }
 
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryOp>(pl::ObGetPLKVEntryOp &);
-template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySchemaIdOp>(pl::ObGetPLKVEntryBySchemaIdOp &);
-template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySQLIDOp>(pl::ObGetPLKVEntryBySQLIDOp &);
 
 // Remove all cache object in the lib cache
 int ObPlanCache::cache_evict_all_obj()
@@ -1709,7 +1707,7 @@ int ObPlanCache::ref_cache_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard
   int ret = OB_SUCCESS;
   ObCacheObjAtomicOp op(guard.ref_handle_);
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(co_mgr_.atomic_get_cache_obj(obj_id, op))) {
+  if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
     SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
   } else if (NULL == op.get_value()) {
     ret = OB_HASH_NOT_EXIST;
@@ -1725,40 +1723,6 @@ int ObPlanCache::ref_plan(const ObCacheObjID plan_id, ObCacheObjGuard& guard)
   ObILibCacheObject *cache_obj = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
   if (OB_FAIL(ref_cache_obj(plan_id, guard))) { // inc ref count by 1
-    LOG_WARN("failed to ref cache obj", K(ret));
-  } else if (FALSE_IT(cache_obj = guard.cache_obj_)) {
-    // do nothing
-  } else if (OB_ISNULL(cache_obj)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null cache object", K(ret));
-  } else if (ObLibCacheNameSpace::NS_CRSR != cache_obj->get_ns()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("this cache object is not a plan.", K(ret), K(cache_obj->get_ns()));
-  }
-  return ret;
-}
-
-int ObPlanCache::ref_alloc_obj(const ObCacheObjID obj_id, ObCacheObjGuard& guard)
-{
-  int ret = OB_SUCCESS;
-  ObCacheObjAtomicOp op(guard.ref_handle_);
-  ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(co_mgr_.atomic_get_alloc_cache_obj(obj_id, op))) {
-    SQL_PC_LOG(WARN, "failed to get update plan statistic", K(obj_id), K(ret));
-  } else if (NULL == op.get_value()) {
-    ret = OB_HASH_NOT_EXIST;
-  } else {
-    guard.cache_obj_ = op.get_value();
-  }
-  return ret;
-}
-
-int ObPlanCache::ref_alloc_plan(const ObCacheObjID plan_id, ObCacheObjGuard& guard)
-{
-  int ret = OB_SUCCESS;
-  ObILibCacheObject *cache_obj = NULL;
-  ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_FAIL(ref_alloc_obj(plan_id, guard))) { // inc ref count by 1
     LOG_WARN("failed to ref cache obj", K(ret));
   } else if (FALSE_IT(cache_obj = guard.cache_obj_)) {
     // do nothing
@@ -2266,7 +2230,7 @@ int ObPlanCache::get_ps_plan(ObCacheObjGuard& guard,
   if (OB_SUCC(ret) && GCONF.enable_perf_event) {
     uint64_t tenant_id = pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id();
     bool read_only = false;
-    if (pc_ctx.sql_ctx_.session_info_->is_inner()) {
+    if ((pc_ctx.sql_ctx_.session_info_->is_inner() && !pc_ctx.sql_ctx_.is_from_pl_)) {
       // do nothing
     } else if (OB_FAIL(pc_ctx.sql_ctx_.schema_guard_->get_tenant_read_only(tenant_id, read_only))) {
       SQL_PC_LOG(WARN, "fail to get tenant read only attribute", K(tenant_id), K(ret));
@@ -2308,21 +2272,10 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   int ret = OB_SUCCESS;
   uint64_t database_id = OB_INVALID_ID;
   session.get_database_id(database_id);
-  pc_key.db_id_ = (database_id == OB_INVALID_ID) ? OB_MOCK_DEFAULT_DATABASE_ID : database_id;
+  pc_key.db_id_ = (database_id == OB_INVALID_ID) ? OB_OUTLINE_DEFAULT_DATABASE_ID : database_id;
   pc_key.namespace_ = ns;
   pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
   pc_key.config_str_ = session.get_config_in_pc_str();
-  // here we use `initial_use_rich_format` instead of `use_rich_format` as part of key
-  // consider scenario of binding outline:
-  // ```
-  //   set _enable_rich_vector_format = true;
-  //   create outline xx on select /*+opt_param('enable_rich_vector_format', 'false')*/ * from t on select * from t;
-  //   select * from t;
-  // ```
-  // rich_format is forced off by hint, thus `use_rich_format() = false`, `initial_use_rich_format() = true`
-  // added plan's key will be `true + other_info`, same as key constructed for getting plan.
-  // if `use_rich_format()` is used as part of key, added plan's key will be `false + other_info`.
-  pc_key.use_rich_vector_format_ = session.initial_use_rich_format();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }
@@ -2580,42 +2533,6 @@ int ObPlanCache::flush_lib_cache_by_ns(const ObLibCacheNameSpace ns)
   return ret;
 }
 
-template<typename GETPLKVEntryOp, typename EvictAttr>
-int ObPlanCache::flush_pl_cache_single_cache_obj(uint64_t db_id, EvictAttr &attr)
-{
-  int ret = OB_SUCCESS;
-  observer::ObReqTimeGuard req_timeinfo_guard;
-  if (OB_FAIL(ObPLCacheMgr::cache_evict_pl_cache_single<GETPLKVEntryOp>(this, db_id, attr))) {
-    SQL_PC_LOG(ERROR, "Plan cache evict failed, please check", K(ret));
-  }
-  ObArray<AllocCacheObjInfo> deleted_objs;
-  int64_t safe_timestamp = INT64_MAX;
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(observer::ObGlobalReqTimeService::get_instance()
-                        .get_global_safe_timestamp(safe_timestamp))) {
-    SQL_PC_LOG(ERROR, "failed to get global safe timestamp", K(ret));
-  } else if (OB_FAIL(dump_deleted_objs<DUMP_PL>(deleted_objs, safe_timestamp))) {
-    SQL_PC_LOG(WARN, "failed to get deleted sql objs", K(ret));
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    tmp_ret = OB_E(EventTable::EN_FLUSH_PC_NOT_CLEANUP_LEAK_MEM_ERROR) OB_SUCCESS;
-    if (OB_SUCCESS == tmp_ret) {
-      LOG_INFO("Deleted Cache Objs", K(deleted_objs));
-      for (int64_t i = 0; i < deleted_objs.count(); i++) { // ignore error code and continue
-        if (OB_FAIL(ObCacheObjectFactory::destroy_cache_obj(true,
-                                                            deleted_objs.at(i).obj_id_,
-                                                            this))) {
-            LOG_WARN("failed to destroy cache obj", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySchemaIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
-template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySQLIDOp, common::ObString>(uint64_t db_id, common::ObString &sql_id);
 
 int ObPlanCache::flush_pl_cache()
 {

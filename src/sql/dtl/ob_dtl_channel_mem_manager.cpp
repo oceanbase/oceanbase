@@ -19,7 +19,6 @@
 #include "src/sql/dtl/ob_dtl_tenant_mem_manager.h"
 #include "share/ob_occam_time_guard.h"
 #include "lib/utility/ob_tracepoint.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
@@ -69,8 +68,12 @@ int ObDtlChannelMemManager::get_max_mem_percent()
 int ObDtlChannelMemManager::get_memstore_limit_percentage_()
 {
   int ret = OB_SUCCESS;
-  MTL_SWITCH(tenant_id_) {
-    memstore_limit_percent_ = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
+  ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (tenant_config.is_valid()) {
+    memstore_limit_percent_ = tenant_config->memstore_limit_percentage;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("failed to init tenant config", K(tenant_id_), K(ret));
   }
   return ret;
 }

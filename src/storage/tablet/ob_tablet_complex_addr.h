@@ -141,7 +141,7 @@ int64_t ObTabletComplexAddr<T>::to_string(char *buf, const int64_t buf_len) cons
     // do nothing
   } else {
     J_OBJ_START();
-    J_KV(KP_(ptr), K_(addr));
+    J_KV(K_(ptr), K_(addr));
     J_OBJ_END();
   }
 

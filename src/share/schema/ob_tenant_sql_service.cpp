@@ -16,7 +16,6 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_isql_client.h"
-#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h"  // for ObTenantSnapshotUtil
 #include "share/ob_dml_sql_splicer.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/schema/ob_schema_struct.h"
@@ -79,10 +78,7 @@ int ObTenantSqlService::alter_tenant(
     LOG_WARN("invalid tenant schema", K(tenant_schema), K(ret));
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(tenant_schema.get_charset_type(),
                                                                     tenant_schema.get_tenant_id()))) {
-    LOG_WARN("failed to check charset data version valid", K(tenant_schema.get_charset_type()), K(ret));
-  } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(tenant_schema.get_collation_type(),
-                                                                      tenant_schema.get_tenant_id()))) {
-    LOG_WARN("failed to check charset data version valid", K(tenant_schema.get_collation_type()), K(ret));
+    LOG_WARN("failed to check charset data version valid", K(ret));
   } else if (OB_FAIL(replace_tenant(tenant_schema, op, sql_client, ddl_stmt_str))) {
     LOG_WARN("replace_tenant failed", K(tenant_schema), K(op), K(ret));
   }
@@ -91,25 +87,15 @@ int ObTenantSqlService::alter_tenant(
 
 int ObTenantSqlService::delay_to_drop_tenant(
     const ObTenantSchema &tenant_schema,
-    ObMySQLTransaction &trans,
+    ObISQLClient &sql_client,
     const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
   const ObSchemaOperationType op = OB_DDL_DEL_TENANT_START;
-  rootserver::ObConflictCaseWithClone case_to_check(rootserver::ObConflictCaseWithClone::DELAY_DROP_TENANT);
-  uint64_t tenant_id_to_check_clone = tenant_schema.get_tenant_id();
   if (!tenant_schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant schema", K(tenant_schema), K(ret));
-  } else if (!is_user_tenant(tenant_id_to_check_clone)) {
-    // sys tenant and meta tenant can not in clone procedure
-  } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::lock_status_for_tenant(trans, tenant_id_to_check_clone))) {
-    LOG_WARN("fail to lock __all_tenant for clone check", KR(ret), K(tenant_id_to_check_clone));
-  } else if (OB_FAIL(rootserver::ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id_to_check_clone, case_to_check))) {
-    LOG_WARN("fail to check whether tenant is cloning", KR(ret), K(tenant_id_to_check_clone), K(case_to_check));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(replace_tenant(tenant_schema, op, trans, ddl_stmt_str))) {
+  } else if (OB_FAIL(replace_tenant(tenant_schema, op, sql_client, ddl_stmt_str))) {
     LOG_WARN("replace_tenant failed", K(tenant_schema), K(op), K(ret));
   }
   return ret;
@@ -182,6 +168,31 @@ int ObTenantSqlService::delete_tenant(
     if (OB_FAIL(log_operation(delete_tenant_op, sql_client, sql_tenant_id))) {
       LOG_WARN("log delete tenant ddl operation failed", K(delete_tenant_op), K(ret));
     }
+  }
+  return ret;
+}
+
+int ObTenantSqlService::delete_tenant_content(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    const char *table_name)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", K(tenant_id), K(ret));
+  } else if (OB_ISNULL(table_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table_name is null", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu",
+                                    table_name,
+                                    ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))) {
+    LOG_WARN("assign_fmt failed", K(ret));
+  } else if (OB_FAIL(client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("execute sql failed", K(sql), K(ret));
   }
   return ret;
 }

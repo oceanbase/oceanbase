@@ -57,7 +57,7 @@
 
 - **MySQL 兼容**
      
-    高度兼容 MySQL，覆盖绝大多数常见功能，支持过程语言、触发器等高级特性，提供自动迁移工具，支持迁移评估和反向同步以保障数据迁移安全，可支撑金融、政府、运营商等关键行业核心场景。
+    高度兼容 MySQL，覆盖绝大多数常见功能，支持过程语言、触发器等高级特性，提供自动迁移工具，支持迁移评估和反向同步以保障数据迁移安全，可支撑金融、政府、运营商等关键行业核心场景替代。
 
 - **低成本**
 
@@ -88,7 +88,7 @@ obd demo
 
     ```shell
     # 部署一个mini模式实例
-    docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+    docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
     ```
 
 2. 连接 OceanBase
@@ -98,10 +98,6 @@ obd demo
     ```
 
 更多信息参考[快速体验 OceanBase 数据库](https://open.oceanbase.com/quickStart)。
-
-## ☸️ 使用 Kubernetes
-
-使用 [ob-operator](https://github.com/oceanbase/ob-operator) 可在 Kubernetes 环境中快速部署和管理 OceanBase 数据库实例，可参考文档 [ob-operator 快速上手](https://oceanbase.github.io/ob-operator/README-CN.html)了解具体的使用方法。
 
 ## 👨‍💻 使用源码编译部署
 
@@ -113,7 +109,7 @@ obd demo
 
 # 案例
 
-OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
+OceanBase 已服务超过 400 家来自不同行业的客户，包括金融服务、电信、零售、互联网等。
 
 更详细的信息请参考[客户案例](https://www.oceanbase.com/customer/home)和[谁在使用 OceanBase](https://github.com/oceanbase/oceanbase/issues/1301)。
 

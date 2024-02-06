@@ -48,10 +48,6 @@ public:
   }
 
 public:
-  bool is_idle() const
-  {
-    return IDLE == ATOMIC_LOAD(&status_);
-  }
   bool acquire()
   {
     bool bool_ret = false;

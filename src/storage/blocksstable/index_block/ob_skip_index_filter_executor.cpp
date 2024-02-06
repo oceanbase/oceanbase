@@ -65,20 +65,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
   } else {
     switch (index_type) {
       case ObSkipIndexType::MIN_MAX: {
-        if (filter.is_filter_dynamic_node()) {
-          sql::ObDynamicFilterExecutor &dynamic_filter =
-              static_cast<sql::ObDynamicFilterExecutor &>(filter);
-          if (!dynamic_filter.is_data_prepared()) {
-            filter.get_filter_bool_mask().set_uncertain();
-          } else if (dynamic_filter.is_filter_all_data()) {
-            filter.get_filter_bool_mask().set_always_false();
-          } else if (dynamic_filter.is_pass_all_data()) {
-            filter.get_filter_bool_mask().set_always_true();
-          } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
-              obj_meta, filter, allocator))) {
-            LOG_WARN("Fail to filter on min_max for dynamic filter", K(ret), K(col_idx));
-          }
-        } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
+        if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
             obj_meta, filter, allocator))) {
           LOG_WARN("Fail to filter on min_max", K(ret), K(col_idx));
         }

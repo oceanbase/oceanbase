@@ -58,6 +58,7 @@ public:
   }
   int get_data_ch(ObPxTaskChSet &ch_set, int64_t timeout_ts, dtl::ObDtlChTotalInfo &ch_info);
   int get_dfo_key(dtl::ObDtlDfoKey &key);
+  int get_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache *&first_buffer_cache);
   uint64_t get_ch_provider() { return ch_provider_ptr_; }
   void set_ignore_vtable_error(bool flag) { ignore_vtable_error_ = flag; };
   bool is_ignore_vtable_error() { return ignore_vtable_error_; }
@@ -169,7 +170,7 @@ protected:
   ObPxTaskChSet task_ch_set_;
   bool iter_end_;
   bool channel_linked_;
-  ObTMArray<dtl::ObDtlChannel *> task_channels_;
+  common::ObArray<dtl::ObDtlChannel *> task_channels_;
   ObReceiveRowReader row_reader_;
   ObPxReceiveRowP px_row_msg_proc_;
   dtl::ObDtlFlowControl dfc_;
@@ -177,10 +178,10 @@ protected:
   int64_t ts_cnt_;
   int64_t ts_;
   ObOpMetric metric_;
+  dtl::ObDtlLocalFirstBufferCache *proxy_first_buffer_cache_;
   dtl::ObDtlChTotalInfo ch_info_;
   // stored rows used for get batch rows from DTL reader.
   const ObChunkDatumStore::StoredRow **stored_rows_;
-  const ObCompactRow **vector_rows_;
   obrpc::ObPxBFProxy bf_rpc_proxy_;
   int64_t bf_ctx_idx_; // the idx of bloom_filter_id_array_ in spec
   int64_t bf_send_idx_; // the idx of bf_send_ctx_array_ in sqc proxy
@@ -227,7 +228,6 @@ protected:
 private:
   // try get %row_cnt rows from channels
   int get_rows_from_channels(const int64_t row_cnt, int64_t timeout_us);
-  int get_rows_from_channels_vec(const int64_t row_cnt, int64_t timeout_us);
 private:
   ObPxInterruptP interrupt_proc_;
 };

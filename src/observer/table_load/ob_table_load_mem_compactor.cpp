@@ -161,8 +161,8 @@ private:
 class ObTableLoadMemCompactor::FinishTaskCallback : public ObITableLoadTaskCallback
 {
 public:
-  FinishTaskCallback(ObTableLoadTableCtx *ctx)
-    : ctx_(ctx)
+  FinishTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadMemCompactor *compactor)
+    : ctx_(ctx), compactor_(compactor)
   {
     ctx_->inc_ref_count();
   }
@@ -174,6 +174,7 @@ public:
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(ret_code)) {
+      compactor_->set_has_error();
       ctx_->store_ctx_->set_status_error(ret);
     }
     ctx_->free_task(task);
@@ -181,6 +182,7 @@ public:
   }
 private:
   ObTableLoadTableCtx *const ctx_;
+  ObTableLoadMemCompactor *const compactor_;
 };
 
 class ObTableLoadMemCompactor::MemDumpTaskProcessor : public ObITableLoadTaskProcessor
@@ -465,7 +467,7 @@ int ObTableLoadMemCompactor::start_finish()
     LOG_WARN("fail to set compactor task processor", KR(ret));
   }
   // 3. 设置callback
-  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx))) {
+  else if (OB_FAIL(task->set_callback<FinishTaskCallback>(ctx, this))) {
     LOG_WARN("fail to set compactor task callback", KR(ret));
   }
   // 4. 把task放入调度器
@@ -529,11 +531,11 @@ int ObTableLoadMemCompactor::start_compact()
 
 void ObTableLoadMemCompactor::stop()
 {
-  set_has_error(); //先设置为error，因为stop的场景就是error
   if (nullptr != task_scheduler_) {
     task_scheduler_->stop();
     task_scheduler_->wait();
   }
+  set_has_error(); //先设置为error，因为stop的场景就是error
 }
 
 int64_t ObTableLoadMemCompactor::get_compact_task_count() const
@@ -573,6 +575,9 @@ int ObTableLoadMemCompactor::finish()
       LOG_WARN("fail to start parallel merge", KR(ret));
     }
   }
+  if (OB_SUCC(ret)) {
+    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
+  }
   return ret;
 }
 
@@ -603,9 +608,6 @@ int ObTableLoadMemCompactor::build_result_for_heap_table()
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    mem_ctx_.reset();
-  }
   return ret;
 }
 
@@ -622,9 +624,6 @@ int ObTableLoadMemCompactor::add_table_to_parallel_merge_ctx()
     } else if (OB_FAIL(parallel_merge_ctx_.add_tablet_sstable(sstable))) {
       LOG_WARN("fail to add tablet sstable", KR(ret));
     }
-  }
-  if (OB_SUCC(ret)) {
-    mem_ctx_.reset(); // mem_ctx的tables已经copy，需要提前释放
   }
   return ret;
 }

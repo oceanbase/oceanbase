@@ -10,21 +10,16 @@ ob_set_subtarget(oblib_lib ALONE
 )
 
 ob_set_subtarget(oblib_lib charset
-  charset/ob_ctype_bin.cc
-  charset/ob_ctype.cc
-  charset/ob_ctype_gb18030.cc
-  charset/ob_ctype_gbk.cc
-  charset/ob_ctype_latin1.cc
-  charset/ob_ctype_mb.cc
-  charset/ob_ctype_simple.cc
-  charset/ob_ctype_uca.cc
-  charset/ob_ctype_utf8.cc
-  charset/ob_ctype_utf16.cc
-  charset/ob_dtoa.cc
-  charset/uca900_ja_tbls.cc
-  charset/uca900_zh_tbls.cc
-  charset/uca900_zh2_tbls.cc
-  charset/uca900_zh3_tbls.cc
+  charset/ob_ctype_bin_os.cc
+  charset/ob_ctype_gb18030_os.cc
+  charset/ob_ctype_gbk_os.cc
+  charset/ob_ctype_latin1_os.cc
+  charset/ob_ctype_mb_os.cc
+  charset/ob_ctype_simple_os.cc
+  charset/ob_ctype_os.cc
+  charset/ob_ctype_utf16_os.cc
+  charset/ob_ctype_utf8_os.cc
+  charset/ob_dtoa_os.cc
   charset/ob_charset.cpp
 )
 
@@ -179,7 +174,6 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer.cpp
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
-  udt/ob_udt_type.cpp
 )
 
 ob_set_subtarget(oblib_lib lock
@@ -232,6 +226,7 @@ ob_set_subtarget(oblib_lib signal
   signal/ob_signal_struct.cpp
   signal/ob_signal_utils.cpp
   signal/ob_signal_worker.cpp
+  signal/safe_snprintf.c
   signal/ob_libunwind.c
 )
 
@@ -261,8 +256,6 @@ ob_set_subtarget(oblib_lib utility
   utility/utility.cpp
   utility/ob_backtrace.cpp
   utility/ob_proto_trans_util.cpp
-  utility/ob_unify_serialize.cpp
-  utility/ob_rpc_authentication_utility.cpp
 )
 
 ob_set_subtarget(oblib_lib ash
@@ -303,7 +296,6 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/ob_malloc_allocator.cpp
   alloc/ob_malloc_callback.cpp
   alloc/ob_malloc_sample_struct.cpp
-  alloc/ob_malloc_time_monitor.cpp
   alloc/ob_tenant_ctx_allocator.cpp
   alloc/object_mgr.cpp
   alloc/object_set.cpp

@@ -1795,7 +1795,6 @@ int ObXAService::two_phase_xa_rollback_(const ObXATransID &xid,
     }
     xa_ctx_mgr_.revert_xa_ctx(xa_ctx);
   }
-  xa_cache_.clean_prepare_cache_item(xid);
 
   return ret;
 }
@@ -2074,7 +2073,7 @@ int ObXAService::xa_rollback_all_changes(const ObXATransID &xid, ObTxDesc *&tx_d
     if (OB_FAIL(start_stmt(xid, 0/*unused session id*/, *tx_desc))) {
       TRANS_LOG(WARN, "xa start stmt fail", K(ret), K(xid), K(tx_id));
     } else {
-      const transaction::ObTxSEQ savepoint = tx_desc->get_min_tx_seq();
+      const transaction::ObTxSEQ savepoint = tx_desc->get_tx_seq(1);
       if (OB_FAIL(MTL(transaction::ObTransService *)->rollback_to_implicit_savepoint(*tx_desc,
               savepoint, stmt_expired_time, NULL))) {
         TRANS_LOG(WARN, "do savepoint rollback error", K(ret), K(xid), K(tx_id));
@@ -2233,14 +2232,9 @@ int ObXAService::local_xa_prepare_(const ObXATransID &xid,
   int ret = OB_SUCCESS;
   bool alloc = false;
   ObXACtx *xa_ctx = NULL;
+
   if (OB_FAIL(xa_ctx_mgr_.get_xa_ctx(tx_id, alloc, xa_ctx))) {
-    int64_t xa_state = ObXATransState::UNKNOWN;
-    if (OB_SUCCESS == xa_cache_.query_prepare_cache_item(xid, xa_state) && ObXATransState::PREPARED == xa_state) {
-      TRANS_LOG(INFO, "xa_cache hit", K(xid), K(tx_id));
-      ret = OB_SUCCESS;
-    } else {
-      TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id), KP(xa_ctx));
-    }
+    TRANS_LOG(WARN, "get xa ctx failed", K(ret), K(xid), K(tx_id), KP(xa_ctx));
   } else if (OB_ISNULL(xa_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "xa ctx is null", K(ret), K(xid), K(tx_id));
@@ -2856,8 +2850,6 @@ int ObXAService::two_phase_xa_commit_(const ObXATransID &xid,
     has_tx_level_temp_table = ObXAFlag::contain_temp_table(end_flag);
   }
 
-  xa_cache_.clean_prepare_cache_item(xid);
-
   TRANS_LOG(INFO, "two phase xa commit", K(ret), K(xid), K(tx_id), K(coordinator));
   return ret;
 }
@@ -2879,48 +2871,6 @@ void ObXAService::clear_xa_branch(const ObXATransID &xid, ObTxDesc *&tx_desc)
   }
   tx_desc = NULL;
   TRANS_LOG(INFO, "clear xa branch", K(xid), K(tx_id));
-}
-
-// XACache
-int ObXACache::query_prepare_cache_item(const ObXATransID &xid, int64_t &state)
-{
-  int ret = OB_SUCCESS;
-  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
-  ObXACacheItem &item = xa_prepare_cache_[idx];
-  ObSpinLockGuard guard(item.lock_);
-  if (item.is_valid_to_query(xid)) {
-    state = item.state_;
-  } else {
-    ret = OB_HASH_NOT_EXIST;
-  }
-  return ret;
-}
-
-void ObXACache::insert_prepare_cache_item(const ObXATransID &xid, int64_t state)
-{
-  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
-  ObXACacheItem &item = xa_prepare_cache_[idx];
-  ObSpinLockGuard guard(item.lock_);
-  if (item.is_valid_to_set()) {
-    clean_prepare_cache_item_(item);
-    item.state_ = state;
-    item.xid_ = xid;
-    item.create_timestamp_ = ObTimeUtility::current_time();
-  }
-}
-
-void ObXACache::clean_prepare_cache_item(const ObXATransID &xid) {
-  int idx = xid.get_hash() % XA_PREPARE_CACHE_COUNT;
-  ObXACacheItem &item = xa_prepare_cache_[idx];
-  ObSpinLockGuard guard(item.lock_);
-  if (item.is_valid_to_query(xid)) {
-    clean_prepare_cache_item_(item);
-  }
-}
-
-void ObXACache::clean_prepare_cache_item_(ObXACacheItem &item) {
-  // should get lock in upper layer
-  item.reset();
 }
 
 }//transaction

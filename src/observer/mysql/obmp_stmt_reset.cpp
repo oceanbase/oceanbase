@@ -68,8 +68,6 @@ int ObMPStmtReset::process()
   } else if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL or invalid", K(ret), K(session));
-  } else if (OB_FAIL(process_kill_client_session(*session))) {
-    LOG_WARN("client session has been killed", K(ret));
   } else if (FALSE_IT(session->set_txn_free_route(pkt.txn_free_route()))) {
   } else if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
     LOG_WARN("fail get process extra info", K(ret));
@@ -83,7 +81,6 @@ int ObMPStmtReset::process()
     THIS_WORKER.set_session(session);
     ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
     LOG_TRACE("close ps stmt or cursor", K_(stmt_id), K(session->get_sessid()));
-    session->init_use_rich_format();
 
     // get stmt info
     if (OB_NOT_NULL(session->get_ps_cache())) {

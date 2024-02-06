@@ -37,28 +37,6 @@ int ObCGIterParamPool::get_iter_param(
     const int32_t cg_idx,
     const ObTableIterParam &row_param,
     sql::ObExpr *expr,
-    ObTableIterParam *&iter_param)
-{
-  int ret = OB_SUCCESS;
-  iter_param = nullptr;
-  if (OB_UNLIKELY(0 > cg_idx || !row_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param));
-  } else {
-    common::ObSEArray<sql::ObExpr*, 1> exprs;
-    if (nullptr != expr && OB_FAIL(exprs.push_back(expr))) {
-      LOG_WARN("Fail to push back", K(ret));
-    } else if (OB_FAIL(get_iter_param(cg_idx, row_param, exprs, iter_param))) {
-      LOG_WARN("Fail to get cg iter param", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObCGIterParamPool::get_iter_param(
-    const int32_t cg_idx,
-    const ObTableIterParam &row_param,
-    const common::ObIArray<sql::ObExpr*> &exprs,
     ObTableIterParam *&iter_param,
     const bool is_aggregate)
 {
@@ -67,22 +45,26 @@ int ObCGIterParamPool::get_iter_param(
   if (OB_UNLIKELY(0 > cg_idx || !row_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(cg_idx), K(row_param));
-  } else {
+  } else if (!is_aggregate) {
     for (int64_t i = 0; OB_SUCC(ret) && i < iter_params_.count(); ++i) {
       ObTableIterParam* tmp_param = iter_params_.at(i);
       if (OB_ISNULL(tmp_param)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null iter param", K(ret));
-      } else if (tmp_param->can_be_reused(cg_idx, exprs, is_aggregate)) {
+      } else if (tmp_param->can_be_reused(cg_idx, expr)) {
         iter_param = tmp_param;
-        iter_param->tablet_handle_ = row_param.tablet_handle_;
         break;
       }
     }
   }
   if (OB_FAIL(ret) || OB_NOT_NULL(iter_param)) {
-  } else if (OB_FAIL(new_iter_param(cg_idx, row_param, exprs, iter_param, is_aggregate))) {
-    LOG_WARN("Fail to new cg iter param", K(ret));
+  } else {
+    common::ObSEArray<sql::ObExpr*, 1> exprs;
+    if (OB_FAIL(exprs.push_back(expr))) {
+      LOG_WARN("Fail to push back", K(ret));
+    } else if (OB_FAIL(new_iter_param(cg_idx, row_param, exprs, iter_param, is_aggregate))) {
+      LOG_WARN("Fail to new cg iter param", K(ret));
+    }
   }
   return ret;
 }
@@ -120,11 +102,11 @@ int ObCGIterParamPool::new_iter_param(
     }
   } else if (OB_FAIL(fill_cg_iter_param(row_param, cg_idx, exprs, *iter_param))) {
     STORAGE_LOG(WARN, "Failed to mock cg iter param", K(ret), K(row_param), K(cg_idx), K(exprs));
+  } else if (OB_FAIL(put_iter_param(iter_param))) {
+    LOG_WARN("Fail to put iter param", K(ret));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(put_iter_param(iter_param))) {
-      LOG_WARN("Fail to put iter param", K(ret));
-    } else if (!is_aggregate) {
+    if (!is_aggregate) {
       iter_param->disable_pd_aggregate();
     }
   } else if (nullptr != iter_param) {
@@ -200,7 +182,6 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.output_exprs_ = output_exprs;
     cg_param.op_ = row_param.op_;
     cg_param.pd_storage_flag_ = row_param.pd_storage_flag_;
-    cg_param.tablet_handle_ = row_param.tablet_handle_;
   }
   if (OB_FAIL(ret) && nullptr != output_exprs) {
     output_exprs->reset();
@@ -255,7 +236,6 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
     cg_param.tablet_id_ = row_param.tablet_id_;
     cg_param.cg_idx_ = cg_idx;
     cg_param.read_info_ = cg_param.cg_read_info_handle_.get_read_info();
-    cg_param.tablet_handle_ = row_param.tablet_handle_;
     cg_param.cg_col_param_ = col_param;
     cg_param.out_cols_project_ = out_cols_project;
     cg_param.agg_cols_project_ = nullptr;

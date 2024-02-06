@@ -218,7 +218,7 @@ class ObTmpTenantMacroBlockManager final
 public:
   ObTmpTenantMacroBlockManager();
   ~ObTmpTenantMacroBlockManager();
-  int init(const uint64_t tenant_id, common::ObIAllocator &allocator);
+  int init(common::ObIAllocator &allocator);
   void destroy();
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
   int free_macro_block(const int64_t block_id);
@@ -250,13 +250,10 @@ public:
   int read(ObTmpBlockIOInfo &io_info, ObTmpFileIOHandle &handle);
   int write(const ObTmpBlockIOInfo &io_info);
   int wash_block(const int64_t block_id, ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
-  void refresh_memory_limit(const uint64_t tenant_id);
   int sync_block(const int64_t block_id, ObTmpTenantMemBlockManager::ObIOWaitInfoHandle &handle);
   int wait_write_finish(const int64_t block_id, const int64_t timeout_ms);
   int get_disk_macro_block_list(common::ObIArray<MacroBlockId> &macro_id_list);
   int get_macro_block(const int64_t block_id, ObTmpMacroBlock *&t_mblk);
-  // use io_allocator_ to allocate tenant extent memory.
-  common::ObIAllocator &get_extent_allocator() { return allocator_; }
   void print_block_usage() { tmp_block_manager_.print_block_usage(); }
   OB_INLINE void inc_page_cache_num(const int64_t num) {
     ATOMIC_FAA(&page_cache_num_, num);
@@ -281,14 +278,12 @@ private:
   int free_extent(const int64_t block_id, const int32_t start_page_id, const int32_t page_nums);
   int free_macro_block(ObTmpMacroBlock *&t_mblk);
   int alloc_macro_block(const int64_t dir_id, const uint64_t tenant_id, ObTmpMacroBlock *&t_mblk);
-  int64_t get_memory_limit(const uint64_t tenant_id);
-  int wait_write_io_finish_if_need();
+  int64_t get_memory_limit(const uint64_t tenant_id) const;
 
 private:
   static const uint64_t IO_LIMIT = 4 * 1024L * 1024L * 1024L;
   static const uint64_t TOTAL_LIMIT = 15 * 1024L * 1024L * 1024L;
   static const uint64_t HOLD_LIMIT = 8 * 1024L * 1024L;
-  static const uint64_t REFRESH_CONFIG_INTERVAL = 5 * 60 * 1000 * 1000L; // 5min
   static const uint64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static constexpr double DEFAULT_PAGE_IO_MERGE_RATIO = 0.5;
 
@@ -302,8 +297,6 @@ private:
   common::ObFIFOAllocator io_allocator_;
   ObTmpTenantMacroBlockManager tmp_block_manager_;
   ObTmpTenantMemBlockManager tmp_mem_block_manager_;
-  int64_t last_access_tenant_config_ts_;
-  int64_t last_meta_mem_limit_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTmpTenantFileStore);
 };
@@ -353,7 +346,6 @@ public:
   int get_macro_block_list(common::ObIArray<TenantTmpBlockCntPair> &tmp_block_cnt_pairs);
   int get_all_tenant_id(common::ObIArray<uint64_t> &tenant_ids);
   int64_t get_next_blk_id();
-  int get_tenant_extent_allocator(const int64_t tenant_id, common::ObIAllocator *&allocator);
 
   static int64_t get_block_size()
   {

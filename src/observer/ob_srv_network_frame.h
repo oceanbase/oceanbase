@@ -83,7 +83,6 @@ public:
   int net_endpoint_set_ingress(const ObNetEndpointKey &endpoint_key, int64_t assigned_bw);
 
 private:
-  uint64_t get_root_certificate_table_hash();
   ObGlobalContext &gctx_;
 
   ObSrvXlator xlator_;

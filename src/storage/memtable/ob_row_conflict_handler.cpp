@@ -209,7 +209,7 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuar
                                                                    ObStoreRowLockState &lock_state) {
   int ret = OB_SUCCESS;
   // If a transaction is committed, the trans_id of it is 0, which is invalid.
-  // So we can not use check_row_locked interface to get the trans_version.
+  // So we can not use check_row_locekd interface to get the trans_version.
   if (!data_trans_id.is_valid()) {
     if (trans_version > snapshot_version) {
       ret = OB_TRANSACTION_SET_VIOLATION;
@@ -277,7 +277,7 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
       tx_desc->add_conflict_tx(conflict_tx);
     }
     // The addr in tx_desc is the scheduler_addr of current trans,
-    // and GCTX.self_addr() will return the addr where the row is stored
+    // and GCTX.self_addr() will retrun the addr where the row is stored
     // (i.e. where the trans is executing)
     bool remote_tx = tx_desc->get_addr() != GCTX.self_addr();
     ObFunction<int(bool&, bool&)> recheck_func([&](bool &locked, bool &wait_on_row) -> int {

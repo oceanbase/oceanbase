@@ -67,14 +67,6 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-  static int not_support_merge_type(
-      const storage::ObGetMergeTablesParam &param,
-      storage::ObLS &ls,
-      const storage::ObTablet &tablet,
-      storage::ObGetMergeTablesResult &result)
-  {
-    return OB_NOT_SUPPORTED;
-  }
    static int check_need_medium_merge(
       storage::ObLS &ls,
       storage::ObTablet &tablet,
@@ -237,7 +229,6 @@ public:
     TENANT_MAJOR = 5,
     USER_REQUEST = 6,
     REBUILD_COLUMN_GROUP = 7,
-    CRAZY_MEDIUM_FOR_TEST = 8,
     INVALID_REASON
   };
 

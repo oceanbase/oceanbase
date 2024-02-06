@@ -410,10 +410,10 @@ int ObDirectLoadDataBlockWriter2::close()
     LOG_WARN("ObDirectLoadDataBlockWriter2 is closed", KR(ret));
   } else if (buf_pos_ > header_length_ && OB_FAIL(flush_buffer(buf_size_, buf_))) {
     LOG_WARN("fail to flush buffer", KR(ret));
-  } else if (OB_FAIL(file_io_handle_.wait())) {
-    LOG_WARN("fail to wait io finish", KR(ret));
   } else {
     reset();
+  }
+  if (OB_SUCC(ret)) {
     is_closed_ = true;
   }
   return ret;
@@ -428,7 +428,7 @@ int ObDirectLoadDataBlockWriter2::flush_buffer(int64_t buf_size, char *buf)
   if (OB_FAIL(header_.serialize(buf, buf_size, pos))) {
     LOG_WARN("fail to serialize data block header", KR(ret), K(buf_size), KP(buf_), K(pos));
   } else {
-    if (OB_FAIL(file_io_handle_.write(buf, buf_size))) {
+    if (OB_FAIL(file_io_handle_.aio_write(buf, buf_size))) {
       LOG_WARN("fail to do aio write data file", KR(ret));
     } else {
       ObDirectLoadIndexBlockItem item;
@@ -560,7 +560,7 @@ int ObDirectLoadIndexBlockWriter::flush_buffer()
   if (OB_FAIL(header_.serialize(buf_, buf_size_, pos))) {
     LOG_WARN("fail to serialize data block header", KR(ret), K(buf_size_), K(pos), KP(buf_));
   } else {
-    if (OB_FAIL(file_io_handle_.write(buf_, buf_size_))) {
+    if (OB_FAIL(file_io_handle_.aio_write(buf_, buf_size_))) {
       LOG_WARN("fail to do aio write index file", KR(ret));
     } else {
       header_.start_offset_ = offset_;
@@ -584,10 +584,10 @@ int ObDirectLoadIndexBlockWriter::close()
     LOG_WARN("ObDirectLoadIndexBlockWriter is closed", KR(ret));
   } else if (buf_pos_ > header_length_ && OB_FAIL(flush_buffer())) {
     LOG_WARN("fail to flush buffer", KR(ret));
-  } else if (OB_FAIL(file_io_handle_.wait())) {
-    LOG_WARN("fail to wait io finish", KR(ret));
   } else {
     reset();
+  }
+  if (OB_SUCC(ret)) {
     is_closed_ = true;
   }
   return ret;
@@ -667,9 +667,13 @@ int ObDirectLoadIndexBlockReader::read_buffer(int64_t idx)
   int ret = OB_SUCCESS;
   uint64_t offset = 0;
   offset = buf_size_ * idx;
-  if (OB_FAIL(file_io_handle_.pread(buf_, buf_size_, offset))) {
+  if (OB_FAIL(file_io_handle_.aio_pread(buf_, buf_size_, offset))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
-      LOG_WARN("fail to do pread from index file", KR(ret));
+      LOG_WARN("fail to do aio read from index file", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(file_io_handle_.wait())) {
+      LOG_WARN("fail to wait io finish", KR(ret));
     }
   }
   return ret;

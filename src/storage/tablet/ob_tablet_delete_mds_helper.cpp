@@ -55,7 +55,6 @@ int ObTabletDeleteMdsHelper::on_commit_for_old_mds(
     const int64_t len,
     const transaction::ObMulSourceDataNotifyArg &notify_arg)
 {
-  mds::TLOCAL_MDS_TRANS_NOTIFY_TYPE = NotifyType::UNKNOWN;// disable runtime check
   return ObTabletCreateDeleteHelper::process_for_old_mds<obrpc::ObBatchRemoveTabletArg, ObTabletDeleteMdsHelper>(buf, len, notify_arg);
 }
 

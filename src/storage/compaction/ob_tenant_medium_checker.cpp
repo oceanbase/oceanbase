@@ -68,6 +68,8 @@ int64_t ObBatchFinishCheckStat::to_string(char *buf, const int64_t buf_len) cons
 /*
  * ObTenantMediumChecker implement
  * */
+const int64_t ObTenantMediumChecker::MAX_BATCH_CHECK_NUM;
+
 int ObTenantMediumChecker::mtl_init(ObTenantMediumChecker *&tablet_medium_checker)
 {
   return tablet_medium_checker->init();
@@ -252,25 +254,25 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
         tablet_ls_set_.clear();
       }
     }
-    const int64_t batch_size = MTL(ObTenantTabletScheduler *)->get_checker_batch_size();
-    if (OB_FAIL(ret) || tablet_ls_infos.empty()) {
-    } else if (OB_FAIL(batch_tablet_ls_infos.reserve(batch_size))) {
-      LOG_WARN("fail to reserve array", K(ret), "size", batch_size);
-    } else if (OB_FAIL(finish_tablet_ls_infos.reserve(batch_size))) {
-      LOG_WARN("fail to reserve array", K(ret), "size", batch_size);
+    if (FAILEDx(batch_tablet_ls_infos.reserve(MAX_BATCH_CHECK_NUM))) {
+      LOG_WARN("fail to reserve array", K(ret), "size", MAX_BATCH_CHECK_NUM);
+    } else if (OB_FAIL(finish_tablet_ls_infos.reserve(MAX_BATCH_CHECK_NUM))) {
+      LOG_WARN("fail to reserve array", K(ret), "size", MAX_BATCH_CHECK_NUM);
     } else {
       // batch check
       int64_t info_count = tablet_ls_infos.count();
       int64_t start_idx = 0;
-      int64_t end_idx = min(batch_size, info_count);
+      int64_t end_idx = min(MAX_BATCH_CHECK_NUM, info_count);
       int64_t cost_ts = ObTimeUtility::fast_current_time();
       ObBatchFinishCheckStat stat;
       while (start_idx < end_idx) {
         if (OB_TMP_FAIL(check_medium_finish(tablet_ls_infos, start_idx, end_idx, batch_tablet_ls_infos, finish_tablet_ls_infos, stat))) {
           LOG_WARN("failed to check medium finish", K(tmp_ret));
+        } else {
+          LOG_INFO("success to batch check medium finish", K(start_idx), K(end_idx), K(info_count));
         }
         start_idx = end_idx;
-        end_idx = min(start_idx + batch_size, info_count);
+        end_idx = min(start_idx + MAX_BATCH_CHECK_NUM, info_count);
       }
       cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
       ADD_COMPACTION_EVENT(
@@ -316,7 +318,7 @@ int ObTenantMediumChecker::check_medium_finish(
         }
       }
     }
-    ObCompactionScheduleTimeGuard time_guard;
+    ObStorageCompactionTimeGuard time_guard;
     stat.filter_cnt_ += (end_idx - start_idx - check_tablet_ls_infos.count());
     if (FAILEDx(ObMediumCompactionScheduleFunc::batch_check_medium_finish(
         ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard))) {
@@ -337,11 +339,11 @@ int ObTenantMediumChecker::check_medium_finish(
       if (OB_FAIL(MTL(ObTenantTabletScheduler*)->schedule_next_round_for_leader(check_tablet_ls_infos, finish_tablet_ls_infos))) {
         LOG_WARN("failed to leader schedule", K(ret));
       } else {
-        time_guard.click(ObCompactionScheduleTimeGuard::SCHEDULER_NEXT_ROUND);
+        time_guard.click(ObStorageCompactionTimeGuard::SCHEDULER_NEXT_ROUND);
+        LOG_INFO("success to leader schedule", K(ret),
+          K(check_tablet_ls_infos.count()), K(finish_tablet_ls_infos.count()), K(time_guard));
       }
     }
-    LOG_INFO("finish medium check", K(ret), K(start_idx), K(end_idx),
-          K(check_tablet_ls_infos.count()), K(finish_tablet_ls_infos.count()), K(time_guard));
   }
   return ret;
 }

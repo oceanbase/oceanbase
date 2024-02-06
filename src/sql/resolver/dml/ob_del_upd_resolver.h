@@ -50,7 +50,7 @@ public:
   //set is json constraint type is strict or relax
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
-  inline bool is_resolve_insert_update() { return is_resolve_insert_update_;}
+
 protected:
 
   int resolve_assignments(const ParseNode &parse_node,
@@ -125,15 +125,15 @@ protected:
   virtual int process_values_function(ObRawExpr *&expr);
   virtual int recursive_values_expr(ObRawExpr *&expr);
 
-  bool need_all_columns(const share::schema::ObTableSchema &table_schema,
-                        const int64_t binlog_row_image);
+  bool need_all_columns(const share::schema::ObTableSchema &table_schema, int64_t binlog_row_image);
 
   int add_all_columns_to_stmt(const TableItem &table_item,
                               common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_all_columns_to_stmt_for_trigger(const TableItem &table_item,
                                           common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int add_all_rowkey_columns_to_stmt(const TableItem &table_item,
-                                     common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+                                             common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
+
   int add_index_related_columns_to_stmt(const TableItem &table_item,
                                         const uint64_t column_id,
                                         common::ObIArray<ObColumnRefRawExpr*> &column_exprs);
@@ -149,13 +149,12 @@ protected:
   // check the update view is key preserved
   int uv_check_key_preserved(const TableItem &table_item, bool &key_preserved);
 
-  int check_need_fired_trigger(const TableItem* table_item);
+  int has_need_fired_trigger_on_view(const TableItem* view_item, bool &has);
 
   int view_pullup_special_column_exprs();
   int view_pullup_part_exprs();
   int expand_record_to_columns(const ParseNode &record_node,
                                               ObIArray<ObRawExpr *> &value_list);
-  bool is_fk_parent_table(const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos, const uint64_t table_id);
   int resolve_check_constraints(const TableItem* table_item,
                                 common::ObIArray<ObRawExpr*> &check_exprs);
   int resolve_view_check_exprs(uint64_t table_id,
@@ -259,8 +258,6 @@ private:
   bool is_column_specify_;
   bool is_oracle_tmp_table_; //是否创建oracle的临时表
   int64_t oracle_tmp_table_type_;
-protected:
-  bool is_resolve_insert_update_;
 };
 
 } /* namespace sql */

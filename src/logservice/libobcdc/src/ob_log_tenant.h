@@ -132,7 +132,7 @@ public:
   IObLogPartMgr &get_part_mgr() { return part_mgr_; }
   int64_t get_global_schema_version() const { return global_seq_and_schema_version_.hi; }
   int64_t get_global_seq() const { return global_seq_and_schema_version_.lo; }
-  void *get_redo_storage_cf_handle() { return redo_cf_handle_; }
+  void *get_cf() { return cf_handle_; }
   void *get_lob_storage_cf_handle() { return lob_storage_cf_handle_; }
   ObCDCLobAuxDataCleanTask& get_lob_storage_clean_task() { return lob_storage_clean_task_; }
 
@@ -239,13 +239,6 @@ public:
     return part_mgr_.get_table_info_of_tablet_id(tablet_id, table_info);
   }
 
-  // flush memory data in local storage(e.g. memtable for rocksdb)
-  void flush_storage();
-
-  // compact data in local storage
-  // NOTE: LOB data will compact by resource_collector with lob_aux_meta_storager
-  void compact_storage();
-
 public:
   enum
   {
@@ -334,7 +327,7 @@ private:
   // Transaction data and DDL data need to be matched for consumption, where the global_schema_version of the current transaction is recorded, which is used by the DDL to determine if it needs to be consumed.
   int64_t                 committer_next_trans_schema_version_ CACHE_ALIGNED;
 
-  void                       *redo_cf_handle_;
+  void                       *cf_handle_;
   void                       *lob_storage_cf_handle_;
   ObCDCLobAuxDataCleanTask   lob_storage_clean_task_;
 

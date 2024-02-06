@@ -61,14 +61,14 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_WRITE_CKPT, ObDagPrio::DAG_PRIO_COMPACTION_L
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::MDS_TABLE_MERGE_TASK, "MDS_TABLE_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
 
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_COMPLEMENT", "DDL",
-    true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL", "DDL",
+    false, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_UNIQUE_CHECKING, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "UNIQUE_CHECK", "DDL",
-    true, 2, {"tablet_id", "index_id"})
+    false, 2, {"tablet_id", "index_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SQL_BUILD_INDEX, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "SQL_BUILD_INDEX", "DDL",
-    true, 0, {})
+    false, 0, {})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL_KV_MERGE, ObDagPrio::DAG_PRIO_DDL_HIGH, ObSysTaskType::DDL_KV_MERGE_TASK, "DDL_KV_MERGE", "DDL",
-    true, 3, {"ls_id", "tablet_id", "rec_scn"})
+    false, 3, {"ls_id", "tablet_id", "rec_scn"})
 
 // DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MIGRATE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "MIGRATE", "MIGRATE")
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_COMPLETE_MIGRATION, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "INITIAL_COMPLETE_MIGRATION", "MIGRATE",
@@ -165,12 +165,9 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TRANSFER_BACKFILL_TX, ObDagPrio::DAG_PRIO_HA
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TRANSFER_REPLACE_TABLE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "TRANSFER_REPLACE_TABLE", "TRANSFER",
     true, 2, {"tenant_id", "desc_ls_id"})
 // DAG_TYPE_TRANSFER END
+
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TTL, ObDagPrio::DAG_PRIO_TTL, ObSysTaskType::TABLE_API_TTL_TASK, "TTL_DELTE_DAG", "TTL",
     false, 4, {"tenant_id", "ls_id", "table_id", "tablet_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TENANT_SNAPSHOT_CREATE, ObDagPrio::DAG_PRIO_HA_MID, ObSysTaskType::TENANT_SNAPSHOT_CREATE_TASK, "TENANT_SNAPSHOT_CREATE", "TSNAP_CR8",
-    false, 1, {"tsnap_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TENANT_SNAPSHOT_GC, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::TENANT_SNAPSHOT_GC_TASK, "TENANT_SNAPSHOT_GC","TSNAP_GC",
-    false, 1, {"tsnap_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
 #endif
 

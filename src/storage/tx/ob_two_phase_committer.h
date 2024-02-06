@@ -294,9 +294,6 @@ public:
   // and apply_prepare_log.
   virtual bool is_2pc_logging() const = 0;
 
-  // means 2pc state machine stop, don't advance to next phase
-  virtual bool is_2pc_blocking() const = 0;
-
   //durable state, set by applying log
   virtual ObTxState get_downstream_state() const = 0;
   virtual int set_downstream_state(const ObTxState state) = 0;
@@ -332,26 +329,11 @@ public:
   // TODO, refine in 4.1
   virtual bool is_sub2pc() const = 0;
   // only persist redo and commit info
+  //
   int prepare_redo();
   // continue execution of two phase commit
   int continue_execution(const bool is_rollback);
 
-  // for tree phase commit
-  //
-  // Merge the intermediate_participants(created during transfer) into the
-  // participants to guarantee the consistency view of the 2pc(we guarantee the
-  // same participants in each state transfer).
-  // Implementer need to distinguish the particpants of the current 2pc state
-  // and the participants created during transfer in the current 2pc state. And
-  // merge them in the implementation
-  virtual int merge_intermediate_participants() = 0;
-  // Whether it is the real upstream of myself during handling the 2pc msg. We
-  // rely on thus information to prevent the deadlock(caused by cycled transfer.
-  // eg: A transfer to B and then B transfer to A) of the tree phase commit.
-  // Implementer need to remember that the request and compare with the real
-  // upstream. What's more, we need consider the case it is called not during
-  // the 2pc msg and so we are handling with the real upstream
-  virtual bool is_real_upstream() = 0;
 
 private:
   // Inner method for handle_2pc_xxx_request/response for clearity

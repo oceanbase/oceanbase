@@ -294,6 +294,8 @@ int TestDataFilePrepareUtil::open()
         STORAGE_LOG(WARN, "Fail to init OB_STORE_CACHE, ", K(ret), K(storage_env_.data_dir_));
       } else if (OB_FAIL(ObIOManager::get_instance().start())) {
         STORAGE_LOG(WARN, "Fail to star io mgr", K(ret));
+      } else if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
+        STORAGE_LOG(WARN, "add tenant io config failed", K(ret));
       } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.start(0/*reserver_size*/))) {
         STORAGE_LOG(WARN, "Fail to start server block mgr", K(ret));
       } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.first_mark_device())) {

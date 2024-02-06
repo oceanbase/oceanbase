@@ -32,12 +32,6 @@ public:
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const = 0;
-  virtual int batch_get(
-      const int64_t *row_ids,
-      const int64_t row_cap,
-      const bool has_ext,
-      const char **row_datas,
-      uint32_t *row_lens) const = 0;
 };
 
 class ObVarRowIndex : public ObIRowIndex
@@ -55,12 +49,6 @@ public:
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const;
-  inline virtual int batch_get(
-      const int64_t *row_ids,
-      const int64_t row_cap,
-      const bool has_ext,
-      const char **row_datas,
-      uint32_t *row_lens) const override;
   inline const char *get_data() const { return data_; }
   inline const char *get_index_data() const { return index_.get_data(); }
 private:
@@ -83,12 +71,6 @@ public:
       const bool has_ext,
       const char **row_datas,
       ObDatum *datums) const;
-  inline virtual int batch_get(
-      const int64_t *row_ids,
-      const int64_t row_cap,
-      const bool has_ext,
-      const char **row_datas,
-      uint32_t *row_lens) const override;
 private:
   const char *data_;
   int64_t row_size_;
@@ -158,30 +140,6 @@ inline int ObVarRowIndex::batch_get(
   return ret;
 }
 
-inline int ObVarRowIndex::batch_get(
-    const int64_t *row_ids,
-    const int64_t row_cap,
-    const bool has_ext,
-    const char **row_datas,
-    uint32_t *row_lens) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(data_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "Not inited", K(ret), KP_(data));
-  } else if (OB_ISNULL(row_ids) || OB_ISNULL(row_lens) || OB_ISNULL(row_datas)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(row_ids), KP(row_datas), KP(row_lens));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-    uint64_t offset = index_.get_array().at(row_ids[i]);
-    row_datas[i] = data_ + offset;
-    row_lens[i] = static_cast<int32_t>(index_.get_array().at(row_ids[i] + 1) - offset);
-  }
-  return ret;
-}
-
 inline int ObFixRowIndex::init(const char *data, const int64_t len, const int64_t row_cnt)
 {
   int ret = OB_SUCCESS;
@@ -236,29 +194,6 @@ inline int ObFixRowIndex::batch_get(
       datums[i].pack_ = static_cast<int32_t>(row_size_);
       row_datas[i] = data_ + row_ids[i] * row_size_;
     }
-  }
-  return ret;
-}
-
-inline int ObFixRowIndex::batch_get(
-    const int64_t *row_ids,
-    const int64_t row_cap,
-    const bool has_ext,
-    const char **row_datas,
-    uint32_t *row_lens) const
-{
-   int ret = OB_SUCCESS;
-  if (OB_ISNULL(data_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "Not inited", K(ret), KP_(data));
-  } else if (OB_ISNULL(row_ids) || OB_ISNULL(row_lens) || OB_ISNULL(row_datas)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "Invalid argument", K(ret), KP(row_ids), KP(row_datas), KP(row_lens));
-  }
-  // Not check row_id valid for performance
-  for (int64_t i = 0; OB_SUCC(ret) && i < row_cap; ++i) {
-    row_lens[i] = static_cast<int32_t>(row_size_);
-    row_datas[i] = data_ + row_ids[i] * row_size_;
   }
   return ret;
 }

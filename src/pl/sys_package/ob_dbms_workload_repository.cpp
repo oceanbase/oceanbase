@@ -1295,8 +1295,8 @@ int ObDbmsWorkloadRepository::print_ash_top_sql_with_event(
 
             tmp_real_str_len = 0;
             char query_sql[64] = "";
-            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(
-                *result, "QUERY_SQL", query_sql, 63, tmp_real_str_len);
+            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                *result, "QUERY_SQL", query_sql, 64, tmp_real_str_len);
             if (OB_SUCC(ret)) {
               const char *column_content[] = {
                   sql_id, plan_id_char, event_cnt_char, event, event_radio_char, query_sql};
@@ -1414,8 +1414,8 @@ int ObDbmsWorkloadRepository::print_ash_top_sql_with_blocking_event(
 
             tmp_real_str_len = 0;
             char query_sql[64] = "";
-            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(
-                *result, "QUERY_SQL", query_sql, 63, tmp_real_str_len);
+            EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                *result, "QUERY_SQL", query_sql, 64, tmp_real_str_len);
             if (OB_SUCC(ret)) {
               const char *column_content[] = {
                   sql_id, plan_id_char, event_cnt_char, event, event_radio_char, query_sql};
@@ -1517,8 +1517,8 @@ int ObDbmsWorkloadRepository::print_ash_sql_text_list(
             HEAP_VAR(char[4005], sql_text)
             {
               sql_text[0] = '\0';
-              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET_AND_TRUNCATION(
-                  *result, "QUERY_SQL", sql_text, 4000, tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "QUERY_SQL", sql_text, 4005, tmp_real_str_len);
               if (OB_FAIL(ret)) {
               } else if (OB_FAIL(buff.append("SQL Text: "))) {
                 LOG_WARN("failed to push string into buff", K(ret));

@@ -80,9 +80,7 @@ public:
   ObMajorMergeIdling &get_major_scheduler_idling() { return idling_; }
 
   int try_update_epoch_and_reload();
-  int get_uncompacted_tablets(
-    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
-    common::ObArray<uint64_t> &uncompacted_table_ids) const;
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
 
 protected:
   virtual int try_idle(const int64_t ori_idle_time_us,

@@ -12,8 +12,11 @@
 
 #ifndef _OCEABASE_COMMON_OB_COMMON_UTILITY_H_
 #define _OCEABASE_COMMON_OB_COMMON_UTILITY_H_
-#include <sys/time.h>
+
 #include "lib/ob_define.h"
+#include "lib/string/ob_string.h"
+#include "lib/utility/ob_print_utils.h"
+
 namespace oceanbase
 {
 namespace common
@@ -49,56 +52,10 @@ public:
   explicit ObFatalErrExtraInfoGuard();
   virtual ~ObFatalErrExtraInfoGuard();
   static const ObFatalErrExtraInfoGuard *get_thd_local_val_ptr();
-  virtual int64_t to_string(char* buf, const int64_t buf_len) const;
+  DEFINE_VIRTUAL_TO_STRING();
 private:
   static ObFatalErrExtraInfoGuard *&get_val();
   ObFatalErrExtraInfoGuard *last_;
-};
-
-inline int64_t get_cur_ts()
-{
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  const int64_t us =
-            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
-  return us;
-}
-
-class ObBasicTimeGuard
-{
-public:
-  explicit ObBasicTimeGuard()
-  {
-    start_ts_ = get_cur_ts();
-    last_ts_ = start_ts_;
-    click_count_ = 0;
-  }
-  void click(const char *mod = NULL)
-  {
-    const int64_t cur_ts = get_cur_ts();
-    if (OB_LIKELY(click_count_ < MAX_CLICK_COUNT)) {
-      click_str_[click_count_] = mod;
-      click_[click_count_++] = (int32_t)(cur_ts - last_ts_);
-      last_ts_ = cur_ts;
-    }
-  }
-  int64_t get_start_ts() const
-  {
-    return start_ts_;
-  }
-  int64_t get_diff() const
-  {
-    return get_cur_ts() - start_ts_;
-  }
-  int64_t to_string(char *buf, const int64_t buf_len) const;
-protected:
-  static const int64_t MAX_CLICK_COUNT = 16;
-private:
-  int64_t start_ts_;
-  int64_t last_ts_;
-  int64_t click_count_;
-  int32_t click_[MAX_CLICK_COUNT];
-  const char *click_str_[MAX_CLICK_COUNT];
 };
 
 } // end of namespace common

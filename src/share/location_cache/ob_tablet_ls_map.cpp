@@ -96,9 +96,7 @@ void ObTabletLSMap::destroy()
   size_ = 0;
 }
 
-int ObTabletLSMap::update(
-    const ObTabletLSCache &tablet_ls_cache,
-    const bool update_only)
+int ObTabletLSMap::update(const ObTabletLSCache &tablet_ls_cache)
 {
   int ret = OB_SUCCESS;
   ObTabletLSCache *curr = NULL;
@@ -123,25 +121,21 @@ int ObTabletLSMap::update(
 
     if (OB_ISNULL(curr)) {
       // insert
-      if (!update_only) {
-        ObTabletLSCache *tmp = op_alloc(ObTabletLSCache);
-        if (OB_ISNULL(tmp)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_ERROR("ls location memory alloc error", KR(ret), K(key), K(tablet_ls_cache));
-        } else if (OB_FAIL(tmp->assign(tablet_ls_cache))) {
-          LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
-        } else {
-          // try_update_access_ts_(tmp); // always update for insert
-          tmp->next_ = ls_buckets_[pos];
-          ls_buckets_[pos] = tmp;
-          ATOMIC_INC(&size_);
-        }
+      ObTabletLSCache *tmp = op_alloc(ObTabletLSCache);
+      if (OB_ISNULL(tmp)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("ls location memory alloc error", KR(ret), K(key), K(tablet_ls_cache));
+      } else if (OB_FAIL(tmp->assign(tablet_ls_cache))) {
+        LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
+      } else {
+        // try_update_access_ts_(tmp); // always update for insert
+        tmp->next_ = ls_buckets_[pos];
+        ls_buckets_[pos] = tmp;
+        ATOMIC_INC(&size_);
       }
     } else {
       // update
-      if (curr->get_transfer_seq() >= tablet_ls_cache.get_transfer_seq()) {
-        LOG_TRACE("current tablet-ls is new enough, just skip", KPC(curr), K(tablet_ls_cache));
-      } else if (OB_FAIL(curr->assign(tablet_ls_cache))) {
+      if (OB_FAIL(curr->assign(tablet_ls_cache))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
       } else {
         // try_update_access_ts_(curr); // always update for update
@@ -203,32 +197,6 @@ int ObTabletLSMap::get_all(common::ObIArray<ObTabletLSCache> &cache_array)
       }
     }
   }
-  return ret;
-}
-
-int ObTabletLSMap::get_tablet_ids(
-    const uint64_t tenant_id,
-    common::ObIArray<ObTabletID> &tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  int64_t start_time = ObTimeUtility::current_time();
-  tablet_ids.reset();
-  ObTabletLSCache *tablet_ls_cache = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
-    ObQSyncLockReadGuard guard(buckets_lock_[i % LOCK_SLOT_CNT]);
-    tablet_ls_cache = ls_buckets_[i];
-    while (OB_NOT_NULL(tablet_ls_cache) && OB_SUCC(ret)) {
-      if (tablet_ls_cache->get_tenant_id() == tenant_id) {
-        if (OB_FAIL(tablet_ids.push_back(tablet_ls_cache->get_tablet_id()))) {
-          LOG_WARN("fail to push back tablet_id", KR(ret), KPC(tablet_ls_cache));
-        }
-      }
-      tablet_ls_cache = static_cast<ObTabletLSCache *>(tablet_ls_cache->next_);
-    }
-  }
-  FLOG_INFO("get tablet_ids cost", KR(ret), K(tenant_id),
-            "map_size", size_, "tablet_ids_cnt", tablet_ids.count(),
-            "cost_us", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

@@ -140,8 +140,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
     //Otherwise, you can show only the threads at the same Tenant with you.
     //If you have the PROCESS privilege, you can show all threads at your Tenant.
     //Otherwise, you can show only your own threads.
-    // if session is marked killed, no display to user.
-    if (sess_info->is_shadow() || sess_info->is_mark_killed()) {
+    if (sess_info->is_shadow()) {
       //this session info is logical free, shouldn't be added to scanner
     } else if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id())
         || (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id()
@@ -155,8 +154,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
         uint64_t col_id = output_column_ids_.at(i);
         switch(col_id) {
           case ID: {
-            cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(
-                                  sess_info->get_compatibility_sessid()));
+            cur_row_->cells_[cell_idx].set_uint64(static_cast<uint64_t>(key.sessid_));
             break;
           }
           case USER: {
@@ -165,8 +163,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
               // before we finally find the reason and resolve the bug. otherwise we cannot
               // use this command in on-line cluster.
               // see
-              cur_row_->cells_[cell_idx].set_varchar("");
-              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+              cur_row_->cells_[cell_idx].set_null();
             } else {
               cur_row_->cells_[cell_idx].set_varchar(sess_info->get_user_name());
               cur_row_->cells_[cell_idx].set_collation_type(default_collation);
@@ -445,7 +442,7 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             break;
           }
           case USER_CLIENT_PORT: {
-            cur_row_->cells_[cell_idx].set_int(sess_info->get_client_addr_port());
+            cur_row_->cells_[cell_idx].set_int(0);
             break;
           }
           default: {

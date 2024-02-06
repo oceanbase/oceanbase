@@ -109,7 +109,7 @@ int TestTabletMemberLoadAndFree::create_ls(const uint64_t tenant_id, const share
 int TestTabletMemberLoadAndFree::remove_ls(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ls_id);
+  ret = MTL(ObLSService*)->remove_ls(ls_id, false);
   return ret;
 }
 

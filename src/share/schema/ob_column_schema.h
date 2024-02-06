@@ -294,8 +294,7 @@ int assign(const ObColumnSchemaV2 &other);
   inline void add_column_flag(int64_t flag) { column_flags_ |= flag; }
   inline void del_column_flag(int64_t flag) { column_flags_ &= ~flag; }
   inline void add_or_del_column_flag(int64_t flag, bool is_add);
-  inline bool is_shadow_column() const { return (column_id_ > common::OB_MIN_SHADOW_COLUMN_ID)
-                                                && !is_mlog_special_column(column_id_); }
+  inline bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
   inline bool is_on_update_current_timestamp() const { return on_update_current_timestamp_; }
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
 
@@ -325,10 +324,6 @@ int assign(const ObColumnSchemaV2 &other);
     vp_tid_array[0] = table_id_;
     return ret;
   }
-
-  int get_each_column_group_name(ObString &cg_name) const;
-  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
-  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:

@@ -28,7 +28,6 @@ public:
                             ObExpr &rt_expr) const override;
   static int calc_bitcount_expr(const ObExpr &expr, ObEvalCtx &ctx,
                                 ObDatum& res_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
 	static const uint8_t char_to_num_bits[256];
 	DISALLOW_COPY_AND_ASSIGN(ObExprBitCount);

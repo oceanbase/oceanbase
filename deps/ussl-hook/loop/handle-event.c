@@ -31,32 +31,6 @@ enum ServerNegoStage {
   SERVER_ACK_NEGO_AND_SSL = 3,
 };
 
-enum ob_rpc_connection_type {
-  OB_CONNECTION_COMMON_TYPE,
-  OB_CONNECTION_AUTH_BYPASS_TYPE,
-};
-
-static const int MAX_FD_NUM = 1024 * 1024;
-static uint8_t gs_connection_type_arr[MAX_FD_NUM];
-
-int ussl_set_rpc_connection_type(int fd, int type)
-{
-  int ret = 0;
-  if (fd >= 0 && fd < MAX_FD_NUM) {
-    gs_connection_type_arr[fd] = type;
-  } else {
-    ret = -ERANGE;
-  }
-  return ret;
-}
-
-void ussl_reset_rpc_connection_type(int fd)
-{
-  if (fd >= 0 && fd < MAX_FD_NUM) {
-    gs_connection_type_arr[fd] = 0;
-  }
-}
-
 static void auth_type_to_str(int auth_type, char *buf, size_t len)
 {
   if (USSL_AUTH_NONE == auth_type) {
@@ -352,28 +326,9 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
     } else if (is_local_ip_address(src_addr)) {
       ussl_log_info("local ip address:%s, need dispatch", src_addr);
       need_dispatch = 1;
-    } else if (is_net_keepalive_connection(rbytes, buf)) {
-      need_dispatch = 1;
-      ussl_log_info("net keepalive negotation message, need dispatch, src:%s, fd:%d", src_addr, s->fd);
     } else {
-      //if enable rpc auth bypass, all connections are allowed, including tableapi, liboblog,
-      //else, only tableapi connections are allowed
-      if (ussl_get_auth_bypass_flag()) {
-        ussl_log_info("rpc auth enable bypass, need dispatch, src:%s, fd:%d", src_addr, s->fd);
-        need_dispatch = 1;
-      } else {
-        if (ob_judge_is_tableapi_pcode_from_raw_packet(buf, rbytes)) {
-          ussl_log_info("tableapi connection, need dispatch, src:%s, fd:%d", src_addr, s->fd);
-          need_dispatch = 1;
-        }
-      }
-      if (need_dispatch) {
-        if (0 == ussl_set_rpc_connection_type(s->fd, OB_CONNECTION_AUTH_BYPASS_TYPE)) {
-        } else {
-          ussl_log_warn("ussl_set_rpc_connection_type failed, need close, src:%s, fd:%d", src_addr, s->fd);
-          need_dispatch = 0;
-        }
-      }
+      need_dispatch = is_net_keepalive_connection(rbytes, buf);
+      ussl_log_info("easy negotation message, need dispatch:%d, src:%s, fd:%d", need_dispatch, src_addr, s->fd);
     }
     if (need_dispatch) {
       err = EUCLEAN;
@@ -420,14 +375,6 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
             s->fd_info.client_gid = nego_message->client_gid;
             ussl_log_info("auth mothod is NONE, the fd will be dispatched, fd:%d, src_addr:%s", s->fd,
                           src_addr);
-          } else if (ussl_get_auth_bypass_flag()) {
-            if (0 == ussl_set_rpc_connection_type(s->fd, OB_CONNECTION_AUTH_BYPASS_TYPE)) {
-              err = EUCLEAN;
-              ussl_log_warn("enable bypass connection, allow connect, src:%s, fd:%d", src_addr, s->fd);
-            } else {
-              err = EUCLEAN;
-              s->has_error = 1;
-            }
           } else {
             err = EUCLEAN;
             s->has_error = 1;
@@ -440,13 +387,11 @@ static int acceptfd_handle_first_readable_event(acceptfd_sk_t *s)
             if (-1 == ssl_config_ctx_id) {
               err = EUCLEAN;
               s->has_error = 1;
-              ussl_log_warn("ssl config not configured or not load completely!");
+              ussl_log_error("ssl config not configured!");
             } else {
               negotiation_message_t nego_message_ack;
               nego_message_ack.type = nego_message->type;
-              int has_method_none = test_server_auth_methods(USSL_AUTH_NONE);
-              if (0 != fd_enable_ssl_for_server(s->fd, ssl_config_ctx_id, nego_message->type,
-                  has_method_none)) {
+              if (0 != fd_enable_ssl_for_server(s->fd, ssl_config_ctx_id, nego_message->type)) {
                 err = EUCLEAN;
                 s->has_error = 1;
                 ussl_log_error("fd_enable_ssl_for_server failed, fd:%d", s->fd);
@@ -502,16 +447,6 @@ int acceptfd_sk_handle_event(acceptfd_sk_t *s)
     } else if (SERVER_ACK_NEGO_AND_SSL == s->fd_info.stage) {
       ret = acceptfd_handle_ssl_event(s);
     }
-  }
-  return ret;
-}
-
-int ussl_check_pcode_mismatch_connection(int fd, uint32_t pcode)
-{
-  int ret = 0;
-  if (fd >= 0 && fd < MAX_FD_NUM) {
-    ret = (gs_connection_type_arr[fd] & OB_CONNECTION_AUTH_BYPASS_TYPE) &&
-          !ob_is_bypass_pcode(pcode);
   }
   return ret;
 }

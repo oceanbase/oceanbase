@@ -24,7 +24,7 @@ static void *ob_zstd_malloc(void *opaque, size_t size)
 {
   void *buf = NULL;
   if (NULL != opaque) {
-    ObIAllocator *allocator = reinterpret_cast<ObIAllocator*> (opaque);
+    ObZstdCtxAllocator *allocator = reinterpret_cast<ObZstdCtxAllocator*> (opaque);
     buf = allocator->alloc(size);
   }
   return buf;
@@ -33,7 +33,7 @@ static void *ob_zstd_malloc(void *opaque, size_t size)
 static void ob_zstd_free(void *opaque, void *address)
 {
   if (NULL != opaque) {
-    ObIAllocator *allocator = reinterpret_cast<ObIAllocator*> (opaque);
+    ObZstdCtxAllocator *allocator = reinterpret_cast<ObZstdCtxAllocator*> (opaque);
     allocator->free(address);
   }
 }
@@ -42,7 +42,7 @@ static void ob_zstd_free(void *opaque, void *address)
  * ------------------------------ObZstdCtxAllocator---------------------
  */
 ObZstdCtxAllocator::ObZstdCtxAllocator(int64_t tenant_id)
-  : allocator_(ObModIds::OB_COMPRESSOR, ZSTD_ALLOCATOR_BLOCK_SIZE,
+  : allocator_(ObModIds::OB_COMPRESSOR, OB_MALLOC_BIG_BLOCK_SIZE,
                tenant_id)
 {
 }
@@ -51,14 +51,14 @@ ObZstdCtxAllocator::~ObZstdCtxAllocator()
 {
 }
 
-void* ObZstdCtxAllocator::alloc(const int64_t size)
+void* ObZstdCtxAllocator::alloc(size_t size)
 {
   return allocator_.alloc(size);
 }
 
-void ObZstdCtxAllocator::free(void *ptr)
+void ObZstdCtxAllocator::free(void *addr)
 {
-  allocator_.free(ptr);
+  allocator_.free(addr);
 }
 
 void ObZstdCtxAllocator::reuse()
@@ -78,14 +78,13 @@ int ObZstdCompressor::compress(const char *src_buffer,
                                const int64_t src_data_size,
                                char *dst_buffer,
                                const int64_t dst_buffer_size,
-                               int64_t &dst_data_size,
-                               ObIAllocator *allocator)
+                               int64_t &dst_data_size)
 {
   int ret = OB_SUCCESS;
   int64_t max_overflow_size = 0;
   size_t compress_ret_size = 0;
   ObZstdCtxAllocator &zstd_allocator = ObZstdCtxAllocator::get_thread_local_instance();
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, allocator ?: &zstd_allocator};
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &zstd_allocator};
   dst_data_size = 0;
 
   if (NULL == src_buffer
@@ -121,13 +120,12 @@ int ObZstdCompressor::decompress(const char *src_buffer,
                                  const int64_t src_data_size,
                                  char *dst_buffer,
                                  const int64_t dst_buffer_size,
-                                 int64_t &dst_data_size,
-                                 ObIAllocator *allocator)
+                                 int64_t &dst_data_size)
 {
   int ret = OB_SUCCESS;
   size_t decompress_ret_size = 0;
   ObZstdCtxAllocator &zstd_allocator = ObZstdCtxAllocator::get_thread_local_instance();
-  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, allocator ?: &zstd_allocator};
+  OB_ZSTD_customMem zstd_mem = {ob_zstd_malloc, ob_zstd_free, &zstd_allocator};
   dst_data_size = 0;
 
   if (NULL == src_buffer

@@ -50,7 +50,6 @@ class ObExecContext;
 class ObRawExpr;
 class ObCreateTableStmt;
 class ObTableStmt;
-class ObExprRegexpSessionVariables;
 
 class ObCreateTableExecutor
 {
@@ -107,12 +106,10 @@ public:
       const common::ObString &location,
       const common::ObString &access_info,
       const common::ObString &pattern,
-      const ObExprRegexpSessionVariables &regexp_vars);
+      ObExecContext &ctx);
   static int collect_local_files_on_servers(
       const uint64_t tenant_id,
       const common::ObString &location,
-      const common::ObString &pattern,
-      const ObExprRegexpSessionVariables &regexp_vars,
       common::ObIArray<common::ObAddr> &all_servers,
       common::ObIArray<common::ObString> &file_urls,
       common::ObIArray<int64_t> &file_sizes,
@@ -202,8 +199,17 @@ private:
 
   int refresh_schema_for_table(const uint64_t tenant_id);
   int execute_alter_external_table(ObExecContext &ctx, ObAlterTableStmt &stmt);
-  static int sort_external_files(ObIArray<ObString> &file_urls,
-                                 ObIArray<int64_t> &file_sizes);
+  static int get_external_file_list(
+    const ObString &location,
+    common::ObIArray<common::ObString> &file_urls,
+    common::ObIArray<int64_t> &file_sizes,
+    const common::ObString &access_info,
+    common::ObIAllocator &allocator,
+    common::ObStorageType &storage_type);
+  static int filter_and_sort_external_files(const ObString &pattern,
+                                            ObExecContext &exec_ctx,
+                                            ObIArray<ObString> &file_urls,
+                                            ObIArray<int64_t> &file_sizes);
 private:
   //DISALLOW_COPY_AND_ASSIGN(ObAlterTableExecutor);
 };

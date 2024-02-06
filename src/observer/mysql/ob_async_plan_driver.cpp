@@ -100,11 +100,6 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
     *  3. response_query_header & flush_buffer 不会产生需要重试的报错，此位置是 ObAsyncPlanDriver 重试前的一步，中间不会有别的可能重试的操作
     *  4. ps stmt 清理要注意异步回包的情况，可能需要在异步包里面做清理
     */
-    // need close result set
-    int close_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (close_ret = result.close())) {
-      LOG_WARN("close result failed", K(close_ret));
-    }
     LOG_WARN("prexecute response query head fail. ", K(ret));
   } else if (result.is_with_rows()) {
     ret = OB_ERR_UNEXPECTED;
@@ -118,8 +113,7 @@ int ObAsyncPlanDriver::response_result(ObMySQLResultSet &result)
       if (stmt::T_SELECT == result.get_stmt_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("select stmt do not use async plan in prexecute.", K(ret));
-      } else if (!result.is_async_end_trans_submitted()) {
-        // is_async_end_trans_submitted 表示异步回包准备好了
+      } else {
         ObOKPParam ok_param;
         ok_param.affected_rows_ = result.get_affected_rows();
         ok_param.is_partition_hit_ = session_.partition_hit().get_bool();

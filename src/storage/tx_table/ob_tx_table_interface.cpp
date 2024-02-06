@@ -34,16 +34,6 @@ int ObTxTableGuard::init(ObTxTable *tx_table)
   return ret;
 }
 
-int ObTxTableGuard::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg,
-                                       ObITxDataCheckFunctor &fn)
-{
-  if (OB_NOT_NULL(tx_table_)) {
-    return tx_table_->check_with_tx_data(read_tx_data_arg, fn);
-  } else {
-    return OB_NOT_INIT;
-  }
-}
-
 int ObTxTableGuard::check_row_locked(const transaction::ObTransID &read_tx_id,
                                      const transaction::ObTransID data_tx_id,
                                      const transaction::ObTxSEQ &sql_sequence,
@@ -97,31 +87,26 @@ int ObTxTableGuard::try_get_tx_state(const transaction::ObTransID tx_id,
 
 int ObTxTableGuard::lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                                   bool &can_read,
-                                  share::SCN &trans_version)
+                                  share::SCN &trans_version,
+                                  bool &is_determined_state)
 {
   ObCleanoutNothingOperation clean_nothing_op;
   ObReCheckNothingOperation recheck_nothing_op;
-  return lock_for_read(lock_for_read_arg,
-                       can_read,
-                       trans_version,
-                       clean_nothing_op,
-                       recheck_nothing_op);
+  return lock_for_read(
+      lock_for_read_arg, can_read, trans_version, is_determined_state, clean_nothing_op, recheck_nothing_op);
 }
 
 int ObTxTableGuard::lock_for_read(const transaction::ObLockForReadArg &lock_for_read_arg,
                                   bool &can_read,
                                   share::SCN &trans_version,
+                                  bool &is_determined_state,
                                   ObCleanoutOp &cleanout_op,
                                   ObReCheckOp &recheck_op)
 {
   if (OB_NOT_NULL(tx_table_)) {
-    ObReadTxDataArg read_tx_data_arg(lock_for_read_arg.data_trans_id_, epoch_, mini_cache_);
-    return tx_table_->lock_for_read(read_tx_data_arg,
-                                    lock_for_read_arg,
-                                    can_read,
-                                    trans_version,
-                                    cleanout_op,
-                                    recheck_op);
+    ObReadTxDataArg arg(lock_for_read_arg.data_trans_id_, epoch_, mini_cache_);
+    return tx_table_->lock_for_read(
+        arg, lock_for_read_arg, can_read, trans_version, is_determined_state, cleanout_op, recheck_op);
   } else {
     return OB_NOT_INIT;
   }
@@ -173,11 +158,6 @@ bool ObTxTableGuard::check_ls_offline()
   }
 
   return discover_ls_offline;
-}
-
-share::ObLSID ObTxTableGuard::get_ls_id() const
-{
-  return tx_table_->get_ls_id();
 }
 
 }  // namespace storage

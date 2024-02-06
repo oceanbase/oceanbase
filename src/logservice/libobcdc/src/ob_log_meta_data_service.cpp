@@ -13,7 +13,6 @@
 #include "ob_log_meta_data_service.h"
 #include "ob_log_instance.h"
 #include "ob_log_fetching_mode.h"
-#include "ob_log_meta_data_queryer.h"
 #include "share/backup/ob_archive_struct.h"
 #include "logservice/restoreservice/ob_log_archive_piece_mgr.h"
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h"
@@ -40,6 +39,7 @@ ObLogMetaDataService &ObLogMetaDataService::get_instance()
 ObLogMetaDataService::ObLogMetaDataService() :
     is_inited_(false),
     fetcher_(),
+    sql_queryer_(),
     baseline_loader_(),
     incremental_replayer_(),
     fetcher_dispatcher_()
@@ -56,7 +56,7 @@ int ObLogMetaDataService::init(
     const ClientFetchingMode fetching_mode,
     const share::ObBackupPathString &archive_dest,
     IObLogSysLsTaskHandler *sys_ls_handler,
-    common::ObMySQLProxy *proxy,
+    ObISQLClient *proxy,
     IObLogErrHandler *err_handler,
     const int64_t cluster_id,
     const ObLogConfig &cfg,
@@ -67,6 +67,8 @@ int ObLogMetaDataService::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("init twice", KR(ret));
+  } else if (OB_FAIL(sql_queryer_.init(cluster_id, false, *proxy))) {
+    LOG_ERROR("ObLogMetaDataSQLQueryer init fail", KR(ret));
   } else if (OB_FAIL(baseline_loader_.init(cfg))) {
     LOG_ERROR("ObLogMetaDataBaselineLoader init fail", KR(ret));
   } else if (OB_FAIL(incremental_replayer_.init())) {
@@ -91,6 +93,7 @@ void ObLogMetaDataService::destroy()
 {
   if (IS_INIT) {
     fetcher_.destroy();
+    sql_queryer_.destroy();
     baseline_loader_.destroy();
     incremental_replayer_.destroy();
     fetcher_dispatcher_.destroy();
@@ -122,7 +125,7 @@ int ObLogMetaDataService::refresh_baseline_meta_data(
       LOG_ERROR("log_meta_data_service get_data_dict_in_log_info failed", KR(ret), K(tenant_id));
     } else {
       ISTAT("get_data_dict_in_log_info success", K(tenant_id), K(start_timestamp_ns), K(data_dict_in_log_info));
-      start_parameters.reset(data_dict_in_log_info.snapshot_scn_, std::max(start_timestamp_ns, data_dict_in_log_info.end_scn_), data_dict_in_log_info);
+      start_parameters.reset(data_dict_in_log_info.snapshot_scn_, start_timestamp_ns, data_dict_in_log_info);
     }
 
     if (OB_SUCC(ret)) {
@@ -257,18 +260,14 @@ int ObLogMetaDataService::get_data_dict_in_log_info_in_archive_(
 
       if (target_index >= item_arr_size) {
         ret = OB_ENTRY_NOT_EXIST;
-        LOG_ERROR("can't find datadict snapshot_scn older than start_timestamp_ns", K(target_index), K(data_dict_meta_info),
+        LOG_ERROR("not datadict metainfo item older than start_timestamp_ns", K(target_index), K(data_dict_meta_info),
             K(start_timestamp_ns));
       } else {
         datadict::ObDataDictMetaInfoItem data_dict_item;
         data_dict_item = item_arr.at(target_index);
-        const int64_t end_scn_val = (data_dict_item.end_scn_ == share::OB_INVALID_SCN_VAL) ? start_timestamp_ns : data_dict_item.end_scn_;
-
         data_dict_in_log_info.reset(data_dict_item.snapshot_scn_,
-            end_scn_val,
             palf::LSN(data_dict_item.start_lsn_),
             palf::LSN(data_dict_item.end_lsn_));
-        LOG_INFO("get_data_dict_in_log_info_in_archive_ succ", K(data_dict_meta_info), K(start_timestamp_ns), K(data_dict_in_log_info));
       }
     }
   }
@@ -330,7 +329,7 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
         LOG_WARN("data dict info is not valid", KR(ret), K(data_dict_meta_info));
       } else {
         const uint64_t tenant_id = data_dict_meta_info.get_tenant_id();
-        LOG_INFO("read_meta_info_in_archive_log success", K(tenant_id), K(start_timestamp_ns), K(data_dict_meta_info));
+        LOG_INFO("read_meta_info_in_archive_log success", K(tenant_id), K(data_dict_meta_info));
       }
     }
   }
@@ -344,7 +343,7 @@ int ObLogMetaDataService::read_meta_info_in_archive_log_(
 
 int ObLogMetaDataService::get_data_dict_in_log_info_(
     const uint64_t tenant_id,
-    const int64_t start_timestamp_ns,
+    const int64_t start_timstamp_ns,
     logfetcher::DataDictionaryInLogInfo &data_dict_in_log_info)
 {
   int ret = OB_SUCCESS;
@@ -356,44 +355,39 @@ int ObLogMetaDataService::get_data_dict_in_log_info_(
     ret = OB_NOT_INIT;
     LOG_ERROR("ObLogMetaDataService is not initialized", KR(ret));
   } else {
-    while (! done) {
-      if (is_direct_fetching_mode(fetching_mode)) {
-        if (OB_FAIL(get_data_dict_in_log_info_in_archive_(start_timestamp_ns, data_dict_in_log_info))) {
-          LOG_WARN("get_data_dict_in_log_info_in_archive_ failed", KR(ret), K(start_timestamp_ns), K(tenant_id), K(data_dict_in_log_info));
+    if (is_direct_fetching_mode(fetching_mode)) {
+      while (OB_SUCC(ret) && ! done) {
+        if (OB_FAIL(get_data_dict_in_log_info_in_archive_(start_timstamp_ns, data_dict_in_log_info))) {
+          LOG_WARN("get_data_dict_in_log_info_in_archive_ failed", KR(ret), K(start_timstamp_ns), K(tenant_id));
         } else {
           done = true;
         }
-      } else if (is_integrated_fetching_mode(fetching_mode)) {
-        common::ObMySQLProxy& sql_proxy = TCTX.is_tenant_sync_mode() ? TCTX.mysql_proxy_.get_ob_mysql_proxy() : TCTX.tenant_sql_proxy_.get_ob_mysql_proxy();
-        ObLogMetaDataSQLQueryer sql_queryer(start_timestamp_ns, sql_proxy);
 
-        if (OB_FAIL(sql_queryer.get_data_dict_in_log_info(tenant_id, start_timestamp_ns, data_dict_in_log_info))) {
-          LOG_WARN("sql_queryer get_data_dict_in_log_info fail", KR(ret), K(tenant_id), K(start_timestamp_ns), K(data_dict_in_log_info));
+        if (OB_FAIL(ret)) {
+          ret = OB_SUCCESS;
+          ob_usleep(100L * 1000L);
+        }
+      }
+    } else if (is_integrated_fetching_mode(fetching_mode)) {
+      while (OB_SUCC(ret) && ! done) {
+        if (OB_FAIL(sql_queryer_.get_data_dict_in_log_info(tenant_id, start_timstamp_ns, record_count, data_dict_in_log_info))) {
+          LOG_WARN("sql_queryer_ get_data_dict_in_log_info fail", KR(ret), K(tenant_id), K(start_timstamp_ns),
+              K(record_count), K(data_dict_in_log_info));
+        } else if (0 == record_count) {
+          ret = OB_NEED_RETRY;
+          LOG_WARN("No valid baseline data is currently available, need retry", KR(ret), K(tenant_id), K(start_timstamp_ns));
         } else {
           done = true;
         }
-      } else {
-        ret = OB_NOT_SUPPORTED;
-        done = true;
-        LOG_ERROR("[FATAL]fetching mode of TCTX is not valid", KR(ret), K(fetching_mode), K(tenant_id));
-      }
 
-      if (OB_SUCC(ret) || done) {
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        done = true;
-        LOG_ERROR("[FATAL][DATA_DICT] Can't find suitable data_dict to launch OBCDC, please try use online schema(refresh_mode=online && skip_ob_version_compat_check=1)",
-            KR(ret), K(tenant_id), K(start_timestamp_ns));
-      } else {
-        const static int64_t RETRY_FUNC_PRINT_INTERVAL = 10 * _SEC_;
-        const int64_t sleep_usec_on_error = 100 * _MSEC_;
-        if (REACH_TIME_INTERVAL(RETRY_FUNC_PRINT_INTERVAL)) {
-          LOG_WARN("[DATA_DICT] retry get data_dict_in_log_info", KR(ret));
-        } else {
-          LOG_TRACE("[DATA_DICT] retry get data_dict_in_log_info", KR(ret));
+        if (OB_FAIL(ret)) {
+          ret = OB_SUCCESS;
+          ob_usleep(100L * 1000L);
         }
-        ret = OB_SUCCESS;
-        ob_usleep(sleep_usec_on_error);
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("fetching mode of TCTX is not valid", KR(ret), K(fetching_mode), K(tenant_id));
     }
   }
 

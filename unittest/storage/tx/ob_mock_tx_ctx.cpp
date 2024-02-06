@@ -118,7 +118,6 @@ void MockObTxCtx::destroy()
 
 int MockObTxCtx::submit_log(const ObTwoPhaseCommitLogType& log_type)
 {
-  merge_intermediate_participants();
   log_queue_.push_back(log_type);
   TRANS_LOG(INFO, "submit log success", K(log_type), KPC(this));
   return OB_SUCCESS;
@@ -260,20 +259,12 @@ int MockObTxCtx::apply()
     TRANS_LOG(ERROR, "log_queue is empty", KPC(this));
     ob_abort();
   } else {
-    ObLSLogInfo info((ObLSID(addr_)), palf::LSN());
     ObTwoPhaseCommitLogType log_type = log_queue_.front();
     log_queue_.pop_front();
-
-    if (ObTwoPhaseCommitLogType::OB_LOG_TX_PREPARE == log_type) {
-      merge_prepare_log_info_(info);
-    }
-
     ret = ObTxCycleTwoPhaseCommitter::apply_log(log_type);
     if (OB_FAIL(ret)) {
-      TRANS_LOG(ERROR, "apply log failed", K(ret), K(log_type), KPC(this));
+      TRANS_LOG(ERROR, "apply log success", K(ret), K(log_type), KPC(this));
       ob_abort();
-    } else {
-      TRANS_LOG(INFO, "apply log success", K(ret), K(log_type), KPC(this), K(info));
     }
   }
 
@@ -310,7 +301,7 @@ int MockObTxCtx::handle(const ObMail<ObTxMsg>& mail)
   case TX_COMMIT: {
     const ObTxCommitMsg *msg = dynamic_cast<const ObTxCommitMsg*>(mail.mail_);
     scheduler_addr_ = mail.from_;
-    ret = commit(msg->commit_parts_,
+    ret = commit(msg->parts_,
                  MonotonicTs::current_time(),
                  msg->expire_ts_,
                  msg->app_trace_info_,
@@ -324,10 +315,7 @@ int MockObTxCtx::handle(const ObMail<ObTxMsg>& mail)
   }
   case TX_2PC_PREPARE_RESP: {
     const Ob2pcPrepareRespMsg *prepare_resp = dynamic_cast<const Ob2pcPrepareRespMsg*>(mail.mail_);
-    Ob2pcPrepareRespMsg prepare_resp2 = *prepare_resp;
-    prepare_resp2.prepare_info_array_.reset();
-    prepare_resp2.prepare_info_array_.push_back(ObLSLogInfo((ObLSID(mail.from_)), palf::LSN()));
-    ret = handle_tx_2pc_prepare_resp(prepare_resp2);
+    ret = handle_tx_2pc_prepare_resp(*prepare_resp);
     break;
   }
   case TX_2PC_PRE_COMMIT_REQ: {
@@ -444,35 +432,6 @@ void MockObTxCtx::set_exiting_()
 {
   TRANS_LOG(INFO, "exiting!!", KPC(this));
   is_exiting_ = true;
-}
-
-bool MockObTxCtx::check_status_valid(const bool should_commit)
-{
-  bool bret = true;
-
-  // check commit or abort
-  if (bret) {
-    ObTxData *tx_data_ptr = NULL;
-    ctx_tx_data_.get_tx_data_ptr(tx_data_ptr);
-    const int32_t state = (*tx_data_ptr).state_;
-
-    if (should_commit) {
-      bret = ObTxData::COMMIT == state;
-    } else {
-      bret = ObTxData::ABORT == state;
-    }
-  }
-
-  // check clear
-  if (bret) {
-    bret = ObTxState::CLEAR == exec_info_.state_;
-  }
-
-  if (!bret) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "state is not match", K(*this), K(should_commit));
-  }
-
-  return bret;
 }
 
 } // end namespace transaction

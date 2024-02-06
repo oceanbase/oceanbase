@@ -30,8 +30,6 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/file/file_directory_utils.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "sql/optimizer/ob_dynamic_sampling.h"
-#include "sql/optimizer/ob_skyline_prunning.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -409,7 +407,7 @@ int ObOptimizerTraceImpl::append(const ObObj& value)
   int64_t pos = 0;
   if (value.is_invalid_type()) {
     ret = append(" ");
-  } else if (OB_FAIL(value.print_sql_literal(buf, buf_len, pos))) {
+  } else if (OB_FAIL(value.print_smart(buf, buf_len, pos))) {
     LOG_WARN("failed to print obj", K(ret));
   } else if (OB_FAIL(log_handle_.append(buf, pos))) {
     LOG_WARN("failed to append value", K(ret));
@@ -488,27 +486,6 @@ int ObOptimizerTraceImpl::append(const ObPhyPlanType& type)
     case OB_PHY_PLAN_UNCERTAIN:
       ret = append("uncertain");
       break;
-  }
-  return ret;
-}
-
-int ObOptimizerTraceImpl::append(const OptSystemStat& stat)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(append("cpu speed:", stat.get_cpu_speed(), "MHz"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("disk seq read speed:", stat.get_disk_seq_read_speed(), "MB/s"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("disk rnd read speed:", stat.get_disk_rnd_read_speed(), "MB/s"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("network speed:", stat.get_network_speed(), "MB/s"))) {
-    LOG_WARN("failed to append msg", K(ret));
   }
   return ret;
 }
@@ -750,130 +727,13 @@ int ObOptimizerTraceImpl::append(const CandidatePlan &plan)
   return ret;
 }
 
-int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
-{
-  int ret = OB_SUCCESS;
-  const ObOptDSStat *stat = ds_result.stat_handle_.stat_;
-  if (NULL == stat) {
-  } else if (OB_FAIL(append("table id:", ds_result.index_id_))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_DS_BASIC_STAT == ds_result.type_ &&
-             OB_FAIL(append(", tpye:basic"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_DS_OUTPUT_STAT == ds_result.type_ &&
-             OB_FAIL(append(", tpye:output"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_DS_FILTER_OUTPUT_STAT == ds_result.type_ &&
-             OB_FAIL(append(", tpye:filter and output"))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FALSE_IT(increase_section())) {
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("rows:",
-                            stat->get_rowcount()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("macro_block_num:",
-                            stat->get_macro_block_num()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("micro_block_num:",
-                            stat->get_micro_block_num()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("sample_block_ratio:",
-                            stat->get_sample_block_ratio()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("ds_level:",
-                            stat->get_ds_level()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("dml_cnt:",
-                            stat->get_dml_cnt()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(new_line())) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_FAIL(append("ds_degree:",
-                            stat->get_ds_degree()))) {
-    LOG_WARN("failed to append msg", K(ret));
-  } else {
-    for (int64_t j = 0; OB_SUCC(ret) && j < stat->get_ds_col_stats().count(); ++j) {
-      const ObOptDSColStat &col_stat = stat->get_ds_col_stats().at(j);
-      if (OB_FAIL(append("column id:", col_stat.column_id_, ":"))) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FALSE_IT(increase_section())) {
-      } else if (OB_FAIL(new_line())) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(append("NDV:", col_stat.num_distinct_))) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(new_line())) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(append("Null:", col_stat.num_null_))) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(new_line())) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(append("degree:", col_stat.degree_))) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else if (OB_FAIL(new_line())) {
-        LOG_WARN("failed to append msg", K(ret));
-      } else {
-        decrease_section();
-      }
-    }
-    decrease_section();
-  }
-  return ret;
-}
-
-int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
-{
-  int ret = OB_SUCCESS;
-  switch (dim.get_dim_type()) {
-    case ObSkylineDim::INDEX_BACK: {
-      const ObIndexBackDim &index_dim = static_cast<const ObIndexBackDim &>(dim);
-      append("[index back dim] need index back:", index_dim.need_index_back_);
-      append(", has interesting order:", index_dim.has_interesting_order_);
-      append(", can extract range:", index_dim.can_extract_range_);
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(index_dim.filter_column_ids_, index_dim.filter_column_cnt_));
-      break;
-    }
-    case ObSkylineDim::INTERESTING_ORDER: {
-      const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
-      append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
-      append(", need index back:", order_dim.need_index_back_);
-      append(", can extract range:", order_dim.can_extract_range_);
-      append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
-      append(", filter columns:", common::ObArrayWrap<uint64_t>(order_dim.filter_column_ids_, order_dim.filter_column_cnt_));
-      break;
-    }
-    case ObSkylineDim::QUERY_RANGE: {
-      const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
-      append("[query range dim] contain false range:", range_dim.contain_always_false_);
-      append(", rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
-      break;
-    }
-    default: {
-      append("unknown dim");
-      break;
-    }
-  }
-  return ret;
-}
-
 int ObOptimizerTraceImpl::trace_env()
 {
   int ret = OB_SUCCESS;
   char buf[1024+1] = {0};
   int64_t buf_len = 1024;
-  if (OB_FAIL(get_package_and_svn(buf, buf_len))) {
-    LOG_WARN("fail to get build_version", KR(ret));
-  } else if (OB_FAIL(new_line())) {
+  get_package_and_svn(buf, buf_len);
+  if (OB_FAIL(new_line())) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FAIL(append_key_value("Version", ObString(strlen(buf), buf)))) {
     LOG_WARN("failed to append msg", K(ret));
@@ -932,7 +792,6 @@ int ObOptimizerTraceImpl::trace_parameters()
     //for tenant parameters
     TRACE_PARAMETER(_rowsets_enabled, bool);
     TRACE_PARAMETER(_enable_px_batch_rescan, bool);
-    TRACE_PARAMETER(_enable_spf_batch_rescan, bool);
     TRACE_PARAMETER(_hash_join_enabled, bool);
     TRACE_PARAMETER(_optimizer_sortmerge_join_enabled, bool);
     TRACE_PARAMETER(_nested_loop_join_enabled, bool);

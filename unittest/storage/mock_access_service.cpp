@@ -56,7 +56,6 @@ int MockObAccessService::insert_rows(
                                           tablet_id,
                                           ObStoreAccessType::MODIFY,
                                           dml_param,
-                                          dml_param.timeout_,
                                           tx_desc,
                                           tablet_handle,
                                           ctx_guard))) {

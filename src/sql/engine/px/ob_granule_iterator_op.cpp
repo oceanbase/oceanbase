@@ -140,8 +140,7 @@ OB_SERIALIZE_MEMBER((ObGranuleIteratorSpec, ObOpSpec),
                     hash_func_,
                     tablet_id_expr_,
                     pw_dml_tsc_ids_,
-                    repart_pruning_tsc_idx_,
-                    px_rf_info_);
+                    repart_pruning_tsc_idx_);
 
 ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
 : ObOpSpec(alloc, type),
@@ -158,8 +157,7 @@ ObGranuleIteratorSpec::ObGranuleIteratorSpec(ObIAllocator &alloc, const ObPhyOpe
   bf_info_(),
   hash_func_(),
   tablet_id_expr_(NULL),
-  repart_pruning_tsc_idx_(OB_INVALID_ID),
-  px_rf_info_()
+  repart_pruning_tsc_idx_(OB_INVALID_ID)
 {}
 
 ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
@@ -182,8 +180,7 @@ ObGranuleIteratorOp::ObGranuleIteratorOp(ObExecContext &exec_ctx, const ObOpSpec
   rf_start_wait_time_(0),
   tablet2part_id_map_(),
   real_child_(NULL),
-  is_parallel_runtime_filtered_(false),
-  is_parallel_rf_qr_extracted_(false)
+  is_parallel_runtime_filtered_(false)
 {
   op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::FILTERED_GRANULE_COUNT;
   op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_GRANULE_COUNT;
@@ -409,29 +406,6 @@ int ObGranuleIteratorOp::inner_open()
       }
     }
   }
-
-  bool skip_prepare_table_scan = false;
-  if (OB_SUCC(ret)) {
-    if (MY_SPEC.px_rf_info_.is_inited_) {
-      ObGIOpInput *input = static_cast<ObGIOpInput *>(input_);
-      for (int64_t i = 0; i < MY_SPEC.px_rf_info_.p2p_dh_ids_.count() && OB_SUCC(ret); ++i) {
-        ObP2PDhKey rf_key;
-        rf_key.task_id_ = MY_SPEC.px_rf_info_.is_shared_ ? 0 : worker_id_;
-        rf_key.px_sequence_id_ = input->px_sequence_id_;
-        rf_key.p2p_datahub_id_ = MY_SPEC.px_rf_info_.p2p_dh_ids_.at(i);
-        if (OB_FAIL(query_range_rf_keys_.push_back(rf_key))) {
-          LOG_WARN("failed to push back");
-        } else if (OB_FAIL(query_range_rf_msgs_.push_back(nullptr))) {
-          LOG_WARN("failed to push back");
-        }
-      }
-      if (OB_SUCC(ret)) {
-        skip_prepare_table_scan = true;
-      }
-      LOG_TRACE("runtime filter extract query range in GI", K(ret), K(query_range_rf_keys_));
-    }
-  }
-
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(child_)) {
       ret = OB_NOT_INIT;
@@ -448,8 +422,7 @@ int ObGranuleIteratorOp::inner_open()
       // when partition runtime filter pushdown to the right TSC child of NLJ,
       // we must set state_ = GI_PREPARED to get all tasks during rescan
       state_ = GI_PREPARED;
-      skip_prepare_table_scan = true;
-    } else if (!skip_prepare_table_scan && OB_FAIL(prepare_table_scan())) {
+    } else if (OB_FAIL(prepare_table_scan())) {
       LOG_WARN("prepare table scan failed", K(ret));
     }
   }
@@ -462,14 +435,6 @@ int ObGranuleIteratorOp::inner_close()
     // rf_msg_ is got from PX_P2P_DH map
     // do not destroy it, because other worker thread may not start yet
     rf_msg_->dec_ref_count();
-  }
-  for (int64_t i = 0; i < query_range_rf_keys_.count(); ++i) {
-    // rf_msg_ is got from PX_P2P_DH map
-    // do not destroy it, because other worker thread may not start yet
-    ObP2PDatahubMsgBase *&rf_msg = query_range_rf_msgs_.at(i);
-    if (OB_NOT_NULL(rf_msg)) {
-      rf_msg->dec_ref_count();
-    }
   }
   return OB_SUCCESS;
 }
@@ -617,20 +582,8 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
   } else if (!MY_SPEC.full_partition_wise()) {
     ObGranuleTaskInfo gi_task_info;
     /* non-partition wise join */
-
-    // both parallel runtime filter extract query range and parallel runtime filter partition
-    // pruning need to regenerate_gi_task, to reduce the regenerate time to 1, we judge if both
-    //
-    // let A = parallel_runtime_filter_extract_query_range, B = parallel_runtime_filter_pruning
-    // if enable A but disable B, we do A and do regenerate_gi_task in A
-    // if both enable A and B, we do A in B and do regenerate_gi_task in B
-    // if disable A but enable B, we do B and do regenerate_gi_task in B
-    if (!enable_parallel_runtime_filter_pruning()
-        && enable_parallel_runtime_filter_extract_query_range()
-        && OB_FAIL(do_parallel_runtime_filter_extract_query_range(true))) {
-      LOG_WARN("failed to do do_parallel_runtime_filter_extract_query_range");
-    } else if (enable_parallel_runtime_filter_pruning()
-               && OB_FAIL(do_parallel_runtime_filter_pruning())) {
+    if (enable_parallel_runtime_filter_pruning() &&
+        OB_FAIL(do_parallel_runtime_filter_pruning())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to do parallel runtime filter pruning", K(ret));
       } else {
@@ -648,12 +601,13 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
       if (OB_NOT_NULL(gi_prepare_map->get(tsc_op_id_))) {
         // GI在向Map中塞任务的时候，需要尝试清理上一次塞入的任务
         if (OB_FAIL(gi_prepare_map->erase_refactored(tsc_op_id_))) {
-          if (OB_HASH_NOT_EXIST != ret) {
-            LOG_WARN("failed to erase task", K(ret));
-          } else {
-            ret = OB_SUCCESS;
-          }
+          LOG_WARN("failed to erase task", K(ret));
         }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(gi_prepare_map->set_refactored(tsc_op_id_, gi_task_info))) {
+        LOG_WARN("reset table scan's ranges failed", K(ret),
+          K(child_->get_spec().id_), K(gi_task_info));
       }
       LOG_DEBUG("produce a gi task", K(tsc_op_id_), K(gi_task_info));
     }
@@ -663,14 +617,6 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
           LOG_WARN("fail to do join filter partition pruning", K(ret));
       } else if (!partition_pruning && OB_FAIL(do_dynamic_partition_pruning(gi_task_info, partition_pruning))) {
         LOG_WARN("fail to do dynamic partition pruning", K(ret));
-      } else if (!partition_pruning) {
-        if (enable_single_runtime_filter_extract_query_range()
-            && OB_FAIL(do_single_runtime_filter_extract_query_range(gi_task_info))) {
-          LOG_WARN("failed to do single runtime filter extract_query_range");
-        } else if (OB_FAIL(gi_prepare_map->set_refactored(tsc_op_id_, gi_task_info))) {
-          LOG_WARN("reset table scan's ranges failed", K(ret), K(child_->get_spec().id_),
-                   K(gi_task_info));
-        }
       }
     }
   } else {
@@ -725,7 +671,7 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning)
   return ret;
 }
 
-int ObGranuleIteratorOp::wait_partition_runtime_filter_ready(bool &partition_pruning) {
+int ObGranuleIteratorOp::wait_runtime_ready(bool &partition_pruning) {
   int ret = OB_SUCCESS;
   if (0 == rf_start_wait_time_) {
     rf_start_wait_time_ = ObTimeUtility::current_time();
@@ -766,49 +712,14 @@ int ObGranuleIteratorOp::wait_partition_runtime_filter_ready(bool &partition_pru
   return ret;
 }
 
-int ObGranuleIteratorOp::wait_runtime_filter_ready(ObP2PDhKey &rf_key,
-                                                   ObP2PDatahubMsgBase *&rf_msg)
-{
-  int ret = OB_SUCCESS;
-  if (0 == rf_start_wait_time_) {
-    rf_start_wait_time_ = ObTimeUtility::current_time();
-  }
-  ObGIOpInput *gi_input = static_cast<ObGIOpInput *>(input_);
-  while (OB_SUCC(ret) && (OB_ISNULL(rf_msg) || !rf_msg->check_ready())) {
-    if (OB_ISNULL(rf_msg) && OB_FAIL(PX_P2P_DH.atomic_get_msg(rf_key, rf_msg))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("fail to get px bloom filter", K(ret), K(rf_key));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ctx_.fast_check_status())) {
-        LOG_WARN("fail to check status", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(rf_msg) || !rf_msg->check_ready()) {
-        int64_t cur_time = ObTimeUtility::current_time();
-        if (cur_time - rf_start_wait_time_ > gi_input->get_rf_max_wait_time() * 1000) {
-          break;
-        } else {
-          ob_usleep(100);
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObGranuleIteratorOp::do_join_filter_partition_pruning(
     int64_t tablet_id,
     bool &partition_pruning)
 {
   int ret = OB_SUCCESS;
   bool is_match = false;
-  if (OB_FAIL(wait_partition_runtime_filter_ready(partition_pruning))) {
-    LOG_WARN("failed to wait partition runtime_filter ready");
+  if (OB_FAIL(wait_runtime_ready(partition_pruning))) {
+    LOG_WARN("failed to wait wait_runtime_ready");
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg_) && rf_msg_->check_ready()) {
     uint64_t hash_val = ObExprJoinFilter::JOIN_FILTER_SEED;
@@ -1170,10 +1081,7 @@ int ObGranuleIteratorOp::try_build_tablet2part_id_map()
     } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected part level", K(ret));
-    } else if (OB_FAIL(tablet2part_id_map_.create(max(1, table_schema->get_all_part_num()),
-                                                  "GITabletMap",
-                                                  ObModIds::OB_HASH_NODE,
-                                                  MTL_ID()))) {
+    } else if (OB_FAIL(tablet2part_id_map_.create(max(1, table_schema->get_all_part_num()), "GITabletMap"))) {
       LOG_WARN("fail create hashmap", K(ret));
     } else {
       ObPartitionSchemaIter iter(*table_schema, CHECK_PARTITION_MODE_NORMAL);
@@ -1197,19 +1105,6 @@ int ObGranuleIteratorOp::try_build_tablet2part_id_map()
     }
   }
   return ret;
-}
-
-bool ObGranuleIteratorOp::enable_parallel_runtime_filter_extract_query_range()
-{
-  return !is_parallel_rf_qr_extracted_ && MY_SPEC.px_rf_info_.is_inited_
-         && !ObGranuleUtil::is_partition_task_mode(MY_SPEC.gi_attri_flag_);
-}
-
-bool ObGranuleIteratorOp::enable_single_runtime_filter_extract_query_range()
-{
-  // if right table's gi is partition gi, the range in gi_task can be directly coverd
-  return MY_SPEC.px_rf_info_.is_inited_
-         && ObGranuleUtil::is_partition_task_mode(MY_SPEC.gi_attri_flag_);
 }
 
 bool ObGranuleIteratorOp::enable_parallel_runtime_filter_pruning()
@@ -1288,21 +1183,11 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
           if (pruning_remain_tablets.empty()) {
             ret = OB_ITER_END;
             args.sharing_iter_end_ = true;
-            // all partition be pruned, no need to extract query range again
-            is_parallel_rf_qr_extracted_ = true;
           } else if (pruning_remain_tablets.count() == tablet_array.count()) {
-            // if no partition is pruned, still need to check whether can extract query range.
-            // regenerate_gi_task in do_parallel_runtime_filter_extract_query_range
-            if (OB_SUCC(ret) && enable_parallel_runtime_filter_extract_query_range()) {
-              OZ(do_parallel_runtime_filter_extract_query_range(true));
-            }
+            /* do nothing*/
           } else {
             args.tablet_arrays_.reset();
             OZ(args.tablet_arrays_.push_back(pruning_remain_tablets));
-            if (OB_SUCC(ret) && enable_parallel_runtime_filter_extract_query_range()) {
-              // don't do regenerate_gi_task in do_parallel_runtime_filter_extract_query_range
-              OZ(do_parallel_runtime_filter_extract_query_range(false));
-            }
             OZ(pump_->regenerate_gi_task());
           }
         }
@@ -1316,10 +1201,6 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
             ob_usleep(100);
           }
         }
-        if (OB_SUCC(ret) && enable_parallel_runtime_filter_extract_query_range()) {
-          // already extract by the lucky one thread(i.e. the thread who regenerating the gi task)
-          is_parallel_rf_qr_extracted_ = true;
-        }
         if (OB_SUCC(ret)
            && (args.sharing_iter_end_ || OB_UNLIKELY(OB_SUCCESS != args.get_pruning_ret()))) {
           ret = OB_ITER_END;
@@ -1327,101 +1208,6 @@ int ObGranuleIteratorOp::do_parallel_runtime_filter_pruning()
       }
     }
   }
-  return ret;
-}
-
-int ObGranuleIteratorOp::do_single_runtime_filter_extract_query_range(
-    ObGranuleTaskInfo &gi_task_info)
-{
-  int ret = OB_SUCCESS;
-  bool has_extrct = false;
-  ObIArray<ObNewRange> &ranges = gi_task_info.ranges_;
-  ObIArray<ObNewRange> &ss_ranges = gi_task_info.ss_ranges_;
-  if (gi_task_info.ranges_.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ranges_ is empty ", K(ret));
-  } else {
-    for (int64_t i = 0; i < query_range_rf_keys_.count() && OB_SUCC(ret) && !has_extrct; ++i) {
-      ObP2PDatahubMsgBase *&rf_msg = query_range_rf_msgs_.at(i);
-      ObP2PDhKey &rf_key = query_range_rf_keys_.at(i);
-      if (OB_FAIL(wait_runtime_filter_ready(rf_key, rf_msg))) {
-        LOG_WARN("failed to wait wait_runtime_filter_ready");
-      }
-      if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg) && rf_msg->check_ready()) {
-        if (OB_FAIL(rf_msg->try_extract_query_range(has_extrct, ranges))) {
-          LOG_WARN("failed to try_extract_query_range");
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (has_extrct) {
-        ss_ranges.reset();
-        if (ranges.empty()) {
-          // do nothing
-        } else {
-          ObNewRange whole_range;
-          const ObNewRange &key_range = ranges.at(0);
-          whole_range.set_whole_range();
-          whole_range.table_id_ = key_range.table_id_;
-          whole_range.flag_ = key_range.flag_;
-          for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-            if (OB_FAIL(ss_ranges.push_back(whole_range))) {
-              LOG_WARN("push back ss_ranges failed", K(ret));
-            }
-          }
-        }
-      }
-    }
-    LOG_TRACE("single runtime filter extract query range", K(ret), K(has_extrct), K(ranges));
-  }
-  return ret;
-}
-
-int ObGranuleIteratorOp::do_parallel_runtime_filter_extract_query_range(
-    bool need_regenerate_gi_task)
-{
-  int ret = OB_SUCCESS;
-  bool has_extrct = false;
-  if (OB_ISNULL(pump_) || 1 != pump_->get_pump_args().count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pump is unexpected", K(pump_), K(ret));
-  } else {
-    ObGranulePumpArgs &args = pump_->get_pump_args().at(0);
-    ObIArray<ObNewRange> &ranges = args.query_range_by_runtime_filter_;
-
-    bool is_lucky_one = ATOMIC_CAS(&args.lucky_one_, true, false);
-    if (is_lucky_one) {
-      for (int64_t i = 0; i < query_range_rf_keys_.count() && OB_SUCC(ret) && !has_extrct; ++i) {
-        ObP2PDatahubMsgBase *&rf_msg = query_range_rf_msgs_.at(i);
-        ObP2PDhKey &rf_key = query_range_rf_keys_.at(i);
-        if (OB_FAIL(wait_runtime_filter_ready(rf_key, rf_msg))) {
-          LOG_WARN("failed to wait wait_runtime_filter_ready");
-        }
-        if (OB_SUCC(ret) && OB_NOT_NULL(rf_msg) && rf_msg->check_ready()) {
-          if (OB_FAIL(rf_msg->try_extract_query_range(has_extrct, ranges))) {
-            LOG_WARN("failed to try_extract_query_range", K(ranges));
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (has_extrct) {
-        if (need_regenerate_gi_task) {
-          OZ(pump_->regenerate_gi_task());
-        }
-      }
-      LOG_TRACE("parallel runtime filter extract query range", K(ret), K(has_extrct), K(ranges));
-      args.extract_finished_ = true;
-    } else {
-      while (!args.extract_finished_ && OB_SUCC(ret)) {
-        if (OB_FAIL(ctx_.fast_check_status())) {
-          LOG_WARN("fail to fast check status", K(ret));
-        } else {
-          ob_usleep(100);
-        }
-      }
-    }
-  }
-  is_parallel_rf_qr_extracted_ = true;
   return ret;
 }
 

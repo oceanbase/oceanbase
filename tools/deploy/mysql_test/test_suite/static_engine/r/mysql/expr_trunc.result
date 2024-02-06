@@ -1101,7 +1101,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c17], [truncate(cast(t1.c1, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c1], [t1.c17], [truncate(cast(t1.c1, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c1], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -2421,7 +2421,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2], [t1.c17], [truncate(cast(t1.c2, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c2], [t1.c17], [truncate(cast(t1.c2, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c2], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3741,7 +3741,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3], [t1.c17], [truncate(cast(t1.c3, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c3], [t1.c17], [truncate(cast(t1.c3, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c3], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5061,7 +5061,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4], [t1.c17], [truncate(cast(t1.c4, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c4], [t1.c17], [truncate(cast(t1.c4, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c4], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6381,7 +6381,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5], [t1.c17], [truncate(cast(t1.c5, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c5], [t1.c17], [truncate(cast(t1.c5, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c5], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7701,7 +7701,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6], [t1.c17], [truncate(cast(t1.c6, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c6], [t1.c17], [truncate(cast(t1.c6, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c6], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9021,7 +9021,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7], [t1.c17], [truncate(cast(t1.c7, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c7], [t1.c17], [truncate(cast(t1.c7, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c7], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10341,7 +10341,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8], [t1.c17], [truncate(cast(t1.c8, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c8], [t1.c17], [truncate(cast(t1.c8, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c8], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -11661,7 +11661,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9], [t1.c17], [truncate(cast(t1.c9, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c9], [t1.c17], [truncate(cast(t1.c9, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c9], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -12981,7 +12981,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10], [t1.c17], [truncate(cast(t1.c10, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c10], [t1.c17], [truncate(cast(t1.c10, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c10], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -14285,7 +14285,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11], [t1.c17], [truncate(cast(t1.c11, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c11], [t1.c17], [truncate(cast(t1.c11, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c11], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -15583,7 +15583,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12], [t1.c17], [truncate(cast(t1.c12, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c12], [t1.c17], [truncate(cast(t1.c12, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c12], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -16897,7 +16897,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13], [t1.c17], [truncate(cast(t1.c13, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c13], [t1.c17], [truncate(cast(t1.c13, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c13], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -18217,7 +18217,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14], [t1.c17], [truncate(cast(t1.c14, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c14], [t1.c17], [truncate(cast(t1.c14, DOUBLE UNSIGNED(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c14], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -19521,7 +19521,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15], [t1.c17], [truncate(t1.c15, cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c15], [t1.c17], [truncate(t1.c15, cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c15], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -20819,7 +20819,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16], [t1.c17], [truncate(t1.c16, cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c16], [t1.c17], [truncate(t1.c16, cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c16], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -22117,7 +22117,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17], [t1.c17], [truncate(t1.c17, cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c17], [t1.c17], [truncate(t1.c17, cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -23415,7 +23415,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18], [t1.c17], [truncate(t1.c18, cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c18], [t1.c17], [truncate(t1.c18, cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c18], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -24729,7 +24729,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c19], [t1.c17], [truncate(cast(t1.c19, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c19], [t1.c17], [truncate(cast(t1.c19, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c19], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -26049,7 +26049,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c20], [t1.c17], [truncate(cast(t1.c20, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c20], [t1.c17], [truncate(cast(t1.c20, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c20], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -27369,7 +27369,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c21], [t1.c17], [truncate(cast(t1.c21, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c21], [t1.c17], [truncate(cast(t1.c21, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c21], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -28689,7 +28689,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c22], [t1.c17], [truncate(cast(t1.c22, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c22], [t1.c17], [truncate(cast(t1.c22, DOUBLE(-1, -1)), cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c22], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

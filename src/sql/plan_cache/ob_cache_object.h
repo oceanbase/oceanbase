@@ -186,16 +186,6 @@ public:
   inline stmt::StmtType get_stmt_type() const { return stmt_type_; }
   inline void set_need_param(bool need_param) { need_param_ = need_param; }
   inline bool need_param() const { return need_param_; }
-  static int match_pre_calc_cons(common::ObDList<ObPreCalcExprConstraint> &cached_cons,
-                                 const ObPlanCacheCtx &pc_ctx,
-                                 const bool is_ignore_stmt,
-                                 bool &is_matched);
-  static int is_same_pre_calc_cons(const ObPreCalcExprConstraint &cons1,
-                                   const ObPreCalcExprConstraint &cons2,
-                                   bool &is_same);
-  static int is_same_expr(const ObExpr *expr1,
-                          const ObExpr *expr2,
-                          bool &is_same);
   static int check_pre_calc_cons(const bool is_ignore_stmt,
                                  bool &is_match,
                                  ObPreCalcExprConstraint &pre_calc_con,

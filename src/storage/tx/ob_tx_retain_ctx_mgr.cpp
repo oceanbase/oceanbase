@@ -119,17 +119,19 @@ int ObIRetainCtxCheckFunctor::del_retain_ctx()
 
 int ObMDSRetainCtxFunctor::init(ObPartTransCtx *ctx,
                                 RetainCause cause,
-                                const SCN &final_log_ts)
+                                const SCN &final_log_ts,
+                                palf::LSN final_log_lsn)
 {
   int ret = OB_SUCCESS;
 
-  if (!final_log_ts.is_valid()) {
+  if (!final_log_ts.is_valid() || !final_log_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(final_log_ts));
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(final_log_ts), K(final_log_lsn));
   } else if (OB_FAIL(ObIRetainCtxCheckFunctor::init(ctx, cause))) {
     TRANS_LOG(WARN, "init retain ctx check functor failed", K(ret));
   } else {
     final_log_ts_ = final_log_ts;
+    final_log_lsn_ = final_log_lsn;
   }
 
   return ret;
@@ -160,7 +162,8 @@ int ObMDSRetainCtxFunctor::operator()(ObLS *ls, ObTxRetainCtxMgr *retain_mgr)
 
 bool ObMDSRetainCtxFunctor::is_valid()
 {
-  return ObIRetainCtxCheckFunctor::is_valid() && final_log_ts_.is_valid();
+  return ObIRetainCtxCheckFunctor::is_valid() && final_log_ts_.is_valid()
+         && final_log_lsn_.is_valid();
 }
 
 void ObTxRetainCtxMgr::reset()

@@ -13,7 +13,6 @@
 #include "ob_tmp_file_store.h"
 #include "ob_tmp_file.h"
 #include "share/ob_task_define.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::share;
 
@@ -741,10 +740,10 @@ ObTmpTenantMacroBlockManager::~ObTmpTenantMacroBlockManager()
   destroy();
 }
 
-int ObTmpTenantMacroBlockManager::init(const uint64_t tenant_id, common::ObIAllocator &allocator)
+int ObTmpTenantMacroBlockManager::init(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(tenant_id, ObModIds::OB_TMP_BLOCK_MAP);
+  ObMemAttr attr = SET_USE_500(ObModIds::OB_TMP_BLOCK_MAP);
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has been inited", K(ret));
@@ -802,7 +801,7 @@ int ObTmpTenantMacroBlockManager::get_macro_block(const int64_t block_id, ObTmpM
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(block_id));
   } else if (OB_FAIL(blocks_.get_refactored(block_id, t_mblk))) {
-    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret), K(block_id));
+    STORAGE_LOG(WARN, "fail to get tmp macro block", K(ret));
   }
   return ret;
 }
@@ -903,9 +902,7 @@ ObTmpTenantFileStore::ObTmpTenantFileStore()
     allocator_(),
     io_allocator_(),
     tmp_block_manager_(),
-    tmp_mem_block_manager_(*this),
-    last_access_tenant_config_ts_(0),
-    last_meta_mem_limit_(TOTAL_LIMIT)
+    tmp_mem_block_manager_(*this)
 {
 }
 
@@ -939,15 +936,14 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
   } else if (OB_FAIL(allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, get_memory_limit(tenant_id)))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
-  } else if (OB_FAIL(io_allocator_.init(
-                 lib::ObMallocAllocator::get_instance(),
-                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                 ObMemAttr(tenant_id, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
+  } else if (OB_FAIL(io_allocator_.init(lib::ObMallocAllocator::get_instance(),
+                                     OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                     ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_TMP_PAGE_CACHE, ObCtxIds::DEFAULT_CTX_ID)))) {
     STORAGE_LOG(WARN, "Fail to init io allocator, ", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "fail to get the page cache", K(ret));
-  } else if (OB_FAIL(tmp_block_manager_.init(tenant_id, allocator_))) {
+  } else if (OB_FAIL(tmp_block_manager_.init(allocator_))) {
     STORAGE_LOG(WARN, "fail to init the block manager for ObTmpFileStore", K(ret));
   } else if (OB_FAIL(tmp_mem_block_manager_.init(tenant_id, allocator_))) {
     STORAGE_LOG(WARN, "fail to init memory block manager", K(ret));
@@ -960,41 +956,20 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id)
   return ret;
 }
 
-void ObTmpTenantFileStore::refresh_memory_limit(const uint64_t tenant_id)
-{
-  const int64_t old_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
-  const int64_t new_limit = get_memory_limit(tenant_id);
-  if (old_limit != new_limit) {
-    allocator_.set_total_limit(new_limit);
-    ObTaskController::get().allow_next_syslog();
-    STORAGE_LOG(INFO, "succeed to refresh temporary file meta memory limit", K(tenant_id), K(old_limit), K(new_limit));
-  }
-}
-
-int64_t ObTmpTenantFileStore::get_memory_limit(const uint64_t tenant_id)
-{
-  const int64_t last_access_ts = ATOMIC_LOAD(&last_access_tenant_config_ts_);
-  int64_t memory_limit = TOTAL_LIMIT;
-  if (last_access_ts > 0 && common::ObClockGenerator::getClock() - last_access_ts < REFRESH_CONFIG_INTERVAL) {
-    memory_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
+int64_t ObTmpTenantFileStore::get_memory_limit(const uint64_t tenant_id) const {
+  int64_t memory_limit = 0;
+  const int64_t lower_limit = 1 << 30; // 1G memory for 500G disk
+  const int64_t upper_limit = int64_t(200) * (1 << 30); // 200G memory for 100T disk
+  const int64_t tenant_memory_limit = lib::get_tenant_memory_limit(tenant_id) * 0.7;
+  if (tenant_memory_limit < lower_limit) {
+    memory_limit = lower_limit;
+  } else if (tenant_memory_limit > upper_limit) {
+    memory_limit = upper_limit;
   } else {
-    omt::ObTenantConfigGuard config(TENANT_CONF(tenant_id));
-    const int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id);
-    if (!config.is_valid() || 0 == tenant_mem_limit || INT64_MAX == tenant_mem_limit) {
-      COMMON_LOG(INFO, "failed to get tenant config", K(tenant_id), K(tenant_mem_limit));
-    } else {
-      const int64_t limit_percentage_config = config->_temporary_file_meta_memory_limit_percentage;
-      const int64_t limit_percentage = 0 == limit_percentage_config ? 70 : limit_percentage_config;
-      memory_limit = tenant_mem_limit * limit_percentage / 100;
-      if (OB_UNLIKELY(memory_limit <= 0)) {
-        STORAGE_LOG(INFO, "memory limit isn't more than 0", K(memory_limit));
-        memory_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
-      } else {
-        ATOMIC_STORE(&last_meta_mem_limit_, memory_limit);
-        ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
-      }
-    }
+    memory_limit = tenant_memory_limit;
   }
+  memory_limit = common::upper_align(memory_limit, ObTmpFileStore::get_block_size());
+
   return memory_limit;
 }
 
@@ -1007,8 +982,6 @@ void ObTmpTenantFileStore::destroy()
   }
   allocator_.destroy();
   io_allocator_.reset();
-  last_access_tenant_config_ts_ = 0;
-  last_meta_mem_limit_ = TOTAL_LIMIT;
   is_inited_ = false;
   STORAGE_LOG(INFO, "cache num when destroy",
               K(ATOMIC_LOAD(&page_cache_num_)), K(ATOMIC_LOAD(&block_cache_num_)));
@@ -1347,7 +1320,7 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
   }
 
   if (OB_SUCC(ret)) {
-    if (!handle.is_disable_page_cache() && page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
+    if (page_io_infos->count() > DEFAULT_PAGE_IO_MERGE_RATIO * page_nums) {
       // merge multi page io into one.
       ObMacroBlockHandle mb_handle;
       ObTmpBlockIOInfo info(io_info);
@@ -1375,16 +1348,9 @@ int ObTmpTenantFileStore::read_page(ObTmpMacroBlock *block, ObTmpBlockIOInfo &io
         info.offset_ += ObTmpMacroBlock::get_header_padding();
         info.size_ = ObTmpMacroBlock::get_default_page_size();
         info.macro_block_id_ = block->get_macro_block_id();
-        if (handle.is_disable_page_cache()) {
-          if (OB_FAIL(page_cache_->direct_read(info, mb_handle))) {
-            STORAGE_LOG(WARN, "fail to direct read tmp page", K(ret));
-          }
+        if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
+          STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
         } else {
-          if (OB_FAIL(page_cache_->prefetch(page_io_infos->at(i).key_, info, mb_handle, io_allocator_))) {
-            STORAGE_LOG(WARN, "fail to prefetch tmp page", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
           char *buf = io_info.buf_ + ObTmpMacroBlock::calculate_offset(
               page_io_infos->at(i).key_.get_page_id(), page_io_infos->at(i).offset_) - io_info.offset_;
           ObTmpFileIOHandle::ObIOReadHandle read_handle(mb_handle, buf, page_io_infos->at(i).offset_,
@@ -1945,21 +1911,6 @@ int64_t ObTmpFileStore::get_next_blk_id()
     old_val = new_val;
   }
   return next_blk_id;
-}
-
-int ObTmpFileStore::get_tenant_extent_allocator(const int64_t tenant_id, common::ObIAllocator *&allocator)
-{
-  int ret = OB_SUCCESS;
-  ObTmpTenantFileStoreHandle store_handle;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObTmpFileStore has not been inited", K(ret), K(tenant_id));
-  } else if (OB_FAIL(get_store(tenant_id, store_handle))) {
-    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
-  } else {
-    allocator = &(store_handle.get_tenant_store()->get_extent_allocator());
-  }
-  return ret;
 }
 
 void ObTmpFileStore::destroy()

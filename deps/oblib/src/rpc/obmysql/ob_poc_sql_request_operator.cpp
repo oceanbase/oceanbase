@@ -13,7 +13,6 @@
 #include "rpc/obmysql/ob_poc_sql_request_operator.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "rpc/obrpc/ob_rpc_opts.h"
-#include "rpc/obmysql/ob_sql_sock_processor.h"
 
 namespace oceanbase
 {
@@ -71,35 +70,6 @@ void ObPocSqlRequestOperator::finish_sql_request(ObRequest* req)
   req->set_trace_point(ObRequest::OB_FINISH_SQL_REQUEST);
   sess->revert_sock();
   obmysql::request_finish_callback();
-}
-
-int ObPocSqlRequestOperator::create_read_handle(ObRequest* req, void*& read_handle)
-{
-  ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
-  return sess->create_read_handle(read_handle);
-}
-
-int ObPocSqlRequestOperator::release_read_handle(ObRequest* req, void* read_handle)
-{
-  ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
-  return sess->release_read_handle(read_handle);
-}
-
-int ObPocSqlRequestOperator::read_packet(ObRequest* req,
-                                         ObICSMemPool& mem_pool,
-                                         void* read_handle,
-                                         ObSqlSockProcessor &sock_processor,
-                                         ObPacket*& pkt)
-{
-  ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
-  return sock_processor.decode_sql_packet(mem_pool, *sess, read_handle, pkt);
-}
-
-int ObPocSqlRequestOperator::release_packet(ObRequest* req, void* read_handle, ObPacket* pkt)
-{
-  ObSqlSockSession* sess = (ObSqlSockSession*)req->get_server_handle_context();
-  obmysql::ObMySQLRawPacket* mysql_packet = static_cast<obmysql::ObMySQLRawPacket*>(pkt);
-  return sess->consume_data(read_handle, mysql_packet->get_consume_size());
 }
 
 int ObPocSqlRequestOperator::write_response(ObRequest* req, const char* buf, int64_t sz)

@@ -27,7 +27,7 @@ namespace blocksstable
 ObSSTableSecMetaIterator::ObSSTableSecMetaIterator()
   : tenant_id_(OB_INVALID_TENANT_ID), rowkey_read_info_(nullptr), sstable_meta_hdl_(),
     prefetch_flag_(), idx_cursor_(), macro_reader_(), block_cache_(nullptr),
-    micro_reader_(nullptr), micro_reader_helper_(), block_meta_tree_(nullptr), ddl_iter_(),
+    micro_reader_(nullptr), micro_reader_helper_(), block_meta_tree_(nullptr),
     query_range_(nullptr), start_bound_micro_block_(), end_bound_micro_block_(),
     micro_handles_(), row_(), io_allocator_(), curr_handle_idx_(0), prefetch_handle_idx_(0), prev_block_row_cnt_(0),
     curr_block_start_idx_(0), curr_block_end_idx_(0), curr_block_idx_(0), step_cnt_(0),
@@ -44,7 +44,6 @@ void ObSSTableSecMetaIterator::reset()
   block_cache_ = nullptr;
   micro_reader_ = nullptr;
   micro_reader_helper_.reset();
-  ddl_iter_.reset();
   block_meta_tree_ = nullptr;
   row_.reset();
   query_range_ = nullptr;
@@ -76,7 +75,7 @@ int ObSSTableSecMetaIterator::open(
 {
   int ret = OB_SUCCESS;
   bool is_meta_root = false;
-  const bool is_ddl_mem_sstable = sstable.is_ddl_mem_sstable();
+  bool is_ddl_mem_sstable = false;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Fail to open sstable secondary meta iterator", K(ret));
@@ -101,30 +100,30 @@ int ObSSTableSecMetaIterator::open(
     block_cache_ = &ObStorageCacheSuite::get_instance().get_block_cache();
     is_meta_root = sstable_meta_hdl_.get_sstable_meta().get_macro_info().is_meta_root();
   }
+
   if (OB_FAIL(ret) || is_prefetch_end_) {
-  } else if (is_ddl_mem_sstable) {
-    const bool is_co_sstable = sstable.is_co_sstable() || sstable.is_ddl_mem_co_cg_sstable();
+  } else if (sstable.is_ddl_mem_sstable()) {
+    is_ddl_mem_sstable = true;
     const ObMicroBlockData &root_block = sstable_meta_hdl_.get_sstable_meta().get_root_info().get_block_data();
     if (ObMicroBlockData::DDL_BLOCK_TREE != root_block.type_ || nullptr == root_block.buf_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("block type is not ddl block tree", K(ret), K(root_block));
     } else {
       block_meta_tree_ = reinterpret_cast<ObBlockMetaTree *>(const_cast<char *>(root_block.buf_));
-      const int64_t step = max(1, sample_step);
-      if (OB_FAIL(ddl_iter_.set_iter_param(const_cast<ObStorageDatumUtils *>(&rowkey_read_info.get_datum_utils()), is_reverse_scan, block_meta_tree_, is_co_sstable, step))) {
-        LOG_WARN("fail to set ddl iter param", K(ret));
-      } else if (OB_FAIL(ddl_iter_.locate_range(query_range,
-                                                true, /*is_left_border*/
-                                                true, /*is_right_border*/
-                                                true /*is_bormal_cg*/))) {
+      if (OB_FAIL(block_meta_tree_->locate_range(query_range,
+                                                 rowkey_read_info.get_datum_utils(),
+                                                 true, //is_left_border
+                                                 true, //is_right_border,
+                                                 curr_block_start_idx_,
+                                                 curr_block_end_idx_))) {
         if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
-          LOG_WARN("locate range failed", K(ret), K(query_range), K(ddl_iter_));
+          LOG_WARN("locate range failed", K(ret), K(query_range));
         } else {
-          ddl_iter_.set_iter_end();
+          curr_block_idx_ = curr_block_end_idx_ + 1;
           ret = OB_SUCCESS; // return OB_ITER_END on get_next() for get
         }
-      }
-      if (OB_SUCC(ret)) {
+      } else {
+        const int64_t step = max(1, sample_step);
         step_cnt_ = !is_reverse_scan ? step : -step;
         curr_block_idx_ = !is_reverse_scan ? curr_block_start_idx_ : curr_block_end_idx_;
         is_inited_ = true;
@@ -144,7 +143,7 @@ int ObSSTableSecMetaIterator::open(
   const int64_t request_col_cnt = rowkey_read_info.get_schema_rowkey_count()
            + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() + 1;
 
-  if (OB_SUCC(ret) && !is_prefetch_end_ && !is_meta_root && !is_ddl_mem_sstable /* ddl kv use ddl_iter directly*/) {
+  if (OB_SUCC(ret) && !is_prefetch_end_ && !is_meta_root && !is_ddl_mem_sstable) {
     bool start_key_beyond_range = false;
     bool end_key_beyond_range = false;
     if (is_reverse_scan) {
@@ -219,7 +218,6 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
 {
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
-  const ObDataMacroBlockMeta *tmp_meta = nullptr;
   row_.reuse();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -227,13 +225,10 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
   } else if (nullptr != block_meta_tree_) {
     if (!is_target_row_in_curr_block()) {
       ret = OB_ITER_END;
-    } else if (OB_UNLIKELY(!ddl_iter_.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cur tree value is null", K(ret), K(ddl_iter_));
-    } else if (OB_FAIL(ddl_iter_.get_next_meta(tmp_meta))) {
-      LOG_WARN("get next meta failed", K(ret));
-    } else if (OB_FAIL(macro_meta.assign(*tmp_meta))) {
-      LOG_WARN("assign macro meta failed", K(ret), KPC(tmp_meta));
+    } else if (OB_FAIL(block_meta_tree_->get_macro_block_meta(curr_block_idx_, macro_meta))) {
+      LOG_WARN("get next macro block meta failed", K(ret), K(curr_block_idx_));
+    } else {
+      curr_block_idx_ += step_cnt_;
     }
   } else {
     while (OB_SUCC(ret) && !is_target_row_in_curr_block()) {

@@ -24,28 +24,15 @@
 #include "common/object/ob_object.h"
 #include "storage/lob/ob_lob_seq.h"
 
-
 namespace oceanbase
 {
 
 namespace storage
 {
 
-struct ObLobStorageParam
-{
-  ObLobStorageParam():
-    inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
-  {}
-
-  TO_STRING_KV(K_(inrow_threshold));
-
-  int64_t inrow_threshold_;
-};
-
 struct ObLobAccessParam {
   ObLobAccessParam()
-    : tx_desc_(nullptr), snapshot_(), tx_id_(), read_latest_(0),
-      sql_mode_(SMO_DEFAULT), allocator_(nullptr),
+    : tx_desc_(nullptr), snapshot_(), tx_id_(), sql_mode_(SMO_DEFAULT), allocator_(nullptr),
       dml_base_param_(nullptr), column_ids_(),
       meta_table_schema_(nullptr), piece_table_schema_(nullptr),
       main_tablet_param_(nullptr), meta_tablet_param_(nullptr), piece_tablet_param_(nullptr),
@@ -56,7 +43,7 @@ struct ObLobAccessParam {
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), spec_lob_id_()
+      inrow_read_nocopy_(false)
   {}
   ~ObLobAccessParam() {
     if (OB_NOT_NULL(dml_base_param_)) {
@@ -65,17 +52,14 @@ struct ObLobAccessParam {
   }
 public:
   int set_lob_locator(common::ObLobLocatorV2 *lob_locator);
-  int64_t get_inrow_threshold();
   TO_STRING_KV(K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), KPC_(lob_locator), KPC_(lob_common),
     KPC_(lob_data), K_(byte_size), K_(handle_size), K_(coll_type), K_(scan_backward), K_(offset), K_(len),
-    K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
-    K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest),
-    K_(inrow_read_nocopy), K_(inrow_threshold), K_(spec_lob_id));
+    K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum), K_(update_len), K_(op_type),
+    K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(inrow_read_nocopy));
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
   transaction::ObTxReadSnapshot snapshot_; // for read
-  transaction::ObTransID tx_id_; // used when read-latest
-  bool read_latest_;
+  transaction::ObTransID tx_id_;           // used when read-latest
   ObSQLMode sql_mode_;
   bool is_total_quantity_log_;
   ObIAllocator *allocator_;
@@ -116,8 +100,6 @@ public:
   bool is_fill_zero_; // fill zero when erase
   bool from_rpc_;
   bool inrow_read_nocopy_;
-  int64_t inrow_threshold_;
-  ObLobId spec_lob_id_;
 };
 
 struct ObLobMetaInfo {
@@ -179,16 +161,6 @@ struct ObLobMetaInfo {
     return pos;
   }
 
-  void reset()
-  {
-    lob_id_.reset();
-    seq_id_.reset();
-    char_len_ = 0;
-    byte_len_ = 0;
-    piece_id_ = 0;
-    lob_data_.reset();
-  }
-
   ObLobId lob_id_;
   ObString seq_id_;
   uint32_t char_len_;
@@ -208,8 +180,6 @@ struct ObLobPieceInfo {
   TO_STRING_KV(K_(piece_id), K_(len), K_(macro_id));
 };
 
-class ObLobMetaWriteIter;
-
 class ObInsertLobColumnHelper final
 {
 public:
@@ -227,8 +197,7 @@ public:
   static int insert_lob_column(ObIAllocator &allocator,
                                const share::ObLSID ls_id,
                                const common::ObTabletID tablet_id,
-                               const ObCollationType &cs_type,
-                               const ObLobStorageParam &lob_storage_param,
+                               const share::schema::ObColDesc &column,
                                blocksstable::ObStorageDatum &datum,
                                const int64_t timeout_ts,
                                const bool has_lob_header,
@@ -236,23 +205,9 @@ public:
   static int insert_lob_column(ObIAllocator &allocator,
                                const share::ObLSID ls_id,
                                const common::ObTabletID tablet_id,
-                               const ObCollationType &cs_type,
-                               const ObLobStorageParam &lob_storage_param,
+                               const share::schema::ObColDesc &column,
                                ObObj &obj,
                                const int64_t timeout_ts);
-  // should call iter.close outter
-  static int insert_lob_column(ObIAllocator &allocator,
-                               transaction::ObTxDesc *tx_desc,
-                               const share::ObLSID ls_id,
-                               const common::ObTabletID tablet_id,
-                               const ObLobId &lob_id,
-                               const ObCollationType collation_type,
-                               const ObLobStorageParam &lob_storage_param,
-                               blocksstable::ObStorageDatum &datum,
-                               const int64_t timeout_ts,
-                               const bool has_lob_header,
-                               const uint64_t src_tenant_id,
-                               ObLobMetaWriteIter &iter);
 };
 
 struct ObLobDiffFlags
@@ -273,7 +228,6 @@ struct ObLobDiff
     WRITE = 2,
     ERASE = 3,
     ERASE_FILL_ZERO = 4,
-    WRITE_DIFF = 5,
   };
   ObLobDiff()
     : type_(DiffType::INVALID), ori_offset_(0), ori_len_(0), offset_(0), byte_len_(0), dst_offset_(0), dst_len_(0),

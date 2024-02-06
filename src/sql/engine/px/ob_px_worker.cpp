@@ -148,7 +148,7 @@ private:
   ObPxSqcHandler *sqc_handler_;
 };
 
-void PxWorkerFunctor::operator ()(bool need_exec)
+void PxWorkerFunctor::operator ()()
 {
   int ret = OB_SUCCESS;
   ObCurTraceId::set(env_arg_.get_trace_id());
@@ -163,9 +163,7 @@ void PxWorkerFunctor::operator ()(bool need_exec)
   const bool enable_trace_log = lib::is_trace_log_enabled();
   //ensure PX worker skip updating timeout_ts_ by ntp offset
   THIS_WORKER.set_ntp_offset(0);
-  if (!need_exec) {
-    LOG_INFO("px pool already stopped, do not execute the task.");
-  } else if (OB_FAIL(px_int_guard.get_interrupt_reg_ret())) {
+  if (OB_FAIL(px_int_guard.get_interrupt_reg_ret())) {
     LOG_WARN("px worker failed to SET_INTERRUPTABLE");
   } else if (OB_NOT_NULL(sqc_handler) && OB_LIKELY(!sqc_handler->has_interrupted())) {
     THIS_WORKER.set_worker_level(sqc_handler->get_rpc_level());
@@ -243,11 +241,6 @@ void PxWorkerFunctor::operator ()(bool need_exec)
     LOG_WARN("already interrupted");
   }
 
-  if (OB_ISNULL(sqc_handler)) {
-    // do nothing
-  } else if (sqc_handler->get_flt_ctx().trace_id_.is_inited()) {
-    OBTRACE->reset();
-  }
   PxWorkerFinishFunctor on_func_finish;
   on_func_finish();
   ObCurTraceId::reset();
@@ -348,25 +341,9 @@ int ObPxThreadWorker::exit()
 
 int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
 {
-  int ret = OB_SUCCESS;
-  ObPxSqcHandler *h = task_arg.get_sqc_handler();
-
-  if (OB_ISNULL(h)) {
-  } else if (h->get_flt_ctx().trace_id_.is_inited()) {
-    OBTRACE->init(h->get_flt_ctx());
-  }
-
-  {
-    FLTSpanGuard(px_task);
-    ObPxTaskProcess task_proc(gctx_, task_arg);
-    ret = task_proc.process();
-  }
-
-  if (OB_ISNULL(h)) {
-  } else if (h->get_flt_ctx().trace_id_.is_inited()) {
-    OBTRACE->reset();
-  }
-  return ret;
+  FLTSpanGuard(px_task);
+  ObPxTaskProcess task_proc(gctx_, task_arg);
+  return task_proc.process();
 }
 
 //////////////////////////////////////////////////////////////////////////////

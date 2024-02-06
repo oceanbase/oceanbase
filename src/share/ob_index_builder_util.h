@@ -73,10 +73,6 @@ public:
       share::schema::ObTableSchema &table_schema,
       const bool is_hidden,
       const bool is_specified_storing_col);
-  static int set_shadow_column_info(
-      const ObString &src_column_name,
-      const uint64_t src_column_id,
-      ObColumnSchemaV2 &shadow_column_schema);
 private:
   static const int SPATIAL_MBR_COLUMN_MAX_LENGTH = 32;
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;

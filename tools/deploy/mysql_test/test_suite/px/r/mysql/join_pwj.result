@@ -74,7 +74,7 @@ Query Plan
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
 |0 |PX COORDINATOR           |        |28      |77          |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|28      |48          |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|28      |49          |
 |2 |  └─PX PARTITION ITERATOR|        |28      |17          |
 |3 |    └─MERGE JOIN         |        |28      |17          |
 |4 |      ├─TABLE FULL SCAN  |score   |28      |8           |

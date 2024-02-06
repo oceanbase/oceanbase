@@ -362,8 +362,7 @@ private:
   // write task info into inner table
   // @param [in] task, which task info to write
   int persist_task_info_(
-      const ObDRTask &task,
-      ObDRTaskRetComment &ret_comment);
+      const ObDRTask &task);
 
   // try to log inmemory task infos according to balancer_log_interval
   // @param [in] last_dump_ts, last time do logging

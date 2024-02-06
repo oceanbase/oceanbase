@@ -92,18 +92,19 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
   const int64_t current_time = ObTimeUtility::current_time();
   {
     ObSpinLockGuard guard(lock_);
-    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); OB_SUCC(ret) && iter != ingress_plan_map_.end(); ++iter) {
+    int tmp_ret = OB_SUCCESS;
+    for (ObIngressPlanMap::iterator iter = ingress_plan_map_.begin(); iter != ingress_plan_map_.end(); ++iter) {
       const ObNetEndpointKey &endpoint_key = iter->first;
       ObNetEndpointValue *endpoint_value = iter->second;
       if (endpoint_value->expire_time_ < current_time) {
         LOG_INFO("endpoint expired", K(endpoint_key), K(endpoint_value->expire_time_), K(current_time));
-        if (OB_FAIL(delete_keys.push_back(endpoint_key))) {
+        if (OB_TMP_FAIL(delete_keys.push_back(endpoint_key))) {
           LOG_WARN("fail to push back arrays", K(ret), K(endpoint_key));
         } else {
           ob_free(endpoint_value);
         }
       } else {
-        if (OB_FAIL(update_kvs.push_back(ObNetEndpointKeyValue(endpoint_key, endpoint_value)))) {
+        if (OB_TMP_FAIL(update_kvs.push_back(ObNetEndpointKeyValue(endpoint_key, endpoint_value)))) {
           LOG_WARN("fail to push back arrays", K(ret), K(endpoint_key));
         } else {
           endpoint_value->predicted_bw_ = -1;
@@ -111,10 +112,11 @@ int ObNetEndpointIngressManager::collect_predict_bw(ObNetEndpointKVArray &update
       }
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < delete_keys.count(); i++) {
+    for (int64_t i = 0; i < delete_keys.count(); i++) {
       const ObNetEndpointKey &endpoint_key = delete_keys[i];
       if (OB_FAIL(ingress_plan_map_.erase_refactored(endpoint_key))) {
         LOG_ERROR("failed to erase endpoint", K(ret), K(endpoint_key));
+        ret = OB_SUCCESS;  // ignore error
       }
     }
   }

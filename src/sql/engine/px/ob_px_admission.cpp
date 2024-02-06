@@ -34,12 +34,7 @@ int ObPxAdmission::get_parallel_session_target(ObSQLSessionInfo &session,
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(tenant_id, parallel_servers_target))) {
     LOG_WARN("get parallel_servers_target failed", K(ret));
-  } else if (OB_UNLIKELY(minimal_session_target > parallel_servers_target)) {
-    ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
-    LOG_WARN("minimal_session_target is more than parallel_servers_target", K(ret),
-                                      K(minimal_session_target), K(parallel_servers_target));
   } else if (OB_LIKELY(tenant_config.is_valid())) {
-    session_target = parallel_servers_target;
     int64_t pmas = tenant_config->_parallel_max_active_sessions;
     int64_t parallel_session_count;
     if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_session_count(tenant_id, parallel_session_count))) {
@@ -49,6 +44,10 @@ int ObPxAdmission::get_parallel_session_target(ObSQLSessionInfo &session,
       // this is not good! We ensure this query can run with minimal threads here
       session_target = std::max(parallel_servers_target / pmas, minimal_session_target);
     }
+  } else if (OB_UNLIKELY(minimal_session_target > parallel_servers_target)) {
+    ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
+    LOG_WARN("minimal_session_target is more than parallel_servers_target", K(ret),
+                                      K(minimal_session_target), K(parallel_servers_target));
   } else {
     // tenant_config is invalid, use parallel_servers_target
     session_target = parallel_servers_target;

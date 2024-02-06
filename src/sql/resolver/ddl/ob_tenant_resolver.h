@@ -153,9 +153,6 @@ int ObTenantResolver<T>::resolve_tenant_option(T *stmt, ParseNode *node,
         } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
                                                                           session_info->get_effective_tenant_id()))) {
           LOG_WARN("failed to check charset data version valid", K(ret));
-        } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(collation_type,
-                                                                            session_info->get_effective_tenant_id()))) {
-          LOG_WARN("failed to check collation data version valid", K(ret));
         } else {
           collation_type_ = collation_type;
           if (stmt->get_stmt_type() == stmt::T_MODIFY_TENANT) {

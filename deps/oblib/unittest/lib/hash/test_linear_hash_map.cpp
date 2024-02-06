@@ -150,7 +150,7 @@ TEST(ObLinearHashMap, EStest1)
 
   // Init map.
   Map map;
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   // Validate some settings.
   EXPECT_EQ(m_sz / sizeof(Map::Bucket), map.L0_bkt_n_);
   {
@@ -217,7 +217,7 @@ TEST(ObLinearHashMap, ACCSStest1)
   uint64_t m_sz = 1 << 12; // 4KB
   uint64_t s_sz = 1 << 16; // 64KB
   Map map;
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   map.load_factor_l_limit_ = 0;
   map.load_factor_u_limit_ = 100000;
   const int64_t limit = 10000;
@@ -259,7 +259,7 @@ TEST(ObLinearHashMap, ACCSStest2)
   uint64_t m_sz = 1 << 12; // 4KB
   uint64_t s_sz = 1 << 16; // 64KB
   const uint64_t maxL = 6; // will use both m-seg and s-seg
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   map.load_factor_l_limit_ = 0;
   map.load_factor_u_limit_ = 100000000;
   const int64_t key_n = (int64_t)2 << maxL; // more than 2 keys in bucket when it reaches maxL.
@@ -335,7 +335,7 @@ TEST(ObLinearHashMap, ACCSStest3)
   const int64_t thread_n = 4;
   pthread_t threads[thread_n];
   Map map;
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   map.load_factor_l_limit_ = 0;
   map.load_factor_u_limit_ = 100000;
   // Modify the dir size to an extremely short size.
@@ -392,7 +392,7 @@ TEST(ObLinearHashMap, ACCSStest4)
   Map map;
   uint64_t m_sz = 1 << 12; // 4KB
   uint64_t s_sz = 1 << 16; // 64KB
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   map.load_factor_l_limit_ = 0;
   map.load_factor_u_limit_ = 100000;
   uint64_t L, p;
@@ -516,7 +516,7 @@ TEST(ObLinearHashMap, ACCSStest5)
   const int64_t thread_n = 4;
   pthread_t threads[thread_n];
   Map map;
-  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz, ObMemAttr(OB_SERVER_TENANT_ID, ObModIds::OB_LINEAR_HASH_MAP)));
+  EXPECT_EQ(OB_SUCCESS, map.init(m_sz, s_sz, m_sz));
   map.load_factor_l_limit_ = 0;
   map.load_factor_u_limit_ = 100000;
   // Insert.

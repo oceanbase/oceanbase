@@ -1127,7 +1127,7 @@ OB_NOINLINE int ObDASLocationRouter::get_vt_ls_location(uint64_t table_id,
     ObReplicaProperty mock_prop;
     ObLSReplicaLocation ls_replica;
     ObAddr server;
-    ObLSRestoreStatus restore_status(ObLSRestoreStatus::NONE);
+    ObLSRestoreStatus restore_status(ObLSRestoreStatus::RESTORE_NONE);
     if (OB_FAIL(location.init(GCONF.cluster_id, MTL_ID(), ObLSID(ObLSID::VT_LS_ID), now))) {
       LOG_WARN("init location failed", KR(ret));
     } else if (OB_FAIL(server_pair->get_server_by_tablet_id(tablet_id, server))) {
@@ -1247,7 +1247,7 @@ int ObDASLocationRouter::get_external_table_ls_location(ObLSLocation &location)
   int64_t now = ObTimeUtility::current_time();
   ObReplicaProperty mock_prop;
   ObLSReplicaLocation ls_replica;
-  ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::NONE);
+  ObLSRestoreStatus ls_restore_status(ObLSRestoreStatus::RESTORE_NONE);
   OZ (location.init(GCONF.cluster_id, MTL_ID(), ObLSID(ObLSID::VT_LS_ID), now));
   OZ (ls_replica.init(GCTX.self_addr(), common::LEADER,
                       GCONF.mysql_port, REPLICA_TYPE_FULL,

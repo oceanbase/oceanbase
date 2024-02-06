@@ -35,7 +35,7 @@ public:
 };
 
 template <typename T>
-class ObIntegerArray final : public ObIIntegerArray
+class ObIntegerArray : public ObIIntegerArray
 {
 public:
   ObIntegerArray(void *data) : data_(static_cast<T *>(data)) {}

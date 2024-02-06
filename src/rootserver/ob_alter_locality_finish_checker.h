@@ -58,6 +58,7 @@ public:
       share::schema::ObMultiVersionSchemaService &schema_service,
       obrpc::ObCommonRpcProxy &common_rpc_proxy,
       common::ObAddr &self,
+      ObUnitManager &unit_mgr,
       ObZoneManager &zone_mgr,
       common::ObMySQLProxy &sql_proxy,
       share::ObLSTableOperator &lst_operator);
@@ -73,6 +74,7 @@ private:
   share::schema::ObMultiVersionSchemaService *schema_service_;
   obrpc::ObCommonRpcProxy *common_rpc_proxy_;   //use GCTX.rs_rpc_proxy_
   common::ObAddr self_;
+  ObUnitManager *unit_mgr_;
   ObZoneManager *zone_mgr_;
   common::ObMySQLProxy *sql_proxy_;
   share::ObLSTableOperator *lst_operator_;

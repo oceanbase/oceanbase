@@ -91,7 +91,7 @@ int ObTenantConfig::read_config()
         OB_LOG(ERROR, "config item is null", "name", it->first.str(), K(ret));
       } else {
         key.set_version(it->second->version());
-        int temp_ret = system_config_.read_config(get_tenant_id(), key, *(it->second));
+        int temp_ret = system_config_.read_config(key, *(it->second));
         if (OB_SUCCESS != temp_ret) {
           OB_LOG(DEBUG, "Read config error", "name", it->first.str(), K(temp_ret));
         }
@@ -326,14 +326,7 @@ int ObTenantConfig::publish_special_config_after_dump()
     ret = OB_INVALID_CONFIG;
     LOG_WARN("Invalid config value", K(tenant_id_), K((*pp_item)->spfile_str()), K(ret));
   } else {
-    FLOG_INFO("[COMPATIBLE] read data_version after dump",
-              KR(ret), K_(tenant_id),
-              "version", (*pp_item)->version(),
-              "value", (*pp_item)->str(),
-              "value_updated", (*pp_item)->value_updated(),
-              "dump_version", (*pp_item)->dumped_version(),
-              "dump_value", (*pp_item)->spfile_str(),
-              "dump_value_updated", (*pp_item)->dump_value_updated());
+    LOG_INFO("publish special config after dump succ", K(tenant_id_), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
   }
   return ret;
 }
@@ -411,14 +404,7 @@ int ObTenantConfig::add_extra_config(const char *config_str,
               } else {
                 (*pp_item)->set_dump_value_updated();
                 (*pp_item)->set_version(version);
-                FLOG_INFO("[COMPATIBLE] init data_version before dump",
-                          KR(ret), K_(tenant_id),
-                          "version", (*pp_item)->version(),
-                          "value", (*pp_item)->str(),
-                          "value_updated", (*pp_item)->value_updated(),
-                          "dump_version", (*pp_item)->dumped_version(),
-                          "dump_value", (*pp_item)->spfile_str(),
-                          "dump_value_updated", (*pp_item)->dump_value_updated());
+                LOG_INFO("Load tenant config dump value succ", K(name), K((*pp_item)->spfile_str()), K((*pp_item)->str()));
               }
             } else if (!(*pp_item)->set_value(value)) {
               ret = OB_INVALID_CONFIG;
@@ -543,7 +529,7 @@ int ObTenantConfig::build_errsim_module_()
   if (OB_SUCC(ret)) {
     const int64_t percentage = this->errsim_module_error_percentage;
 
-    if (OB_FAIL(build_tenant_errsim_moulde(tenant_id_, current_version_, module_array, percentage))) {
+    if (build_tenant_errsim_moulde(tenant_id_, current_version_, module_array, percentage)) {
       LOG_WARN("failed to build tenant module", K(ret), K(tenant_id_));
     }
   }

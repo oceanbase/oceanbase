@@ -786,6 +786,7 @@ public:
                       const share::schema::ObTableType table_type) const;
   int del_schemas_in_tenant(const uint64_t tenant_id);
 
+  int get_tenant_mv_ids(const uint64_t tenant_id, common::ObIArray<uint64_t> &mv_ids) const;
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
 
@@ -956,7 +957,6 @@ private:
   ObRlsContextMgr rls_context_mgr_;
   int64_t timestamp_in_slot_; // when schema mgr put in slot, we will set the timestamp
   int64_t allocator_idx_;
-  TableInfos mlog_infos_;
 };
 
 }//end of namespace schema

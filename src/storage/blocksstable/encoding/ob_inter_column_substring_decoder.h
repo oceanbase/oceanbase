@@ -42,11 +42,6 @@ public:
   virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
-  virtual int decode_vector(
-      const ObColumnDecoderCtx &decoder_ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const override;
-
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
 
   virtual int get_ref_col_idx(int64_t &ref_col_idx) const override;
@@ -60,15 +55,6 @@ public:
   virtual bool can_vectorized() const override { return false; }
 
 protected:
-  template<typename VectorType>
-  int inner_decode_vector(
-      const ObColumnDecoderCtx &decoder_ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const;
-  template<typename VectorType>
-  int rearrange_sub_str_column_len(
-      const ObColumnDecoderCtx &decoder_ctx,
-      ObVectorDecodeCtx &vec_ctx) const;
   inline bool has_exc(const ObColumnDecoderCtx &ctx) const
   { return ctx.col_header_->length_ > sizeof(ObInterColSubStrMetaHeader); }
 

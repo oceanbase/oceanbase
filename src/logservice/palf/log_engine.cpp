@@ -24,7 +24,6 @@
 #include "log_io_task.h"                                // LogIOTask
 #include "log_io_worker.h"                              // LogIOWorker
 #include "log_reader_utils.h"                           // ReadBuf
-#include "log_shared_task.h"                            // LogSharedTask
 #include "log_writer_utils.h"                           // LogWriteBuf
 #include "lsn.h"                                        // LSN
 #include "log_meta_entry.h"                             // LogMetaEntry
@@ -51,7 +50,6 @@ LogEngine::LogEngine() :
     log_net_service_(),
     alloc_mgr_(NULL),
     log_io_worker_(NULL),
-    log_shared_queue_th_(NULL),
     plugins_(NULL),
     palf_id_(INVALID_PALF_ID),
     palf_epoch_(-1),
@@ -91,7 +89,6 @@ int LogEngine::init(const int64_t palf_id,
                     LogHotCache *hot_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
-                    LogSharedQueueTh *log_shared_queue_th,
                     LogPlugins *plugins,
                     const int64_t palf_epoch,
                     const int64_t log_storage_block_size,
@@ -109,8 +106,7 @@ int LogEngine::init(const int64_t palf_id,
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogEngine has inited!!!", K(ret), K(palf_id));
   } else if (false == is_valid_palf_id(palf_id) || OB_ISNULL(base_dir) || OB_ISNULL(alloc_mgr)
-             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker)
-             || OB_ISNULL(plugins)) {
+             || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker) || OB_ISNULL(plugins)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR,
              "Invalid argument!!!",
@@ -121,7 +117,6 @@ int LogEngine::init(const int64_t palf_id,
              K(hot_cache),
              K(alloc_mgr),
              K(log_io_worker),
-             K(log_shared_queue_th),
              K(plugins));
     // NB: Nowday, LSN is strongly dependent on physical block,
   } else if (OB_FAIL(log_meta_storage_.init(base_dir,
@@ -158,7 +153,6 @@ int LogEngine::init(const int64_t palf_id,
     log_meta_ = log_meta;
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
-    log_shared_queue_th_ = log_shared_queue_th;
     plugins_ = plugins;
     palf_epoch_ = palf_epoch;
     base_lsn_for_block_gc_ = log_meta.get_log_snapshot_meta().base_lsn_;
@@ -178,7 +172,6 @@ void LogEngine::destroy()
     is_inited_ = false;
     palf_id_ = INVALID_PALF_ID;
     log_io_worker_ = NULL;
-    log_shared_queue_th_ = NULL;
     alloc_mgr_ = NULL;
     log_net_service_.destroy();
     log_meta_storage_.destroy();
@@ -198,7 +191,6 @@ int LogEngine::load(const int64_t palf_id,
                     LogHotCache *hot_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
-                    LogSharedQueueTh *log_shared_queue_th,
                     LogPlugins *plugins,
                     LogGroupEntryHeader &entry_header,
                     const int64_t palf_epoch,
@@ -278,7 +270,6 @@ int LogEngine::load(const int64_t palf_id,
     palf_epoch_ = palf_epoch;
     alloc_mgr_ = alloc_mgr;
     log_io_worker_ = log_io_worker;
-    log_shared_queue_th_ = log_shared_queue_th;
     base_lsn_for_block_gc_ = log_meta_.get_log_snapshot_meta().base_lsn_;
     is_inited_ = true;
     PALF_LOG(INFO,
@@ -342,36 +333,6 @@ int LogEngine::submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
   if (OB_FAIL(ret) && OB_NOT_NULL(flush_log_task)) {
     alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
     flush_log_task = NULL;
-  }
-  return ret;
-}
-
-int LogEngine::submit_handle_submit_task()
-{
-  int ret = OB_SUCCESS;
-  LogHandleSubmitTask *handle_submit_task = NULL;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(ERROR, "LogEngine not inited", K(ret), KPC(this));
-  } else if (OB_ISNULL(log_shared_queue_th_)) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
-  } else if (OB_FAIL(generate_handle_submit_task_(handle_submit_task))) {
-    PALF_LOG(ERROR, "generate_flush_log_task failed", K(ret), KPC(this));
-  } else if (OB_FAIL(log_shared_queue_th_->push_task(handle_submit_task))) {
-    if (OB_IN_STOP_STATE == ret) {
-      if (REACH_TIME_INTERVAL(100 * 1000)) {
-        PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
-      }
-    } else {
-      PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(handle_submit_task));
-    }
-  } else {
-    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(handle_submit_task)) {
-    alloc_mgr_->free_log_handle_submit_task(handle_submit_task);
-    handle_submit_task = NULL;
   }
   return ret;
 }
@@ -996,14 +957,13 @@ int LogEngine::submit_push_log_req(const common::ObAddr &server,
 
 int LogEngine::submit_push_log_resp(const ObAddr &server,
                                     const int64_t &msg_proposal_id,
-                                    const LSN &lsn,
-                                    const bool is_batch)
+                                    const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    ret = log_net_service_.submit_push_log_resp(server, msg_proposal_id, lsn, is_batch);
+    ret = log_net_service_.submit_push_log_resp(server, msg_proposal_id, lsn);
     PALF_LOG(TRACE, "submit_push_log_resp success", K(ret), K(server));
   }
   return ret;
@@ -1347,22 +1307,6 @@ int LogEngine::generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
   if (OB_FAIL(ret) && NULL != flush_log_task) {
     alloc_mgr_->free_log_io_flush_log_task(flush_log_task);
     flush_log_task = NULL;
-  }
-  return ret;
-}
-
-int LogEngine::generate_handle_submit_task_(LogHandleSubmitTask *&handle_submit_task)
-{
-  int ret = OB_SUCCESS;
-  handle_submit_task = NULL;
-  if (NULL == (handle_submit_task = alloc_mgr_->alloc_log_handle_submit_task(palf_id_, palf_epoch_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    PALF_LOG(ERROR, "alloc_log_handle_submit_task failed", K(ret));
-  }
-
-  if (OB_FAIL(ret) && OB_NOT_NULL(handle_submit_task)) {
-    alloc_mgr_->free_log_handle_submit_task(handle_submit_task);
-    handle_submit_task = NULL;
   }
   return ret;
 }

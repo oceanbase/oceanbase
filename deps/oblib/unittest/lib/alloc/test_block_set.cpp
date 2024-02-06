@@ -37,7 +37,6 @@ public:
   {
     tallocator_.set_tenant_memory_mgr();
     tallocator_.set_limit(1000L << 20);
-    cs_.set_chunk_mgr(&tallocator_.get_chunk_mgr());
     cs_.set_tenant_ctx_allocator(tallocator_);
   }
 

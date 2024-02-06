@@ -1,0 +1,12 @@
+oceanbase-ce:
+  servers:
+    - 127.0.0.1
+  global:
+    home_path: @OB_HOME_PATH@
+    devname: lo
+    mysql_port: @OB_MYSQL_PORT@
+    rpc_port: @OB_RPC_PORT@
+    datafile_size: 20G
+    log_disk_size: 20G
+    appname: @OB_CLUSTER_NAME@
+    root_password: @OB_ROOT_PASSWORD@

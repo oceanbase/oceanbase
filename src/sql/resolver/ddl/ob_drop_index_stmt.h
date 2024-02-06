@@ -40,7 +40,6 @@ public:
 
   inline const common::ObString &get_database_name() const;
   inline const common::ObString &get_table_name() const;
-  inline const common::ObString &get_index_name() const;
   inline common::ObString &get_table_name();
   obrpc::ObDropIndexArg &get_drop_index_arg();
   const obrpc::ObDropIndexArg &get_drop_index_arg() const;
@@ -99,11 +98,6 @@ inline const common::ObString &ObDropIndexStmt::get_table_name() const
 inline common::ObString &ObDropIndexStmt::get_table_name()
 {
   return drop_index_arg_.table_name_;
-}
-
-inline const common::ObString &ObDropIndexStmt::get_index_name() const
-{
-  return drop_index_arg_.index_name_;
 }
 
 inline void ObDropIndexStmt::set_tenant_id(const uint64_t tenant_id)

@@ -47,8 +47,8 @@ int ObExprConvertTZ::calc_result_type3(ObExprResType &type,
     input1.set_calc_type(ObDateTimeType);
     input2.set_calc_type(ObVarcharType);
     input3.set_calc_type(ObVarcharType);
-    input2.set_calc_collation_ascii_compatible();
-    input3.set_calc_collation_ascii_compatible();
+    input2.set_calc_collation_type(session->get_nls_collation());
+    input3.set_calc_collation_type(session->get_nls_collation());
   }
   return ret;
 }

@@ -24,7 +24,6 @@
 #include "sql/engine/px/ob_px_basic_info.h"
 #include "sql/engine/ob_io_event_observer.h"
 #include "sql/ob_sql_define.h"
-#include "sql/engine/ob_batch_rows.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_trigger_info.h"
@@ -166,6 +165,30 @@ struct ObBatchRescanCtl
   TO_STRING_KV(K_(cur_idx), K_(params), K_(param_version));
 };
 
+// operator return batch rows description
+struct ObBatchRows
+{
+  ObBatchRows() : skip_(NULL), size_(0), end_(false) {}
+  DECLARE_TO_STRING;
+  int copy(const ObBatchRows *src)
+  {
+    int ret = common::OB_SUCCESS;
+    size_ = src->size_;
+    end_ = src->end_;
+    // TODO qubin.qb: use shallow copy instead
+    skip_->deep_copy(*(src->skip_), size_);
+    return ret;
+  }
+  // bit vector for filtered rows
+  ObBitVector *skip_;
+  // batch size
+  int64_t size_;
+  // iterate end
+  bool end_;
+};
+
+
+
 // Adapt get_next_batch() to the old style get_next_row() interface.
 // (return OB_ITER_END for iterate end)
 class ObBatchRowIter
@@ -231,7 +254,7 @@ public:
   virtual ~ObOpSpec();
 
   DECLARE_VIRTUAL_TO_STRING;
-  const char *op_name() const { return ob_phy_operator_type_str(type_, use_rich_format_); }
+  const char *op_name() const { return ob_phy_operator_type_str(type_); }
 
   // Pre-order recursive create execution components (ObOperator and ObOperatorInput)
   // for current DFO.
@@ -274,7 +297,7 @@ public:
   int32_t get_child_num() const { return get_child_cnt(); }
   ObPhyOperatorType get_type() const { return type_; }
   uint64_t get_id() const { return id_; }
-  const char *get_name() const { return get_phy_op_name(type_, use_rich_format_); }
+  const char *get_name() const { return get_phy_op_name(type_); }
 
   int accept(ObOpSpecVisitor &visitor) const;
   int64_t get_rows() const { return rows_; }
@@ -344,7 +367,6 @@ public:
   int64_t plan_depth_;
   int64_t max_batch_size_;
   bool need_check_output_datum_;
-  bool use_rich_format_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpec);
@@ -377,6 +399,8 @@ public:
 
   int set_children_pointer(ObOperator **children, uint32_t child_cnt);
   int set_child(const uint32_t idx, ObOperator *child);
+
+  int get_real_child(ObOperator *&child, const int32_t child_idx);
 
   int init();
 
@@ -452,8 +476,6 @@ public:
   // clear evaluated flag of current datum (ObEvalCtx::batch_idx_) of batch.
   inline void clear_datum_eval_flag();
 
-  void reset_output_format();
-
   // check execution status: timeout, session kill, interrupted ..
   int check_status();
   // check execution status every CHECK_STATUS_TRY_TIMES tries.
@@ -476,30 +498,22 @@ public:
   static int filter_row(ObEvalCtx &eval_ctx,
                         const common::ObIArray<ObExpr *> &exprs,
                         bool &filtered);
-  static int filter_row_vector(ObEvalCtx &eval_ctx,
-                               const common::ObIArray<ObExpr *> &exprs,
-                               const sql::ObBitVector &skip_bit,
-                               bool &filtered);
   ObBatchRows &get_brs() { return brs_; }
   // Drain exchange in data for PX, or producer DFO will be blocked.
-  int drain_exch();
+  virtual int drain_exch();
   void set_pushdown_param_null(const common::ObIArray<ObDynamicParamSetter> &rescan_params);
   void set_feedback_node_idx(int64_t idx)
   { fb_node_idx_ = idx; }
-
-  bool is_operator_end() { return batch_reach_end_ ||  row_reach_end_ ; }
 protected:
-  virtual int do_drain_exch();
   int init_skip_vector();
   // Execute filter
   // Calc buffer does not reset internally, you need to reset it appropriately.
   int filter(const common::ObIArray<ObExpr *> &exprs, bool &filtered);
 
-  int filter_rows(const ObExprPtrIArray &exprs,
-                  ObBitVector &skip,
-                  const int64_t bsize,
-                  bool &all_filtered,
-                  bool &all_active);
+  int filter_batch_rows(const ObExprPtrIArray &exprs,
+                        ObBitVector &skip,
+                        const int64_t bsize,
+                        bool &all_filtered);
 
   int startup_filter(bool &filtered) { return filter(spec_.startup_filters_, filtered); }
   int filter_row(bool &filtered) { return filter(spec_.filters_, filtered); }
@@ -513,10 +527,9 @@ protected:
   inline void reset_batchrows()
   {
     if (brs_.size_ > 0) {
-      brs_.reset_skip(brs_.size_);
+      brs_.skip_->reset(brs_.size_);
       brs_.size_ = 0;
     }
-    brs_.all_rows_active_ = false;
   }
   inline int get_next_row_vectorizely();
   inline int get_next_batch_with_onlyone_row()
@@ -548,19 +561,7 @@ protected:
     }
     return ret;
   }
-
 private:
-  int filter_batch_rows(const ObExprPtrIArray &exprs,
-                        ObBitVector &skip,
-                        const int64_t bsize,
-                        bool &all_filtered,
-                        bool &all_active);
-  int filter_vector_rows(const ObExprPtrIArray &exprs,
-                         ObBitVector &skip,
-                         const int64_t bsize,
-                         bool &all_filtered,
-                         bool &all_active);
-  int convert_vector_format();
   // for sql plan monitor
   int try_register_rt_monitor_node(int64_t rows);
   int try_deregister_rt_monitor_node();
@@ -572,6 +573,7 @@ private:
   int output_expr_decint_datum_len_check();
   int output_expr_decint_datum_len_check_batch();
   int setup_op_feedback_info();
+  int do_drain_exch();
   // child can implement this interface, but can't call this directly
   virtual int inner_drain_exch() { return common::OB_SUCCESS; };
 protected:
@@ -679,7 +681,6 @@ public:
 
   ObPhyOperatorType get_type() const { return spec_.type_; }
   const ObOpSpec &get_spec() const { return spec_; }
-  TO_STRING_KV(K(spec_));
 protected:
   ObExecContext &exec_ctx_;
   const ObOpSpec &spec_;

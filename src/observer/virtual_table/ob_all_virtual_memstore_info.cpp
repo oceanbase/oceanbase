@@ -112,24 +112,18 @@ int ObAllVirtualMemstoreInfo::get_next_tablet(ObTabletHandle &tablet_handle)
   int ret = OB_SUCCESS;
 
   while (OB_SUCC(ret)) {
-    if (!ls_tablet_iter_.is_valid()) {
+    if (OB_FAIL(ls_tablet_iter_.get_next_tablet(tablet_handle))) {
+      if (OB_ITER_END != ret) {
+        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
+      }
+      ret = OB_SUCCESS; // continue to next ls
       ObLS *ls = nullptr;
       if (OB_FAIL(get_next_ls(ls))) {
         if (OB_ITER_END != ret) {
           SERVER_LOG(WARN, "fail to get next ls", K(ret));
         }
-      } else if (OB_FAIL(ls->build_tablet_iter(ls_tablet_iter_, true /* except_ls_inner_tablet */))) {
-        SERVER_LOG(WARN, "fail to build tablet iter", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ls_tablet_iter_.get_next_tablet(tablet_handle))) {
-      if (OB_ITER_END == ret) {
-        ls_tablet_iter_.reset();
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "fail to get next tablet", K(ret));
+      } else if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(ls_tablet_iter_, true /* except_ls_inner_tablet */))) {
+        SERVER_LOG(WARN, "fail to get tablet iter", K(ret));
       }
     } else {
       break;
@@ -161,8 +155,11 @@ int ObAllVirtualMemstoreInfo::get_next_memtable(memtable::ObMemtable *&mt)
       } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid tablet handle", K(ret), K(tablet_handle));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(tables_handle_))) {
-        SERVER_LOG(WARN, "failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet_handle.get_obj()));
+      } else if (OB_ISNULL(memtable_mgr = tablet_handle.get_obj()->get_memtable_mgr())) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "memtable mgr is null", K(ret));
+      } else if (OB_FAIL(memtable_mgr->get_all_memtables(tables_handle_))) {
+        SERVER_LOG(WARN, "fail to get all memtables for log stream", K(ret));
       }
     } else if (OB_FAIL(tables_handle_.at(memtable_array_pos_++).get_data_memtable(mt))) {
       // get next memtable
@@ -208,7 +205,7 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
     if (OB_ITER_END != ret) {
       SERVER_LOG(WARN, "get_next_memtable failed", K(ret));
     }
-  } else if (OB_ISNULL(mt)) {
+  } else if (NULL == mt) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "mt shouldn't NULL here", K(ret), K(mt));
   } else {
@@ -270,9 +267,8 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(mt->get_unsubmitted_cnt());
           break;
         case OB_APP_MIN_COLUMN_ID + 11:
-          // unsynced_count, since 4.3 memtable's unsynced_count is not used
-          // reuse this field for max_end_scn
-          cur_row_.cells_[i].set_uint64(mt->get_max_end_scn().get_val_for_inner_table_field());
+          // unsynced_count
+          cur_row_.cells_[i].set_int(mt->get_unsynced_cnt());
           break;
         case OB_APP_MIN_COLUMN_ID + 12:
           // write_ref_count

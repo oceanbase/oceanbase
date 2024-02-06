@@ -191,8 +191,10 @@ int ObDirectLoadDataBlockReader<Header, T>::read_next_buffer()
     buf_size_ = data_size;
     // read buffer
     const int64_t read_size = MIN(buf_capacity_ - buf_size_, read_size_);
-    if (OB_FAIL(file_io_handle_.pread(buf_ + buf_size_, read_size, offset_))) {
-      STORAGE_LOG(WARN, "fail to do pread from tmp file", KR(ret));
+    if (OB_FAIL(file_io_handle_.aio_pread(buf_ + buf_size_, read_size, offset_))) {
+      STORAGE_LOG(WARN, "fail to do aio read from tmp file", KR(ret));
+    } else if (OB_FAIL(file_io_handle_.wait())) {
+      STORAGE_LOG(WARN, "fail to wait io finish", KR(ret), K(io_timeout_ms_));
     } else {
       buf_size_ += read_size;
       offset_ += read_size;

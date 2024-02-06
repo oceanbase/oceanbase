@@ -35,9 +35,7 @@ public:
                     const int64_t pos,
                     const int64_t len,
                     common::ObCollationType cs_type,
-                    const bool do_ascii_optimize_check,
-                    const bool is_arg_batch_ascii,
-                    bool &is_result_batch_ascii);
+                    const bool do_ascii_optimize_check);
 
   static int calc(common::ObObj &result,
                   const common::ObString &text,
@@ -50,18 +48,11 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 
-  static int eval_substr(EVAL_FUNC_ARG_DECL);
-  static int eval_substr_batch(BATCH_EVAL_FUNC_ARG_DECL);
-  static int eval_substr_vector(VECTOR_EVAL_FUNC_ARG_DECL);
-  DECLARE_SET_LOCAL_SESSION_VARS;
+  static int eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_substr_batch(
+             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
 
 private:
-  template <typename ArgVec, typename ResVec>
-  static int vector_substr(const ObExpr &expr,
-                           ObEvalCtx &ctx,
-                           const ObBitVector &skip,
-                           const EvalBound &bound);
-
   int calc_result_length(ObExprResType *types_array,
                          int64_t param_num,
                          common::ObCollationType cs_type,
@@ -91,8 +82,6 @@ private:
   int cast_param_type_for_mysql(const common::ObObj& in,
                                 common::ObExprCtx& expr_ctx,
                                 common::ObObj& out) const;
-
-  static int ora_get_integer(const ObDatum &int_datum, const ObExpr &expr, int64_t &v);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprSubstr);
 };

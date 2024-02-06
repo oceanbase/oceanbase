@@ -135,6 +135,7 @@ public:
   inline bool is_paxos_replica() const { return common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_
                                                 || common::REPLICA_TYPE_FULL == replica_type_
                                                 || common::REPLICA_TYPE_LOGONLY == replica_type_; }
+  inline bool is_in_restore() const { return !restore_status_.is_restore_none(); }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   // operator-related functions
   int assign(const ObLSReplica &other);

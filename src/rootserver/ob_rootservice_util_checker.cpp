@@ -54,6 +54,7 @@ int ObRootServiceUtilChecker::init(
           schema_service,
           common_rpc_proxy,
           self,
+          unit_mgr,
           zone_mgr,
           sql_proxy,
           lst_operator))) {

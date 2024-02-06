@@ -1165,7 +1165,7 @@ public:
   // if callback failed, erase the node
   // parameters:
   //   flag: 0 shows that not cover existing object.
-  //   callback: MUST with a int operator()
+  //   callback: MUST with a int operater()
   // return value:
   //   OB_SUCCESS for success, the node is set
   //   OB_HASH_EXIST for node already exist

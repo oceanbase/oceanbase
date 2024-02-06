@@ -1936,33 +1936,41 @@ int ObInnerTableSchema::proc_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("param_list", //column_name
+    ObObj param_list_default;
+    param_list_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("param_list", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObLongTextType, //column_type
-      CS_TYPE_BINARY, //column_collation_type
-      0, //column_length
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_VARCHAR_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
+      false, //is_nullable
+      false, //is_autoincrement
+      param_list_default,
+      param_list_default); //default_value
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("returns", //column_name
+    ObObj returns_default;
+    returns_default.set_varchar(ObString::make_string(""));
+    ADD_COLUMN_SCHEMA_T("returns", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObLongTextType, //column_type
-      CS_TYPE_BINARY, //column_collation_type
-      0, //column_length
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      OB_MAX_VARCHAR_LENGTH, //column_length
       -1, //column_precision
       -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
+      false, //is_nullable
+      false, //is_autoincrement
+      returns_default,
+      returns_default); //default_value
   }
 
   if (OB_SUCC(ret)) {
@@ -2814,6 +2822,21 @@ int ObInnerTableSchema::all_virtual_table_mgr_schema(ObTableSchema &table_schema
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("data_checksum", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("size", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -2950,21 +2973,6 @@ int ObInnerTableSchema::all_virtual_table_mgr_schema(ObTableSchema &table_schema
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("cg_idx", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("data_checksum", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

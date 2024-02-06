@@ -54,17 +54,27 @@ public:
   std::unique_ptr<legacy::FunctionPassManager> TheFPM;
 };
 
+class StringMemoryBuffer : public llvm::MemoryBuffer
+{
+public:
+  StringMemoryBuffer(const char *debug_buffer, int64_t debug_length) {
+    init(debug_buffer, debug_buffer + debug_length, false);
+  }
+  BufferKind getBufferKind() const override { return MemoryBuffer_Malloc; }
+};
+
 class ObDWARFContext
 {
 public:
   ObDWARFContext(char* DebugBuf, int64_t DebugLen)
-    : MemoryRef(StringRef(DebugBuf, DebugLen), "") {}
+    : MemoryBuf(DebugBuf, DebugLen), MemoryRef(MemoryBuf) {}
 
   ~ObDWARFContext() {}
 
   int init();
 
 public:
+  StringMemoryBuffer MemoryBuf;
   llvm::MemoryBufferRef MemoryRef;
   std::unique_ptr<llvm::object::Binary> Bin;
 

@@ -15,7 +15,6 @@
 #include "rootserver/ob_root_service.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/ob_ddl_error_message_table_operator.h"
-#include "share/ob_ddl_sim_point.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_client.h"
 #include "storage/ddl/ob_ddl_lock.h"
@@ -58,8 +57,6 @@ int ObUpdateAutoincSequenceTask::process()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id_), K(data_table_id_), K(column_id_),
                                  K(orig_column_type_), K(dest_table_id_));
-  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, UPDATE_AUTOINC_SEQUENCE_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     ObDDLService &ddl_service = root_service->get_ddl_service();
     ObMultiVersionSchemaService &schema_service = ddl_service.get_schema_service();
@@ -123,19 +120,8 @@ int ObUpdateAutoincSequenceTask::process()
     if (OB_SUCCESS != (tmp_ret = root_service->get_ddl_scheduler().notify_update_autoinc_end(task_key, max_value + 1, ret))) {
       LOG_WARN("fail to finish update autoinc task", K(ret), K(max_value));
     }
-    LOG_INFO("execute finish update autoinc task finish", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_key), K(data_table_id_), K(column_id_), K(max_value));
+    LOG_INFO("execute finish update autoinc task finish", K(ret), K(task_key), K(data_table_id_), K(column_id_), K(max_value));
   }
-  char table_id_buffer[256];
-  snprintf(table_id_buffer, sizeof(table_id_buffer), "data_table_id:%ld, dest_table_id:%ld",
-            data_table_id_, dest_table_id_);
-  ROOTSERVICE_EVENT_ADD("ddl scheduler", "update autoinc sequence task process",
-    "tenant_id", tenant_id_,
-    "ret", ret,
-    K_(trace_id),
-    K_(task_id),
-    "table_id", table_id_buffer,
-    K_(schema_version),
-    column_id_);
   return ret;
 }
 
@@ -171,7 +157,6 @@ int ObModifyAutoincTask::init(const uint64_t tenant_id,
                               const int64_t table_id,
                               const int64_t schema_version,
                               const int64_t consumer_group_id,
-                              const int32_t sub_task_trace_id,
                               const obrpc::ObAlterTableArg &alter_table_arg,
                               const int64_t task_status,
                               const int64_t snapshot_version)
@@ -195,7 +180,6 @@ int ObModifyAutoincTask::init(const uint64_t tenant_id,
     target_object_id_ = table_id;
     schema_version_ = schema_version;
     consumer_group_id_ = consumer_group_id;
-    sub_task_trace_id_ = sub_task_trace_id;
     task_status_ = static_cast<ObDDLTaskStatus>(task_status);
     snapshot_version_ = snapshot_version;
     tenant_id_ = tenant_id;
@@ -288,10 +272,6 @@ int ObModifyAutoincTask::process()
       }
     }
     ddl_tracing_.release_span_hierarchy();
-    if (OB_FAIL(ret)) {
-      add_event_info("modify autoinc task process fail");
-      LOG_INFO("modify autoinc task process fail", "ddl_event_info", ObDDLEventInfo());
-    }
   }
   return ret;
 }
@@ -332,8 +312,6 @@ int ObModifyAutoincTask::modify_autoinc()
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, MODIFY_AUTOINC_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(check_update_autoinc_end(is_update_autoinc_end))) {
     LOG_WARN("fail to check update autoinc end", K(ret));
   } else if (!is_update_autoinc_end && update_autoinc_job_time_ == 0) {
@@ -430,7 +408,6 @@ int ObModifyAutoincTask::wait_trans_end()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("cannot find orig table", K(ret), K(alter_table_arg_));
     } else if (OB_FAIL(wait_trans_ctx_.init(tenant_id_,
-                                            task_id_,
                                             object_id_,
                                             ObDDLWaitTransEndCtx::WAIT_SCHEMA_TRANS,
                                             updated_table_schema->get_schema_version()))) {
@@ -471,8 +448,6 @@ int ObModifyAutoincTask::set_schema_available()
   } else if (OB_ISNULL(root_service)) {
     ret = OB_ERR_SYS;
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_TAKE_EFFECT_FAILED))) {
-    LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else {
     ObSArray<uint64_t> unused_ids;
     alter_table_arg_.ddl_task_type_ = share::UPDATE_AUTOINC_SCHEMA;

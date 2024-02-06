@@ -28,7 +28,7 @@ class ObNewRow;
 }
 namespace sql
 {
-class LastCompactRow;
+
 class ObRowComparer
 {
 public:
@@ -68,56 +68,6 @@ public:
   const common::ObIArray<const ObChunkDatumStore::StoredRow*> *rows_;
 };
 
-class ObCompactRowCompare
-{
-public:
-  ObCompactRowCompare();
-  int init(const ObIArray<ObSortFieldCollation> *sort_collations,
-      const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
-      const common::ObIArray<const ObCompactRow*> &rows);
-
-  // compare function for quick sort.
-  bool operator()(int64_t row_idx1, int64_t row_idx2);
-
-  bool is_inited() const { return NULL != sort_collations_; }
-  // interface required by ObBinaryHeap
-  int get_error_code() { return ret_; }
-
-  void reset() { this->~ObCompactRowCompare(); new (this)ObCompactRowCompare(); }
-  int get_ret() const { return ret_; }
-  void set_row_meta(const RowMeta &row_meta) { row_meta_ = &row_meta; }
-public:
-  int ret_;
-  const ObIArray<ObSortFieldCollation> *sort_collations_;
-  const ObIArray<ObSortCmpFunc> *sort_cmp_funs_;
-  const common::ObIArray<const ObCompactRow*> *rows_;
-  const RowMeta *row_meta_;
-};
-
-class ObLastCompactRowCompare
-{
-public:
-  ObLastCompactRowCompare();
-  int init(const ObIArray<ObSortFieldCollation> *sort_collations,
-      const ObIArray<ObSortCmpFunc> *sort_cmp_funs,
-      const common::ObIArray<const LastCompactRow*> &rows);
-
-  // compare function for quick sort.
-  bool operator()(int64_t row_idx1, int64_t row_idx2);
-
-  bool is_inited() const { return NULL != sort_collations_; }
-  // interface required by ObBinaryHeap
-  int get_error_code() { return ret_; }
-
-  void reset() { this->~ObLastCompactRowCompare(); new (this)ObLastCompactRowCompare(); }
-  int get_ret() const { return ret_; }
-public:
-  int ret_;
-  const ObIArray<ObSortFieldCollation> *sort_collations_;
-  const ObIArray<ObSortCmpFunc> *sort_cmp_funs_;
-  const common::ObIArray<const LastCompactRow*> *rows_;
-};
-
 class ObMaxDatumRowCompare
 {
 public:
@@ -154,6 +104,8 @@ public:
   ~ObRowHeap<COMPARE, ROW>();
 
   /* 初始化方法(1) */
+  int init(int64_t capacity,
+           const common::ObIArray<ObSortColumn> &sort_columns);
   int init(int64_t capacity, const ObIArray<ObSortFieldCollation> *sort_collations,
       const ObIArray<ObSortCmpFunc> *sort_cmp_funs);
 
@@ -163,7 +115,7 @@ public:
   void set_sort_columns(const common::ObIArray<ObSortColumn> &sort_columns)
   { sort_columns_ = &sort_columns; }
   int init();
-  void set_row_meta(const RowMeta &row_meta) { indexed_row_comparer_.set_row_meta(row_meta); }
+
   int push(const ROW *row);
   int pop(const ROW *&row);
   //本接口仅用于清空 heap 释放内存
@@ -172,7 +124,7 @@ public:
   int64_t writable_channel_idx() const { return writable_ch_idx_; }
   int64_t capacity() const { return capacity_; }
   int64_t count() const { return row_idx_.count(); }
-  bool has_inited() const { return inited_; }
+
   void reset() { row_idx_.reset(); row_arr_.reset(); }
 
   void reuse_heap(int64_t capacity, common::ObIAllocator &allocatar) 
@@ -223,6 +175,27 @@ ObRowHeap<COMPARE, ROW>::ObRowHeap()
 template <class COMPARE, class ROW>
 ObRowHeap<COMPARE, ROW>::~ObRowHeap()
 {
+}
+
+template <class COMPARE, class ROW>
+int ObRowHeap<COMPARE, ROW>::init(int64_t capacity, const common::ObIArray<ObSortColumn> &sort_columns)
+{
+  int ret = common::OB_SUCCESS;
+  if (capacity <= 0) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "invalid capacity", K(capacity), K(ret));
+  } else if (OB_FAIL(row_idx_.reserve(capacity))) {
+    SQL_ENG_LOG(WARN, "fail alloc mem", K(capacity), K(ret));
+  } else if (OB_FAIL(row_arr_.prepare_allocate(capacity))) {
+    SQL_ENG_LOG(WARN, "fail alloc mem", K(capacity), K(ret));
+  } else if (OB_FAIL(indexed_row_comparer_.init(sort_columns, row_arr_))) {
+    SQL_ENG_LOG(WARN, "fail init comparer", K(ret));
+  } else {
+    writable_ch_idx_ = 0;
+    capacity_ = capacity;
+    inited_ = true;
+  }
+  return ret;
 }
 
 template <class COMPARE, class ROW>

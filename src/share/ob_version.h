@@ -32,7 +32,7 @@ namespace oceanbase
 {
 namespace share
 {
-int get_package_and_svn(char *server_version, int64_t buf_len);
+void get_package_and_svn(char *server_version, int64_t buf_len);
 }
 }
 

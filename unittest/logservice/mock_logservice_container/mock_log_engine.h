@@ -318,14 +318,12 @@ public:
   int submit_push_log_resp(
       const common::ObAddr &server,
       const int64_t &msg_proposal_id,
-      const LSN &lsn,
-      const bool is_batch) override
+      const LSN &lsn) override
   {
     int ret = OB_SUCCESS;
     UNUSED(server);
     UNUSED(msg_proposal_id);
     UNUSED(lsn);
-    UNUSED(is_batch);
     return ret;
   }
 

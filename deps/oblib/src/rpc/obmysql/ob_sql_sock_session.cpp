@@ -71,7 +71,7 @@ void ObSqlSockSession::shutdown()
 void ObSqlSockSession::revert_sock()
 {
   if (last_pkt_sz_ > 0) {
-    nio_->consume_data((void*)this, NULL, last_pkt_sz_);
+    nio_->consume_data((void*)this, last_pkt_sz_);
     last_pkt_sz_ = 0;
   }
   sql_req_.reset_trace_id();
@@ -100,23 +100,13 @@ bool ObSqlSockSession::has_error()
   return nio_->has_error((void*)this);
 }
 
-int ObSqlSockSession::create_read_handle(void *& read_handle)
-{
-  return nio_->create_read_handle((void*)this, read_handle);
-}
-
-int ObSqlSockSession::release_read_handle(void * read_handle)
-{
-  return nio_->release_read_handle((void*)this, read_handle);
-}
-
-int ObSqlSockSession::peek_data(void *handle, int64_t limit, const char*& buf, int64_t& sz)
+int ObSqlSockSession::peek_data(int64_t limit, const char*& buf, int64_t& sz)
 {
   int ret = OB_SUCCESS;
   if (has_error()) {
     ret = OB_IO_ERROR;
     LOG_WARN("sock has error", K(ret));
-  } else if (OB_FAIL(nio_->peek_data((void*)this, handle, limit, buf, sz))) {
+  } else if (OB_FAIL(nio_->peek_data((void*)this,  limit, buf, sz))) {
     destroy_sock();
   }
   return ret;
@@ -127,13 +117,13 @@ void ObSqlSockSession::clear_sql_session_info()
   nio_->reset_sql_session_info(this);
 }
 
-int ObSqlSockSession::consume_data(void* read_handle, int64_t sz)
+int ObSqlSockSession::consume_data(int64_t sz)
 {
   int ret = OB_SUCCESS;
   if (has_error()) {
     ret = OB_IO_ERROR;
     LOG_WARN("sock has error", K(ret));
-  } else if (OB_FAIL(nio_->consume_data((void*)this, read_handle, sz))) {
+  } else if (OB_FAIL(nio_->consume_data((void*)this, sz))) {
     destroy_sock();
   }
   return ret;

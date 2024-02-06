@@ -327,7 +327,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
 {
   int ret = OB_SUCCESS;
   if (col_idx < 0 || col_idx >= fields_.count()) {
-    ret = OB_ERR_VARIABLE_NOT_IN_SELECT_LIST;
+    ret = OB_SIZE_OVERFLOW;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
   } else if (!cast_supported(fields_.at(col_idx).type_.get_type(),
                              static_cast<common::ObCollationType>(fields_.at(col_idx).charsetnr_),
@@ -847,7 +847,6 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
     bool for_update = false;
     bool hidden_rowid = false;
     int64_t into_cnt = 0;
-    bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
     ObPLExecCtx pl_ctx(cursor->get_allocator(), &exec_ctx, &dummy_params,
@@ -866,7 +865,6 @@ int ObPLDbmsSql::do_parse(ObExecContext &exec_ctx, ObDbmsCursorInfo *cursor, ObS
                                       for_update,
                                       hidden_rowid,
                                       into_cnt,
-                                      skip_locked,
                                       &cursor->get_field_columns()));
     if (OB_SUCC(ret)) {
       cursor->set_ps_sql(ps_sql);

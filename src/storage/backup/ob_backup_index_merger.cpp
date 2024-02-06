@@ -113,9 +113,7 @@ int ObBackupMetaIndexFuser::fuse(const MERGE_ITER_ARRAY &iter_array)
 {
   int ret = OB_SUCCESS;
   ObBackupMetaIndex output;
-  output.reset();
-  int64_t largest_turn_id = -1;
-  int64_t largest_retry_id = -1;
+  int64_t largest_retry = -1;
   for (int64_t i = 0; OB_SUCC(ret) && i < iter_array.count(); ++i) {
     ObBackupMetaIndexIterator *iter = iter_array.at(i);
     if (OB_ISNULL(iter)) {
@@ -125,20 +123,13 @@ int ObBackupMetaIndexFuser::fuse(const MERGE_ITER_ARRAY &iter_array)
       continue;
     } else if (OB_FAIL(iter->get_cur_index(output))) {
       LOG_WARN("failed to get cur index", K(ret));
-    } else if (output.turn_id_ > largest_turn_id) {
-      largest_turn_id = output.turn_id_;
-      largest_retry_id = output.retry_id_;
+    } else if (output.retry_id_ > largest_retry) {
       result_ = output;
-    } else if (output.turn_id_ == largest_turn_id) {
-      if (output.retry_id_ > largest_retry_id) {
-        largest_turn_id = output.turn_id_;
-        largest_retry_id = output.retry_id_;
-        result_ = output;
-      }
+      largest_retry = output.retry_id_;
     }
   }
   if (OB_SUCC(ret)) {
-    if (-1 == largest_retry_id) {
+    if (-1 == largest_retry) {
       ret = OB_ITER_END;
     }
   }
@@ -560,15 +551,7 @@ ObIBackupIndexMerger::ObIBackupIndexMerger()
 {}
 
 ObIBackupIndexMerger::~ObIBackupIndexMerger()
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(dev_handle_) && io_fd_.is_valid()) {
-    ObBackupIoAdapter util;
-    if (OB_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-      LOG_WARN("fail to close device and fd", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-}
+{}
 
 int ObIBackupIndexMerger::get_all_retries_(const int64_t task_id, const uint64_t tenant_id,
     const share::ObBackupDataType &backup_data_type, const share::ObLSID &ls_id, common::ObISQLClient &sql_client,
@@ -589,7 +572,7 @@ int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path, con
 {
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter util;
-  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
+  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
   if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), storage_info))) {
     LOG_WARN("failed to make parent dir", K(path), K(path), KP(storage_info));
   } else if (OB_FAIL(util.open_with_access_type(dev_handle_, io_fd_, storage_info, path.get_obstr(), access_type))) {
@@ -770,8 +753,6 @@ void ObBackupMacroBlockIndexMerger::reset()
 int ObBackupMacroBlockIndexMerger::merge_index()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
   ObIBackupMacroBlockIndexFuser *fuser = NULL;
   MERGE_ITER_ARRAY unfinished_iters;
   MERGE_ITER_ARRAY min_iters;
@@ -826,23 +807,6 @@ int ObBackupMacroBlockIndexMerger::merge_index()
   }
   if (OB_NOT_NULL(fuser)) {
     ObLSBackupFactory::free(fuser);
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
-      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
-      ret = COVER_SUCC(tmp_ret);
-      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-    ret = COVER_SUCC(tmp_ret);
-    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-  } else {
-    dev_handle_ = NULL;
-    io_fd_.reset();
   }
   return ret;
 }
@@ -1300,8 +1264,6 @@ void ObBackupMetaIndexMerger::reset()
 int ObBackupMetaIndexMerger::merge_index()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObBackupIoAdapter util;
   MERGE_ITER_ARRAY unfinished_iters;
   MERGE_ITER_ARRAY min_iters;
   if (IS_NOT_INIT) {
@@ -1347,23 +1309,6 @@ int ObBackupMetaIndexMerger::merge_index()
         LOG_WARN("failed to flush index tree", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dev_handle_->complete(io_fd_))) {
-      LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
-    }
-  } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
-      ret = COVER_SUCC(tmp_ret);
-      LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-    }
-  }
-  if (OB_TMP_FAIL(util.close_device_and_fd(dev_handle_, io_fd_))) {
-    ret = COVER_SUCC(tmp_ret);
-    LOG_WARN("fail to close device or fd", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
-  } else {
-    dev_handle_ = NULL;
-    io_fd_.reset();
   }
   return ret;
 }

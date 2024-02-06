@@ -870,10 +870,8 @@ void ObDictTableMeta::reset()
   database_id_ = OB_INVALID_ID;
   table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_TIMESTAMP;
-  if (table_name_.ptr() != nullptr) {
-    allocator_->free(table_name_.ptr());
-    table_name_.reset();
-  }
+  allocator_->free(table_name_.ptr());
+  table_name_.reset();
   name_case_mode_ = common::OB_NAME_CASE_INVALID;
   table_type_ = schema::ObTableType::USER_TABLE;
   table_mode_.reset();

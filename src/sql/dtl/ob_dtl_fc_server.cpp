@@ -32,13 +32,14 @@ using namespace oceanbase::share;
 // ObTenantDfc
 ObTenantDfc::ObTenantDfc(uint64_t tenant_id)
 : tenant_dfc_(), tenant_id_(tenant_id), blocked_dfc_cnt_(0), channel_total_cnt_(0), max_parallel_cnt_(0),
-  max_blocked_buffer_size_(0), max_buffer_size_(0), tenant_mem_mgr_(tenant_id)
+  max_blocked_buffer_size_(0), max_buffer_size_(0), tenant_mem_mgr_(tenant_id),
+  first_buffer_mgr_(tenant_id, &tenant_mem_mgr_)
 {}
 
 ObTenantDfc::~ObTenantDfc()
 {}
 
-int ObTenantDfc::mtl_new(ObTenantDfc *&tenant_dfc)
+int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
@@ -47,16 +48,7 @@ int ObTenantDfc::mtl_new(ObTenantDfc *&tenant_dfc)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc tenant dfc", K(ret));
   } else if (FALSE_IT(new (tenant_dfc) ObTenantDfc(tenant_id))) {
-  }
-  return ret;
-}
-
-
-int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  if (OB_SUCC(ret)) {
+  } else {
     tenant_dfc->channel_total_cnt_ = 0;
     tenant_dfc->blocked_dfc_cnt_ = 0;
     tenant_dfc->max_parallel_cnt_ = 0;
@@ -65,9 +57,20 @@ int ObTenantDfc::mtl_init(ObTenantDfc *&tenant_dfc)
     tenant_dfc->tenant_id_ = tenant_id;
     if (OB_FAIL(tenant_dfc->tenant_mem_mgr_.init())) {
       LOG_WARN("failed to init tenant memory manager", K(ret));
+    } else if (OB_FAIL(tenant_dfc->first_buffer_mgr_.init())) {
+      LOG_WARN("failed to init new first buffer manager", K(ret));
     }
     // tenant_dfc->calc_max_buffer(10);
     LOG_INFO("init tenant dfc", K(ret), K(tenant_dfc->tenant_id_));
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != tenant_dfc) {
+      tenant_dfc->first_buffer_mgr_.destroy();
+      tenant_dfc->tenant_mem_mgr_.destroy();
+      common::ob_delete(tenant_dfc);
+      tenant_dfc = nullptr;
+    }
+    LOG_WARN("failed to mtl init", K(ret));
   }
   return ret;
 }
@@ -76,6 +79,7 @@ void ObTenantDfc::mtl_destroy(ObTenantDfc *&tenant_dfc)
 {
   if (nullptr != tenant_dfc) {
     LOG_INFO("trace tenant dfc destroy", K(tenant_dfc->tenant_id_));
+    tenant_dfc->first_buffer_mgr_.destroy();
     tenant_dfc->tenant_mem_mgr_.destroy();
     common::ob_delete(tenant_dfc);
     tenant_dfc = nullptr;
@@ -205,6 +209,84 @@ int ObTenantDfc::deregister_dfc(ObDtlFlowControl &dfc)
   return ret;
 }
 
+int ObTenantDfc::cache_buffer(int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(data_buffer->has_dfo_key())) {
+    if (OB_FAIL(first_buffer_mgr_.cache_buffer(chid, data_buffer, attach))) {
+      LOG_WARN("failed to cache buffer", K(ret), KP(chid), K(attach));
+    }
+  } else {
+    // 如果是老server发到新server，则不缓存
+    ret = OB_NOT_SUPPORTED;
+    LOG_TRACE("old data not cache", K(ret), KP(chid), K(attach));
+  }
+  return ret;
+}
+
+int ObTenantDfc::get_buffer_cache(ObDtlDfoKey &key, ObDtlLocalFirstBufferCache *&buf_cache)
+{
+  int ret = OB_SUCCESS;
+  buf_cache = nullptr;
+  if (OB_FAIL(first_buffer_mgr_.get_buffer_cache(key, buf_cache))) {
+    LOG_WARN("failed to get cache buffer", K(ret), K(key));
+  } else if (nullptr == buf_cache) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: buffer cache is null", K(ret));
+  } else {
+    buf_cache->release();
+  }
+  return ret;
+}
+
+int ObTenantDfc::try_process_first_buffer_by_qc(ObDtlFlowControl *dfc, ObDtlChannel *ch, int64_t ch_idx, bool &got)
+{
+  int ret = OB_SUCCESS;
+  ObDtlLinkedBuffer *data_buffer = nullptr;
+  int64_t chid = ch->get_id();
+  got = false;
+  ObDtlLocalFirstBufferCache *buf_cache = dfc->get_first_buffer_cache();
+  if (nullptr == buf_cache) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: first buffer cache is null", K(ret));
+  } else if (OB_FAIL(first_buffer_mgr_.get_cached_buffer(buf_cache, chid, data_buffer))) {
+    LOG_WARN("failed to get cache buffer", K(ch->get_id()));
+  } else if (nullptr != data_buffer) {
+    bool is_eof = data_buffer->is_eof();
+    if (!is_eof && OB_FAIL(enforce_block(dfc, ch_idx))) {
+      LOG_WARN("failed to enforce block", K(ret), KP(chid), K(ch_idx));
+    } else if (OB_FAIL(ch->attach(data_buffer, true))) {
+      LOG_WARN("failed to feedup data buffer", K(ret), KP(chid));
+    } else {
+      got = true;
+      LOG_TRACE("process first msg", KP(chid), K(ch->get_peer()), K(ret));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (nullptr != data_buffer && OB_SUCCESS != (tmp_ret = tenant_mem_mgr_.free(data_buffer))) {
+      LOG_WARN("failed to free data buffer", KP(chid), K(ret), K(tmp_ret), K(lbt()));
+      ret = tmp_ret;
+    }
+  }
+  return ret;
+}
+
+int ObTenantDfc::try_process_first_buffer(ObDtlFlowControl *dfc, int64_t ch_idx)
+{
+  int ret = OB_SUCCESS;
+  ObDtlChannel *ch = nullptr;
+  if (OB_FAIL(dfc->get_channel(ch_idx, ch))) {
+    LOG_WARN("failed to get dtl channel", K(dfc), K(ch_idx), K(ret));
+  } else {
+    bool got = false;
+    if (dfc->has_dfo_key()) {
+      if (OB_FAIL(try_process_first_buffer_by_qc(dfc, ch, ch_idx, got))) {
+        LOG_WARN("failed to process first buffer", K(ch->get_id()), K(ch_idx), K(dfc->get_dfo_key()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantDfc::enforce_block(ObDtlFlowControl *dfc, int64_t ch_idx)
 {
   int ret = OB_SUCCESS;
@@ -304,6 +386,18 @@ int ObTenantDfc::block_tenant_dfc(ObDtlFlowControl *dfc, int64_t ch_idx, int64_t
   }
   return ret;
 }
+int ObTenantDfc::register_first_buffer_cache(ObDtlLocalFirstBufferCache *buf_cache)
+{
+  return first_buffer_mgr_.register_first_buffer_cache(buf_cache);
+}
+
+int ObTenantDfc::unregister_first_buffer_cache(
+  ObDtlDfoKey &key,
+  ObDtlLocalFirstBufferCache *org_buf_cache)
+{
+  return first_buffer_mgr_.unregister_first_buffer_cache(key, org_buf_cache);
+}
+
 // dfc server
 int ObDfcServer::init()
 {
@@ -420,6 +514,57 @@ int ObDfcServer::unblock_channels(ObDtlFlowControl *dfc)
   return ret;
 }
 
+int ObDfcServer::cache(uint64_t tenant_id, int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDfc *tenant_dfc = nullptr;
+  MTL_SWITCH(tenant_id) {
+    if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+      LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+    } else if (OB_ISNULL(tenant_dfc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant dfc is null", K(tenant_id), K(ret));
+    } else if (OB_FAIL(tenant_dfc->cache_buffer(chid, data_buffer, attach))) {
+      LOG_WARN("failed to cache data buffer", K(tenant_id), K(ret));
+    }
+  } else {
+    LOG_WARN("failed to cache data buffer", K(tenant_id), K(ret));
+  }
+  return ret;
+}
+
+int ObDfcServer::cache(int64_t chid, ObDtlLinkedBuffer *&data_buffer, bool attach)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = data_buffer->tenant_id();
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+  } else if (OB_ISNULL(tenant_dfc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant dfc is null", K(ret));
+  } else if (OB_FAIL(tenant_dfc->cache_buffer(chid, data_buffer, attach))) {
+    LOG_WARN("failed to cache data buffer", K(tenant_id), K(ret));
+  }
+  return ret;
+}
+
+int ObDfcServer::try_process_first_buffer(ObDtlFlowControl *dfc, int64_t ch_idx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = dfc->get_tenant_id();
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+  } else if (OB_ISNULL(tenant_dfc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant dfc is null", K(tenant_id), K(ret));
+  } else if (OB_FAIL(tenant_dfc->try_process_first_buffer(dfc, ch_idx))) {
+    LOG_WARN("failed to process first cache buffer", K(tenant_id), K(ret));
+  }
+  return ret;
+}
+
 int ObDfcServer::register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch)
 {
   int ret = OB_SUCCESS;
@@ -472,6 +617,57 @@ int ObDfcServer::deregister_dfc(ObDtlFlowControl &dfc)
     } else if (OB_FAIL(tenant_dfc->deregister_dfc(dfc))) {
       LOG_WARN("failed to deregister dfc", K(tenant_id), K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDfcServer::get_buffer_cache(
+    uint64_t tenant_id,
+    ObDtlDfoKey &key,
+    ObDtlLocalFirstBufferCache *&buf_cache)
+{
+  int ret = OB_SUCCESS;
+  buf_cache = nullptr;
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+  } else if (key.is_valid() && OB_FAIL(tenant_dfc->get_buffer_cache(key, buf_cache))) {
+    LOG_WARN("failed to deregister dfc", K(tenant_id), K(ret));
+  }
+  return ret;
+}
+
+int ObDfcServer::register_first_buffer_cache(
+    uint64_t tenant_id,
+    ObDtlLocalFirstBufferCache *buf_cache)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+  } else if (buf_cache->get_key().is_valid() && OB_FAIL(tenant_dfc->register_first_buffer_cache(buf_cache))) {
+    LOG_WARN("failed to deregister dfc", K(ret));
+  }
+  return ret;
+}
+
+int ObDfcServer::unregister_first_buffer_cache(
+  uint64_t tenant_id,
+  ObDtlDfoKey &key,
+  ObDtlLocalFirstBufferCache *org_buf_cache)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status: invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_current_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("failed to get tenant dfc", K(tenant_id), K(ret));
+  } else if (OB_FAIL(tenant_dfc->unregister_first_buffer_cache(key, org_buf_cache))) {
+    LOG_WARN("failed to deregister dfc", K(ret));
   }
   return ret;
 }

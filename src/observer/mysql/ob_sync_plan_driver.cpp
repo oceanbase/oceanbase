@@ -189,11 +189,6 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     }
   } else {
     if (is_prexecute_ && OB_FAIL(response_query_header(result, false, false, true))) {
-      // need close result set
-      int close_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (close_ret = result.close())) {
-        LOG_WARN("close result failed", K(close_ret));
-      }
       LOG_WARN("prexecute response query head fail. ", K(ret));
     } else if (OB_FAIL(result.close())) {
       LOG_WARN("close result set fail", K(ret));

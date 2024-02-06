@@ -76,7 +76,6 @@ namespace transaction
                     tx_id_(),
                     receiver_(share::ObLSID::INVALID_LS_ID),
                     epoch_(-1),
-                    transfer_epoch_(-1),
                     sender_addr_(),
                     sender_(share::ObLSID::INVALID_LS_ID),
                     request_id_(-1),
@@ -91,7 +90,6 @@ namespace transaction
       share::ObLSID receiver_;
       /* the target participant's born epoch, used to verify its health */
       int64_t epoch_;
-      int64_t transfer_epoch_;
       /* useful when send rsp to sender */
       ObAddr sender_addr_;
       share::ObLSID sender_;
@@ -106,7 +104,6 @@ namespace transaction
                            K_(sender),
                            K_(sender_addr),
                            K_(epoch),
-                           K_(transfer_epoch),
                            K_(request_id),
                            K_(timestamp),
                            K_(cluster_id));
@@ -138,13 +135,11 @@ namespace transaction
           ObTxMsg(SUBPREPARE),
           expire_ts_(OB_INVALID_TIMESTAMP),
           xid_(),
-          parts_(),
-          commit_parts_()
+          parts_()
       {}
       int64_t expire_ts_;
       ObXATransID xid_;
       share::ObLSArray parts_;
-      ObTxCommitParts commit_parts_;
       common::ObString app_trace_info_;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(xid), K_(parts),
@@ -215,9 +210,8 @@ namespace transaction
       share::SCN commit_start_scn_;
       share::ObLSArray parts_;
       common::ObString app_trace_info_;
-      ObTxCommitParts commit_parts_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts), K_(app_trace_info), K_(commit_parts));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(expire_ts), K_(commit_start_scn), K_(parts), K_(app_trace_info));
       OB_UNIS_VERSION(1);
     };
     struct ObTxCommitRespMsg : public ObTxMsg {
@@ -246,10 +240,10 @@ namespace transaction
           ObTxMsg(ROLLBACK_SAVEPOINT),
           savepoint_(),
           op_sn_(-1),
-          tx_seq_base_(0),
+          //todo:后续branch_id使用方式确定后，需要相应修改
+          branch_id_(-1),
           tx_ptr_(NULL),
-          flag_(USE_ASYNC_RESP),
-          specified_from_scn_()
+          flag_(USE_ASYNC_RESP)
       {}
       ~ObTxRollbackSPMsg() {
         if (OB_NOT_NULL(tx_ptr_)) {
@@ -257,23 +251,19 @@ namespace transaction
           ob_free((void*)tx_ptr_);
           tx_ptr_ = NULL;
         }
-        specified_from_scn_.reset();
       }
       ObTxSEQ savepoint_;
       int64_t op_sn_;
-      int64_t tx_seq_base_;
+      //todo:后期设计中操作编号是否等于branch_id
+      int64_t branch_id_;
       const ObTxDesc *tx_ptr_;
       uint8_t flag_;
-      ObTxSEQ specified_from_scn_;
       bool use_async_resp() const { return (flag_ & USE_ASYNC_RESP) !=0; }
-      void set_for_transfer() { flag_ |= ROLLBACK_FOR_TRANSFER; }
-      bool for_transfer() const { return (flag_ & ROLLBACK_FOR_TRANSFER) !=0; }
       const static uint8_t USE_ASYNC_RESP = 0x01;
-      const static uint8_t ROLLBACK_FOR_TRANSFER = 0x02;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg,
-                           K_(savepoint), K_(op_sn), K_(tx_seq_base), K_(flag),
-                           K_(specified_from_scn), KP_(tx_ptr));
+                           K_(savepoint), K_(op_sn), K_(branch_id), K_(flag),
+                           KP_(tx_ptr));
       OB_UNIS_VERSION(1);
     };
 
@@ -289,8 +279,7 @@ namespace transaction
       }
       int ret_;
       int64_t orig_epoch_;
-      ObSEArray<ObTxLSEpochPair, 1> downstream_parts_;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(orig_epoch), K_(downstream_parts));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(ret), K_(orig_epoch));
       OB_UNIS_VERSION(1);
     };
 
@@ -482,13 +471,10 @@ namespace transaction
     {
     public:
       Ob2pcPrepareVersionReqMsg() :
-          ObTxMsg(TX_2PC_PREPARE_VERSION_REQ),
-          upstream_(share::ObLSID::INVALID_LS_ID)
+          ObTxMsg(TX_2PC_PREPARE_VERSION_REQ)
       {}
     public:
-      share::ObLSID upstream_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(upstream));
       OB_UNIS_VERSION(1);
     };
 
@@ -512,16 +498,13 @@ namespace transaction
     public:
       ObAskStateMsg() :
           ObTxMsg(ASK_STATE),
-          snapshot_(),
-          ori_ls_id_(),
-          ori_addr_()
+          snapshot_()
       {}
     public:
       share::SCN snapshot_;
-      share::ObLSID ori_ls_id_;
-      ObAddr ori_addr_;
+
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot), K_(ori_ls_id), K_(ori_addr));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
       OB_UNIS_VERSION(1);
     };
 
@@ -544,14 +527,12 @@ namespace transaction
     public:
       ObCollectStateMsg() :
           ObTxMsg(COLLECT_STATE),
-          snapshot_(),
-          check_info_()
+          snapshot_()
       {}
     public:
       share::SCN snapshot_;
-      ObStandbyCheckInfo check_info_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot), K_(check_info));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(snapshot));
       OB_UNIS_VERSION(1);
     };
 
@@ -560,14 +541,12 @@ namespace transaction
     public:
       ObCollectStateRespMsg() :
           ObTxMsg(COLLECT_STATE_RESP),
-          state_info_(),
-          transfer_parts_()
+          state_info_()
       {}
     public:
       ObStateInfo state_info_;
-      ObTxCommitParts transfer_parts_;
       bool is_valid() const;
-      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info), K_(transfer_parts));
+      INHERIT_TO_STRING_KV("txMsg", ObTxMsg, K_(state_info));
       OB_UNIS_VERSION(1);
     };
 

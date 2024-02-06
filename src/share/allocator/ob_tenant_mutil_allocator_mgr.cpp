@@ -10,15 +10,13 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/allocator/ob_malloc.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
-#include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
+#include "lib/allocator/ob_malloc.h"
 #include "share/config/ob_server_config.h"
-#include "share/rc/ob_tenant_base.h"
-#include "ob_memstore_allocator.h"
-
-using namespace oceanbase::share;
+#include "share/allocator/ob_tenant_mutil_allocator.h"
+#include "ob_gmemstore_allocator.h"
+#include "ob_memstore_allocator_mgr.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -139,8 +137,12 @@ int ObTenantMutilAllocatorMgr::get_tenant_memstore_limit_percent_(const uint64_t
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid arguments", K(ret), K(tenant_id));
   } else {
-    MTL_SWITCH(tenant_id) {
-      limit_percent = MTL(ObTenantFreezer*)->get_memstore_limit_percentage();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (!tenant_config.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(ERROR, "tenant config invalid", K(ret), K(tenant_id));
+    } else {
+      limit_percent = tenant_config->memstore_limit_percentage;
     }
   }
   return ret;
@@ -403,14 +405,15 @@ int ObTenantMutilAllocatorMgr::update_tenant_mem_limit(const share::TenantUnits 
             K(tenant_id),  K(nway), K(new_tma_limit), K(pre_tma_limit), K(cur_memstore_limit_percent), K(tenant_config));
       }
 
-      //update memstore threshold of MemstoreAllocator
-      MTL_SWITCH(tenant_id) {
-        ObMemstoreAllocator &memstore_allocator = MTL(ObSharedMemAllocMgr *)->memstore_allocator();
-        if (OB_FAIL(memstore_allocator.set_memstore_threshold())) {
-          OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
-        } else {
-          OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
-        }
+      //update memstore threshold of GmemstoreAllocator
+      ObGMemstoreAllocator* memstore_allocator = NULL;
+      if (OB_TMP_FAIL(ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(tenant_id, memstore_allocator))) {
+      } else if (OB_ISNULL(memstore_allocator)) {
+        OB_LOG(WARN, "get_tenant_memstore_allocator failed", K(tenant_id));
+      } else if (OB_FAIL(memstore_allocator->set_memstore_threshold(tenant_id))) {
+        OB_LOG(WARN, "failed to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
+      } else {
+        OB_LOG(INFO, "succ to set_memstore_threshold of memstore allocator", K(tenant_id), K(ret));
       }
     }
   }

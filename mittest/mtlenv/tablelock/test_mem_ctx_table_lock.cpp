@@ -318,8 +318,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   // 1.3 rollback
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.3");
   auto rollback_to_seq_no = ObTxSEQ(2, 0);
-  auto rollback_from_seq_no = ObTxSEQ(100, 0);
-  ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no, rollback_from_seq_no);
+  ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
@@ -340,7 +339,7 @@ TEST_F(TestMemCtxTableLock, rollback_table_lock)
   // 1.4 rollback again
   LOG_INFO("TestMemCtxTableLock::rollback_table_lock 1.4");
   rollback_to_seq_no = ObTxSEQ(1, 0);
-  ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no, rollback_from_seq_no);
+  ret = mem_ctx_.rollback_table_lock(rollback_to_seq_no);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = mem_ctx_.check_lock_exist(DEFAULT_IN_TRANS_LOCK_OP.lock_id_,
                                   DEFAULT_IN_TRANS_LOCK_OP.owner_id_,
@@ -430,12 +429,11 @@ TEST_F(TestMemCtxTableLock, get_table_lock_store_info)
   ret = mem_ctx_.get_table_lock_store_info(table_lock_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   op_count = table_lock_info.table_lock_ops_.count();
-  ASSERT_EQ(1, op_count);
+  ASSERT_EQ(0, op_count);
   // 2 CHECK LOGGED LOCK
   LOG_INFO("TestMemCtxTableLock::check_lock_need_replay 2.1");
   scn.set_base();
-  table_lock_info.reset();
-  mem_ctx_.sync_log_succ(scn);
+  mem_ctx_.set_log_synced(lock_op_node, scn);
   ret = mem_ctx_.get_table_lock_store_info(table_lock_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   op_count = table_lock_info.table_lock_ops_.count();
@@ -450,13 +448,13 @@ TEST_F(TestMemCtxTableLock, get_table_lock_store_info)
   ret = mem_ctx_.get_table_lock_store_info(table_lock_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   op_count = table_lock_info.table_lock_ops_.count();
-  ASSERT_EQ(2, op_count);
+  ASSERT_EQ(1, op_count);
   ASSERT_EQ(scn, table_lock_info.max_durable_scn_);
   // 4 CHECK TWO LOGGED
   LOG_INFO("TestMemCtxTableLock::check_lock_need_replay 4.1");
   table_lock_info.reset();
   scn = share::SCN::plus(share::SCN::min_scn(), 2);
-  mem_ctx_.sync_log_succ(scn);
+  mem_ctx_.set_log_synced(lock_op_node, scn);
   ret = mem_ctx_.get_table_lock_store_info(table_lock_info);
   ASSERT_EQ(OB_SUCCESS, ret);
   op_count = table_lock_info.table_lock_ops_.count();

@@ -169,7 +169,7 @@ OB_INLINE int64_t *get_type_size_map()
     -1, //ObTimestampLTZType
     -1, //ObTimestampNanoType
     -1, //ObRawType
-    8, //ObIntervalYMType
+    -1, //ObIntervalYMType
     -1, //ObIntervalDSType
     -1, //ObNumberFloatType
     -1, //ObNVarchar2Type
@@ -248,14 +248,6 @@ OB_INLINE int64_t *get_estimate_base_store_size_map()
       "Base store size map count mismatch with type count");
   return estimate_base_store_size_map;
 }
-
-enum ObEncodingDecodeMetodType
-{
-  D_DEEP_COPY = 0,
-  D_SHALLOW_COPY = 1,
-  D_INTEGER = 2,
-  D_MAX_DECODE_METHOD_TYPE,
-};
 
 extern uint64_t INTEGER_MASK_TABLE[sizeof(int64_t) + 1];
 
@@ -556,6 +548,62 @@ OB_INLINE uint64_t get_uint64_from_buf_by_len(const char *buf, const int64_t len
   uint64_t result = 0;
   ENCODING_ADAPT_MEMCPY(&result, buf, len);
   return result;
+}
+
+enum ObFPIntCmpOpType
+{
+  FP_INT_OP_EQ = 0, // WHITE_OP_EQ
+  FP_INT_OP_LE, // WHITE_OP_LE
+  FP_INT_OP_LT, // WHITE_OP_LT
+  FP_INT_OP_GE, // WHITE_OP_GE
+  FP_INT_OP_GT, // WHITE_OP_GT
+  FP_INT_OP_NE, // WHITE_OP_NE
+  FP_INT_OP_MAX,
+};
+
+template <typename T>
+OB_INLINE bool fp_int_cmp(const T left, const T right, const ObFPIntCmpOpType cmp_op)
+{
+  // not check parameter for performance
+  bool res = false;
+  switch (cmp_op) {
+  case FP_INT_OP_EQ:
+    res = left == right;
+    break;
+  case FP_INT_OP_LE:
+    res = left <= right;
+    break;
+  case FP_INT_OP_LT:
+    res = left < right;
+    break;
+  case FP_INT_OP_GE:
+    res = left >= right;
+    break;
+  case FP_INT_OP_GT:
+    res = left > right;
+    break;
+  case FP_INT_OP_NE:
+    res = left != right;
+    break;
+  default:
+    STORAGE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Not Supported compare operation type", K(cmp_op));
+  }
+  return res;
+}
+
+OB_INLINE ObFPIntCmpOpType *get_white_op_int_op_map()
+{
+  static ObFPIntCmpOpType white_op_int_op_map[] = {
+    FP_INT_OP_EQ, // WHITE_OP_EQ
+    FP_INT_OP_LE, // WHITE_OP_LE
+    FP_INT_OP_LT, // WHITE_OP_LT
+    FP_INT_OP_GE, // WHITE_OP_GE
+    FP_INT_OP_GT, // WHITE_OP_GT
+    FP_INT_OP_NE  // WHITE_OP_NE
+  };
+  STATIC_ASSERT(ARRAYSIZEOF(white_op_int_op_map) == FP_INT_OP_NE + 1,
+    "type size map count mismatch with type count");
+  return white_op_int_op_map;
 }
 
 inline static int compare_datum(

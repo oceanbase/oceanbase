@@ -25,34 +25,6 @@ using namespace palf;
 namespace storage
 {
 
-ObTxCtxMemtableMgr::ObTxCtxMemtableMgr()
-  : ls_id_(),
-    lock_def_()
-{
-  lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
-  lock_.lock_ = &lock_def_;
-}
-
-ObTxCtxMemtableMgr::~ObTxCtxMemtableMgr()
-{
-  destroy();
-}
-
-void ObTxCtxMemtableMgr::destroy()
-{
-  int ret = OB_SUCCESS;
-  const int64_t ref_cnt = get_ref();
-  if (OB_UNLIKELY(0 != ref_cnt)) {
-    LOG_ERROR("ref cnt is NOT 0", K(ret), K(ref_cnt), K_(ls_id), KPC(this));
-  }
-
-  MemMgrWLockGuard lock_guard(lock_);
-  reset_tables();
-  ls_id_.reset();
-  freezer_ = NULL;
-  is_inited_ = false;
-}
-
 int ObTxCtxMemtableMgr::init(const common::ObTabletID &tablet_id,
                              const ObLSID &ls_id,
                              ObFreezer *freezer,
@@ -71,6 +43,19 @@ int ObTxCtxMemtableMgr::init(const common::ObTabletID &tablet_id,
   LOG_INFO("tx ctx memtable mgr init successfully", K(ls_id), K(tablet_id), K(this));
 
   return ret;
+}
+
+void ObTxCtxMemtableMgr::destroy()
+{
+  reset();
+}
+
+void ObTxCtxMemtableMgr::reset()
+{
+  MemMgrWLockGuard lock_guard(lock_);
+  reset_tables();
+  freezer_ = NULL;
+  is_inited_ = false;
 }
 
 int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
@@ -105,7 +90,7 @@ int ObTxCtxMemtableMgr::create_memtable(const SCN last_replay_scn,
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_ISNULL(table = handle.get_table())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("table is nullptr", K(ret));
+    STORAGE_LOG(ERROR, "table is nullptr", K(ret));
   } else {
     tx_ctx_memtable = dynamic_cast<ObTxCtxMemtable *>(table);
     if (NULL == tx_ctx_memtable) {

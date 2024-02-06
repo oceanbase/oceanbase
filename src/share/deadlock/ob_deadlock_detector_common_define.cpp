@@ -409,7 +409,7 @@ int ObDetectorUserReportInfo::assign(const ObDetectorUserReportInfo &rhs)
     DETECT_LOG(WARN, "fail to copy array", K(rhs));
   } else {
     module_name_ = rhs.module_name_;
-    resource_visitor_ = rhs.resource_visitor_;
+    resource_visitor_ = rhs.required_resource_;
     required_resource_ = rhs.required_resource_;
     valid_extra_column_size_ = rhs.valid_extra_column_size_;
     module_name_guard_ = rhs.module_name_guard_;

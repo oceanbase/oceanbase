@@ -235,7 +235,7 @@ int ObQueryEngine::get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMe
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "get NULL value from keyhash", KR(ret), K(*parameter_key));
-    } else if (returned_key) {
+    } else {
       ret = returned_key->encode(copy_inner_key_wrapper->get_rowkey());
     }
   }
@@ -405,13 +405,11 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
           }
           gap_size = 0;
         }
-
         if (blocksstable::ObDmlFlag::DF_NOT_EXIST == value->first_dml_flag_ &&
-            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_) {
-          ObMvccTransNode *iter = value->get_list_head();
-          if (nullptr != iter && iter->get_tx_id() == tx_id) {
-            ++logical_row_count;
-          }
+            blocksstable::ObDmlFlag::DF_NOT_EXIST == value->last_dml_flag_ &&
+            nullptr != value->list_head_ &&
+            value->list_head_->tx_id_ == tx_id) {
+          ++logical_row_count;
         } else if (blocksstable::ObDmlFlag::DF_INSERT == value->first_dml_flag_
             && blocksstable::ObDmlFlag::DF_DELETE != value->last_dml_flag_) {
           // insert new row
@@ -427,7 +425,6 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
         } else {
           // existent row, not change estimation total row count
         }
-
         if (sample_row_count >= MAX_SAMPLE_ROW_COUNT) {
           break;
         }
@@ -444,6 +441,8 @@ int ObQueryEngine::sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtabl
   if (gap_size >= OB_SKIP_RANGE_LIMIT) {
     physical_row_count -= static_cast<int64_t>(static_cast<double>(gap_size) * ratio);
   }
+  TRANS_LOG(DEBUG, "memtable after sample", KR(ret), K(sample_row_count), K(logical_row_count),
+      K(physical_row_count), K(gap_size), K(ratio));
   return ret;
 }
 
@@ -511,50 +510,41 @@ int ObQueryEngine::split_range(const ObMemtableKey *start_key,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "range count should be greater than 1 if you try to split range", KR(ret), K(range_count));
   } else {
-    bool need_retry = false;
-    do {
-      need_retry = false;
-      // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
-      ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD / 2> key_array;
-      if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
-          OB_ENTRY_NOT_EXIST != ret) {
-        TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
-      } else if (OB_ENTRY_NOT_EXIST == ret) {
-        TRANS_LOG(
-            WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(range_count));
-      } else if (btree_node_count < range_count) {
-        ret = OB_ENTRY_NOT_EXIST;
-        TRANS_LOG(WARN, "branch fan out less than range count", K(btree_node_count), K(range_count));
-      } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
-        TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
-      } else if (NULL == iter) {
-        ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(iter->get_read_handle().split_range(top_level, btree_node_count, range_count, key_array))) {
-        TRANS_LOG(WARN,
-                  "split range fail",
-                  K(ret),
-                  K(*start_key),
-                  K(*end_key),
-                  K(range_count),
-                  K(top_level),
-                  K(btree_node_count),
-                  K(range_count));
-        if (OB_EAGAIN == ret) {
-          need_retry = true;
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_FAIL(convert_keys_to_store_ranges_(start_key, end_key, range_count, key_array, range_array))) {
-        TRANS_LOG(WARN, "convert keys to store ranges failed", KR(ret), K(range_count), K(key_array));
-      } else {
-        // split range succeed
-      }
+    // Here we can not use ESTIMATE_CHILD_COUNT_THRESHOLD to init SEArray due to the stack size limit
+    ObSEArray<ObStoreRowkeyWrapper, ESTIMATE_CHILD_COUNT_THRESHOLD/2> key_array;
+    if (OB_FAIL(find_split_range_level_(start_key, end_key, range_count, top_level, btree_node_count)) &&
+        OB_ENTRY_NOT_EXIST != ret) {
+      TRANS_LOG(WARN, "estimate size fail", K(ret), K(*start_key), K(*end_key));
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      TRANS_LOG(WARN, "range too small, not enough rows ro split", K(ret), K(*start_key), K(*end_key), K(range_count));
+    } else if (btree_node_count < range_count) {
+      ret = OB_ENTRY_NOT_EXIST;
+      TRANS_LOG(WARN, "branch fan out less than range count", K(btree_node_count), K(range_count));
+    } else if (OB_FAIL(init_raw_iter_for_estimate(iter, start_key, end_key))) {
+      TRANS_LOG(WARN, "init raw iter fail", K(ret), K(*start_key), K(*end_key));
+    } else if (NULL == iter) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(iter->get_read_handle().split_range(top_level, btree_node_count, range_count, key_array))) {
+      TRANS_LOG(WARN,
+                "split range fail",
+                K(ret),
+                K(*start_key),
+                K(*end_key),
+                K(range_count),
+                K(top_level),
+                K(btree_node_count),
+                K(range_count));
+    } else if (OB_FAIL(convert_keys_to_store_ranges_(start_key, end_key, range_count, key_array, range_array))) {
+      TRANS_LOG(WARN, "convert keys to store ranges failed", KR(ret), K(range_count), K(key_array));
+    } else {
+      // split range succeed
+    }
 
-      if (OB_NOT_NULL(iter)) {
-        iter->reset();
-        raw_iter_alloc_.free(iter);
-        iter = NULL;
-      }
-    } while (OB_SUCC(ret) && need_retry);
+    if (OB_NOT_NULL(iter)) {
+      iter->reset();
+      raw_iter_alloc_.free(iter);
+      iter = NULL;
+    }
   }
   return ret;
 }
@@ -695,7 +685,6 @@ int ObQueryEngine::estimate_row_count(const transaction::ObTransID &tx_id,
       TRANS_LOG(WARN, "failed to sample rows", KR(ret), K(*start_key), K(*end_key));
     }
   }
-
   logical_row_count = log_row_count1 + log_row_count2;
   // since remaining_row_count actually includes phy_row_count1, so we don't
   // want to add it twice here

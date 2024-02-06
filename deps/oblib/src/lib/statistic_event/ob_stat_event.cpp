@@ -17,25 +17,17 @@ namespace oceanbase
 {
 namespace common
 {
-
-#define STAT_DEF_true(def, name, stat_class, stat_id, summary_in_session, can_visible)\
-{name, stat_class, stat_id, summary_in_session, can_visible},
-
-#define STAT_DEF_false(def, name, stat_class, stat_id, summary_in_session, can_visible)
-
 const ObStatEvent OB_STAT_EVENTS[] = {
-#define STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable) \
-  STAT_DEF_##enable(def, name, stat_class, stat_id, summary_in_session, can_visible)
+#define STAT_EVENT_ADD_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible) \
+  {name, stat_class, stat_id, summary_in_session, can_visible},
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_ADD_DEF
-#define STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible, enable) \
-  STAT_DEF_##enable(def, name, stat_class, stat_id, summary_in_session, can_visible)
+#define STAT_EVENT_SET_DEF(def, name, stat_class, stat_id, summary_in_session, can_visible) \
+  {name, stat_class, stat_id, summary_in_session, can_visible},
 #include "lib/statistic_event/ob_stat_event.h"
 #undef STAT_EVENT_SET_DEF
 };
 
-#undef STAT_DEF_true
-#undef STAT_DEF_false
 
 ObStatEventAddStat::ObStatEventAddStat()
   : stat_value_(0)

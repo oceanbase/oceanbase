@@ -25,7 +25,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "share/ob_occam_time_guard.h"
-#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -324,15 +323,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
     switch (event.event_type_) {
       case RoleChangeEventType::CHANGE_LEADER_EVENT_TYPE:
         CLOG_LOG(INFO, "begin change leader", K(curr_access_mode), K(event), KPC(ls));
-#ifdef ERRSIM
-        ret = OB_E(EventTable::EN_RC_ONLY_LEADER_TO_LEADER) OB_SUCCESS;
-        if (OB_FAIL(ret)) {
-          ls->get_log_restore_handler()->change_leader_to(event.dst_addr_);
-          CLOG_LOG(INFO, "fake EN_RC_ONLY_LEADER_TO_LEADER with change_leader_event", KPC(ls), K(event));
-        }
-#endif
-        if (OB_FAIL(ret)) {
-        } else if (is_append_mode(curr_access_mode)
+        if (is_append_mode(curr_access_mode)
             && OB_FAIL(handle_change_leader_event_for_log_handler_(event.dst_addr_, ls))) {
           CLOG_LOG(WARN, "ObLogHandler change leader failed", K(ret), K(event), KPC(ls));
         } else if (is_raw_write_or_flashback_mode(curr_access_mode)
@@ -465,51 +456,39 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
         K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline));
   } else if (FALSE_IT(opt_type = get_role_change_opt_type_(curr_role, new_role, only_need_change_to_follower))) {
   } else {
-
-#ifdef ERRSIM
-    ret = OB_E(EventTable::EN_RC_ONLY_LEADER_TO_LEADER) OB_SUCCESS;
-    if (RoleChangeOptType::LEADER_2_LEADER == opt_type) {
-      ret = OB_SUCCESS;
-    }
-    if (OB_FAIL(ret)) {
-      CLOG_LOG(INFO, "fake EN_RC_ONLY_LEADER_TO_LEADER with role_change_event", KPC(ls), K(opt_type));
-    }
-#endif
-
     switch (opt_type) {
       // leader -> follower
       case RoleChangeOptType::LEADER_2_FOLLOWER:
-        if (OB_SUCC(ret) && OB_FAIL(switch_leader_to_follower_forcedly_(new_proposal_id, ls))) {
+        if (OB_FAIL(switch_leader_to_follower_forcedly_(new_proposal_id, ls))) {
           CLOG_LOG(WARN, "switch_leader_to_follower_forcedly_ failed", K(ret), K(curr_role),
-                   K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
+          K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
         break;
-        // follower -> follower
+      // follower -> follower
       case RoleChangeOptType::FOLLOWER_2_LEADER:
-        if (OB_SUCC(ret) && OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls, retry_ctx))) {
-          CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(curr_role), K(curr_proposal_id), K(new_role),
-                   K(curr_access_mode), K(new_proposal_id));
+        if (OB_FAIL(switch_follower_to_leader_(new_proposal_id, ls, retry_ctx))) {
+          CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(curr_role),
+              K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
         break;
-        // leader -> leader
+      // leader -> leader
       case RoleChangeOptType::LEADER_2_LEADER:
-        if (OB_SUCC(ret) && OB_FAIL(switch_leader_to_leader_(new_proposal_id, curr_proposal_id,
-                                                             ls, retry_ctx))) {
+        if (OB_FAIL(switch_leader_to_leader_(new_proposal_id, curr_proposal_id, ls, retry_ctx))) {
           CLOG_LOG(WARN, "switch_leader_to_leader_ failed", K(ret), K(curr_role),
-                   K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
+              K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
         break;
-        // follower -> follower
-    case RoleChangeOptType::FOLLOWER_2_FOLLOWER:
-      if (OB_SUCC(ret) && OB_FAIL(switch_follower_to_follower_(new_proposal_id, ls))) {
-        CLOG_LOG(WARN, "switch_follower_to_follower_ failed", K(curr_role), K(curr_proposal_id),
-                 K(new_role), K(curr_access_mode), K(new_proposal_id));
-      }
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "unexpected error, can not handle role change", K(ret),
-               K(curr_role), K(curr_proposal_id), K(new_role), K(new_proposal_id), KPC(ls));
+      // follower -> follower
+      case RoleChangeOptType::FOLLOWER_2_FOLLOWER:
+        if (OB_FAIL(switch_follower_to_follower_(new_proposal_id, ls))) {
+          CLOG_LOG(WARN, "switch_follower_to_follower_ failed", K(ret), K(curr_role),
+              K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "unexpected error, can not handle role change", K(ret), K(curr_role),
+            K(curr_proposal_id), K(new_role), K(new_proposal_id), KPC(ls));
     }
   }
   return ret;
@@ -606,10 +585,6 @@ int ObRoleChangeService::switch_follower_to_leader_(
     CLOG_LOG(WARN, "apply_service_ switch_to_leader failed", K(ret), K(new_role), K(new_proposal_id));
   } else if (FALSE_IT(time_guard.click("replay_service->switch_to_leader"))
       || OB_FAIL(replay_service_->switch_to_leader(ls_id))) {
-    CLOG_LOG(WARN, "replay_service_ switch_to_leader failed", K(new_role), K(new_proposal_id));
-  } else if (FALSE_IT(time_guard.click("wait_replay_service_submit_task_clear_"))
-      || OB_FAIL(wait_replay_service_submit_task_clear_(ls_id))) {
-    CLOG_LOG(ERROR, "wait_replay_service_submit_task_clear_ failed", K(new_role), K(new_proposal_id));
   } else if (FALSE_IT(log_handler->switch_role(new_role, new_proposal_id))) {
     CLOG_LOG(WARN, "ObLogHandler switch role failed", K(ret), K(new_role), K(new_proposal_id));
   } else if (FALSE_IT(ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_RC_HANDLER_DONE))) {
@@ -737,9 +712,6 @@ int ObRoleChangeService::switch_leader_to_leader_(
     RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
-  #ifdef ERRSIM
-   SERVER_EVENT_SYNC_ADD("LOGSERVICE", "BEFORE_LEADER_TO_LEADER_RC");
-  #endif
   ObTimeGuard time_guard("switch_leader_to_leader", EACH_ROLE_CHANGE_COST_MAX_TIME);
   if (FALSE_IT(time_guard.click("switch_leader_to_follower_forcedly_"))
       || OB_FAIL(switch_leader_to_follower_forcedly_(curr_proposal_id, ls))) {
@@ -871,25 +843,6 @@ int ObRoleChangeService::wait_replay_service_replay_done_(
     }
   }
   CLOG_LOG(INFO, "wait_replay_service_replay_done_ finish", K(ret), K(ls_id), K(end_lsn), K(is_done));
-  return ret;
-}
-
-int ObRoleChangeService::wait_replay_service_submit_task_clear_(const share::ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  bool is_clear = false;
-  const int64_t start_ts = ObTimeUtility::current_time();
-  while (OB_SUCC(ret) && (!is_clear)) {
-    if (OB_FAIL(replay_service_->is_submit_task_clear(ls_id, is_clear))) {
-      CLOG_LOG(WARN, "replay_service_ is_submit_task_clean failed", K(is_clear));
-    } else if (!is_clear) {
-      ob_usleep(1 * 1000);
-      if (REACH_TIME_INTERVAL(100 * 1000L)) {
-        CLOG_LOG(WARN, "submit_task is not clear, need retry", K(ls_id), K(start_ts));
-      }
-    } else {/*do nothing*/}
-  }
-  CLOG_LOG(INFO, "wait_replay_service_submit_task_clear_ finish", K(ls_id), K(is_clear));
   return ret;
 }
 

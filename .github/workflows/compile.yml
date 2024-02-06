@@ -2,15 +2,9 @@ name: Compile
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, develop ]
-    paths-ignore:
-      - 'docs/**'
-      - '.github/**'
-      - 'README.md'
-      - 'README_CN.md'
-      - 'CONTRIBUTING.md'
+    branches: [ master ]
 
 jobs:
   centos-build:

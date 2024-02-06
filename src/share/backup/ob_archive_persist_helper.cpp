@@ -169,7 +169,7 @@ int ObArchivePersistHelper::lock_archive_dest(
   int ret = OB_SUCCESS;
   ObBackupPathString path;
   if (OB_FAIL(get_archive_dest(trans, true /* need_lock */, dest_no, path))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
+    if (OB_ENTRY_NOT_EXIST) {
       ret = OB_SUCCESS;
       is_exist = false;
     } else {
@@ -521,42 +521,6 @@ int ObArchivePersistHelper::get_round_by_dest_id(common::ObISQLClient &proxy, co
         ret = OB_ENTRY_NOT_EXIST;
       } else if (OB_FAIL(round.deep_copy_from(rounds.at(0)))) {
         LOG_WARN("failed to deep copy round", K(ret), K(rounds));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObArchivePersistHelper::get_round_stopping_ts(
-    common::ObISQLClient &proxy, const int64_t dest_no, int64_t &ts) const
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tenant archive table operator not init", K(ret));
-  } else if (OB_FAIL(sql.append_fmt("select time_to_usec(gmt_modified) as stopping_ts from %s where tenant_id=%ld and dest_no=%ld and status='STOPPING'",
-                     OB_ALL_LOG_ARCHIVE_PROGRESS_TNAME,
-                     tenant_id_,
-                     dest_no))) {
-    LOG_WARN("failed to append fmt", K(ret));
-  } else {
-    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
-        LOG_WARN("failed to exec sql", K(ret), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(sql));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_ENTRY_NOT_EXIST;
-        } else {
-          LOG_WARN("failed to get next", K(ret));
-        }
-      } else {
-        EXTRACT_INT_FIELD_MYSQL(*result, "stopping_ts", ts, int64_t);
       }
     }
   }

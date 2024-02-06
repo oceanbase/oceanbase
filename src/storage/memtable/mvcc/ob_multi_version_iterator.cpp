@@ -152,12 +152,6 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
         TRANS_LOG(WARN, "current trans node has not submit clog yet", K(ret), KPC_(version_iter));
       } else if (NDT_COMPACT == version_iter_->type_) { // ignore compact node
         version_iter_ = version_iter_->prev_;
-      } else if (version_iter_->scn_ > merge_scn_) {
-        // skip tx node which not log succ
-        if (REACH_TIME_INTERVAL(100_ms)) {
-          TRANS_LOG(INFO, "skip txn-node log sync failed", KPC(version_iter_), K(merge_scn_));
-        }
-        version_iter_ = version_iter_->prev_;
       } else {
         bool need_get_state = version_iter_->get_tx_end_scn() > merge_scn_;
         if (need_get_state) {

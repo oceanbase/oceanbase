@@ -57,22 +57,12 @@ public:
       const char **cell_datas,
       const int64_t row_cap,
       common::ObDatum *datums) const override;
-  virtual int decode_vector(
-      const ObColumnDecoderCtx &decoder_ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const override;
   virtual int get_null_count(
       const ObColumnDecoderCtx &ctx,
       const ObIRowIndex *row_index,
       const int64_t *row_ids,
       const int64_t row_cap,
       int64_t &null_count) const override;
-private:
-  template <typename VectorType, bool HAS_NULL, bool HEX_PACKED>
-  int fill_vector(
-      const ObColumnDecoderCtx &ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const;
 private:
   const ObStringPrefixMetaHeader *meta_header_;
   const char *meta_data_;

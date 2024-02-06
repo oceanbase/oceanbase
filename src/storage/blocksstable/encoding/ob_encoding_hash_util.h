@@ -42,11 +42,11 @@ inline uint64_t xxhash64(const void* input, int64_t length, uint64_t seed)
 struct ObEncodingHashNode
 {
   const ObDatum *datum_;
+  int64_t dict_ref_;
   ObEncodingHashNode *next_;
-  int32_t dict_ref_;
 
   TO_STRING_KV(KP_(datum), K_(dict_ref), KP_(next));
-}__attribute__((packed));
+};
 
 class ObEncodingHashNodeListIterator
 {
@@ -209,11 +209,11 @@ struct ObEncodingHashNodeList
 
   ObEncodingHashNode *header_;
   ObEncodingHashNodeList *next_;
-  int32_t size_;
-  int32_t insert_ref_;
+  int64_t size_;
+  int64_t insert_ref_;
 
   TO_STRING_KV(KP_(header), KP_(next), K_(size), K_(insert_ref));
-}__attribute__((packed));
+};
 
 class ObEncodingHashTable
 {
@@ -305,8 +305,6 @@ public:
 private:
   void clear();
 
-  // release hashtable too large to reduce memory usage
-  static const int64_t MAX_CACHED_HASHTABLE_SIZE = UINT16_MAX;
   common::ObPooledAllocator<ObEncodingHashTable> allocator_;
   common::ObArray<ObEncodingHashTable *> hashtables_;
 };

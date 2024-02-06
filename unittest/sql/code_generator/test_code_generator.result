@@ -3153,7 +3153,7 @@
     ]
   }
 }
-[9] UPDATE oceanbase.__all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND svr_ip = '127.0.0.1' AND svr_port = 51951;
+[9] UPDATE oceanbase.__all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND svr_ip = '10.232.36.175' AND svr_port = 51951;
 {
   "param_num":11,
   "table_schema_version": [
@@ -3668,11 +3668,11 @@
                                     "key_type":0,
                                     "null_safe":false,
                                     "start_value": {
-                                      "VARCHAR":"127.0.0.1",
+                                      "VARCHAR":"10.232.36.175",
                                       "collation":"utf8mb4_general_ci"
                                     },
                                     "end_value": {
-                                      "VARCHAR":"127.0.0.1",
+                                      "VARCHAR":"10.232.36.175",
                                       "collation":"utf8mb4_general_ci"
                                     },
                                     "include_start":true,

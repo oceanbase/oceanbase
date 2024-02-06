@@ -51,7 +51,7 @@ private:
                         const share::schema::ObUDTTypeInfo* type_info,
                         int64_t position,
                         share::schema::ObUDTTypeAttr& type_attr,
-                        const ObString& db_name);
+                        ObString &db_name);
   int resolve_final_node(const ParseNode *final_node);
   int resolve_type_attr(const ParseNode *attr_node,
                         int64_t position,
@@ -68,13 +68,12 @@ private:
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &object_spec);
   int resolve_udt_data_type(const ParseNode *type_node,
-                            share::schema::ObUDTCollectionType& coll_type,
-                            const ObString& type_name,
-                            const ObString& db_name);
+                        share::schema::ObUDTCollectionType& coll_type,
+                        ObString &db_name);
   int resolve_type_varray(const ParseNode *varray_node,
-                          obrpc::ObCreateUDTArg &crt_udt_arg);
+                        share::schema::ObUDTTypeInfo *udt_info);
   int resolve_type_nested_table(const ParseNode *nested_node,
-                                obrpc::ObCreateUDTArg &crt_udt_arg);
+                        share::schema::ObUDTTypeInfo* udt_info);
   int resolve_type_define(const ParseNode *type_def_node,
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &object_spec);
@@ -83,10 +82,9 @@ private:
                         obrpc::ObCreateUDTArg &crt_udt_arg,
                         const ObString &db_name,
                         const ObString &object_spec);
-  int detect_loop_dependency(const ObString &target_udt_name,
-                             uint64_t target_database_id,
-                             const ObUDTTypeInfo *udt_info,
-                             bool &has_mutual_dep);
+  int detect_loop_dependency(const ObString &udt_name,
+                             const share::schema::ObUDTTypeInfo *udt_info,
+                             bool &is_dep);
 public:
   static int package_info_to_object_info(const share::schema::ObPackageInfo &pkg_info,
                                          share::schema::ObUDTObjectType &obj_info);

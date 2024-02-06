@@ -20,7 +20,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/index_block/ob_index_block_tree_cursor.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
-#include "storage/blocksstable/index_block/ob_index_block_dual_meta_iterator.h"
+#include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/blocksstable/ob_block_manager.h"
 
 namespace oceanbase

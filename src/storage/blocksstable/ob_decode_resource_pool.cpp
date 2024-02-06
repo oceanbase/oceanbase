@@ -209,18 +209,18 @@ void ObDecoderPool::reset()
   ObDecodeResourcePool *decode_res_pool = MTL(ObDecodeResourcePool*);
   if (OB_ISNULL(decode_res_pool)) {
     int ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "NULL tenant decode resource pool", K(ret));
+    STORAGE_LOG(WARN, "NULL tenant decode resource pool", K(ret));
   } else {
-    (void)free_decoders<ObRawDecoder>(*decode_res_pool, ObColumnHeader::RAW);
-    (void)free_decoders<ObDictDecoder>(*decode_res_pool, ObColumnHeader::DICT);
-    (void)free_decoders<ObRLEDecoder>(*decode_res_pool, ObColumnHeader::RLE);
-    (void)free_decoders<ObConstDecoder>(*decode_res_pool, ObColumnHeader::CONST);
-    (void)free_decoders<ObIntegerBaseDiffDecoder>(*decode_res_pool, ObColumnHeader::INTEGER_BASE_DIFF);
-    (void)free_decoders<ObStringDiffDecoder>(*decode_res_pool, ObColumnHeader::STRING_DIFF);
-    (void)free_decoders<ObHexStringDecoder>(*decode_res_pool, ObColumnHeader::HEX_PACKING);
-    (void)free_decoders<ObStringPrefixDecoder>(*decode_res_pool, ObColumnHeader::STRING_PREFIX);
-    (void)free_decoders<ObColumnEqualDecoder>(*decode_res_pool, ObColumnHeader::COLUMN_EQUAL);
-    (void)free_decoders<ObInterColSubStrDecoder>(*decode_res_pool, ObColumnHeader::COLUMN_SUBSTR);
+    free_decoders<ObRawDecoder>(*decode_res_pool, ObColumnHeader::RAW);
+    free_decoders<ObDictDecoder>(*decode_res_pool, ObColumnHeader::DICT);
+    free_decoders<ObRLEDecoder>(*decode_res_pool, ObColumnHeader::RLE);
+    free_decoders<ObConstDecoder>(*decode_res_pool, ObColumnHeader::CONST);
+    free_decoders<ObIntegerBaseDiffDecoder>(*decode_res_pool, ObColumnHeader::INTEGER_BASE_DIFF);
+    free_decoders<ObStringDiffDecoder>(*decode_res_pool, ObColumnHeader::STRING_DIFF);
+    free_decoders<ObHexStringDecoder>(*decode_res_pool, ObColumnHeader::HEX_PACKING);
+    free_decoders<ObStringPrefixDecoder>(*decode_res_pool, ObColumnHeader::STRING_PREFIX);
+    free_decoders<ObColumnEqualDecoder>(*decode_res_pool, ObColumnHeader::COLUMN_EQUAL);
+    free_decoders<ObInterColSubStrDecoder>(*decode_res_pool, ObColumnHeader::COLUMN_SUBSTR);
   }
 }
 
@@ -244,10 +244,10 @@ void ObCSDecoderPool::reset()
     int ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "NULL tenant decode resource pool", K(ret));
   } else {
-    (void)free_decoders<ObIntegerColumnDecoder>(*decode_res_pool, ObCSColumnHeader::INTEGER);
-    (void)free_decoders<ObStringColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STRING);
-    (void)free_decoders<ObIntDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::INT_DICT);
-    (void)free_decoders<ObStrDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STR_DICT);
+    free_decoders<ObIntegerColumnDecoder>(*decode_res_pool, ObCSColumnHeader::INTEGER);
+    free_decoders<ObStringColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STRING);
+    free_decoders<ObIntDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::INT_DICT);
+    free_decoders<ObStrDictColumnDecoder>(*decode_res_pool, ObCSColumnHeader::STR_DICT);
   }
 }
 

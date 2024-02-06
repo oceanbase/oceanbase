@@ -443,6 +443,7 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     errsim_point_info_(),
 #endif
     rebuild_seq_(OB_INVALID_VERSION),
+    update_logical_minor_sstable_(false),
     is_transfer_replace_(false),
     start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr),
@@ -455,6 +456,7 @@ void ObBatchUpdateTableStoreParam::reset()
 {
   tables_handle_.reset();
   rebuild_seq_ = OB_INVALID_VERSION;
+  update_logical_minor_sstable_ = false;
   is_transfer_replace_ = false;
   start_scn_.set_min();
   tablet_meta_ = nullptr;
@@ -465,6 +467,8 @@ void ObBatchUpdateTableStoreParam::reset()
 bool ObBatchUpdateTableStoreParam::is_valid() const
 {
   return rebuild_seq_ > OB_INVALID_VERSION
+      && (!update_logical_minor_sstable_
+          || (update_logical_minor_sstable_ && start_scn_ > SCN::min_scn() && OB_ISNULL(tablet_meta_)))
       && ObTabletRestoreStatus::is_valid(restore_status_);
 }
 
@@ -479,6 +483,7 @@ int ObBatchUpdateTableStoreParam::assign(
     LOG_WARN("failed to assign tables handle", K(ret), K(param));
   } else {
     rebuild_seq_ = param.rebuild_seq_;
+    update_logical_minor_sstable_ = param.update_logical_minor_sstable_;
     is_transfer_replace_ = param.is_transfer_replace_;
     start_scn_ = param.start_scn_;
     tablet_meta_ = param.tablet_meta_;

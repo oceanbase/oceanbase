@@ -93,18 +93,14 @@ int calc_convert_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
       ObString checked_res;
       bool is_null = false;
       const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-      ObSQLMode sql_mode = 0;
-      ObSolidifiedVarsGetter helper(expr, ctx, session);
       if (OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session is null", K(ret));
-      } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-        LOG_WARN("get sql mode failed", K(ret));
       } else if (OB_FAIL(ObSQLUtils::check_well_formed_str(child_res->get_string(),
                                                            cs_type,
                                                            checked_res,
                                                            is_null,
-                                                           is_strict_mode(sql_mode),
+                                                           is_strict_mode(session->get_sql_mode()),
                                                            false))) {
         LOG_WARN("check_well_formed_str failed", K(ret),
                                                  K(child_res->get_string()),
@@ -128,13 +124,6 @@ int ObExprConvert::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_convert_expr;
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprConvert, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
   return ret;
 }
 

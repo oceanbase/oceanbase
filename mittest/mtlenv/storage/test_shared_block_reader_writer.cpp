@@ -63,6 +63,10 @@ void TestSharedBlockRWriter::TearDownTestCase()
 void TestSharedBlockRWriter::SetUp()
 {
   int ret = OB_SUCCESS;
+  const ObTenantIOConfig &io_config = ObTenantIOConfig::default_instance();
+  if (OB_FAIL(ObIOManager::get_instance().add_tenant_io_manager(OB_SERVER_TENANT_ID, io_config))) {
+    STORAGE_LOG(WARN, "add tenant io config failed");
+  }
 }
 
 void TestSharedBlockRWriter::TearDown()
@@ -144,14 +148,13 @@ TEST_F(TestSharedBlockRWriter, test_rwrite_easy_block)
     ObSharedBlocksWriteCtx write_ctx;
     ObSharedBlockReadInfo read_info;
     OK(write_handle.get_write_ctx(write_ctx));
-    ASSERT_EQ(write_ctx.addr_.size_, 10);
+    ASSERT_EQ(write_ctx.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
     if (test_round == 9) {
       macro_id = write_ctx.addr_.block_id();
     }
 
     read_info.addr_ = write_ctx.addr_;
-    ASSERT_EQ(read_info.addr_.size_, 10);
-    ASSERT_TRUE(read_info.addr_.is_raw_block());
+    ASSERT_EQ(read_info.addr_.size_, 10 + sizeof(ObSharedBlockHeader));
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     OK(rwriter.async_read(read_info, read_handle));
     char *buf = nullptr;
@@ -299,12 +302,14 @@ TEST_F(TestSharedBlockRWriter, test_cb_single_write)
   ObStorageMetaCache::ObStorageMetaIOCallback *cb = nullptr;
   callback_buf = allocator_.alloc(sizeof(ObStorageMetaCache::ObStorageMetaIOCallback));
   ASSERT_NE(nullptr, callback_buf);
-  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback(&allocator_,
-                                                                      meta_type,
-                                                                      meta_key,
-                                                                      meta_handle.cache_handle_,
-                                                                      fake_tablet,
-                                                                      nullptr);
+  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback;
+  cb->meta_type_ = meta_type;
+  cb->offset_ = meta_key.get_meta_addr().offset();
+  cb->buf_size_ = meta_key.get_meta_addr().size();
+  cb->handle_ = meta_handle.cache_handle_;
+  cb->allocator_ = &allocator_;
+  cb->tablet_= fake_tablet;
+  cb->key_ = meta_key;
   ObSharedBlockReadInfo read_info;
   ObSharedBlockReadHandle read_handle;
   read_info.addr_ = write_ctx.addr_;
@@ -372,12 +377,14 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   ObStorageMetaCache::ObStorageMetaIOCallback *cb = nullptr;
   callback_buf = allocator_.alloc(sizeof(ObStorageMetaCache::ObStorageMetaIOCallback));
   ASSERT_NE(nullptr, callback_buf);
-  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback(&allocator_,
-                                                                      meta_type,
-                                                                      meta_key,
-                                                                      meta_handle.cache_handle_,
-                                                                      fake_tablet,
-                                                                      nullptr);
+  cb = new (callback_buf) ObStorageMetaCache::ObStorageMetaIOCallback;
+  cb->meta_type_ = meta_type;
+  cb->offset_ = meta_key.get_meta_addr().offset();
+  cb->buf_size_ = meta_key.get_meta_addr().size();
+  cb->handle_ = meta_handle.cache_handle_;
+  cb->allocator_ = &allocator_;
+  cb->tablet_= fake_tablet;
+  cb->key_ = meta_key;
   ObSharedBlockReadInfo read_info;
   ObSharedBlockReadHandle read_handle;
   read_info.addr_ = write_ctxs[test_round].addr_;
@@ -390,54 +397,6 @@ TEST_F(TestSharedBlockRWriter, test_cb_batch_write)
   int64_t buf_len = 0;
   OK(read_handle.get_data(allocator_, buf, buf_len));
   ASSERT_EQ(sstable_size, buf_len);
-}
-
-TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
-{
-  ObSharedBlockReaderWriter rwriter;
-  OK(rwriter.init(true/*need align*/, false/*need cross*/));
-  int test_round = 10;
-
-  ObSharedBlockWriteInfo write_info;
-  ObArray<ObSharedBlockWriteInfo> write_infos;
-  char s[10][20];
-  for (int i = 0; i < test_round; ++i) {
-    for (int j = 0; j < 20; ++j) {
-      s[i][j] = '0' + i;
-    }
-    write_info.buffer_ = s[i];
-    write_info.offset_ = 0;
-    write_info.size_ = 20;
-    write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-    write_infos.push_back(write_info);
-  }
-
-  ObSharedBlockBatchHandle write_handle;
-  OK(rwriter.async_batch_write(write_infos, write_handle));
-  ASSERT_TRUE(write_handle.is_valid());
-
-  ObArray<ObSharedBlocksWriteCtx> write_ctxs;
-  OK(write_handle.batch_get_write_ctx(write_ctxs));
-  ASSERT_EQ(test_round, write_ctxs.count());
-  MacroBlockId block_id = write_ctxs[0].addr_.block_id();
-  ObMacroBlockHandle macro_handle;
-  ObMacroBlockReadInfo read_info;
-  const int64_t io_buf_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
-  read_info.offset_ = 0;
-  read_info.size_ = io_buf_size;
-  read_info.io_desc_.set_mode(ObIOMode::READ);
-  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
-  read_info.macro_block_id_ = block_id;
-  read_info.buf_ = static_cast<char *>(allocator_.alloc(io_buf_size));
-  OK(ObBlockManager::read_block(read_info, macro_handle));
-  char *buf = nullptr;
-  int64_t buf_len = 0;
-  for (int i = 0; i < test_round; ++i) {
-    OK(ObSharedBlockReaderWriter::parse_data_from_macro_block(macro_handle, write_ctxs[i].addr_, buf, buf_len));
-    ASSERT_EQ(20, buf_len);
-    ASSERT_EQ(0, MEMCMP(s[i], buf, 20));
-  }
 }
 
 TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
@@ -529,7 +488,7 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_bug1)
   common_header.set_attr(ObMacroBlockCommonHeader::MacroBlockType::SharedMetaData);
   const int64_t header_size = common_header.get_serialize_size();
   ASSERT_EQ(addr.offset_, 0 + header_size);
-  ASSERT_EQ(addr.size_, data_size);
+  ASSERT_EQ(addr.size_, data_size + sizeof(ObSharedBlockHeader));
   ASSERT_EQ(rwriter.offset_, 4096);
   ASSERT_EQ(rwriter.align_offset_, 4096);
 }

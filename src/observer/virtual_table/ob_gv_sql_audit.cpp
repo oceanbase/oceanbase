@@ -21,7 +21,6 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "share/rc/ob_tenant_base.h"
-#include "sql/resolver/ob_resolver_utils.h"
 
 #include <algorithm> // std::sort
 
@@ -546,8 +545,7 @@ bool ObGvSqlAudit::is_perf_event_dep_field(uint64_t col_id) {
     case INDEX_BLOCK_CACHE_HIT:
     case BLOCKSCAN_BLOCK_CNT:
     case BLOCKSCAN_ROW_CNT:
-    case PUSHDOWN_STORAGE_FILTER_ROW_CNT:
-    case NETWORK_WAIT_TIME: {
+    case PUSHDOWN_STORAGE_FILTER_ROW_CNT: {
       is_contain = true;
       break;
     }
@@ -901,7 +899,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_uint64(record.data_.exec_record_.user_io_time_);
         } break;
         case SCHEDULE_TIME: {
-          cells[cell_idx].set_uint64(record.data_.exec_record_.schedule_time_);
+          cells[cell_idx].set_uint64(0);
         } break;
         case ROW_CACHE_HIT: {
           cells[cell_idx].set_int(record.data_.exec_record_.row_cache_hit_);
@@ -1052,24 +1050,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_null();
         } break;
         case PLSQL_EXEC_TIME: {
-          cells[cell_idx].set_int(0);
-        } break;
-        case NETWORK_WAIT_TIME: {
           cells[cell_idx].set_null();
-        } break;
-        case STMT_TYPE: {
-          cells[cell_idx].set_null();
-          cells[cell_idx].set_default_collation_type();
-        } break;
-        case SEQ_NUM: {
-          int64_t set_v = record.data_.seq_num_;
-          cells[cell_idx].set_int(set_v);
-        } break;
-        case TOTAL_MEMSTORE_READ_ROW_COUNT: {
-          cells[cell_idx].set_int(record.data_.total_memstore_read_row_count_);
-        } break;
-        case TOTAL_SSSTORE_READ_ROW_COUNT: {
-          cells[cell_idx].set_int(record.data_.total_ssstore_read_row_count_);
         } break;
         default: {
           ret = OB_ERR_UNEXPECTED;

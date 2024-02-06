@@ -31,7 +31,7 @@ public:
                     const ObLogicMacroBlockId &logic_id,
                     char *buf,
                     const int64_t buf_len,
-                    const int64_t row_count) = 0;
+                    const int64_t data_seq) = 0;
   virtual int wait() = 0;
 };
 

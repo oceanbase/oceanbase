@@ -106,11 +106,8 @@ private:
       ObTableAccessContext &context,
       ObITable *table);
   int extract_group_by_iters();
-  int construct_cg_iter_params_for_single_row(
-      const ObTableIterParam &row_param,
-      ObTableAccessContext &context,
-      common::ObIArray<ObTableIterParam*> &iter_params);
   int construct_cg_iter_params(
+      const bool project_single_row,
       const ObTableIterParam &row_param,
       ObTableAccessContext &context,
       common::ObIArray<ObTableIterParam*> &iter_params);

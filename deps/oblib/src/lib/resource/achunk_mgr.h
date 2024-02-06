@@ -117,24 +117,6 @@ public:
     }
     return chunk;
   }
-  inline AChunk *popall()
-  {
-    AChunk *chunk = NULL;
-    if (!OB_ISNULL(header_)) {
-      ObDisableDiagnoseGuard disable_diagnose_guard;
-      if (with_mutex_) {
-        mutex_.lock();
-      }
-      DEFER(if (with_mutex_) {mutex_.unlock();});
-      if (!OB_ISNULL(header_)) {
-        chunk = header_;
-        hold_ = 0;
-        pops_ = pushes_;
-        header_ = NULL;
-      }
-    }
-    return chunk;
-  }
 
   inline int64_t count() const
   {
@@ -239,8 +221,6 @@ public:
   inline int64_t get_huge_maps()  { return huge_maps_; }
   inline int64_t get_huge_unmaps()  { return huge_unmaps_; }
   inline int64_t get_shadow_hold() const { return ATOMIC_LOAD(&shadow_hold_); }
-
-  int64_t sync_wash();
 
 private:
   typedef ABitSet ChunkBitMap;

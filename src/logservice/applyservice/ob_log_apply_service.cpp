@@ -51,11 +51,10 @@ void ObApplyFsCb::destroy()
 
 int ObApplyFsCb::update_end_lsn(int64_t id,
                                 const LSN &end_lsn,
-                                const SCN &end_scn,
                                 const int64_t proposal_id)
 {
   UNUSED(id);
-  return apply_status_->update_palf_committed_end_lsn(end_lsn, end_scn, proposal_id);
+  return apply_status_->update_palf_committed_end_lsn(end_lsn, proposal_id);
 }
 
 //---------------ObApplyServiceTask---------------//
@@ -257,7 +256,6 @@ ObApplyStatus::ObApplyStatus()
       proposal_id_(-1),
       ap_sv_(NULL),
       palf_committed_end_lsn_(0),
-      palf_committed_end_scn_(),
       last_check_scn_(),
       max_applied_cb_scn_(),
       submit_task_(),
@@ -338,7 +336,6 @@ void ObApplyStatus::destroy()
   proposal_id_ = -1;
   role_ = FOLLOWER;
   fs_cb_.destroy();
-  palf_committed_end_scn_.reset();
   palf_committed_end_lsn_.reset();
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
@@ -612,7 +609,6 @@ int ObApplyStatus::switch_to_follower_()
 
 //单线程调用
 int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
-                                                 const SCN &end_scn,
                                                  const int64_t proposal_id)
 {
   int ret = OB_SUCCESS;
@@ -630,7 +626,6 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
         if (palf_committed_end_lsn_ >= end_lsn) {
           CLOG_LOG(ERROR, "invalid new end_lsn", KPC(this), K(proposal_id), K(end_lsn));
         } else {
-          palf_committed_end_scn_.atomic_store(end_scn);
           palf_committed_end_lsn_ = end_lsn;
           if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
             CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret), K(proposal_id), K(end_lsn));
@@ -649,12 +644,6 @@ int ObApplyStatus::update_palf_committed_end_lsn(const palf::LSN &end_lsn,
     CLOG_LOG(TRACE, "update_palf_committed_end_lsn", KPC(this), K(proposal_id), K(end_lsn), KR(ret));
   }
   return ret;
-}
-
-share::SCN ObApplyStatus::get_palf_committed_end_scn() const
-{
-  share::SCN scn = palf_committed_end_scn_.atomic_load();
-  return scn;
 }
 
 int ObApplyStatus::unregister_file_size_cb()
@@ -692,28 +681,23 @@ int ObApplyStatus::get_max_applied_scn(SCN &scn)
   } else if (OB_UNLIKELY(is_in_stop_state_)) {
     // stop后不会再上任, 始终返回上轮作为leader时缓存的值
   } else if (FOLLOWER == role_) {
-    //The max_applied_cb_scn_ undergoes asynchronous updating, and under circumstances where a
-    //transiting to a follower role, there exists a possibility that its recorded value might underestimate the actual one.
-    //Upon a log stream replica's shift from the leader role to a follower role, it guarantees the
-    //application of every log entry that has been confirmed. Thus, while in the follower phase, the
-    //value of max_applied_cb_scn_ can be securely incremented to match palf_committed_end_scn_.
+    palf::LSN palf_end_lsn;
     palf::LSN apply_end_lsn;
+    SCN palf_end_scn;
     bool is_done = false;
-    const SCN cur_palf_committed_end_scn = palf_committed_end_scn_.atomic_load();
-    if (max_applied_cb_scn_ > cur_palf_committed_end_scn) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "invalid max_applied_cb_scn", KPC(this));
-    } else if (max_applied_cb_scn_ == cur_palf_committed_end_scn) {
-      //no need to push up
-    } else if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
+    if (OB_FAIL(is_apply_done(is_done, apply_end_lsn))) {
       CLOG_LOG(WARN, "check is_apply_done failed", K(ret), KPC(this));
     } else if (!is_done) {
       // follower期间cb未完全回调之前暂不做任何更新
       // 始终返回上轮作为leader时缓存的值
       // 所有cb回调完成后, 尝试推进一次最大连续回调位点
-    } else if (max_applied_cb_scn_ < cur_palf_committed_end_scn) {
-      max_applied_cb_scn_ = cur_palf_committed_end_scn;
-      CLOG_LOG(INFO, "update max_applied_cb_scn_", K(cur_palf_committed_end_scn), KPC(this));
+    } else if (OB_FAIL(palf_handle_.get_end_scn(palf_end_scn))) {
+      CLOG_LOG(WARN, "get_end_scn failed", K(ret), KPC(this));
+    } else if (OB_FAIL(palf_handle_.get_end_lsn(palf_end_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(this));
+    } else if (palf_end_lsn == apply_end_lsn) {
+      max_applied_cb_scn_ = palf_end_scn;
+      CLOG_LOG(INFO, "update max_applied_cb_scn_", K(ret), KPC(this));
     }
   } else if ((!last_check_scn.is_valid()) || last_check_scn == max_applied_cb_scn_) {
     if (OB_FAIL(update_last_check_scn_())) {
@@ -805,9 +789,7 @@ void ObApplyStatus::reset_meta()
   lib::ObMutexGuard guard(mutex_);
   last_check_scn_.reset();
   max_applied_cb_scn_.reset();
-  // palf_committed_end_scn_ also should be reset along with palf_committed_end_lsn_.
   palf_committed_end_lsn_.val_ = 0;
-  palf_committed_end_scn_.reset();
 }
 
 int ObApplyStatus::submit_task_to_apply_service_(ObApplyServiceTask &task)
@@ -1271,26 +1253,6 @@ int ObLogApplyService::get_max_applied_scn(const share::ObLSID &id, SCN &scn)
     CLOG_LOG(WARN, "apply status get_max_applied_scn failed", K(ret), K(id));
   } else {
     CLOG_LOG(TRACE, "apply service get_max_applied_scn success", K(id));
-  }
-  return ret;
-}
-
-int ObLogApplyService::get_palf_committed_end_scn(const share::ObLSID &id, share::SCN &scn)
-{
-  int ret = OB_SUCCESS;
-  ObApplyStatus *apply_status = NULL;
-  ObApplyStatusGuard guard;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(ERROR, "apply service not init", K(ret));
-  } else if (OB_FAIL(get_apply_status(id, guard))) {
-    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
-  } else if (NULL == (apply_status = guard.get_apply_status())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
-  } else {
-    scn = apply_status->get_palf_committed_end_scn();
-    CLOG_LOG(TRACE, "apply service get palf_committed_end_lsn success", K(id), K(scn));
   }
   return ret;
 }

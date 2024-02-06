@@ -21,6 +21,7 @@
 #include "sql/dtl/ob_dtl_channel_watcher.h"
 #include "sql/dtl/ob_dtl_channel.h"
 #include "sql/dtl/ob_dtl_local_channel.h"
+#include "sql/dtl/ob_dtl_local_first_buffer_manager.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 
 namespace oceanbase {
@@ -54,6 +55,8 @@ public:
   virtual ~ObDtlChannelLoop() = default;
 
   void notify(ObDtlChannel &chan) override;
+  virtual int has_first_buffer(uint64_t chan_id, bool &has_first_buffer) override;
+  virtual int set_first_buffer(uint64_t chan_id) override;
 
   void reset();
   OB_INLINE ObDtlChannelLoop &register_interrupt_processor(InterruptProc &proc);
@@ -80,6 +83,8 @@ public:
     interrupt_proc_ = nullptr;
   }
   void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id;}
+  void set_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache *proxy_first_buffer_cache)
+  { proxy_first_buffer_cache_ = proxy_first_buffer_cache; }
 
   void reset_eof_cnt() { eof_channel_cnt_ = 0; }
   void inc_eof_cnt() { eof_channel_cnt_ += 1; }
@@ -128,6 +133,7 @@ private:
   bool ignore_interrupt_;
   uint64_t tenant_id_;
   int64_t timeout_;
+  dtl::ObDtlLocalFirstBufferCache *proxy_first_buffer_cache_;
 
   // list hold channels that has msg
   ObSpinLock spin_lock_;

@@ -192,8 +192,7 @@ int ObSimpleClusterTestBase::close()
 int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
                                            const char *memory_size,
                                            const char *log_disk_size,
-                                           const bool oracle_mode,
-                                           int64_t tenant_cpu)
+                                           const bool oracle_mode)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -229,8 +228,8 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s';",
-                                      UNIT_BASE, tenant_name, tenant_cpu, memory_size, log_disk_size))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu 2, memory_size '%s', log_disk_size='%s';",
+                                      UNIT_BASE, tenant_name, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));

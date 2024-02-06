@@ -70,12 +70,7 @@ const char* ObITable::table_type_name_[] =
   "COL_ORIENTED",
   "NORMAL_COL_GROUP",
   "ROWKEY_COL_GROUP",
-  "COL_ORIENTED_META",
-  "DDL_MERGE_CO",
-  "DDL_MERGE_CG",
-  "DDL_MEM_CO",
-  "DDL_MEM_CG",
-  "MDS"
+  "COL_ORIENTED_META"
 };
 
 uint64_t ObITable::TableKey::hash() const
@@ -209,6 +204,8 @@ bool ObTableHandleV2::is_valid() const
   if (nullptr == table_) {
   } else if (ObITable::is_memtable(table_type_)) {
     bret = (nullptr != t3m_) ^ (nullptr != allocator_);
+  } else if (ObITable::is_ddl_mem_sstable(table_type_)) {
+    bret = nullptr != t3m_;
   } else {
     // all other sstables
     bret = (meta_handle_.is_valid() ^ (nullptr != allocator_)) || lifetime_guaranteed_by_tablet_;
@@ -499,7 +496,7 @@ int ObTableHandleV2::set_table(
       OB_UNLIKELY(!ObITable::is_table_type_valid(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(table), KP(t3m), K(table_type));
-  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type))) {
+  } else if (OB_UNLIKELY(ObITable::is_sstable(table_type) && !ObITable::is_ddl_mem_sstable(table_type))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "sstable should not use this interface", K(ret), KP(table), K(table_type));
   } else {

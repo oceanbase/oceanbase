@@ -114,7 +114,6 @@ int ObExprAnd::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   } else {
     rt_expr.eval_func_ = calc_and_exprN;
     rt_expr.eval_batch_func_ = eval_and_batch_exprN;
-    rt_expr.eval_vector_func_ = eval_and_vector;
   }
   return ret;
 }
@@ -260,125 +259,6 @@ int ObExprAnd::eval_and_batch_exprN(const ObExpr &expr, ObEvalCtx &ctx,
       }
     }
   }
-  return ret;
-}
-
-template <typename ArgVec, typename ResVec,
-          ObExprAnd::EvalAndStage Stage>
-static int inner_eval_and_vector(const ObExpr &expr,
-                                 ObEvalCtx &ctx,
-                                 ObBitVector &my_skip,
-                                 const EvalBound &bound,
-                                 const int64_t& arg_idx,
-                                 int64_t& skip_cnt)
-{
-  int ret = OB_SUCCESS;
-  ArgVec *curr_vec = static_cast<ArgVec *>(expr.args_[arg_idx]->get_vector(ctx));
-  ResVec *results = static_cast<ResVec *>(expr.get_vector(ctx));
-  for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-    if (my_skip.at(j)) {
-      continue;
-    }
-    if (curr_vec->is_null(j)) {
-      results->set_null(j);
-    } else if (false == curr_vec->get_bool(j)) {
-      if (Stage == ObExprAnd::FIRST) {
-        my_skip.set(j);
-        ++skip_cnt;
-      } else if (Stage == ObExprAnd::MIDDLE) {
-        results->unset_null(j);
-        my_skip.set(j);
-        ++skip_cnt;
-      } else {
-        results->unset_null(j);
-      }
-      results->set_bool(j, false);
-    } else {
-      if (Stage == ObExprAnd::FIRST) {
-        results->set_bool(j, true);
-      }
-    }
-  }
-  return ret;
-}
-
-static int dispatch_eval_and_vector(const ObExpr &expr,
-                                    ObEvalCtx &ctx,
-                                    ObBitVector &my_skip,
-                                    const EvalBound &bound,
-                                    const int64_t& arg_idx,
-                                    int64_t& skip_cnt)
-{
-  int ret = OB_SUCCESS;
-  VectorFormat res_format = expr.get_format(ctx);
-  VectorFormat arg_format = expr.args_[arg_idx]->get_format(ctx);
-  // When res_format == VEC_FIXED,
-  // the template parameter cannot be passed as ObVectorBase.
-  // If ObVectorBase is passed,
-  // the condition typeid(ResVec) == typeid(IntegerFixedVec) will become invalid,
-  // resulting in unset_null not being called and causing correctness issues.
-  if (arg_idx == 0 &&
-      arg_format == VEC_FIXED &&
-      res_format == VEC_FIXED) {
-    ret = inner_eval_and_vector<IntegerFixedVec, IntegerFixedVec, ObExprAnd::FIRST>(
-                                        expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  } else if (arg_idx == 0) {
-    ret = inner_eval_and_vector<ObVectorBase, ObVectorBase, ObExprAnd::FIRST>(
-                                  expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  } else if (arg_idx == expr.arg_cnt_ - 1 &&
-             arg_format == VEC_FIXED &&
-             res_format == VEC_FIXED) {
-    ret = inner_eval_and_vector<IntegerFixedVec, IntegerFixedVec, ObExprAnd::LAST>(
-                                      expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  } else if (arg_idx == expr.arg_cnt_ - 1) {
-    ret = inner_eval_and_vector<ObVectorBase, ObVectorBase, ObExprAnd::LAST>(
-                                expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  } else if (arg_format == VEC_FIXED &&
-             res_format == VEC_FIXED) {
-    ret = inner_eval_and_vector<IntegerFixedVec, IntegerFixedVec, ObExprAnd::MIDDLE>(
-                                        expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  } else {
-    ret = inner_eval_and_vector<ObVectorBase, ObVectorBase, ObExprAnd::MIDDLE>(
-                                  expr, ctx, my_skip, bound, arg_idx, skip_cnt);
-  }
-  return ret;
-}
-
-int ObExprAnd::eval_and_vector(const ObExpr &expr,
-                               ObEvalCtx &ctx,
-                               const ObBitVector &skip,
-                               const EvalBound &bound)
-{
-  int ret = OB_SUCCESS;
-  ObBitVector &my_skip = expr.get_pvt_skip(ctx);
-  my_skip.deep_copy(skip, bound.start(), bound.end());
-  const int64_t total_cnt = bound.end() - bound.start();
-  // Record the number of skips in a batch,
-  // end when all parameters are skipped.
-  int64_t skip_cnt = my_skip.accumulate_bit_cnt(bound);
-  EvalBound my_bound = bound;
-
-  for (int64_t arg_idx = 0; OB_SUCC(ret) &&
-       arg_idx < expr.arg_cnt_ && skip_cnt < total_cnt; ++arg_idx) {
-    if (skip_cnt > 0) {
-      my_bound.set_all_row_active(false);
-    }
-    if (OB_FAIL(expr.args_[arg_idx]->eval_vector(ctx, my_skip, my_bound))) {
-      LOG_WARN("failed to eval vector result", K(ret), K(arg_idx));
-    } else if (OB_FAIL(dispatch_eval_and_vector(
-                expr, ctx, my_skip, my_bound, arg_idx, skip_cnt))){
-      LOG_WARN("failed to dispatch eval vector and", K(ret),
-      K(expr), K(ctx), K(my_bound), K(arg_idx), K(skip_cnt));
-    }
-  }
-
-  // It would be more reasonable for eval_flags to be set after the calculation is completed
-  // rather than setting it to 1 before the calculation.
-  if (OB_SUCC(ret)) {
-    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-    eval_flags.bit_not(skip, my_bound);
-  }
-
   return ret;
 }
 

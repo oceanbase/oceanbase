@@ -643,7 +643,7 @@ ObHTableRowIterator::~ObHTableRowIterator()
 int ObHTableRowIterator::next_cell()
 {
   ObNewRow *ob_row = NULL;
-  int ret = child_op_->get_next_row(ob_row);
+  int ret = child_op_->get_next_row(ob_row, false);
   if (OB_SUCCESS == ret) {
     curr_cell_.set_ob_row(ob_row);
     LOG_DEBUG("[yzfdebug] fetch next cell", K_(curr_cell));
@@ -659,7 +659,7 @@ int ObHTableRowIterator::next_cell()
 int ObHTableRowIterator::reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells, ObTableQueryResult *&out_result)
 {
   ObNewRow *ob_row = NULL;
-  int ret = child_op_->get_next_row(ob_row);
+  int ret = child_op_->get_next_row(ob_row, false);
   if ((ObQueryFlag::Reverse == scan_order_ && OB_ITER_END == ret) ||
       (ObQueryFlag::Reverse == scan_order_ && OB_SUCCESS == ret &&
       NULL != hfilter_ && hfilter_->filter_all_remaining())) {
@@ -736,7 +736,6 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;  // initialize
   if (ObQueryFlag::Reverse == scan_order_ && (-1 != limit_per_row_per_cf_ || 0 != offset_per_row_per_cf_)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan");
     LOG_WARN("server don't support set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan yet",
               K(ret), K(scan_order_), K(limit_per_row_per_cf_), K(offset_per_row_per_cf_));
   }

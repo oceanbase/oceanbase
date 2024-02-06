@@ -158,13 +158,8 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
           sleep(1);
           LOG_DEBUG("restore not finish, wait later", K(ret), K(user_tenant_id));
         } else if (is_failed) {
-          char comment[OB_INNER_TABLE_DEFAULT_KEY_LENTH] = { 0 };
-          if(OB_FAIL(ObRestoreUtil::get_restore_job_comment(*sql_proxy, job_id, comment, OB_INNER_TABLE_DEFAULT_KEY_LENTH))) {
-            LOG_WARN("failed to get failed restore job comment", K(ret), K(job_id));
-          }
-          ret = OB_RESTORE_TENANT_FAILED;
-          LOG_WARN("restore tenant failed.", K(ret), K(tenant_name), K(comment));
-          LOG_USER_ERROR(OB_RESTORE_TENANT_FAILED, tenant_name.ptr(), comment);
+          ret = OB_TASK_STATE_FAILED;
+          LOG_WARN("created tenant failed when restore.", K(ret), K(tenant_name));
         } else {
           break;
         }

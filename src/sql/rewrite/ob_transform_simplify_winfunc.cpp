@@ -543,7 +543,7 @@ int ObTransformSimplifyWinfunc::check_stmt_win_can_be_removed(ObSelectStmt *sele
     LOG_WARN("failed to check stmt unique", K(ret));
   } else if (!is_unique) {
     /*do nothing*/
-  } else if (BoundType::BOUND_CURRENT_ROW != win_expr->get_lower().type_
+  } else if (BoundType::BOUND_CURRENT_ROW != win_expr->get_upper().type_
              && BoundType::BOUND_CURRENT_ROW != win_expr->get_upper().type_
              && win_expr->get_upper().is_preceding_ == win_expr->get_lower().is_preceding_) {
     //upper 与 lower 均非 BOUND_CURRENT_ROW 且 is_preceding 相同时, 可能出现不包含当前行的窗口, 禁止消除
@@ -631,12 +631,6 @@ int ObTransformSimplifyWinfunc::do_remove_stmt_win(ObSelectStmt *select_stmt,
     }
     if (OB_SUCC(ret) && OB_FAIL(select_stmt->replace_relation_exprs(exprs, new_exprs))) {
       LOG_WARN("select_stmt replace inner stmt expr failed", K(ret), K(select_stmt));
-    }
-    if (OB_SUCC(ret)) {
-      //check qualify filters
-      if (OB_FAIL(ObTransformUtils::pushdown_qualify_filters(select_stmt))) {
-        LOG_WARN("check pushdown qualify filters failed", K(ret));
-      }
     }
   }
   return ret;

@@ -132,7 +132,7 @@ int ObLogTopk::est_cost()
     topk_card = std::min(topk_card, child->get_card());
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     double op_cost = ObOptEstCost::cost_get_rows(topk_card / parallel,
-                                                 opt_ctx);
+                                                 opt_ctx.get_cost_model_type());
     set_card(topk_card);
     set_op_cost(op_cost);
     set_cost(child->get_cost() + op_cost);

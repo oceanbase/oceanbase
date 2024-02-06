@@ -89,7 +89,7 @@ int ObSignalHandle::add_signums_to_set(sigset_t &sig_set)
     LOG_ERROR("Empty signal set error", K(ret));
   } else {
     int rc = 0;
-    int signals[] = {SIGPIPE, SIGTERM, SIGUSR1,
+    int signals[] = {SIGPIPE, SIGTERM,
                      40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
                      50, 51, 52, 53, 55, 56, 57, 59, 60, 62,
                      63, 64};
@@ -114,10 +114,9 @@ int ObSignalHandle::deal_signals(int signum)
       break;
     }
     case SIGTERM: {
+#ifdef OB_BUILD_RPM
       raise(SIGKILL);
-      break;
-    }
-    case SIGUSR1: {
+#endif
       ObServer::get_instance().prepare_stop();
       ObServer::get_instance().set_stop();
       break;

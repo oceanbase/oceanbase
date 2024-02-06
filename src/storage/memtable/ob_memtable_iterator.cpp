@@ -913,7 +913,6 @@ int ObMemtableMultiVersionScanIterator::inner_get_next_row(const ObDatumRow *&ro
       TRANS_LOG(TRACE, "after inner get next row", K(*row), K(scan_state_));
     }
   }
-
   return ret;
 }
 

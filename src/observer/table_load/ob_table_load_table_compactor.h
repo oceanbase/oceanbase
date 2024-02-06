@@ -39,7 +39,6 @@ public:
   void reset();
   int init();
   int add_table(storage::ObIDirectLoadPartitionTable *table);
-  void release_all_table_data();
 public:
   typedef common::ObLinkHashMap<common::ObTabletID, ObTableLoadTableCompactTabletResult>
     TabletResultMap;
@@ -60,13 +59,12 @@ public:
   int handle_table_compact_success();
   TO_STRING_KV(KP_(store_ctx), KP_(merger), KP_(compactor));
 private:
-  int new_compactor();
-  void release_compactor();
+  ObTableLoadTableCompactor *new_compactor();
 
 public:
+  common::ObArenaAllocator allocator_;
   ObTableLoadStoreCtx *store_ctx_;
   ObTableLoadMerger *merger_;
-  mutable obsys::ObRWLock rwlock_;
   ObTableLoadTableCompactor *compactor_;
   ObTableLoadTableCompactResult result_;
 };

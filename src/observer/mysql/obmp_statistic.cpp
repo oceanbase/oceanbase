@@ -42,6 +42,8 @@ int ObMPStatistic::process()
     LOG_WARN("failed to alloc easy buf", K(ret));
   } else if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
     LOG_WARN("failed to update last packet pos", K(ret));
+  } else if (OB_FAIL(response_packet(pkt, NULL))) {
+    RPC_OBMYSQL_LOG(WARN, "fail to response statistic packet", K(ret));
   } else if (OB_ISNULL(conn = get_conn())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get connection fail", K(conn), K(ret));
@@ -52,8 +54,6 @@ int ObMPStatistic::process()
     } else if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql session info is null", K(ret));
-    } else if (OB_FAIL(process_kill_client_session(*session))) {
-      LOG_WARN("client session has been killed", K(ret));
     } else if (FALSE_IT(session->set_txn_free_route(mysql_pkt.txn_free_route()))) {
     } else if (OB_FAIL(process_extra_info(*session, mysql_pkt, need_response_error))) {
       LOG_WARN("fail get process extra info", K(ret));
@@ -62,19 +62,14 @@ int ObMPStatistic::process()
       LOG_WARN("update transmisson checksum flag failed", K(ret));
     } else {
       ObOKPParam ok_param; // use default values
-      if (OB_FAIL(send_ok_packet(*session, ok_param, &pkt))) {
+      if (OB_FAIL(send_ok_packet(*session, ok_param))) {
         LOG_WARN("fail to send ok pakcet in statistic response", K(ok_param), K(ret));
       }
     }
     if (OB_LIKELY(NULL != session)) {
       revert_session(session);
     }
-  } else if (OB_FAIL(response_packet(pkt, NULL))) {
-    RPC_OBMYSQL_LOG(WARN, "fail to response statistic packet", K(ret));
-  } else {
-    // do nothing
   }
-
   if (OB_FAIL(ret) && need_response_error) {
     send_error_packet(ret, NULL);
   }

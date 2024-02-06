@@ -110,7 +110,6 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcLSRemoveNonPaxosReplicaP, gctx_);
     RPC_PROCESSOR(ObRpcLSModifyPaxosReplicaNumberP, gctx_);
     RPC_PROCESSOR(ObRpcLSCheckDRTaskExistP, gctx_);
-    RPC_PROCESSOR(ObAdminDRTaskP, gctx_);
     RPC_PROCESSOR(ObRpcCreateTenantUserLSP, gctx_);
     RPC_PROCESSOR(ObRpcGenUniqueIDP, gctx_);
     RPC_PROCESSOR(ObRpcStartTransferTaskP, gctx_);
@@ -121,12 +120,5 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
 #endif
     RPC_PROCESSOR(ObRpcDDLCheckTabletMergeStatusP, gctx_);
     RPC_PROCESSOR(ObRpcCreateDuplicateLSP, gctx_);
-    RPC_PROCESSOR(ObRpcNotifyTenantSnapshotSchedulerP, gctx_);
-    RPC_PROCESSOR(ObRpcInnerCreateTenantSnapshotP, gctx_);
-    RPC_PROCESSOR(ObRpcInnerDropTenantSnapshotP, gctx_);
-    RPC_PROCESSOR(ObRpcFlushLSArchiveP, gctx_);
-    RPC_PROCESSOR(ObRpcNotifyCloneSchedulerP, gctx_);
-    RPC_PROCESSOR(ObRpcNotifyTenantThreadP, gctx_);
     RPC_PROCESSOR(ObRpcTabletMajorFreezeP, gctx_);
-    RPC_PROCESSOR(ObCancelGatherStatsP, gctx_);
 }

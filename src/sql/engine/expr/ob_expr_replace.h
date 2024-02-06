@@ -43,11 +43,7 @@ public:
                      const common::ObString &text,
                      const common::ObString &from,
                      const common::ObString &to,
-                     common::ObExprStringBuf &string_buf,
-                     const int64_t max_len = OB_MAX_VARCHAR_LENGTH);
-
-  DECLARE_SET_LOCAL_SESSION_VARS;
-
+                     common::ObExprStringBuf &string_buf);
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprReplace);

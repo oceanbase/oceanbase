@@ -866,15 +866,6 @@ int ObExprTrim::eval_trim(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
   return ret;
 }
 
-DEF_SET_LOCAL_SESSION_VARS(ObExprTrim, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
-  }
-  return ret;
-}
-
 // Ltrim start
 ObExprLtrim::ObExprLtrim(ObIAllocator &alloc)
     : ObExprTrim(alloc, T_FUN_SYS_LTRIM, N_LTRIM, (lib::is_oracle_mode()) ? ONE_OR_TWO : 1)

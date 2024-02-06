@@ -43,11 +43,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override final;
+      ObCGTableWrapper &wrapper) override final;
   virtual void reset() override;
   virtual void reuse() override;
   virtual int locate(
@@ -103,7 +103,7 @@ protected:
   ObCSRowId current_;
   ObCSRange query_index_range_;
   ObSSTable *sstable_;
-  ObSSTableWrapper table_wrapper_;
+  ObCGTableWrapper table_wrapper_;
   const ObTableIterParam *iter_param_;
   ObTableAccessContext *access_ctx_;
   ObCGPrefetcher prefetcher_;
@@ -118,7 +118,6 @@ public:
   ObCGRowScanner() :
       ObCGScanner(),
       row_ids_(nullptr),
-      len_array_(nullptr),
       cell_data_ptrs_(nullptr),
       filter_bitmap_(nullptr),
       read_info_(nullptr)
@@ -129,7 +128,7 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual int get_next_rows(uint64_t &count, const uint64_t capacity) override;
   virtual int locate(
       const ObCSRange &range,
@@ -138,8 +137,6 @@ public:
   { return OB_CG_ROW_SCANNER; }
   int get_next_rows(uint64_t &count, const uint64_t capacity, const int64_t datum_offset);
   int deep_copy_projected_rows(const int64_t datum_offset, const uint64_t count);
-  void set_project_type(const bool project_without_filter)
-  { return prefetcher_.set_project_type(project_without_filter); }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(current),
                K_(query_index_range), K_(prefetcher), KP_(filter_bitmap));
 
@@ -149,7 +146,6 @@ private:
 
 protected:
   int64_t *row_ids_;
-  uint32_t *len_array_;
   // for projection in vectorize, need to remove later
   const char **cell_data_ptrs_;
   const ObCGBitmap *filter_bitmap_;

@@ -210,7 +210,7 @@ int ObTxDataSingleRowGetter::deserialize_tx_data_from_store_buffers_(ObTxData &t
       p_dest += tx_data_buffers_[idx].get_ob_string().length();
     }
     tx_data.tx_id_ = tx_id_;
-    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, tx_data_allocator_))) {
+    if (OB_FAIL(tx_data.deserialize(merge_buffer, total_buffer_size, pos, slice_allocator_))) {
       STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), KPHEX(merge_buffer, total_buffer_size));
       hex_dump(merge_buffer, total_buffer_size, true, OB_LOG_LEVEL_WARN);
     } else if (!tx_data.is_valid_in_tx_data_table()) {

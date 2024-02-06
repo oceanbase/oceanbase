@@ -263,7 +263,10 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
       //single table delete, delete list is same with from list
       CK(delete_stmt->get_table_size() == 1);
       OZ(delete_tables_.push_back(delete_stmt->get_table_item(0)));
-      OZ (check_need_fired_trigger(table_item));
+      if (OB_SUCC(ret) && delete_stmt->get_table_item(0)->is_view_table_ && is_oracle_mode()) {
+        OZ(has_need_fired_trigger_on_view(delete_stmt->get_table_item(0), has_tg));
+      }
+      OX(delete_stmt->set_has_instead_of_trigger(has_tg));
     } else {
       //multi table delete
       is_multi_table_delete = true;
@@ -286,8 +289,6 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
           ret = OB_ERR_NONUNIQ_TABLE;
           LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item->table_name_.length(),
                       table_item->table_name_.ptr());
-        } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
-          LOG_WARN("failed to check need fired trigger", K(ret));
         } else if (OB_FAIL(delete_tables_.push_back(table_item))) {
           LOG_WARN("failed to push back table item", K(ret));
         }

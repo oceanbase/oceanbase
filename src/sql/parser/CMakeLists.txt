@@ -1,9 +1,26 @@
 
 # charset objects used for proxy_parser
 
-
-
+if (OB_BUILD_OPENSOURCE)
 set(ob_sql_parser_charset_object_list
+  ob_ctype_bin_os.cc
+  ob_ctype_gb18030_os.cc
+  ob_ctype_gbk_os.cc
+  ob_ctype_latin1_os.cc
+  ob_ctype_mb_os.cc
+  ob_ctype_simple_os.cc
+  ob_ctype_os.cc
+  ob_ctype_utf16_os.cc
+  ob_ctype_utf8_os.cc
+  ob_dtoa_os.cc
+)
+endif()
+
+list(TRANSFORM ob_sql_parser_charset_object_list
+  PREPEND ${PROJECT_SOURCE_DIR}/deps/oblib/src/lib/charset/)
+
+if(OB_BUILD_FULL_CHARSET)
+  set(ob_sql_parser_full_charset_object_list
     ob_ctype_bin.cc
     ob_ctype.cc
     ob_ctype_gbk.cc
@@ -19,10 +36,12 @@ set(ob_sql_parser_charset_object_list
     uca900_zh_tbls.cc
     uca900_zh2_tbls.cc
     uca900_zh3_tbls.cc
-    )
+  )
+endif()
 
-list(TRANSFORM ob_sql_parser_charset_object_list
-     PREPEND ${PROJECT_SOURCE_DIR}/deps/oblib/src/lib/charset/)
+list(TRANSFORM ob_sql_parser_full_charset_object_list
+  PREPEND ${PROJECT_SOURCE_DIR}/close_modules/charset/deps/oblib/src/lib/charset/)
+
 # hash objects used for proxy parser
 set(ob_sql_parser_hash_object_list
   murmur_hash.h
@@ -105,12 +124,19 @@ set(ob_extra_sql_parser_object_list
 )
 
 # ob_sql_proxy_parser_objects is the static library for proxy, it does not link against observer
-add_library(ob_sql_proxy_parser_objects OBJECT
-            ${ob_inner_sql_parser_object_list}
-            ${ob_sql_parser_hash_object_list}
-            ${ob_sql_parser_charset_object_list}
-            )
-
+if (OB_BUILD_FULL_CHARSET)
+  add_library(ob_sql_proxy_parser_objects OBJECT
+              ${ob_inner_sql_parser_object_list}
+              ${ob_sql_parser_hash_object_list}
+              ${ob_sql_parser_full_charset_object_list}
+              )
+else()
+  add_library(ob_sql_proxy_parser_objects OBJECT
+              ${ob_inner_sql_parser_object_list}
+              ${ob_sql_parser_hash_object_list}
+              ${ob_sql_parser_charset_object_list}
+              )
+endif()
 
 # ob_sql_server_parser_object is the static library for observer
 add_library(ob_sql_server_parser_objects OBJECT

@@ -14,6 +14,7 @@
 #include "ob_table.h"
 #include "share/ob_errno.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "common/row/ob_row.h"
 #include "rpc/obrpc/ob_rpc_packet.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 
@@ -541,7 +542,7 @@ ObTableRequestOptions::ObTableRequestOptions()
      max_execution_time_us_(10*1000*1000),
      retry_policy_(NULL),
      returning_affected_rows_(false),
-     option_flag_(OB_TABLE_OPTION_DEFAULT),
+     returning_rowkey_(false),
      returning_affected_entity_(false),
      batch_operation_as_atomic_(false),
      binlog_row_image_type_(ObBinlogRowImageType::FULL)
@@ -1312,8 +1313,7 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
 ////////////////////////////////////////////////////////////////
 ObTableQueryResult::ObTableQueryResult()
     :row_count_(0),
-     allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-     prop_name_allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     allocator_(ObModIds::TABLE_PROC),
      fixed_result_size_(0),
      curr_idx_(0)
 {
@@ -1333,7 +1333,6 @@ void ObTableQueryResult::reset()
 {
   properties_names_.reset();
   reset_except_property();
-  prop_name_allocator_.reset();
 }
 
 void ObTableQueryResult::rewind()
@@ -1416,7 +1415,7 @@ int ObTableQueryResult::deep_copy_property_names(const ObIArray<ObString> &other
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < other.count(); i++) {
-    if (OB_FAIL(ob_write_string(prop_name_allocator_, other.at(i), properties_names_.at(i)))) {
+    if (OB_FAIL(ob_write_string(allocator_, other.at(i), properties_names_.at(i)))) {
       LOG_WARN("failed to write string", K(ret), K(other.at(i)));
     }
   }
@@ -1470,65 +1469,44 @@ int ObTableQueryResult::alloc_buf_if_need(const int64_t need_size)
 int ObTableQueryResult::add_row(const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
-
-  // 1. check properties count and row count
+  ret = alloc_buf_if_need(row.get_serialize_size());
   const int64_t N = row.get_count();
-  if (0 != properties_names_.count()
-      && N != properties_names_.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("cell count not match with property count", K(ret), K(N),
-              "properties_count", properties_names_.count());
-  } else {
-    // 2. construct new row
-    ObNewRow new_row = row;
-    ObObj *lob_cells = nullptr;
-    const int64_t lob_storage_count = get_lob_storage_count(new_row);
-    if (lob_storage_count != 0) {
-      if (OB_ISNULL(lob_cells = static_cast<ObObj*>(allocator_.alloc(sizeof(ObObj) * lob_storage_count)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc cells buffer", K(ret), K(lob_storage_count));
-      }
-      for (int i = 0, lob_cell_idx = 0; OB_SUCC(ret) && i < N; ++i) {
-        const ObObj &cell = new_row.get_cell(i);
-        ObObjType type = cell.get_type();
-        if (is_lob_storage(type)) {
-          ObString real_data;
-          if (cell.has_lob_header()) {
-            if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, cell, real_data))) {
-              LOG_WARN("fail to read real string date", K(ret), K(cell));
-            } else if (lob_cell_idx >= lob_storage_count) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected index count", K(ret), K(lob_cell_idx), K(lob_storage_count));
-            } else {
-              lob_cells[lob_cell_idx].set_lob_value(type, real_data.ptr(), real_data.length());
-              lob_cells[lob_cell_idx].set_collation_type(cell.get_collation_type());
-              new_row.get_cell(i) = lob_cells[lob_cell_idx]; // switch lob cell
-              lob_cell_idx++;
-            }
-          }
+  if (OB_SUCC(ret)) {
+    if (0 != properties_names_.count()
+        && N != properties_names_.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("cell count not match with property count", K(ret), K(N),
+               "properties_count", properties_names_.count());
+    }
+  }
+  for (int i = 0; OB_SUCCESS == ret && i < N; ++i)
+  {
+    // Output of TableApi does not have lob locator header, remove lob header before serialize.
+    // Functions defined by DEF_TEXT_SERIALIZE_FUNCS is called here, refer to ob_obj_funcs.h
+    ObObjType type = row.get_cell(i).get_type();
+    if (is_lob_storage(type)) {
+      ObObj tmp_obj = row.get_cell(i);
+      ObString read_data;
+      if (tmp_obj.has_lob_header()) {
+        if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, tmp_obj, read_data))) {
+            LOG_WARN("failed to get obj", K(ret), K_(buf));
+        } else {
+          tmp_obj.set_lob_value(type, read_data.ptr(), read_data.length());
         }
       }
-    }
-
-    // 3. alloc serialize size
-    int64_t size = new_row.get_serialize_size();
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(alloc_buf_if_need(size))) {
-      LOG_WARN("failed to alloc buff", K(ret), K(size));
-    }
-
-    // 4. serialize
-    for (int i = 0; OB_SUCC(ret) && i < N; ++i) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(tmp_obj.serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
+        LOG_WARN("failed to serialize obj", K(ret), K_(buf));
+      }
+    } else {
       if (OB_FAIL(row.get_cell(i).serialize(buf_.get_data(), buf_.get_capacity(), buf_.get_position()))) {
         LOG_WARN("failed to serialize obj", K(ret), K_(buf));
       }
     }
-  }
-
+  } // end for
   if (OB_SUCC(ret)) {
     ++row_count_;
   }
-
   return ret;
 }
 

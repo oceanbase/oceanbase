@@ -1057,23 +1057,15 @@ inline void set_member_allocator(T &dest, common::ObIAllocator *alloc)
 template <typename T>
 inline int construct_assign_wrap(T &dest, const T &src, TrueType)
 {
-  int ret = OB_SUCCESS;
   new(&dest) T();
-  if (OB_FAIL(dest.assign(src))) {
-    dest.~T();
-  }
-  return ret;
+  return dest.assign(src);
 }
 
 template <typename T>
 inline int construct_assign_wrap(T &dest, const T &src, FalseType)
 {
-  int ret = OB_SUCCESS;
   new(&dest) T(src);
-  if (OB_FAIL(get_copy_assign_ret_wrap(dest, BoolType<HAS_MEMBER(T, get_copy_assign_ret)>()))) {
-    dest.~T();
-  }
-  return ret;
+  return get_copy_assign_ret_wrap(dest, BoolType<HAS_MEMBER(T, get_copy_assign_ret)>());
 }
 
 // This function is used for copy assignment
@@ -1318,8 +1310,6 @@ void call_dtor(T *&ptr)
 //      OB_IO_ERROR Error executing system call
 //      OB_SUCCESS successfully executed
 int is_dir_empty(const char *dirname, bool &is_empty);
-
-int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t &expired_time);
 } // end namespace common
 } // end namespace oceanbase
 

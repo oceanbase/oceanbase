@@ -25,8 +25,6 @@
 #include "pl/ob_pl_allocator.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_resolver.h"
-#include "sql/engine/expr/vector_cast/vector_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -197,35 +195,28 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
     ObCollationType cast_coll_type = (CS_TYPE_INVALID != type2.get_collation_type())
         ? type2.get_collation_type()
         : conn;
-    ObDataTypeCastParams dtc_params;
-    ObTimeZoneInfoWrap tz_wrap;
-    bool is_valid = false;
-    ObRawExpr *raw_expr = NULL;
-    if (OB_ISNULL(raw_expr = type_ctx.get_raw_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else {
-      ObCastCtx cast_ctx(&oballocator,
-                        &type_ctx.get_dtc_params(),
-                        0,
-                        cast_mode,
-                        cast_coll_type);
-      ObString val_str;
-      EXPR_GET_VARCHAR_V2(val, val_str);
-      //这里设置的len为字符个数
-      if (OB_SUCC(ret) && NULL != val_str.ptr()) {
-        int32_t len_byte = val_str.length();
-        res_len = len_byte;
-        length_semantics = LS_CHAR;
-        if (NULL != val_str.ptr()) {
-          int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cast_coll_type,
-              val_str.ptr(), len_byte));
-          res_len = static_cast<int32_t>(ObCharset::strlen_char(cast_coll_type,
-              val_str.ptr(), trunc_len_byte));
-        }
-        if (type1.is_numeric_type() && !type1.is_integer_type()) {
-          res_len += 1;
-        }
+    const ObDataTypeCastParams dtc_params =
+          ObBasicSessionInfo::create_dtc_params(type_ctx.get_session());
+    ObCastCtx cast_ctx(&oballocator,
+                       &dtc_params,
+                       0,
+                       cast_mode,
+                       cast_coll_type);
+    ObString val_str;
+    EXPR_GET_VARCHAR_V2(val, val_str);
+    //这里设置的len为字符个数
+    if (OB_SUCC(ret) && NULL != val_str.ptr()) {
+      int32_t len_byte = val_str.length();
+      res_len = len_byte;
+      length_semantics = LS_CHAR;
+      if (NULL != val_str.ptr()) {
+        int32_t trunc_len_byte = static_cast<int32_t>(ObCharset::strlen_byte_no_sp(cast_coll_type,
+            val_str.ptr(), len_byte));
+        res_len = static_cast<int32_t>(ObCharset::strlen_char(cast_coll_type,
+            val_str.ptr(), trunc_len_byte));
+      }
+      if (type1.is_numeric_type() && !type1.is_integer_type()) {
+        res_len += 1;
       }
     }
   }
@@ -237,7 +228,6 @@ int ObExprCast::get_cast_string_len(ObExprResType &type1,
 int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
                               const ObExprResType &dst_type,
                               const ObSQLSessionInfo &session,
-                              ObSQLMode sql_mode,
                               const ObRawExpr &cast_raw_expr,
                               ObCastMode &cast_mode) const
 {
@@ -245,22 +235,16 @@ int ObExprCast::get_explicit_cast_cm(const ObExprResType &src_type,
   cast_mode = CM_NONE;
   const bool is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr.get_extra());
   const int32_t result_flag = src_type.get_result_flag();
-  const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
-  const ObObjTypeClass src_tc = ob_obj_type_class(src_type.get_type());
-  ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
-                                    session.get_stmt_type(),
-                                    session.is_ignore_stmt(),
-                                    sql_mode, cast_mode);
-  if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
-    cast_mode |= CM_NULL_ON_WARN;
-  } else if (ob_is_int_uint(src_tc, dst_tc)) {
-    cast_mode |= CM_NO_RANGE_CHECK;
-  }
-  if (!is_oracle_mode() && CM_IS_EXPLICIT_CAST(cast_mode)) {
-    // CM_STRING_INTEGER_TRUNC is only for string to int cast in mysql mode
-    if (ob_is_string_type(src_type.get_type()) &&
-        (ob_is_int_tc(dst_type.get_type()) || ob_is_uint_tc(dst_type.get_type()))) {
-      cast_mode |= CM_STRING_INTEGER_TRUNC;
+  if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
+                                                &session, cast_mode))) {
+    LOG_WARN("get_default_cast_mode failed", K(ret));
+  } else {
+    const ObObjTypeClass dst_tc = ob_obj_type_class(dst_type.get_type());
+    const ObObjTypeClass src_tc = ob_obj_type_class(src_type.get_type());
+    if (ObDateTimeTC == dst_tc || ObDateTC == dst_tc || ObTimeTC == dst_tc) {
+      cast_mode |= CM_NULL_ON_WARN;
+    } else if (ob_is_int_uint(src_tc, dst_tc)) {
+      cast_mode |= CM_NO_RANGE_CHECK;
     }
     if (!is_oracle_mode() && CM_IS_EXPLICIT_CAST(cast_mode)) {
       // CM_STRING_INTEGER_TRUNC is only for string to int cast in mysql mode
@@ -509,9 +493,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
   }
   if (OB_SUCC(ret)) {
     ObCastMode explicit_cast_cm = CM_NONE;
-    if (OB_FAIL(get_explicit_cast_cm(type1, dst_type, *session,
-                                     type_ctx.get_sql_mode(),
-                                     *cast_raw_expr,
+    if (OB_FAIL(get_explicit_cast_cm(type1, dst_type, *session, *cast_raw_expr,
                                      explicit_cast_cm))) {
       LOG_WARN("set cast mode failed", K(ret));
     } else if (CM_IS_EXPLICIT_CAST(explicit_cast_cm)) {
@@ -1156,7 +1138,6 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     rt_expr.is_called_in_sql_ = is_called_in_sql();
     if (OB_SUCC(ret)) {
-      bool just_eval_arg = false;
       const ObRawExpr *src_raw_expr = raw_expr.get_param_expr(0);
       if (OB_ISNULL(src_raw_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1178,20 +1159,10 @@ int ObExprCast::cg_expr(ObExprCGCtx &op_cg_ctx,
         OB_ASSERT(rt_expr.eval_func_ != nullptr);
         OB_ASSERT(rt_expr.eval_batch_func_ != nullptr);
       } else {
-        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type, out_type, out_cs_type,
-                                                      cast_mode, *(op_cg_ctx.allocator_),
-                                                      just_eval_arg, rt_expr))) {
+        if (OB_FAIL(ObDatumCast::choose_cast_function(in_type, in_cs_type,
+                    out_type, out_cs_type, cast_mode, *(op_cg_ctx.allocator_), rt_expr))) {
           LOG_WARN("choose_cast_func failed", K(ret));
         }
-      }
-      if (OB_SUCC(ret)) {
-        int tmp_ret = OB_E(EventTable::EN_ENABLE_VECTOR_CAST) OB_SUCCESS;
-        rt_expr.eval_vector_func_ =
-          tmp_ret == OB_SUCCESS ?
-            VectorCasterUtil::get_vector_cast(rt_expr.args_[0]->get_vec_value_tc(),
-                                              rt_expr.get_vec_value_tc(), just_eval_arg,
-                                              rt_expr.eval_func_, cast_mode) :
-            nullptr;
       }
     }
     if (OB_SUCC(ret)) {
@@ -1243,46 +1214,19 @@ int ObExprCast::is_valid_for_generated_column(const ObRawExpr*expr, const common
   } else {
     ObObjType src = exprs.at(0)->get_result_type().get_type();
     ObObjType dst = expr->get_result_type().get_type();
-    if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
+    is_valid = true;
+    if (is_oracle_mode()) {
+      if ((ob_is_oracle_temporal_type(src) && ob_is_string_type(dst))
+          || (ob_is_oracle_temporal_type(dst) && ob_is_string_type(src))) {
+        is_valid = false;
+      } else if ((ob_is_timestamp_tz(dst) || ob_is_timestamp_ltz(dst))
+                 && (ob_is_timestamp_nano(src) || ob_is_datetime(src))) {
+        is_valid = false;
+      }
+    } else if (ObTimeType == src && ObTimeType != dst && ob_is_temporal_type(dst)) {
       is_valid = false;
-    } else {
-      is_valid = true;
-    }
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprCast, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(raw_expr) || OB_ISNULL(raw_expr->get_param_expr(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null expr", K(ret));
-  } else {
-    ObObjType src = raw_expr->get_param_expr(0)->get_result_type().get_type();
-    ObObjType dst = raw_expr->get_result_type().get_type();
-    if (is_mysql_mode()) {
-      SET_LOCAL_SYSVAR_CAPACITY(3);
-      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
-    } else {
-      SET_LOCAL_SYSVAR_CAPACITY(5);
-    }
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
-    if (ob_is_datetime_tc(src)
-        || ob_is_datetime_tc(dst)
-        || ob_is_otimestampe_tc(src)
-        || ob_is_otimestampe_tc(dst)) {
-      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
-    }
-    if (is_oracle_mode()
-        && (ob_is_string_type(src)
-            || ob_is_string_type(dst))
-        && (ob_is_temporal_type(src)
-            || ob_is_otimestamp_type(src)
-            || ob_is_temporal_type(dst)
-            || ob_is_otimestamp_type(dst))) {
-      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
-      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
-      EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
+    } else if (ObTimestampType == src && ObTimestampType != dst) {
+      is_valid = false;
     }
   }
   return ret;

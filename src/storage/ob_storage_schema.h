@@ -72,7 +72,6 @@ public:
 
   int legacy_deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int legacy_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int64_t legacy_serialize_len() const;
 
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));
@@ -212,10 +211,9 @@ public:
   virtual inline bool is_index_table() const override { return share::schema::is_index_table(table_type_); }
   virtual inline bool is_storage_index_table() const override
   {
-    return share::schema::is_index_table(table_type_);
+    return share::schema::is_index_table(table_type_) || is_materialized_view();
   }
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
-  inline bool is_mlog_table() const { return share::schema::ObTableSchema::is_mlog_table(table_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 
@@ -235,6 +233,7 @@ public:
   virtual inline share::schema::ObTableMode get_table_mode_struct() const override { return table_mode_; }
   virtual inline share::schema::ObTableType get_table_type() const override { return table_type_; }
   virtual inline share::schema::ObIndexType get_index_type() const override { return index_type_; }
+  virtual inline share::schema::ObIndexStatus get_index_status() const override { return index_status_; }
   const common::ObIArray<ObStorageColumnSchema> &get_store_column_schemas() const { return column_array_; }
   const common::ObIArray<ObStorageColumnGroupSchema> &get_column_groups() const { return column_group_array_; }
   virtual inline common::ObRowStoreType get_row_store_type() const override { return row_store_type_; }
@@ -263,7 +262,7 @@ public:
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
-      K_(row_store_type), K_(schema_version),
+      K_(index_status), K_(row_store_type), K_(schema_version),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
@@ -292,11 +291,10 @@ private:
   int deserialize_rowkey_column_array(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
-  int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type);
   template <typename T>
-  int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
+  int64_t get_column_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
 
@@ -310,7 +308,7 @@ public:
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
-  // because we add "allocator" param in deserialize function,
+  // because we add "allocator" param in deserialize fiunction,
   // so we should handle compatibility in the specified deserialize function,
   // thus we add a static variable STORAGE_SCHEMA_VERSION and a class member storage_schema_version_ here.
   // Compatibility code should be added if new variables occur in future
@@ -335,6 +333,8 @@ public:
   share::schema::ObTableType table_type_;
   share::schema::ObTableMode table_mode_;
   share::schema::ObIndexType index_type_;
+  share::schema::ObIndexStatus index_status_;
+
   ObRowStoreType row_store_type_;
   int64_t schema_version_;
   int64_t column_cnt_; // include virtual generated column
@@ -416,7 +416,7 @@ int ObStorageSchema::serialize_schema_array(
 }
 
 template <typename T>
-int64_t ObStorageSchema::get_array_serialize_length(const common::ObIArray<T> &array) const
+int64_t ObStorageSchema::get_column_array_serialize_length(const common::ObIArray<T> &array) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_vi64(array.count());

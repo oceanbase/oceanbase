@@ -961,9 +961,6 @@ int ObPersistentLobApator::build_common_scan_param(
     scan_param.limit_param_.offset_ = 0;
     // sessions
     scan_param.snapshot_ = param.snapshot_;
-    if(param.read_latest_) {
-      scan_param.tx_id_ = param.snapshot_.core_.tx_id_;
-    }
     scan_param.sql_mode_ = param.sql_mode_;
     // common set
     scan_param.allocator_ = param.allocator_;

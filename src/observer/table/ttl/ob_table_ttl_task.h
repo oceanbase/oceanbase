@@ -49,8 +49,7 @@ public:
   };
 
 public:
-  const static int64_t ONE_ITER_EXECUTE_MAX_TIME = 30 * 1000 * 1000; // 30s
-  common::ObArenaAllocator hbase_kq_allocator_;
+  common::ObArenaAllocator allocator_;
   bool is_inited_;
   int32_t max_version_;
   int64_t time_to_live_ms_; // ttl in millisecond
@@ -71,8 +70,6 @@ public:
   common::ObSArray<uint64_t> rowkey_cell_ids_;
   // map new row -> normal column
   common::ObSArray<PropertyPair> properties_pairs_;
-  bool hbase_new_cq_;
-  int64_t iter_end_ts_;
 };
 
 
@@ -110,6 +107,7 @@ private:
   static const int64_t RETRY_INTERVAL = 30 * 60 * 1000 * 1000l; // 30min
   static const int64_t PER_TASK_DEL_ROWS = 1024l;
   static const int64_t ONE_TASK_TIMEOUT = 1 * 60 * 1000 * 1000l; // 1min
+  static const ObString TTL_TRACE_INFO;
 private:
   int process_one();
 
@@ -123,10 +121,10 @@ private:
   share::ObLSID ls_id_;
   ObTableEntity delete_entity_;
   table::ObTableApiCredential credential_;
-  uint64_t hbase_cur_version_;
   common::ObArenaAllocator rowkey_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDeleteTask);
 };
+
 class ObTableTTLDag final: public share::ObIDag
 {
 public:
@@ -139,12 +137,15 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+
   virtual bool is_ha_dag() const { return false; }
+
 private:
   bool is_inited_;
   table::ObTTLTaskParam param_;
   table::ObTTLTaskInfo info_;
   lib::Worker::CompatMode compat_mode_;
+
   DISALLOW_COPY_AND_ASSIGN(ObTableTTLDag);
 };
 

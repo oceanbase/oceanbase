@@ -37,10 +37,8 @@ public:
   bool has_error(void* sess);
   void destroy_sock(void* sess);
   void revert_sock(void* sess);
-  int create_read_handle(void* sess, void*& read_handle);
-  int release_read_handle(void* sess, void* read_handle);
-  int peek_data(void* sess, void* read_handle, int64_t limit, const char*& buf, int64_t& sz);
-  int consume_data(void* sess, void* read_handle, int64_t sz);
+  int peek_data(void* sess, int64_t limit, const char*& buf, int64_t& sz);
+  int consume_data(void* sess, int64_t sz);
   int write_data(void* sess, const char* buf, int64_t sz);
   void async_write_data(void* sess, const char* buf, int64_t sz);
   void stop();

@@ -18,7 +18,6 @@
 #include "ob_bit_stream.h"
 #include "ob_integer_array.h"
 #include "ob_row_index.h"
-#include "ob_vector_decode_util.h"
 #include "common/ob_target_specific.h"
 #include "lib/hash/ob_hashset.h"
 #include "sql/engine/expr/ob_expr_cmp_func.h"
@@ -529,177 +528,6 @@ int ObRawDecoder::batch_decode_general(
         integer_mask_,
         datums))) {
       LOG_WARN("Failed to batch load data to datum", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObRawDecoder::decode_vector(
-    const ObColumnDecoderCtx &decoder_ctx,
-    const ObIRowIndex* row_index,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const unsigned char *col_data = reinterpret_cast<const unsigned char *>(meta_data_);
-  int64_t data_offset =0;
-
-  if (decoder_ctx.is_bit_packing()) {
-    // bit packing
-    if (OB_FAIL(decode_vector_bitpacked(decoder_ctx, vector_ctx))) {
-      LOG_WARN("Failed to decode bitpacked data to vector", K(ret), K(decoder_ctx), K(vector_ctx));
-    }
-  } else {
-    if (decoder_ctx.is_fix_length()) {
-      // fixed-length
-      const int64_t fixed_packing_len = decoder_ctx.col_header_->length_;
-      int64_t data_offset = 0;
-      if (decoder_ctx.has_extend_value()) {
-        data_offset = decoder_ctx.micro_block_header_->row_count_
-          * decoder_ctx.micro_block_header_->extend_value_bit_;
-        data_offset = (data_offset + CHAR_BIT - 1) / CHAR_BIT;
-      }
-      const char *fixed_buf = meta_data_ + data_offset;
-      DataFixedLocator fixed_locator(vector_ctx.row_ids_, fixed_buf, fixed_packing_len, col_data);
-      if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<DataFixedLocator>(
-          decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), fixed_packing_len,
-          decoder_ctx.has_extend_value(), fixed_locator, vector_ctx.row_cap_,
-          vector_ctx.vec_offset_, vector_ctx.vec_header_))) {
-        LOG_WARN("failed to load byte aligned data to vector", K(ret));
-      }
-    } else {
-      // var-length
-      bool has_null = false;
-      if (OB_FAIL(batch_locate_var_len_row(decoder_ctx, row_index, vector_ctx, has_null))) {
-        LOG_WARN("Faild to set null vector from var-length column", K(ret));
-      } else if (has_null) {
-        ret = ObIColumnDecoder::batch_locate_cell_data<ObColumnHeader, true>(decoder_ctx, *decoder_ctx.col_header_,
-            vector_ctx.ptr_arr_, vector_ctx.len_arr_, vector_ctx.row_ids_, vector_ctx.row_cap_);
-      } else {
-        ret = ObIColumnDecoder::batch_locate_cell_data<ObColumnHeader, false>(decoder_ctx, *decoder_ctx.col_header_,
-            vector_ctx.ptr_arr_, vector_ctx.len_arr_, vector_ctx.row_ids_, vector_ctx.row_cap_);
-      }
-
-      if (OB_FAIL(ret)) {
-        LOG_WARN("failed to locate cell datas", K(ret));
-      } else {
-        const int64_t fixed_packing_len = 0;
-        DataDiscreteLocator discrete_locator(vector_ctx.ptr_arr_, vector_ctx.len_arr_);
-        if (OB_FAIL(ObVecDecodeUtils::load_byte_aligned_vector<DataDiscreteLocator>(
-            decoder_ctx.obj_meta_, decoder_ctx.col_header_->get_store_obj_type(), fixed_packing_len,
-            has_null, discrete_locator, vector_ctx.row_cap_,
-            vector_ctx.vec_offset_, vector_ctx.vec_header_))) {
-          LOG_WARN("failed to load byte aligned data to vector", K(ret));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObRawDecoder::decode_vector_bitpacked(
-    const ObColumnDecoderCtx &decoder_ctx,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  #define FILL_VECTOR_FUNC(vector_type, has_null) \
-    if (has_null) { \
-      ret = decode_vector_bitpacked<vector_type, true>(decoder_ctx, vector_ctx); \
-    } else { \
-      ret = decode_vector_bitpacked<vector_type, false>(decoder_ctx, vector_ctx); \
-    }
-
-  const ObObjMeta &obj_meta = decoder_ctx.obj_meta_;
-  const int16_t precision = obj_meta.is_decimal_int() ? obj_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
-  VecValueTypeClass vec_tc = common::get_vec_value_tc(obj_meta.get_type(), obj_meta.get_scale(), precision);
-  if (VEC_UNIFORM == vector_ctx.get_format()) {
-    FILL_VECTOR_FUNC(ObUniformFormat<false>, decoder_ctx.has_extend_value());
-  } else if (VEC_FIXED == vector_ctx.get_format()) {
-    switch (vec_tc) {
-    case VEC_TC_YEAR: {
-      // uint8_t
-      FILL_VECTOR_FUNC(ObFixedLengthFormat<uint8_t>, decoder_ctx.has_extend_value());
-      break;
-    }
-    case VEC_TC_DATE:
-    case VEC_TC_DEC_INT32: {
-      // int32_t
-      FILL_VECTOR_FUNC(ObFixedLengthFormat<int32_t>, decoder_ctx.has_extend_value());
-      break;
-    }
-    case VEC_TC_INTEGER:
-    case VEC_TC_DATETIME:
-    case VEC_TC_TIME:
-    case VEC_TC_UNKNOWN:
-    case VEC_TC_INTERVAL_YM:
-    case VEC_TC_DEC_INT64: {
-      // int64_t
-      FILL_VECTOR_FUNC(ObFixedLengthFormat<int64_t>, decoder_ctx.has_extend_value());
-      break;
-    }
-    case VEC_TC_UINTEGER:
-    case VEC_TC_BIT:
-    case VEC_TC_ENUM_SET:
-    case VEC_TC_DOUBLE:
-    case VEC_TC_FIXED_DOUBLE: {
-      // uint64_t
-      FILL_VECTOR_FUNC(ObFixedLengthFormat<uint64_t>, decoder_ctx.has_extend_value());
-      break;
-    }
-    case VEC_TC_FLOAT: {
-      // float
-      FILL_VECTOR_FUNC(ObFixedLengthFormat<uint32_t>, decoder_ctx.has_extend_value());
-      break;
-    }
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected vector type class for fixed format", K(ret), K(vec_tc));
-    }
-    }
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unnexpected vector format", K(ret), K(vector_ctx));
-  }
-  #undef FILL_VECTOR_FUNC
-  return ret;
-}
-
-template<typename VectorType, bool HAS_NULL>
-int ObRawDecoder::decode_vector_bitpacked(
-    const ObColumnDecoderCtx &decoder_ctx,
-    ObVectorDecodeCtx &vector_ctx) const
-{
-  int ret = OB_SUCCESS;
-  const unsigned char *col_data = reinterpret_cast<const unsigned char *>(meta_data_);
-  const int64_t bit_packing_len = decoder_ctx.col_header_->length_;
-  const int64_t bs_len = decoder_ctx.col_header_->length_ * decoder_ctx.micro_block_header_->row_count_;
-  bitstream_unpack unpack_func = ObBitStream::get_unpack_func(bit_packing_len);
-  VectorType *vector = static_cast<VectorType *>(vector_ctx.get_vector());
-  int64_t data_offset = 0;
-  uint32_t vec_data_len = 0;
-  if (OB_FAIL(get_uint_data_datum_len(
-      ObDatum::get_obj_datum_map_type(decoder_ctx.obj_meta_.get_type()), vec_data_len))) {
-    LOG_WARN("Failed to get vec data length", K(ret), K(decoder_ctx));
-  } else {
-    if (decoder_ctx.has_extend_value()) {
-      data_offset = decoder_ctx.micro_block_header_->row_count_ * decoder_ctx.micro_block_header_->extend_value_bit_;
-    }
-    const sql::ObBitVector *null_bitset = sql::to_bit_vector(col_data);
-    for (int64_t i = 0; i < vector_ctx.row_cap_; ++i) {
-      const int64_t curr_vec_offset = vector_ctx.vec_offset_ + i;
-      const int64_t row_id = vector_ctx.row_ids_[i];
-      if (HAS_NULL && null_bitset->contain(row_id)) {
-        vector->set_null(curr_vec_offset);
-      } else {
-        int64_t unpacked_val = 0;
-        unpack_func(
-            col_data,
-            data_offset + row_id * decoder_ctx.col_header_->length_,
-            decoder_ctx.col_header_->length_,
-            bs_len,
-            unpacked_val);
-        vector->set_payload(curr_vec_offset, &unpacked_val, vec_data_len);
-      }
     }
   }
   return ret;
@@ -1282,12 +1110,10 @@ int ObRawDecoder::ObRawDecoderFilterBetweenFunc::operator()(
   int right_cmp_res = 0;
   if (OB_FAIL(type_cmp_func_(cur_datum, filter.get_datums().at(0), left_cmp_res))) {
     LOG_WARN("Failed to compare datum", K(ret), K(cur_datum), K(filter.get_datums().at(0)));
-  } else if (left_cmp_res < 0) {
-    result = false;
   } else if (OB_FAIL(type_cmp_func_(cur_datum, filter.get_datums().at(1), right_cmp_res))) {
     LOG_WARN("Failed to compare datum", K(ret), K(cur_datum), K(filter.get_datums().at(1)));
   } else {
-    result = (right_cmp_res <= 0);
+    result = get_ge_cmp_ret_(left_cmp_res) && get_le_cmp_ret_(right_cmp_res);
   }
   return ret;
 }

@@ -668,17 +668,7 @@ int ObGtsSource::handle_gts_result(const uint64_t tenant_id, const int64_t queue
   } else {
     ObGTSTaskQueue *queue = &(queue_[queue_index]);
     if (OB_FAIL(queue->foreach_task(srr, gts, receive_gts_ts))) {
-      if (OB_EAGAIN == ret) {
-        ret = OB_SUCCESS;
-        if (gts_local_cache_.no_rpc_on_road()) {
-          int tmp_ret = OB_SUCCESS;
-          if (OB_SUCCESS != (tmp_ret = refresh_gts_(false))) {
-            TRANS_LOG(WARN, "refresh gts failed", K(tmp_ret));
-          }
-        }
-      } else {
-        TRANS_LOG(WARN, "iterate task failed", KR(ret), K(queue_index));
-      }
+      TRANS_LOG(WARN, "iterate task failed", KR(ret), K(queue_index));
     }
   }
   return ret;

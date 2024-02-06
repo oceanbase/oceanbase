@@ -19,7 +19,6 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -187,10 +186,10 @@ int ObExprTimeStampDiff::eval_timestamp_diff(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *u = NULL;
   ObDatum *l = NULL;
   ObDatum *r = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  const common::ObTimeZoneInfo *tz_info = NULL;
-  if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
+  const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, u, l, r))) {
     LOG_WARN("eval arg failed", K(ret));
   } else if (u->is_null()) {
@@ -202,7 +201,7 @@ int ObExprTimeStampDiff::eval_timestamp_diff(const ObExpr &expr, ObEvalCtx &ctx,
     int64_t res_int = 0;
     bool is_null = false;
     if (OB_FAIL(calc(res_int, is_null, u->get_int(), l->get_datetime(),
-                     r->get_datetime(), tz_info))) {
+                     r->get_datetime(), session->get_timezone_info()))) {
       LOG_WARN("calc failed", K(ret));
     } else if (is_null) {
       res.set_null();
@@ -224,15 +223,6 @@ int ObExprTimeStampDiff::cg_expr(ObExprCGCtx &ctx, const ObRawExpr &raw_expr,
      ObDateTimeType == rt_expr.args_[1]->datum_meta_.type_ &&
      ObDateTimeType == rt_expr.args_[2]->datum_meta_.type_);
   OX(rt_expr.eval_func_ = eval_timestamp_diff);
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprTimeStampDiff, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
-  }
   return ret;
 }
 

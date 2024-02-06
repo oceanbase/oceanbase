@@ -52,20 +52,20 @@ public:
     }
   ~ObWkbToS2Visitor() { reset(); }
   template<typename T_IBIN>
-  int MakeS2Point(T_IBIN *geo, S2Cell *&res);
-  template<typename T_IBIN>
-  int MakeS2Polyline(T_IBIN *geo, S2Polyline *&res);
+  S2Cell* MakeS2Point(T_IBIN *geo);
+  template<typename T_IBIN, typename T_BIN>
+  S2Polyline* MakeS2Polyline(T_IBIN *geo);
   template<typename T_IBIN, typename T_BIN,
            typename T_BIN_RING, typename T_BIN_INNER_RING>
-  int MakeS2Polygon(T_IBIN *geo, S2Polygon *&res);
+  S2Polygon* MakeS2Polygon(T_IBIN *geo);
 
   template<typename T_IBIN>
-  int MakeProjS2Point(T_IBIN *geo, S2Cell *&res);
-  template<typename T_IBIN>
-  int MakeProjS2Polyline(T_IBIN *geo, S2Polyline *&res);
+  S2Cell* MakeProjS2Point(T_IBIN *geo);
+  template<typename T_IBIN, typename T_BIN>
+  S2Polyline* MakeProjS2Polyline(T_IBIN *geo);
   template<typename T_IBIN, typename T_BIN,
            typename T_BIN_RING, typename T_BIN_INNER_RING>
-  int MakeProjS2Polygon(T_IBIN *geo, S2Polygon *&res);
+  S2Polygon* MakeProjS2Polygon(T_IBIN *geo);
 
   bool prepare(ObGeometry *geo);
   // wkb
@@ -100,13 +100,8 @@ private:
   double stToUV(double s);
   bool exceedsBounds(double x, double y);
   S2Point MakeS2PointFromXy(double x, double y);
-  int add_cell_from_point(S2Point point);
-  int add_cell_from_point(S2LatLng point);
-  template <typename ElementType>
-  static int vector_push_back(std::vector<ElementType> &vector, ElementType &element);
-  static int vector_emplace_back(std::vector<std::unique_ptr<S2Loop>> &vector, S2Loop *element);
-  template <typename ElementType>
-  static int vector_emplace_back(std::vector<std::unique_ptr<S2Region>> &vector, ElementType *element);
+  void add_cell_from_point(S2Point point);
+  void add_cell_from_point(S2LatLng point);
   // S2对象内部使用了std::vector实现，在这里统一使用std::vector管理这些对象
   std::vector<std::unique_ptr<S2Region>> s2v_;
   S2LatLngRect mbr_;

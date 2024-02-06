@@ -23,7 +23,7 @@ typedef struct pkts_cfg_t {
 } pkts_cfg_t;
 
 typedef struct pkts_req_t {
-  int64_t ctime_us;
+  PNIO_DELAY_WARN(int64_t ctime_us);
   int errcode;
   pkts_flush_cb_func_t flush_cb;
   uint64_t sock_id;
@@ -38,11 +38,9 @@ extern int pkts_resp(pkts_t* pkts, pkts_req_t* req);
 
 typedef struct pkts_sk_t {
   SOCK_COMMON;
-  dlink_t list_link;
   uint64_t id;
   write_queue_t wq;
   ibuffer_t ib;
-  socket_diag_info_t sk_diag_info;
 } pkts_sk_t;
 
 typedef struct pkts_sf_t {
@@ -58,6 +56,4 @@ typedef struct pkts_t {
   sc_queue_t req_queue;
   idm_t sk_map;
   idm_item_t sk_table[1<<16];
-  dlink_t sk_list;
-  diag_info_t diag_info;
 } pkts_t;

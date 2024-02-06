@@ -2355,6 +2355,8 @@ int ObHashGroupByOp::group_child_batch_rows(const ObChunkDatumStore::StoredRow *
           if (OB_FAIL(alloc_group_row(local_group_rows_.size() - new_groups + i,
                                       *curr_gr_item))) {
             LOG_WARN("alloc group row failed", K(ret));
+          } else if (OB_FAIL(aggr_processor_.prepare_in_batch_mode(curr_gr_item->group_row_))) {
+            LOG_WARN("fail to prepare row", K(ret), KPC(curr_gr_item->group_row_));
           } else {
             curr_gr_item->group_row_->groupby_store_row_
                 = const_cast<ObChunkDatumStore::StoredRow*>(batch_rows_from_dump_[i]);

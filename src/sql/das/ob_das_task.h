@@ -20,7 +20,6 @@
 #include "sql/das/ob_das_define.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
-#include "sql/engine/basic/ob_temp_row_store.h"
 #include "lib/list/ob_obj_store.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
 namespace oceanbase
@@ -112,7 +111,6 @@ public:
       task_flag_(0),
       trans_desc_(nullptr),
       snapshot_(nullptr),
-      write_branch_id_(0),
       tablet_loc_(nullptr),
       op_alloc_(op_alloc),
       related_ctdefs_(op_alloc),
@@ -194,8 +192,6 @@ public:
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
-  int16_t get_write_branch_id() const { return write_branch_id_; }
-  void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
   bool is_local_task() const { return task_started_; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
@@ -249,7 +245,6 @@ protected:
   };
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
   transaction::ObTxReadSnapshot *snapshot_; // Mvcc snapshot
-  int16_t write_branch_id_;  // branch id for parallel write, required for partially rollback
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   const ObDASTabletLoc *tablet_loc_; //does not need serialize it
@@ -312,15 +307,11 @@ public:
 public:
   DASOpResultIter()
     : task_iter_(),
-      wild_datum_info_(nullptr),
-      enable_rich_format_(false)
+      wild_datum_info_(nullptr)
   { }
-  DASOpResultIter(const DASTaskIter &task_iter,
-                  WildDatumPtrInfo &wild_datum_info,
-                  const bool enable_rich_format)
+  DASOpResultIter(const DASTaskIter &task_iter, WildDatumPtrInfo &wild_datum_info)
     : task_iter_(task_iter),
-      wild_datum_info_(&wild_datum_info),
-      enable_rich_format_(enable_rich_format)
+      wild_datum_info_(&wild_datum_info)
   {
   }
   int get_next_row();
@@ -333,7 +324,6 @@ private:
 private:
   DASTaskIter task_iter_;
   WildDatumPtrInfo *wild_datum_info_;
-  bool enable_rich_format_;
 };
 
 class ObDASTaskArg
@@ -527,18 +517,14 @@ public:
   int init(const uint64_t tenant_id, const int64_t task_id);
 public:
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
-  ObTempRowStore &get_vec_row_store() { return vec_row_store_; }
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
-  int64_t get_task_id() const { return task_id_; }
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store));
 private:
   ObChunkDatumStore datum_store_;
   uint64_t tenant_id_;
   int64_t task_id_;
   bool has_more_;
-  bool enable_rich_format_;
-  ObTempRowStore vec_row_store_;
 };
 
 class ObDASDataEraseReq

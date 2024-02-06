@@ -62,10 +62,6 @@ const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
 const int64_t MAGIC_BASE_SAMPLE_SIZE = 1000;
 const double MAGIC_SAMPLE_CUT_RATIO = 0.00962;
-const static int64_t MAX_NUM_OF_WRITE_STATS = 2000;
-const static int64_t DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE = 256;
-const static int64_t MIN_GATHER_WORK_ARANA_SIZE = 10 * 1024L * 1024L; //10M
-const int64_t MAX_OPT_STATS_PROCESS_RPC_TIMEOUT = 300000000;//one optimizer stats processing rpc time should not exceed 300 seconds
 
 enum StatLevel
 {
@@ -117,7 +113,8 @@ enum ColumnGatherFlag
   NO_NEED_STAT          = 0,
   VALID_OPT_COL         = 1,
   NEED_BASIC_STAT       = 1 << 1,
-  NEED_AVG_LEN          = 1 << 2
+  NEED_AVG_LEN          = 1 << 2,
+  NO_NEED_HISTOGRAM     = 1 << 3
 };
 
 enum ObGranularityType
@@ -153,6 +150,15 @@ struct BlockNumStat
                K(cg_micro_cnt_arr_))
 };
 
+struct ObExtraParam
+{
+  StatLevel type_;
+  int64_t nth_part_;
+  PartitionIdBlockMap partition_id_block_map_;
+  int64_t start_time_;
+  bool need_histogram_;
+};
+
 //TODO@jiangxiu.wt: improve the expression of PartInfo, use the map is better.
 struct PartInfo
 {
@@ -180,35 +186,38 @@ struct PartInfo
                K_(first_part_id));
 };
 
-struct ObPartitionStatInfo;
-struct StatTable
+	struct StatTable
 {
   StatTable() :
     database_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
+    incremental_stat_(false),
     stale_percent_(0.0),
-    partition_stat_infos_()
-  {
-    partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
-  }
+    need_gather_subpart_(false),
+    no_regather_partition_ids_()
+  {}
   StatTable(uint64_t database_id, uint64_t table_id) :
     database_id_(database_id),
     table_id_(table_id),
+    incremental_stat_(false),
     stale_percent_(0.0),
-    partition_stat_infos_()
-  {
-    partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
-  }
+    need_gather_subpart_(false),
+    no_regather_partition_ids_()
+  {}
   bool operator<(const StatTable &other) const;
   int assign(const StatTable &other);
   TO_STRING_KV(K_(database_id),
                K_(table_id),
+               K_(incremental_stat),
                K_(stale_percent),
-               K_(partition_stat_infos));
+               K_(need_gather_subpart),
+               K_(no_regather_partition_ids));
   uint64_t database_id_;
   uint64_t table_id_;
+  bool incremental_stat_;
   double stale_percent_;
-  ObArray<ObPartitionStatInfo> partition_stat_infos_;
+  bool need_gather_subpart_;
+  ObSEArray<int64_t, 4> no_regather_partition_ids_;
 };
 
 enum ObStatTableType {
@@ -282,7 +291,6 @@ struct ObPartitionStatParam
   ObPartitionStatParam(share::schema::ObPartitionFuncType type)
   : part_type_(type),
     need_modify_(true),
-    can_use_approx_(false),
     gather_histogram_(true)
   {}
   ObPartitionStatParam& operator=(const ObPartitionStatParam& other)
@@ -297,25 +305,21 @@ struct ObPartitionStatParam
     need_modify_ = other.need_modify_;
     gather_histogram_ = other.gather_histogram_;
   }
-  void set_gather_stat(const bool can_use_approx = false)
+  void set_gather_stat()
   {
     need_modify_ = true;
-    can_use_approx_ = can_use_approx;
     gather_histogram_ = true;
   }
   void reset_gather_stat()
   {
     need_modify_ = false;
-    can_use_approx_ = false;
     gather_histogram_ = false;
   }
   TO_STRING_KV(K_(part_type),
                K_(need_modify),
-               K_(can_use_approx),
                K_(gather_histogram));
   share::schema::ObPartitionFuncType part_type_;
   bool need_modify_;
-  bool can_use_approx_;
   bool gather_histogram_;
 };
 
@@ -371,10 +375,11 @@ struct ObColumnStatParam {
   inline void set_valid_opt_col() { gather_flag_ |= ColumnGatherFlag::VALID_OPT_COL; }
   inline void set_need_basic_stat() { gather_flag_ |= ColumnGatherFlag::NEED_BASIC_STAT; }
   inline void set_need_avg_len() { gather_flag_ |= ColumnGatherFlag::NEED_AVG_LEN; }
+  inline void set_no_need_histogram() { gather_flag_ |= ColumnGatherFlag::NO_NEED_HISTOGRAM; }
   inline bool is_valid_opt_col() const { return gather_flag_ & ColumnGatherFlag::VALID_OPT_COL; }
   inline bool need_basic_stat() const { return gather_flag_ & ColumnGatherFlag::NEED_BASIC_STAT; }
   inline bool need_avg_len() const { return gather_flag_ & ColumnGatherFlag::NEED_AVG_LEN; }
-  inline bool need_col_stat() const { return gather_flag_ != ColumnGatherFlag::NO_NEED_STAT; }
+  inline bool is_no_need_histogram() const { return gather_flag_ & ColumnGatherFlag::NO_NEED_HISTOGRAM; }
 
   ObString column_name_;
   uint64_t column_id_;
@@ -412,7 +417,7 @@ struct ObTableStatParam {
   static const int64_t DEFAULT_DATA_PART_ID = -1;
 
   ObTableStatParam() : tenant_id_(0),
-    db_name_(),
+    db_name_(0),
     db_id_(OB_INVALID_ID),
     tab_name_(),
     table_id_(OB_INVALID_ID),
@@ -420,6 +425,7 @@ struct ObTableStatParam {
     global_stat_param_(),
     part_stat_param_(share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
     subpart_stat_param_(share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_MAX),
+    total_part_cnt_(0),
     part_name_(),
     part_infos_(),
     subpart_infos_(),
@@ -435,6 +441,8 @@ struct ObTableStatParam {
     column_params_(),
     no_invalidate_(false),
     force_(false),
+    part_ids_(),
+    subpart_ids_(),
     no_regather_partition_ids_(),
     is_subpart_name_(false),
     stat_category_(),
@@ -471,10 +479,6 @@ struct ObTableStatParam {
     return global_data_part_id_ != INVALID_GLOBAL_PART_ID;
   }
 
-  bool is_specify_partition_gather() const;
-
-  bool is_specify_column_gather() const;
-
   uint64_t tenant_id_;
 
   ObString db_name_;
@@ -486,6 +490,7 @@ struct ObTableStatParam {
   ObGlobalStatParam global_stat_param_;
   ObPartitionStatParam part_stat_param_;
   ObPartitionStatParam subpart_stat_param_;
+  int64_t total_part_cnt_;
 
   ObString part_name_;
   ObSEArray<PartInfo, 4> part_infos_;
@@ -507,6 +512,9 @@ struct ObTableStatParam {
 
   bool no_invalidate_;
   bool force_;
+
+  ObSEArray<int64_t, 4> part_ids_;
+  ObSEArray<int64_t, 4> subpart_ids_;
   ObSEArray<int64_t, 4> no_regather_partition_ids_;
 
   bool is_subpart_name_;
@@ -553,6 +561,8 @@ struct ObTableStatParam {
                K(column_params_),
                K(no_invalidate_),
                K(force_),
+               K(part_ids_),
+               K(subpart_ids_),
                K(no_regather_partition_ids_),
                K(is_subpart_name_),
                K(stat_category_),
@@ -575,77 +585,6 @@ struct ObTableStatParam {
                K(column_group_params_));
 };
 
-struct ObOptStatGatherParam {
-  ObOptStatGatherParam () :
-    tenant_id_(0),
-    db_name_(),
-    tab_name_(),
-    table_id_(OB_INVALID_ID),
-    stat_level_(INVALID_LEVEL),
-    need_histogram_(false),
-    sample_info_(),
-    degree_(1),
-    partition_infos_(),
-    column_params_(),
-    column_group_params_(),
-    allocator_(NULL),
-    partition_id_block_map_(NULL),
-    gather_start_time_(0),
-    stattype_(StatTypeLocked::NULL_TYPE),
-    is_split_gather_(false),
-    max_duration_time_(0),
-    need_approx_ndv_(true),
-    data_table_name_(),
-    global_part_id_(-1),
-    gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
-    sepcify_scn_(0)
-  {}
-  int assign(const ObOptStatGatherParam &other);
-  uint64_t tenant_id_;
-  ObString db_name_;
-  ObString tab_name_;
-  uint64_t table_id_;
-  StatLevel stat_level_;
-  bool need_histogram_;
-  ObAnalyzeSampleInfo sample_info_;
-  int64_t degree_;
-  ObSEArray<PartInfo, 4> partition_infos_;
-  ObSEArray<ObColumnStatParam, 4> column_params_;
-  ObArray<ObColumnGroupStatParam> column_group_params_;
-  common::ObIAllocator *allocator_;
-  const PartitionIdBlockMap *partition_id_block_map_;
-  int64_t gather_start_time_;
-  StatTypeLocked stattype_;
-  bool is_split_gather_;
-  int64_t max_duration_time_;
-  bool need_approx_ndv_;
-  ObString data_table_name_;
-  int64_t global_part_id_;
-  int64_t gather_vectorize_;
-  uint64_t sepcify_scn_;
-
-  TO_STRING_KV(K(tenant_id_),
-               K(db_name_),
-               K(tab_name_),
-               K(table_id_),
-               K(stat_level_),
-               K(need_histogram_),
-               K(sample_info_),
-               K(degree_),
-               K(partition_infos_),
-               K(column_params_),
-               K(column_group_params_),
-               K(gather_start_time_),
-               K(stattype_),
-               K(is_split_gather_),
-               K(max_duration_time_),
-               K(need_approx_ndv_),
-               K(data_table_name_),
-               K(global_part_id_),
-               K(gather_vectorize_),
-               K(sepcify_scn_));
-};
-
 struct ObOptStat
 {
   ObOptStat() : table_stat_(NULL), column_stats_() {
@@ -656,7 +595,7 @@ struct ObOptStat
   // turn the column stat into pointer
   ObArray<ObOptColumnStat *> column_stats_;
   TO_STRING_KV(K(table_stat_),
-               K(column_stats_));
+               K(column_stats_.count()));
 };
 
 struct ObHistogramParam
@@ -728,54 +667,27 @@ struct ObSetColumnStatParam
 
 };
 
-struct ObSetSystemStatParam
-{
-  ObSetSystemStatParam()
-  :tenant_id_(OB_INVALID_ID),
-  name_(),
-  value_(0)
-  { }
-
-  int64_t tenant_id_;
-  ObString name_;
-  int64_t value_;
-
-  TO_STRING_KV(K(tenant_id_),
-               K(name_),
-               K(value_)
-    );
-};
-
 struct ObPartitionStatInfo
 {
   ObPartitionStatInfo():
     partition_id_(-1),
     row_cnt_(0),
-    is_stat_locked_(false),
-    is_no_dml_modified_(false),
-    is_no_stale_(false)
+    is_stat_locked_(false)
   {}
 
-  ObPartitionStatInfo(int64_t partition_id, int64_t row_cnt, bool is_locked, bool is_no_dml_modified):
+  ObPartitionStatInfo(int64_t partition_id, int64_t row_cnt, bool is_locked):
     partition_id_(partition_id),
     row_cnt_(row_cnt),
-    is_stat_locked_(is_locked),
-    is_no_dml_modified_(is_no_dml_modified),
-    is_no_stale_(false)
+    is_stat_locked_(is_locked)
   {}
 
   int64_t partition_id_;
   int64_t row_cnt_;
   bool is_stat_locked_;
-  bool is_no_dml_modified_;
-  bool is_no_stale_;
-  bool is_regather() const { return !is_stat_locked_ && !is_no_dml_modified_ && !is_no_stale_; }
 
   TO_STRING_KV(K(partition_id_),
                K(row_cnt_),
-               K(is_stat_locked_),
-               K(is_no_dml_modified_),
-               K(is_no_stale_));
+               K(is_stat_locked_));
 };
 
 enum ObOptDmlStatType {

@@ -53,7 +53,6 @@
 #include "sql/optimizer/ob_log_insert_all.h"
 #include "sql/optimizer/ob_log_err_log.h"
 #include "sql/engine/basic/ob_limit_op.h"
-#include "sql/engine/basic/ob_limit_vec_op.h"
 #include "sql/optimizer/ob_log_group_by.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_sort.h"
@@ -95,7 +94,6 @@
 #include "sql/engine/aggregate/ob_merge_distinct_op.h"
 #include "sql/engine/aggregate/ob_hash_distinct_op.h"
 #include "sql/engine/basic/ob_material_op.h"
-#include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/basic/ob_topk_op.h"
 #include "sql/engine/sort/ob_sort_op.h"
 #include "sql/engine/basic/ob_count_op.h"
@@ -120,7 +118,6 @@
 #include "sql/engine/dml/ob_table_replace_op.h"
 #include "sql/engine/dml/ob_link_dml_op.h"
 #include "sql/engine/join/ob_hash_join_op.h"
-#include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "sql/engine/subquery/ob_subplan_scan_op.h"
@@ -133,14 +130,12 @@
 #include "sql/engine/px/ob_granule_iterator_op.h"
 #include "sql/engine/px/exchange/ob_px_receive_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_receive_op.h"
-#include "sql/engine/px/exchange/ob_px_ms_receive_vec_op.h"
 #include "sql/engine/px/exchange/ob_px_dist_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_repart_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_reduce_transmit_op.h"
 #include "sql/engine/px/exchange/ob_px_fifo_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ordered_coord_op.h"
 #include "sql/engine/px/exchange/ob_px_ms_coord_op.h"
-#include "sql/engine/px/exchange/ob_px_ms_coord_vec_op.h"
 #include "sql/engine/aggregate/ob_scalar_aggregate_op.h"
 #include "sql/engine/aggregate/ob_merge_groupby_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
@@ -166,13 +161,6 @@
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
-#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
-#include "sql/engine/aggregate/ob_hash_distinct_vec_op.h"
-#include "sql/engine/aggregate/ob_scalar_aggregate_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_access_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_transformation_vec_op.h"
-#include "sql/engine/sort/ob_sort_vec_op.h"
 
 namespace oceanbase
 {
@@ -362,8 +350,6 @@ static bool G_VECTORIZED_OP_ARRAY[PHY_END];
 bool *ObOperatorFactory::G_VECTORIZED_OP_ARRAY_ = G_VECTORIZED_OP_ARRAY;
 static uint64_t G_OB_VERSION_ARRAY[PHY_END];
 uint64_t *ObOperatorFactory::G_OB_VERSION_ARRAY_ = G_OB_VERSION_ARRAY;
-static bool G_SUPPORT_RICH_FMT_ARRAY[PHY_END];
-bool *ObOperatorFactory::G_SUPPORT_RICH_FMT_ARRAY_ = G_SUPPORT_RICH_FMT_ARRAY;
 
 template <int N>
 struct InitAllocFunc
@@ -381,7 +367,6 @@ struct InitAllocFunc
 
     G_VECTORIZED_OP_ARRAY[N] = op_reg::ObOpTypeTraits<N>::vectorized_;
     G_OB_VERSION_ARRAY[N] = op_reg::ObOpTypeTraits<N>::ob_version_;
-    G_SUPPORT_RICH_FMT_ARRAY[N] = op_reg::ObOpTypeTraits<N>::support_rich_format_;
   }
 };
 

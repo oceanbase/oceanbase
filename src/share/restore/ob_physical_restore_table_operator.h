@@ -41,7 +41,7 @@ public:
    * @param[in] tenant_id of restore job, maybe sys or user tenant
    * @param[in] sql client
    */
-  int init(common::ObISQLClient *sql_client, const uint64_t tenant_id, const int32_t group_id);
+  int init(common::ObISQLClient *sql_client, const uint64_t tenant_id);
   /*
    * description: insert into __all_restore_job
    * @param[in] restore job
@@ -160,7 +160,6 @@ private:
   bool inited_;
   common::ObISQLClient *sql_client_;
   uint64_t tenant_id_;
-  int32_t group_id_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalRestoreTableOperator);
 };
 
@@ -189,7 +188,7 @@ int ObPhysicalRestoreTableOperator::update_restore_option(
       SHARE_LOG(WARN, "fail to add column", KR(ret), K(option_value));
     } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_RESTORE_JOB_TNAME, sql))) {
       SHARE_LOG(WARN, "splice_insert_sql failed", KR(ret));
-    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+    } else if (OB_FAIL(sql_client_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
       SHARE_LOG(WARN, "execute sql failed", K(sql), KR(ret), K(exec_tenant_id));
     } else if (affected_rows <= 0) {
       ret = OB_ERR_UNEXPECTED;

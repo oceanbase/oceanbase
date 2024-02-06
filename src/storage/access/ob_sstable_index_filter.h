@@ -29,8 +29,7 @@ namespace storage
 struct ObSkippingFilterNode
 {
   ObSkippingFilterNode()
-   : is_already_determinate_(false),
-      skip_index_type_(blocksstable::ObSkipIndexType::MAX_TYPE),
+    : skip_index_type_(blocksstable::ObSkipIndexType::MAX_TYPE),
       filter_(nullptr) {}
 
   OB_INLINE bool is_useful() const
@@ -41,9 +40,9 @@ struct ObSkippingFilterNode
   {
     skip_index_type_ = blocksstable::ObSkipIndexType::MAX_TYPE;
   }
-  TO_STRING_KV(K_(is_already_determinate), K_(skip_index_type), KP_(filter));
+  TO_STRING_KV(K_(is_skipping_index_used), K_(skip_index_type), KP_(filter));
 
-  bool is_already_determinate_;
+  bool is_skipping_index_used_;
   blocksstable::ObSkipIndexType skip_index_type_;
   sql::ObPushdownFilterExecutor *filter_;
 };

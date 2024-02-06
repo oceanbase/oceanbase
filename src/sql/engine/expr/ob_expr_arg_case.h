@@ -67,7 +67,6 @@ public:
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const;
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprArgCase);

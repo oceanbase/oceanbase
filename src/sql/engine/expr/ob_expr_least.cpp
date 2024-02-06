@@ -273,6 +273,7 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
                                  const ObRawExpr &raw_expr,
                                  ObExpr &rt_expr) const
 {
+  UNUSED(raw_expr);
   int ret = OB_SUCCESS;
   const uint32_t param_num = rt_expr.arg_cnt_;
   bool is_oracle_mode = lib::is_oracle_mode();
@@ -316,21 +317,16 @@ int ObExprLeastGreatest::cg_expr(ObExprCGCtx &op_cg_ctx,
       ObCastMode cm = CM_NONE;
       if (!is_oracle_mode && !cmp_meta.is_null()) {
         DatumCastExtraInfo *info = OB_NEWx(DatumCastExtraInfo, op_cg_ctx.allocator_, *(op_cg_ctx.allocator_), type_);
-        ObSQLMode sql_mode = op_cg_ctx.session_->get_sql_mode();
         if (OB_ISNULL(info)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("alloc memory failed", K(ret));
-        } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(&raw_expr.get_local_session_var(),
-                                                                          sql_mode))) {
-          LOG_WARN("try get local sql mode failed", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
+                                                             op_cg_ctx.session_, cm))) {
+          LOG_WARN("get default cast mode failed", K(ret));
         } else if (CS_TYPE_INVALID == cmp_meta.get_collation_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("compare cs type is invalid", K(ret), K(cmp_meta));
         } else {
-          ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
-                                            op_cg_ctx.session_->get_stmt_type(),
-                                            op_cg_ctx.session_->is_ignore_stmt(),
-                                            sql_mode, cm);
           info->cmp_meta_.type_ = cmp_meta.get_type();
           info->cmp_meta_.cs_type_ = cmp_meta.get_collation_type();
           info->cmp_meta_.scale_ = cmp_meta.get_scale();
@@ -561,16 +557,6 @@ int ObExprLeastGreatest::calc_oracle(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-DEF_SET_LOCAL_SESSION_VARS(ObExprLeastGreatest, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(2);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
-  }
-  return ret;
-}
-
 ObExprLeast::ObExprLeast(common::ObIAllocator &alloc)
     : ObExprLeastGreatest(alloc,
                            T_FUN_SYS_LEAST,
@@ -590,6 +576,7 @@ int ObExprLeast::calc_least(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
   }
   return ret;
 }
+
 
 }
 }

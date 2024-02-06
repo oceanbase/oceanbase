@@ -27,10 +27,7 @@ class ObTableLoadRowArray
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableLoadRowArray() : allocator_handle_()
-  {
-    array_.set_attr(ObMemAttr(MTL_ID(), "TDL_RowArray"));
-  }
+  ObTableLoadRowArray() : allocator_handle_() {}
   ~ObTableLoadRowArray() {}
 
   int push_back(const T &obj_row);

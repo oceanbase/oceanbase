@@ -348,10 +348,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
     ClientLSCtx &ctx)
 {
   int ret = OB_SUCCESS;
-  // always reserve 4K for archive header
-  const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L - 4 * 1024;
-  const int64_t MAX_RETRY_COUNT = 4;
-  if (OB_ISNULL(ctx.get_source()) && OB_FAIL(ObCdcService::init_archive_source(ls_id, ctx))) {
+  if (OB_ISNULL(ctx.get_source()) && OB_FAIL(init_archive_source_(ctx, ls_id))) {
     LOG_WARN("init archive source failed", K(ctx), K(ls_id));
   } else {
     const char *buf = NULL;
@@ -359,30 +356,22 @@ int ObCdcFetcher::fetch_log_in_archive_(
     share::SCN pre_scn;
     if (OB_FAIL(pre_scn.convert_from_ts(ctx.get_progress()/1000L))) {
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
-    } else  {
-      int64_t retry_count = 0;
-      do {
-        if (! remote_iter.is_init() && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
-            start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
-          LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
-        } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
-          // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
-          if (OB_ITER_END != ret) {
-            LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
-          } else {
-            remote_iter.update_source_cb();
-            remote_iter.reset();
-            LOG_INFO("get iter end from remote_iter, retry", K(retry_count), K(MAX_RETRY_COUNT));
-          }
-        } else if (start_lsn != lsn) {
-          // to keep consistency with the ret code of palf
-          ret = OB_INVALID_DATA;
-          LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
-              K(remote_iter));
-        } else {
+    } else if (need_init_iter && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
+                                                          start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_,
+                                                          log_ext_handler_))) {
+      LOG_WARN("init remote log iterator failed", KR(ret), K(tenant_id_), K(ls_id));
+    } else if (OB_FAIL(remote_iter.next(log_entry, lsn, buf, buf_size))) {
+      // expected OB_ITER_END and OB_SUCCEES, error occurs when other code is returned.
+      if (OB_ITER_END != ret) {
+        LOG_WARN("iterate remote log failed", KR(ret), K(need_init_iter), K(ls_id));
+      }
+    } else if (start_lsn != lsn) {
+      // to keep consistency with the ret code of palf
+      ret = OB_INVALID_DATA;
+      LOG_WARN("remote iterator returned unexpected log entry lsn", K(start_lsn), K(lsn), K(log_entry), K(ls_id),
+          K(remote_iter));
+    } else {
 
-        }
-      } while (OB_ITER_END == ret && ++retry_count < MAX_RETRY_COUNT);
     }
   }
   return ret;
@@ -1002,6 +991,34 @@ int ObCdcFetcher::prefill_resp_with_log_entry_(const ObLSID &ls_id,
   return ret;
 }
 
+// called when source in ctx is null
+int ObCdcFetcher::init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id) {
+  int ret = OB_SUCCESS;
+  ObRemoteLogParent *source = ctx.get_source();
+  if (OB_NOT_NULL(source)) {
+    LOG_WARN("archive source is not null, no need to init");
+  } else if (OB_ISNULL(source = logservice::ObResSrcAlloctor::alloc(ObLogRestoreSourceType::LOCATION, ls_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc RemoteLocationParent failed", KR(ret), K(tenant_id_), K(ls_id));
+  } else {
+    share::ObBackupDest archive_dest;
+    if (OB_FAIL(ObCdcService::get_backup_dest(ls_id, archive_dest))) {
+      LOG_WARN("get backupdest from archivedestinfo failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(static_cast<ObRemoteLocationParent*>(source)->set(archive_dest, SCN::max_scn()))) {
+      LOG_WARN("source set archive dest info failed", KR(ret), K(archive_dest));
+    } else {
+      ctx.set_source(source);
+      LOG_INFO("init archive source succ", K(ctx), K(ls_id));
+    }
+
+    if (OB_FAIL(ret)) {
+      logservice::ObResSrcAlloctor::free(source);
+      source = nullptr;
+    }
+  }
+  return ret;
+}
+
 int ObCdcFetcher::prepare_berfore_fetch_missing_(const ObLSID &ls_id,
     ClientLSCtx &ctx,
     palf::PalfHandleGuard &palf_handle_guard,
@@ -1018,7 +1035,7 @@ int ObCdcFetcher::prepare_berfore_fetch_missing_(const ObLSID &ls_id,
       }
     }
 
-    if (OB_SUCC(ret) && OB_ISNULL(ctx.get_source()) && OB_FAIL(ObCdcService::init_archive_source(ls_id, ctx))) {
+    if (OB_SUCC(ret) && OB_ISNULL(ctx.get_source()) && OB_FAIL(init_archive_source_(ctx, ls_id))) {
       if (OB_ALREADY_IN_NOARCHIVE_MODE == ret) {
         ret = OB_SUCCESS;
         archive_is_on = false;

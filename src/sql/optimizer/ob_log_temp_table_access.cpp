@@ -132,8 +132,8 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
     }
     double per_dop_card = read_card / parallel;
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx) +
-                ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx);
+    cost = ObOptEstCost::cost_read_materialized(per_dop_card, opt_ctx.get_cost_model_type()) +
+                ObOptEstCost::cost_quals(per_dop_card, get_filter_exprs(), opt_ctx.get_cost_model_type());
     op_cost = cost;
   }
   return ret;

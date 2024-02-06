@@ -21,15 +21,13 @@
 // 定期更新黑名单的时间间隔(us)
 #define BLACK_LIST_REFRESH_INTERVAL       3000000     // 3s
 // 判断时间戳是否赶上/落后的缓冲时间(ns)，避免阈值附近的日志流反复加入/移出黑名单
-#define BLACK_LIST_WHITEWASH_INTERVAL_NS  1000000000L  // 1s
+#define BLACK_LIST_WHITEWASH_INTERVAL_NS  1000000000  // 1s
 // 黑名单信息打印时间间隔(us)
 #define BLACK_LIST_PRINT_INTERVAL         5000000    // 5s
 // 清理超时对象的时间间隔(us)，这些对象不会出现在 SQLResult 中，比如切换server之后旧server上的日志流
 #define BLACK_LIST_CLEAN_UP_INTERVAL      5000000     // 5s
 // 最大连续失败次数，连续刷新黑名单失败 达到 该次数则清空黑名单
 #define BLACK_LIST_MAX_FAIL_COUNT         3
-// 执行内部sql的超时时间，内部sql的hint不生效，需要在接口中指定超时时间
-#define INNER_SQL_QUERY_TIMEOUT           2000000L     // 2s
 
 // 查询 __all_virtual_ls_info 的语句，设置了2s超时时间
 // select /*+query_timeout(2000000)*/ a.svr_ip, a.svr_port, a.tenant_id, a.ls_id, a.role, nvl(b.weak_read_scn, 1) as weak_read_scn, nvl(b.migrate_status, 0) as migrate_status, nvl(b.tx_blocked, 0) as tx_blocked from oceanbase.__all_virtual_ls_meta_table a left join oceanbase.__all_virtual_ls_info b on a.svr_ip = b.svr_ip and a.svr_port = b.svr_port and a.tenant_id = b.tenant_id and a.ls_id = b.ls_id;
@@ -109,7 +107,6 @@ public:
   const ObLSID &get_ls_id() const { return ls_id_; }
   // TODO: different keys return different types, default return BLTYPE_UNKNOWN
   BLType get_type() const { return BLType::BLTYPE_LS; }
-  const ObAddr &get_server() const { return server_; }
   bool is_valid() const {
     return server_.is_valid() && OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid();
   }
@@ -180,7 +177,7 @@ public:
     }
     return ret;
   }
-  int init(const ObBLKey &key, const ObLsInfo &ls_info)
+  int init(const ObBLKey &key, const ObLsInfo ls_info)
   {
     int ret = OB_SUCCESS;
     if (!key.is_valid() || !ls_info.is_valid()) {
@@ -207,7 +204,7 @@ public:
   {
     return update_ts_;
   }
-  TO_STRING_KV(K_(key), K_(ls_info), KTIME_(update_ts));
+  TO_STRING_KV(K_(key), K_(ls_info));
 
 private:
   ObBLKey key_;
@@ -288,7 +285,7 @@ public:
     return ret;
   }
   // update or create
-  int update(const BLKey &bl_key, const ObLsInfo &ls_info, bool only_update = false)
+  int update(const BLKey &bl_key, const ObLsInfo &ls_info)
   {
     int ret = OB_SUCCESS;
     BLValue *value = NULL;
@@ -300,9 +297,7 @@ public:
       TRANS_LOG(WARN, "map get error", KR(ret), K(bl_key), K(ls_info));
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       // key不存在，创建value并插入map
-      if (only_update) {
-        ret = OB_SUCCESS;
-      } else if (OB_FAIL(map_.create(bl_key, value))) {
+      if (OB_FAIL(map_.create(bl_key, value))) {
         // 可能前面get时还没有这个key，但是在create之前别的线程把这个key插入map了
         TRANS_LOG(WARN, "map create error", KR(ret), K(bl_key), K(ls_info));
       } else {
@@ -322,28 +317,18 @@ public:
     }
     return ret;
   }
-  int remove(const BLKey &bl_key)
+  void remove(const BLKey &bl_key)
   {
-    int ret = OB_SUCCESS;
-    if (!bl_key.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-    } else if(OB_FAIL(map_.del(bl_key))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        TRANS_LOG(ERROR, "map remove fail ", KR(ret), K(bl_key));
-      }
+    if (bl_key.is_valid()) {
+      map_.del(bl_key);
     }
-    return ret;
   }
   int check_in_black_list(const BLKey &bl_key, bool &in_black_list) const
   {
     int ret = OB_SUCCESS;
 
-    if (OB_UNLIKELY(!bl_key.is_valid())) {
+    if (!bl_key.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
-    } else if (0 == map_.size()) {
-      in_black_list = false;
     } else if (OB_ENTRY_EXIST == map_.contains_key(bl_key)) {
       in_black_list = true;
     } else {
@@ -377,7 +362,7 @@ public:
 
   int add(const ObBLKey &bl_key);
   void remove(const ObBLKey &bl_key);
-  int check_in_black_list(const ObBLKey &bl_key, bool &in_black_list);
+  int check_in_black_list(const ObBLKey &bl_key, bool &in_black_list) const;
 
   void run1();
   TO_STRING_KV(K_(is_inited), K_(is_running));

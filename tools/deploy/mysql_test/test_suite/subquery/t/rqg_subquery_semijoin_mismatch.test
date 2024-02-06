@@ -8,7 +8,7 @@
 # 03:54:00 Starting 
 # 03:54:00  gentest.pl \ 
 # 03:54:00  --dsn1=dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test \ 
-# 03:54:00  --dsn2=dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10 \ 
+# 03:54:00  --dsn2=dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10 \ 
 # 03:54:00  --gendata=conf/ob_subquery_semijoin_nested.mysql.zz \ 
 # 03:54:00  --grammar=conf/ob_subquery_semijoin_nested.mysql.yy \ 
 # 03:54:00  --threads=1 \ 
@@ -17,7 +17,7 @@
 # 03:54:00  --myprint
 # 03:54:00 -------------------------------
 # 03:54:00 Configuration
-# 03:54:00   dsn => ['dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10']
+# 03:54:00   dsn => ['dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10']
 # 03:54:00   duration => 3600
 # 03:54:00   gendata => conf/ob_subquery_semijoin_nested.mysql.zz
 # 03:54:00   grammar => conf/ob_subquery_semijoin_nested.mysql.yy
@@ -1968,7 +1968,7 @@ COMMIT;
 # 03:54:07 Default schema: test
 # 03:54:07 Caching metadata for dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test
 # 03:54:07 Default schema: test
-# 03:54:07 Caching metadata for dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10
+# 03:54:07 Caching metadata for dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10
 # 03:54:07 Started periodic reporting process...
 #SELECT DISTINCT GRANDPARENT1 . col_date AS G1 FROM A AS GRANDPARENT1 LEFT JOIN P AS GRANDPARENT2 USING ( col_date ) WHERE ( GRANDPARENT1 . `col_varchar_10` , GRANDPARENT1 . `col_varchar_20_key` ) IN ( #SELECT DISTINCT PARENT1 . `col_varchar_20` AS P1 , PARENT1 . `col_varchar_20` AS P2 FROM G AS PARENT1 LEFT JOIN H AS PARENT2 ON ( PARENT1 . `col_int` >= PARENT2 . `col_int_key` )   ) AND GRANDPARENT1 . col_date IS NULL  ORDER BY GRANDPARENT1 . col_date LIMIT 9;
 #SELECT  GRANDPARENT1 . col_date AS G1 FROM AA AS GRANDPARENT1 WHERE ( GRANDPARENT1 . `col_varchar_10_key` , GRANDPARENT1 . `col_varchar_10` ) IN ( #SELECT  PARENT1 . `col_varchar_20_key` AS P1 , PARENT1 . `col_varchar_20_key` AS P2 FROM G AS PARENT1   ) AND ( ( ( ( GRANDPARENT1 . `col_datetime_key` BETWEEN '2005-02-25' AND '2005-02-04' OR NOT GRANDPARENT1 . `col_int_key` = 4 ) OR NOT GRANDPARENT1 . `col_varchar_10` <= 'w' ) OR GRANDPARENT1 . `col_varchar_10_key` <= 'u' ) AND GRANDPARENT1 . `col_datetime` BETWEEN '2007-03-27' AND '2003-06-17' )  ORDER BY GRANDPARENT1 . col_date ;

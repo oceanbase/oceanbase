@@ -107,11 +107,11 @@ public:
   DEFINE_SETTER(dep_obj_owner_id, uint64_t)
   DEFINE_SETTER(property, uint64_t)
   DEFINE_SETTER(schema_version, int64_t)
-  OB_INLINE int set_dep_attrs(const common::ObString &dep_attrs)
-   { return deep_copy_str(dep_attrs, dep_attrs_); }
-  OB_INLINE int set_dep_reason(const common::ObString &dep_reason)
+  OB_INLINE int set_dep_attrs(common::ObString &dep_attrs)
+   { return deep_copy_str(dep_attrs_, dep_attrs); }
+  OB_INLINE int set_dep_reason(common::ObString &dep_reason)
    { return deep_copy_str(dep_reason, dep_reason_); }
-  OB_INLINE int set_ref_obj_name(const common::ObString &ref_obj_name)
+  OB_INLINE int set_ref_obj_name(common::ObString &ref_obj_name)
    { return deep_copy_str(ref_obj_name, ref_obj_name_); }
 
 #undef DEFINE_SETTER
@@ -120,7 +120,6 @@ public:
   bool is_user_field_valid() const;
   void reset();
   int64_t get_convert_size() const;
-  int parse_from(common::sqlclient::ObMySQLResult &result);
   int insert_schema_object_dependency(common::ObISQLClient &trans,
                                       bool is_replace = false, bool only_history = false);
 
@@ -143,17 +142,6 @@ public:
                                ObObjectType dep_obj_type,
                                uint64_t dep_obj_id,
                                int64_t &max_version);
-  static int collect_dep_infos(
-    const common::ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
-    common::ObIArray<ObDependencyInfo> &deps,
-    const uint64_t tenant_id,
-    const ObObjectType dep_obj_type,
-    const uint64_t dep_obj_id,
-    const uint64_t dep_obj_owner_id,
-    const uint64_t property,
-    const common::ObString &dep_attrs,
-    const common::ObString &dep_reason,
-    const int64_t schema_version);
 
   int get_object_create_time(common::ObISQLClient &sql_client,
                              share::schema::ObObjectType obj_type,
@@ -161,23 +149,10 @@ public:
                              common::ObString &ref_obj_name);
   int gen_dependency_dml(const uint64_t exec_tenant_id, oceanbase::share::ObDMLSqlSplicer &dml);
 
-  static int collect_ref_infos(uint64_t tenant_id,
-                               uint64_t dep_obj_id,
-                               common::ObISQLClient &sql_proxy,
-                               common::ObIArray<ObDependencyInfo> &deps);
-  static int collect_dep_infos(uint64_t tenant_id,
-                               uint64_t ref_obj_id,
-                               common::ObISQLClient &sql_proxy,
-                               common::ObIArray<ObDependencyInfo> &deps);
   static int collect_all_dep_objs(uint64_t tenant_id,
                                   uint64_t ref_obj_id,
                                   common::ObISQLClient &sql_proxy,
                                   common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
-  static int collect_all_dep_objs_inner(uint64_t tenant_id,
-                                        uint64_t root_obj_id,
-                                        uint64_t ref_obj_id,
-                                        common::ObISQLClient &sql_proxy,
-                                        common::ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &objs);
   static int cascading_modify_obj_status(common::ObMySQLTransaction &trans,
                                          uint64_t tenant_id,
                                          uint64_t obj_id,

@@ -114,9 +114,13 @@ TEST_F(TestObMicroBlockCache, test_block_cache)
   ObIndexBlockRowScanner idx_row_scanner;
   ObMicroBlockData root_block;
   ObMicroIndexInfo micro_idx_info;
+  ObArray<int32_t> agg_projector;
+  ObArray<ObColumnSchemaV2> agg_column_schema;
   ObArray<ObMicroIndexInfo> micro_idx_infos;
   sstable_.get_index_tree_root(root_block);
   ASSERT_EQ(OB_SUCCESS, idx_row_scanner.init(
+      agg_projector,
+      agg_column_schema,
       tablet_handle_.get_obj()->get_rowkey_read_info().get_datum_utils(),
       allocator_,
       context_.query_flag_,

@@ -76,9 +76,9 @@ int ObUnitPlacementDPStrategy::choose_server(ObArray<ObUnitPlacementDPStrategy::
   int ret = OB_SUCCESS;
   ObArray<double> all_dot_product;
   double dot_product = 0.0;
-  double demands[RES_MAX] = {};  // scaled demands
-  double remaining[RES_MAX] = {};  // scaled remaining
-  double weight[RES_MAX] = {};
+  double demands[RES_MAX];  // scaled demands
+  double remaining[RES_MAX];  // scaled remaining
+  double weight[RES_MAX];
   double max_dot_product = -1.0;
   int64_t found_idx = -1;
   if (servers.count() > 0) {

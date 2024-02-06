@@ -83,9 +83,6 @@ int ObTxCycleTwoPhaseCommitter::drive_self_2pc_phase(ObTxState next_phase)
     ret = OB_EAGAIN;
     TRANS_LOG(WARN, "can not enter next phase when logging", K(ret), KPC(this));
     // TODO check state
-  } else if (is_2pc_blocking()) {
-    ret = OB_EAGAIN;
-    TRANS_LOG(WARN, "can not enter next phase when 2pc blocking", K(ret), KPC(this));
   } else if (next_phase == get_upstream_state()) {
     // do nothing about in-memory operation
   } else {
@@ -137,11 +134,7 @@ int ObTxCycleTwoPhaseCommitter::drive_self_2pc_phase(ObTxState next_phase)
     }
     }
     if (OB_FAIL(ret)) {
-      // It is safe to merge the intermediate_participants because we will block
-      // the in-memory state machine with is_2pc_blocking. The detailed design
-      // can be found in the implementation of the merge_intermediate_participants.
-    } else if (OB_FAIL(merge_intermediate_participants())) {
-      TRANS_LOG(WARN, "fail to merge incremental participants", KPC(this));
+      // do nothing
     } else {
       collected_.reset();
       set_upstream_state(next_phase);
@@ -308,10 +301,7 @@ int ObTxCycleTwoPhaseCommitter::retransmit_downstream_msg_()
   ObTwoPhaseCommitMsgType msg_type;
   bool need_submit = true;
 
-  if ((is_root() || is_internal())
-      // If we are handling the fake upstream, we only need to take care of
-      // myself without retransmitting to the downstreams
-      && is_real_upstream()) {
+  if (is_root() || is_internal()) {
     int64_t this_part_id = get_self_id();
     if (OB_FAIL(decide_downstream_msg_type_(need_submit, msg_type))) {
       TRANS_LOG(WARN, "deecide downstream msg_type fail", K(ret), KPC(this));
@@ -947,12 +937,9 @@ bool ObTxCycleTwoPhaseCommitter::all_downstream_collected_()
 {
   bool all_collected = false;
   switch (get_2pc_role()) {
-  case Ob2PCRole::ROOT: {
-    all_collected = collected_.num_members() == get_downstream_size() - 1;
-    break;
-  }
+  case Ob2PCRole::ROOT:
   case Ob2PCRole::INTERNAL: {
-    all_collected = collected_.num_members() == get_downstream_size();
+    all_collected = collected_.num_members() == get_downstream_size() - 1;
     break;
   }
   case Ob2PCRole::LEAF: {

@@ -469,11 +469,6 @@ public:
     scn.set_max();
     return OB_SUCCESS;
   }
-  int get_max_decided_scn_as_leader(share::SCN &scn) const
-  {
-    scn.set_max();
-    return OB_SUCCESS;
-  }
   int get_max_decided_log_ts_ns(int64_t &log_ts)
   {
     log_ts = INT64_MAX;

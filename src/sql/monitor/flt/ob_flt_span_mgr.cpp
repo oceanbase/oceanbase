@@ -81,12 +81,23 @@ namespace sql
   {
     int ret = OB_SUCCESS;
     uint64_t tenant_id = lib::current_resource_owner_id();
-    int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
-    int64_t queue_size = MAX_QUEUE_SIZE;
-    if (OB_FAIL(span_mgr->init(tenant_id, mem_limit, queue_size))) {
-      LOG_WARN("failed to init request manager", K(ret));
+    span_mgr = OB_NEW(ObFLTSpanMgr, ObMemAttr(tenant_id, "SqlFltSpanRec"));
+    if (nullptr == span_mgr) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for ObMySQLRequestManager", K(ret));
     } else {
-      // do nothing
+      int64_t mem_limit = lib::get_tenant_memory_limit(tenant_id);
+      int64_t queue_size = MAX_QUEUE_SIZE;
+      if (OB_FAIL(span_mgr->init(tenant_id, mem_limit, queue_size))) {
+        LOG_WARN("failed to init request manager", K(ret));
+      } else {
+        // do nothing
+      }
+    }
+    if (OB_FAIL(ret) && span_mgr != nullptr) {
+      // cleanup
+      common::ob_delete(span_mgr);
+      span_mgr = nullptr;
     }
     return ret;
   }

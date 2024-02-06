@@ -219,7 +219,6 @@ private:
   ObArenaAllocator allocator_;
   ObTableQuerySyncSession *query_session_;
   int64_t timeout_ts_;
-  bool is_full_table_scan_;
 };
 
 } // end namespace observer

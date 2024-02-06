@@ -119,8 +119,6 @@ ObXATransID &ObXATransID::operator=(const ObXATransID &xid)
     bqual_str_.assign_buffer(bqual_buf_, sizeof(bqual_buf_));
     gtrid_str_.write(xid.gtrid_str_.ptr(), xid.gtrid_str_.length());
     bqual_str_.write(xid.bqual_str_.ptr(), xid.bqual_str_.length());
-    g_hv_ = xid.g_hv_;
-    b_hv_ = xid.b_hv_;
   }
   return *this;
 }

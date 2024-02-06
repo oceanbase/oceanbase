@@ -22,7 +22,6 @@ namespace sqlclient
 class ObTenantOciEnvs
 {
 public:
-  static int mtl_new(ObTenantOciEnvs *&tenant_oci_envs) { return OB_SUCCESS; }
   static int mtl_init(ObTenantOciEnvs *&tenant_oci_envs) { return OB_SUCCESS; }
   static void mtl_destroy(ObTenantOciEnvs *&tenant_oci_envs) { }
 };

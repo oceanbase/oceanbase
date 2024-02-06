@@ -21,6 +21,7 @@
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define_v4.h"
+#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -46,6 +47,7 @@ struct ObStorageDatum;
 }
 namespace storage
 {
+class ObIPartitionGroupGuard;
 
 //
 // Project storage output row to expression array, the core project logic is:
@@ -134,6 +136,7 @@ public:
         table_param_(NULL),
         allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         need_scn_(false),
+        partition_guard_(NULL),
         need_switch_param_(false),
         is_thread_scope_(true)
   {}
@@ -148,6 +151,7 @@ public:
   common::ObIAllocator *allocator_; //stmt level allocator, only be free at the end of query
   common::SampleInfo sample_info_;
   bool need_scn_;
+  ObIPartitionGroupGuard *partition_guard_; // remove after SQL adopt tablet
   bool need_switch_param_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid();
@@ -181,7 +185,6 @@ struct ObDMLBaseParam
         encrypt_meta_legacy_(),
         spec_seq_no_(),
         snapshot_(),
-        branch_id_(0),
         direct_insert_task_id_(0),
         write_flag_(),
         check_schema_version_(true)
@@ -212,8 +215,6 @@ struct ObDMLBaseParam
   transaction::ObTxSEQ spec_seq_no_;
   // transaction snapshot
   transaction::ObTxReadSnapshot snapshot_;
-  // parallel dml write branch id
-  int16_t branch_id_;
   int64_t direct_insert_task_id_; // 0 means no direct insert
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;

@@ -169,9 +169,6 @@ public:
       const common::ObTabletID &tablet_id,
       const int error_code,
       const bool is_nonblock);
-
-  int submit_tablet_broadcast_task(const ObTabletLocationBroadcastTask &task);
-  int submit_tablet_update_task(const ObTabletLocationBroadcastTask &task);
  // ----------------------- End interfaces for tablet to log stream -----------------------
 
   // ----------------------- Interfaces for virtual table location -------------------------

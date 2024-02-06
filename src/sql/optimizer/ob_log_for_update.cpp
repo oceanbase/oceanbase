@@ -225,7 +225,7 @@ int ObLogForUpdate::est_cost()
   } else {
     // todo: refine for update cost
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
-    set_op_cost(ObOptEstCost::cost_get_rows(first_child->get_card(), opt_ctx));
+    set_op_cost(ObOptEstCost::cost_get_rows(first_child->get_card(), opt_ctx.get_cost_model_type()));
     set_cost(first_child->get_cost() + op_cost_);
     set_card(first_child->get_card());
   }

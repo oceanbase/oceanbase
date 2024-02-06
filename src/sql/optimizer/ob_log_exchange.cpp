@@ -493,7 +493,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                     get_in_server_cnt());
     if (OB_FAIL(ObOptEstCost::cost_exchange_out(est_cost_info,
                                                 op_cost,
-                                                opt_ctx))) {
+                                                opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to cost exchange out", K(ret));
     }
   } else {
@@ -507,7 +507,7 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                    sort_keys_);
     if (OB_FAIL(ObOptEstCost::cost_exchange_in(est_cost_info,
                                                op_cost,
-                                               opt_ctx))) {
+                                               opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to cost exchange in", K(ret));
     }
   }
@@ -1032,19 +1032,4 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
              expr == partition_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
-}
-
-bool ObLogExchange::support_rich_format_vectorize() const {
-  bool res = !(dist_method_ == ObPQDistributeMethod::SM_BROADCAST ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANDOM ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_RANGE ||
-          dist_method_ == ObPQDistributeMethod::PARTITION_HASH);
-  int tmp_ret = abs(OB_E(EventTable::EN_OFS_IO_SUBMIT) OB_SUCCESS);
-  if (tmp_ret & (1 << dist_method_)) {
-    res = false;
-  }
-  // ordered: 16
-  // ms: 17
-  LOG_TRACE("[VEC2.0 PX] support_rich_format_vectorize", K(res), K(dist_method_), K(tmp_ret));
-  return res;
 }

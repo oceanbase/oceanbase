@@ -101,18 +101,6 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "Unknown parse tree type", K_(parse_tree.type), K(ret));
     }
-    if (OB_SUCC(ret)) {
-      if (drop_table_arg.table_type_ == share::schema::MATERIALIZED_VIEW) {
-        uint64_t tenant_version = 0;
-        if (OB_FAIL(GET_MIN_DATA_VERSION(drop_table_arg.tenant_id_, tenant_version))) {
-          SQL_RESV_LOG(WARN, "failed to get data version", K(ret));
-        } else if (tenant_version < DATA_VERSION_4_3_0_0) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview before 4.3 is");
-        }
-      }
-    }
-
     ObPlacementHashSet<ObTableItem> *tmp_ptr = NULL;
     ObPlacementHashSet<ObTableItem> *table_item_set = NULL;
     if (NULL == (tmp_ptr = (ObPlacementHashSet<ObTableItem> *)
@@ -191,13 +179,8 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                   SQL_RESV_LOG(WARN, "failed to check table or view exists", K(db_name),
                                 K(table_name), K(ret));
                 } else if (!is_exists) {
-                  if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
-                    ret = OB_ERR_MVIEW_NOT_EXIST;
-                    LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
-                  } else {
-                    ret = OB_TABLE_NOT_EXIST;
-                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
-                  }
+                  ret = OB_TABLE_NOT_EXIST;
+                  LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name), to_cstring(table_name));
                 } else {
                   uint64_t db_id = OB_INVALID_ID;
                   const share::schema::ObSimpleTableSchemaV2 *table_view_schema = NULL;
@@ -213,17 +196,9 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                               && table_view_schema->is_view_table())
                               || (T_DROP_VIEW == parse_tree.type_
                                   && !table_view_schema->is_view_table())) {
-                    if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
-                      ret = OB_ERR_MVIEW_NOT_EXIST;
-                      SQL_RESV_LOG(WARN, "mview not exist", KR(ret));
-                      LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
-                    } else {
-                      ret = OB_TABLE_NOT_EXIST;
-                      SQL_RESV_LOG(WARN, "table not exist", KR(ret));
-                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                          to_cstring(table_name));
-                    }
+                    ret = OB_TABLE_NOT_EXIST;
+                    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
+                        to_cstring(table_name));
                   } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
                                 tenant_id,
                                 session_info_->get_priv_user_id(),
@@ -236,14 +211,8 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                                 stmt::T_DROP_TABLE : stmt::T_DROP_VIEW,
                                 session_info_->get_enable_role_array()))) {
                     if (OB_TABLE_NOT_EXIST == ret) {
-                      if (MATERIALIZED_VIEW == drop_table_arg.table_type_) {
-                        ret = OB_ERR_MVIEW_NOT_EXIST;
-                        LOG_USER_ERROR(OB_ERR_MVIEW_NOT_EXIST, to_cstring(db_name),
-                            to_cstring(table_name));
-                      } else {
-                        LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
-                            to_cstring(table_name));
-                      }
+                      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db_name),
+                          to_cstring(table_name));
                     }
                     SQL_RESV_LOG(WARN, "failed to check ora ddl priv",
                                   K(db_name), K(parse_tree.type_),

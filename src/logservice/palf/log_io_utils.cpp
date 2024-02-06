@@ -11,9 +11,6 @@
  */
 #include "log_io_utils.h"
 #include <linux/falloc.h> // FALLOC_FL_ZERO_RANGE for linux kernel 3.15
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include "log_block_pool_interface.h"
 #include "share/ob_errno.h"
 #include "logservice/ob_server_log_block_mgr.h"
@@ -62,86 +59,6 @@ int close_with_ret(const int fd)
   return ret;
 }
 
-int check_file_exist(const char *file_name,
-                     bool &exist)
-{
-  int ret = OB_SUCCESS;
-  exist = false;
-  struct stat64 file_info;
-  if (OB_ISNULL(file_name) || OB_UNLIKELY(strlen(file_name) == 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments.", KCSTRING(file_name), K(ret));
-  } else {
-    exist = (0 == ::stat64(file_name, &file_info));
-  }
-  return ret;
-}
-
-int check_file_exist(const int dir_fd,
-                     const char *file_name,
-                     bool &exist)
-{
-  int ret = OB_SUCCESS;
-  exist = false;
-  struct stat64 file_info;
-  const int64_t flag = 0;
-  if (OB_ISNULL(file_name) || OB_UNLIKELY(strlen(file_name) == 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(WARN, "invalid arguments.", KCSTRING(file_name), K(ret));
-  } else {
-    exist = (0 == ::fstatat64(dir_fd, file_name, &file_info, flag));
-  }
-  return ret;
-}
-
-bool check_rename_success(const char *src_name,
-                          const char *dest_name)
-{
-  bool bool_ret = false;
-  bool src_exist = false;
-  bool dest_exist = false;
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_file_exist(src_name, src_exist))) {
-    PALF_LOG(WARN, "check_file_exist failed", KR(ret), K(src_name), K(dest_name));
-  } else if (!src_exist && OB_FAIL(check_file_exist(dest_name, dest_exist))) {
-    PALF_LOG(WARN, "check_file_exist failed", KR(ret), K(src_name), K(dest_name));
-  } else if (!src_exist && dest_exist) {
-    bool_ret = true;
-    PALF_LOG(INFO, "check_rename_success return true",
-             KR(ret), K(src_name), K(dest_name), K(src_exist), K(dest_exist));
-  } else {
-    bool_ret = false;
-    LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "msg", "rename file failed, unexpected error",
-                  KR(ret), K(errno), K(src_name), K(dest_name), K(src_exist), K(dest_exist));
-  }
-  return bool_ret;
-}
-
-bool check_renameat_success(const int src_dir_fd,
-                            const char *src_name,
-                            const int dest_dir_fd,
-                            const char *dest_name)
-{
-  bool bool_ret = false;
-  bool src_exist = false;
-  bool dest_exist = false;
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(check_file_exist(src_dir_fd, src_name, src_exist))) {
-    PALF_LOG(WARN, "check_file_exist failed", KR(ret), K(src_name), K(dest_name));
-  } else if (!src_exist && OB_FAIL(check_file_exist(dest_dir_fd, dest_name, dest_exist))) {
-    PALF_LOG(WARN, "check_file_exist failed", KR(ret), K(src_name), K(dest_name));
-  } else if (!src_exist && dest_exist) {
-    bool_ret = true;
-    PALF_LOG(INFO, "check_renameat_success return true",
-             KR(ret), K(src_name), K(dest_name), K(src_dir_fd), K(dest_dir_fd), K(src_exist), K(dest_exist));
-  } else {
-    bool_ret = false;
-    LOG_DBA_ERROR(OB_ERR_UNEXPECTED, "msg", "renameat file failed, unexpected error",
-                  KR(ret), K(errno), K(src_name), K(dest_name), K(src_exist), K(dest_exist));
-  }
-  return bool_ret;
-}
-
 int rename_with_retry(const char *src_name,
                       const char *dest_name)
 {
@@ -153,16 +70,15 @@ int rename_with_retry(const char *src_name,
     do {
       if (-1 == ::rename(src_name, dest_name)) {
         ret  = convert_sys_errno();
-        LOG_DBA_WARN(OB_IO_ERROR, "msg", "rename file failed",
-                     KR(ret), K(errno), K(src_name), K(dest_name));
+        PALF_LOG(WARN, "rename file failed", KR(ret), K(src_name), K(dest_name));
         // for xfs, source file not exist and dest file exist after rename return ENOSPC, therefore, next rename will return
-        // OB_NO_SUCH_FILE_OR_DIRECTORY, however, for some reason, we can not return OB_SUCCESS when rename return OB_NO_SUCH_FILE_OR_DIRECTORY.
-        // consider that, if file names with 'src_name' has been delted by human and file names with 'dest_name' not exist.
-        if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret && check_rename_success(src_name, dest_name)) {
+        // OB_NO_SUCH_FILE_OR_DIRECTORY.
+        if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
           ret = OB_SUCCESS;
-          break;
+          PALF_LOG(WARN, "rename file failed, source file not exist, return OB_SUCCESS.", K(src_name), K(dest_name));
+        } else {
+          ob_usleep(RETRY_INTERVAL);
         }
-        usleep(RETRY_INTERVAL);
       }
     } while(OB_FAIL(ret));
   }
@@ -183,16 +99,15 @@ int renameat_with_retry(const int src_dir_fd,
     do {
       if (-1 == ::renameat(src_dir_fd, src_name, dest_dir_fd, dest_name)) {
         ret  = convert_sys_errno();
-        LOG_DBA_WARN(OB_IO_ERROR, "msg", "renameat file failed",
-                     KR(ret), K(errno), K(src_name), K(dest_name), K(src_dir_fd), K(dest_dir_fd));
-        // for xfs, source file not exist and dest file exist after renameat return ENOSPC, therefore, next renameat will return
-        // OB_NO_SUCH_FILE_OR_DIRECTORY, however, for some reason, we can not return OB_SUCCESS when renameat return OB_NO_SUCH_FILE_OR_DIRECTORY.
-        // consider that, if file names with 'src_name' has been delted by human and file names with 'dest_name' not exist.
-        if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret && check_renameat_success(src_dir_fd, src_name, dest_dir_fd, dest_name)) {
+        PALF_LOG(WARN, "rename file failed", KR(ret), K(src_name), K(dest_name));
+        // for xfs, source file not exist and dest file exist after rename return ENOSPC, therefore, next rename will return
+        // OB_NO_SUCH_FILE_OR_DIRECTORY.
+        if (OB_NO_SUCH_FILE_OR_DIRECTORY == ret) {
           ret = OB_SUCCESS;
-          break;
+          PALF_LOG(WARN, "rename file failed, source file not exist, return OB_SUCCESS.", K(src_name), K(dest_name));
+        } else {
+          ob_usleep(RETRY_INTERVAL);
         }
-        ob_usleep(RETRY_INTERVAL);
       }
     } while(OB_FAIL(ret));
   }

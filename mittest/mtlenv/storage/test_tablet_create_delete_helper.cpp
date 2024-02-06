@@ -133,7 +133,7 @@ void TestTabletCreateDeleteHelper::TearDownTestCase()
   ret = t3m->init();
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MockTenantModuleEnv::get_instance().destroy();
@@ -2880,8 +2880,8 @@ TEST_F(TestTabletCreateDeleteHelper, migrate_lob_tablets)
     const ObSArray<ObTabletID> index_tablet_array;
     const ObTabletID tablet_id(2);
     const ObTabletID lob_meta_tablet_id(101);
-    ret = helper.create_tablet(lob_meta_tablet_id, tablet_id, lob_meta_tablet_id, ObTabletID(),
-        index_tablet_array, arg, trans_flags, table_schema1, true /*need_create_empty_major_sstable*/, lib::Worker::CompatMode::MYSQL);
+    ret = helper.do_create_tablet(lob_meta_tablet_id, tablet_id, lob_meta_tablet_id, ObTabletID(),
+        index_tablet_array, arg, trans_flags, table_schema1, lib::Worker::CompatMode::MYSQL, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     // reset tx data to normal state
     tablet_handle.get_obj()->tablet_meta_.tx_data_.tx_id_ = 0;
@@ -2889,8 +2889,8 @@ TEST_F(TestTabletCreateDeleteHelper, migrate_lob_tablets)
     tablet_handle.get_obj()->tablet_meta_.tx_data_.tx_scn_ = share::SCN::minus(share::SCN::max_scn(), 98);
 
     const ObTabletID lob_piece_tablet_id(102);
-    ret = helper.create_tablet(lob_piece_tablet_id, tablet_id, ObTabletID(), lob_piece_tablet_id,
-        index_tablet_array, arg, trans_flags, table_schema2, true /*need_create_empty_major_sstable*/, lib::Worker::CompatMode::MYSQL);
+    ret = helper.do_create_tablet(lob_piece_tablet_id, tablet_id, ObTabletID(), lob_piece_tablet_id,
+        index_tablet_array, arg, trans_flags, table_schema2, lib::Worker::CompatMode::MYSQL, tablet_handle);
     ASSERT_EQ(OB_SUCCESS, ret);
     // reset tx data to normal state
     tablet_handle.get_obj()->tablet_meta_.tx_data_.tx_id_ = 0;

@@ -1,4 +1,4 @@
-drop table if exists t1,t2, test, t_ignore, t3;
+drop table if exists t1,t2, test, t_ignore;
 CREATE TABLE t1(a BIGINT primary key);
 insert into t1 values(100);
 insert into t1 values(100);
@@ -324,9 +324,3 @@ SELECT * FROM t_ignore;
 c1	c2
 1	
 DROP TABLE t_ignore;
-create TABLE t3 ( str varchar(255) character set utf8mb4 not null, key str (str(2)) );
-INSERT ignore INTO t3 VALUES (NULL);
-ERROR 23000: Column 'str' cannot be null
-select /*+ opt_param('hidden_column_visible', 'true') index('str')*/__pk_increment, __substr2_16 from t3;
-__pk_increment	__substr2_16
-drop table t3;

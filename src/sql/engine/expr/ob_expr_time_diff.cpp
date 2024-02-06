@@ -19,7 +19,6 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -134,9 +133,6 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   ObDatum *param_datum1 = NULL;
   ObDatum *param_datum2 = NULL;
   const ObSQLSessionInfo *session = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
-  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -145,17 +141,13 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
     LOG_WARN("eval param value failed", K(ret));
   } else if (OB_UNLIKELY(param_datum1->is_null())) {
     expr_datum.set_null();
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
   } else {
     int64_t int64_diff = 0;
     ObTime ot1(DT_TYPE_TIME);
     ObTime ot2(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(
           *param_datum1, expr.args_[0]->datum_meta_.type_, expr.args_[0]->datum_meta_.scale_,
-          tz_info, ot1, expr.args_[0]->obj_meta_.has_lob_header()))) {
+          get_timezone_info(session), ot1, expr.args_[0]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the first param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
@@ -166,12 +158,12 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
       expr_datum.set_null();
     } else if (OB_FAIL(ob_datum_to_ob_time_without_date(
                  *param_datum2, expr.args_[1]->datum_meta_.type_, expr.args_[1]->datum_meta_.scale_,
-                 tz_info, ot2, expr.args_[1]->obj_meta_.has_lob_header()))) {
+                 get_timezone_info(session), ot2, expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("cast the second param failed", K(ret));
       ret = OB_INVALID_DATE_VALUE;
       expr_datum.set_null();
     } else if (OB_FAIL(
-                 get_diff_value_with_ob_time(ot1, ot2, tz_info, int64_diff))) {
+                 get_diff_value_with_ob_time(ot1, ot2, get_timezone_info(session), int64_diff))) {
       LOG_WARN("get diff value with ob time failed", K(ret));
       expr_datum.set_null();
     } else {
@@ -184,27 +176,11 @@ int ObExprTimeDiff::calc_timediff(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
 
     if (OB_SUCCESS != ret) {
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                        session->is_ignore_stmt(),
-                                        sql_mode,
-                                        cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
       if (!calc_param_failure && CM_IS_WARN_ON_FAIL(cast_mode)) {
         ret = OB_SUCCESS;
       }
     }
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprTimeDiff, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(2);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
-  } else {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
   }
   return ret;
 }

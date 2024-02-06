@@ -42,7 +42,7 @@ static int my_sk_flush(my_sk_t* s, int64_t time_limit) {
 
 int my_sk_consume(my_sk_t* s, int64_t time_limit, int64_t* avail_bytes) {
   int err = 0;
-  my_msg_t msg = (my_msg_t) { .sz = 0, .payload = NULL, .ctime_us = 0};
+  my_msg_t msg = (my_msg_t) { .sz = 0, .payload = NULL };
   pn_comm_t* pn = get_current_pnio();
   if (avail_bytes == NULL && skt(s, IN) && LOAD(&pn->pn_grp->rx_bw) != RATE_UNLIMITED) {
     // push socket to ratelimit list
@@ -58,11 +58,8 @@ int my_sk_consume(my_sk_t* s, int64_t time_limit, int64_t* avail_bytes) {
       }
     } else if (NULL == msg.payload) {
       // not read a complete package yet
-    } else {
-      s->sk_diag_info.read_process_time += (rk_get_us() - msg.ctime_us);
-      if (0 != (err = my_sk_handle_msg(s, &msg))) {
-        rk_info("handle msg fail: %d", err);
-      }
+    } else if (0 != (err = my_sk_handle_msg(s, &msg))) {
+      rk_info("handle msg fail: %d", err);
     }
   }
   return err;

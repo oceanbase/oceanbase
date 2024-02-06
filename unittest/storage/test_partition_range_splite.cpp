@@ -302,7 +302,7 @@ void TestRangeSpliter::prepare_sstable_handle(ObTableHandleV2 &handle,
       "bigint   var   bigint bigint  flag    multi_version_row_flag\n"
       "18       var1     -9    0     EXIST   CLF\n"
       "19       var1   -9    MIN      EXIST   SCF\n"
-      "19       var1     -9    0     EXIST   C\n";
+      "19       var1     -9    0     EXIST   CF\n";
 
   macro_data[13] =
       "bigint   var   bigint bigint  flag    multi_version_row_flag\n"
@@ -324,7 +324,7 @@ void TestRangeSpliter::prepare_sstable_handle(ObTableHandleV2 &handle,
       "bigint   var   bigint bigint  flag    multi_version_row_flag\n"
       "24       var1    -9    0     EXIST   CLF\n"
       "25       var1    -9    MIN      EXIST  SCF\n"
-      "25       var1    -9    0     EXIST   CL\n";
+      "25       var1    -9    0     EXIST   CF\n";
 
   macro_data[17] =
       "bigint   var   bigint bigint  flag    multi_version_row_flag\n"

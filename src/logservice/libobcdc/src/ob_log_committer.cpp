@@ -1177,7 +1177,6 @@ int ObLogCommitter::after_trans_handled_(PartTransTask *participants)
   // Update Commit information
   // NOTE: Since the above guarantees that the reference count is greater than the number of Binlog Records, the list of participants here must be valid
   PartTransTask *part_trans_task = participants;
-  const bool is_ddl_trans = part_trans_task->is_ddl_trans();
 
   while (OB_SUCC(ret) && ! stop_flag_ && OB_NOT_NULL(part_trans_task)) {
     PartTransTask *next = part_trans_task->next_task();
@@ -1189,10 +1188,6 @@ int ObLogCommitter::after_trans_handled_(PartTransTask *participants)
     // Decrement the reference count after the Commit message is updated
     // If the reference count is 0, the partition transaction is recycled
     else if (0 == part_trans_task->dec_ref_cnt()) {
-      if (is_ddl_trans && ! part_trans_task->is_sys_ls_part_trans()) {
-        // mark user_ls part_trans_task in ddl_trans not served, and will recycle redo of the part_trans_task in resource_collector.
-        part_trans_task->set_unserved();
-      }
       if (OB_FAIL(resource_collector_->revert(part_trans_task))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("revert PartTransTask fail", KR(ret), K(part_trans_task));

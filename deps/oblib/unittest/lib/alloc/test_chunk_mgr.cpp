@@ -341,32 +341,3 @@ TEST_F(TestChunkMgr, FreeListManyChunk)
   EXPECT_EQ(2* AChunkList::DEFAULT_MAX_CHUNK_CACHE_SIZE/INTACT_ACHUNK_SIZE, free_list_.get_pushes());
   EXPECT_EQ(AChunkList::DEFAULT_MAX_CHUNK_CACHE_SIZE/INTACT_ACHUNK_SIZE, free_list_.get_pops());
 }
-
-TEST_F(TestChunkMgr, sync_wash)
-{
-  set_limit(1LL<<30);
-  int NORMAL_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;
-  int LARGE_SIZE = INTACT_ACHUNK_SIZE + 100;
-  free_list_.set_max_chunk_cache_size(1LL<<30);
-  large_free_list_.set_max_chunk_cache_size(1LL<<30);
-  AChunk *chunks[16][2] = {};
-  for (int i = 0; i < 16; ++i) {
-    chunks[i][0] = alloc_chunk(NORMAL_SIZE);
-    chunks[i][1] = alloc_chunk(LARGE_SIZE);
-  }
-  for (int i = 0; i < 16; ++i) {
-    for (int j = 0; j < 2; ++j) {
-      free_chunk(chunks[i][j]);
-      chunks[i][j] = NULL;
-    }
-  }
-  int64_t hold = free_list_.hold() + large_free_list_.hold();
-  EXPECT_EQ(hold, hold_);
-  EXPECT_EQ(16, free_list_.count());
-  EXPECT_EQ(16, large_free_list_.count());
-  int64_t washed_size = sync_wash();
-  EXPECT_EQ(hold, washed_size);
-  EXPECT_EQ(0, hold_);
-  EXPECT_EQ(0, free_list_.count());
-  EXPECT_EQ(0, large_free_list_.count());
-}

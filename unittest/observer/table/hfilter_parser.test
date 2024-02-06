@@ -20,15 +20,15 @@ RowF(<, 'binary:abc')
 RowFilter(<, 'binary
 --error 5006
 RowFilter(<, 'binary'')
---error 5006
+--error 4002
 RowFilter(<, 'binary''')
 --error 5006
 RowFilter(<, 'binary:abc'))
 --error 5006
 (RowFilter(<, 'binary:abc')
---error 5006
+--error 4002
 RowFilter(>, 'substring:abc')
---error 5006
+--error 4007
 RowFilter(>=, 'regexstring:abc')
 --error 5006
 ( singlecolumnvaluefilter ( !=, 'substring:abc', 'cf1', 'c1') )

@@ -54,7 +54,7 @@ int ObPrepareResolver::resolve(const ParseNode &parse_tree)
         prepare_stmt->set_prepare_sql(stmt_expr);
       }
     } else {
-      ret = OB_ERR_PARSER_SYNTAX;
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid name node", K(name_node->type_), K(ret));
     }
   }

@@ -75,19 +75,7 @@ int ObStringStreamEncoder::do_convert_datum_to_stream_(ObIDatumIter &iter)
   if (!is_fixed_len) {
     offset_arr_count_ = (uint32_t)(iter.size());
     int64_t offset_arr_len = offset_arr_count_ * sizeof(T);
-    if (umcompress_len + offset_arr_len > all_string_writer_->remain()) {
-      // remain size is not enough to hold umcompress_len and offset_array_len, which is possible
-      // if the fixed-length data use variable-length encoding due to existing many null values.
-      if (OB_FAIL(all_string_writer_->ensure_space(umcompress_len))) {
-        STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(umcompress_len), K(offset_arr_len));
-      } else {
-        byte_arr_ = all_string_writer_->current();
-        if (OB_ISNULL(offset_arr_ = ctx_->info_.allocator_->alloc(offset_arr_len))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          STORAGE_LOG(WARN, "fail to malloc", K(ret), K(umcompress_len), K(offset_arr_len));
-        }
-      }
-    } else if (OB_FAIL(all_string_writer_->ensure_space(umcompress_len + offset_arr_len))) {
+    if (OB_FAIL(all_string_writer_->ensure_space(umcompress_len + offset_arr_len))) {
       STORAGE_LOG(WARN, "fail to ensure space", K(ret), K(umcompress_len), K(offset_arr_len));
     } else {
       byte_arr_ = all_string_writer_->current();

@@ -13,7 +13,7 @@
 #ifndef OCEANBASE_SHARE_OB_TABLET_LS_MAP
 #define OCEANBASE_SHARE_OB_TABLET_LS_MAP
 
-#include "lib/lock/ob_qsync_lock.h" // ObQSyncLockWriteGuard
+#include "lib/lock/ob_qsync_lock.h"
 #include "share/location_cache/ob_location_struct.h" // ObTabletLSKey, ObTabletLSCache
 
 namespace oceanbase
@@ -40,15 +40,13 @@ public:
   ~ObTabletLSMap() { destroy(); }
   void destroy();
   int init();
-  int update(const ObTabletLSCache &tablet_ls_cache,
-             const bool update_only);
+  int update(const ObTabletLSCache &tablet_ls_cache);
   int update_limit_by_threshold(
       const int64_t threshold,
       const ObTabletLSKey &key,
       const ObTabletLSCache &tablet_ls_cache);
   int get(const ObTabletLSKey &key, ObTabletLSCache &tablet_ls_cache);
   int get_all(common::ObIArray<ObTabletLSCache> &cache_array);
-  int get_tablet_ids(const uint64_t tenant_id, common::ObIArray<ObTabletID> &tablet_ids);
   int del(const ObTabletLSKey &key);
   int64_t size() const { return size_; }
 

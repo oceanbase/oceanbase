@@ -375,8 +375,6 @@ private:
   int check_need_copy_sstable_(
       const ObITable::TableKey &table_key,
       bool &need_copy);
-  int check_transfer_seq_equal_(
-      const ObMigrationTabletParam *src_tablet_meta);
 
 private:
   bool is_inited_;
@@ -397,16 +395,13 @@ class ObTabletFinishMigrationTask final : public share::ObITask
 public:
   ObTabletFinishMigrationTask();
   virtual ~ObTabletFinishMigrationTask();
-  int init(const int64_t task_gen_time, const int64_t copy_table_count,
-      ObCopyTabletCtx &ctx, ObLS &ls);
+  int init(ObCopyTabletCtx &ctx, ObLS &ls);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletFinishMigrationTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(copy_tablet_ctx_), KPC(ls_));
 private:
   int update_data_and_expected_status_();
 private:
   bool is_inited_;
-  int64_t task_gen_time_;
-  int64_t copy_table_count_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   ObCopyTabletCtx *copy_tablet_ctx_;
   ObLS *ls_;
@@ -506,8 +501,8 @@ public:
 private:
   int build_tablets_sstable_info_();
   int generate_tablet_migration_dag_();
+  int try_update_local_tablets_();
   int try_remove_tablets_info_();
-  int remove_tablets_info_();
   int record_server_event_();
 
 private:

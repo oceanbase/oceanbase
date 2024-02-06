@@ -238,10 +238,10 @@ TEST_F(TestObjectMgr, TestSubObjectMgr)
   abort_unless(ptr != MAP_FAILED);
   int64_t tenant_id = OB_SERVER_TENANT_ID;
   int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
-  auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
-    tenant_id, ctx_id);
-  ObjectMgr som(*ta.ref_allocator(), false, INTACT_NORMAL_AOBJECT_SIZE, 1, false, NULL);
+  SubObjectMgr som(false, tenant_id, ctx_id, INTACT_NORMAL_AOBJECT_SIZE, false, NULL);
   ObMemAttr attr;
+  som.set_tenant_ctx_allocator(*ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(
+                                 tenant_id, ctx_id).ref_allocator());
   ObTenantResourceMgrHandle resource_handle;
   ObResourceMgr::get_instance().get_tenant_resource_mgr(
 		  tenant_id, resource_handle);

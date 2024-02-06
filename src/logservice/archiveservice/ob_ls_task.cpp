@@ -395,18 +395,6 @@ int ObLSArchiveTask::get_max_no_limit_lsn(const ArchiveWorkStation &station, LSN
   return ret;
 }
 
-int ObLSArchiveTask::update_no_limit_lsn(const palf::LSN &lsn)
-{
-  int ret = OB_SUCCESS;
-  WLockGuard guard(rwlock_);
-  if (OB_UNLIKELY(!lsn.is_valid())) {
-    ARCHIVE_LOG(WARN, "lsn not valid", K(lsn));
-  } else {
-    dest_.update_no_limit_lsn(lsn);
-  }
-  return ret;
-}
-
 int ObLSArchiveTask::print_self()
 {
   int ret = OB_SUCCESS;
@@ -825,16 +813,6 @@ void ObLSArchiveTask::ArchiveDest::get_archive_send_arg(ObArchiveSendDestArg &ar
 void ObLSArchiveTask::ArchiveDest::get_max_no_limit_lsn(LSN &lsn)
 {
   lsn = max_no_limit_lsn_;
-}
-
-void ObLSArchiveTask::ArchiveDest::update_no_limit_lsn(const palf::LSN &lsn)
-{
-  if (lsn > max_no_limit_lsn_) {
-    max_no_limit_lsn_ = lsn;
-    ARCHIVE_LOG(INFO, "update max no limit lsn succ", K(lsn));
-  } else {
-    ARCHIVE_LOG(INFO, "lsn is smaller than max_no_limit_lsn_, just skip", K(lsn), K(max_no_limit_lsn_));
-  }
 }
 
 void ObLSArchiveTask::ArchiveDest::mark_error()

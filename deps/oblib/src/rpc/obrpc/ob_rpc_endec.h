@@ -47,13 +47,7 @@ template <typename T>
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
   int64_t extra_payload_size = calc_extra_payload_size();
-#ifdef ENABLE_SERIALIZATION_CHECK
-  lib::begin_record_serialization();
   int64_t args_len = common::serialization::encoded_length(args);
-  lib::finish_record_serialization();
-#else
-  int64_t args_len = common::serialization::encoded_length(args);
-#endif
   int64_t payload_sz = extra_payload_size + args_len;
   const int64_t reserve_bytes_for_pnio = 0;
   char* header_buf = (char*)pool.alloc(reserve_bytes_for_pnio + header_sz + payload_sz) + reserve_bytes_for_pnio;
@@ -71,11 +65,6 @@ template <typename T>
                          payload_buf, payload_sz, pos, args))) {
     RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload_sz), K(ret));
   } else if (OB_UNLIKELY(args_len < pos)) {
-#ifdef ENABLE_SERIALIZATION_CHECK
-    lib::begin_check_serialization();
-    common::serialization::encoded_length(args);
-    lib::finish_check_serialization();
-#endif
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "arg encoded length greater than arg length", K(ret), K(payload_sz),
                   K(args_len), K(extra_payload_size), K(pos), K(pcode));
@@ -87,8 +76,6 @@ template <typename T>
     bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type);
     if (need_compressed) {
       // compress
-      EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
-      EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, payload_sz);
       int tmp_ret = OB_SUCCESS;
       common::ObCompressor *compressor = NULL;
       char *compressed_buf = NULL;
@@ -114,8 +101,6 @@ template <typename T>
         pkt.set_original_len(static_cast<int32_t>(payload_sz));
         memcpy(payload_buf, compressed_buf, dst_data_size);
         payload_sz = dst_data_size;
-        EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
-        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
       }
       if (NULL != compressed_buf) {
         ob_free(compressed_buf);

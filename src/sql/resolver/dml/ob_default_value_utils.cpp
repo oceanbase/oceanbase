@@ -30,11 +30,9 @@ int ObDefaultValueUtils::generate_insert_value(const ColumnItem *column,
 {
   int ret = OB_SUCCESS;
   ObDMLDefaultOp op = OB_INVALID_DEFAULT_OP;
-  if (OB_ISNULL(column) || OB_ISNULL(params_) ||
-      OB_ISNULL(params_->expr_factory_) ||
-      OB_ISNULL(params_->session_info_)) {
+  if (OB_ISNULL(column)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(column), K(params_), K(params_->expr_factory_), K(params_->session_info_));
+    LOG_WARN("invalid argument", K(column));
   } else if (OB_FAIL(get_default_type_for_insert(column, op))) {
     LOG_WARN("fail to check column default value", K(column), K(ret));
   } else if (has_instead_of_trigger
@@ -757,7 +755,7 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     default_value.set_null();
   } else {
     default_value.set_type(column_schema->get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision()))) {
+    if (OB_FAIL(default_value.build_not_strict_default_value())) {
       LOG_WARN("failed to build not strict default value info", K(column_schema), K(ret));
     } else if (default_value.is_string_type()) {
       default_value.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -812,7 +810,7 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
     default_value.set_null();
   } else {
     default_value.set_type(column->get_column_type()->get_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision()))) {
+    if (OB_FAIL(default_value.build_not_strict_default_value())) {
       LOG_WARN("failed to build not strict default value info", K(column), K(ret));
     } else if (default_value.is_string_type()) {
       default_value.set_collation_level(CS_LEVEL_IMPLICIT);

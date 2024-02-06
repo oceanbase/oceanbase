@@ -382,7 +382,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,        /* ObDecimalIntType  */
+    ObUNumberType,        /* ObDecimalIntType  */
   },
 
   /*USmallIntType*/
@@ -437,7 +437,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,        /* ObDecimalIntType  */
+    ObUNumberType,        /* ObDecimalIntType  */
   },
 
   /*UMediumIntType*/
@@ -492,7 +492,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,        /* ObDecimalIntType  */
+    ObUNumberType,        /* ObDecimalIntType  */
   },
 
   /*UInt32Type*/
@@ -547,7 +547,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,        /* ObDecimalIntType  */
+    ObUNumberType,        /* ObDecimalIntType  */
   },
 
   /*UIntType*/
@@ -602,7 +602,7 @@ static ObObjType MOD_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType   */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,        /* ObDecimalIntType  */
+    ObUNumberType,        /* ObDecimalIntType  */
   },
 
   /*FloatType*/

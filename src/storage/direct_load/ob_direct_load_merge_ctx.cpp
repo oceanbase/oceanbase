@@ -20,7 +20,6 @@
 #include "storage/direct_load/ob_direct_load_multiple_sstable.h"
 #include "storage/direct_load/ob_direct_load_partition_merge_task.h"
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
-#include "storage/direct_load/ob_direct_load_partition_rescan_task.h"
 #include "observer/table_load/ob_table_load_schema.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
@@ -49,15 +48,12 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     rowkey_column_num_(0),
     store_column_count_(0),
     snapshot_version_(0),
-    lob_column_cnt_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
     cmp_funcs_(nullptr),
     is_heap_table_(false),
     is_fast_heap_table_(false),
-    is_column_store_(false),
     online_opt_stat_gather_(false),
-    px_mode_(false),
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr)
 {
@@ -71,8 +67,8 @@ bool ObDirectLoadMergeParam::is_valid() const
 {
   return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < store_column_count_ &&
          snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != col_descs_ && nullptr != cmp_funcs_ &&
-         nullptr != insert_table_ctx_ && nullptr != dml_row_handler_;
+         nullptr != col_descs_ && nullptr != cmp_funcs_ && nullptr != insert_table_ctx_ &&
+         nullptr != dml_row_handler_;
 }
 
 /**
@@ -157,7 +153,7 @@ int ObDirectLoadMergeCtx::create_all_tablet_ctxs(
  */
 
 ObDirectLoadTabletMergeCtx::ObDirectLoadTabletMergeCtx()
-  : allocator_("TLD_MegTbtCtx"), task_finish_count_(0), rescan_task_finish_count_(0), is_inited_(false)
+  : allocator_("TLD_MegTbtCtx"), task_finish_count_(0), is_inited_(false)
 {
 }
 
@@ -168,13 +164,7 @@ ObDirectLoadTabletMergeCtx::~ObDirectLoadTabletMergeCtx()
     task->~ObDirectLoadPartitionMergeTask();
     allocator_.free(task);
   }
-  for (int64_t i = 0; i < rescan_task_array_.count(); ++i) {
-    ObDirectLoadPartitionRescanTask *task = rescan_task_array_.at(i);
-    task->~ObDirectLoadPartitionRescanTask();
-    allocator_.free(task);
-  }
   task_array_.reset();
-  rescan_task_array_.reset();
 }
 
 int ObDirectLoadTabletMergeCtx::init(const ObDirectLoadMergeParam &param,
@@ -787,31 +777,6 @@ int ObDirectLoadTabletMergeCtx::build_aggregate_merge_task_for_multiple_heap_tab
   return ret;
 }
 
-int ObDirectLoadTabletMergeCtx::build_rescan_task(int64_t thread_count)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < thread_count; ++i) {
-    ObDirectLoadPartitionRescanTask *rescan_task = nullptr;
-    if (OB_ISNULL(rescan_task = OB_NEWx(ObDirectLoadPartitionRescanTask,
-                                              (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadPartitionRescanTask", KR(ret));
-    } else if (OB_FAIL(rescan_task->init(param_, this, thread_count, i))) {
-      LOG_WARN("fail to init merge task", KR(ret));
-    } else if (OB_FAIL(rescan_task_array_.push_back(rescan_task))) {
-      LOG_WARN("fail to push back merge task", KR(ret));
-    }
-    if (OB_FAIL(ret)) {
-      if (nullptr != rescan_task) {
-        rescan_task->~ObDirectLoadPartitionRescanTask();
-        allocator_.free(rescan_task);
-        rescan_task = nullptr;
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDirectLoadTabletMergeCtx::get_autoincrement_value(uint64_t count,
                                                         ObTabletCacheInterval &interval)
 {
@@ -843,19 +808,6 @@ int ObDirectLoadTabletMergeCtx::inc_finish_count(bool &is_ready)
   } else {
     const int64_t finish_count = ATOMIC_AAF(&task_finish_count_, 1);
     is_ready = (finish_count >= task_array_.count());
-  }
-  return ret;
-}
-
-int ObDirectLoadTabletMergeCtx::inc_rescan_finish_count(bool &is_ready)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadTabletMergeCtx not init", KR(ret), KP(this));
-  } else {
-    const int64_t finish_count = ATOMIC_AAF(&rescan_task_finish_count_, 1);
-    is_ready = (finish_count >= rescan_task_array_.count());
   }
   return ret;
 }

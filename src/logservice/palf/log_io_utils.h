@@ -86,17 +86,6 @@ private:
 };
 
 int reuse_block_at(const int fd, const char *block_path);
-bool check_rename_success(const char *src_name,
-                          const char *dest_name);
-bool check_renameat_success(const int src_dir_fd,
-                            const char *src_name,
-                            const int dest_dir_fd,
-                            const char *dest_name);
-int check_file_exist(const char *file_name,
-                     bool &exist);
-int check_file_exist(const int dir_fd,
-                     const char *file_name,
-                     bool &exist);
 
 } // end namespace palf
 } // end namespace oceanbase

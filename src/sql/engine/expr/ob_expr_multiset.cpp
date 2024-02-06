@@ -529,10 +529,6 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
       } else if (c1->get_element_type().get_obj_type() != c2->get_element_type().get_obj_type()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("udt union failed due to uninited", K(ret), KPC(c1), KPC(c2));
-      } else if (c1->is_of_composite()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "MULTISET expr for collections of composite types is");
-        LOG_WARN("MULTISET expr for collections of composite types is not supported", K(c1->get_element_type()), K(c2->get_element_type()));
       } else if (!c1->is_inited() || !c2->is_inited()) {
         // if has uninit collection, result is uninit, so do nothing ...
       } else {

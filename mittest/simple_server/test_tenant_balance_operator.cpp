@@ -576,14 +576,10 @@ TEST_F(TestBalanceOperator, ls_balance_helper)
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::insert_ls_balance_task(task, sql_proxy));
 
-  ObArray<ObBalanceTaskHelper> new_task;
-  SCN op_scn;
-  ASSERT_EQ(OB_SUCCESS, op_scn.convert_from_ts(ts));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
-        tenant_id, sql_proxy, op_scn, new_task));
-  ASSERT_EQ(1, new_task.count());
-  ASSERT_EQ(new_task.at(0).get_operation_scn().convert_to_ts(), ts);
-  ASSERT_EQ(ls_group_id, new_task.at(0).get_ls_group_id());
+  ObBalanceTaskHelper new_task;
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::pop_task(tenant_id, sql_proxy, new_task));
+  ASSERT_EQ(new_task.get_operation_scn().convert_to_ts(), ts);
+  ASSERT_EQ(ls_group_id, new_task.get_ls_group_id());
   ts += 10000000;
   ObBalanceTaskHelperOp new_op(0);
   ls_group_id = 1001;
@@ -592,20 +588,14 @@ TEST_F(TestBalanceOperator, ls_balance_helper)
       tenant_id, scn, new_op,
       src_ls_id, dest_ls_id, ls_group_id));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::insert_ls_balance_task(task, sql_proxy));
-  ASSERT_EQ(OB_SUCCESS, op_scn.convert_from_ts(ts));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
-        tenant_id, sql_proxy, op_scn, new_task));
-  ASSERT_EQ(2, new_task.count());
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::pop_task(tenant_id, sql_proxy, new_task));
   ts = 10000000000000;
-  ASSERT_EQ(new_task.at(0).get_operation_scn().convert_to_ts(), ts);
-  ASSERT_EQ(new_task.at(0).get_ls_group_id(), 0);
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::remove_task(tenant_id,
-        new_task.at(0).get_operation_scn(), sql_proxy));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
-        tenant_id, sql_proxy, op_scn, new_task));
-  ASSERT_EQ(1, new_task.count());
+  ASSERT_EQ(new_task.get_operation_scn().convert_to_ts(), ts);
+  ASSERT_EQ(new_task.get_ls_group_id(), 0);
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::remove_task(tenant_id, new_task.get_operation_scn(), sql_proxy));
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskHelperTableOperator::pop_task(tenant_id, sql_proxy, new_task));
 
-  ASSERT_EQ(ls_group_id, new_task.at(0).get_ls_group_id());
+  ASSERT_EQ(ls_group_id, new_task.get_ls_group_id());
 }
 } // namespace share
 } // namespace oceanbase

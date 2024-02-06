@@ -25,7 +25,6 @@
 #include "ob_log_timezone_info_getter.h"                            // ObCDCTimeZoneInfoGetter
 
 #include "ob_log_start_schema_matcher.h"                            // ObLogStartSchemaMatcher
-#include "ob_log_store_service.h"                                   // IObLogStoreService
 
 #define STAT(level, tag_str, args...) OBLOG_LOG(level, "[STAT] [TENANT] " tag_str, ##args)
 #define ISTAT(tag_str, args...) STAT(INFO, tag_str, ##args)
@@ -55,7 +54,7 @@ ObLogTenant::ObLogTenant() :
     committer_global_heartbeat_(OB_INVALID_VERSION),
     committer_cur_schema_version_(OB_INVALID_VERSION),
     committer_next_trans_schema_version_(OB_INVALID_VERSION),
-    redo_cf_handle_(NULL),
+    cf_handle_(NULL),
     lob_storage_cf_handle_(nullptr),
     lob_storage_clean_task_()
 {
@@ -75,7 +74,7 @@ int ObLogTenant::init(
     const int64_t start_tstamp_ns,
     const int64_t start_seq,
     const int64_t start_schema_version,
-    void *redo_cf_handle,
+    void *cf_handle,
     void *lob_storage_cf_handle,
     ObLogTenantMgr &tenant_mgr)
 {
@@ -90,9 +89,9 @@ int ObLogTenant::init(
       || OB_UNLIKELY(start_seq < 0)
       || OB_UNLIKELY(start_schema_version <= 0)
       || OB_ISNULL(tenant_name)
-      || OB_ISNULL(redo_cf_handle)) {
+      || OB_ISNULL(cf_handle)) {
     LOG_ERROR("invalid argument", K(tenant_id), K(tenant_name), K(start_tstamp_ns), K(start_seq),
-        K(start_schema_version), K(redo_cf_handle));
+        K(start_schema_version), K(cf_handle));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_ISNULL(task_queue_ = OB_NEW(ObLogTenantTaskQueue, ObModIds::OB_LOG_TENANT_TASK_QUEUE, *this))) {
     LOG_ERROR("create task queue fail", K(task_queue_));
@@ -137,7 +136,7 @@ int ObLogTenant::init(
     committer_global_heartbeat_ = OB_INVALID_VERSION;
     committer_cur_schema_version_ = start_schema_version;
     committer_next_trans_schema_version_ = start_schema_version;
-    redo_cf_handle_ = redo_cf_handle;
+    cf_handle_ = cf_handle;
     lob_storage_cf_handle_ = lob_storage_cf_handle;
     lob_storage_clean_task_.tenant_id_ = tenant_id;
 
@@ -163,8 +162,6 @@ int ObLogTenant::init_all_ddl_operation_table_schema_info_()
 
 void ObLogTenant::reset()
 {
-  int ret = OB_SUCCESS;
-
   if (inited_) {
     LOG_INFO("destroy tenant", K_(tenant_id), K_(tenant_name), K_(start_schema_version));
   }
@@ -198,28 +195,9 @@ void ObLogTenant::reset()
   committer_global_heartbeat_ = OB_INVALID_VERSION;
   committer_cur_schema_version_ = OB_INVALID_VERSION;
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
+  cf_handle_ = NULL;
+  lob_storage_cf_handle_ = nullptr;
   lob_storage_clean_task_.reset();
-  IObStoreService *store_service = TCTX.store_service_;
-  if (OB_NOT_NULL(store_service)) {
-    LOG_INFO("prepare drop tenant column family", K(tenant_id));
-    if (OB_NOT_NULL(lob_storage_cf_handle_) && OB_FAIL(store_service->drop_column_family(lob_storage_cf_handle_))) {
-      LOG_WARN("drop_lob_column_family failed", K(tenant_id));
-    }
-    if (OB_NOT_NULL(redo_cf_handle_) && OB_FAIL(store_service->drop_column_family(redo_cf_handle_))) {
-      LOG_WARN("drop_redo_column_family failed", K(tenant_id));
-    }
-    LOG_INFO("prepare destroy tenant column family", K(tenant_id));
-    if (OB_NOT_NULL(lob_storage_cf_handle_) && OB_FAIL(store_service->destory_column_family(lob_storage_cf_handle_))) {
-      LOG_WARN("destroy_lob_column_family failed", K(tenant_id));
-    }
-    if (OB_NOT_NULL(redo_cf_handle_) && OB_FAIL(store_service->destory_column_family(redo_cf_handle_))) {
-      LOG_WARN("destroy_redo_column_family failed", K(tenant_id));
-    }
-    redo_cf_handle_ = nullptr;
-    lob_storage_cf_handle_ = nullptr;
-    LOG_INFO("handle tenant column family done", K(tenant_id));
-  }
-
   ObMallocAllocator::get_instance()->recycle_tenant_allocator(tenant_id);
 }
 
@@ -890,49 +868,6 @@ int ObLogTenant::update_data_start_schema_version_on_split_mode()
   }
 
   return ret;
-}
-
-void ObLogTenant::flush_storage()
-{
-  int ret = OB_SUCCESS;
-  IObStoreService *store_service = TCTX.store_service_;
-
-  if (OB_ISNULL(store_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("store_service should be valid", KR(ret), K_(tenant_id));
-  } else {
-    if (OB_FAIL(store_service->flush(lob_storage_cf_handle_))) {
-      LOG_WARN("flush tenant lob_column_family failed", KR(ret), K_(tenant_id));
-    } else {
-      LOG_INFO("flush tenant lob column_family succ", K_(tenant_id));
-    }
-
-    if (OB_FAIL(store_service->flush(redo_cf_handle_))) {
-      LOG_WARN("flush tenant redo_column_family failed", KR(ret), K_(tenant_id));
-    } else {
-      LOG_INFO("flush tenant redo column_family succ", K_(tenant_id));
-    }
-  }
-}
-
-// DEL_RANGE and COMPACT_RANGE of lob data will invoke by resource_collector and implied in lob_aux_storager,
-// here won't compact lob_column_family
-void ObLogTenant::compact_storage()
-{
-  int ret = OB_SUCCESS;
-  IObStoreService *store_service = TCTX.store_service_;
-  const bool compact_entire_column_family = true;
-
-  if (OB_ISNULL(store_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("store_service should be valid", KR(ret), K_(tenant_id));
-  } else {
-    if (OB_FAIL(store_service->compact_range(redo_cf_handle_, std::string(), std::string(), compact_entire_column_family))) {
-      LOG_WARN("compact tenant redo column_family failed", KR(ret), K_(tenant_id));
-    } else {
-      LOG_INFO("compact tenant redo column_family succ", K_(tenant_id));
-    }
-  }
 }
 
 } // namespace libobcdc

@@ -19,6 +19,7 @@
 #include "ob_cs_encoding_test_base.h"
 #include "storage/blocksstable/cs_encoding/ob_cs_encoding_util.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
+#include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
 
 namespace oceanbase
 {
@@ -38,14 +39,14 @@ class ObPdFilterTestBase : public ObCSEncodingTestBase, public ::testing::Test
 {
 public:
   ObPdFilterTestBase()
-    : abnormal_filter_type_(AbnormalFilterType::NOT_ABNORMAL)
+    : enable_abnormal_filter_type_(false)
   {}
   virtual ~ObPdFilterTestBase() {}
   virtual void SetUp() {}
   virtual void TearDown()
   {
     reuse();
-    abnormal_filter_type_ = AbnormalFilterType::NOT_ABNORMAL;
+    enable_abnormal_filter_type_ = false;
   }
 
   void set_obj_collation(ObObj &obj, const ObObjType &column_type);
@@ -74,19 +75,14 @@ public:
                                       const int64_t row_cnt,
                                       const int64_t col_cnt,
                                       const int64_t col_offset,
-                                       const ObObjMeta &col_meta,
+                                      const ObObjType &col_type,
                                       const ObIArray<ObObj> &ref_objs,
                                       ObMicroBlockCSDecoder &decoder,
                                       const int64_t res_count);
 
 public:
-   enum AbnormalFilterType
-   {
-      NOT_ABNORMAL = 0,
-      WIDER_WIDTH,
-      OPPOSITE_SIGN
-   };
-   AbnormalFilterType abnormal_filter_type_;
+  bool enable_abnormal_filter_type_;
+
 };
 
 void ObPdFilterTestBase::set_obj_collation(ObObj &obj, const ObObjType &column_type)
@@ -130,19 +126,11 @@ void ObPdFilterTestBase::setup_obj(ObObj& obj, int64_t column_idx)
   ObObjMeta column_meta = row_generate_.column_list_.at(column_idx).col_type_;
   ObObjType column_type = column_meta.get_type();
   bool is_integer = (ob_obj_type_class(column_type) == ObObjTypeClass::ObIntTC) || (ob_obj_type_class(column_type) == ObObjTypeClass::ObUIntTC);
-  if (is_integer) {
-    if (abnormal_filter_type_ == AbnormalFilterType::WIDER_WIDTH) {
-      if (ob_obj_type_class(column_type) == ObObjTypeClass::ObIntTC) {
-        column_meta.set_int();
-      } else {
-        column_meta.set_uint64();
-      }
-    } else if (abnormal_filter_type_ == AbnormalFilterType::OPPOSITE_SIGN) {
-      if (ob_obj_type_class(column_type) == ObObjTypeClass::ObIntTC) {
-        column_meta.set_uint64();
-      } else {
-        column_meta.set_int();
-      }
+  if (enable_abnormal_filter_type_ && is_integer) {
+    if (ob_obj_type_class(column_type) == ObObjTypeClass::ObIntTC) {
+      column_meta.set_int();
+    } else {
+      column_meta.set_uint64();
     }
   }
   column_type = column_meta.get_type();
@@ -285,7 +273,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
     const int64_t row_cnt,
     const int64_t col_cnt,
     const int64_t col_offset,
-    const ObObjMeta &col_meta,
+    const ObObjType &col_type,
     const ObIArray<ObObj> &ref_objs,
     ObMicroBlockCSDecoder &decoder,
     const int64_t res_count)
@@ -315,7 +303,13 @@ int ObPdFilterTestBase::check_column_store_white_filter(
     white_filter->col_offsets_.init(1);
     white_filter->col_params_.init(1);
     ObColumnParam col_param(allocator_);
-    col_param.set_meta_type(col_meta);
+    ObObjMeta col_meta;
+    if (ref_objs.count() < 1) {
+      set_obj_meta_collation(col_meta, col_type);
+      col_param.set_meta_type(col_meta);
+    } else {
+      col_param.set_meta_type(ref_objs.at(0).meta_);
+    }
     white_filter->col_params_.push_back(&col_param);
     white_filter->col_offsets_.push_back(col_offset);
     white_filter->n_cols_ = 1;
@@ -364,14 +358,13 @@ int ObPdFilterTestBase::check_column_store_white_filter(
         }
       } else {
         white_filter->filter_.expr_->args_[i]->type_ = T_REF_COLUMN;
-        white_filter->filter_.expr_->args_[arg_cnt-1]->obj_meta_ = col_meta;
       }
     }
     if (OB_UNLIKELY(2 > white_filter->filter_.expr_->arg_cnt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected filter expr", K(ret), K(white_filter->filter_.expr_->arg_cnt_));
     } else {
-      white_filter->cmp_func_ = get_datum_cmp_func(white_filter->filter_.expr_->args_[arg_cnt-1]->obj_meta_, white_filter->filter_.expr_->args_[0]->obj_meta_);
+      white_filter->cmp_func_ = get_datum_cmp_func(white_filter->filter_.expr_->args_[0]->obj_meta_, white_filter->filter_.expr_->args_[0]->obj_meta_);
     }
 
     if (OB_SUCC(ret) ) {
@@ -415,7 +408,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
         ASSERT_EQ(OB_SUCCESS, build_integer_filter_ref(ref_cnt, tmp_ref_arr, col_offset, ref_objs, false)); \
       } \
       ASSERT_EQ(OB_SUCCESS, check_column_store_white_filter(op_type, row_cnt, col_cnt, \
-        col_offset, col_descs_[col_offset].col_type_, ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
+        col_offset, col_types[col_offset], ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
     } \
   } \
 
@@ -434,7 +427,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
         ASSERT_EQ(OB_SUCCESS, build_decimal_filter_ref(ref_cnt, tmp_ref_arr, col_offset, ref_objs)); \
       } \
       ASSERT_EQ(OB_SUCCESS, check_column_store_white_filter(op_type, row_cnt, col_cnt, \
-        col_offset, col_descs_[col_offset].col_type_, ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
+        col_offset, col_types[col_offset], ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
     } \
   } \
 
@@ -454,7 +447,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
         ASSERT_EQ(OB_SUCCESS, build_integer_filter_ref(ref_cnt, tmp_ref_seed_arr, col_offset, ref_objs, true)); \
       } \
       ASSERT_EQ(OB_SUCCESS, check_column_store_white_filter(op_type, row_cnt, col_cnt, \
-        col_offset, col_descs_[col_offset].col_type_, ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
+        col_offset, col_types[col_offset], ref_objs, decoder, res_arr[i])) << "round: " << i << std::endl; \
     } \
   } \
 
@@ -474,7 +467,7 @@ int ObPdFilterTestBase::check_column_store_white_filter(
         } \
       } \
       ASSERT_EQ(OB_SUCCESS, check_column_store_white_filter(op_type, row_cnt, col_cnt, \
-        col_offset, col_descs_[col_offset].col_type_, ref_objs, decoder, res_arr[i])); \
+        col_offset, col_types[col_offset], ref_objs, decoder, res_arr[i])); \
     } \
   } \
 

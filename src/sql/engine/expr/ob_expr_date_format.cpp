@@ -26,7 +26,7 @@ namespace sql
 {
 
 ObExprDateFormat::ObExprDateFormat(ObIAllocator &alloc)
-    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2, VALID_FOR_GENERATED_COL)
+    : ObStringExprOperator(alloc, T_FUN_SYS_DATE_FORMAT, N_DATE_FORMAT, 2, NOT_VALID_FOR_GENERATED_COL)
 {
 }
 
@@ -80,19 +80,11 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   uint64_t cast_mode = 0;
   bool res_null = false;
   ObDateSqlMode date_sql_mode;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
-  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_NOT_INIT;
     LOG_WARN("session is null", K(ret), K(session));
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
-  } else if (FALSE_IT(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                                       session->is_ignore_stmt(),
-	                                                     sql_mode, cast_mode))) {
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
+	                                                     session, cast_mode))) {
     LOG_WARN("get default cast mode failed", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, date, format))) {
     LOG_WARN("calc param failed", K(ret));
@@ -101,11 +93,11 @@ int ObExprDateFormat::calc_date_format(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("no more memory to alloc for buf");
-  } else if (FALSE_IT(date_sql_mode.init(sql_mode))) {
+  } else if (FALSE_IT(date_sql_mode.init(session->get_sql_mode()))) {
   } else if (OB_FAIL(ob_datum_to_ob_time_with_date(*date,
                                             expr.args_[0]->datum_meta_.type_,
                                             expr.args_[0]->datum_meta_.scale_,
-                                            tz_info,
+                                            get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                                             date_sql_mode,
@@ -140,16 +132,11 @@ int ObExprDateFormat::calc_date_format_invalid(const ObExpr &expr, ObEvalCtx &ct
   expr_datum.set_null();
   uint64_t cast_mode = 0;
   const ObSQLSessionInfo *session = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_NOT_INIT;
     LOG_WARN("session is null", K(ret), K(session));
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (FALSE_IT(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                                        session->is_ignore_stmt(),
-                                                        sql_mode, cast_mode))) {
+  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode))) {
+    LOG_WARN("get default cast mode failed", K(ret));
   } else if (!CM_IS_WARN_ON_FAIL(cast_mode)) {
     ret =OB_INVALID_ARGUMENT;
   }
@@ -167,17 +154,6 @@ int ObExprDateFormat::is_valid_for_generated_column(const ObRawExpr*expr, const 
     LOG_WARN("invalid param", K(ret), K(exprs.at(0)), K(exprs.at(1)));
   } else if (ObTimeType == exprs.at(0)->get_result_type().get_type() || ObTimestampType == exprs.at(0)->get_result_type().get_type()) {
     is_valid = false;
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprDateFormat, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(3);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
   }
   return ret;
 }

@@ -807,8 +807,9 @@ private:
   int init_free_tablet_pool_();
   int destroy_free_tablet_pool_();
 
-  int alloc_one_free_tablet_set_(const uint64_t uid);
-
+  // int get_changing_new_set_(DupTabletChangeMap *&changing_new_set);
+  // int get_old_tablet_set_(DupTabletChangeMap *&old_tablet_set);
+  int alloc_extra_free_tablet_set_();
   int get_free_tablet_set(DupTabletChangeMap *&free_set,
                           const bool force_alloc = false,
                           const uint64_t target_id = 0);

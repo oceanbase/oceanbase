@@ -1076,6 +1076,8 @@ int ObMergeGroupByOp::get_rollup_row(
     } else if (OB_FAIL(aggr_processor_.get_group_row(group_row_id, curr_group_row))) {
       LOG_WARN("failed to get_group_row", K(ret));
       // performance critical: use curr_group_row directly, no defensive check
+    } else if (OB_FAIL(aggr_processor_.prepare_in_batch_mode(curr_group_row))) {
+      LOG_WARN("fail to prepare the aggr func", K(ret));
     } else {
       // deep copy from prev group row
       ObChunkDatumStore::LastStoredRow *groupby_store_row = nullptr;
@@ -1146,6 +1148,8 @@ int ObMergeGroupByOp::get_empty_rollup_row(
     } else if (OB_FAIL(aggr_processor_.get_group_row(group_row_id, curr_group_row))) {
       LOG_WARN("failed to get_group_row", K(ret));
       // performance critical: use curr_group_row directly, no defensive check
+    } else if (OB_FAIL(aggr_processor_.prepare_in_batch_mode(curr_group_row))) {
+      LOG_WARN("fail to prepare the aggr func", K(ret));
     } else if (OB_FAIL(get_groupby_store_row(group_row_id, &store_row))) {
       LOG_WARN("failed to get groupby store row", K(ret), K(group_row_id));
     } else if (OB_ISNULL(store_row)) {
@@ -1201,6 +1205,8 @@ int ObMergeGroupByOp::get_cur_group_row(
     } else if (OB_FAIL(aggr_processor_.get_group_row(group_row_id, curr_group_row))) {
       LOG_WARN("failed to get_group_row", K(ret));
       // performance critical: use curr_group_row directly, no defensive check
+    } else if (OB_FAIL(aggr_processor_.prepare_in_batch_mode(curr_group_row))) {
+      LOG_WARN("fail to prepare the aggr func", K(ret));
     } else if (OB_FAIL(prepare_and_save_curr_groupby_datums(
         curr_group_rowid_, curr_group_row, group_exprs, group_count,
         ROLLUP_DISTRIBUTOR == MY_SPEC.rollup_status_ ? ROLLUP_BASE_ROW_EXTRA_SIZE : 0))) {

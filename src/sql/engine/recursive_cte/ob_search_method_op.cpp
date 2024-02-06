@@ -187,11 +187,6 @@ int ObDepthFisrtSearchOp::init()
   return ret;
 }
 
-void ObDepthFisrtSearchOp::destroy()
-{
-  search_stack_.reset();
-}
-
 int ObDepthFisrtSearchOp::reuse()
 {
   ObSearchMethodOp::reuse();

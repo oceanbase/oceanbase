@@ -131,12 +131,6 @@ int ObLSRouterValue::get_server_array_for_locate_start_lsn(ObIArray<common::ObAd
   return ret;
 }
 
-void ObLSRouterValue::refresh_ls_svr_list(const LSSvrList &svr_list)
-{
-  ObByteLockGuard guard(lock_);
-  ls_svr_list_ = svr_list;
-}
-
 } // namespace logservice
 } // namespace oceanbase
 

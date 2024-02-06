@@ -205,7 +205,7 @@ TEST_F(TestLockMemtableCheckpoint, replay_disorder)
   LOG_INFO("TestLockMemtableCheckpoint::replay_disorder 11");
   table_handle_.reset();
   ls_handle_.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id_, false));
 }
 }  // namespace tablelock
 }  // namespace transaction

@@ -230,7 +230,7 @@ int ObPLCompiler::compile(
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
         // check session status after get lock
@@ -297,7 +297,6 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     uint64_t old_db_id = OB_INVALID_ID;
     bool need_reset_exec_env = false;
     bool need_reset_default_database = false;
-    bool need_set_db = true;
 
     //Step 1：根据id从schema取出pl信息，并构造ObPLFunctionAST
     int64_t init_start = ObTimeUtility::current_time();
@@ -328,16 +327,8 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     CK (OB_UNLIKELY(OB_NOT_NULL(proc)));
     OZ (schema_guard_.get_database_schema(proc->get_tenant_id(), proc->get_database_id(), db));
     CK (OB_UNLIKELY(OB_NOT_NULL(db)));
-    // in mysql mode, only system packages with invoker's right do not need set db
-    // in oracle mode, set db by if the routine is invoker's right
     if (OB_SUCC(ret)
-        && (lib::is_oracle_mode()
-            || get_tenant_id_by_object_id(proc->get_package_id()) == OB_SYS_TENANT_ID)) {
-      need_set_db = !proc->is_invoker_right();
-    }
-
-    if (OB_SUCC(ret)
-        && need_set_db
+        && !proc->is_invoker_right()
         && proc->get_database_id() != old_db_id) {
       old_db_id = session_info_.get_database_id();
       if (OB_FAIL(old_db_name.append(session_info_.get_database_name()))) {
@@ -390,16 +381,16 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
           LOG_WARN("procedure param is NULL", K(param), K(ret));
         }
         if (OB_SUCC(ret)) {
-          ObSEArray<ObSchemaObjVersion, 1> deps;
+          ObSchemaObjVersion obj_version;
           OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                 schema_guard_,
                                                 session_info_,
                                                 allocator_,
                                                 sql_proxy_,
                                                 param_type,
-                                                &deps));
-          if (OB_SUCC(ret) && deps.count() > 0) {
-            OZ (func_ast.add_dependency_objects(deps));
+                                                &obj_version));
+          if (OB_SUCC(ret) && obj_version.is_valid()) {
+            OZ (func_ast.add_dependency_object(obj_version));
           }
         }
         if (OB_SUCC(ret)) {
@@ -478,7 +469,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
@@ -791,35 +782,32 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger()));
 
-  {
-    ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
-    // check session status after get lock
-    if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
-      LOG_WARN("query or session is killed after get PL jit lock", K(ret));
-    }
-
-    if (OB_SUCC(ret)) {
-#ifdef USE_MCJIT
-      HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
-#else
-      HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
-                session_info_,
-                schema_guard_,
-                package_ast,
-                package.get_expressions(),
-                package.get_helper(),
-                package.get_di_helper(),
-                lib::is_oracle_mode()) {
-#endif
-        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
-        OZ (cg.init());
-        OZ (cg.generate(package));
-      }
-    }
-
-    OZ (generate_package(package_info.get_exec_env(), package_ast, package));
+  ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+  // check session status after get lock
+  if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
+    LOG_WARN("query or session is killed after get PL jit lock", K(ret));
   }
 
+  if (OB_SUCC(ret)) {
+#ifdef USE_MCJIT
+    HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
+#else
+    HEAP_VAR(ObPLCodeGenerator, cg, package.get_allocator(),
+               session_info_,
+               schema_guard_,
+               package_ast,
+               package.get_expressions(),
+               package.get_helper(),
+               package.get_di_helper(),
+               lib::is_oracle_mode()) {
+#endif
+      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
+      OZ (cg.init());
+      OZ (cg.generate(package));
+    }
+  }
+
+  OZ (generate_package(package_info.get_exec_env(), package_ast, package));
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
@@ -1312,7 +1300,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
                    routine->get_di_helper(),
                    lib::is_oracle_mode()) {
 #endif
-            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "PlCodeGen"));
             if (OB_FAIL(cg.init())) {
               LOG_WARN("init code generator failed", K(ret));
             } else if (OB_FAIL(cg.generate(*routine))) {
@@ -1412,7 +1400,6 @@ template<class Info>
 void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard, int &ret)
 {
   ObExecEnv env;
-  bool need_set_db = true;
   OX (need_reset_exec_env_ = false);
   OX (need_reset_default_database_ = false);
   OZ (old_exec_env_.load(session_info_));
@@ -1421,16 +1408,8 @@ void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info
     OZ (env.store(session_info_));
     OX (need_reset_exec_env_ = true);
   }
-
-  // in mysql mode, only system packages with invoker's right do not need set db
-  // in oracle mode, set db by if the routine is invoker's right
   if (OB_SUCC(ret)
-      && (lib::is_oracle_mode()
-          || get_tenant_id_by_object_id(info.get_package_id()) == OB_SYS_TENANT_ID)) {
-    need_set_db = !info.is_invoker_right();
-  }
-  if (OB_SUCC(ret)
-      && need_set_db
+      && !info.is_invoker_right()
       && info.get_database_id() != session_info_.get_database_id()) {
     const share::schema::ObDatabaseSchema *db_schema = NULL;
     old_db_id_ = session_info_.get_database_id();

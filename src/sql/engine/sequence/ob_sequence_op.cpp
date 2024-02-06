@@ -113,13 +113,12 @@ int ObLocalSequenceExecutor::init(ObExecContext &ctx)
 
 void ObLocalSequenceExecutor::reset()
 {
-  ObSequenceExecutor::reset();
+
 }
 
 void ObLocalSequenceExecutor::destroy()
 {
   sequence_cache_ = NULL;
-  ObSequenceExecutor::destroy();
 }
 
 int ObLocalSequenceExecutor::get_nextval(ObExecContext &ctx)
@@ -297,7 +296,7 @@ int ObRemoteSequenceExecutor::init_sequence_sql(ObExecContext &ctx)
 
 void ObRemoteSequenceExecutor::reset()
 {
-  ObSequenceExecutor::reset();
+
 }
 
 void ObRemoteSequenceExecutor::destroy()
@@ -317,7 +316,6 @@ void ObRemoteSequenceExecutor::destroy()
   }
   sessid_ = 0;
   dblink_conn_ = NULL;
-  ObSequenceExecutor::destroy();
 }
 
 int ObRemoteSequenceExecutor::rescan()

@@ -80,7 +80,7 @@ void TestLSMigrationParam::SetUpTestCase()
 void TestLSMigrationParam::TearDownTestCase()
 {
   int ret = OB_SUCCESS;
-  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
+  ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   MockTenantModuleEnv::get_instance().destroy();
@@ -237,18 +237,13 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
 
   share::schema::ObTableSchema table_schema;
   TestSchemaUtils::prepare_data_schema(table_schema);
-  ObArenaAllocator schema_allocator;
-  ObCreateTabletSchema create_tablet_schema;
-
-  ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, table_schema,
+      lib::Worker::CompatMode::MYSQL, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;
@@ -302,18 +297,13 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
 
   share::schema::ObTableSchema table_schema;
   TestSchemaUtils::prepare_data_schema(table_schema);
-  ObArenaAllocator schema_allocator;
-  ObCreateTabletSchema create_tablet_schema;
-
-  ret = create_tablet_schema.init(schema_allocator, table_schema, lib::Worker::CompatMode::MYSQL,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3);
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletID empty_tablet_id;
   SCN scn;
   scn.convert_from_ts(ObTimeUtility::current_time());
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
-      scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
+      scn, 2022, table_schema,
+      lib::Worker::CompatMode::MYSQL, false, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ObMigrationTabletParam tablet_param;
@@ -347,7 +337,6 @@ TEST_F(TestLSMigrationParam, test_deleted_tablet_info)
   char buf[buf_len] = {};
   share::ObLSID ls_id(1);
   ObTabletID tablet_id(200001);
-  set_compat_mode(Worker::CompatMode::MYSQL);
   ObMigrationTabletParam param;
   ret = param.build_deleted_tablet_info(ls_id, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);

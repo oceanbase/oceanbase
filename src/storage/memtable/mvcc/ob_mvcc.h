@@ -23,32 +23,22 @@ class ObTransCallbackList;
 class ObITransCallbackIterator;
 class ObIMemtable;
 enum class MutatorType;
-struct TxChecksum : public common::ObBatchChecksum {
-  TxChecksum(): cnt_(0), scn_() {}
-  void reset() {
-    common::ObBatchChecksum::reset();
-    cnt_ = 0;
-    scn_.reset();
-  }
-  int cnt_;
-  share::SCN scn_;
-  TO_STRING_KV(K_(cnt), K_(scn), "checksum", const_cast<TxChecksum*>(this)->calc());
-};
+
 class ObITransCallback
 {
   friend class ObTransCallbackList;
   friend class ObITransCallbackIterator;
 public:
-  ObITransCallback() :
+  ObITransCallback()
+    : need_fill_redo_(true),
     need_submit_log_(true),
     scn_(share::SCN::max_scn()),
-    epoch_(0),
     prev_(NULL),
     next_(NULL) {}
-  ObITransCallback(const bool need_submit_log) :
+  ObITransCallback(const bool need_fill_redo, const bool need_submit_log)
+    : need_fill_redo_(need_fill_redo),
     need_submit_log_(need_submit_log),
     scn_(share::SCN::max_scn()),
-    epoch_(0),
     prev_(NULL),
     next_(NULL) {}
   virtual ~ObITransCallback() {}
@@ -59,28 +49,30 @@ public:
   virtual bool on_memtable(const ObIMemtable * const memtable)
   { UNUSED(memtable); return false; }
   virtual ObIMemtable* get_memtable() const { return nullptr; }
-  virtual uint32_t get_freeze_clock() const { return 0; }
   virtual transaction::ObTxSEQ get_seq_no() const { return transaction::ObTxSEQ::INVL(); }
   virtual int del() { return remove(); }
   virtual bool is_need_free() const { return true; }
+  virtual bool log_synced() const { return false; }
   void set_scn(const share::SCN scn);
   share::SCN get_scn() const;
-  bool is_log_submitted() const { return !scn_.is_max(); }
-  void set_epoch(int64_t epoch) { epoch_ = epoch; }
-  int64_t get_epoch() const { return epoch_; }
   int before_append_cb(const bool is_replay);
   void after_append_cb(const bool is_replay);
+  // interface for redo log generator
+  bool need_fill_redo() const { return need_fill_redo_; }
   bool need_submit_log() const { return need_submit_log_; }
   virtual bool is_logging_blocked() const { return false; }
-  virtual bool on_frozen_memtable(ObIMemtable *&last_frozen_mt) const { return true; }
-  int log_submitted_cb(const share::SCN scn, ObIMemtable *&last_mt);
-  int log_sync_fail_cb(const share::SCN scn);
+  int log_submitted_cb();
+  int undo_log_submitted_cb();
+  int log_sync_cb(const share::SCN scn);
+  int log_sync_fail_cb();
   // interface should be implement by subclasses
   virtual int before_append(const bool is_replay) { return common::OB_SUCCESS; }
   virtual void after_append(const bool is_replay) {}
-  virtual int log_submitted(const share::SCN scn, ObIMemtable *&last_mt)
+  virtual int log_submitted() { return common::OB_SUCCESS; }
+  virtual int undo_log_submitted() { return common::OB_SUCCESS; }
+  virtual int log_sync(const share::SCN scn)
   { UNUSED(scn); return common::OB_SUCCESS; }
-  virtual int log_sync_fail(const share::SCN max_committed_scn)
+  virtual int log_sync_fail()
   { return common::OB_SUCCESS; }
   virtual int64_t get_data_size() { return 0; }
   virtual MutatorType get_mutator_type() const; 
@@ -112,7 +104,7 @@ public:
   // execution the checksum if checksum_scn is smaller or equal than your
   // scn.
   virtual int calc_checksum(const share::SCN checksum_scn,
-                            TxChecksum *checksumer)
+                            ObBatchChecksum *checksumer)
   {
     UNUSED(checksum_scn);
     UNUSED(checksumer);
@@ -160,11 +152,10 @@ protected:
   int before_append(ObITransCallback *node);
   int remove();
   struct {
-    // Identifies whether log has been submitted, and may not been synced
-    bool need_submit_log_ : 1;
+    bool need_fill_redo_  : 1; // Identifies whether log is needed
+    bool need_submit_log_ : 1; // Identifies whether log has been submitted
   };
   share::SCN scn_;
-  int64_t epoch_;
 public:
   int64_t owner_;
 private:

@@ -139,12 +139,9 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     }
     param.need_row_count_ = std::min(param.need_row_count_, card);
     param.need_row_count_ += offset_count_double;
-    if (OB_FAIL(AccessPath::re_estimate_cost(param,
-                                             *est_cost_info_,
-                                             sample_info_,
-                                             *opt_ctx,
-                                             card,
-                                             op_cost))) {
+    if (OB_FAIL(AccessPath::re_estimate_cost(param, *est_cost_info_, sample_info_,
+                                             opt_ctx->get_cost_model_type(),
+                                             card, op_cost))) {
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
       cost = op_cost;
@@ -738,8 +735,7 @@ int ObLogTableScan::generate_ddl_output_column_ids()
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (opt_ctx.is_online_ddl() &&
-        stmt::T_INSERT == opt_ctx.get_session_info()->get_stmt_type() &&
-        !opt_ctx.get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
+        stmt::T_INSERT == opt_ctx.get_session_info()->get_stmt_type()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < get_output_exprs().count(); ++i) {
         const ObRawExpr *output_expr = get_output_exprs().at(i);
         if (OB_ISNULL(output_expr)) {
@@ -1062,6 +1058,39 @@ int ObLogTableScan::pick_out_query_range_exprs()
   return ret;
 }
 
+int ObLogTableScan::pick_out_startup_filters()
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = get_plan();
+  const ParamStore *params = NULL;
+  ObOptimizerContext *opt_ctx = NULL;
+  ObArray<ObRawExpr *> filter_exprs;
+  if (OB_ISNULL(plan)
+      || OB_ISNULL(opt_ctx = &plan->get_optimizer_context())
+      || OB_ISNULL(params = opt_ctx->get_params())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("NULL pointer error", K(plan), K(opt_ctx), K(ret));
+  } else if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
+    LOG_WARN("assign filter exprs failed", K(ret));
+  } else {
+    filter_exprs_.reset();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs.count(); ++i) {
+    ObRawExpr *qual = filter_exprs.at(i);
+    if (OB_ISNULL(qual)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (qual->is_static_const_expr()) {
+      if (OB_FAIL(startup_exprs_.push_back(qual))) {
+        LOG_WARN("add filter expr failed", K(i), K(ret));
+      } else { /* Do nothing */ }
+    } else if (OB_FAIL(filter_exprs_.push_back(qual))) {
+      LOG_WARN("add filter expr failed", K(i), K(ret));
+    } else { /* Do nothing */ }
+  }
+  return ret;
+}
+
 int ObLogTableScan::init_calc_part_id_expr()
 {
   int ret = OB_SUCCESS;
@@ -1241,9 +1270,6 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF("dynamic sampling level:%ld", table_meta->get_ds_level()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
-    } else if (OB_NOT_NULL(est_cost_info_) &&
-               OB_FAIL(print_est_method(est_cost_info_->est_method_, buf, buf_len, pos))) {
-      LOG_WARN("failed to print est method", K(ret));
     }
     END_BUF_PRINT(plan_item.optimizer_, plan_item.optimizer_len_);
   }
@@ -1311,41 +1337,6 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
                   plan_item.special_predicates_len_);
   }
 
-  return ret;
-}
-
-int ObLogTableScan::print_est_method(ObBaseTableEstMethod method, char *buf, int64_t &buf_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (method == EST_INVALID) {
-    // do nothing
-  } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if (OB_FAIL(BUF_PRINTF("estimation method:["))) {
-    LOG_WARN("BUF_PRINTF fails", K(ret));
-  } else if ((EST_DEFAULT & method) &&
-             OB_FAIL(BUF_PRINTF("DEFAULT, "))) {
-    LOG_WARN("BUF_PRINTF fails");
-  } else if ((EST_STAT & method) &&
-             OB_FAIL(BUF_PRINTF("OPTIMIZER STATISTICS, "))) {
-    LOG_WARN("BUF_PRINTF fails");
-  } else if ((EST_STORAGE & method) &&
-             OB_FAIL(BUF_PRINTF("STORAGE, "))) {
-    LOG_WARN("BUF_PRINTF fails");
-  } else if (((EST_DS_BASIC) & method) &&
-             OB_FAIL(BUF_PRINTF("DYNAMIC SAMPLING BASIC, "))) {
-    LOG_WARN("BUF_PRINTF fails");
-  } else if (((EST_DS_FULL) & method) &&
-             OB_FAIL(BUF_PRINTF("DYNAMIC SAMPLING FULL, "))) {
-    LOG_WARN("BUF_PRINTF fails");
-  } else {
-    pos -= 2;
-    if (OB_FAIL(BUF_PRINTF("]"))) {
-      LOG_WARN("BUF_PRINTF fails");
-    }
-  }
   return ret;
 }
 
@@ -2053,7 +2044,7 @@ bool ObLogTableScan::is_need_feedback() const
 
   ret = sel >= SELECTION_THRESHOLD && !is_multi_part_table_scan_;
 
-  LOG_TRACE("is_need_feedback", K(table_row_count),
+  LOG_TRACE("is_need_feedback", K(estimate_method_), K(table_row_count),
             K(logical_query_range_row_count), K(sel), K(ret));
   return ret;
 }

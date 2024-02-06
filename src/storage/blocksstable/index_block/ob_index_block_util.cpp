@@ -67,28 +67,24 @@ int ObSkipIndexColMeta::calc_skip_index_maximum_size(
     LOG_WARN("invalid column type", K(ret), K(obj_type), K(datum_type));
   } else {
     int64_t normal_agg_column_cnt = 0;
-    int64_t sum_column_cnt = 0;
     bool has_null_count_column = false;
     if (skip_idx_attr.has_min_max()) {
       normal_agg_column_cnt += 2;
       has_null_count_column = true;
     }
     if (skip_idx_attr.has_sum()) {
-      sum_column_cnt += 1;
+      normal_agg_column_cnt += 1;
       has_null_count_column = true;
     }
     const int64_t null_count_column_cnt = has_null_count_column ? 1 : 0;
     uint32_t data_type_upper_size = 0;
     uint32_t null_count_upper_size = 0;
-    uint32_t sum_store_size = 0;
     if (OB_FAIL(get_skip_index_store_upper_size(datum_type, precision, data_type_upper_size))) {
       LOG_WARN("failed to get datum stored upper size", K(ret), K(datum_type));
     } else if (OB_FAIL(get_skip_index_store_upper_size(NULL_CNT_COL_TYPE, 0, null_count_upper_size))) {
       LOG_WARN("failed to get null count col upper size", K(ret), K(datum_type));
-    } else if (can_agg_sum(obj_type) && OB_FAIL(get_sum_store_size(obj_type, sum_store_size))) {
-      LOG_WARN("failed to get sum store size", K(ret), K(obj_type));
     } else {
-      max_size = normal_agg_column_cnt * data_type_upper_size + sum_column_cnt * sum_store_size
+      max_size = normal_agg_column_cnt * data_type_upper_size
           + null_count_column_cnt * null_count_upper_size;
     }
   }

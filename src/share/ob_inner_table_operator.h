@@ -107,7 +107,7 @@ public:
   // row operation
   // Init operator with operation table name.
   int init(
-    const char *tname, const ObIExecTenantIdProvider &exec_tenant_id_provider, const int32_t group_id = 0);
+    const char *tname, const ObIExecTenantIdProvider &exec_tenant_id_provider);
   // Get operation table name.
   const char *get_table_name() const;
   const ObIExecTenantIdProvider *get_exec_tenant_id_provider() const;
@@ -270,7 +270,6 @@ private:
   bool is_inited_;
   TableName table_name_; // operation table name.
   const ObIExecTenantIdProvider *exec_tenant_id_provider_; // provide tenant id to exec sql.
-  int32_t group_id_; //remote inner sql rpc queue
 };
 
 

@@ -114,8 +114,6 @@ public:
   static int calc_partition_level_one(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       ObDatum &res_datum);
-  static int calc_partition_level_one_vector(const ObExpr &expr, ObEvalCtx &ctx,
-                                             const ObBitVector &skip, const EvalBound &bound);
   static int calc_partition_level_two(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       ObDatum &res_datum);

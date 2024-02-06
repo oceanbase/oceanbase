@@ -86,6 +86,7 @@ public:
                                  ObExecContext &ctx,
                                  int64_t task_cnt,
                                  ObPieceMsgCtx *&msg_ctx);
+  static bool enable_dh_channel_sync(const bool channel_sync_enabled);
   int received_; // 已经收到的 piece 数量
   int64_t tenant_id_;
   ObInitChannelWholeMsg whole_msg_;

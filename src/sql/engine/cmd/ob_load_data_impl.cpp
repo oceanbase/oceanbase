@@ -44,7 +44,6 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
-#include "share/config/ob_config_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -911,15 +910,26 @@ void ObCSVFormats::init(const ObDataInFileStruct &file_formats)
 ObShuffleTaskHandle::ObShuffleTaskHandle(ObDataFragMgr &main_datafrag_mgr,
                                          ObBitSet<> &main_string_values,
                                          uint64_t tenant_id)
-  : allocator(ObMemAttr(tenant_id, ObModIds::OB_SQL_LOAD_DATA)),
-    exec_ctx(allocator, GCTX.session_mgr_),
+  : exec_ctx(allocator, GCTX.session_mgr_),
     data_buffer(NULL),
     escape_buffer(NULL),
     calc_tablet_id_expr(NULL),
     datafrag_mgr(main_datafrag_mgr),
     string_values(main_string_values)
 {
-  attr = ObMemAttr(tenant_id, ObModIds::OB_SQL_LOAD_DATA);
+  const int64_t FILE_BUFFER_SIZE = ObLoadFileBuffer::MAX_BUFFER_SIZE;
+  ObMemAttr attr(tenant_id, ObModIds::OB_SQL_LOAD_DATA);
+  void *buf = NULL;
+  buf = ob_malloc(FILE_BUFFER_SIZE, attr);
+  if (OB_NOT_NULL(buf)) {
+    data_buffer = new(buf) ObLoadFileBuffer(
+          FILE_BUFFER_SIZE - sizeof(ObLoadFileBuffer));
+  }
+  buf = ob_malloc(FILE_BUFFER_SIZE, attr);
+  if (OB_NOT_NULL(buf)) {
+    escape_buffer = new(buf) ObLoadFileBuffer(
+          FILE_BUFFER_SIZE - sizeof(ObLoadFileBuffer));
+  }
 }
 
 ObShuffleTaskHandle::~ObShuffleTaskHandle()
@@ -930,41 +940,6 @@ ObShuffleTaskHandle::~ObShuffleTaskHandle()
   if (OB_NOT_NULL(escape_buffer)) {
     ob_free(escape_buffer);
   }
-}
-
-int ObShuffleTaskHandle::expand_buf(const int64_t max_size)
-{
-  int ret = OB_SUCCESS;
-  int64_t new_size = 0;
-  if (OB_ISNULL(data_buffer)) {
-    new_size = ObLoadFileBuffer::MAX_BUFFER_SIZE;
-  } else {
-    new_size = (sizeof(ObLoadFileBuffer) + data_buffer->get_buffer_size()) * 2;
-  }
-  if (new_size > max_size) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("buffer size not enough", K(ret));
-  } else {
-    void *buf1 = NULL;
-    void *buf2 = NULL;
-    if (OB_ISNULL(buf1 = ob_malloc(new_size, attr))
-        || OB_ISNULL(buf2 = ob_malloc(new_size, attr))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-    } else {
-      if (OB_NOT_NULL(data_buffer)) {
-        ob_free(data_buffer);
-      }
-      data_buffer = new(buf1) ObLoadFileBuffer(
-            new_size - sizeof(ObLoadFileBuffer));
-      if (OB_NOT_NULL(escape_buffer)) {
-        ob_free(escape_buffer);
-      }
-      escape_buffer = new(buf2) ObLoadFileBuffer(
-            new_size - sizeof(ObLoadFileBuffer));
-    }
-  }
-  LOG_DEBUG("expand buf to", K(new_size));
-  return ret;
 }
 
 int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
@@ -1007,7 +982,6 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
     return true;
   };
 
-    const int64_t buf_len = handle->data_buffer->get_buffer_size() + sizeof(ObLoadFileBuffer);
   if (OB_ISNULL(handle)
       || OB_ISNULL(handle->data_buffer)
       || OB_ISNULL(handle->escape_buffer)
@@ -1024,13 +998,14 @@ int ObLoadDataSPImpl::exec_shuffle(int64_t task_id, ObShuffleTaskHandle *handle)
                        handle->generator.get_insert_exprs().count()))) {
     LOG_WARN("fail to prealloc", K(ret),
              "insert values count", handle->generator.get_insert_exprs().count());
-  } else if (OB_ISNULL(expr_buf = ob_malloc(handle->data_buffer->get_buffer_size() + sizeof(ObLoadFileBuffer),
+  } else if (OB_ISNULL(expr_buf = ob_malloc(ObLoadFileBuffer::MAX_BUFFER_SIZE,
                                             ObMemAttr(tenant_id, ObModIds::OB_SQL_LOAD_DATA)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("not enough memory", K(ret));
   } else {
     handle->err_records.reuse();
-    expr_buffer = new(expr_buf) ObLoadFileBuffer(handle->data_buffer->get_buffer_size());
+    expr_buffer = new(expr_buf) ObLoadFileBuffer(ObLoadFileBuffer::MAX_BUFFER_SIZE
+                                                 - sizeof(ObLoadFileBuffer));
     ObSEArray<ObCSVGeneralParser::LineErrRec, 1> err_records;
     ObSEArray<ObObj, 32> parse_result;
 
@@ -1373,66 +1348,62 @@ int ObLoadDataSPImpl::handle_returned_shuffle_task(ToolBox &box, ObShuffleTaskHa
   return ret;
 }
 
-int ObLoadDataSPImpl::next_file_buffer(ObExecContext &ctx,
-                                       ToolBox &box,
-                                       ObShuffleTaskHandle *handle,
+int ObLoadDataSPImpl::next_file_buffer(ToolBox &box,
+                                       ObLoadFileBuffer &data_buffer,
                                        int64_t limit)
 {
   int ret = OB_SUCCESS;
-  bool has_valid_data = false;
 
-  CK (OB_NOT_NULL(handle) && OB_NOT_NULL(handle->data_buffer));
+  //从data_trimer中恢复出上次读取剩下的数据
+  OZ (box.data_trimer.recover_incomplate_data(data_buffer));
 
-  do {
+  if (ObLoadFileLocation::SERVER_DISK == box.load_file_storage) {
+    OZ (box.file_reader.pread(data_buffer.current_ptr(),
+                              data_buffer.get_remain_len(),
+                              box.read_cursor.file_offset_,
+                              box.read_cursor.read_size_));
+  } else {
+    OZ (box.device_handle_->pread(box.fd_, box.read_cursor.file_offset_,
+                                data_buffer.get_remain_len(),
+                                data_buffer.current_ptr(),
+                                box.read_cursor.read_size_));
+  }
 
-    //从data_trimer中恢复出上次读取剩下的数据
-    OZ (box.data_trimer.recover_incomplate_data(*handle->data_buffer));
-
-    OZ (box.file_reader->readn(handle->data_buffer->current_ptr(),
-                               handle->data_buffer->get_remain_len(),
-                               box.read_cursor.read_size_));
-
-    if (OB_SUCC(ret)) {
-      if (OB_LIKELY(box.read_cursor.read_size_ > 0)) {
-        handle->data_buffer->update_pos(box.read_cursor.read_size_); //更新buffer中数据长度
-        int64_t last_proccessed_GBs = box.read_cursor.get_total_read_GBs();
-        box.read_cursor.commit_read();
-        int64_t processed_GBs = box.read_cursor.get_total_read_GBs();
-        if (processed_GBs != last_proccessed_GBs) {
-          LOG_INFO("LOAD DATA file read progress: ", K(processed_GBs));
-        }
-
-        box.job_status->read_bytes_ += box.read_cursor.read_size_;
-      } else if (box.file_reader->eof()) {
-        box.read_cursor.is_end_file_ = true;
-        LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(0 == box.read_cursor.read_size_)) {
+      box.read_cursor.is_end_file_ = true;
+      LOG_DEBUG("LOAD DATA reach file end", K(box.read_cursor));
+    } else {
+      data_buffer.update_pos(box.read_cursor.read_size_); //更新buffer中数据长度
+      int64_t last_proccessed_GBs = box.read_cursor.get_total_read_GBs();
+      box.read_cursor.commit_read();
+      int64_t processed_GBs = box.read_cursor.get_total_read_GBs();
+      if (processed_GBs != last_proccessed_GBs) {
+        LOG_INFO("LOAD DATA file read progress: ", K(processed_GBs));
       }
-    }
 
-    //从buffer中找出完整的行，剩下的备份到 data_trimer
-    if (OB_SUCC(ret) && OB_LIKELY(handle->data_buffer->is_valid())) {
-      int64_t complete_cnt = limit;
-      int64_t complete_len = 0;
-      if (OB_FAIL(pre_parse_lines(*handle->data_buffer, box.parser,
-                                  box.read_cursor.is_end_file(),
-                                  complete_len, complete_cnt))) {
-        LOG_WARN("fail to fast_lines_parse", K(ret));
-      } else if (OB_FAIL(box.data_trimer.backup_incomplate_data(*handle->data_buffer,
-                                                                complete_len))) {
-        LOG_WARN("fail to back up data", K(ret));
-      } else {
-        box.data_trimer.commit_line_cnt(complete_cnt);
-        has_valid_data = complete_cnt > 0;
-        LOG_DEBUG("LOAD DATA",
-            "split offset", box.read_cursor.file_offset_ - box.data_trimer.get_incomplate_data_string().length(),
-            K(complete_len), K(complete_cnt),
-            "incomplate data length", box.data_trimer.get_incomplate_data_string().length(),
-            "incomplate data", box.data_trimer.get_incomplate_data_string());
-      }
+      box.job_status->read_bytes_ += data_buffer.get_data_len();
     }
-  } while (OB_SUCC(ret) && !has_valid_data && !box.read_cursor.is_end_file_
-           && OB_SUCC(handle->expand_buf(box.batch_buffer_size))
-           && OB_SUCC(box.data_trimer.expand_buf(ctx.get_allocator())));
+  }
+
+  //从buffer中找出完整的行，剩下的备份到 data_trimer
+  if (OB_SUCC(ret) && OB_LIKELY(data_buffer.is_valid())) {
+    int64_t complete_cnt = limit;
+    int64_t complete_len = 0;
+    if (OB_FAIL(pre_parse_lines(data_buffer, box.parser,
+                                box.read_cursor.is_end_file(),
+                                complete_len, complete_cnt))) {
+      LOG_WARN("fail to fast_lines_parse", K(ret));
+    } else if (OB_FAIL(box.data_trimer.backup_incomplate_data(data_buffer,
+                                                              complete_len))) {
+      LOG_WARN("fail to back up data", K(ret));
+    } else {
+      box.data_trimer.commit_line_cnt(complete_cnt);
+      LOG_DEBUG("LOAD DATA",
+          "split offset", box.read_cursor.file_offset_ - box.data_trimer.get_incomplate_data_string().length(),
+          "incomplate data", box.data_trimer.get_incomplate_data_string());
+    }
+  }
   return ret;
 }
 
@@ -1477,7 +1448,7 @@ int ObLoadDataSPImpl::shuffle_task_gen_and_dispatch(ObExecContext &ctx, ToolBox 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(box.file_buf_row_num.push_back(box.data_trimer.get_lines_count()))) {
         LOG_WARN("fail to push back", K(ret));
-      } else if (OB_FAIL(next_file_buffer(ctx, box, handle))) {
+      } else if (OB_FAIL(next_file_buffer(box, *(handle->data_buffer)))) {
         LOG_WARN("fail get next file buffer", K(ret));
       }
     }
@@ -1957,7 +1928,8 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     while (OB_SUCC(ret)
            && !box.read_cursor.is_end_file()
            && box.data_trimer.get_lines_count() < box.ignore_rows) {
-      OZ (next_file_buffer(ctx, box, box.temp_handle,
+      box.expr_buffer->reset();
+      OZ (next_file_buffer(box, *box.expr_buffer,
                            box.ignore_rows - box.data_trimer.get_lines_count()));
       LOG_DEBUG("LOAD DATA ignore rows", K(box.ignore_rows), K(box.data_trimer.get_lines_count()));
     }
@@ -2033,9 +2005,9 @@ int ObLoadFileDataTrimer::backup_incomplate_data(ObLoadFileBuffer &buffer, int64
 {
   int ret = OB_SUCCESS;
   incomplate_data_len_ = buffer.get_data_len() - valid_data_len;
-  if (incomplate_data_len_ > incomplate_data_buf_len_) {
+  if (incomplate_data_len_ > ObLoadFileBuffer::MAX_BUFFER_SIZE) {
     ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size over flow", K(ret), K(incomplate_data_len_), K(incomplate_data_buf_len_));
+    LOG_WARN("size over flow", K(ret), K(incomplate_data_len_));
   } else if (incomplate_data_len_ > 0 && NULL != incomplate_data_) {
     MEMCPY(incomplate_data_, buffer.begin_ptr() + valid_data_len, incomplate_data_len_);
     buffer.update_pos(-incomplate_data_len_);
@@ -2338,29 +2310,16 @@ int ObPartDataFragMgr::update_part_location(ObExecContext &ctx)
   return ret;
 }
 
-int ObLoadFileDataTrimer::expand_buf(ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-
-  int64_t new_buf_len = incomplate_data_buf_len_ * (NULL != incomplate_data_ ? 2 : 1);
-  char *new_buf = NULL;
-  if (OB_ISNULL(new_buf = static_cast<char*>(allocator.alloc(new_buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("no memory", K(ret));
-  } else {
-    if (NULL != incomplate_data_) {
-      MEMCPY(new_buf, incomplate_data_, incomplate_data_len_);
-    }
-    incomplate_data_ = new_buf;
-    incomplate_data_buf_len_ = new_buf_len;
-  }
-  return ret;
-}
-
 int ObLoadFileDataTrimer::init(ObIAllocator &allocator, const ObCSVFormats &formats)
 {
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(incomplate_data_
+                = static_cast<char*>(allocator.alloc(ObLoadFileBuffer::MAX_BUFFER_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no memory", K(ret));
+  }
   formats_ = formats;
-  return expand_buf(allocator);
+  return ret;
 }
 
 int ObLoadDataSPImpl::ToolBox::release_resources()
@@ -2457,14 +2416,12 @@ int ObLoadDataSPImpl::ToolBox::release_resources()
     ob_free(expr_buffer);
   }
 
-  //release file reader
-  if (OB_NOT_NULL(file_reader)) {
-    file_reader->~ObFileReader();
-    file_reader = NULL;
-  }
-
-  if (OB_NOT_NULL(temp_handle)) {
-    temp_handle->~ObShuffleTaskHandle();
+  //release fd and device
+  if (NULL != device_handle_) {
+    if (fd_.is_valid()) {
+      device_handle_->close(fd_);
+    }
+    common::ObDeviceManager::get_instance().release_device(device_handle_);
   }
 
   return ret;
@@ -2698,6 +2655,12 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     LOG_WARN("fail to gen insert column names buff", K(ret));
   } else if (OB_FAIL(data_frag_mgr.init(ctx, load_args.table_id_))) {
     LOG_WARN("fail to init data frag mgr", K(ret));
+  } else if (ObLoadFileLocation::SERVER_DISK != load_file_storage) {
+    if (OB_FAIL(util.get_and_init_device(device_handle_, &load_args.access_info_, load_args.file_name_))) {
+      LOG_WARN("fail to get device manager", K(ret), K(load_args.access_info_), K(load_args.file_name_));
+    } else if (OB_FAIL(util.set_access_type(&iod_opts, false, 1))) {
+      LOG_WARN("fail to set access type", K(ret));
+    }
   }
 
   //init server_info_map
@@ -2763,20 +2726,14 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
-    file_read_param.file_location_   = load_file_storage;
-    file_read_param.filename_        = load_args.file_name_;
-    file_read_param.access_info_     = load_args.access_info_;
-    file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
-    file_read_param.session_         = ctx.get_my_session();
-    file_read_param.timeout_ts_      = THIS_WORKER.get_timeout_ts();
-
-    if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
-      LOG_WARN("failed to open file.", KR(ret), K(file_read_param), K(load_args.file_name_));
-
-    } else if (!file_reader->seekable()) {
-      file_size = -1;
-    } else if (OB_FAIL(file_reader->get_file_size(file_size))) {
-      LOG_WARN("fail to get io device file size", KR(ret), K(file_size));
+    if (ObLoadFileLocation::SERVER_DISK == load_file_storage) {
+      OZ (file_reader.open(load_args.file_name_, false));
+      OX (file_size = get_file_size(load_args.file_name_.ptr()));
+    } else {
+      int64_t file_length = -1;
+      OZ (device_handle_->open(load_args.file_name_.ptr(), -1, 0, fd_, &iod_opts));
+      OZ (util.get_file_size(device_handle_, fd_, file_length));
+      OX (file_size = file_length);
     }
   }
 
@@ -2868,8 +2825,6 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
 
   if (OB_SUCC(ret)) {
     int64_t hint_batch_size = 0;
-    int64_t hint_max_batch_buffer_size = 0;
-    ObString hint_batch_buffer_size_str;
     if (OB_FAIL(hint.get_value(ObLoadDataHint::BATCH_SIZE, hint_batch_size))) {
       LOG_WARN("fail to get value", K(ret));
     } else if (0 == hint_batch_size) {
@@ -2877,22 +2832,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     } else {
       batch_row_count = std::max(1L, std::min(DEFAULT_BUFFERRED_ROW_COUNT, hint_batch_size));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(hint.get_value(ObLoadDataHint::BATCH_BUFFER_SIZE, hint_batch_buffer_size_str))) {
-        LOG_WARN("fail to get value", K(ret));
-      } else {
-        bool is_valid = false;
-        hint_batch_buffer_size_str = hint_batch_buffer_size_str.trim();
-        if (!hint_batch_buffer_size_str.empty()) {
-          hint_max_batch_buffer_size = ObConfigCapacityParser::get(to_cstring(hint_batch_buffer_size_str), is_valid);
-        }
-        if (!is_valid) {
-          hint_max_batch_buffer_size = 1L << 30; // 1G
-        }
-        batch_buffer_size = MAX(ObLoadFileBuffer::MAX_BUFFER_SIZE, hint_max_batch_buffer_size);
-      }
-    }
-    LOG_DEBUG("batch size", K(hint_batch_size), K(batch_row_count), K(batch_buffer_size));
+    LOG_DEBUG("batch size", K(hint_batch_size), K(batch_row_count));
   }
 
   if (OB_SUCC(ret)) {
@@ -2942,31 +2882,18 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     }
 */
 
-
-
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(temp_handle = OB_NEWx(ObShuffleTaskHandle, (&ctx.get_allocator()),
-                                          data_frag_mgr, string_type_column_bitset, tenant_id))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc", K(ret));
-      } else if (OB_FAIL(temp_handle->expand_buf(batch_buffer_size))) {
-        LOG_WARN("fail to expand buf", K(ret));
-      }
-    }
-
     for (int i = 0; OB_SUCC(ret) && i < shuffle_task_controller.get_max_parallelism(); ++i) {
       ObShuffleTaskHandle *handle = nullptr;
       int64_t pos = 0;
 
       if (OB_ISNULL(handle = OB_NEWx(ObShuffleTaskHandle, (&ctx.get_allocator()),
-                                     data_frag_mgr, string_type_column_bitset, tenant_id))) {
+                                     data_frag_mgr, string_type_column_bitset, tenant_id))
+          || OB_ISNULL(handle->data_buffer)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc", K(ret));
       } else {
-        if (OB_FAIL(handle->expand_buf(batch_buffer_size))) {
-          LOG_WARN("fail to expand buf", K(ret));
-        } else if (OB_FAIL(handle->exec_ctx.deserialize(exec_ctx_serialized_data.ptr(),
-                                                        exec_ctx_serialized_data.length(), pos))) {
+        if (OB_FAIL(handle->exec_ctx.deserialize(exec_ctx_serialized_data.ptr(),
+                                                 exec_ctx_serialized_data.length(), pos))) {
           LOG_WARN("fail to deserialize", K(ret));
         } else if (OB_FAIL(handle->parser.init(file_formats, num_of_file_column, load_args.file_cs_type_))) {
           LOG_WARN("fail to init parser", K(ret));
@@ -3065,8 +2992,7 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
   }
 
   if (OB_SUCC(ret)) {
-    const int64_t fake_file_size = (file_size > 0) ? file_size : (2 << 30); // use 2G as default in load local mode
-    int64_t max_task_count = (fake_file_size / ObLoadFileBuffer::MAX_BUFFER_SIZE + 1) * 2;
+    int64_t max_task_count = (file_size / ObLoadFileBuffer::MAX_BUFFER_SIZE + 1) * 2;
     if (OB_FAIL(file_buf_row_num.reserve(max_task_count))) {
       LOG_WARN("fail to reserve", K(ret));
     }

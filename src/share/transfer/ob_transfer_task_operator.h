@@ -30,7 +30,6 @@ class ObMySQLResult;
 namespace share
 {
 class ObDMLSqlSplicer;
-class ObTabletLSCache;
 
 // operator for __all_transfer_task
 class ObTransferTaskOperator final
@@ -423,36 +422,6 @@ public:
       const uint64_t tenant_id,
       const ObTransferTaskID task_id,
       const ObTransferTaskComment &comment);
-
-  /*
-   * generate new task_id for transfer task
-   *
-   * should be protected by trans to ensure task_id is unique
-   */
-  static int generate_transfer_task_id(
-             common::ObMySQLTransaction &trans,
-             const uint64_t tenant_id,
-             ObTransferTaskID &new_task_id);
-
-  /*-----For auto refresh tablet location----*/
-
-  static int fetch_initial_base_task_id(
-             common::ObISQLClient &sql_proxy,
-             const uint64_t tenant_id,
-             ObTransferTaskID &base_task_id);
-
-  static int fetch_inc_task_infos(
-             common::ObISQLClient &sql_proxy,
-             const uint64_t tenant_id,
-             const ObTransferTaskID &base_task_id,
-             common::ObIArray<ObTransferRefreshInfo> &inc_task_infos);
-
-  static int batch_get_tablet_ls_cache(
-             common::ObISQLClient &sql_proxy,
-             const uint64_t tenant_id,
-             const common::ObIArray<ObTransferTaskID> &task_ids,
-             common::ObIArray<ObTabletLSCache> &tablet_ls_caches);
-  /*-----------------------------------------*/
 
 private:
   static int get_by_ls_id_(

@@ -66,7 +66,6 @@ class ObTransformOrExpansion: public ObTransformRule
       : trans_id_(OB_INVALID_ID),
         or_expand_type_(INVALID_OR_EXPAND_TYPE),
         is_set_distinct_(false),
-        is_valid_topk_(false),
         is_unique_(false),
         orig_expr_(NULL),
         hint_(NULL) {}
@@ -76,7 +75,6 @@ class ObTransformOrExpansion: public ObTransformRule
       trans_id_ = OB_INVALID_ID;
       or_expand_type_ = INVALID_OR_EXPAND_TYPE;
       is_set_distinct_ = false;
-      is_valid_topk_ = false;
       is_unique_ = false;
       orig_expr_ = NULL;
       hint_ = NULL;
@@ -84,7 +82,6 @@ class ObTransformOrExpansion: public ObTransformRule
     uint64_t trans_id_;
     uint64_t or_expand_type_;
     bool is_set_distinct_; // trans or expansion use distinct set
-    bool is_valid_topk_; // determine whether to do or classify when is_topk
     bool is_unique_; // spj stmt before trans is unique
     const ObRawExpr *orig_expr_;
     const ObOrExpandHint *hint_;
@@ -95,16 +92,13 @@ class ObTransformOrExpansion: public ObTransformRule
     OrExpandInfo()
       : pos_(-1),
         or_expand_type_(INVALID_OR_EXPAND_TYPE),
-        is_set_distinct_(false),
-        is_valid_topk_(false) {}
+        is_set_distinct_(false) {}
     int64_t pos_;
     uint64_t or_expand_type_;
     bool is_set_distinct_;
-    bool is_valid_topk_;
     TO_STRING_KV(K_(pos),
                  K_(or_expand_type),
-                 K_(is_set_distinct),
-                 K_(is_valid_topk));
+                 K_(is_set_distinct));
   };
 
 public:
@@ -166,7 +160,6 @@ private:
 
   int add_select_item_to_ref_query(ObSelectStmt *stmt,
                                    const uint64_t flag_table_id,
-                                   StmtUniqueKeyProvider &unique_key_provider,
                                    ObSqlBitSet<> &left_unique_pos,
                                    ObSqlBitSet<> &right_flag_pos);
 
@@ -206,7 +199,6 @@ private:
   bool reached_max_times_for_or_expansion() { return try_times_ >= MAX_TIMES_FOR_OR_EXPANSION; }
 
   int check_upd_del_stmt_validity(const ObDelUpdStmt &stmt, bool &is_valid);
-  int disable_pdml_for_upd_del_stmt(ObDMLStmt &stmt);
 
   int has_odd_function(const ObDMLStmt &stmt, bool &has);
 
@@ -304,9 +296,9 @@ private:
   int transform_or_expansion(ObSelectStmt *stmt,
                              const uint64_t trans_id,
                              const int64_t expr_pos,
+                             bool is_topk,
                              ObCostBasedRewriteCtx &ctx,
-                             ObSelectStmt *&trans_stmt,
-                             StmtUniqueKeyProvider &unique_key_provider);
+                             ObSelectStmt *&trans_stmt);
   int adjust_or_expansion_stmt(ObIArray<ObRawExpr*> *conds_exprs,
                                const int64_t expr_pos,
                                const int64_t param_pos,
@@ -367,7 +359,6 @@ private:
   int get_candi_match_index_exprs(ObRawExpr *expr,
                                   ObIArray<ObRawExpr*> &candi_exprs);
 
-  int pre_classify_or_expr(const ObRawExpr *expr, int &count);
   int classify_or_expr(const ObDMLStmt &stmt, ObRawExpr *&expr);
   int merge_expr_class(ObRawExpr *&expr_class, ObRawExpr *expr);
   int get_condition_related_tables(ObSelectStmt &stmt,

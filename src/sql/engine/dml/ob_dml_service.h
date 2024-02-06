@@ -24,13 +24,11 @@ class ObErrLogService;
 class ObDMLService
 {
 public:
-  static bool check_cascaded_reference(const ObExpr *expr, const ObExprPtrIArray &row);
-
   static int check_row_null(const ObExprPtrIArray &row,
                             ObEvalCtx &eval_ctx,
                             int64_t row_num,
                             const ColContentIArray &column_infos,
-                            bool is_ignore,
+                            const ObDASDMLBaseCtDef &das_ctdef,
                             bool is_single_value,
                             ObTableModifyOp &dml_op);
   static int check_column_type(const ExprFixedArray &dml_row,
@@ -142,7 +140,6 @@ public:
   static int init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                             ObDASDMLBaseRtDef &base_rtdef,
                             transaction::ObTxReadSnapshot &snapshot,
-                            const int16_t write_branch_id,
                             common::ObIAllocator &das_alloc,
                             storage::ObDMLBaseParam &dml_param);
   static int init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
@@ -284,7 +281,6 @@ public:
   ObDASIndexDMLAdaptor()
     : tx_desc_(nullptr),
       snapshot_(nullptr),
-      write_branch_id_(0),
       ctdef_(nullptr),
       rtdef_(nullptr),
       related_ctdefs_(nullptr),
@@ -306,7 +302,6 @@ public:
 public:
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTxReadSnapshot *snapshot_;
-  int16_t write_branch_id_;
   const CtDefType *ctdef_;
   RtDefType *rtdef_;
   const DASCtDefFixedArray *related_ctdefs_;
@@ -330,7 +325,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
     if (OB_FAIL(write_tablet_with_ignore(iter, affected_rows))) {
       LOG_WARN("write tablet with ignore failed", K(ret));
     }
-  } else if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, write_branch_id_, *das_allocator_, dml_param_))) {
+  } else if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, *das_allocator_, dml_param_))) {
     SQL_DAS_LOG(WARN, "init dml param failed", K(ret), K(ctdef_->table_id_), K(ctdef_->index_tid_));
   } else if (OB_FAIL(write_rows(ls_id_, tablet_id_, *ctdef_, *rtdef_, iter, affected_rows))) {
     SQL_DAS_LOG(WARN, "write rows failed", K(ret),
@@ -346,7 +341,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
                   K(ls_id_), K(related_tablet_id), K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
       if (OB_FAIL(iter.rewind(related_ctdef))) {
         SQL_DAS_LOG(WARN, "rewind iterator failed", K(ret));
-      } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef, *related_rtdef, *snapshot_, write_branch_id_, *das_allocator_, dml_param_))) {
+      } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef, *related_rtdef, *snapshot_, *das_allocator_, dml_param_))) {
         SQL_DAS_LOG(WARN, "init index dml param failed", K(ret),
                     K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
       } else if (OB_FAIL(write_rows(ls_id_,
@@ -403,7 +398,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
       SQL_DAS_LOG(TRACE, "write table dml row with ignore", KPC(dml_row), K(ls_id_), K(tablet_id_),
                   K(ctdef_->table_id_), K(ctdef_->index_tid_));
       DMLIterator single_row_iter(ctdef_, single_row_buffer, *das_allocator_);
-      if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, write_branch_id_, *das_allocator_, dml_param_))) {
+      if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, *das_allocator_, dml_param_))) {
         SQL_DAS_LOG(WARN, "init dml param failed", K(ret), KPC_(ctdef), KPC_(rtdef));
       } else if (OB_FAIL(write_rows(ls_id_,
                                     tablet_id_,
@@ -427,7 +422,6 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
           } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef,
                                                           *related_rtdef,
                                                           *snapshot_,
-                                                          write_branch_id_,
                                                           *das_allocator_,
                                                           dml_param_))) {
             SQL_DAS_LOG(WARN, "init index dml param failed", K(ret),

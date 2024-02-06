@@ -141,9 +141,6 @@ int ObGroupJoinBufffer::init(ObOperator *op,
   } else if (OB_UNLIKELY(op->get_child_cnt() < 2)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("op should have at least 2 children", KR(ret), K(op->get_child_cnt()));
-  } else if (max_group_size < group_scan_size) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("max group size is less than group scan size", K(max_group_size), K(group_scan_size));
   } else {
     op_ = op;
     spec_ = &op_->get_spec();
@@ -197,13 +194,9 @@ int ObGroupJoinBufffer::has_next_left_row(bool &has_next)
       LOG_WARN("left row read and group idx do not match", KR(ret),
                K(left_store_read_), K(left_store_group_idx_.count()));
     } else if (above_group_idx_for_read_ == left_store_group_idx_.at(left_store_read_)) {
-      // above_group_idx_for_read_ < left_store_group_idx_.at(left_store_read_) means the row of above_group_idx_ is end,
-      // need to return iter_end, and rescan current NLJ operator
       // we are still reading results for the current rescan param, need to rescan right child
       has_next = true;
     }
-  } else {
-    LOG_TRACE("Left child operator has no left rows for read,and the join buffer has no left row, needs to return iter_end_");
   }
   return ret;
 }
@@ -349,7 +342,6 @@ int ObGroupJoinBufffer::drain_left()
   const ObChunkDatumStore::StoredRow *row = NULL;
   // drain old rows from left store
   for (int64_t i = left_store_read_; OB_SUCC(ret) && need_drain && i < left_store_group_idx_.count(); ++i) {
-    // In addition to the lines of the current group (above_group_idx_for_read_), the buffer also caches rows of subsequent groups
     if (above_group_idx_for_read_ != left_store_group_idx_.at(i)) {
       need_drain = false;
     } else if (OB_FAIL(left_store_iter_.get_next_row(row))) {
@@ -359,7 +351,6 @@ int ObGroupJoinBufffer::drain_left()
       ++left_store_read_;
     }
   }
-  // Only rows of the current group are left in the buffer, and there are rows of the current group that have not been added to the buffer
   // discard unread rows from left op
   if (OB_SUCC(ret) && need_drain && !is_left_end_) {
     if (!spec_->is_vectorized()) {
@@ -590,8 +581,6 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
     } else if (OB_FAIL(backup_above_params(left_params_backup, right_params_backup))) {
       LOG_WARN("backup above params failed", KR(ret));
     }
-
-    // fill group join buffer of current op untill join buffer is full
     if (OB_SUCC(ret)) {
       ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*eval_ctx_);
       if (save_last_batch_) {
@@ -623,7 +612,6 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
             }
           }
         }
-        // rescan left op, switch to next iter of left child op
         if (OB_SUCC(ret) && batch_rows->end_) {
           is_left_end_ = true;
           if (is_multi_level_) {
@@ -637,7 +625,6 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       if (!rescan_params_->empty()) {
         op_->set_pushdown_param_null(*rescan_params_);
@@ -645,11 +632,9 @@ int ObGroupJoinBufffer::batch_fill_group_buffer(const int64_t max_row_cnt,
       if (batch_rows->size_ == 0 && batch_rows->end_) {
         // do nothing
       } else {
-        // if buffer is full ,but the last batch rows of left op is not added, save them to last batch
         last_batch_.from_exprs(*eval_ctx_, batch_rows->skip_, spec_->max_batch_size_);
         save_last_batch_ = true;
       }
-
       op_->clear_evaluated_flag();
       if (left_store_.get_row_cnt() <= 0) {
         // this could happen if we have skipped all rows

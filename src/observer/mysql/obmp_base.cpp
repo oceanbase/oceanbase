@@ -203,15 +203,6 @@ int ObMPBase::get_conn_id(uint32_t &sessid) const
   return packet_sender_.get_conn_id(sessid);
 }
 
-int ObMPBase::read_packet(obmysql::ObICSMemPool& mem_pool, obmysql::ObMySQLPacket *&pkt)
-{
-  return packet_sender_.read_packet(mem_pool, pkt);
-}
-
-int ObMPBase::release_packet(obmysql::ObMySQLPacket* pkt)
-{
-  return packet_sender_.release_packet(pkt);
- }
 int ObMPBase::send_error_packet(int err,
                                 const char* errmsg,
                                 bool is_partition_hit /* = true */,
@@ -295,7 +286,7 @@ int ObMPBase::create_session(ObSMConnection *conn, ObSQLSessionInfo *&sess_info)
       } else {
         sess_info->set_ssl_cipher("");
       }
-      sess_info->set_client_sessid(conn->client_sessid_);
+
       sess_info->gen_gtt_session_scope_unique_id();
       sess_info->gen_gtt_trans_scope_unique_id();
     }
@@ -537,9 +528,6 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       // need at ps mode
       if (!is_packed && value.get_type() != fields->at(i).type_.get_type()) {
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
-        if (ObDecimalIntType == fields->at(i).type_.get_type()) {
-          cast_ctx.res_accuracy_ = const_cast<ObAccuracy*>(&fields->at(i).accuracy_);
-        }
         if (OB_FAIL(common::ObObjCaster::to_type(fields->at(i).type_.get_type(),
                                           cast_ctx,
                                           value,
@@ -629,39 +617,6 @@ int ObMPBase::process_extra_info(sql::ObSQLSessionInfo &session,
               OB_FAIL(ObSessInfoVerify::verify_session_info(session,
               sess_info_verification))) {
     LOG_WARN("fail to verify sess info", K(ret));
-  }
-  return ret;
-}
-
-// The obmp layer handles the kill client session logic.
-int ObMPBase::process_kill_client_session(sql::ObSQLSessionInfo &session, bool is_connect)
-{
-  int ret = OB_SUCCESS;
-  uint64_t create_time = 0;
-  if (OB_ISNULL(gctx_.session_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid session mgr", K(ret), K(gctx_));
-  } else if (OB_UNLIKELY(session.is_mark_killed())) {
-    ret = OB_ERR_KILL_CLIENT_SESSION;
-    LOG_WARN("client session need be killed", K(session.get_session_state()),
-            K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-            K(session.get_client_sessid()), K(ret));
-  } else if (is_connect) {
-    if (OB_UNLIKELY(OB_HASH_NOT_EXIST != (gctx_.session_mgr_->get_kill_client_sess_map().
-              get_refactored(session.get_client_sessid(), create_time)))) {
-      if (session.get_client_create_time() == create_time) {
-        ret = OB_ERR_KILL_CLIENT_SESSION;
-        LOG_WARN("client session need be killed", K(session.get_session_state()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()), K(ret),K(create_time));
-      } else {
-        LOG_DEBUG("client session is created later", K(create_time),
-                K(session.get_client_create_time()),
-                K(session.get_sessid()), "proxy_sessid", session.get_proxy_sessid(),
-                K(session.get_client_sessid()));
-      }
-    }
-  } else {
   }
   return ret;
 }

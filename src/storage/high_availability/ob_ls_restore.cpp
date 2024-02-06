@@ -1030,7 +1030,7 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
         LOG_WARN("failed to get restore status", K(ret), K(ls_meta_package));
       } else if (ctx_->arg_.is_leader_
                  && (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
-                    || ObLSRestoreStatus::NONE != restore_status)) {
+                    || ObLSRestoreStatus::RESTORE_NONE != restore_status)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("leader ls restore get unexpected migration status or restore status", K(ret), K(migration_status),
             K(restore_status), K(ls_meta_package));

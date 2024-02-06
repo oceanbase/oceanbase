@@ -139,8 +139,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       cascade_indexes   BOOLEAN DEFAULT TRUE,
       statown           VARCHAR(65535) DEFAULT NULL,
       no_invalidate     BOOLEAN DEFAULT FALSE,
-      force             BOOLEAN DEFAULT FALSE,
-      degree            DECIMAL DEFAULT 1
+      force             BOOLEAN DEFAULT FALSE
     );
     PRAGMA INTERFACE(C, DELETE_TABLE_STATS);
 
@@ -155,8 +154,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       statown          VARCHAR(65535) DEFAULT NULL,
       no_invalidate    BOOLEAN DEFAULT FALSE,
       force            BOOLEAN DEFAULT FALSE,
-      col_stat_type    VARCHAR(65535) DEFAULT 'ALL',
-      degree           DECIMAL DEFAULT 1
+      col_stat_type    VARCHAR(65535) DEFAULT 'ALL'
     );
     PRAGMA INTERFACE(C, DELETE_COLUMN_STATS);
 
@@ -171,8 +169,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       no_invalidate    BOOLEAN        DEFAULT FALSE,
       stattype         VARCHAR(65535) DEFAULT 'ALL',
       force            BOOLEAN        DEFAULT FALSE,
-      tabname          VARCHAR(65535) DEFAULT NULL,
-      degree           DECIMAL DEFAULT 1
+      tabname          VARCHAR(65535) DEFAULT NULL
     );
     PRAGMA INTERFACE(C, DELETE_INDEX_STATS);
 
@@ -182,8 +179,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       statid            VARCHAR(65535) DEFAULT NULL,
       statown           VARCHAR(65535) DEFAULT NULL,
       no_invalidate     BOOLEAN DEFAULT FALSE,
-      force             BOOLEAN DEFAULT FALSE,
-      degree            DECIMAL DEFAULT 1
+      force             BOOLEAN DEFAULT FALSE
     );
     PRAGMA INTERFACE(C, DELETE_SCHEMA_STATS);
 
@@ -434,32 +430,5 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       pname          VARCHAR(65535)
     );
     PRAGMA INTERFACE(C, DELETE_TABLE_PREFS);
-
-    PROCEDURE copy_table_stats (
-      ownname        VARCHAR(65535),
-      tabname        VARCHAR(65535),
-      srcpartname    VARCHAR(65535),
-      dstpartname		 VARCHAR(65535),
-      scale_factor	 DECIMAL DEFAULT 1,
-      flags					 DECIMAL DEFAULT NULL,
-      force          BOOLEAN DEFAULT FALSE
-    );
-    PRAGMA INTERFACE(C, COPY_TABLE_STATS);
-
-    PROCEDURE cancel_gather_stats (
-      taskid          VARCHAR(65535)
-    );
-    PRAGMA INTERFACE(C, CANCEL_GATHER_STATS);
-    PROCEDURE GATHER_SYSTEM_STATS();
-    PRAGMA INTERFACE(C, GATHER_SYSTEM_STATS);
-
-    PROCEDURE DELETE_SYSTEM_STATS();
-    PRAGMA INTERFACE(C, DELETE_SYSTEM_STATS);
-
-    PROCEDURE SET_SYSTEM_STATS (
-      pname          VARCHAR(65535),
-      pvalue         DECIMAL
-    );
-    PRAGMA INTERFACE(C, SET_SYSTEM_STATS);
 
 END dbms_stats;

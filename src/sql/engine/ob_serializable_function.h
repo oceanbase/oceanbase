@@ -15,35 +15,25 @@
 
 #include "lib/utility/serialization.h"
 #include "lib/hash_func/murmur_hash.h"
-#include "sql/engine/ob_bit_vector.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-struct EvalBound;
 
 struct ObSerializeFuncTag {};
 typedef void (*serializable_function)(ObSerializeFuncTag &);
 
 struct ObExpr;
 struct ObEvalCtx;
+struct ObBitVector;
 // Implemented in ob_expr.cpp
 extern int expr_default_eval_batch_func(const ObExpr &expr,
                                         ObEvalCtx &ctx,
                                         const ObBitVector &skip,
                                         const int64_t batch_size);
-// Implemented in ob_expr.cpp
-extern int expr_default_eval_vector_func(const ObExpr &expr,
-                                         ObEvalCtx &ctx,
-                                         const ObBitVector &skip,
-                                         const EvalBound &bound);
-
 struct ObBatchEvalFuncTag {};
 typedef void (*ser_eval_batch_function)(ObBatchEvalFuncTag &);
-
-struct ObEvalVectorFuncTag {};
-typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
 
 // serialize help macro, can be used in OB_SERIALIZE_MEMBER like this:
 // OB_SERIALIZE_MEMBER(Foo, SER_FUNC(func_));
@@ -107,9 +97,6 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_DATUM_NULLSAFE_GEO_CMP,                 \
   OB_SFA_EXPR_UDT_BASIC_PART1,                   \
   OB_SFA_EXPR_UDT_BASIC_PART2,                   \
-  OB_SFA_SQL_EXPR_EVAL_VECTOR,                   \
-  OB_SFA_CMP_EXPR_EVAL_VECTOR,                   \
-  OB_SFA_VECTOR_NULLSAFE_CMP,                    \
   OB_SFA_DECIMAL_INT_EXPR_EVAL,                  \
   OB_SFA_DECIMAL_INT_EXPR_EVAL_BATCH,            \
   OB_SFA_DECIMAL_INT_CAST_EXPR_EVAL,             \
@@ -120,10 +107,6 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_DECIMAL_INT_BASIC_PART1,                \
   OB_SFA_DECIMAL_INT_BASIC_PART2,                \
   OB_SFA_DECIMAL_INT_NULLSAFE_CMP,               \
-  OB_SFA_VECTOR_CMP,                             \
-  OB_SFA_SQL_EXPR_ABS_EVAL_VEC,                  \
-  OB_SFA_VECTOR_CAST,                            \
-  OB_SFA_VECTOR_EVAL_ARG_CAST,                   \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {
@@ -291,11 +274,6 @@ inline int64_t encoded_length(sql::ser_eval_batch_function)
   return sizeof(uint64_t);
 }
 
-inline int64_t encoded_length(sql::ser_eval_vector_function)
-{
-  return sizeof(uint64_t);
-}
-
 inline int encode(char *buf, const int64_t buf_len, int64_t &pos,
                   sql::serializable_function func)
 {
@@ -303,8 +281,8 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos,
   const uint64_t idx = sql::ObFuncSerialization::get_serialize_index(
       reinterpret_cast<void *>(func));
   if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
-    ret = OB_INVALID_ARGUMENT;
-    SQL_LOG(WARN, "function not serializable", K(ret), KP(func), K(idx));
+    ret = OB_INVALID_INDEX;
+    SQL_LOG(WARN, "function not serializable", K(ret), KP(func));
   } else {
     ret = encode_i64(buf, buf_len, pos, idx);
   }
@@ -313,12 +291,6 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos,
 
 inline int encode(char *buf, const int64_t buf_len, int64_t &pos,
                   sql::ser_eval_batch_function func)
-{
-  return encode(buf, buf_len, pos, reinterpret_cast<sql::serializable_function>(func));
-}
-
-inline int encode(char *buf, const int64_t buf_len, int64_t &pos,
-                  sql::ser_eval_vector_function func)
 {
   return encode(buf, buf_len, pos, reinterpret_cast<sql::serializable_function>(func));
 }
@@ -361,29 +333,6 @@ inline int decode(const char *buf, const int64_t data_len, int64_t &pos,
         SQL_LOG(DEBUG, "batch eval function not found", K(idx));
         func = reinterpret_cast<sql::ser_eval_batch_function>(
             sql::expr_default_eval_batch_func);
-      }
-    }
-  }
-  return ret;
-}
-
-inline int decode(const char *buf, const int64_t data_len, int64_t &pos,
-                  sql::ser_eval_vector_function &func)
-{
-  int ret = OB_SUCCESS;
-  uint64_t idx = 0;
-  ret = decode_i64(buf, data_len, pos, reinterpret_cast<int64_t *>(&idx));
-  if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(0 == idx)) {
-      func = NULL;
-    } else {
-      func = reinterpret_cast<sql::ser_eval_vector_function>(
-          sql::ObFuncSerialization::get_serialize_func(idx));
-      if (NULL == func) {
-        // set to default eval vector func
-        SQL_LOG(DEBUG, "eval vector function not found", K(idx));
-        func = reinterpret_cast<sql::ser_eval_vector_function>(
-            sql::expr_default_eval_vector_func);
       }
     }
   }

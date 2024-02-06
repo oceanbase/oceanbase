@@ -49,15 +49,18 @@ class ObReCheckTxNodeForLockForReadOperation : public ObReCheckOp
 public:
   ObReCheckTxNodeForLockForReadOperation(memtable::ObMvccTransNode &tnode,
                                          bool &can_read,
-                                         share::SCN &trans_version)
+                                         share::SCN &trans_version,
+                                         bool &is_determined_state)
     : tnode_(tnode),
     can_read_(can_read),
+    is_determined_state_(is_determined_state),
     trans_version_(trans_version) {}
   virtual bool operator()() override;
   DECLARE_TO_STRING;
 private:
   memtable::ObMvccTransNode &tnode_;
   bool &can_read_;
+  bool &is_determined_state_;
   share::SCN &trans_version_;
 };
 
@@ -72,8 +75,8 @@ public:
 class ObCleanoutOp
 {
 public:
-  virtual int operator()(const ObTxDataCheckData &tx_data) = 0;
-  virtual bool need_cleanout() const { return false; }
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) = 0;
+
   int64_t to_string(char* buf, const int64_t buf_len) const { return 0; }
 };
 
@@ -86,8 +89,7 @@ public:
     : value_(value),
     tnode_(tnode),
     need_row_latch_(need_row_latch) {}
-  virtual int operator()(const ObTxDataCheckData &tx_data) override;
-  virtual bool need_cleanout() const override;
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   DECLARE_TO_STRING;
 private:
   memtable::ObMvccRow &value_;
@@ -99,7 +101,7 @@ class ObCleanoutNothingOperation : public ObCleanoutOp
 {
 public:
   ObCleanoutNothingOperation() {}
-  virtual int operator()(const ObTxDataCheckData &tx_data) override;
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   TO_STRING_KV("CleanoutOperation", "CleanoutNothing");
 };
 
@@ -113,8 +115,7 @@ public:
   CheckSqlSequenceCanReadFunctor(const transaction::ObTxSEQ &sql_sequence, bool &can_read)
     : sql_sequence_(sql_sequence), can_read_(can_read) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
-  INHERIT_TO_STRING_KV("ObITxDataCheckFunctor", ObITxDataCheckFunctor,
-                       K(sql_sequence_), K(can_read_));
+  TO_STRING_KV(K(sql_sequence_), K(can_read_));
 public:
   const transaction::ObTxSEQ &sql_sequence_;
   bool &can_read_;
@@ -139,9 +140,8 @@ public:
       sql_sequence_(sql_sequence),
       lock_state_(lock_state) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
-  INHERIT_TO_STRING_KV("ObITxDataCheckFunctor", ObITxDataCheckFunctor,
-                       K(read_tx_id_), K(data_tx_id_), K(sql_sequence_),
-                       K(lock_state_));
+  TO_STRING_KV(K(read_tx_id_), K(data_tx_id_), K(sql_sequence_),
+               K(lock_state_));
 public:
   const transaction::ObTransID &read_tx_id_;
   const transaction::ObTransID &data_tx_id_;
@@ -157,13 +157,12 @@ class GetTxStateWithSCNFunctor : public ObITxDataCheckFunctor
 {
 public:
   GetTxStateWithSCNFunctor(const share::SCN scn,
-                           int64_t &state,
-                           share::SCN &trans_version)
+                             int64_t &state,
+                             share::SCN &trans_version)
     : scn_(scn), state_(state), trans_version_(trans_version) {}
   virtual ~GetTxStateWithSCNFunctor() {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
-  INHERIT_TO_STRING_KV("ObITxDataCheckFunctor", ObITxDataCheckFunctor, K(scn_),
-                       K(state_), K(trans_version_));
+  TO_STRING_KV(K(scn_), K(state_), K(trans_version_));
 public:
   const share::SCN scn_;
   int64_t &state_;
@@ -182,11 +181,13 @@ public:
   LockForReadFunctor(const transaction::ObLockForReadArg &lock_for_read_arg,
                      bool &can_read,
                      share::SCN &trans_version,
+                     bool &is_determined_state,
                      const share::ObLSID ls_id,
                      ObCleanoutOp &cleanout_op,
                      ObReCheckOp &recheck_op)
     : lock_for_read_arg_(lock_for_read_arg),
       can_read_(can_read),
+      is_determined_state_(is_determined_state),
       trans_version_(trans_version),
       ls_id_(ls_id),
       cleanout_op_(cleanout_op),
@@ -195,8 +196,8 @@ public:
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
   virtual bool recheck() override;
   int check_for_standby(const transaction::ObTransID &tx_id);
-  INHERIT_TO_STRING_KV("ObITxDataCheckFunctor", ObITxDataCheckFunctor, K(lock_for_read_arg_),
-                       K(can_read_), K(trans_version_), K(ls_id_));
+  TO_STRING_KV(K(lock_for_read_arg_), K(can_read_), K(is_determined_state_),
+               K(trans_version_), K(ls_id_));
 private:
   int inner_lock_for_read(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx);
   int check_clog_disk_full_();
@@ -204,6 +205,7 @@ private:
 public:
   const transaction::ObLockForReadArg &lock_for_read_arg_;
   bool &can_read_;
+  bool &is_determined_state_;
   share::SCN &trans_version_;
   share::ObLSID ls_id_;
   // Cleanout the tx node if necessary
@@ -219,13 +221,11 @@ public:
 class CleanoutTxStateFunctor : public ObITxDataCheckFunctor
 {
 public:
-  CleanoutTxStateFunctor(const transaction::ObTxSEQ seq_no,
-                         ObCleanoutOp &op)
-    : seq_no_(seq_no), operation_(op) {}
+  CleanoutTxStateFunctor(ObCleanoutOp &op)
+    : operation_(op) {}
   virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
-  INHERIT_TO_STRING_KV("ObITxDataCheckFunctor", ObITxDataCheckFunctor, K_(operation), K_(seq_no));
+  TO_STRING_KV(K_(operation));
 public:
-  transaction::ObTxSEQ seq_no_;
   ObCleanoutOp &operation_;
 };
 

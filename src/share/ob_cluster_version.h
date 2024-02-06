@@ -171,8 +171,6 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_4_2_0_0 (oceanbase::common::cal_version(4, 2, 0, 0))
 #define CLUSTER_VERSION_4_2_1_0 (oceanbase::common::cal_version(4, 2, 1, 0))
 #define CLUSTER_VERSION_4_2_1_1 (oceanbase::common::cal_version(4, 2, 1, 1))
-#define CLUSTER_VERSION_4_2_1_2 (oceanbase::common::cal_version(4, 2, 1, 2))
-#define CLUSTER_VERSION_4_2_1_3 (oceanbase::common::cal_version(4, 2, 1, 3))
 #define CLUSTER_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
 #define CLUSTER_VERSION_4_3_0_0 (oceanbase::common::cal_version(4, 3, 0, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -193,14 +191,13 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_2_0_0 (oceanbase::common::cal_version(4, 2, 0, 0))
 #define DATA_VERSION_4_2_1_0 (oceanbase::common::cal_version(4, 2, 1, 0))
 #define DATA_VERSION_4_2_1_1 (oceanbase::common::cal_version(4, 2, 1, 1))
-#define DATA_VERSION_4_2_1_2 (oceanbase::common::cal_version(4, 2, 1, 2))
 #define DATA_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
 #define DATA_VERSION_4_3_0_0 (oceanbase::common::cal_version(4, 3, 0, 0))
 
 #define DATA_CURRENT_VERSION DATA_VERSION_4_3_0_0
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // LAST_BARRIER_DATA_VERSION should be the latest barrier data version before DATA_CURRENT_VERSION
-#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_2_1_0
+#define LAST_BARRIER_DATA_VERSION DATA_VERSION_4_1_0_0
 // should check returned ret
 #define GET_MIN_DATA_VERSION(tenant_id, data_version) (oceanbase::common::ObClusterVersion::get_instance().get_tenant_data_version((tenant_id), (data_version)))
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))

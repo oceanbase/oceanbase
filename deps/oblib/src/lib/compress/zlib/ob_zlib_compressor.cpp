@@ -11,6 +11,7 @@
  */
 
 #include "ob_zlib_compressor.h"
+#include "zlib_src/deflate.h"
 #include "lib/ob_errno.h"
 
 namespace oceanbase
@@ -52,12 +53,6 @@ int ObZlibCompressor::fast_level0_compress(unsigned char *dest, unsigned long *d
     MEMCPY(dest, zlib_header, ZLIB_HEADER_LEN);
     dest += ZLIB_HEADER_LEN;
 
-//the macro definitions below is not defined in external header file of zlib (zlib.h),
-//and observer originally compile the source file of zlib and we remove it by link libz.a instead,
-//these macro definitions haven't changed since version 1.2.7
-#define MIN_MATCH  3
-#define MAX_MATCH  258
-#define MIN_LOOKAHEAD (MAX_MATCH+MIN_MATCH+1)
     //2. fill zilb body: deflate header + body
     Byte deflate_header[DEFLATE_HEADER_LEN] = {0x00,};
     uLong max_dist_size = (1<<15) - MIN_LOOKAHEAD;
@@ -105,9 +100,6 @@ int ObZlibCompressor::fast_level0_compress(unsigned char *dest, unsigned long *d
     dest += ZLIB_TAILER_LEN;
     *destLen = (dest - orig_dest);
   }
-#undef MIN_MATCH
-#undef MAX_MATCH
-#undef MIN_LOOKAHEAD
   return err;
 }
 

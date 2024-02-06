@@ -592,7 +592,6 @@ int ObExprLike::cg_expr(ObExprCGCtx &op_cg_ctx,
         !rt_expr.args_[1]->is_batch_result() &&
         !rt_expr.args_[2]->is_batch_result()) {
       rt_expr.eval_batch_func_ = ObExprLike::eval_like_expr_batch_only_text_vectorized;
-      rt_expr.eval_vector_func_ = ObExprLike::eval_like_expr_vector_only_text_vectorized;
     }
   }
   return ret;
@@ -664,7 +663,7 @@ int ObExprLike::like_varchar_inner(const ObExpr &expr, ObEvalCtx &ctx,  ObDatum 
   const ObCollationType coll_type = expr.args_[1]->datum_meta_.cs_type_;
   if (OB_FAIL(check_pattern_valid<true>(pattern, escape, escape_coll, coll_type,
                                         &ctx.exec_ctx_, like_id, do_optimization))) {
-    LOG_WARN("fail to check pattern string", K(pattern), K(escape), K(coll_type));
+      LOG_WARN("fail to check pattern string", K(pattern), K(escape), K(coll_type));
   } else if (text.is_null() || pattern.is_null()) {
     expr_datum.set_null();
   } else {
@@ -943,58 +942,6 @@ int ObExprLike::match_text_batch(BATCH_EVAL_FUNC_ARG_DECL,
   return ret;
 }
 
-template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
-int ObExprLike::match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL, const ObCollationType coll_type,
-                                  const int32_t escape_wc, const ObString &pattern_val,
-                                  const InstrInfo instr_info)
-{
-  int ret = OB_SUCCESS;
-  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  const TextVec *text_vec = static_cast<const TextVec *>(expr.args_[0]->get_vector(ctx));
-  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-  const ObObjType text_type = expr.args_[0]->datum_meta_.type_;
-  // calc match result for each text
-  for (int64_t i = bound.start(); i < bound.end() && OB_SUCC(ret); i++) {
-    if (!(skip.at(i) || eval_flags.at(i))) {
-      if (NullCheck && text_vec->is_null(i)) {
-        res_vec->set_null(i);
-      } else if (!ob_is_text_tc(text_type)) {
-        if (UseInstrMode) {
-          int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
-                  : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                  (text_vec->get_string(i), instr_info);
-          res_vec->set_int(i, res);
-        } else {
-          res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_vec->get_string(i),
-                                                        pattern_val, escape_wc, ret));
-        }
-      } else { // text tc
-        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-        common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-        ObString text_val = text_vec->get_string(i);
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator,
-                                                              text_vec,
-                                                              expr.args_[0]->datum_meta_,
-                                                              expr.args_[0]->obj_meta_.has_lob_header(),
-                                                              text_val,
-                                                              i))) {
-          LOG_WARN("failed to read text", K(ret), K(text_val));
-        } else if (UseInstrMode) {
-          int64_t res = ALL_PERCENT_SIGN == InstrMode ? 1
-                : match_with_instr_mode<PERCENT_SIGN_START(InstrMode), PERCENT_SIGN_END(InstrMode)>
-                (text_val, instr_info);
-          res_vec->set_int(i, res);
-        } else {
-          res_vec->set_int(i, ObNonInstrModeMatcher()(coll_type, text_val,
-                                                        pattern_val, escape_wc, ret));
-        }
-      }
-      eval_flags.set(i);
-    }
-  }
-  return ret;
-}
-
 int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
                                            const ObBitVector &skip, const int64_t size,
                                            ObExpr &text, ObDatum *pattern_datum, ObDatum *escape_datum)
@@ -1108,120 +1055,6 @@ int ObExprLike::like_text_vectorized_inner(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
-template <typename TextVec, typename ResVec>
-int ObExprLike::like_text_vectorized_inner_vec2(const ObExpr &expr, ObEvalCtx &ctx,
-                                           const ObBitVector &skip, const EvalBound &bound,
-                                           ObExpr &text, ObDatum *pattern_inrow)
-{
-  int ret = OB_SUCCESS;
-  const bool do_optimization = true;
-  uint64_t like_id = static_cast<uint64_t>(expr.expr_ctx_id_);
-  const ObCollationType coll_type = expr.args_[0]->datum_meta_.cs_type_;
-  const ObCollationType escape_coll = expr.args_[2]->datum_meta_.cs_type_;
-  ConstUniformFormat *pattern_vector = static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
-  ConstUniformFormat *escape_vector = static_cast<ConstUniformFormat *>(expr.args_[2]->get_vector(ctx));
-  if (OB_FAIL(check_pattern_valid<true>(*pattern_inrow, escape_vector->get_datum(0),
-                                        escape_coll, coll_type,
-                                        &ctx.exec_ctx_, like_id, do_optimization))) {
-    LOG_WARN("check pattern valid failed", K(ret));
-  } else if (OB_UNLIKELY(pattern_inrow->is_null())) {
-    ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-    for (int64_t i = bound.start(); i < bound.end(); i++) {
-      if (!skip.at(i)) {
-        res_vec->set_null(i);
-        eval_flags.set(i);
-      }
-    }
-    expr.get_eval_info(ctx).notnull_ = false;
-  } else {
-    ObString pattern_val = pattern_inrow->get_string();
-    ObString escape_val;
-    // check pattern is not null already, so result is null if and only if text is null.
-    bool null_check = !expr.args_[0]->get_eval_info(ctx).notnull_;
-    if (escape_vector->is_null(0) || escape_vector->get_string(0).empty()) {
-      escape_val.assign_ptr("\\", 1);
-    } else {
-      escape_val = escape_vector->get_string(0);
-    }
-    ObExprLikeContext *like_ctx = NULL;
-    if (OB_ISNULL(like_ctx = static_cast<ObExprLikeContext *>
-                    (ctx.exec_ctx_.get_expr_op_ctx(like_id)))) {
-      ret = OB_ERR_UNEXPECTED;
-      //like context should be created while checking validation.
-      LOG_WARN("like context is null", K(ret), K(like_id));
-    } else if (OB_UNLIKELY((!is_oracle_mode() && !checked_already<true>(*like_ctx, false, pattern_val,
-                                                                        false, escape_val))
-                        || (is_oracle_mode() && !like_ctx->same_as_last))) {
-      if (OB_FAIL(set_instr_info(&ctx.exec_ctx_.get_allocator(), coll_type, pattern_val,
-          escape_val, escape_coll, *like_ctx))) {
-        LOG_WARN("failed to set instr info", K(ret), K(pattern_val));
-      } else if (!is_oracle_mode()) {
-        record_last_check<true>(*like_ctx, pattern_val, escape_val,
-                          &ctx.exec_ctx_.get_allocator());
-      }
-    }
-    INSTR_MODE instr_mode = like_ctx->get_instr_mode();
-    const InstrInfo instr_info = like_ctx->instr_info_;
-    int32_t escape_wc = 0;
-    LOG_DEBUG("set instr info inner end", K(coll_type), K(pattern_val), K(instr_mode),
-              K(like_ctx->same_as_last));
-    if (OB_FAIL(ret)) {
-    } else if (INVALID_INSTR_MODE == instr_mode
-               && OB_FAIL(calc_escape_wc(escape_coll, escape_val, escape_wc))) {
-      LOG_WARN("calc escape wc failed", K(ret));
-      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ESCAPE");
-    } else {
-      #define MATCH_TEXT_VECTOR_ARG_LIST expr, ctx, skip, bound, coll_type, escape_wc, pattern_val, \
-                instr_info
-      // it seems to take a lot of work to make eval_info.notnull_ correct and it may be removed.
-      // so null_check variable is not used now, match_text_batch is called always with null check.
-      #define CALL_MATCH_TEXT_VECTOR(use_instr_mode, instr_mode) \
-          ret = match_text_vector<TextVec, ResVec, true, use_instr_mode, instr_mode>(MATCH_TEXT_VECTOR_ARG_LIST);
-
-      switch (instr_mode) {
-        case INVALID_INSTR_MODE: {
-          CALL_MATCH_TEXT_VECTOR(false, INVALID_INSTR_MODE)
-          break;
-        }
-        case START_WITH_PERCENT_SIGN: {
-          CALL_MATCH_TEXT_VECTOR(true, START_WITH_PERCENT_SIGN)
-          break;
-        }
-        case START_END_WITH_PERCENT_SIGN: {
-          CALL_MATCH_TEXT_VECTOR(true, START_END_WITH_PERCENT_SIGN)
-          break;
-        }
-        case MIDDLE_PERCENT_SIGN: {
-          CALL_MATCH_TEXT_VECTOR(true, MIDDLE_PERCENT_SIGN);
-          break;
-        }
-        case END_WITH_PERCENT_SIGN: {
-          CALL_MATCH_TEXT_VECTOR(true, END_WITH_PERCENT_SIGN)
-          break;
-        }
-        case ALL_PERCENT_SIGN: {
-          CALL_MATCH_TEXT_VECTOR(true, ALL_PERCENT_SIGN)
-          break;
-        }
-        default : {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("unexpected instr mode", K(ret), K(instr_mode), K(pattern_val));
-          break;
-        }
-      }
-      if (OB_FAIL(ret)) {
-        LOG_WARN("match text batch failed", K(ret), K(instr_mode), K(null_check));
-      } else {
-        expr.get_eval_info(ctx).notnull_ = !null_check;
-      }
-      #undef MATCH_TEXT_VECTOR_ARG_LIST
-      #undef CALL_MATCH_TEXT_VECTOR
-    }
-  }
-  return ret;
-}
-
 // only text is vectorized, check pattern validation and mode first, then try to match each text.
 int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DECL)
 {
@@ -1258,83 +1091,6 @@ int ObExprLike::eval_like_expr_batch_only_text_vectorized(BATCH_EVAL_FUNC_ARG_DE
     LOG_WARN("failed to eval_like_expr_batch_only_text_vectorized", K(ret));
   }
 
-  return ret;
-}
-
-template <typename TextVec, typename ResVec>
-int ObExprLike::vector_like(VECTOR_EVAL_FUNC_ARG_DECL)
-{
-  int ret = OB_SUCCESS;
-  ObExpr &text = *expr.args_[0];
-  ObExpr &pattern = *expr.args_[1];
-  ObExpr &escape = *expr.args_[2];
-  const ConstUniformFormat *pattern_vector =
-    static_cast<ConstUniformFormat *>(expr.args_[1]->get_vector(ctx));
-  ObDatum pattern_inrow = pattern_vector->get_datum(0);
-  if ((!ob_is_text_tc(text.datum_meta_.type_) && !ob_is_text_tc(pattern.datum_meta_.type_))) {
-    ret =
-      like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text, &pattern_inrow);
-  } else  {
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-    ObString pattern_val = pattern_vector->get_string(0);
-    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(
-          temp_allocator, pattern_vector->get_datum(0), expr.args_[1]->datum_meta_,
-          expr.args_[1]->obj_meta_.has_lob_header(), pattern_val))) {
-      LOG_WARN("failed to read pattern", K(ret), K(pattern_val));
-    } else {
-      if (!pattern_inrow.is_null() && !pattern_inrow.is_nop()) {
-        pattern_inrow.set_string(pattern_val);
-      }
-      ret = like_text_vectorized_inner_vec2<TextVec, ResVec>(expr, ctx, skip, bound, text,
-                                                             &pattern_inrow);
-    }
-  }
-  return ret;
-}
-
-// only text is vectorized, check pattern validation and mode first, then try to match each text.
-int ObExprLike::eval_like_expr_vector_only_text_vectorized(VECTOR_EVAL_FUNC_ARG_DECL)
-{
-  int ret = OB_SUCCESS;
-  ObExpr &pattern = *expr.args_[1];
-  ObExpr &escape = *expr.args_[2];
-  if (OB_FAIL(pattern.eval_vector(ctx, skip, bound))) {
-    LOG_WARN("eval pattern failed", K(ret));
-  } else if (OB_FAIL(escape.eval_vector(ctx, skip, bound))) {
-    LOG_WARN("eval escape failed", K(ret));
-  // the third arg escape must be varchar
-  } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
-    LOG_WARN("eval text batch failed", K(ret));
-  }  else {
-    VectorFormat text_format = expr.args_[0]->get_format(ctx);
-    VectorFormat res_format = expr.get_format(ctx);
-    if (VEC_DISCRETE == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextDiscVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextUniVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == text_format && VEC_DISCRETE == res_format) {
-      ret = vector_like<TextContVec, TextDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_DISCRETE == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextDiscVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_UNIFORM == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextUniVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else if (VEC_CONTINUOUS == text_format && VEC_UNIFORM == res_format) {
-      ret = vector_like<TextContVec, TextUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
-    } else {
-      ret = vector_like<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
-    }
-  }
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to eval_like_expr_batch_only_text_vectorized", K(ret));
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprLike, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

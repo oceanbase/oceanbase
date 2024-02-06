@@ -26,7 +26,7 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObSSTableWrapper &wrapper) override;
+      ObCGTableWrapper &wrapper) override;
   virtual ObCGIterType get_type() override
   { return OB_CG_GROUP_BY_SCANNER; }
   virtual int init_group_by_info() override;

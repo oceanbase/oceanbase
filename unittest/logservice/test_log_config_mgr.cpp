@@ -131,6 +131,8 @@ TEST_F(TestLogConfigMgr, test_set_initial_member_list)
     EXPECT_EQ(OB_NOT_SUPPORTED, cm.set_initial_member_list(init_member_list, ObMember(addr1, 0), 2, learner_list, 1, config_version));
     // arb_member overlaps with member_list
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr2, 0), 2, learner_list, 1, config_version));
+    // invalid replica_num
+    EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr3, 0), 3, learner_list, 1, config_version));
     // arb_member overlaps with learners
     learner_list.add_learner(ObMember(addr4, 0));
     EXPECT_EQ(OB_INVALID_ARGUMENT, cm.set_initial_member_list(init_member_list, ObMember(addr4, 0), 2, learner_list, 1, config_version));
@@ -1371,20 +1373,19 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     EXPECT_GT(cm.last_submit_config_log_time_us_, 0);
     // ack defensive code
-    bool unused_bool = false;
-    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version, unused_bool));
-    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion(), unused_bool));
+    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 2, expect_config_version));
+    EXPECT_EQ(OB_STATE_NOT_MATCH, cm.ack_config_log(addr2, 1, LogConfigVersion()));
     // receive ack from learner
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr4, 1, expect_config_version, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr4, 1, expect_config_version));
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
     // receive ack from member
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, 1, expect_config_version, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, 1, expect_config_version));
     EXPECT_EQ(1, cm.ms_ack_list_.get_count());
     EXPECT_EQ(2, cm.resend_log_list_.get_member_number());
     EXPECT_EQ(OB_EAGAIN, cm.confirm_start_working_log(INIT_PROPOSAL_ID, INIT_ELE_EPOCH, sw_config_version));
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr2, 1, expect_config_version, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr2, 1, expect_config_version));
     EXPECT_EQ(2, cm.ms_ack_list_.get_count());
     EXPECT_EQ(1, cm.resend_log_list_.get_member_number());
     // check if config log is committed
@@ -1397,7 +1398,7 @@ TEST_F(TestLogConfigMgr, test_submit_start_working_log)
     cm.last_submit_config_log_time_us_ = 0;
     EXPECT_EQ(OB_SUCCESS, cm.try_resend_config_log_(1));
     // receive ack from last member
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, 1, expect_config_version));
     EXPECT_EQ(0, cm.ms_ack_list_.get_count());
     EXPECT_EQ(0, cm.resend_log_list_.get_member_number());
   }
@@ -1619,14 +1620,13 @@ TEST_F(TestLogConfigMgr, test_degrade_upgrade_scenario)
     // member_list will not take effect after append_config_meta_
     EXPECT_FALSE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // self ack config log
-    bool unused_bool = false;
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(1, cm.state_);
     EXPECT_FALSE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
     // degrade success, switch to INIT state
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, de_config_version));
     EXPECT_EQ(0, cm.state_);
@@ -1640,13 +1640,13 @@ TEST_F(TestLogConfigMgr, test_degrade_upgrade_scenario)
     // member_list will not take effect after append_config_meta_
     EXPECT_TRUE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     // self ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr1, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
     // reach majority - 1
     EXPECT_EQ(OB_EAGAIN, cm.change_config(up_args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_TRUE(cm.log_ms_meta_.curr_.config_.log_sync_memberlist_.contains(addr2));
     EXPECT_EQ(1, cm.state_);
     // ack config log
-    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_, unused_bool));
+    EXPECT_EQ(OB_SUCCESS, cm.ack_config_log(addr3, cm.log_ms_meta_.proposal_id_, cm.log_ms_meta_.curr_.config_.config_version_));
     // degrade success, switch to INIT state
     EXPECT_EQ(OB_SUCCESS, cm.change_config(args, INIT_PROPOSAL_ID, INIT_ELE_EPOCH, up_config_version));
     EXPECT_EQ(0, cm.state_);

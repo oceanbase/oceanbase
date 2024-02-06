@@ -29,7 +29,6 @@ static const char* TENANT_ROLE_ARRAY[] =
   "PRIMARY",
   "STANDBY",
   "RESTORE",
-  "CLONE",
 };
 
 OB_SERIALIZE_MEMBER(ObTenantRole, value_);
@@ -74,7 +73,6 @@ GEN_IS_TENANT_ROLE(ObTenantRole::Role::INVALID_TENANT, invalid)
 GEN_IS_TENANT_ROLE(ObTenantRole::Role::PRIMARY_TENANT, primary)
 GEN_IS_TENANT_ROLE(ObTenantRole::Role::STANDBY_TENANT, standby)
 GEN_IS_TENANT_ROLE(ObTenantRole::Role::RESTORE_TENANT, restore)
-GEN_IS_TENANT_ROLE(ObTenantRole::Role::CLONE_TENANT, clone)
 #undef GEN_IS_TENANT_ROLE
 
 

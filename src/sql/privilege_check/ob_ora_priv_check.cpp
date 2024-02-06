@@ -171,11 +171,17 @@ int ObOraSysChecker::check_plist_and(
     const uint64_t option)
 {
   int ret = OB_SUCCESS;
-  OZX1 (check_plist_and_in_single(guard, tenant_id, user_id, plist, option), OB_ERR_NO_PRIVILEGE);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    OZX1 (check_plist_and_in_roles(guard, tenant_id, user_id, plist, role_id_array, option),
-        OB_ERR_NO_PRIVILEGE, tenant_id, user_id, plist);
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX1 (check_plist_and_in_single(guard, tenant_id, user_id, plist, option), OB_ERR_NO_PRIVILEGE);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      OZX1 (check_plist_and_in_roles(guard, tenant_id, user_id, plist, role_id_array, option),
+          OB_ERR_NO_PRIVILEGE, tenant_id, user_id, plist);
+    }
   }
   return ret;  
 }
@@ -192,11 +198,17 @@ int ObOraSysChecker::check_plist_or(
     const uint64_t option)
 {
   int ret = OB_SUCCESS;
-  OZX1 (check_plist_or_in_single(guard, tenant_id, user_id, plist, option), OB_ERR_NO_PRIVILEGE);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, plist, role_id_array, option),
-        OB_ERR_NO_PRIVILEGE, tenant_id, user_id, plist);
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX1 (check_plist_or_in_single(guard, tenant_id, user_id, plist, option), OB_ERR_NO_PRIVILEGE);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      OZX1 (check_plist_or_in_roles(guard, tenant_id, user_id, plist, role_id_array, option),
+          OB_ERR_NO_PRIVILEGE, tenant_id, user_id, plist);
+    }
   }
   return ret;  
 }
@@ -212,11 +224,17 @@ int ObOraSysChecker::check_p1(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  OZX1 (check_p1_in_single(guard, tenant_id, user_id, p1), OB_ERR_NO_PRIVILEGE);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    OZX1 (check_p1_in_roles(guard, tenant_id, user_id, p1, role_id_array),
-        OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX1 (check_p1_in_single(guard, tenant_id, user_id, p1), OB_ERR_NO_PRIVILEGE);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      OZX1 (check_p1_in_roles(guard, tenant_id, user_id, p1, role_id_array),
+          OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
+    }
   }
   return ret;  
 }
@@ -232,18 +250,24 @@ int ObOraSysChecker::check_plist_or_in_roles(
 {
   int ret = OB_SUCCESS;
   bool exists;
-  ObPackedPrivArray sys_packed_array;
-  OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
-                                  true, role_id_array),
-    tenant_id, user_id);
+  lib::Worker::CompatMode compat_mode;
 
-  ObPackedPrivArray packed_privs;
-  OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-  OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
-                                                      sys_packed_array,
-                                                      exists));
-  if (OB_SUCC(ret) && !exists) {
-    ret = OB_ERR_NO_PRIVILEGE;
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    ObPackedPrivArray sys_packed_array;
+    OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
+                                   true, role_id_array),
+      tenant_id, user_id);
+
+    ObPackedPrivArray packed_privs;
+    OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
+    OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
+                                                       sys_packed_array,
+                                                       exists));
+    if (OB_SUCC(ret) && !exists) {
+      ret = OB_ERR_NO_PRIVILEGE;
+    }
   }
   return ret;  
 }
@@ -259,18 +283,24 @@ int ObOraSysChecker::check_plist_and_in_roles(
 {
   int ret = OB_SUCCESS;
   bool exists;
-  ObPackedPrivArray sys_packed_array;
-  OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
-                                  true, role_id_array),
-    tenant_id, user_id);
+  lib::Worker::CompatMode compat_mode;
 
-  ObPackedPrivArray packed_privs;
-  OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-  OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
-                                                      sys_packed_array,
-                                                      exists));
-  if (OB_SUCC(ret) && !exists) {
-    ret = OB_ERR_NO_PRIVILEGE;
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    ObPackedPrivArray sys_packed_array;
+    OZ (get_user_sys_priv_in_roles(guard, tenant_id, user_id, sys_packed_array,
+                                   true, role_id_array),
+      tenant_id, user_id);
+
+    ObPackedPrivArray packed_privs;
+    OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
+    OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
+                                                       sys_packed_array,
+                                                       exists));
+    if (OB_SUCC(ret) && !exists) {
+      ret = OB_ERR_NO_PRIVILEGE;
+    }
   }
   return ret;  
 }
@@ -285,19 +315,25 @@ int ObOraSysChecker::check_plist_and_in_single(
 {
   int ret = OB_SUCCESS;
   bool exists;
-  ObSysPriv *sys_priv = NULL;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
-  if (OB_SUCC(ret)) {
-    if (sys_priv == NULL) {
-      ret = OB_ERR_NO_PRIVILEGE;
-    } else {
-      ObPackedPrivArray packed_privs;
-      OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-      OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
-                                                          sys_priv->get_priv_array(),
-                                                          exists));
-      if (OB_SUCC(ret) && !exists) {
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    ObSysPriv *sys_priv = NULL;
+    OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
+    if (OB_SUCC(ret)) {
+      if (sys_priv == NULL) {
         ret = OB_ERR_NO_PRIVILEGE;
+      } else {
+        ObPackedPrivArray packed_privs;
+        OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
+        OZ (ObOraPrivCheck::packed_sys_priv_list_and_exists(packed_privs,
+                                                           sys_priv->get_priv_array(),
+                                                           exists));
+        if (OB_SUCC(ret) && !exists) {
+          ret = OB_ERR_NO_PRIVILEGE;
+        }
       }
     }
   }
@@ -314,19 +350,25 @@ int ObOraSysChecker::check_plist_or_in_single(
 {
   int ret = OB_SUCCESS;
   bool exists;
-  ObSysPriv *sys_priv = NULL;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
-  if (OB_SUCC(ret)) {
-    if (sys_priv == NULL) {
-      ret = OB_ERR_NO_PRIVILEGE;
-    } else {
-      ObPackedPrivArray packed_privs;
-      OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
-      OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
-                                                          sys_priv->get_priv_array(),
-                                                          exists));
-      if (OB_SUCC(ret) && !exists) {
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    ObSysPriv *sys_priv = NULL;
+    OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
+    if (OB_SUCC(ret)) {
+      if (sys_priv == NULL) {
         ret = OB_ERR_NO_PRIVILEGE;
+      } else {
+        ObPackedPrivArray packed_privs;
+        OZ (ObPrivPacker::pack_raw_priv_list(option, plist, packed_privs));
+        OZ (ObOraPrivCheck::packed_sys_priv_list_or_exists(packed_privs,
+                                                           sys_priv->get_priv_array(),
+                                                           exists));
+        if (OB_SUCC(ret) && !exists) {
+          ret = OB_ERR_NO_PRIVILEGE;
+        }
       }
     }
   }
@@ -448,20 +490,26 @@ int ObOraSysChecker::check_obj_plist_or(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode;
   int ret1;
-  OZX2 (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type,
-                                      obj_id, col_id, plist),
-        OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY,
-        tenant_id, user_id, obj_type, obj_id, col_id, plist);
-  if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
-    ret1 = ret;
-    ret = OB_SUCCESS;
-    OZ (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type,
-        obj_id, col_id, plist, role_id_array),
-        tenant_id, user_id, obj_type, obj_id, col_id, plist);
-    /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
-    if (ret == OB_ERR_EMPTY_QUERY && ret1 != OB_ERR_EMPTY_QUERY) {
-      ret = OB_ERR_NO_PRIVILEGE;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX2 (check_obj_plist_or_in_single(guard, tenant_id, user_id, obj_type,
+                                       obj_id, col_id, plist),
+         OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY,
+         tenant_id, user_id, obj_type, obj_id, col_id, plist);
+    if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
+      ret1 = ret;
+      ret = OB_SUCCESS;
+      OZ (check_obj_plist_or_in_roles(guard, tenant_id, user_id, obj_type,
+          obj_id, col_id, plist, role_id_array),
+          tenant_id, user_id, obj_type, obj_id, col_id, plist);
+      /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
+      if (ret == OB_ERR_EMPTY_QUERY && ret1 != OB_ERR_EMPTY_QUERY) {
+        ret = OB_ERR_NO_PRIVILEGE;
+      }
     }
   }
   return ret;
@@ -482,19 +530,29 @@ int ObOraSysChecker::check_obj_p1(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
+  // unused
+  // bool exists;
+  lib::Worker::CompatMode compat_mode;
+  // unused
+  // ObObjPriv *obj_priv = NULL;
   int ret1;
-  OZX2 (check_obj_p1_in_single(guard, tenant_id, user_id, obj_type, obj_id, col_id, p1, option),
-        OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY,
-        tenant_id, user_id, obj_type, obj_id, col_id, p1, option);
-  if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
-    ret1 = ret;
-    ret = OB_SUCCESS;
-    OZX1 (check_obj_p1_in_roles(guard, tenant_id, user_id, obj_type,
-        obj_id, col_id, p1, option, role_id_array), OB_ERR_EMPTY_QUERY,
-        tenant_id, user_id, obj_type, obj_id, col_id, p1, option);
-    /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
-    if (ret == OB_ERR_EMPTY_QUERY && ret1 != OB_ERR_EMPTY_QUERY) {
-      ret = OB_ERR_NO_PRIVILEGE;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX2 (check_obj_p1_in_single(guard, tenant_id, user_id, obj_type, obj_id, col_id, p1, option),
+         OB_ERR_NO_PRIVILEGE, OB_ERR_EMPTY_QUERY,
+         tenant_id, user_id, obj_type, obj_id, col_id, p1, option);
+    if (ret == OB_ERR_NO_PRIVILEGE || ret == OB_ERR_EMPTY_QUERY) {
+      ret1 = ret;
+      ret = OB_SUCCESS;
+      OZX1 (check_obj_p1_in_roles(guard, tenant_id, user_id, obj_type,
+          obj_id, col_id, p1, option, role_id_array), OB_ERR_EMPTY_QUERY,
+          tenant_id, user_id, obj_type, obj_id, col_id, p1, option);
+      /* 无任何间接权限，但有直接权限，需要更改错误码为 no privilege */
+      if (ret == OB_ERR_EMPTY_QUERY && ret1 != OB_ERR_EMPTY_QUERY) {
+        ret = OB_ERR_NO_PRIVILEGE;
+      }
     }
   }
   return ret;
@@ -510,13 +568,19 @@ int ObOraSysChecker::check_p1_or_plist_in_single(
 {
   int ret = OB_SUCCESS;
   ObSysPriv *sys_priv = NULL;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
-  if (OB_SUCC(ret)) {
-    if (sys_priv == NULL) {
-      ret = OB_ERR_NO_PRIVILEGE;
-    } else {
-      OZX1 (check_p1_or_plist_using_privs(sys_priv->get_priv_array(), p1, option, plist),
-                                          OB_ERR_NO_PRIVILEGE);
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
+    if (OB_SUCC(ret)) {
+      if (sys_priv == NULL) {
+        ret = OB_ERR_NO_PRIVILEGE;
+      } else {
+        OZX1 (check_p1_or_plist_using_privs(sys_priv->get_priv_array(), p1, option, plist),
+                                           OB_ERR_NO_PRIVILEGE);
+      }
     }
   }
   return ret;
@@ -563,17 +627,25 @@ int ObOraSysChecker::check_p1_with_plist_info(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  OZX1 (check_p1_with_plist_info_in_single(
-        guard, tenant_id, user_id, p1, option, plist, has_other_priv),
-                                    OB_ERR_NO_PRIVILEGE);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    if (has_other_priv) {
-      OZX1 (check_p1_in_roles(guard, tenant_id, user_id, p1, role_id_array), OB_ERR_NO_PRIVILEGE);
-    } else {
-      OZX1 (check_p1_with_plist_info_in_roles(
-            guard, tenant_id, user_id, p1, option, plist,
-            has_other_priv, role_id_array), OB_ERR_NO_PRIVILEGE);
+  // unused
+  // ObSysPriv *sys_priv = NULL;
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX1 (check_p1_with_plist_info_in_single(
+          guard, tenant_id, user_id, p1, option, plist, has_other_priv),
+                                     OB_ERR_NO_PRIVILEGE);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      if (has_other_priv) {
+        OZX1 (check_p1_in_roles(guard, tenant_id, user_id, p1, role_id_array), OB_ERR_NO_PRIVILEGE);
+      } else {
+        OZX1 (check_p1_with_plist_info_in_roles(
+              guard, tenant_id, user_id, p1, option, plist,
+              has_other_priv, role_id_array), OB_ERR_NO_PRIVILEGE);
+      }
     }
   }
   return ret;
@@ -644,15 +716,20 @@ int ObOraSysChecker::check_p1_with_plist_info_in_single(
 {
   int ret = OB_SUCCESS;
   ObSysPriv *sys_priv = NULL;
+  lib::Worker::CompatMode compat_mode;
   has_other_priv = false;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
-  if (OB_SUCC(ret)) {
-    if (sys_priv == NULL) {
-      ret = OB_ERR_NO_PRIVILEGE;
-    } else {
-      OZX1 (check_p1_with_plist_info_using_privs(
-            sys_priv->get_priv_array(), p1, option, plist, has_other_priv),
-                                          OB_ERR_NO_PRIVILEGE);
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZ (guard.get_sys_priv_with_grantee_id(tenant_id, user_id, sys_priv));
+    if (OB_SUCC(ret)) {
+      if (sys_priv == NULL) {
+        ret = OB_ERR_NO_PRIVILEGE;
+      } else {
+        OZX1 (check_p1_with_plist_info_using_privs(
+              sys_priv->get_priv_array(), p1, option, plist, has_other_priv),
+                                           OB_ERR_NO_PRIVILEGE);
+      }
     }
   }
   return ret;
@@ -672,12 +749,20 @@ int ObOraSysChecker::check_p1_or_plist(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  OZX1 (check_p1_or_plist_in_single(guard, tenant_id, user_id, p1, option, plist),
-                                    OB_ERR_NO_PRIVILEGE);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    OZ (check_p1_or_plist_in_roles(guard, tenant_id, user_id, p1,
-                                      option, plist, role_id_array));
+  // unused
+  // ObSysPriv *sys_priv = NULL;
+  lib::Worker::CompatMode compat_mode;
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZX1 (check_p1_or_plist_in_single(guard, tenant_id, user_id, p1, option, plist),
+                                     OB_ERR_NO_PRIVILEGE);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      OZ (check_p1_or_plist_in_roles(guard, tenant_id, user_id, p1,
+                                        option, plist, role_id_array));
+    }
   }
   return ret;
 }   
@@ -735,19 +820,25 @@ int ObOraSysChecker::check_p1_or_cond_p2_in_single(
 {
   int ret = OB_SUCCESS;
   ObSysPriv *sys_priv = NULL;
+  lib::Worker::CompatMode compat_mode;
   bool exists = false;
-  OZ (guard.get_sys_priv_with_grantee_id(tenant_id, ur_id, sys_priv));
-  if (OB_SUCC(ret)) {
-    if (sys_priv == NULL) {
-      ret = OB_ERR_NO_PRIVILEGE;
-    } else {
-      OZ (ObOraPrivCheck::p1_or_cond_p2_exists(p1,
-                                                is_owner,
-                                                p2,
-                                                sys_priv->get_priv_array(),
-                                                exists));
-      if (OB_SUCC(ret) && !exists) {
+
+  OZ (guard.get_tenant_compat_mode(tenant_id, compat_mode));
+  /* 仅在oracle模式下执行 */
+  if (OB_SUCC(ret) && compat_mode == lib::Worker::CompatMode::ORACLE) {
+    OZ (guard.get_sys_priv_with_grantee_id(tenant_id, ur_id, sys_priv));
+    if (OB_SUCC(ret)) {
+      if (sys_priv == NULL) {
         ret = OB_ERR_NO_PRIVILEGE;
+      } else {
+        OZ (ObOraPrivCheck::p1_or_cond_p2_exists(p1,
+                                                 is_owner,
+                                                 p2,
+                                                 sys_priv->get_priv_array(),
+                                                 exists));
+        if (OB_SUCC(ret) && !exists) {
+          ret = OB_ERR_NO_PRIVILEGE;
+        }
       }
     }
   }
@@ -797,25 +888,31 @@ int ObOraSysChecker::check_p1_or_owner_and_p2(
 {
   int ret = OB_SUCCESS;
   bool is_owner;
-  if (database_name.empty()) {
-    is_owner = true;
-  } else {
-    const ObUserInfo *user_info = NULL;
-    OZ (guard.get_user_info(tenant_id, user_id, user_info));
-    if (OB_SUCC(ret) && NULL == user_info) {
-      ret = OB_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
-    }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
-                                                  database_name));
-  }
-  OZX1 (check_p1_or_cond_p2_in_single(guard, tenant_id, user_id, p1, is_owner, p2),
-      OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1, is_owner, p2);
-  if (ret == OB_ERR_NO_PRIVILEGE) {
-    ret = OB_SUCCESS;
-    OZ (check_p1_or_cond_p2_in_roles(guard, tenant_id, user_id, p1,
-                                        is_owner, p2, role_id_array));
+  lib::Worker::CompatMode compat_mode;
 
+  if (OB_FAIL(guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("get_tenant_compat_mode failed", K(ret));
+  } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
+    if (database_name.empty()) {
+      is_owner = true;
+    } else {
+      const ObUserInfo *user_info = NULL;
+      OZ (guard.get_user_info(tenant_id, user_id, user_info));
+      if (OB_SUCC(ret) && NULL == user_info) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+      }
+      OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+                                                   database_name));
+    }
+    OZX1 (check_p1_or_cond_p2_in_single(guard, tenant_id, user_id, p1, is_owner, p2),
+        OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1, is_owner, p2);
+    if (ret == OB_ERR_NO_PRIVILEGE) {
+      ret = OB_SUCCESS;
+      OZ (check_p1_or_cond_p2_in_roles(guard, tenant_id, user_id, p1,
+                                          is_owner, p2, role_id_array));
+
+    }
   }
   return ret;
 }
@@ -841,36 +938,42 @@ int ObOraSysChecker::check_owner_or_p1_or_objp2(
   int ret = OB_SUCCESS;
   bool is_owner = false;
   uint64_t obj_owner_id = OB_INVALID_ID;
-  if (database_name.empty()) {
-    is_owner = true;
-    obj_owner_id = user_id;
-  } else {
-    const ObUserInfo *user_info = NULL;
-    OZ (guard.get_user_info(tenant_id, user_id, user_info));
-    if (OB_SUCC(ret) && NULL == user_info) {
-      ret = OB_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+  lib::Worker::CompatMode compat_mode;
+
+  if (OB_FAIL(guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("get_tenant_compat_mode failed", K(ret));
+  } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
+    if (database_name.empty()) {
+      is_owner = true;
+      obj_owner_id = user_id;
+    } else {
+      const ObUserInfo *user_info = NULL;
+      OZ (guard.get_user_info(tenant_id, user_id, user_info));
+      if (OB_SUCC(ret) && NULL == user_info) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+      }
+      OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+                                                   database_name));
+      OZ (guard.get_user_id(tenant_id, database_name,
+                            ObString(OB_DEFAULT_HOST_NAME), obj_owner_id));
+      if (OB_SUCC(ret) && obj_owner_id == OB_INVALID_ID) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+      }
     }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
-                                                  database_name));
-    OZ (guard.get_user_id(tenant_id, database_name,
-                          ObString(OB_DEFAULT_HOST_NAME), obj_owner_id));
-    if (OB_SUCC(ret) && obj_owner_id == OB_INVALID_ID) {
-      ret = OB_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
-    }
-  }
-  if (!is_owner) {
-    OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array),
-                  OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
-    if (ret == OB_ERR_NO_PRIVILEGE) {
-      ret = OB_SUCCESS;
-      OZ (check_ora_obj_priv(guard, tenant_id, user_id, database_name, obj_id,
-                              OBJ_LEVEL_FOR_TAB_PRIV, obj_type, obj_p2, CHECK_FLAG_NORMAL,
-                              obj_owner_id, role_id_array));
-      /*OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
-          obj_id, OBJ_LEVEL_FOR_TAB_PRIV, obj_p2, NO_OPTION, role_id_array),
-          tenant_id, user_id, obj_type, obj_id, OBJ_LEVEL_FOR_TAB_PRIV, obj_p2);*/
+    if (!is_owner) {
+      OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array),
+                    OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
+      if (ret == OB_ERR_NO_PRIVILEGE) {
+        ret = OB_SUCCESS;
+        OZ (check_ora_obj_priv(guard, tenant_id, user_id, database_name, obj_id,
+                               OBJ_LEVEL_FOR_TAB_PRIV, obj_type, obj_p2, CHECK_FLAG_NORMAL,
+                               obj_owner_id, role_id_array));
+        /*OZ (check_obj_p1(guard, tenant_id, user_id, obj_type,
+            obj_id, OBJ_LEVEL_FOR_TAB_PRIV, obj_p2, NO_OPTION, role_id_array),
+            tenant_id, user_id, obj_type, obj_id, OBJ_LEVEL_FOR_TAB_PRIV, obj_p2);*/
+      }
     }
   }
   return ret;
@@ -896,77 +999,46 @@ int ObOraSysChecker::check_owner_or_p1_or_access(
 {
   int ret = OB_SUCCESS;
   bool is_owner = false;
-  if (database_name.empty()) {
-    is_owner = true;
-  } else {
-    const ObUserInfo *user_info = NULL;
-    OZ (guard.get_user_info(tenant_id, user_id, user_info));
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(user_info)) {
-        ret = OB_USER_NOT_EXIST;
-        LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+  lib::Worker::CompatMode compat_mode;
+  if (OB_FAIL(guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("get_tenant_compat_mode failed", K(ret));
+  } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
+    if (database_name.empty()) {
+      is_owner = true;
+    } else {
+      const ObUserInfo *user_info = NULL;
+      OZ (guard.get_user_info(tenant_id, user_id, user_info));
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(user_info)) {
+          ret = OB_USER_NOT_EXIST;
+          LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+        }
       }
+      // 1. Check if is owner
+      OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+                                                   database_name));
     }
-    // 1. Check if is owner
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
-                                                  database_name));
-  }
-  if (OB_SUCC(ret)) {
-    if (!is_owner) {
-      // 2. Check sys priv
-      OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array),
-                OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
-      // 3. Check related priv
-      if (OB_ERR_NO_PRIVILEGE == ret) {
-        ret = OB_SUCCESS;
-        bool accessible = false;
-        OZ (check_access_to_obj(guard, tenant_id, user_id,
-                p1, obj_type, obj_id, database_name, role_id_array, accessible));
-        if (OB_SUCC(ret)) {
-          if (accessible) {
-            ret = OB_ERR_NO_PRIVILEGE;
-          } else {
-            ret = OB_TABLE_NOT_EXIST;
+    if (OB_SUCC(ret)) {
+      if (!is_owner) {
+        // 2. Check sys priv
+        OZX1 (check_p1(guard, tenant_id, user_id, p1, role_id_array),
+                  OB_ERR_NO_PRIVILEGE, tenant_id, user_id, p1);
+        // 3. Check related priv
+        if (OB_ERR_NO_PRIVILEGE == ret) {
+          ret = OB_SUCCESS;
+          bool accessible = false;
+          OZ (check_access_to_obj(guard, tenant_id, user_id,
+                  p1, obj_type, obj_id, database_name, role_id_array, accessible));
+          if (OB_SUCC(ret)) {
+            if (accessible) {
+              ret = OB_ERR_NO_PRIVILEGE;
+            } else {
+              ret = OB_TABLE_NOT_EXIST;
+            }
           }
         }
       }
     }
-  }
-  return ret;
-}
-
-int ObOraSysChecker::check_access_to_mlog_base_table(
-    ObSchemaGetterGuard &guard,
-    const uint64_t tenant_id,
-    const uint64_t user_id,
-    const uint64_t obj_id,
-    const ObString &database_name,
-    const ObIArray<uint64_t> &role_id_array,
-    bool &accessible)
-{
-  int ret = OB_SUCCESS;
-  uint64_t obj_owner_id = OB_INVALID_ID;
-  accessible = false;
-
-  if (OB_FAIL(guard.get_user_id(tenant_id,
-                                       database_name,
-                                       ObString(OB_DEFAULT_HOST_NAME),
-                                       obj_owner_id))) {
-    LOG_WARN("failed to get user id", KR(ret), K(tenant_id), K(database_name));
-  } else if (OB_FAIL(ObOraSysChecker::check_ora_obj_priv(
-      guard, tenant_id, user_id, database_name, obj_id,
-      OBJ_LEVEL_FOR_TAB_PRIV, static_cast<uint64_t>(ObObjectType::TABLE),
-      OBJ_PRIV_ID_SELECT, CHECK_FLAG_NORMAL, obj_owner_id, role_id_array))) {
-    LOG_WARN("failed to check ora obj privs",
-        KR(ret), K(tenant_id), K(user_id), K(database_name),
-        K(obj_id), K(obj_owner_id), K(role_id_array));
-  } else {
-    accessible = true;
-  }
-
-  // callers need to rewrite the error code by accessible=false
-  if (OB_ERR_NO_SYS_PRIVILEGE == ret) {
-    ret = OB_SUCCESS;
   }
   return ret;
 }
@@ -1296,21 +1368,31 @@ int ObOraSysChecker::check_owner_or_p1(
     const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
+  // unused
+  // ObSysPriv *sys_priv = NULL;
   bool is_owner = false;
-  if (database_name.empty()) {
-    is_owner = true;
-  } else {
-    const ObUserInfo *user_info = NULL;
-    OZ (guard.get_user_info(tenant_id, user_id, user_info));
-    if (OB_SUCC(ret) && NULL == user_info) {
-      ret = OB_USER_NOT_EXIST;
-      LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+  lib::Worker::CompatMode compat_mode;
+  // unused
+  // bool exists = false;
+
+  if (OB_FAIL(guard.get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("get_tenant_compat_mode failed", K(ret));
+  } else if (compat_mode == lib::Worker::CompatMode::ORACLE) {
+    if (database_name.empty()) {
+      is_owner = true;
+    } else {
+      const ObUserInfo *user_info = NULL;
+      OZ (guard.get_user_info(tenant_id, user_id, user_info));
+      if (OB_SUCC(ret) && NULL == user_info) {
+        ret = OB_USER_NOT_EXIST;
+        LOG_USER_ERROR(OB_USER_NOT_EXIST, database_name.length(), database_name.ptr());
+      }
+      OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
+                                                   database_name));
     }
-    OX (is_owner = ObOraPrivCheck::user_is_owner(user_info->get_user_name(),
-                                                  database_name));
-  }
-  if (!is_owner) {
-    OZ (check_p1(guard, tenant_id, user_id, p1, role_id_array), tenant_id, user_id, p1);
+    if (!is_owner) {
+      OZ (check_p1(guard, tenant_id, user_id, p1, role_id_array), tenant_id, user_id, p1);
+    }
   }
   return ret;
 }
@@ -2382,14 +2464,6 @@ int ObOraSysChecker::check_ora_ddl_priv(
       }
       case stmt::T_VARIABLE_SET: {
         DEFINE_PUB_CHECK_CMD(PRIV_ID_ALTER_SYSTEM);
-        break;
-      }
-      case stmt::T_CREATE_MLOG: {
-        DEFINE_CREATE_CHECK_CMD(PRIV_ID_CREATE_ANY_TABLE, PRIV_ID_CREATE_TABLE);
-        break;
-      }
-      case stmt::T_DROP_MLOG: {
-        DEFINE_DROP_CHECK_CMD(PRIV_ID_DROP_ANY_TABLE);
         break;
       }
       default: {

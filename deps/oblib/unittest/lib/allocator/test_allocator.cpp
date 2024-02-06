@@ -180,11 +180,13 @@ TEST_F(TestAllocator, pm_basic)
 
   // freelist
   int large_size = INTACT_ACHUNK_SIZE - 200;
+  pm.set_max_chunk_cache_size(INTACT_ACHUNK_SIZE);
   ptr = pm.alloc_page(large_size);
   hold = pm.get_hold();
   ASSERT_GT(hold, 0);
   pm.free_page(ptr);
   ASSERT_EQ(pm.get_hold(), hold);
+  pm.set_max_chunk_cache_size(0);
   ptr = pm.alloc_page(large_size);
   ASSERT_EQ(pm.get_hold(), hold);
   pm.free_page(ptr);
@@ -195,6 +197,7 @@ TEST_F(TestAllocator, pm_basic)
   pm.free_page(ptr);
   ASSERT_EQ(pm.get_hold(), hold);
 
+  pm.set_max_chunk_cache_size(INTACT_ACHUNK_SIZE * 2);
   pm.alloc_page(large_size);
   pm.alloc_page(large_size);
   pm.alloc_page(large_size);

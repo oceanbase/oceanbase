@@ -498,7 +498,7 @@ public:
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
-    check_no_partition_(false)
+    check_no_partiton_(false)
   {
   }
 
@@ -547,7 +547,7 @@ public:
     tablet_id_(ObTabletID::INVALID_TABLET_ID),
     object_id_(OB_INVALID_ID),
     related_list_(allocator_),
-    check_no_partition_(false)
+    check_no_partiton_(false)
   {
   }
   virtual ~ObTableLocation() { reset(); }
@@ -770,9 +770,9 @@ public:
                                           const bool is_dml_table = true);
 
   int calc_not_partitioned_table_ids(ObExecContext &exec_ctx);
-  void set_check_no_partition(const bool check)
+  void set_check_no_partiton(const bool check)
   {
-    check_no_partition_ = check;
+    check_no_partiton_ = check;
   }
   TO_STRING_KV(K_(loc_meta),
                K_(part_projector),
@@ -918,7 +918,7 @@ private:
                         ObRawExpr *col_expr,
                         bool &can_replace);
   //add partition column
-  //add column to row desc and partition columns
+  //add column to row desc and partiton columns
   int add_partition_column(const ObDMLStmt &stmt,
                            const uint64_t table_id,
                            const uint64_t column_id,
@@ -1170,7 +1170,7 @@ private:
   ObTabletID tablet_id_;
   ObObjectID object_id_;
   common::ObList<DASRelatedTabletMap::MapEntry, common::ObIAllocator> related_list_;
-  bool check_no_partition_;
+  bool check_no_partiton_;
 };
 
 }

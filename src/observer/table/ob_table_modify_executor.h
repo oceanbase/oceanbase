@@ -107,8 +107,6 @@ protected:
                                const ObChunkDatumStore::StoredRow &upd_new_row,
                                const ObTableUpdCtDef &upd_ctdef,
                                bool &is_row_changed);
-  int check_rowkey_change(const ObChunkDatumStore::StoredRow &upd_old_row,
-                          const ObChunkDatumStore::StoredRow &upd_new_row);
   int to_expr_skip_old(const ObChunkDatumStore::StoredRow &store_row,
                        const ObTableUpdCtDef &upd_ctdef);
   int generate_del_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
@@ -128,7 +126,6 @@ protected:
   int stored_row_to_exprs(const ObChunkDatumStore::StoredRow &row,
                           const common::ObIArray<ObExpr*> &exprs,
                           ObEvalCtx &ctx);
-  int check_row_null(const ObExprPtrIArray &row, const ColContentIArray &column_infos);
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;

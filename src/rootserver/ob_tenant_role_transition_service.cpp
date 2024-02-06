@@ -302,8 +302,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
                      SCN::min_scn()))) {
     LOG_WARN("failed to do_recover_tenant", KR(ret), K_(tenant_id));
     // reset error code and USER_ERROR to avoid print recover error log
-    ret = OB_OP_NOT_ALLOW;
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover cancel failed, failover to primary");
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "can not do recover cancel for tenant, failed to failover to primary");
   } else if (OB_FAIL(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
@@ -433,8 +433,8 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_append(
       LOG_WARN("Tenant status changed by concurrent operation, switch to primary not allowed",
                KR(ret), K(tenant_info), K(cur_tenant_info));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant status changed by concurrent operation, switch to primary");
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role_in_trans(
-            tenant_id_, trans, tenant_info.get_switchover_epoch(),
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
+            tenant_id_, &trans, tenant_info.get_switchover_epoch(),
             share::PRIMARY_TENANT_ROLE, tenant_info.get_switchover_status(),
             share::NORMAL_SWITCHOVER_STATUS, switchover_epoch_))) {
       LOG_WARN("failed to update tenant switchover status", KR(ret), K(tenant_id_), K(tenant_info), K(cur_tenant_info));
@@ -525,15 +525,12 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
       LOG_INFO("data version is smaller than 4200, no need check", K(user_compat_version));
     } else {
       bool is_finish = false;
-      ObArray<ObBalanceTaskHelper> ls_balance_tasks;
+      ObBalanceTaskHelper ls_balance_task;
       ObBalanceTaskArray balance_task_array;
       share::ObAllTenantInfo cur_tenant_info;
-      int tmp_ret = OB_SUCCESS;
-      SCN max_scn;
-      max_scn.set_max();
       while (!THIS_WORKER.is_timeout() && OB_SUCC(ret) && !is_finish) {
-        if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(tenant_id_,
-                *sql_proxy_, max_scn, ls_balance_tasks))) {
+        if (FALSE_IT(ret = ObBalanceTaskHelperTableOperator::pop_task(tenant_id_,
+                *sql_proxy_, ls_balance_task))) {
         } else if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           balance_task_array.reset();
@@ -558,30 +555,15 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
             LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id_));
           } else if (cur_tenant_info.get_sync_scn() == cur_tenant_info.get_standby_scn()) {
             is_finish = true;
-            for (int64_t i = 0; OB_SUCC(ret) && i < balance_task_array.count() && !is_finish; ++i) {
-              const ObBalanceTask &task = balance_task_array.at(i);
-              if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(tenant_id_,
-                      task.get_src_ls_id(), task.get_dest_ls_id(), cur_tenant_info.get_sync_scn(),
-                      is_finish))) {
-                LOG_WARN("failed to check transfer task replay", KR(ret), K(cur_tenant_info), K(task));
-              } else if (!is_finish) {
-                LOG_INFO("has transfe task, and not replay to newest", K(task));
-              }
-            }//end for
-            if (OB_SUCC(ret) && is_finish) {
-            LOG_INFO("has transfer task, and replay to newest", KR(ret), K(cur_tenant_info));
-            }
+            LOG_INFO("has transfer task, and repaly to newest", KR(ret), K(cur_tenant_info));
           }
         } else if (OB_FAIL(ret)) {
           LOG_WARN("failed to pop task", KR(ret), K(tenant_id_));
         }
 
         if (OB_SUCC(ret) && !is_finish) {
-          if (OB_TMP_FAIL(notify_recovery_ls_service_())) {
-            LOG_WARN("failed to notify recovery ls service", KR(tmp_ret));
-          }
           usleep(100L * 1000L);
-          LOG_INFO("has balance task not finish", K(ls_balance_tasks),
+          LOG_INFO("has balance task not finish", K(ls_balance_task),
               K(balance_task_array), K(cur_tenant_info));
         }
       }
@@ -593,44 +575,6 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
       }
     }
   }
-  return ret;
-}
-
-int ObTenantRoleTransitionService::notify_recovery_ls_service_()
-{
-  int ret = OB_SUCCESS;
-  ObTimeoutCtx ctx;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
-  } else if (OB_ISNULL(GCTX.location_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location service is null", KR(ret));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret));
-  } else {
-    ObAddr leader;
-    ObNotifyTenantThreadArg arg;
-    const int64_t timeout = ctx.get_timeout();
-    if (OB_FAIL(GCTX.location_service_->get_leader(
-            GCONF.cluster_id, tenant_id_, SYS_LS, false, leader))) {
-      LOG_WARN("failed to get leader", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(arg.init(tenant_id_, obrpc::ObNotifyTenantThreadArg::RECOVERY_LS_SERVICE))) {
-      LOG_WARN("failed to init arg", KR(ret), K(tenant_id_));
-    } else if (OB_FAIL(rpc_proxy_->to(leader).timeout(timeout)
-          .group_id(share::OBCG_DBA_COMMAND).by(tenant_id_)
-          .notify_tenant_thread(arg))) {
-      LOG_WARN("failed to notify tenant thread", KR(ret),
-          K(leader), K(tenant_id_), K(timeout), K(arg));
-    }
-    if (OB_FAIL(ret)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(GCTX.location_service_->nonblock_renew(
-              GCONF.cluster_id, tenant_id_, SYS_LS))) {
-        LOG_WARN("failed to renew location", KR(ret), KR(tmp_ret), K(tenant_id_));
-      }
-    }
-  }
-
   return ret;
 }
 
@@ -680,7 +624,6 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
     LOG_WARN("fail to execute get_all_ls_status_and_change_access_mode_", KR(ret), K(tenant_info),
         K(target_access_mode), K(sys_ls_sync_scn));
   }
-  DEBUG_SYNC(AFTER_CHANGE_ACCESS_MODE);
   return ret;
 }
 
@@ -1583,7 +1526,7 @@ int ObTenantRoleTransitionService::check_tenant_server_online_()
     LOG_WARN("fail to append sql", KR(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
-      common::sqlclient::ObMySQLResult *result = NULL;
+      ObMySQLResult *result = NULL;
       if (OB_FAIL(sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("fail to read the tenant's online servers", KR(ret), K(sql), K(tenant_id_));
       } else if (NULL == (result = res.get_result())) {

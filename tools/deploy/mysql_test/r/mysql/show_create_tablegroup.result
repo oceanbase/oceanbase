@@ -2,7 +2,7 @@ drop tablegroup if exists show_create_tg_0;
 create tablegroup show_create_tg_0;
 show create tablegroup show_create_tg_0;
 Tablegroup	Create Tablegroup
-show_create_tg_0	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_0`  SHARDING = 'ADAPTIVE'
+show_create_tg_0	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_0`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_0;
 drop tablegroup if exists show_create_tg_1;
 create tablegroup show_create_tg_1 partition by hash partitions 2;
@@ -10,7 +10,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_1;
 Tablegroup	Create Tablegroup
-show_create_tg_1	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_1`  SHARDING = 'ADAPTIVE'
+show_create_tg_1	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_1`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_1;
 drop tablegroup if exists show_create_tg_2;
 create tablegroup show_create_tg_2 partition by key 2 partitions 2;
@@ -18,7 +18,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_2;
 Tablegroup	Create Tablegroup
-show_create_tg_2	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_2`  SHARDING = 'ADAPTIVE'
+show_create_tg_2	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_2`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_2;
 drop tablegroup if exists show_create_tg_3;
 create tablegroup show_create_tg_3 partition by range (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
@@ -26,7 +26,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_3;
 Tablegroup	Create Tablegroup
-show_create_tg_3	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_3`  SHARDING = 'ADAPTIVE'
+show_create_tg_3	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_3`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_3;
 drop tablegroup if exists show_create_tg_4;
 create tablegroup show_create_tg_4 partition by range columns 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
@@ -34,7 +34,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_4;
 Tablegroup	Create Tablegroup
-show_create_tg_4	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_4`  SHARDING = 'ADAPTIVE'
+show_create_tg_4	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_4`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_4;
 drop tablegroup if exists show_create_tg_5;
 create tablegroup show_create_tg_5 partition by list (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
@@ -42,7 +42,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_5;
 Tablegroup	Create Tablegroup
-show_create_tg_5	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_5`  SHARDING = 'ADAPTIVE'
+show_create_tg_5	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_5`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_5;
 drop tablegroup if exists show_create_tg_6;
 create tablegroup show_create_tg_6 partition by list columns 2 (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
@@ -50,7 +50,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_6;
 Tablegroup	Create Tablegroup
-show_create_tg_6	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_6`  SHARDING = 'ADAPTIVE'
+show_create_tg_6	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_6`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_6;
 drop tablegroup if exists show_create_tg_7;
 create tablegroup show_create_tg_7 partition by hash subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) partitions 2;
@@ -58,7 +58,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_7;
 Tablegroup	Create Tablegroup
-show_create_tg_7	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_7`  SHARDING = 'ADAPTIVE'
+show_create_tg_7	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_7`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_7;
 drop tablegroup if exists show_create_tg_8;
 create tablegroup show_create_tg_8 partition by hash subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) partitions 2;
@@ -66,7 +66,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_8;
 Tablegroup	Create Tablegroup
-show_create_tg_8	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_8`  SHARDING = 'ADAPTIVE'
+show_create_tg_8	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_8`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_8;
 drop tablegroup if exists show_create_tg_9;
 create tablegroup show_create_tg_9 partition by hash subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) partitions 2;
@@ -74,7 +74,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_9;
 Tablegroup	Create Tablegroup
-show_create_tg_9	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_9`  SHARDING = 'ADAPTIVE'
+show_create_tg_9	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_9`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_9;
 drop tablegroup if exists show_create_tg_10;
 create tablegroup show_create_tg_10 partition by hash subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) partitions 2;
@@ -82,7 +82,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_10;
 Tablegroup	Create Tablegroup
-show_create_tg_10	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_10`  SHARDING = 'ADAPTIVE'
+show_create_tg_10	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_10`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_10;
 drop tablegroup if exists show_create_tg_11;
 create tablegroup show_create_tg_11 partition by key 2 subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) partitions 2;
@@ -90,7 +90,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_11;
 Tablegroup	Create Tablegroup
-show_create_tg_11	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_11`  SHARDING = 'ADAPTIVE'
+show_create_tg_11	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_11`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_11;
 drop tablegroup if exists show_create_tg_12;
 create tablegroup show_create_tg_12 partition by key 2 subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) partitions 2;
@@ -98,7 +98,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_12;
 Tablegroup	Create Tablegroup
-show_create_tg_12	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_12`  SHARDING = 'ADAPTIVE'
+show_create_tg_12	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_12`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_12;
 drop tablegroup if exists show_create_tg_13;
 create tablegroup show_create_tg_13 partition by key 2 subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) partitions 2;
@@ -106,7 +106,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_13;
 Tablegroup	Create Tablegroup
-show_create_tg_13	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_13`  SHARDING = 'ADAPTIVE'
+show_create_tg_13	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_13`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_13;
 drop tablegroup if exists show_create_tg_14;
 create tablegroup show_create_tg_14 partition by key 2 subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) partitions 2;
@@ -114,7 +114,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_14;
 Tablegroup	Create Tablegroup
-show_create_tg_14	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_14`  SHARDING = 'ADAPTIVE'
+show_create_tg_14	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_14`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_14;
 drop tablegroup if exists show_create_tg_15;
 create tablegroup show_create_tg_15 partition by range subpartition by hash subpartitions 2 (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
@@ -122,7 +122,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_15;
 Tablegroup	Create Tablegroup
-show_create_tg_15	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_15`  SHARDING = 'ADAPTIVE'
+show_create_tg_15	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_15`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_15;
 drop tablegroup if exists show_create_tg_16;
 create tablegroup show_create_tg_16 partition by range subpartition by key 2 subpartitions 2 (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
@@ -130,7 +130,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_16;
 Tablegroup	Create Tablegroup
-show_create_tg_16	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_16`  SHARDING = 'ADAPTIVE'
+show_create_tg_16	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_16`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_16;
 drop tablegroup if exists show_create_tg_17;
 create tablegroup show_create_tg_17 partition by range subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
@@ -138,7 +138,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_17;
 Tablegroup	Create Tablegroup
-show_create_tg_17	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_17`  SHARDING = 'ADAPTIVE'
+show_create_tg_17	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_17`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_17;
 drop tablegroup if exists show_create_tg_18;
 create tablegroup show_create_tg_18 partition by range subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) (partition p0 values less than (100), partition p1 values less than (200), partition p2 values less than (MAXVALUE));
@@ -146,7 +146,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_18;
 Tablegroup	Create Tablegroup
-show_create_tg_18	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_18`  SHARDING = 'ADAPTIVE'
+show_create_tg_18	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_18`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_18;
 drop tablegroup if exists show_create_tg_19;
 create tablegroup show_create_tg_19 partition by range columns 2 subpartition by hash subpartitions 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
@@ -154,7 +154,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_19;
 Tablegroup	Create Tablegroup
-show_create_tg_19	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_19`  SHARDING = 'ADAPTIVE'
+show_create_tg_19	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_19`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_19;
 drop tablegroup if exists show_create_tg_20;
 create tablegroup show_create_tg_20 partition by range columns 2 subpartition by key 2 subpartitions 2 (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
@@ -162,7 +162,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_20;
 Tablegroup	Create Tablegroup
-show_create_tg_20	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_20`  SHARDING = 'ADAPTIVE'
+show_create_tg_20	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_20`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_20;
 drop tablegroup if exists show_create_tg_21;
 create tablegroup show_create_tg_21 partition by range columns 2 subpartition by list subpartition template (subpartition p0 values in (0, 1), subpartition p1 values in (2, 3), subpartition p3 values in (DEFAULT)) (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
@@ -170,7 +170,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_21;
 Tablegroup	Create Tablegroup
-show_create_tg_21	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_21`  SHARDING = 'ADAPTIVE'
+show_create_tg_21	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_21`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_21;
 drop tablegroup if exists show_create_tg_22;
 create tablegroup show_create_tg_22 partition by range columns 2 subpartition by list columns 2 subpartition template (subpartition p0 values in (('00', 0), ('01', 1)), subpartition p1 values in (('02', 2), ('03', 3)), subpartition p3 values in (DEFAULT)) (partition p0 values less than (1, '100'), partition p1 values less than (2, '200'), partition p2 values less than (MAXVALUE, MAXVALUE));
@@ -178,7 +178,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_22;
 Tablegroup	Create Tablegroup
-show_create_tg_22	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_22`  SHARDING = 'ADAPTIVE'
+show_create_tg_22	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_22`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_22;
 drop tablegroup if exists show_create_tg_23;
 create tablegroup show_create_tg_23 partition by list subpartition by hash subpartitions 2 (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
@@ -186,7 +186,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_23;
 Tablegroup	Create Tablegroup
-show_create_tg_23	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_23`  SHARDING = 'ADAPTIVE'
+show_create_tg_23	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_23`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_23;
 drop tablegroup if exists show_create_tg_24;
 create tablegroup show_create_tg_24 partition by list subpartition by key 2 subpartitions 2 (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
@@ -194,7 +194,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_24;
 Tablegroup	Create Tablegroup
-show_create_tg_24	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_24`  SHARDING = 'ADAPTIVE'
+show_create_tg_24	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_24`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_24;
 drop tablegroup if exists show_create_tg_25;
 create tablegroup show_create_tg_25 partition by list subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
@@ -202,7 +202,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_25;
 Tablegroup	Create Tablegroup
-show_create_tg_25	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_25`  SHARDING = 'ADAPTIVE'
+show_create_tg_25	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_25`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_25;
 drop tablegroup if exists show_create_tg_26;
 create tablegroup show_create_tg_26 partition by list subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) (partition p0 values in (0, 1), partition p1 values in (2, 3), partition p3 values in (DEFAULT));
@@ -215,7 +215,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_27;
 Tablegroup	Create Tablegroup
-show_create_tg_27	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_27`  SHARDING = 'ADAPTIVE'
+show_create_tg_27	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_27`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_27;
 drop tablegroup if exists show_create_tg_28;
 create tablegroup show_create_tg_28 partition by list columns 2 subpartition by key 2 subpartitions 2 (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
@@ -223,7 +223,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_28;
 Tablegroup	Create Tablegroup
-show_create_tg_28	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_28`  SHARDING = 'ADAPTIVE'
+show_create_tg_28	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_28`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_28;
 drop tablegroup if exists show_create_tg_29;
 create tablegroup show_create_tg_29 partition by list columns 2 subpartition by range subpartition template (subpartition p0 values less than (100), subpartition p1 values less than (200), subpartition p2 values less than (MAXVALUE)) (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
@@ -231,7 +231,7 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_29;
 Tablegroup	Create Tablegroup
-show_create_tg_29	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_29`  SHARDING = 'ADAPTIVE'
+show_create_tg_29	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_29`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_29;
 drop tablegroup if exists show_create_tg_30;
 create tablegroup show_create_tg_30 partition by list columns 2 subpartition by range columns 2 subpartition template (subpartition p0 values less than (1, '100'), subpartition p1 values less than (2, '200'), subpartition p2 values less than (MAXVALUE, MAXVALUE)) (partition p0 values in (('00', 0), ('01', 1)), partition p1 values in (('02', 2), ('03', 3)), partition p3 values in (DEFAULT));
@@ -239,5 +239,5 @@ Warnings:
 Warning	1235	create tablegroup with partition not supported
 show create tablegroup show_create_tg_30;
 Tablegroup	Create Tablegroup
-show_create_tg_30	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_30`  SHARDING = 'ADAPTIVE'
+show_create_tg_30	CREATE TABLEGROUP IF NOT EXISTS `show_create_tg_30`  SHARDING = ADAPTIVE
 drop tablegroup if exists show_create_tg_30;

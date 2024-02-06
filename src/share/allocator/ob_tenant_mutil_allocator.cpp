@@ -16,7 +16,6 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "logservice/palf/log_io_task.h"
 #include "logservice/palf/fetch_log_engine.h"
-#include "logservice/palf/log_shared_task.h"
 #include "logservice/replayservice/ob_replay_status.h"
 
 namespace oceanbase
@@ -29,7 +28,6 @@ namespace common
 
 ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
   : tenant_id_(tenant_id), total_limit_(INT64_MAX), pending_replay_mutator_size_(0),
-    LOG_HANDLE_SUBMIT_TASK_SIZE(sizeof(palf::LogHandleSubmitTask)),
     LOG_IO_FLUSH_LOG_TASK_SIZE(sizeof(palf::LogIOFlushLogTask)),
     LOG_IO_TRUNCATE_LOG_TASK_SIZE(sizeof(palf::LogIOTruncateLogTask)),
     LOG_IO_FLUSH_META_TASK_SIZE(sizeof(palf::LogIOFlushMetaTask)),
@@ -42,7 +40,6 @@ ObTenantMutilAllocator::ObTenantMutilAllocator(uint64_t tenant_id)
     unlimited_blk_alloc_(),
     replay_log_task_blk_alloc_(REPLAY_MEM_LIMIT_THRESHOLD),
     clog_ge_alloc_(ObMemAttr(tenant_id, ObModIds::OB_CLOG_GE), ObVSliceAlloc::DEFAULT_BLOCK_SIZE, clog_blk_alloc_),
-    log_handle_submit_task_alloc_(LOG_HANDLE_SUBMIT_TASK_SIZE, ObMemAttr(tenant_id, "HandleSubmit"), choose_blk_size(LOG_HANDLE_SUBMIT_TASK_SIZE), clog_blk_alloc_, this),
     log_io_flush_log_task_alloc_(LOG_IO_FLUSH_LOG_TASK_SIZE, ObMemAttr(tenant_id, "FlushLog"), choose_blk_size(LOG_IO_FLUSH_LOG_TASK_SIZE), clog_blk_alloc_, this),
     log_io_truncate_log_task_alloc_(LOG_IO_TRUNCATE_LOG_TASK_SIZE, ObMemAttr(tenant_id, "TruncateLog"), choose_blk_size(LOG_IO_TRUNCATE_LOG_TASK_SIZE), clog_blk_alloc_, this),
     log_io_flush_meta_task_alloc_(LOG_IO_FLUSH_META_TASK_SIZE, ObMemAttr(tenant_id, "FlushMeta"), choose_blk_size(LOG_IO_FLUSH_META_TASK_SIZE), clog_blk_alloc_, this),
@@ -74,7 +71,6 @@ void ObTenantMutilAllocator::destroy()
 {
   OB_LOG(INFO, "ObTenantMutilAllocator destroy", K(tenant_id_));
   clog_ge_alloc_.destroy();
-  log_handle_submit_task_alloc_.destroy();
   log_io_flush_log_task_alloc_.destroy();
   log_io_truncate_log_task_alloc_.destroy();
   log_io_flush_meta_task_alloc_.destroy();
@@ -102,7 +98,6 @@ int ObTenantMutilAllocator::choose_blk_size(int obj_size)
 void ObTenantMutilAllocator::try_purge()
 {
   clog_ge_alloc_.purge_extra_cached_block(0);
-  log_handle_submit_task_alloc_.purge_extra_cached_block(0);
   log_io_flush_log_task_alloc_.purge_extra_cached_block(0);
   log_io_truncate_log_task_alloc_.purge_extra_cached_block(0);
   log_io_flush_meta_task_alloc_.purge_extra_cached_block(0);
@@ -163,27 +158,6 @@ void ObTenantMutilAllocator::free_log_io_flush_log_task(LogIOFlushLogTask *ptr)
     ptr->~LogIOFlushLogTask();
     log_io_flush_log_task_alloc_.free(ptr);
     ATOMIC_DEC(&flying_log_task_);
-  }
-}
-
-LogHandleSubmitTask *ObTenantMutilAllocator::alloc_log_handle_submit_task(
-		const int64_t palf_id, const int64_t palf_epoch)
-{
-  LogHandleSubmitTask *ret_ptr = NULL;
-  void *ptr = log_handle_submit_task_alloc_.alloc();
-  if (NULL != ptr) {
-    ret_ptr = new(ptr)LogHandleSubmitTask(palf_id, palf_epoch);
-    ATOMIC_INC(&flying_log_handle_submit_task_);
-  }
-  return ret_ptr;
-}
-
-void ObTenantMutilAllocator::free_log_handle_submit_task(LogHandleSubmitTask *ptr)
-{
-  if (OB_LIKELY(NULL != ptr)) {
-    ptr->~LogHandleSubmitTask();
-    log_handle_submit_task_alloc_.free(ptr);
-    ATOMIC_DEC(&flying_log_handle_submit_task_);
   }
 }
 

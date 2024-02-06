@@ -181,6 +181,7 @@ inline void ObWarningBuffer::append_msg(ObLogger::UserMsgLevel msg_level, const 
 {
   // warning_buffer will be reset before requests handled
   if (OB_SUCCESS == error_ret_) {
+    std::string eg(str);
     int ret = OB_SUCCESS;
     ObWarningBuffer::WarningItem *item = nullptr;
     if (append_idx_ >= item_.count()) {

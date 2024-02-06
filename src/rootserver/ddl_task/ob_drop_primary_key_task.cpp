@@ -38,20 +38,18 @@ ObDropPrimaryKeyTask::~ObDropPrimaryKeyTask()
 {
 }
 
-int ObDropPrimaryKeyTask::init(const ObTableSchema* src_table_schema, const ObTableSchema* dst_table_schema,
-                               const int64_t task_id, const share::ObDDLType &ddl_type, const int64_t parallelism,
-                               const int64_t consumer_group_id, const int32_t sub_task_trace_id,
-                               const obrpc::ObAlterTableArg &alter_table_arg, const uint64_t tenant_data_version,
-                               const int64_t task_status,const int64_t snapshot_version )
+int ObDropPrimaryKeyTask::init(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType &ddl_type,
+    const int64_t data_table_id, const int64_t dest_table_id, const int64_t schema_version, const int64_t parallelism,
+    const int64_t consumer_group_id, const obrpc::ObAlterTableArg &alter_table_arg, const int64_t task_status, const int64_t snapshot_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, 0, task_id, ddl_type, parallelism, consumer_group_id,
-                                            sub_task_trace_id, alter_table_arg, tenant_data_version, task_status, snapshot_version))) {
+  if (OB_FAIL(ObTableRedefinitionTask::init(tenant_id, tenant_id, task_id, ddl_type, data_table_id,
+                                            dest_table_id, schema_version, schema_version, parallelism, consumer_group_id,
+                                            alter_table_arg, task_status, snapshot_version))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {
     set_gmt_create(ObTimeUtility::current_time());
     consumer_group_id_ = consumer_group_id;
-    sub_task_trace_id_ = sub_task_trace_id;
     task_version_ = OB_DROP_PRIMARY_KEY_TASK_VERSION;
     ddl_tracing_.open();
   }
@@ -120,10 +118,6 @@ int ObDropPrimaryKeyTask::process()
         break;
     }
     ddl_tracing_.release_span_hierarchy();
-    if (OB_FAIL(ret)) {
-      add_event_info("drop primary key task process fail");
-      LOG_INFO("drop primary key task process fail", "ddl_event_info", ObDDLEventInfo());
-    }
   }
   return ret;
 }

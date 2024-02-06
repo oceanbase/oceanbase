@@ -45,11 +45,7 @@ bool FetchCtxMapHBFunc::operator()(const logservice::TenantLSID &tls_id, LSFetch
   if (NULL == ctx) {
     // ctx is invalid, not processed
   } else if (OB_FAIL(ctx->get_dispatch_progress(progress, dispatch_info))) {
-    if (OB_LS_NOT_EXIST != ret) {
-      LOG_ERROR("get_dispatch_progress fail", KR(ret), K(tls_id), KPC(ctx));
-    } else {
-      ret = OB_SUCCESS;
-    }
+    LOG_ERROR("get_dispatch_progress fail", KR(ret), K(tls_id), KPC(ctx));
   }
   // The progress returned by the fetch log context must be valid, and its progress value must be a valid value, underlined by the fetch log progress
   else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == progress)) {

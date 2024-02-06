@@ -100,11 +100,10 @@ int submit_commit_tx(ObTxDesc &tx,
  * this is the end of lifecycle of a transaction
  *
  * @tx:         the target transaction's descriptor
- * @is_from_xa: whether xa ctx calls this interface
  *
  * Return: OB_SUCCESS - OK
  */
-int release_tx(ObTxDesc &tx, const bool is_from_xa = false);
+int release_tx(ObTxDesc &tx);
 
 /**
  * reuse_tx - reuse transaction descriptor
@@ -238,22 +237,6 @@ int get_ls_read_snapshot_version(const share::ObLSID &local_ls_id,
 int get_weak_read_snapshot_version(const int64_t max_read_stale_time,
                                    const bool local_single_ls,
                                    share::SCN &snapshot_version);
-/**
- * refresh_read_snapshot_tx_state - update snapshot's tx state part
- *
- * @snapshot:                       the snapshot to refresh
- * @tx:                             the target tx descriptor
- *
- * this interface try to update snapshot's tx state part by tx descriptor
- * it was used by conflict checker which need read latest state of current
- * transaction (while other read only read the data of before current stmt)
- *
- * Return:
- * OB_SUCCESS              - OK
- * OB_HAS_DECIDED          - transaction has terminated
- * OB_XXX                  - unexpected error
- */
-int refresh_read_snapshot_tx_state(ObTxReadSnapshot &snapshot, const ObTxDesc &tx);
 /*
  * release_snapshot - release snapshot
  *
@@ -333,30 +316,7 @@ int create_implicit_savepoint(ObTxDesc &tx,
                               const ObTxParam &tx_param,
                               ObTxSEQ &savepoint,
                               const bool release = false);
-/**
- * create_branch_savepoint - establish a _branch_level_ savepoint and which can be
- *                           used to rolling back to
- *
- * _branch_ level savepoint can accomplish partially rollback when multiple writer
- * run in parallel at the same time window
- *
- * this was designed for internal use
- * the savepoint won't be saved, for efficiency
- *
- * before you use this interface, a transaction must have been prepared either
- * implicitly by `create_implicit_savepoint` or explicitly by `start_tx`
- *
- * @tx:                        the target transaction's descriptor
- *                             transaction state if need
- * @branch:                    the branch of the savepoint to establish
- * @savepoint:                 the identifier of the savepoint returned
- *
- * Return:
- * OB_SUCCESS - OK
- */
-int create_branch_savepoint(ObTxDesc &tx,
-                            const int16_t branch,
-                            ObTxSEQ &savepoint);
+
 /**
  * create_explicit_savepoint - establish a savepoint and associate name
  *
@@ -401,7 +361,6 @@ int create_explicit_savepoint(ObTxDesc &tx,
  *                                  the savepoint but not sensed by this
  *                                  transaction for some reason
  *                                  (eg. network partition, OutOfMemory)
- * @exec_errcode:                   stmt execution error code
  *
  * Return:
  * OB_SUCCESS             - OK
@@ -413,8 +372,7 @@ int create_explicit_savepoint(ObTxDesc &tx,
 int rollback_to_implicit_savepoint(ObTxDesc &tx,
                                    const ObTxSEQ savepoint,
                                    const int64_t expire_ts,
-                                   const share::ObLSArray *extra_touched_ls,
-                                   const int exec_errcode = OB_SUCCESS);
+                                   const share::ObLSArray *extra_touched_ls);
 
 /**
  * rollback_to_explicit_savepoint - rollback to a explicit savepoint

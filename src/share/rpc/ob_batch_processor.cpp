@@ -17,8 +17,6 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/tx/ob_trans_service.h"
 #include "lib/utility/serialization.h"
-#include "logservice/ob_log_service.h"
-#include "logservice/palf/log_request_handler.h"
 
 namespace oceanbase
 {
@@ -71,10 +69,7 @@ int ObBatchP::process()
             ret = OB_NOT_SUPPORTED;
             break;
           case CLOG_BATCH_REQ:
-            if (OB_SUCCESS == ls_id.deserialize(buf, req->size_, pos)) {
-              handle_log_req(sender, msg_type, ls_id, buf + pos, req->size_ - (int32_t)pos);
-            }
-            clog_batch_cnt++;
+            ret = OB_NOT_SUPPORTED;
             break;
           case ELECTION_BATCH_REQ:
             ret = OB_NOT_SUPPORTED;
@@ -169,45 +164,6 @@ int ObBatchP::handle_sql_req(common::ObAddr& sender, int type, const char* buf, 
       }
     }
   }
-  return ret;
-}
-
-int ObBatchP::handle_log_req(const common::ObAddr& sender, int type, const share::ObLSID &ls_id, const char* buf, int32_t size)
-{
-  int ret = OB_SUCCESS;
-  ObReqTimestamp req_ts;
-  req_ts.receive_timestamp_ = get_receive_timestamp();
-  req_ts.enqueue_timestamp_ = get_enqueue_timestamp();
-  req_ts.run_timestamp_ = get_run_timestamp();
-  logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
-  palf::IPalfEnvImpl *palf_env_impl = NULL;
-
-  #define __LOG_BATCH_PROCESS_REQ(TYPE)                                                 \
-  palf::LogRequestHandler log_request_handler(palf_env_impl);                           \
-  TYPE req;                                                                             \
-  int64_t pos = 0;                                                                      \
-  if (OB_FAIL(req.deserialize(buf, size, pos))) {                                       \
-    RPC_LOG(ERROR, "deserialize rpc failed", K(ret), KP(buf), K(size));                 \
-  } else if (OB_FAIL(log_request_handler.handle_request(ls_id.id(), sender, req))) {    \
-    RPC_LOG(TRACE, "handle_request failed", K(ret), K(ls_id), K(sender), K(req));       \
-  } else {                                                                              \
-    RPC_LOG(TRACE, "handle_log_request success", K(ret), K(ls_id), K(sender), K(req));  \
-  }
-  if (OB_ISNULL(log_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "log_service is nullptr", K(ret), K(log_service));
-  } else if (OB_ISNULL(log_service->get_palf_env())) {
-    ret = OB_ERR_UNEXPECTED;
-    RPC_LOG(ERROR, "palf_env is nullptr", K(ret), KP(log_service));
-  } else if (FALSE_IT(palf_env_impl = log_service->get_palf_env()->get_palf_env_impl())) {
-  } else if (palf::LOG_BATCH_PUSH_LOG_REQ == type) {
-    __LOG_BATCH_PROCESS_REQ(palf::LogPushReq);
-  } else if (palf::LOG_BATCH_PUSH_LOG_RESP == type) {
-    __LOG_BATCH_PROCESS_REQ(palf::LogPushResp);
-  } else {
-    RPC_LOG(ERROR, "invalid sub_type", K(ret), K(type));
-  }
-  #undef __LOG_BATCH_PROCESS_REQ
   return ret;
 }
 }; // end namespace rpc

@@ -34,11 +34,6 @@ public:
                       const ObRawExpr &raw_expr, ObExpr &rt_expr) const override;
   static int calc_partition_key(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_partition_key_batch(BATCH_EVAL_FUNC_ARG_DECL);
-  static int calc_partition_key_vector(const ObExpr &expr,
-                                       ObEvalCtx &ctx,
-                                       const ObBitVector &skip,
-                                       const EvalBound &bound);
-
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncPartKey);

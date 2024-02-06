@@ -57,7 +57,7 @@ public:
   virtual int fill_row(blocksstable::ObDatumRow &out_row) = 0;
   virtual int fill_rows(
       const int64_t group_idx,
-      blocksstable::ObIMicroBlockRowScanner *scanner,
+      blocksstable::ObIMicroBlockReader *reader,
       int64_t &begin_index,
       const int64_t end_index,
       const ObFilterResult &res) = 0;
@@ -70,7 +70,7 @@ public:
   virtual void set_limit_end() { iter_end_flag_ = LIMIT_ITER_END; }
   OB_INLINE int64_t get_batch_size() { return batch_size_; }
   OB_INLINE int64_t get_row_capacity() const { return row_capacity_; }
-  INHERIT_TO_STRING_KV("ObBlockRowStore", ObBlockRowStore, K_(iter_end_flag), K_(batch_size), K_(row_capacity));
+  TO_STRING_KV(K_(iter_end_flag), K_(batch_size), K_(row_capacity));
 protected:
   int get_row_ids(
       blocksstable::ObIMicroBlockReader *reader,
@@ -84,7 +84,6 @@ protected:
   int64_t row_capacity_;
   const char **cell_data_ptrs_;
   int64_t *row_ids_;
-  uint32_t *len_array_;
   sql::ObEvalCtx &eval_ctx_;
 };
 

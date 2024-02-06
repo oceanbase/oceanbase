@@ -44,11 +44,6 @@ public:
   virtual int decode(const ObColumnDecoderCtx &ctx, common::ObDatum &datum, const int64_t row_id,
       const ObBitStream &bs, const char *data, const int64_t len) const override;
 
-  virtual int decode_vector(
-      const ObColumnDecoderCtx &decoder_ctx,
-      const ObIRowIndex *row_index,
-      ObVectorDecodeCtx &vector_ctx) const override;
-
   virtual int update_pointer(const char *old_block, const char *cur_block) override;
 
   virtual int get_ref_col_idx(int64_t &ref_col_idx) const override;

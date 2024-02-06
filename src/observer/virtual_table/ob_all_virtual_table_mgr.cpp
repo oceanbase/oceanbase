@@ -46,11 +46,15 @@ void ObAllVirtualTableMgr::reset()
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ls_id_ = share::ObLSID::INVALID_LS_ID;
+  table_store_iter_.reset();
 
   if (OB_NOT_NULL(iter_buf_)) {
     allocator_->free(iter_buf_);
     iter_buf_ = nullptr;
   }
+
+  tablet_handle_.reset();
+  tablet_allocator_.reset();
 
   ObVirtualTableScannerIterator::reset();
 }
@@ -85,7 +89,6 @@ int ObAllVirtualTableMgr::inner_get_next_row(ObNewRow *&row)
 
 void ObAllVirtualTableMgr::release_last_tenant()
 {
-  table_store_iter_.reset();
   tablet_handle_.reset();
   if (OB_NOT_NULL(tablet_iter_)) {
     tablet_iter_->~ObTenantTabletIterator();
@@ -112,7 +115,7 @@ int ObAllVirtualTableMgr::get_next_tablet()
   if (nullptr == tablet_iter_) {
     tablet_allocator_.set_tenant_id(MTL_ID());
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_, nullptr/*no op*/))) {
+    if (OB_ISNULL(tablet_iter_ = new (iter_buf_) ObTenantTabletIterator(*t3m, tablet_allocator_))) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN, "fail to new tablet_iter_", K(ret));
     }
@@ -232,6 +235,18 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case TABLE_TYPE:
           cur_row_.cells_[i].set_int(table_key.table_type_);
           break;
+        case DATA_CHECKSUM: {
+          int64_t data_checksum = 0;
+          if (table->is_memtable()) {
+            // memtable has no data checksum, do nothing
+          } else if (table->is_co_sstable()) {
+            data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
+          } else if (table->is_sstable()) {
+            data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
+          }
+          cur_row_.cells_[i].set_int(data_checksum);
+          break;
+        }
         case SIZE: {
           int64_t size = 0;
           if (table->is_memtable()) {
@@ -302,18 +317,6 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case CG_IDX:
           cur_row_.cells_[i].set_int(table_key.get_column_group_id());
           break;
-        case DATA_CHECKSUM: {
-          int64_t data_checksum = 0;
-          if (table->is_memtable()) {
-            // memtable has no data checksum, do nothing
-          } else if (table->is_co_sstable()) {
-            data_checksum = static_cast<storage::ObCOSSTableV2 *>(table)->get_cs_meta().data_checksum_;
-          } else if (table->is_sstable()) {
-            data_checksum = static_cast<blocksstable::ObSSTable *>(table)->get_data_checksum();
-          }
-          cur_row_.cells_[i].set_int(data_checksum);
-          break;
-        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

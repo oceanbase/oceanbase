@@ -391,20 +391,6 @@ TEST(TestTenantAllocator, sub_ctx_id)
   ASSERT_NE(OB_SUCCESS, malloc_allocator->recycle_tenant_allocator(tenant_id_1));
 }
 
-TEST(TestTenantAllocator, MERGE_RESERVE_CTX)
-{
-  const uint64_t tenant_id = 1002;
-  ObMallocAllocator* malloc_allocator = ObMallocAllocator::get_instance();
-  ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
-  void *ptr_0 = ob_malloc(100L<<10, ObMemAttr(tenant_id, "Test", 0));
-  void *ptr_1 = ob_malloc(100L<<10, ObMemAttr(tenant_id, "Test", ObCtxIds::MERGE_RESERVE_CTX_ID));
-  malloc_allocator->sync_wash(tenant_id, 0, INT64_MAX);
-  AChunk *chunk_0 = AChunk::ptr2chunk(ptr_0);
-  AChunk *chunk_1 = AChunk::ptr2chunk(ptr_1);
-  ASSERT_NE(0, chunk_0->washed_size_);
-  ASSERT_EQ(0, chunk_1->washed_size_);
-}
-
 int main(int argc, char *argv[])
 {
   signal(49, SIG_IGN);

@@ -90,13 +90,13 @@ int ObExprToBase64::calc_result_type1(ObExprResType &type,
     if (max_deduce_length < OB_MAX_MYSQL_VARCHAR_LENGTH) {
       type.set_varchar();
       type.set_length(max_deduce_length);
-      type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
+      type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
     } else {
       type.set_blob();
       // TODO : Fixme the blob type do not need to set_length.
       // Maybe need wait ObDDLResolver::check_text_length fix the judge of length.
       type.set_length(max_deduce_length);
-      type.set_collation_type(get_default_collation_type(type.get_type(), type_ctx));
+      type.set_collation_type(get_default_collation_type(type.get_type(), *type_ctx.get_session()));
     }
     type.set_collation_level(CS_LEVEL_COERCIBLE);
   }
@@ -211,15 +211,6 @@ int ObExprToBase64::cg_expr(ObExprCGCtx &expr_cg_ctx,
     rt_expr.eval_func_ = ObExprToBase64::eval_to_base64;
     rt_expr.eval_batch_func_ = ObExprToBase64::eval_to_base64_batch;
     return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprToBase64, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (lib::is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_COLLATION_CONNECTION);
-  }
-  return ret;
 }
 
 }//namespace sql

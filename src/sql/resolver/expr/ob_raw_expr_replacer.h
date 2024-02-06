@@ -65,7 +65,6 @@ public:
                         const ObIArray<ObRawExpr *> &to_exprs);
   int add_replace_exprs(const ObIArray<std::pair<ObRawExpr *, ObRawExpr *>> &to_replace_exprs);
   int append_replace_exprs(const ObRawExprReplacer &other);
-  int check_need_replace(const ObRawExpr *old_expr, ObRawExpr *&new_expr, bool &need_replace);
 
 private:
   // types and constants
@@ -77,6 +76,9 @@ private:
                               const bool overwrite,
                               bool &is_existed);
   int check_skip_expr(const ObRawExpr &expr, bool &skip_expr);
+  int check_need_replace(const ObRawExpr *old_expr,
+                         ObRawExpr *&new_expr,
+                         bool &need_replace);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObRawExprReplacer);
   // function members

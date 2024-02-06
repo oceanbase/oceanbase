@@ -402,13 +402,6 @@ public:
                         const uint64_t &column_id,
                         const int64_t &autoinc_version,
                         common::ObMySQLTransaction &trans);
-  // for alter table autoinc to recognize old autoincrement value in inner table
-  int try_lock_autoinc_row(const uint64_t &tenant_id,
-                           const uint64_t &table_id,
-                           const uint64_t &column_id,
-                           const int64_t &autoinc_version,
-                           bool &need_update_inner_table,
-                           common::ObMySQLTransaction &trans);
   static int calc_next_value(const uint64_t last_next_value,
                              const uint64_t offset,
                              const uint64_t increment,

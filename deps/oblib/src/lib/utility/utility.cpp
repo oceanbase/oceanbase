@@ -1418,9 +1418,8 @@ int ObBandwidthThrottle::limit_and_sleep(const int64_t bytes, const int64_t last
       const int64_t copy_KB = (total_bytes_ - last_printed_bytes_) / 1024;
       const int64_t speed_KB_per_s = copy_KB * 1000 / print_interval_ms;
       const int64_t sleep_ms_sum = total_sleep_ms_ - last_printed_sleep_ms_;
-      const int64_t rate_KB = rate_ / 1024;
       COMMON_LOG(INFO, "print band limit", KCSTRING_(comment), K(copy_KB), K(sleep_ms_sum), K(speed_KB_per_s),
-          K_(total_sleep_ms), K_(total_bytes), "rate_KB/s", rate_KB, K(print_interval_ms));
+          K_(total_sleep_ms), K_(total_bytes), "rate_KB/s", rate_, K(print_interval_ms));
       last_printed_bytes_ = total_bytes_;
       last_printed_sleep_ms_ = total_sleep_ms_;
       last_printed_ts_ = cur_time;
@@ -1901,52 +1900,6 @@ int64_t get_level3_cache_size()
   const char *path = "/sys/devices/system/cpu/cpu0/cache/index3/size";
   static int64_t l3_cache_size = get_cpu_cache_size(_SC_LEVEL3_CACHE_SIZE, path, 8388608/*default L3 cache size : 8192K*/);
   return l3_cache_size;
-}
-
-int extract_cert_expired_time(const char* cert, const int64_t cert_len, int64_t &expired_time)
-{
-  int ret = OB_SUCCESS;
-  STACK_OF(X509_INFO)  *chain = NULL;
-  BIO *cbio = NULL;
-  if (OB_ISNULL(cert)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("public cert from kms is null!", K(ret));
-  } else if (OB_ISNULL(cbio = BIO_new_mem_buf((void*)cert, cert_len))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("BIO_new_mem_buf failed", K(ret));
-  } else if (OB_ISNULL(chain = PEM_X509_INFO_read_bio(cbio, NULL, NULL, NULL))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("PEM_X509_INFO_read_bio failed", K(ret));
-  } else {
-    ASN1_TIME *notAfter = NULL;
-    X509_INFO *x509_info = NULL;
-    if (OB_ISNULL(x509_info = sk_X509_INFO_value(chain, 0))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("get app cert failed!", K(ret));
-    } else if (OB_ISNULL((notAfter = X509_get_notAfter(x509_info->x509)))) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("X509_get_notAfter failed",K(ret));
-    } else {
-      struct tm tm1;
-      memset (&tm1, 0, sizeof (tm1));
-      tm1.tm_year = (notAfter->data[ 0] - '0') * 10 + (notAfter->data[ 1] - '0') + 100;
-      tm1.tm_mon  = (notAfter->data[ 2] - '0') * 10 + (notAfter->data[ 3] - '0') - 1;
-      tm1.tm_mday = (notAfter->data[ 4] - '0') * 10 + (notAfter->data[ 5] - '0');
-      tm1.tm_hour = (notAfter->data[ 6] - '0') * 10 + (notAfter->data[ 7] - '0');
-      tm1.tm_min  = (notAfter->data[ 8] - '0') * 10 + (notAfter->data[ 9] - '0');
-      tm1.tm_sec  = (notAfter->data[10] - '0') * 10 + (notAfter->data[11] - '0');
-      time_t expired_time_t = mktime(&tm1);
-      expired_time_t += (int)(mktime(localtime(&expired_time_t)) - mktime(gmtime(&expired_time_t)));
-      expired_time = expired_time_t * 1000000;
-    }
-  }
-  if (NULL != cbio) {
-    BIO_free(cbio);
-  }
-  if (NULL != chain) {
-    sk_X509_INFO_pop_free(chain, X509_INFO_free);
-  }
-  return ret;
 }
 
 

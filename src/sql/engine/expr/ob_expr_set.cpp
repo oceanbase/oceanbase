@@ -99,10 +99,6 @@ int ObExprSet::eval_coll(const ObObj &obj, ObExecContext &ctx, pl::ObPLNestedTab
   } else if (0 > c1->get_count() || !(c1->is_inited())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("union udt failed due to null udt", K(ret), K(c1->get_count()), K(c1->is_inited()));
-  } else if (c1->is_of_composite()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET for collections of composite types is");
-    LOG_WARN("SET for collections of composite types is not supported", K(c1->get_element_type()));
   } else {
     coll = static_cast<pl::ObPLNestedTable*>(allocator.alloc(sizeof(pl::ObPLNestedTable)));
     if (OB_ISNULL(coll)) {

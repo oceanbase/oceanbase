@@ -19,7 +19,6 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "share/rc/ob_tenant_base.h"
-#include "observer/omt/ob_tenant.h"
 #include "share/ob_alive_server_tracer.h"
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/ls/ob_ls_tx_service.h"
@@ -34,13 +33,11 @@
 #include "../mock_utils/msg_bus.h"
 #include "../mock_utils/basic_fake_define.h"
 #include "../mock_utils/ob_fake_tx_rpc.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 
 namespace oceanbase {
 using namespace transaction;
 using namespace share;
 using namespace common;
-
 
 namespace transaction {
 template<class T>
@@ -48,7 +45,7 @@ class QueueConsumer : public share::ObThreadPool
 {
 public:
   QueueConsumer(ObString name,
-                ObLinkQueue *q,
+                ObSpScLinkQueue *q,
                 std::function<int(T*)> func):
     name_(name), queue_(q), func_(func), cond_() {}
   virtual int start() {
@@ -66,14 +63,8 @@ public:
     ObThreadPool::stop();
   }
   void run1() {
-    {
-      char name_buf[128];
-      snprintf(name_buf, 128, "QConsumer:%s", name_.ptr());
-      set_thread_name(name_buf);
-    }
     while(!stop_) {
-      ObLink *e = NULL;
-      queue_->pop(e);
+      ObLink *e = queue_->pop();
       if (e) {
         T *t = static_cast<T*>(e);
         func_(t);
@@ -87,11 +78,11 @@ public:
   }
   void wakeup() { if (ATOMIC_BCAS(&is_sleeping_, true, false)) { cond_.signal(); } }
   void set_name(ObString &name) { name_ = name; }
-  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->size()), K_(stop));
+  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->empty()), K_(stop));
 private:
   ObString name_;
   bool stop_;
-  ObLinkQueue *queue_;
+  ObSpScLinkQueue *queue_;
   std::function<int(T*)> func_;
   common::SimpleCond cond_;
   bool is_sleeping_ = false;
@@ -138,20 +129,18 @@ public:
   }
 
 public:
-  TO_STRING_KV(KP(this), K(addr_), K_(ls_id), K(msg_queue_.size()));
-  ObString get_identifer_str() const;
+  TO_STRING_KV(KP(this), K(addr_), K_(ls_id));
   ObTxDescGuard get_tx_guard();
   // the simple r/w interface
   int read(ObTxDesc &tx, const int64_t key, int64_t &value, const ObTxIsolationLevel iso = ObTxIsolationLevel::RC);
   int read(const ObTxReadSnapshot &snapshot,
            const int64_t key,
            int64_t &value);
-  int write(ObTxDesc &tx, const int64_t key, const int64_t value, const int16_t branch = 0);
+  int write(ObTxDesc &tx, const int64_t key, const int64_t value);
   int write(ObTxDesc &tx,
             const ObTxReadSnapshot &snapshot,
             const int64_t key,
-            const int64_t value,
-            const int16_t branch = 0);
+            const int64_t value);
   int atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
                    const int64_t expire_ts, const ObTxParam &tx_param);
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);
@@ -176,7 +165,6 @@ public:
   DELEGATE_TENANT_WITH_RET(txs_, abort_tx, int);
   DELEGATE_TENANT_WITH_RET(txs_, submit_commit_tx, int);
   DELEGATE_TENANT_WITH_RET(txs_, get_read_snapshot, int);
-  DELEGATE_TENANT_WITH_RET(txs_, create_branch_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, create_implicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, create_explicit_savepoint, int);
   DELEGATE_TENANT_WITH_RET(txs_, rollback_to_explicit_savepoint, int);
@@ -229,14 +217,13 @@ private:
     ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
     OZ(txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(ls_id_, ls_tx_ctx_mgr));
     int i = 0;
-    int tx_count = ls_tx_ctx_mgr->get_tx_ctx_count();
-    for (i = 0; tx_count > 0 && i < 2000; ++i) {
-      tx_count = ls_tx_ctx_mgr->get_tx_ctx_count();
+    for (i = 0; i < 2000; ++i) {
+      if (0 == ls_tx_ctx_mgr->get_tx_ctx_count()) break;
       usleep(500);
     }
     if (2000 == i) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_INFO("wait all tx ctx destoryed fail, print all tx:", K(tx_count));
+      LOG_INFO("print all tx begin", K(ret));
       const bool verbose = true;
       ls_tx_ctx_mgr->print_all_tx_ctx(ObLSTxCtxMgr::MAX_HASH_ITEM_PRINT, verbose);
       LOG_INFO("print all tx end", K(ret));
@@ -279,13 +266,13 @@ public:
   ObAddr addr_;
   ObLSID ls_id_;
   int64_t tenant_id_;
-  omt::ObTenant tenant_;
+  ObTenantBase tenant_;
   common::ObServerObjectPool<ObPartTransCtx> fake_part_trans_ctx_pool_;
   ObTransService txs_;
   memtable::ObMemtable *memtable_;
   ObSEArray<ObColDesc, 2> columns_;
   // msg_handler
-  ObLinkQueue msg_queue_;
+  ObSpScLinkQueue msg_queue_;
   QueueConsumer<MsgPack> msg_consumer_;
   // fake objects
   storage::ObTenantMetaMemMgr t3m_;

@@ -571,7 +571,6 @@ OB_DEF_SERIALIZE(ObDASCtx)
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(snapshot_);
   OB_UNIS_ENCODE(location_router_);
-  OB_UNIS_ENCODE(write_branch_id_);
   return ret;
 }
 
@@ -602,7 +601,6 @@ OB_DEF_DESERIALIZE(ObDASCtx)
     LOG_WARN("rebuild tablet loc reference failed", K(ret));
   }
   OB_UNIS_DECODE(location_router_);
-  OB_UNIS_DECODE(write_branch_id_);
   return ret;
 }
 
@@ -617,7 +615,6 @@ OB_DEF_SERIALIZE_SIZE(ObDASCtx)
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(snapshot_);
   OB_UNIS_ADD_LEN(location_router_);
-  OB_UNIS_ADD_LEN(write_branch_id_);
   return len;
 }
 }  // namespace sql

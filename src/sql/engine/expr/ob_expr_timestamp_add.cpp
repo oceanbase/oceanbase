@@ -23,7 +23,6 @@
 #include "share/object/ob_obj_cast.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "common/sql_mode/ob_sql_mode_utils.h"
-#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -198,9 +197,6 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   ObDatum *unit_datum = NULL;
   ObDatum *interval_datum = NULL;
   ObDatum *timestamp_datum = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
-  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
@@ -212,16 +208,12 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   } else if (unit_datum->is_null() || interval_datum->is_null() ||
              timestamp_datum->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
   } else {
     int64_t ts = 0;
     int64_t interval_int = interval_datum->get_int();
     int64_t res = 0;
     ObTime ot;
-    ObTimeConvertCtx cvrt_ctx(tz_info, false);
+    ObTimeConvertCtx cvrt_ctx(get_timezone_info(ctx.exec_ctx_.get_my_session()), false);
     char *buf = NULL;
     int64_t buf_len = OB_CAST_TO_VARCHAR_MAX_LENGTH;
     int64_t out_len = 0;
@@ -240,7 +232,7 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
     } else if (OB_ISNULL(buf = expr.get_str_res_mem(ctx, buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret), K(buf_len));
-    } else if (OB_FAIL(common_datetime_string(expr, ObDateTimeType, ObVarcharType,
+    } else if (OB_FAIL(common_datetime_string(ObDateTimeType, ObVarcharType,
                                               expr.args_[2]->datum_meta_.scale_, false,
                                               res, ctx, buf, buf_len, out_len))) {
       LOG_WARN("common_datetime_string failed", K(ret), K(res), K(expr));
@@ -250,11 +242,10 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
     ObCastMode cast_mode = CM_NONE;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                      session->is_ignore_stmt(),
-                                      sql_mode,
-                                      cast_mode);
-    if (CM_IS_WARN_ON_FAIL(cast_mode)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != (tmp_ret = ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode)))) {
+      LOG_WARN("get_default_cast_mode failed", K(tmp_ret), K(session->get_stmt_type()));
+    } else if (CM_IS_WARN_ON_FAIL(cast_mode)) {
       ret = OB_SUCCESS;
     }
     res_datum.set_null();
@@ -286,14 +277,5 @@ int ObExprTimeStampAdd::is_valid_for_generated_column(const ObRawExpr*expr, cons
   }
   return ret;
 }
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprTimeStampAdd, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(2);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_TIME_ZONE);
-  return ret;
-}
-
 } //namespace sql
 } //namespace oceanbase

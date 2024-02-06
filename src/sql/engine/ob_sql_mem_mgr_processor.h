@@ -29,8 +29,7 @@ public:
     profile_(profile), op_monitor_info_(op_monitor_info),
     sql_mem_mgr_(nullptr), mem_callback_(nullptr), tenant_id_(OB_INVALID_ID),
     periodic_cnt_(1024),
-    origin_max_mem_size_(0), default_available_mem_size_(0), is_auto_mgr_(false), dir_id_(0),
-    dummy_ptr_(nullptr), dummy_alloc_(nullptr)
+    origin_max_mem_size_(0), default_available_mem_size_(0), is_auto_mgr_(false), dir_id_(0)
   {
     // trace memory dump
     op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::MEMORY_DUMP;
@@ -175,8 +174,6 @@ private:
   int64_t default_available_mem_size_;
   bool is_auto_mgr_;
   int64_t dir_id_;
-  char *dummy_ptr_;
-  ObIAllocator *dummy_alloc_;
 };
 
 class ObSqlWorkareaUtil

@@ -15,7 +15,6 @@
 #include "gtest/gtest.h"
 #include "lib/oblog/ob_log.h"
 #include "logservice/palf/log_define.h"
-#include "share/ob_errno.h"
 
 #define private public
 #include "logservice/data_dictionary/ob_data_dict_meta_info.h"
@@ -37,15 +36,12 @@ TEST(ObDataDictMetaInfoItem, test_data_dict_meta_info_item)
   int64_t pos = 0;
   DataDictMetaInfoItemArr item_arr;
   for (int64_t i = 0; i < item_cnt; i++) {
-    item.reset(random.get(), random.get(), random.get(), random.get());
+    item.reset(random.get(), random.get(), random.get());
     EXPECT_EQ(OB_SUCCESS, item_arr.push_back(item));
     EXPECT_EQ(OB_SUCCESS, item.serialize(buf, buf_size, pos));
   }
   int64_t deserialize_pos = 0;
-  EXPECT_EQ(common::OB_VERSION_NOT_MATCH, item.deserialize(buf, buf_size, deserialize_pos));
-  deserialize_pos = 0;
   for (int64_t i = 0; i < item_cnt; i++) {
-    item.set_version(datadict::ObDataDictMetaInfoHeader::DATADICT_METAINFO_META_VERSION);
     EXPECT_EQ(OB_SUCCESS, item.deserialize(buf, buf_size, deserialize_pos));
     EXPECT_EQ(item, item_arr.at(i));
   }
@@ -94,8 +90,7 @@ TEST(ObDataDictMetaInfo, test_data_dict_meta_info)
   while (have_enough_buffer ) {
     item.reset(random.get(0, max_scn_val),
         random.get(0, palf::LOG_MAX_LSN_VAL),
-        random.get(0, palf::LOG_MAX_LSN_VAL),
-        random.get(0, max_scn_val));
+        random.get(0, palf::LOG_MAX_LSN_VAL));
     if (total_item_data_size + item.get_serialize_size() <= buffer_size - header_size) {
       item_count_expected++;
       total_item_data_size += item.get_serialize_size();

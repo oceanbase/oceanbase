@@ -33,12 +33,6 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
 {
 }
 
-/*
- * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
- * Destructor will be called when finish dag net.
- * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
- * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
- */
 ObCOTabletMergeCtx::~ObCOTabletMergeCtx()
 {
   if (OB_NOT_NULL(cg_merge_info_array_)) {
@@ -167,8 +161,7 @@ int ObCOTabletMergeCtx::collect_running_info()
   int ret = OB_SUCCESS;
   ObSSTableMergeInfo fake_merge_info;
   fake_merge_info.tenant_id_ = MTL_ID();
-  fake_merge_info.ls_id_ = get_ls_id();
-  fake_merge_info.is_fake_ = true;
+  fake_merge_info.ls_id_ = get_ls_id();;
   fake_merge_info.tablet_id_ = get_tablet_id();
   fake_merge_info.merge_start_time_ = dag_net_.get_start_time();
   fake_merge_info.merge_type_ = get_inner_table_merge_type();
@@ -495,9 +488,8 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
     LOG_WARN("find no base co table", K(ret), KPC(this));
   } else if (OB_FAIL(base_co_table->get_meta(meta_handle))) {
     LOG_WARN("failed to get sstable meta handle", K(ret), KPC(base_co_table));
-  } else if (base_co_table->is_all_cg_base() && compaction::is_major_merge_type(static_param_.get_merge_type())
-                && OB_FAIL(validate_column_checksums(meta_handle.get_sstable_meta().get_col_checksum(),
-                  meta_handle.get_sstable_meta().get_col_checksum_cnt(), cg_schemas))) {
+  } else if (base_co_table->is_all_cg_base() && OB_FAIL(validate_column_checksums(meta_handle.get_sstable_meta().get_col_checksum(),
+        meta_handle.get_sstable_meta().get_col_checksum_cnt(), cg_schemas))) {
     LOG_ERROR("failed to validate column checksums", K(ret), KPC(base_co_table));
     if (OB_CHECKSUM_ERROR == ret) {
       (void) get_ls()->get_tablet_svr()->update_tablet_report_status(tablet_id, true/*found_cksum_error*/);

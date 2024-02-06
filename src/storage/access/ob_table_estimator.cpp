@@ -51,13 +51,10 @@ int ObTableEstimator::estimate_row_count_for_scan(
   int ret = OB_SUCCESS;
   part_estimate.reset();
   est_records.reuse();
-  if (OB_UNLIKELY(base_input.is_table_invalid())) {
+  if (OB_UNLIKELY(base_input.is_table_invalid() || ranges.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(base_input.table_id_),
                 K(ranges), K(base_input.tables_.count()));
-  } else if (ranges.empty()) {
-    part_estimate.logical_row_count_ = 0;
-    part_estimate.physical_row_count_ = 0;
   } else {
     ObPartitionEst table_est;
     ObEstRowCountRecord record;

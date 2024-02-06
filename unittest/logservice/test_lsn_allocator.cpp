@@ -386,98 +386,6 @@ TEST_F(TestLSNAllocator, test_alloc_offset_multi_thread)
   }
 };
 
-// 测试多线程 inc_update_last_log_info
-const int64_t UPDATE_MAX_LSN_CNT = 1 * 1000 * 1000;
-const int64_t GAP_PER_THREAD = 0;
-const int64_t LOG_ID_BASE = LSNAllocator::LOG_ID_DELTA_UPPER_BOUND - 1000;
-const int64_t SCN_BASE = LSNAllocator::LOG_TS_DELTA_UPPER_BOUND - 1000;
-class UpdateMaxLSNTestThread
-{
-public:
-  UpdateMaxLSNTestThread() {}
-  virtual ~UpdateMaxLSNTestThread() { }
-public:
-  void create_and_run(int64_t th_idx)
-  {
-    th_idx_ = th_idx;
-    if (0 != pthread_create(&thread_, NULL, routine, this)){
-      PALF_LOG_RET(ERROR, OB_ERR_SYS, "create thread fail", K(thread_));
-    } else {
-      PALF_LOG(INFO, "create thread success", K(thread_), K(th_idx_));
-    }
-  }
-
-  void join()
-  {
-    pthread_join(thread_, NULL);
-  }
-
-  static void* routine(void *arg) {
-    ob_usleep(1000);
-    UpdateMaxLSNTestThread *test_thread = static_cast<UpdateMaxLSNTestThread*>(arg);
-    const int64_t start_number = GAP_PER_THREAD * test_thread->th_idx_;
-    for (int64_t i = 0; i < UPDATE_MAX_LSN_CNT; i++) {
-      int64_t log_id = LOG_ID_BASE + start_number + i;
-      LSN lsn(log_id);
-      share::SCN scn;
-      EXPECT_EQ(OB_SUCCESS, scn.convert_from_ts(SCN_BASE + start_number + i));
-      EXPECT_EQ(OB_SUCCESS, global_lsn_allocator.inc_update_last_log_info(lsn, log_id, scn));
-    }
-    return NULL;
-  }
-public:
-  pthread_t thread_;
-  int64_t th_idx_;
-};
-
-TEST_F(TestLSNAllocator, test_update_max_lsn)
-{
-  int ret = OB_SUCCESS;
-  LSNAllocator lsn_allocator;
-  LSN start_lsn(0);
-  EXPECT_EQ(OB_SUCCESS, lsn_allocator.init(0, share::SCN::base_scn(), start_lsn));
-  lsn_allocator.lsn_ts_meta_.log_id_delta_ = LSNAllocator::LOG_ID_DELTA_UPPER_BOUND - 1000;
-  lsn_allocator.lsn_ts_meta_.scn_delta_ = LSNAllocator::LOG_TS_DELTA_UPPER_BOUND - 1000;
-  PALF_LOG(INFO, "inc_update_last_log_info before", K(lsn_allocator));
-  int64_t begin_ts_ns = ObTimeUtility::current_time_ns();
-  for (int64_t i = 0; i < 1 * 1000 * 1000L; i++) {
-    LSN lsn(i+1);
-    int64_t log_id = i + LSNAllocator::LOG_ID_DELTA_UPPER_BOUND - 1000;
-    share::SCN scn;
-    scn.convert_for_logservice(i + 2 + LSNAllocator::LOG_TS_DELTA_UPPER_BOUND - 1000);
-    if (OB_FAIL(lsn_allocator.inc_update_last_log_info(lsn, log_id, scn))) {
-      PALF_LOG(INFO, "inc_update_last_log_info failed", K(i), K(lsn), K(log_id), K(scn));
-    }
-  }
-  const int64_t cost_time_ns = ObTimeUtility::current_time_ns() - begin_ts_ns;
-  PALF_LOG(INFO, "inc_update_last_log_info finish", K(cost_time_ns), K(lsn_allocator));
-
-  const int64_t THREAD_CNT = 64;
-  const int64_t target_cnt = (THREAD_CNT - 1) * GAP_PER_THREAD + UPDATE_MAX_LSN_CNT - 1;
-  const int64_t target_log_id = LOG_ID_BASE + target_cnt;
-  LSN target_lsn(target_log_id);
-  share::SCN target_scn;
-  EXPECT_EQ(OB_SUCCESS, target_scn.convert_from_ts(SCN_BASE + target_cnt));
-  global_lsn_allocator.reset();
-  EXPECT_EQ(OB_SUCCESS, global_lsn_allocator.init(0, share::SCN::min_scn(), LSN(0)));
-  UpdateMaxLSNTestThread threads[THREAD_CNT];
-  begin_ts_ns = ObTimeUtility::current_time_ns();
-  for (int tidx = 0; tidx < THREAD_CNT; ++tidx) {
-    threads[tidx].create_and_run(tidx);
-    PALF_LOG(INFO, "create thread", K(tidx));
-  }
-  for (int tidx = 0; tidx < THREAD_CNT; ++tidx) {
-    threads[tidx].join();
-  }
-  EXPECT_EQ(target_log_id, global_lsn_allocator.get_max_log_id());
-  EXPECT_EQ(target_scn, global_lsn_allocator.get_max_scn());
-  LSN curr_end_lsn;
-  EXPECT_EQ(OB_SUCCESS, global_lsn_allocator.get_curr_end_lsn(curr_end_lsn));
-  EXPECT_EQ(target_lsn, curr_end_lsn);
-  const int64_t parallel_cost_time_ns = ObTimeUtility::current_time_ns() - begin_ts_ns;
-  PALF_LOG(INFO, "inc_update_last_log_info parallel finish", K(parallel_cost_time_ns), K(global_lsn_allocator));
-}
-
 
 } // END of unittest
 } // end of oceanbase
@@ -486,7 +394,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf ./test_lsn_allocator.log*");
   OB_LOGGER.set_file_name("test_lsn_allocator.log", true);
-  OB_LOGGER.set_log_level("TRACE");
+  OB_LOGGER.set_log_level("INFO");
   PALF_LOG(INFO, "begin unittest::test_lsn_allocator");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

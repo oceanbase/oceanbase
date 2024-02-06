@@ -119,7 +119,6 @@ LogSlidingWindow::LogSlidingWindow()
     is_rebuilding_(false),
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
-    push_log_rpc_post_cost_stat_("[PALF STAT PUSH LOG TO FOLLOWERS RPC POST COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     fs_cb_cost_stat_("[PALF STAT FS CB EXCUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     log_life_time_stat_("[PALF STAT LOG LIFE TIME]", PALF_STAT_PRINT_INTERVAL_US),
     accum_slide_log_cnt_(0),
@@ -134,7 +133,6 @@ LogSlidingWindow::LogSlidingWindow()
     accum_group_log_size_(0),
     last_record_group_log_id_(FIRST_VALID_LOG_ID - 1),
     freeze_mode_(FEEDBACK_FREEZE_MODE),
-    has_pending_handle_submit_task_(false),
     is_inited_(false)
 {}
 
@@ -857,7 +855,6 @@ int LogSlidingWindow::try_push_log_to_paxos_follower_(const int64_t curr_proposa
   ObMemberList dst_member_list;
   int64_t replica_num = 0;
   const bool need_send_log = (state_mgr_->is_leader_active()) ? true : false;
-  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
   if (false == need_send_log) {
     // no need send log to paxos follower
   } else if (OB_FAIL(mm_->get_log_sync_member_list(dst_member_list, replica_num))) {
@@ -866,7 +863,7 @@ int LogSlidingWindow::try_push_log_to_paxos_follower_(const int64_t curr_proposa
     PALF_LOG(WARN, "dst_member_list remove_server failed", K(ret), K_(palf_id), K_(self));
   } else if (dst_member_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(dst_member_list, PUSH_LOG, curr_proposal_id,
-          prev_log_pid, prev_lsn, lsn, log_write_buf, need_batch_push))) {
+          prev_log_pid, prev_lsn, lsn, log_write_buf))) {
     PALF_LOG(WARN, "submit_push_log_req failed", K(ret), K_(palf_id), K_(self));
   } else {
     // do nothing
@@ -884,60 +881,28 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   LogLearnerList children_list;
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
-  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
   if (OB_FAIL(mm_->get_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,
-          prev_log_pid, prev_lsn, lsn, log_write_buf, need_batch_push))) {
+          prev_log_pid, prev_lsn, lsn, log_write_buf))) {
     PALF_LOG(WARN, "submit_push_log_req failed", K(ret), K_(palf_id), K_(self));
   } else if (false == need_presend_log) {
   } else if (OB_FAIL(mm_->get_degraded_learner_list(degraded_learner_list))) {
     PALF_LOG(WARN, "get_degraded_learner_list failed", K(ret), K_(palf_id), K_(self));
   } else if (OB_UNLIKELY(degraded_learner_list.is_valid() && mm_->is_sync_to_degraded_learners())) {
     (void) log_engine_->submit_push_log_req(degraded_learner_list, PUSH_LOG,
-        curr_proposal_id, prev_log_pid, prev_lsn, lsn, log_write_buf, need_batch_push);
+        curr_proposal_id, prev_log_pid, prev_lsn, lsn, log_write_buf);
   }
   return ret;
-}
-
-int LogSlidingWindow::try_handle_next_submit_log()
-{
-  int ret = OB_SUCCESS;
-  // Set has_pending_handle_submit_task_ to false forcedly.
-  (void) ATOMIC_STORE(&has_pending_handle_submit_task_, false);
-  bool unused_bool = false;
-  ret = handle_next_submit_log_(unused_bool);
-  return ret;
-}
-
-bool LogSlidingWindow::is_handle_thread_lease_expired(const int64_t thread_lease_begin_ts) const
-{
-  // The thread lease time for handle_next_submit_log_ is 50ms.
-  static const int64_t THREAD_LEASE_US = 50 * 1000L;
-  bool bool_ret = false;
-  if (OB_INVALID_TIMESTAMP != thread_lease_begin_ts
-      && ObTimeUtility::current_time() - thread_lease_begin_ts > THREAD_LEASE_US) {
-    bool_ret = true;
-  }
-  return bool_ret;
 }
 
 int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard time_guard("handle_next_submit_log", 100 * 1000);
   if (submit_log_handling_lease_.acquire()) {
-    // record handle_thread_lease_begin_ts with current time
-    const int64_t thread_lease_begin_ts = ObTimeUtility::current_time();
-    bool is_lease_expired = false;
-    bool need_submit_async_task = false;
     do {
-      // If it revoke fails when thread lease expired, this thread need submit an async task.
-      if (is_lease_expired) {
-        need_submit_async_task = true;
-      }
-      while (OB_SUCC(ret) && !is_lease_expired) {
+      while (OB_SUCC(ret)) {
         LSN last_submit_lsn;
         LSN last_submit_end_lsn;
         int64_t last_submit_log_id = OB_INVALID_LOG_ID;
@@ -1053,16 +1018,9 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
               // Using tmp_ret to avoid handling failure because of rpc exception.
               int tmp_ret = OB_SUCCESS;
               // Push log to paxos follower.
-              int64_t rpc_begin_ts = ObTimeUtility::current_time();
               if (OB_SUCCESS != (tmp_ret = try_push_log_to_paxos_follower_(curr_proposal_id,
                       last_submit_log_pid, last_submit_lsn, begin_lsn, log_write_buf))) {
                 PALF_LOG(WARN, "try_push_log_to_paxos_follower_ failed", K(tmp_ret), K_(palf_id), K_(self));
-              }
-              int64_t rpc_post_cost = ObTimeUtility::current_time() - rpc_begin_ts;
-              push_log_rpc_post_cost_stat_.stat(rpc_post_cost);
-              if (rpc_post_cost > 100 * 1000) {
-                PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "push log to followers rpc post cost too much time", K(tmp_ret), K_(palf_id),
-                    K_(self), K(rpc_post_cost), K(tmp_log_id), K(begin_lsn), K(curr_proposal_id), K(log_proposal_id));
               }
               // Push log to children_list.
               if (OB_SUCCESS != (tmp_ret = try_push_log_to_children_(curr_proposal_id,
@@ -1127,32 +1085,8 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
           PALF_LOG(TRACE, "handle one submit log", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(is_committed_lsn_updated),
               K(is_need_submit), K(is_submitted));
         }
-        is_lease_expired = is_handle_thread_lease_expired(thread_lease_begin_ts);
       }
     } while (!submit_log_handling_lease_.revoke());
-
-    // Try push handle_submit_task into queue when lease revoke failed(lease expired).
-    if (OB_SUCC(ret) && need_submit_async_task) {
-      // This CAS is used to control only one task can be submitted into queue at any time.
-      if (ATOMIC_BCAS(&has_pending_handle_submit_task_, false, true)) {
-        // push task into queue until success
-        int tmp_ret = OB_SUCCESS;
-        while (OB_TMP_FAIL(log_engine_->submit_handle_submit_task())) {
-          if (REACH_TIME_INTERVAL(100 * 1000)) {
-            PALF_LOG(WARN, "submit_handle_submit_task failed", K(tmp_ret), K_(palf_id), K_(self));
-          }
-          if (OB_IN_STOP_STATE == tmp_ret) {
-            // The thread pool has been stopped, no need retry.
-            break;
-          } else {
-            // sleep 100us when submit task failed
-            ob_usleep(100);
-          }
-        }
-      } else {
-        // no need push task into queue
-      }
-    }
   }
   return ret;
 }
@@ -1604,7 +1538,7 @@ int LogSlidingWindow::get_max_flushed_log_info_(LSN &lsn,
                                                 int64_t &log_proposal_id) const
 {
   int ret = OB_SUCCESS;
-  common::ObSpinLockGuard guard(max_flushed_info_lock_);
+  RLockGuard guard(max_flushed_info_lock_);
   lsn = max_flushed_lsn_;
   end_lsn = max_flushed_end_lsn_;
   log_proposal_id = max_flushed_log_pid_;
@@ -1775,7 +1709,7 @@ int LogSlidingWindow::inc_update_max_flushed_log_info_(const LSN &lsn,
   } else if (curr_max_flushed_end_lsn.is_valid() && curr_max_flushed_end_lsn >= end_lsn) {
     // no need update max_flushed_end_lsn_
   } else {
-    common::ObSpinLockGuard guard(max_flushed_info_lock_);
+    WLockGuard guard(max_flushed_info_lock_);
     // double check
     if (max_flushed_end_lsn_.is_valid() && max_flushed_end_lsn_ >= end_lsn) {
       PALF_LOG(WARN, "arg end lsn is not larger than current, no need update", K_(palf_id), K_(self),
@@ -1802,7 +1736,7 @@ int LogSlidingWindow::truncate_max_flushed_log_info_(const LSN &lsn,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argumetns", K(ret), K_(palf_id), K_(self), K(lsn), K(end_lsn), K(proposal_id));
   } else {
-    common::ObSpinLockGuard guard(max_flushed_info_lock_);
+    WLockGuard guard(max_flushed_info_lock_);
     max_flushed_lsn_ = lsn;
     max_flushed_end_lsn_ = end_lsn;
     max_flushed_log_pid_ = proposal_id;
@@ -1919,18 +1853,6 @@ bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger
     bool_ret = false;
   } else {}
   return bool_ret;
-}
-
-bool LogSlidingWindow::need_use_batch_rpc_(const int64_t buf_size) const
-{
-  constexpr int64_t BATCH_PUSH_LOG_THRESHOLD = 4 * 1024;
-  // only use batch rpc when access mode is raw write and log size is smaller than BATCH_PUSH_LOG_THRESHOLD
-  // NB: BATCH_PUSH_LOG_THRESHOLD must be smaller than 256 * 1024 because of the buffer size of ObBatchRpc is 256 * 1024.
-  const bool need_batch_push = (mode_mgr_->can_raw_write()
-                                && buf_size < BATCH_PUSH_LOG_THRESHOLD
-                                && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2)
-                                ? true : false;
-  return need_batch_push;
 }
 
 int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
@@ -2226,7 +2148,7 @@ int LogSlidingWindow::sliding_cb(const int64_t sn, const FixedSlidingWindowSlot 
         // Call fs_cb.
         int tmp_ret = OB_SUCCESS;
         const int64_t fs_cb_begin_ts = ObTimeUtility::current_time();
-        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_max_scn, log_proposal_id))) {
+        if (OB_SUCCESS != (tmp_ret = palf_fs_cb_->update_end_lsn(palf_id_, log_end_lsn, log_proposal_id))) {
           if (OB_EAGAIN == tmp_ret) {
             if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
               PALF_LOG(WARN, "update_end_lsn eagain", K(tmp_ret), K_(palf_id), K_(self), K(log_id), KPC(log_task));
@@ -3364,8 +3286,6 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
       }
     }
   }
-  // Note: can not use log_task below this line
-  guard.revert_log_task();
 
   if (OB_SUCC(ret)) {
     bool is_committed_lsn_updated = false;
@@ -3410,9 +3330,7 @@ int LogSlidingWindow::submit_push_log_resp_(const common::ObAddr &server,
                                             const LSN &log_end_lsn)
 {
   int ret = OB_SUCCESS;
-  const bool is_need_batch = need_use_batch_rpc_(0);
-  if (state_mgr_->is_allow_vote() &&
-      OB_FAIL(log_engine_->submit_push_log_resp(server, msg_proposal_id, log_end_lsn, is_need_batch))) {
+  if (state_mgr_->is_allow_vote() && OB_FAIL(log_engine_->submit_push_log_resp(server, msg_proposal_id, log_end_lsn))) {
     PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(server), K(log_end_lsn));
   }
   return ret;

@@ -74,13 +74,13 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform pre_precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
     LOG_WARN("failed to formalize query ref exprs");
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
     LOG_WARN("failed to do transform", K(ret));
   } else if (OB_FAIL(do_transform_dblink_read(stmt))) {
     LOG_WARN("failed to do transform dblink read", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_after_transform(stmt))) {
     LOG_WARN("failed deal after transform", K(ret));
@@ -302,7 +302,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         need_next_iteration = false;
       } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
         LOG_WARN("failed to formalize subquery exprs", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
+      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
         LOG_WARN("failed to formalize stmt expr", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
@@ -428,8 +428,6 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, WIN_MAGIC);
       ObTransformRule::add_trans_type(disable_list, NL_FULL_OUTER_JOIN);
       ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
-      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
-      ObTransformRule::add_trans_type(disable_list, GROUPBY_PULLUP);
     }
     if (func.update_global_index_) {
       ObTransformRule::add_trans_type(disable_list, OR_EXPANSION);
@@ -459,12 +457,6 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(dblink_enable_list, AGGR_SUBQUERY);
       ObTransformRule::add_trans_type(dblink_enable_list, FASTMINMAX);
       disable_list |= (~dblink_enable_list);
-    }
-    if (func.contain_json_table_) {
-      // json table ban group by pushdown && join limit pushdown && left join pushdown
-      ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
-      ObTransformRule::add_trans_type(disable_list, JOIN_LIMIT_PUSHDOWN);
-      ObTransformRule::add_trans_type(disable_list, LEFT_JOIN_TO_ANTI);
     }
     //dblink trace point
     if ((OB_E(EventTable::EN_GENERATE_PLAN_WITH_RECONSTRUCT_SQL) OB_SUCCESS) != OB_SUCCESS) {
@@ -530,21 +522,6 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
       LOG_WARN("unexpect null table item", K(ret));
     } else if (table->is_link_table()) {
       func.contain_link_table_ = true;
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !func.contain_json_table_ &&
-                      i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (!table->is_json_table()) { // do nothing
-    } else if (OB_ISNULL(table->json_table_def_)
-               || OB_ISNULL(table->json_table_def_->doc_expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null expr", K(ret));
-    } else if (!table->json_table_def_->doc_expr_->get_relation_ids().is_empty()) {
-      func.contain_json_table_ = true;
     }
   }
   if (OB_SUCC(ret) && (stmt->is_delete_stmt() ||

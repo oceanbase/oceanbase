@@ -168,13 +168,6 @@ public:
       const share::SCN &scn,
       const char *buf,
       const int64_t buf_size);
-  // @brief update max fetch info
-  // @param[in] const int64_t, proposal_id used to distinguish stale logs after flashback
-  // @param[in] const palf::LSN, the max_lsn submitted
-  // @param[in] const int64_t, the max_scn submitted
-  int update_max_fetch_info(const int64_t proposal_id,
-      const palf::LSN &lsn,
-      const share::SCN &scn);
   // @brief check if need update fetch log source,
   // ONLY return true if role of RestoreHandler is LEADER
   bool need_update_source() const;

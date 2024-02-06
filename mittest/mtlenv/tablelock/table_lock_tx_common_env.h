@@ -32,7 +32,6 @@ public:
             ObTxData *tx_data,
             ObTableHandleV2 &lock_memtable_handle);
   void change_to_leader();
-  ~MockObTxCtx();
 private:
   void init_memtable_ctx_(ObTableHandleV2 &lock_memtable_handle);
 };
@@ -106,25 +105,6 @@ void MockObTxCtx::change_to_leader()
   role_state_ = TxCtxRoleState::LEADER;
 }
 
-MockObTxCtx::~MockObTxCtx()
-{
-  // reset to pass sanity check
-  mt_ctx_.unsubmitted_cnt_ = 0;
-  mt_ctx_.log_gen_.reset();
-  auto f = [](memtable::ObTxCallbackList &list) -> void {
-    list.appended_ = 0;
-    list.synced_ = 0;
-    list.logged_ = 0;
-    list.removed_ = 0;
-    list.length_ = 0;
-    list.unlog_removed_ = 0;
-  };
-  int c = mt_ctx_.trans_mgr_.get_callback_list_count();
-  f(mt_ctx_.trans_mgr_.callback_list_);
-  for (int i =1; i < c; i++) {
-    f(mt_ctx_.trans_mgr_.callback_lists_[i - 1]);
-  }
-}
 void MockObTxCtx::init_memtable_ctx_(ObTableHandleV2 &lock_memtable_handle)
 {
   mt_ctx_.is_inited_ = true;
@@ -169,6 +149,7 @@ void MockTxEnv::get_store_ctx(MyTxCtx &my_ctx,
                                      timeout,
                                      timeout,
                                      write_flag);
+  store_ctx.replay_log_scn_ = share::SCN::base_scn();
 }
 
 } // tablelock

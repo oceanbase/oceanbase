@@ -25,12 +25,12 @@ namespace share
 class ObGAISClient
 {
 public:
-  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_map_()
-  { }
+  ObGAISClient() : is_inited_(false), self_(), gais_request_rpc_(nullptr), gais_cache_leader_(),
+  cache_leader_mutex_(common::ObLatchIds::AUTO_INCREMENT_LEADER_LOCK) { }
   ~ObGAISClient() { }
   int init(const common::ObAddr &self, share::ObGAISRequestRpc *gais_request_rpc);
   void reset();
-  TO_STRING_KV(K_(self), "map_size", gais_cache_leader_map_.size());
+  TO_STRING_KV(K_(self), K_(gais_cache_leader));
 
 public:
   int get_value(const AutoincKey &key,
@@ -59,12 +59,18 @@ public:
 private:
   int get_leader_(const uint64_t tenant_id, common::ObAddr &leader);
   int refresh_location_(const uint64_t tenant_id);
+  inline void reset_cache_leader_()
+  {
+    lib::ObMutexGuard guard(cache_leader_mutex_);
+    gais_cache_leader_.reset();
+  }
 
 private:
   bool is_inited_;
   common::ObAddr self_;
   share::ObGAISRequestRpc *gais_request_rpc_;
-  common::hash::ObHashMap<uint64_t, common::ObAddr> gais_cache_leader_map_;
+  common::ObAddr gais_cache_leader_;
+  lib::ObMutex cache_leader_mutex_;
 };
 
 } // share

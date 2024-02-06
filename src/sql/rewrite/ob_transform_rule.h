@@ -36,7 +36,6 @@ class ObStmtFactory;
 class ObPhysicalPlan;
 class ObCodeGeneratorImpl;
 class ObLogPlan;
-class StmtUniqueKeyProvider;
 
 struct ObTransformerCtx
 {
@@ -67,8 +66,7 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
-    is_spm_outline_(false),
-    push_down_filters_()
+    is_spm_outline_(false)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -128,7 +126,6 @@ struct ObTransformerCtx
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
   bool is_spm_outline_;
-  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
 };
 
 enum TransMethod
@@ -193,11 +190,7 @@ struct ObParentDMLStmt
 // use to keep view name/stmt id/qb name stable after copy stmt and try transform
 struct ObTryTransHelper
 {
-  ObTryTransHelper() :
-    available_tb_id_(0),
-    subquery_count_(0),
-    temp_table_count_(0),
-    unique_key_provider_(NULL)
+  ObTryTransHelper() : available_tb_id_(0), subquery_count_(0), temp_table_count_(0)
   {}
 
   int fill_helper(const ObQueryCtx *query_ctx);
@@ -208,7 +201,6 @@ struct ObTryTransHelper
   int64_t subquery_count_;
   int64_t temp_table_count_;
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> qb_name_counts_;
-  StmtUniqueKeyProvider *unique_key_provider_;
 };
 
 // record context param values or array/list size

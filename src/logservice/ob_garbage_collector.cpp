@@ -29,13 +29,11 @@
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/ls/ob_ls_life_manager.h"
-#include "share/ob_debug_sync.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "rootserver/ob_ls_recovery_reportor.h"      // ObLSRecoveryReportor
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/ob_occam_time_guard.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
-#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -120,7 +118,6 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::remove_self_from_learnerlis
               .by(MTL_ID())
               .timeout(TIMEOUT_US)
               .max_process_handler_time(TIMEOUT_US)
-              .group_id(share::OBCG_STORAGE)
               .get_palf_stat(get_palf_stat_req, get_palf_stat_resp))) {
     CLOG_LOG(WARN, "get_palf_stat failed", K(ls_id), K(leader), K(get_palf_stat_req));
   } else {
@@ -162,7 +159,6 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_ls_array_(const ObAd
       if (OB_SUCCESS != (tmp_ret = rpc_proxy_->to(leader)
                                              .by(MTL_ID())
                                              .timeout(TIMEOUT)
-                                             .group_id(share::OBCG_STORAGE)
                                              .query_ls_is_valid_member(request, response))
           || (OB_SUCCESS != (tmp_ret = response.ret_value_))) {
         CLOG_LOG(WARN, "query_is_valid_member failed", K(tmp_ret), K(leader), K(request));
@@ -613,12 +609,6 @@ int ObGCHandler::replay(const void *buffer,
             " than ls_max_decided_scn", K(tenant_readable_scn), K(ls_max_decided_scn), K(ls_id));
           }
         }
-        if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            CLOG_LOG(WARN, "failed to check max_decided_scn ", K(ls_id), K(gc_log));
-          }
-          ret = OB_EAGAIN;
-        }
       }
     }
 
@@ -789,8 +779,6 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
         K(readable_scn), K(offline_scn), K(ls_id), K(gc_state));
   } else if (readable_scn < offline_scn) {
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ wait readable_scn", K(ret), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
-  } else if (concurrency_control::ObDataValidationService::need_delay_resource_recycle(ls_id)) {
-    CLOG_LOG(INFO, "need delay resource recycle", K(ls_id));
   } else if (OB_FAIL(check_if_tenant_in_archive_(tenant_in_archive))) {
     CLOG_LOG(WARN, "check_if_tenant_in_archive_ failed", K(ret), K(ls_id), K(gc_state));
   } else if (! tenant_in_archive) {
@@ -844,11 +832,8 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "Tenant is dropped and the log stream can be removed, try_check_and_set_wait_gc_ success",
           K(tenant_id), K(ls_id), K(gc_state), K(offline_scn), K(readable_scn));
-    } else if (offline_scn.is_valid() &&
-        (MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::RESTORE_TENANT ||
-         MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::CLONE_TENANT)) {
+    } else if (offline_scn.is_valid() && MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::RESTORE_TENANT) {
       // restore tenant, not need gc delay
-      // for clone tenant, we can ensure no ls's changes during clone procedure, so no need to deal with gc status
       if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
         CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
       }
@@ -1048,7 +1033,6 @@ void ObGCHandler::block_ls_transfer_in_(const SCN &block_scn)
 
 void ObGCHandler::offline_ls_(const SCN &offline_scn)
 {
-  DEBUG_SYNC(LS_GC_BEFORE_OFFLINE);
   int ret = OB_SUCCESS;
   LSGCState gc_state = INVALID_LS_GC_STATE;
   ObLSID ls_id = ls_->get_ls_id();
@@ -1167,7 +1151,6 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
     } else if (is_ls_offline_gc_state(gc_state)) {
       (void)try_check_and_set_wait_gc_(ls_status);
     } else {
-      DEBUG_SYNC(LS_GC_BEFORE_SUBMIT_OFFLINE_LOG);
       if (OB_FAIL(submit_log_(ObGCLSLOGType::OFFLINE_LS, is_success))) {
         CLOG_LOG(WARN, "failed to submit OFFLINE_LS log", K(ls_id), K(gc_state));
       } else if (is_success) {
@@ -1376,7 +1359,7 @@ int ObGarbageCollector::get_ls_status_from_table(const ObLSID &ls_id,
   // sys tenant should always return LS_NORMAL
   if (OB_SYS_TENANT_ID == tenant_id) {
     ls_status = OB_LS_NORMAL;
-  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, ls_id, status_info, *sql_proxy_, share::OBCG_STORAGE))) {
+  } else if (OB_FAIL(ls_op.get_ls_status_info(tenant_id, ls_id, status_info, *sql_proxy_))) {
     CLOG_LOG(INFO, "failed to get ls status info from table", K(ret), K(tenant_id), K(ls_id));
   } else {
     ls_status = status_info.status_;
@@ -1693,7 +1676,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
         CLOG_LOG(WARN, "failed to execute_pre_remove", K(tmp_ret), K(id), K_(self_addr));
       } else if (OB_SUCCESS != (tmp_ret = switch_leader_adapter.remove_from_election_blacklist(id.id(), self_addr_))) {
         CLOG_LOG(WARN, "remove_from_election_blacklist failed", K(tmp_ret), K(id), K_(self_addr));
-      } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id))) {
+      } else if (OB_SUCCESS != (tmp_ret = ls_service_->remove_ls(id, false))) {
         CLOG_LOG(WARN, "remove_ls failed", K(tmp_ret), K(id));
       } else {
         CLOG_LOG(INFO, "remove_ls success", K(id), K(gc_reason));

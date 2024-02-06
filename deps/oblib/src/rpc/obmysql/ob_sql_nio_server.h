@@ -40,9 +40,6 @@ public:
   void wait();
   void destroy();
   void update_tcp_keepalive_params(int keepalive_enabled, uint32_t tcp_keepidle, uint32_t tcp_keepintvl, uint32_t tcp_keepcnt);
-
-  ObSqlSockProcessor& get_sql_sock_processor();
-
 private:
   ObSqlSockProcessor thread_processor_; // for tenant worker
   ObSqlSockHandler io_handler_; // for io thread

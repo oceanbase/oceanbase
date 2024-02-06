@@ -30,27 +30,24 @@ public:
                                 ObExprResType &date_unit,
                                 ObExprResType &date,
                                 common::ObExprTypeCtx &type_ctx) const;
-
-  template<typename T_ARG, typename T_RES>
-  static int calc_oracle(
-      const ObSQLSessionInfo *session,
-      ObEvalCtx &ctx,
-      const ObObjType obj_type,
-      const T_ARG &obj,
-      const ObDateUnitType &extract_unit,
-      T_RES &result);
-
-  template<typename T_ARG, typename T_RES>
-  static int calc(ObObjType date_type,
-      const T_ARG &date,
-      const ObDateUnitType extract_field,
-      const ObScale scale,
-      const ObCastMode cast_mode,
-      const ObTimeZoneInfo *tz_info,
-      const int64_t cur_ts_value,
-      const ObDateSqlMode date_sql_mode,
-      bool has_lob_header,
-      T_RES &result);
+  template <typename T>
+  static int calc(T &result,
+                  const int64_t date_unit,
+                  const T &date,
+                  common::ObObjType date_type,
+                  const ObScale scale,
+                  const common::ObCastMode cast_mode,
+                  const common::ObTimeZoneInfo *tz_info,
+                  const int64_t cur_ts_value,
+                  const ObDateSqlMode date_sql_mode,
+                  bool has_lob_header);
+  template <typename T>
+  static int calc_oracle(T &result,
+                        const int64_t date_unit,
+                        const T &date,
+                        common::ObObjType type,
+                        const ObSQLSessionInfo *session,
+                        common::ObIAllocator *calc_buf);
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -61,10 +58,6 @@ public:
       const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
   static int calc_extract_mysql_batch(
       const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
-  static int calc_extract_oracle_vector(
-      const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
-  static int calc_extract_mysql_vector(
-      const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
 private:
   int set_result_type_oracle(common::ObExprTypeCtx &type_ctx,

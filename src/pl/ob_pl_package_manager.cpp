@@ -258,15 +258,12 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"dbms_udr", "dbms_udr.sql", "dbms_udr_body.sql"},
   {"json_element_t", "json_element_type.sql", "json_element_type_body.sql"},
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
-  {"dbms_mview", "dbms_mview.sql", "dbms_mview_body.sql"},
-  {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
 #endif
 };
 
 static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"},
   {"dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"},
-  {"dbms_ischeduler", "dbms_ischeduler_mysql.sql", "dbms_ischeduler_mysql_body.sql"},
   {"dbms_application", "dbms_application_mysql.sql", "dbms_application_body_mysql.sql"},
   {"dbms_session", "dbms_session_mysql.sql", "dbms_session_body_mysql.sql"},
   {"dbms_monitor", "dbms_monitor_mysql.sql", "dbms_monitor_body_mysql.sql"},
@@ -276,10 +273,7 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_spm", "dbms_spm_mysql.sql", "dbms_spm_body_mysql.sql"},
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
-  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
-  {"dbms_mview", "dbms_mview_mysql.sql", "dbms_mview_body_mysql.sql"},
-  {"dbms_mview_stats", "dbms_mview_stats_mysql.sql", "dbms_mview_stats_body_mysql.sql"},
-  {"dbms_trusted_certificate_manager", "dbms_trusted_certificate_manager_mysql.sql", "dbms_trusted_certificate_manager_body_mysql.sql"}
+  {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"}
 };
 
 int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)
@@ -849,7 +843,6 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
   }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));
-    OX (resolve_ctx.session_info_.set_pl_can_retry(false));
   }
   return ret;
 }
@@ -994,10 +987,6 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
       OX (package_body = static_cast<ObPLPackage*>(cacheobj_guard->get_cache_obj()));
       CK (OB_NOT_NULL(package_body));
       OZ (package_body->init(package_body_ast));
-
-      for (int64_t i = 0; OB_SUCC(ret) &&  i < package_spec_ast.get_dependency_table().count(); ++i) {
-        OZ (package_body_ast.add_dependency_object(package_spec_ast.get_dependency_table().at(i)));
-      }
       OZ (compiler.compile_package(package_body_info,
                                   &(package_spec_ast.get_body()->get_namespace()),
                                   package_body_ast,

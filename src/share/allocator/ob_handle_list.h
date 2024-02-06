@@ -19,6 +19,7 @@ namespace oceanbase
 {
 namespace common
 {
+class ObFifoArena;
 class ObHandleList
 {
 public:

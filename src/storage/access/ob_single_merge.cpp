@@ -18,7 +18,6 @@
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_defensive_check_mgr.h"
 #include "storage/column_store/ob_co_sstable_row_getter.h"
-#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -374,7 +373,6 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
                     KPC(read_info),
                     KPC(access_ctx_->store_ctx_),
                     K(tables_));
-      concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
       dump_table_statistic_for_4377();
       dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
     }

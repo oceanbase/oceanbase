@@ -4281,7 +4281,7 @@ int ObServerSchemaService::update_schema_mgr(ObISQLClient &sql_client,
   return ret;
 }
 
-// wrapper for add index
+// wrapper for add index and materialized view
 int ObServerSchemaService::add_index_tids(
     const ObSchemaMgr &schema_mgr,
     ObTableSchema &table)
@@ -4299,7 +4299,7 @@ int ObServerSchemaService::add_index_tids(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL ptr", K(simple_index), K(ret));
       } else {
-        if (simple_index->is_index_table()) {
+        if (simple_index->is_index_table() || simple_index->is_materialized_view()) {
           if (OB_FAIL(table.add_simple_index_info(ObAuxTableMetaInfo(
                              simple_index->get_table_id(),
                              simple_index->get_table_type(),
@@ -5129,8 +5129,7 @@ bool ObServerSchemaService::need_construct_aux_infos_(
       || (table_schema.is_view_table()
            && !table_schema.is_materialized_view())
        || table_schema.is_aux_vp_table()
-       || table_schema.is_aux_lob_table()
-       || table_schema.is_mlog_table()) {
+       || table_schema.is_aux_lob_table()) {
     bret = false;
   }
   return bret;
@@ -5171,8 +5170,6 @@ int ObServerSchemaService::construct_aux_infos_(
         if (OB_FAIL(table_schema.add_aux_vp_tid(aux_table_meta.table_id_))) {
           LOG_WARN("add aux vp table id failed", KR(ret), K(tenant_id), K(aux_table_meta));
         }
-      } else if (MATERIALIZED_VIEW_LOG == aux_table_meta.table_type_) {
-        table_schema.set_mlog_tid(aux_table_meta.table_id_);
       }
     } // end FOREACH_CNT_X
   }
@@ -5596,6 +5593,8 @@ int ObServerSchemaService::refresh_increment_schema(
     const ObRefreshSchemaStatus &schema_status)
 {
   int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  observer::ObUseWeakGuard use_weak_guard;
   const uint64_t tenant_id = schema_status.tenant_id_;
   ObSchemaMgr *schema_mgr_for_cache = NULL;
   if (!check_inner_stat()) {
@@ -5614,27 +5613,16 @@ int ObServerSchemaService::refresh_increment_schema(
     int64_t core_schema_version = 0;
     int64_t schema_version = OB_INVALID_VERSION;
     int64_t retry_count = 0;
-    const int64_t start_ts = ObTimeUtility::current_time();
-    int64_t abs_timeout = OB_INVALID_TIMESTAMP;
-    if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FETCH_SCHEMA_TIMEOUT_US, abs_timeout))) {
-      LOG_WARN("fail to get abs timeout", KR(ret));
-    }
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_stop())) {
         LOG_WARN("observer is stopping", KR(ret), K(schema_status));
         break;
       } else if (retry_count > 0) {
         LOG_WARN("refresh_increment_schema failed", K(retry_count), K(schema_status));
-
-        const int64_t current_ts = ObTimeUtility::current_time();
-        if (current_ts >= abs_timeout) {
-          // ret will be overwrite when core/system table schemas were changed in the meantime.
-          // In such situations, try use timeout remain to retry locally.
-          ret = OB_TIMEOUT;
-          LOG_WARN("already timeout", KR(ret), K(start_ts), K(abs_timeout), K(current_ts), K(abs_timeout));
+        if (OB_FAIL(set_timeout_ctx(ctx))) {
+          LOG_WARN("fail to set timeout ctx", KR(ret), K(schema_status));
           break;
         }
-
       }
       ObISQLClient &sql_client = *sql_proxy_;
       if (OB_SUCC(ret) && core_schema_change) {
@@ -5781,6 +5769,37 @@ int ObServerSchemaService::refresh_increment_schema(
                   "cur_schema_version", schema_mgr_for_cache->get_schema_version());
       }
     }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::set_timeout_ctx(ObTimeoutCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t abs_timeout_us = ctx.get_abs_timeout();
+  int64_t worker_timeout_us = THIS_WORKER.get_timeout_ts();
+
+  if (abs_timeout_us < 0) {
+    abs_timeout_us = ObTimeUtility::current_time() + DEFAULT_FETCH_SCHEMA_TIMEOUT_US;
+  }
+
+  if (INT64_MAX == worker_timeout_us) {
+    // The background schema refresh task triggered by the heartbeat, the system tenant schemea
+    // needs to retry until it succeeds
+    abs_timeout_us = ObTimeUtility::current_time() + MAX_FETCH_SCHEMA_TIMEOUT_US;
+  } else if (worker_timeout_us > 0 && worker_timeout_us < abs_timeout_us) {
+    abs_timeout_us = worker_timeout_us;
+  }
+
+  if (OB_FAIL(ctx.set_abs_timeout(abs_timeout_us))) {
+    LOG_WARN("set timeout failed", K(ret), K(abs_timeout_us));
+  } else  if (ctx.is_timeouted()) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("is timeout",
+        K(ret),
+        "abs_timeout", ctx.get_abs_timeout(),
+        "this worker timeout ts", THIS_WORKER.get_timeout_ts());
   }
 
   return ret;

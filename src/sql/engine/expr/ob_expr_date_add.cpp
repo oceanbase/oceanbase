@@ -21,7 +21,6 @@
 #include "sql/engine/ob_exec_context.h"
 #include "ob_datum_cast.h"
 #include "common/object/ob_obj_type.h"
-#include "sql/engine/expr/ob_expr_util.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
 
@@ -30,7 +29,7 @@ ObExprDateAdjust::ObExprDateAdjust(ObIAllocator &alloc,
                                    const char *name,
                                    int32_t param_num,
                                    int32_t dimension)
-    : ObFuncExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+    : ObFuncExprOperator(alloc, type, name, param_num, NOT_VALID_FOR_GENERATED_COL, dimension)
 {
 }
 
@@ -59,7 +58,11 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObDateUnitType unit_type = static_cast<ObDateUnitType>(unit.get_param().get_int());
   ObExprResType res_date = date;
-  if (OB_UNLIKELY(ObNullType == date.get_type())) {
+  const ObSQLSessionInfo *session = static_cast<const ObSQLSessionInfo*>(type_ctx.get_session());
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_UNLIKELY(ObNullType == date.get_type())) {
     type.set_null();
   } else {
     unit.set_calc_type(ObIntType);
@@ -135,9 +138,6 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   ObDatum *interval = NULL;
   ObDatum *unit = NULL;
   bool is_json = (expr.args_[0]->args_ != NULL) && (expr.args_[0]->args_[0]->datum_meta_.type_ == ObJsonType);
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
-  const common::ObTimeZoneInfo *tz_info = NULL;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -146,10 +146,6 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_UNLIKELY(date->is_null() || interval->is_null())
              || ObNullType == res_type) {
     expr_datum.set_null();
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
   } else {
     int64_t dt_val = 0;
     ObString interval_val = interval->get_string();
@@ -162,8 +158,8 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else {
       ObTime ob_time;
       ObDateSqlMode date_sql_mode;
-      ObTimeConvertCtx cvrt_ctx(tz_info, false);
-      date_sql_mode.init(sql_mode);
+      ObTimeConvertCtx cvrt_ctx(get_timezone_info(session), false);
+      date_sql_mode.init(session->get_sql_mode());
       if (is_json) { // json to string will add quote automatically, here should take off quote
         ObString str = date->get_string();
         if (str.length() >= 3) { // 2 quote and content length >= 1
@@ -171,16 +167,13 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         }
       }
       if (OB_FAIL(ob_datum_to_ob_time_with_date(*date, date_type, expr.args_[0]->datum_meta_.scale_,
-                                            tz_info,
+                                            get_timezone_info(session),
                                             ob_time,
                                             get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                                             date_sql_mode,
                                             expr.args_[0]->obj_meta_.has_lob_header()))) {
         uint64_t cast_mode = 0;
-        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                          session->is_ignore_stmt(),
-                                          sql_mode,
-                                          cast_mode);
+        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {
           expr_datum.set_null();
           ret = OB_SUCCESS;
@@ -195,7 +188,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
     if (OB_SUCC(ret) && !has_set_value) {
       ObDateSqlMode date_sql_mode;
-      date_sql_mode.init(sql_mode);
+      date_sql_mode.init(session->get_sql_mode());
       if (OB_UNLIKELY(ObTimeConverter::ZERO_DATETIME == dt_val)) {
         expr_datum.set_null();
       } else if (OB_FAIL(ObTimeConverter::date_adjust(dt_val, interval_val, unit_val, res_dt_val,
@@ -234,10 +227,7 @@ int ObExprDateAdjust::calc_date_adjust(const ObExpr &expr, ObEvalCtx &ctx, ObDat
         if (OB_SUCCESS != (tmp_ret =
             ObTimeConverter::str_is_date_format(date->get_string(), dt_flag))) {
           uint64_t cast_mode = 0;
-          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                            session->is_ignore_stmt(),
-                                            sql_mode,
-                                            cast_mode);
+          ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
           if (CM_IS_WARN_ON_FAIL(cast_mode) && OB_INVALID_DATE_FORMAT == tmp_ret) {
             expr_datum.set_null();
             has_set_value = true;
@@ -307,19 +297,6 @@ int ObExprDateAdjust::is_valid_for_generated_column(const ObRawExpr*expr, const 
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_first_param_not_time(exprs, is_valid))) {
     LOG_WARN("fail to check if first param is time", K(ret), K(exprs));
-  }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprDateAdjust, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(2);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
-  } else {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
   }
   return ret;
 }
@@ -516,8 +493,6 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
   int ret = OB_SUCCESS;
   ObDatum *param1 = NULL;
   ObSQLSessionInfo *session = NULL;
-  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
-  ObSQLMode sql_mode = 0;
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -525,25 +500,20 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
     LOG_WARN("eval first param value failed");
   } else if (param1->is_null()) {
     expr_datum.set_null();
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
   } else {
     const ObObjType res_type = is_oracle_mode() ? ObDateTimeType : ObDateType;
     int64_t ori_date_utc = param1->get_datetime();
     int64_t res_date_utc = 0;
     ObDateSqlMode date_sql_mode;
-    date_sql_mode.init(sql_mode);
-    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(sql_mode);
-    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(sql_mode);
+    date_sql_mode.init(session->get_sql_mode());
+    date_sql_mode.no_zero_in_date_ = is_no_zero_in_date(session->get_sql_mode());
+    date_sql_mode.allow_incomplete_dates_ = !is_no_zero_in_date(session->get_sql_mode());
     if (OB_FAIL(ObTimeConverter::calc_last_date_of_the_month(ori_date_utc, res_date_utc,
                 res_type, date_sql_mode))) {
       LOG_WARN("fail to calc last mday", K(ret), K(ori_date_utc), K(res_date_utc));
       if (!is_oracle_mode()) {
         uint64_t cast_mode = 0;
-        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                          session->is_ignore_stmt(),
-                                          sql_mode,
-                                          cast_mode);
+        ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
         if (CM_IS_WARN_ON_FAIL(cast_mode)) {
           expr_datum.set_null();
           ret = OB_SUCCESS;
@@ -558,15 +528,6 @@ int ObExprLastDay::calc_last_day(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &ex
     }
   }
 
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprLastDay, raw_expr) {
-  int ret = OB_SUCCESS;
-  if (is_mysql_mode()) {
-    SET_LOCAL_SYSVAR_CAPACITY(1);
-    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_SQL_MODE);
-  }
   return ret;
 }
 

@@ -95,7 +95,8 @@ int ObOptTabletLoc::assign_with_only_readable_replica(const ObObjectID &partitio
   // all replicas are in blacklist, add leader replica forcibly.
   if (OB_SUCC(ret) && 0 == replica_locations_.count()) {
     if (OB_INVALID_INDEX == leader_replica_idx) {
-      LOG_INFO("there is no leader replica");
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid index", K(ret));
     } else if (OB_FAIL(replica_locations_.push_back(ls_location.get_replica_locations().at(leader_replica_idx)))) {
       LOG_WARN("failed to push back leader replica", K(ret));
     }

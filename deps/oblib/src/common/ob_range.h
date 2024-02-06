@@ -485,11 +485,6 @@ public:
     return (start_key_.is_min_row()) && (end_key_.is_max_row());
   }
 
-  inline bool is_false_range() const
-  {
-    return (start_key_.is_max_row()) && (end_key_.is_min_row());
-  }
-
   /*
   inline bool is_close_range() const
   {

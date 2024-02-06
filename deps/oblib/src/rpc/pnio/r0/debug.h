@@ -16,28 +16,6 @@ struct stat_time_guard_t {
   int64_t *time;
   const char *procedure;
 };
-typedef struct diag_info_t
-{
-  uint64_t send_cnt;
-  uint64_t send_size;
-  uint64_t sc_queue_time;
-} diag_info_t;
-typedef struct socket_diag_info_t
-{
-  int64_t establish_time;
-  int64_t last_read_time;
-  uint64_t write_cnt;
-  uint64_t write_size;
-  uint64_t write_wait_time;
-  uint64_t read_cnt;
-  uint64_t read_size;
-  uint64_t read_time;
-  uint64_t read_process_time;
-  uint64_t doing_cnt;
-  uint64_t done_cnt;
-  addr_t local_addr;
-} socket_diag_info_t;
-
 
 extern __thread int64_t eloop_malloc_count;
 extern __thread int64_t eloop_malloc_time;

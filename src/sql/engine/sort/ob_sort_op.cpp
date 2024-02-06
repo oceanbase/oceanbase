@@ -16,8 +16,6 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
-#include "sql/engine/aggregate/ob_hash_groupby_vec_op.h"
-#include "share/ob_rpc_struct.h"
 
 namespace oceanbase
 {
@@ -39,9 +37,7 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
   is_fetch_with_ties_(false),
   prescan_enabled_(false),
   enable_encode_sortkey_opt_(false),
-  part_cnt_(0),
-  sort_compact_level_(share::SORT_DEFAULT_LEVEL),
-  compress_type_(NONE_COMPRESSOR)
+  part_cnt_(0)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
@@ -58,9 +54,7 @@ OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),
                     is_fetch_with_ties_,
                     prescan_enabled_,
                     enable_encode_sortkey_opt_,
-                    part_cnt_,
-                    sort_compact_level_,
-                    compress_type_);
+                    part_cnt_);
 
 ObSortOp::ObSortOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(ctx_, spec, input),
@@ -173,15 +167,12 @@ int ObSortOp::get_topn_count(int64_t &topn_cnt)
       topn_cnt = std::max(MY_SPEC.minimum_row_count_, limit + offset);
       int64_t row_count = 0;
       ObPhyOperatorType op_type = child_->get_spec().type_;
-      if (PHY_HASH_GROUP_BY != op_type && PHY_VEC_HASH_GROUP_BY != op_type) {
+      if (PHY_HASH_GROUP_BY != op_type) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid child_op_", K(op_type), K(ret));
       } else {
-        if (op_type == PHY_VEC_HASH_GROUP_BY) {
-          row_count = static_cast<ObHashGroupByVecOp *>(child_)->get_hash_groupby_row_count();
-        } else {
-          row_count = static_cast<ObHashGroupByOp *>(child_)->get_hash_groupby_row_count();
-        }
+        ObHashGroupByOp *hash_groupby_op = static_cast<ObHashGroupByOp *>(child_);
+        row_count = hash_groupby_op->get_hash_groupby_row_count();
       }
       if (OB_SUCC(ret)) {
         topn_cnt = std::max(topn_cnt,
@@ -290,11 +281,10 @@ int ObSortOp::process_sort_batch()
 int ObSortOp::scan_all_then_sort()
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObCompactStore, cache_store) {
+  SMART_VAR(ObChunkDatumStore, cache_store, "SORT_CACHE_CTX") {
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
-        ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/, 0, true,
-        MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
+        ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/))) {
       LOG_WARN("init sample chunk store failed", K(ret));
     } else if (OB_FAIL(cache_store.alloc_dir_id())) {
       LOG_WARN("failed to alloc dir id", K(ret));
@@ -309,7 +299,7 @@ int ObSortOp::scan_all_then_sort()
         }
       } else {
         sort_row_count_++;
-        if (OB_FAIL(cache_store.add_row(MY_SPEC.all_exprs_, eval_ctx_))) {
+        if (OB_FAIL(cache_store.add_row(MY_SPEC.all_exprs_, &eval_ctx_))) {
           LOG_WARN("failed to add row to cache store", K(ret));
         }
       }
@@ -320,19 +310,21 @@ int ObSortOp::scan_all_then_sort()
     }
 
     if (OB_SUCC(ret)) {
+      ObChunkDatumStore::Iterator iterator;
       if (OB_FAIL(cache_store.finish_add_row(false))) {
         LOG_WARN("fail to finish add row", K(ret));
+      } else if (OB_FAIL(cache_store.begin(iterator))) {
+        LOG_WARN("fail to get cache_store iter", K(ret));
       } else {
         const ObChunkDatumStore::StoredRow *store_row = NULL;
-        bool has_next = false;
-        while (OB_SUCC(ret) && OB_SUCC(cache_store.has_next(has_next)) && has_next) {
-          if (OB_FAIL(cache_store.get_next_row(store_row))) {
+        while (OB_SUCC(ret) && iterator.has_next()) {
+          if (OB_FAIL(iterator.get_next_row(store_row))) {
             if (OB_ITER_END != ret) {
-              LOG_WARN("failed to get next row", K(ret));
+              LOG_WARN("failed to get next row");
             }
           } else if (OB_ISNULL(store_row)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get next row", K(ret));
+            LOG_WARN("failed to get next row");
           } else {
             OZ(sort_impl_.add_stored_row(*store_row));
           }
@@ -346,11 +338,10 @@ int ObSortOp::scan_all_then_sort()
 int ObSortOp::scan_all_then_sort_batch()
 {
   int ret = OB_SUCCESS;
-  SMART_VAR(ObCompactStore, cache_store) {
+  SMART_VAR(ObChunkDatumStore, cache_store, "SORT_CACHE_CTX") {
     if (OB_FAIL(cache_store.init(2 * 1024 * 1024,
         ctx_.get_my_session()->get_effective_tenant_id(),
-        ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/, 0, true,
-        MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_))) {
+        ObCtxIds::DEFAULT_CTX_ID, "SORT_CACHE_CTX", true/*enable dump*/))) {
       LOG_WARN("init sample chunk store failed", K(ret));
     } else if (OB_FAIL(cache_store.alloc_dir_id())) {
       LOG_WARN("failed to alloc dir id", K(ret));
@@ -382,13 +373,15 @@ int ObSortOp::scan_all_then_sort_batch()
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret)) {
+      ObChunkDatumStore::Iterator iterator;
       if (OB_FAIL(cache_store.finish_add_row(false))) {
         LOG_WARN("fail to finish add row", K(ret));
+      } else if (OB_FAIL(cache_store.begin(iterator))) {
+        LOG_WARN("fail to get cache_store iter", K(ret));
       } else {
         const ObChunkDatumStore::StoredRow *store_row = NULL;
-        bool has_next = false;
-        while (OB_SUCC(ret) && OB_SUCC(cache_store.has_next(has_next)) && has_next) {
-          if (OB_FAIL(cache_store.get_next_row(store_row))) {
+        while (OB_SUCC(ret) && iterator.has_next()) {
+          if (OB_FAIL(iterator.get_next_row(store_row))) {
             if (OB_ITER_END != ret) {
               LOG_WARN("failed to get next row");
             }
@@ -437,8 +430,7 @@ int ObSortOp::init_sort(int64_t tenant_id,
   int ret = OB_SUCCESS;
   OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
       &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
-      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_,
-      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.sort_compact_level_, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_));
+      false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_));
   if (is_batch) {
     read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   } else {

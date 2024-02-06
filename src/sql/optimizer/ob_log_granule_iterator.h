@@ -16,7 +16,6 @@
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "lib/container/ob_se_array.h"
 #include "sql/engine/px/ob_granule_util.h"
-#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 
 namespace oceanbase
 {
@@ -35,8 +34,7 @@ public:
   bf_info_(),
   tablet_id_expr_(NULL),
   repartition_ref_table_id_(OB_INVALID_ID),
-  used_by_external_table_(false),
-  px_rf_info_()
+  used_by_external_table_(false)
   { }
   virtual ~ObLogGranuleIterator()
   { }
@@ -76,9 +74,6 @@ public:
   ObPxBFStaticInfo &get_join_filter_info() { return bf_info_; }
   void set_join_filter_info(ObPxBFStaticInfo &bf_info) { bf_info_ = bf_info; }
 
-  int set_px_rf_info(const ObPxRFStaticInfo &px_rf_info) { return px_rf_info_.assign(px_rf_info); }
-  ObPxRFStaticInfo &get_px_rf_info() { return px_rf_info_; }
-
   void set_tablet_id_expr(ObOpPseudoColumnRawExpr *tablet_id_expr) { tablet_id_expr_ = tablet_id_expr; }
   ObOpPseudoColumnRawExpr *get_tablet_id_expr() { return tablet_id_expr_; }
   void set_repartition_ref_table_id(int64_t table_id) { repartition_ref_table_id_ = table_id; }
@@ -99,7 +94,6 @@ private:
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
   int64_t repartition_ref_table_id_;
   bool used_by_external_table_;
-  ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
 };
 
 }

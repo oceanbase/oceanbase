@@ -64,7 +64,7 @@ update t1 set c1 = 1 + 1 where c1 = 2;
 
 #case 17 partition by key
 #update t5 set c1 = 1 where c2 = 3 and c3 = 4;
-#UPDATE __all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND ip = '127.0.0.1' AND port = 51951;
+#UPDATE __all_root_table SET sql_port = 51997, zone = 'test', partition_cnt = 1, role = 0, row_count = 0, data_size = 0, data_version = 1, data_checksum = 0, row_checksum = 0, column_checksum = '' WHERE tenant_id = 1 AND table_id = 2 AND partition_id = 0 AND ip = '10.232.36.175' AND port = 51951;
 
 #test for partition selection in dml_stmt
 insert into t1 partition (p3, p0) values(3, 2);

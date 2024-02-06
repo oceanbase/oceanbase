@@ -60,13 +60,12 @@ int ObSqlEndTransCb::set_packet_param(const sql::ObEndTransCbPacketParam &pkt_pa
 int ObSqlEndTransCb::init(ObMPPacketSender& packet_sender, 
                           sql::ObSQLSessionInfo *sess_info, 
                           int32_t stmt_id,
-                          uint64_t params_num,
-                          int64_t com_offset)
+                          uint64_t params_num)
 {
   sess_info_ = sess_info;
   stmt_id_ = stmt_id;
   params_num_ = params_num;
-  return packet_sender_.clone_from(packet_sender, com_offset);
+  return packet_sender_.clone_from(packet_sender);
 }
 
 void ObSqlEndTransCb::callback(int cb_param, const transaction::ObTransID &trans_id)

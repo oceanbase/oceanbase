@@ -190,7 +190,6 @@ public:
   };
   enum StringHintItem {
     LOG_LEVEL,
-    BATCH_BUFFER_SIZE,
     TOTAL_STRING_ITEM
   };
   void reset()

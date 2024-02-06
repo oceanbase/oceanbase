@@ -55,7 +55,7 @@ endif()
 ob_define(AUTO_FDO_OPT "")
 if(ENABLE_AUTO_FDO)
   # file name pattern [observer.prof.{current_timestamp ms}]
-  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1702984872675")
+  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1693473964865")
 endif()
 
 ob_define(THIN_LTO_OPT "")
@@ -82,6 +82,8 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_TDE_SECURITY ON)
   ob_define(OB_BUILD_AUDIT_SECURITY ON)
   ob_define(OB_BUILD_LABEL_SECURITY ON)
+  # 字符集
+  ob_define(OB_BUILD_FULL_CHARSET ON)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
 
@@ -117,6 +119,10 @@ endif()
 
 if(OB_BUILD_LABEL_SECURITY)
   add_definitions(-DOB_BUILD_LABEL_SECURITY)
+endif()
+
+if(OB_BUILD_FULL_CHARSET)
+  add_definitions(-DOB_BUILD_FULL_CHARSET)
 endif()
 
 if(OB_BUILD_SPM)
@@ -272,7 +278,7 @@ if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
 else()
-    set(MARCH_CFLAGS "-march=armv8-a+crc+lse" )
+    set(MARCH_CFLAGS "-march=armv8-a+crc" )
     set(MTUNE_CFLAGS "-mtune=generic" )
     set(ARCH_LDFLAGS "-l:libatomic.a")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")

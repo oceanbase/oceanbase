@@ -129,22 +129,16 @@ int eloop_run(eloop_t* ep) {
     }
 
     PNIO_DELAY_WARN(eloop_delay_warn(start_us, ELOOP_WARN_US));
-    if (unlikely(PNIO_REACH_TIME_INTERVAL(1000000))) {
+    if (unlikely(NULL != pn && 0 == pn->tid && PNIO_REACH_TIME_INTERVAL(1000000))) {
+      static __thread uint64_t last_rx_bytes = 0;
+      static __thread uint64_t last_time = 0;
+      uint64_t rx_bytes = pn_get_rxbytes(pn->gid);
       int64_t cur_time_us = rk_get_us();
-      if (NULL != pn && 0 == pn->tid) {
-        static __thread uint64_t last_rx_bytes = 0;
-        static __thread uint64_t last_time = 0;
-        uint64_t rx_bytes = pn_get_rxbytes(pn->gid);
-        uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
-        double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
-        rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
-        last_rx_bytes = rx_bytes;
-        last_time = cur_time_us;
-      }
-      // print debug info each 60 seconds
-      if (0 == cur_time_us/1000000%60) {
-        pn_print_diag_info(pn);
-      }
+      uint64_t bytes = rx_bytes >= last_rx_bytes? rx_bytes - last_rx_bytes : 0xffffffff - last_rx_bytes + rx_bytes;
+      double bw = ((double)(bytes)) / (cur_time_us - last_time) * 0.95367431640625;
+      rk_info("[ratelimit] time: %8ld, bytes: %ld, bw: %8lf MB/s, add_ts: %ld, add_bytes: %ld\n", cur_time_us, rx_bytes, bw, cur_time_us - last_time, rx_bytes - last_rx_bytes);
+      last_rx_bytes = rx_bytes;
+      last_time = cur_time_us;
     }
   }
   pn_release(pn);

@@ -25,7 +25,6 @@ struct ObExprSelPair;
 struct JoinFilterInfo;
 class OptTableMetas;
 class OptSelectivityCtx;
-class ObOptimizerContext;
 
 class ObOptEstCost
 {
@@ -39,15 +38,15 @@ public:
   static int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
                            double &cost,
                            common::ObIArray<ObExprSelPair> &all_predicate_sel,
-                           const ObOptimizerContext &opt_ctx);
+                           MODEL_TYPE model_type);
 
   static int cost_mergejoin(const ObCostMergeJoinInfo &est_cost_info,
                             double &cost,
-                            const ObOptimizerContext &opt_ctx);
+                            MODEL_TYPE model_type);
 
   static int cost_hashjoin(const ObCostHashJoinInfo &est_cost_info,
                            double &cost,
-                           const ObOptimizerContext &opt_ctx);
+                           MODEL_TYPE model_type);
 
   static int cost_sort_and_exchange(OptTableMetas *table_metas,
                                     OptSelectivityCtx *sel_ctx,
@@ -64,91 +63,75 @@ public:
                                     const bool need_sort,
                                     const int64_t prefix_pos,
                                     double &cost,
-                                    const ObOptimizerContext &opt_ctx);
+                                    MODEL_TYPE model_type);
 
   static int cost_sort(const ObSortCostInfo &cost_info,
                        double &cost,
-                       const ObOptimizerContext &opt_ctx);
+                       MODEL_TYPE model_type);
 
   static int cost_exchange(const ObExchCostInfo &cost_info,
                            double &ex_cost,
-                           const ObOptimizerContext &opt_ctx);
+                           MODEL_TYPE model_type);
 
   static int cost_exchange_in(const ObExchInCostInfo &cost_info,
                               double &cost,
-                              const ObOptimizerContext &opt_ctx);
+                              MODEL_TYPE model_type);
 
   static int cost_exchange_out(const ObExchOutCostInfo &cost_info,
                                double &cost,
-                               const ObOptimizerContext &opt_ctx);
+                               MODEL_TYPE model_type);
 
   static double cost_merge_group(double rows,
                                  double res_rows,
                                  double width,
                                  const ObIArray<ObRawExpr *> &group_columns,
                                  int64_t agg_col_count,
-                                 const ObOptimizerContext &opt_ctx);
+                                 MODEL_TYPE model_type);
 
   static double cost_hash_group(double rows,
                                 double res_rows,
                                 double width,
                                 const ObIArray<ObRawExpr *> &group_columns,
                                 int64_t agg_col_count,
-                                const ObOptimizerContext &opt_ctx);
+                                MODEL_TYPE model_type);
 
   static double cost_scalar_group(double rows,
                                   int64_t agg_col_count,
-                                  const ObOptimizerContext &opt_ctx);
+                                  MODEL_TYPE model_type);
 
   static double cost_merge_distinct(double rows,
                                     double res_rows,
                                     double width,
                                     const ObIArray<ObRawExpr *> &distinct_columns,
-                                    const ObOptimizerContext &opt_ctx);
+                                    MODEL_TYPE model_type);
 
   static double cost_hash_distinct(double rows,
                                    double res_rows,
                                    double width,
                                    const ObIArray<ObRawExpr *> &disinct_columns,
-                                   const ObOptimizerContext &opt_ctx);
+                                   MODEL_TYPE model_type);
 
-  static double cost_get_rows(double rows,
-                              const ObOptimizerContext &opt_ctx);
+  static double cost_get_rows(double rows, MODEL_TYPE model_type);
 
-  static double cost_sequence(double rows,
-                              double uniq_sequence_cnt,
-                              const ObOptimizerContext &opt_ctx);
+  static double cost_sequence(double rows, double uniq_sequence_cnt, MODEL_TYPE model_type);
 
-  static double cost_material(const double rows,
-                              const double average_row_size,
-                              const ObOptimizerContext &opt_ctx);
+  static double cost_material(const double rows, const double average_row_size, MODEL_TYPE model_type);
 
-  static double cost_read_materialized(const double rows,
-                                       const ObOptimizerContext &opt_ctx);
+  static double cost_read_materialized(const double rows, MODEL_TYPE model_type);
 
-  static double cost_filter_rows(double rows,
-                                 ObIArray<ObRawExpr*> &filters,
-                                 const ObOptimizerContext &opt_ctx);
+  static double cost_filter_rows(double rows, ObIArray<ObRawExpr*> &filters, MODEL_TYPE model_type);
 
-  static int cost_subplan_filter(const ObSubplanFilterCostInfo &info,
-                                 double &cost,
-                                 const ObOptimizerContext &opt_ctx);
+  static int cost_subplan_filter(const ObSubplanFilterCostInfo &info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_union_all(const ObCostMergeSetInfo &info,
-                            double &cost,
-                            const ObOptimizerContext &opt_ctx);
+  static int cost_union_all(const ObCostMergeSetInfo &info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_merge_set(const ObCostMergeSetInfo &info,
-                            double &cost,
-                            const ObOptimizerContext &opt_ctx);
+  static int cost_merge_set(const ObCostMergeSetInfo &info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_hash_set(const ObCostHashSetInfo &info,
-                           double &cost,
-                           const ObOptimizerContext &opt_ctx);
+  static int cost_hash_set(const ObCostHashSetInfo &info, double &cost, MODEL_TYPE model_type);
 
   static double cost_quals(double rows, 
                            const ObIArray<ObRawExpr *> &quals, 
-                           const ObOptimizerContext &opt_ctx,
+                           MODEL_TYPE model_type,
                            bool need_scale = true);
   /*
    * entry point for estimating table access cost
@@ -156,17 +139,16 @@ public:
   static int cost_table(const ObCostTableScanInfo &est_cost_info,
                         int64_t parallel,
                         double &cost,
-                        const ObOptimizerContext &opt_ctx);
+                        MODEL_TYPE model_type);
 
   static int cost_table_for_parallel(const ObCostTableScanInfo &est_cost_info,
                                      const int64_t parallel,
                                      const double part_cnt_per_dop,
                                      double &px_cost,
                                      double &cost,
-                                     const ObOptimizerContext &opt_ctx);
+                                     MODEL_TYPE model_type);
 
-  static double cost_late_materialization_table_get(int64_t column_cnt,
-                                                    const ObOptimizerContext &opt_ctx);
+  static double cost_late_materialization_table_get(int64_t column_cnt, MODEL_TYPE model_type);
 
   static void cost_late_materialization_table_join(double left_card,
                                                    double left_cost,
@@ -174,31 +156,25 @@ public:
                                                    double right_cost,
                                                    double &op_cost,
                                                    double &cost,
-                                                   const ObOptimizerContext &opt_ctx);
+                                                   MODEL_TYPE model_type);
 
   static void cost_late_materialization(double left_card,
                                         double left_cost,
                                         int64_t column_count,
                                         double &cost,
-                                        const ObOptimizerContext &opt_ctx);
+                                        MODEL_TYPE model_type);
 
   static int cost_window_function(double rows, 
                                   double width, 
                                   double win_func_cnt, 
                                   double &cost,
-                                  const ObOptimizerContext &opt_ctx);
+                                  MODEL_TYPE model_type);
 
-  static int cost_insert(ObDelUpCostInfo& cost_info,
-                         double &cost,
-                         const ObOptimizerContext &opt_ctx);
+  static int cost_insert(ObDelUpCostInfo& cost_info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_update(ObDelUpCostInfo& cost_info,
-                         double &cost,
-                         const ObOptimizerContext &opt_ctx);
+  static int cost_update(ObDelUpCostInfo& cost_info, double &cost, MODEL_TYPE model_type);
 
-  static int cost_delete(ObDelUpCostInfo& cost_info,
-                         double &cost,
-                         const ObOptimizerContext &opt_ctx);
+  static int cost_delete(ObDelUpCostInfo& cost_info, double &cost, MODEL_TYPE model_type);
 
   static int calc_range_cost(const ObTableMetaInfo& table_meta_info,
                             const ObIArray<ObRawExpr *> &filters,
@@ -206,7 +182,7 @@ public:
                             int64_t range_count,
                             double range_sel,
                             double &cost,
-                            const ObOptimizerContext &opt_ctx);
+                            MODEL_TYPE model_type);
 
   static int estimate_width_for_table(const OptTableMetas &table_metas,
                                       const OptSelectivityCtx &ctx,
@@ -242,6 +218,9 @@ public:
 
   static double get_estimate_width_from_type(const ObExprResType &type);
 private:
+  static ObOptEstCostModel &get_model(MODEL_TYPE model_type);
+  // static ObOptEstCostModel normal_model_;
+  // static ObOptEstCostModel vector_model_;
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCost);
 };
 

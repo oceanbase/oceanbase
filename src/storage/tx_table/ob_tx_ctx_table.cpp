@@ -104,15 +104,13 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
   transaction::ObPartTransCtx *tx_ctx = NULL;
   bool tx_ctx_existed = true;
   common::ObAddr scheduler;
-  // since 4.3 cluster_version in ctx_info
-  uint64_t cluster_version = ctx_info.cluster_version_;
   transaction::ObTxCreateArg arg(true,  /* for_replay */
-                                 PartCtxSource::RECOVER,
+                                 false,
                                  MTL_ID(),
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,
                                  ctx_info.cluster_id_,     /* cluster_id */
-                                 cluster_version,
+                                 GET_MIN_CLUSTER_VERSION(),
                                  0, /*session_id*/
                                  scheduler,
                                  INT64_MAX,
@@ -215,17 +213,12 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     transaction::ObPartTransCtx *tx_ctx = NULL;
     int64_t pos = 0;
     bool tx_ctx_existed = true;
-    ctx_info_.set_compatible_version(curr_meta.get_version());
+
     if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
-    } else if (FALSE_IT(ctx_info_.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
     } else if (OB_FAIL(recover_one_tx_ctx_(ls_tx_ctx_mgr, ctx_info_))) {
-      // heap memory needed be freed, but can not do this in destruction, cause tx_buffer_node has no value sematics
-      ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();
       STORAGE_LOG(WARN, "failed to recover_one_tx_ctx_", K(ret), K(ctx_info_));
     } else {
-      // heap memory needed be freed, but can not do this in destruction, cause tx_buffer_node has no value sematics
-      ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();
       finish_recover_one_tx_ctx_();
     }
   }

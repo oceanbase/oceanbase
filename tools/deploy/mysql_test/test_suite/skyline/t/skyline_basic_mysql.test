@@ -393,44 +393,6 @@ explain select avg(c1) over (partition by c3 order by c5),
                max(c1) over (partition by c2, c3, c5)
                from t9 order by c3, c2, c5;
 
-# test false range
-create table t10(pk int primary key, c1 int, c2 int, c3 int, c4 int);
-create index t10i1 on t10(c1, c2, c3);
-create index t10i2 on t10(c2, c3);
-create index t10i3 on t10(c3);
-create table t11(pk int primary key, c1 int, c2 int);
-create index t11i1 on t11(c1);
-create table t12(c1 int, c2 int, c3 int, c4 int, primary key(c1, c2));
-create index t12i1 on t12(c2);
-create index t12i2 on t12(c3);
-
-explain extended_noaddr select 1 from t10 where c1 < 0 and c1 > 0 and c2 = 1;
-explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1;
-explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1;
-explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2;
-explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2;
-explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c3 = 1 order by c2;
-explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c2 = 1 order by c3;
-explain extended_noaddr select 1 from t10 where c2 < 0 and c2 > 0 and c4 = 2 order by c1;
-explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c2;
-explain extended_noaddr select 1 from t10 where c3 < 0 and c3 > 0 and c4 = 2 order by c3;
-
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0;
-explain extended_noaddr select 1 from t11 where c1 < 0 and c1 > 0;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by pk;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c1;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c2 = 1 order by c2;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by pk;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c1;
-explain extended_noaddr select 1 from t11 where pk < 0 and pk > 0 and c1 = 1 order by c2;
-
-explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0;
-explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0;
-explain extended_noaddr select 1 from t12 where c2 < 0 and c2 > 0 and c3 = 1;
-explain extended_noaddr select * from t12 where c2 < 0 and c2 > 0 and c3 = 1;
-
 ##complicate
 #
 set @@recyclebin = 'off';

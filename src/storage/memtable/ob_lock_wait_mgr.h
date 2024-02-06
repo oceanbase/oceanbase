@@ -67,7 +67,7 @@ public:
   }
   void clear() { map_.clear(); }
 private:
-  ObLinearHashMap<ObIntWarp, ObTransID, UniqueMemMgrTag> map_;
+  ObLinearHashMap<ObIntWarp, ObTransID> map_;
 };
 
 class DeadLockBlockCallBack {

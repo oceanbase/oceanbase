@@ -8,9 +8,6 @@
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
 #include "storage/blocksstable/ob_data_store_desc.h"
-#include "storage/blocksstable/ob_block_manager.h"
-#include "storage/blocksstable/ob_sstable_meta.h"
-#include "share/schema/ob_column_schema.h"
 
 namespace oceanbase
 {
@@ -52,7 +49,7 @@ bool ObStaticDataStoreDesc::is_valid() const
 
 void ObStaticDataStoreDesc::reset()
 {
-  merge_type_ = compaction::INVALID_MERGE_TYPE;
+  merge_type_ = INVALID_MERGE_TYPE;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   ls_id_.reset();
   tablet_id_.reset();
@@ -253,9 +250,8 @@ int ObColDataStoreDesc::init(
     is_row_store_ = true;
     table_cg_idx_ = table_cg_idx;
     schema_rowkey_col_cnt_ = merge_schema.get_rowkey_column_num();
-    rowkey_column_count_ =
-      schema_rowkey_col_cnt_ + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-    full_stored_col_cnt_ += storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    rowkey_column_count_ = schema_rowkey_col_cnt_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    full_stored_col_cnt_ += ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     row_column_count_ = full_stored_col_cnt_;
     if (!merge_schema.is_column_info_simplified()) {
       if (OB_FAIL(col_desc_array_.init(row_column_count_))) {
@@ -271,7 +267,7 @@ int ObColDataStoreDesc::init(
       } else if (OB_FAIL(merge_schema.get_mulit_version_rowkey_column_ids(col_desc_array_))) {
         STORAGE_LOG(WARN, "fail to get rowkey column ids", K(ret));
       } else if (is_major && OB_FAIL(generate_skip_index_meta(merge_schema, nullptr/*cg_schema*/))) {
-        STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
+      STORAGE_LOG(WARN, "failed to generate skip index meta", K(ret));
       }
     }
     if (FAILEDx(gene_col_default_checksum_array(merge_schema))) {
@@ -314,7 +310,7 @@ int ObColDataStoreDesc::get_compat_mode_from_schema(
 
 int ObColDataStoreDesc::add_col_desc_from_cg_schema(
   const share::schema::ObMergeSchema &merge_schema,
-  const storage::ObStorageColumnGroupSchema &cg_schema)
+  const ObStorageColumnGroupSchema &cg_schema)
 {
   int ret = OB_SUCCESS;
   const int64_t column_cnt = cg_schema.column_cnt_;
@@ -346,7 +342,7 @@ int ObColDataStoreDesc::add_col_desc_from_cg_schema(
 
 int ObColDataStoreDesc::init(const bool is_major,
                              const ObMergeSchema &merge_schema,
-                             const storage::ObStorageColumnGroupSchema &cg_schema,
+                             const ObStorageColumnGroupSchema &cg_schema,
                              const uint16_t table_cg_idx)
 {
   int ret = OB_SUCCESS;
@@ -473,8 +469,6 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   } else if (OB_UNLIKELY(!agg_meta_array_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non-empty aggregate meta array", K(ret));
-  } else if (schema.is_column_info_simplified()) {
-      // simplified do not generate skip index, do not init agg_meta_array
   } else if (OB_FAIL(schema.get_skip_index_col_attr(skip_idx_attrs))) {
     STORAGE_LOG(WARN, "failed to get skip index col attr", K(ret));
   } else if (OB_UNLIKELY(skip_idx_attrs.count() < full_stored_col_cnt_)) {
@@ -512,7 +506,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
   return ret;
 }
 
-int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const storage::ObStorageColumnGroupSchema &cg_schema)
+int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const ObStorageColumnGroupSchema &cg_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -526,7 +520,7 @@ int ObColDataStoreDesc::generate_single_cg_skip_index_meta(const storage::ObStor
     const uint16_t column_idx = cg_schema.column_idxs_[0];
     ObSkipIndexColumnAttr single_cg_skip_idx_attr;
     single_cg_skip_idx_attr.set_min_max();
-    single_cg_skip_idx_attr.set_sum();
+    // single_cg_skip_idx_attr.set_sum(); // open after support sum
     if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
         single_cg_skip_idx_attr, 0, agg_meta_array_))) {
       STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(column_idx), K(cg_schema));

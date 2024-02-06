@@ -26,18 +26,6 @@ namespace oceanbase
 namespace storage
 {
 
-struct ObUpdateTabletPointerParam final
-{
-public:
-  ObUpdateTabletPointerParam() = default;
-  ~ObUpdateTabletPointerParam() = default;
-  bool is_valid() const { return tablet_addr_.is_valid(); }
-  TO_STRING_KV(K_(tablet_addr), K_(tablet_attr));
-public:
-  ObMetaDiskAddr tablet_addr_;
-  ObTabletAttr tablet_attr_;
-};
-
 class ObTabletPointerMap : public ObResourceMap<ObTabletMapKey, ObTabletPointer>
 {
 public:
@@ -45,13 +33,11 @@ public:
   int erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
   int exist(const ObTabletMapKey &key, bool &is_exist);
   int get_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
-  int get_meta_obj_with_filter(const ObTabletMapKey &key, ObITabletFilterOp &op, ObMetaObjGuard<ObTablet> &guard);
   int get_meta_obj_with_external_memory(
       const ObTabletMapKey &key,
       common::ObArenaAllocator &allocator,
       ObMetaObjGuard<ObTablet> &guard,
-      const bool force_alloc_new,
-      ObITabletFilterOp *op);
+      const bool force_alloc_new = false);
   int try_get_in_memory_meta_obj(const ObTabletMapKey &key, bool &success, ObMetaObjGuard<ObTablet> &guard);
   int try_get_in_memory_meta_obj_and_addr(
       const ObTabletMapKey &key,
@@ -62,9 +48,9 @@ public:
   int get_attr_for_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
   int compare_and_swap_addr_and_object(
       const ObTabletMapKey &key,
+      const ObMetaDiskAddr &new_addr,
       const ObMetaObjGuard<ObTablet> &old_guard,
-      const ObMetaObjGuard<ObTablet> &new_guard,
-      const ObUpdateTabletPointerParam &update_pointer_param);
+      ObMetaObjGuard<ObTablet> &new_guard);
   // TIPS:
   //  - only compare and swap pure address, but no reset object.
   // only used for replay and compat, others mustn't call this func
@@ -90,17 +76,11 @@ private:
   int load_meta_obj(
       const ObTabletMapKey &key,
       ObTabletPointer *meta_pointer,
-      ObUpdateTabletPointerParam &updata_pointer_param,
+      ObMetaDiskAddr &load_addr,
       ObTablet *&t);
   int load_and_hook_meta_obj(const ObTabletMapKey &key, ObTabletPointerHandle &ptr_hdl, ObMetaObjGuard<ObTablet> &guard);
   int try_get_in_memory_meta_obj(
       const ObTabletMapKey &key,
-      ObTabletPointerHandle &ptr_hdl,
-      ObMetaObjGuard<ObTablet> &guard,
-      bool &is_in_memory);
-  int try_get_in_memory_meta_obj_with_filter(
-      const ObTabletMapKey &key,
-      ObITabletFilterOp &op,
       ObTabletPointerHandle &ptr_hdl,
       ObMetaObjGuard<ObTablet> &guard,
       bool &is_in_memory);

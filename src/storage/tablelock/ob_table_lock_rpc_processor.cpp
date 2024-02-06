@@ -71,10 +71,6 @@ int check_exist(const ObLockTaskBatchRequest &arg,
   } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_latest_tablet_status(
       data, is_commited))) {
     LOG_WARN("failed to get CreateDeleteMdsUserData", KR(ret));
-    if (OB_EMPTY_RESULT == ret) {
-      // tablet is creating
-      ret = OB_TABLET_NOT_EXIST;
-    }
   } else if (FALSE_IT(tablet_status = data.get_tablet_status())) {
   } else if (ObTabletStatus::NORMAL == tablet_status
              || ObTabletStatus::TRANSFER_OUT == tablet_status

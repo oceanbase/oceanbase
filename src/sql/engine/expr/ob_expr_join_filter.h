@@ -21,7 +21,6 @@ namespace sql
 {
 
 class ObP2PDatahubMsgBase;
-struct ObRowWithHash;
 enum RuntimeFilterType
 {
   NOT_INIT_RUNTIME_FILTER_TYPE = 0,
@@ -29,9 +28,6 @@ enum RuntimeFilterType
   RANGE = 2,
   IN = 3
 };
-
-using ObRuntimeFilterParams = common::ObSEArray<common::ObDatum, 4>;
-
 class ObExprJoinFilter : public ObExprOperator
 {
 public:
@@ -45,8 +41,7 @@ public:
           window_cnt_(0), window_size_(0),
           partial_filter_count_(0), partial_total_count_(0),
           cur_pos_(total_count_), need_reset_sample_info_(false), flag_(0),
-          cur_row_(), cur_row_with_hash_(nullptr), skip_vector_(nullptr),
-          is_partition_wise_jf_(false)
+          cur_row_()
         {
           cur_row_.set_attr(ObMemAttr(MTL_ID(), "RfCurRow"));
           need_wait_rf_ = true;
@@ -57,19 +52,6 @@ public:
       bool is_ready() { return is_ready_; }
       bool need_wait_ready() { return need_wait_rf_; }
       bool dynamic_disable() {  return dynamic_disable_; }
-      void collect_monitor_info(
-          const int64_t filtered_rows_count,
-          const int64_t check_rows_count,
-          const int64_t total_rows_count);
-      void inc_partial_rows_count(
-          const int64_t filtered_rows_count,
-          const int64_t total_rows_count)
-      {
-        if (!dynamic_disable()) {
-          partial_filter_count_ += filtered_rows_count;
-          partial_total_count_ += total_rows_count;
-        }
-      }
       void reset_monitor_info();
     public:
       ObP2PDatahubMsgBase *rf_msg_;
@@ -90,7 +72,7 @@ public:
       int64_t partial_filter_count_;
       int64_t partial_total_count_;
       int64_t &cur_pos_;
-      bool need_reset_sample_info_;
+      bool need_reset_sample_info_; // use for check_need_dynamic_diable_bf_batch
       union {
         uint64_t flag_;
         struct {
@@ -103,15 +85,6 @@ public:
         };
       };
       ObTMArray<ObDatum> cur_row_;
-      ObRowWithHash *cur_row_with_hash_; // used in ObRFInFilterVecMsg, for probe
-      // used in ObRFInFilterVecMsg/ObRFBloomFilterMsg, for probe in single row interface
-      ObBitVector *skip_vector_;
-      // used in ObRFInFilterVecMsg/ObRFBloomFilterMsg, cal probe data's hash value
-      uint64_t *right_hash_vals_;
-
-      // for runtime filter pushdown, if is partition wise join, we need to reset
-      // pushdown filter parameters
-      bool is_partition_wise_jf_;
   };
   ObExprJoinFilter();
   explicit ObExprJoinFilter(common::ObIAllocator& alloc);
@@ -134,27 +107,12 @@ public:
   static int eval_in_filter_batch(
              const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
 
-  static int eval_bloom_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound);
-  static int eval_range_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound);
-  static int eval_in_filter_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound);
 
   static int eval_filter_internal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
 
   static int eval_filter_batch_internal(
              const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size);
-
-  static int eval_filter_vector_internal(
-             const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
 
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
@@ -167,12 +125,6 @@ public:
   static void collect_sample_info_batch(
     ObExprJoinFilter::ObExprJoinFilterContext &join_filter_ctx,
     int64_t filter_count, int64_t total_count);
-  static int prepare_storage_white_filter_data(
-      const ObExpr &expr,
-      ObDynamicFilterExecutor &dynamic_filter,
-      ObEvalCtx &eval_ctx,
-      ObRuntimeFilterParams &params,
-      bool &is_data_prepared);
 private:
   static int check_rf_ready(
     ObExecContext &exec_ctx,

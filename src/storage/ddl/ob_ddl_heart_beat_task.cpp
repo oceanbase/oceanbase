@@ -90,14 +90,14 @@ int ObDDLHeartBeatTaskContainer::set_register_task_id(const int64_t task_id, con
     LOG_WARN("ObDDLHeartBeatTaskContainer not inited", K(ret));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, task_id);
-    if (OB_FAIL(register_tasks_.set_refactored(rootserver::ObDDLTaskID(tenant_id, task_id), 0))) {
+    if (OB_FAIL(register_tasks_.set_refactored(task_id, tenant_id))) {
       LOG_ERROR("set register task id failed", KR(ret));
     }
   }
   return ret;
 }
 
-int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id, const uint64_t tenant_id)
+int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -105,11 +105,11 @@ int ObDDLHeartBeatTaskContainer::remove_register_task_id(const int64_t task_id, 
     LOG_WARN("ObDDLHeartBeatTaskContainer not inited", K(ret));
   } else {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, task_id);
-    if (OB_FAIL(register_tasks_.erase_refactored(rootserver::ObDDLTaskID(tenant_id, task_id)))) {
+    if (OB_FAIL(register_tasks_.erase_refactored(task_id))) {
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("remove register task id failed", KR(ret), K(task_id), K(tenant_id));
+        LOG_WARN("remove register task id failed", KR(ret), K(task_id));
       }
     }
   }
@@ -131,14 +131,14 @@ int ObDDLHeartBeatTaskContainer::send_task_status_to_rs()
       if (OB_FAIL(all_reg_task_guard.get_ret())) {
         if (OB_EAGAIN == ret) {
           cnt++;
-          LOG_INFO("all reg task guard failed, please try again, retry count: ", K(cnt));
+          LOG_INFO("all reg task guard failed, plase try again, retry count: ", K(cnt));
           ret = OB_SUCCESS;
           sleep(RETRY_TIME_INTERVAL);
         }
       } else {
-        for (common::hash::ObHashMap<rootserver::ObDDLTaskID, uint64_t>::iterator it = register_tasks_.begin(); OB_SUCC(ret) && it != register_tasks_.end(); it++) {
-          int64_t task_id = it->first.task_id_;
-          uint64_t tenant_id = it->first.tenant_id_;
+        for (common::hash::ObHashMap<int64_t, uint64_t>::iterator it = register_tasks_.begin(); OB_SUCC(ret) && it != register_tasks_.end(); it++) {
+          int64_t task_id = it->first;
+          uint64_t tenant_id = it->second;
           if (OB_FAIL(heart_beart_task_infos.push_back(ObDDLHeartBeatTaskInfo(task_id, tenant_id)))) {
             LOG_WARN("task_ids push_back failed", K(ret));
           }

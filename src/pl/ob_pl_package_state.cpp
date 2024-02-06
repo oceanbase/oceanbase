@@ -211,7 +211,7 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
                && types_.at(var_idx) != PL_CURSOR_TYPE
                && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
-      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL));
+      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, false));
     } else {
       vars_.at(var_idx) = value;
     }

@@ -49,6 +49,7 @@ public:
   {
     return common::is_valid_tenant_id(tenant_id_)
         && job_id_ != common::OB_INVALID_ID
+        && !job_name_.empty()
         && server_addr_.is_valid()
         && master_addr_.is_valid();
   }

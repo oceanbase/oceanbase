@@ -46,7 +46,7 @@ ObMPStmtSendLongData::ObMPStmtSendLongData(const ObGlobalContext &gctx)
       exec_start_timestamp_(0),
       exec_end_timestamp_(0),
       stmt_id_(0),
-      param_id_(OB_MAX_PARAM_ID),
+      param_id_(-1),
       buffer_len_(0),
       buffer_(),
       need_disconnect_(false)
@@ -71,22 +71,18 @@ int ObMPStmtSendLongData::before_process()
     const char* pos = pkt.get_cdata();
     // stmt_id
     ObMySQLUtil::get_int4(pos, stmt_id_);
-    ObMySQLUtil::get_uint2(pos, param_id_);
-    if (OB_SUCC(ret) && stmt_id_ < 1) {
+    ObMySQLUtil::get_int2(pos, param_id_);
+    if (stmt_id_ < 1 || param_id_ < 0) {
       ret = OB_ERR_PARAM_INVALID;
-      LOG_WARN("send_long_data receive unexpected stmt_id_", K(ret), K(stmt_id_), K(param_id_));
-    } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
-      LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
-    }
-    if (OB_SUCC(ret)) {
-      buffer_len_ = pkt.get_clen() - 7;
+      LOG_WARN("send long data get error info.", K(stmt_id_), K(param_id_));
+    } else {
+      buffer_len_ = pkt.get_clen()-7;
       buffer_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(buffer_len_));
-      LOG_INFO("resolve send_long_data protocol packet successfully",
-               K(stmt_id_), K(param_id_), K(buffer_len_));
-      LOG_DEBUG("send_long_data packet content", K(buffer_));
+      LOG_INFO("get info success in send long data protocol.",
+                  K(stmt_id_), K(param_id_), K(buffer_len_), K(buffer_));
     }
-    LOG_INFO("resolve send_long_data protocol packet",
-             K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(buffer_.length()));
+    LOG_INFO("send long data get param",K(stmt_id_), K(param_id_),
+                K(buffer_len_), K(buffer_.length()), K(buffer_));
   }
   return ret;
 }
@@ -124,7 +120,6 @@ int ObMPStmtSendLongData::process()
     THIS_WORKER.set_session(sess);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
-    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -136,8 +131,6 @@ int ObMPStmtSendLongData::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K_(param_id), K(ret));
-    } else if (OB_FAIL(process_kill_client_session(session))) {
-      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       ret = OB_ERR_SESSION_INTERRUPTED;
       LOG_WARN("session has been killed", K(session.get_session_state()), K_(stmt_id), K_(param_id),
@@ -347,8 +340,6 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
       LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
     } else {
       // send long data do not response.
-      LOG_INFO("store piece successfully", K(ret), K(session.get_sessid()),
-                                           K(stmt_id_), K(param_id_));
     }
   }
   return ret;

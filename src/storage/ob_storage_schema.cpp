@@ -149,18 +149,6 @@ int ObStorageColumnSchema::legacy_serialize(char *buf, const int64_t buf_len, in
   return ret;
 }
 
-int64_t ObStorageColumnSchema::legacy_serialize_len() const
-{
-  // For schema version before 4_2_0_0
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN,
-      info_,
-      default_checksum_,
-      meta_type_,
-      orig_default_value_);
-  return len;
-}
-
 /*
  * ObStorageColumnGroupSchema
  */
@@ -379,6 +367,7 @@ ObStorageSchema::ObStorageSchema()
     table_type_(ObTableType::MAX_TABLE_TYPE),
     table_mode_(),
     index_type_(ObIndexType::INDEX_TYPE_IS_NOT),
+    index_status_(ObIndexStatus::INDEX_STATUS_UNAVAILABLE),
     row_store_type_(ObStoreFormat::get_default_row_store_type()),
     schema_version_(OB_INVALID_VERSION),
     column_cnt_(0),
@@ -823,6 +812,10 @@ int ObStorageSchema::deserialize(
         STORAGE_LOG(WARN, "failed to reserve for column group array", K(ret));
       } else if (OB_FAIL(add_column_group(column_group))) {
         STORAGE_LOG(WARN, "failed to add column group", K(ret), K(column_group));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), compat_version))) {
+        STORAGE_LOG(WARN, "failed to add column group", K(ret), K(MTL_ID()));
+      } else if (compat_version >= DATA_VERSION_4_3_0_0) {
+        storage_schema_version_ = STORAGE_SCHEMA_VERSION_V3;
       }
     } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &store_column_cnt_))) {
       STORAGE_LOG(WARN, "failed to deserialize store_column_cnt", K(ret), K_(store_column_cnt));
@@ -875,21 +868,6 @@ int ObStorageSchema::deserialize_rowkey_column_array(
     }
   }
   return ret;
-}
-
-int64_t ObStorageSchema::get_column_array_serialize_length(
-  const common::ObIArray<ObStorageColumnSchema> &array) const
-{
-  int64_t len = 0;
-  len += serialization::encoded_length_vi64(array.count());
-  for (int64_t i = 0; i < array.count(); ++i) {
-    if (STORAGE_SCHEMA_VERSION_V3 > storage_schema_version_) {
-      len += array.at(i).legacy_serialize_len();
-    } else {
-      len += array.at(i).get_serialize_size();
-    }
-  }
-  return len;
 }
 
 int ObStorageSchema::deserialize_column_array(
@@ -1101,7 +1079,7 @@ int64_t ObStorageSchema::get_serialize_size() const
       compressor_type_,
       encryption_,
       encrypt_key_);
-  len += get_array_serialize_length(rowkey_array_);
+  len += get_column_array_serialize_length(rowkey_array_);
   //get columms size
   if (!column_info_simplified_) {
     len += get_column_array_serialize_length(column_array_);
@@ -1110,8 +1088,8 @@ int64_t ObStorageSchema::get_serialize_size() const
     len += serialization::encoded_length_i64(store_column_cnt_);
   }
   if (storage_schema_version_ >= STORAGE_SCHEMA_VERSION_V3) {
-    len += get_array_serialize_length(column_group_array_);
-    len += get_array_serialize_length(skip_idx_attr_array_);
+    len += get_column_array_serialize_length(column_group_array_);
+    len += get_column_array_serialize_length(skip_idx_attr_array_);
   }
   return len;
 }
@@ -1169,7 +1147,7 @@ int ObStorageSchema::generate_column_array(const ObTableSchema &input_schema)
       if (ob_is_large_text(col->get_data_type())) {
         col_schema.default_checksum_ = 0;
       } else if (OB_FAIL(datum.from_obj_enhance(col->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
       } else {
         col_schema.default_checksum_ = datum.checksum(0);
       }
@@ -1371,7 +1349,7 @@ int ObStorageSchema::get_encryption_id(int64_t &encrypt_id) const
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(share::ObEncryptionUtil::parse_encryption_id(encryption_, encrypt_id))) {
-    STORAGE_LOG(WARN, "failed to parse_encryption_id", K(ret), K(encryption_));
+    STORAGE_LOG(WARN, "failed to parse_encrytion_id", K(ret), K(encryption_));
   }
   return ret;
 }
@@ -1512,7 +1490,7 @@ int ObStorageSchema::get_orig_default_row(
         ret = OB_ERR_SYS;
         STORAGE_LOG(WARN, "column id not found", K(ret), K(column_ids.at(i)));
       } else if (OB_FAIL(default_row.storage_datums_[i].from_obj_enhance(col_schema->get_orig_default_value()))) {
-        STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
+        STORAGE_LOG(WARN, "Failed to transefer obj to datum", K(ret));
       }
     }
   }
@@ -1555,6 +1533,7 @@ void ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema
   table_type_ = input_schema.get_table_type();
   table_mode_ = input_schema.get_table_mode_struct();
   index_type_ = input_schema.get_index_type();
+  index_status_ = input_schema.get_index_status();
   row_store_type_ = input_schema.get_row_store_type();
   schema_version_ = input_schema.get_schema_version();
   column_cnt_ = input_schema.get_column_count();

@@ -379,7 +379,6 @@ ObSSTableMeta::ObSSTableMeta()
   : basic_meta_(),
     data_root_info_(),
     macro_info_(),
-    cg_sstables_(),
     column_checksums_(nullptr),
     column_checksum_count_(0),
     is_inited_(false)
@@ -537,15 +536,7 @@ int ObSSTableMeta::init(
   } else if (OB_UNLIKELY(!check_meta())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to check meta", K(ret), K(*this));
-  } else if (param.table_key_.is_co_sstable()) {
-    if (param.is_empty_co_table_) {
-      // empty co sstable no need to init cg
-    } else if (OB_FAIL(cg_sstables_.init_empty_array_for_cg(allocator, param.column_group_cnt_ - 1/*exclude basic cg*/))) {
-      LOG_WARN("failed to alloc memory for cg sstable array", K(ret), K(param));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     if (param.is_ready_for_read_) {
       basic_meta_.status_ = SSTABLE_READY_FOR_READ;
     }
@@ -553,20 +544,6 @@ int ObSSTableMeta::init(
   }
   if (OB_UNLIKELY(!is_inited_)) {
     reset();
-  }
-  return ret;
-}
-
-int ObSSTableMeta::fill_cg_sstables(
-    common::ObArenaAllocator &allocator,
-    const common::ObIArray<ObITable *> &cg_tables)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(cg_sstables_.count() != cg_tables.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cg table count unexpected not match", K(ret), K(cg_sstables_), K(cg_tables.count()));
-  } else if (OB_FAIL(cg_sstables_.add_tables_for_cg(allocator, cg_tables))) {
-    LOG_WARN("failed to add cg sstables", K(ret), K(cg_tables));
   }
   return ret;
 }
@@ -607,8 +584,6 @@ int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) co
       LOG_WARN("fail to serialize data root info", K(ret), K(buf_len), K(pos), K(data_root_info_));
     } else if (OB_FAIL(macro_info_.serialize(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
-    } else if (OB_FAIL(cg_sstables_.serialize(buf, buf_len, pos))) {
-      LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
     }
   }
   return ret;
@@ -637,7 +612,7 @@ int ObSSTableMeta::deserialize(
     } else if (OB_UNLIKELY(version != SSTABLE_META_VERSION)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("object version mismatch", K(ret), K(version));
-    } else if (OB_FAIL(deserialize_(allocator, buf + pos, len, tmp_pos))) {
+    } else if (OB_FAIL(deserialize_(allocator, buf + pos, data_len, tmp_pos))) {
       LOG_WARN("fail to deserialize_", K(ret), K(data_len), K(tmp_pos), K(pos));
     } else if (OB_UNLIKELY(len != tmp_pos)) {
       ret = OB_ERR_UNEXPECTED;
@@ -682,8 +657,6 @@ int ObSSTableMeta::deserialize_(
       LOG_WARN("fail to deserialize data root info", K(ret), K(data_len), K(pos), K(des_meta));
     } else if (OB_FAIL(macro_info_.deserialize(allocator, des_meta, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize macro info", K(ret), K(data_len), K(pos), K(des_meta));
-    } else if (pos < data_len && OB_FAIL(cg_sstables_.deserialize(allocator, buf, data_len, pos))) {
-      LOG_WARN("fail to deserialize cg sstables", K(ret), K(data_len), K(pos));
     }
   }
   return ret;
@@ -707,7 +680,6 @@ int64_t ObSSTableMeta::get_serialize_size_() const
   OB_UNIS_ADD_LEN_ARRAY(column_checksums_, column_checksum_count_);
   len += data_root_info_.get_serialize_size();
   len += macro_info_.get_serialize_size();
-  len += cg_sstables_.get_serialize_size();
   return len;
 }
 
@@ -715,8 +687,7 @@ int64_t ObSSTableMeta::get_variable_size() const
 {
   return sizeof(int64_t) * column_checksum_count_ // column checksums
        + data_root_info_.get_variable_size()
-       + macro_info_.get_variable_size()
-       + cg_sstables_.get_deep_copy_size();
+       + macro_info_.get_variable_size();
 }
 
 int ObSSTableMeta::deep_copy(
@@ -744,8 +715,6 @@ int ObSSTableMeta::deep_copy(
       LOG_WARN("fail to deep copy data root info", K(ret), KP(buf), K(buf_len), K(pos), K(data_root_info_));
     } else if (OB_FAIL(macro_info_.deep_copy(buf, buf_len, pos, dest->macro_info_))) {
       LOG_WARN("fail to deep copy macro info", K(ret), KP(buf), K(buf_len), K(pos), K(macro_info_));
-    } else if (OB_FAIL(cg_sstables_.deep_copy(buf, buf_len, pos, dest->cg_sstables_))) {
-      LOG_WARN("fail to deep copy cg sstables", K(ret), KP(buf), K(buf_len), K(pos), K(cg_sstables_));
     } else {
       dest->is_inited_ = is_inited_;
     }

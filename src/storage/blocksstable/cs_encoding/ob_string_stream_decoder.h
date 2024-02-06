@@ -22,6 +22,7 @@ namespace oceanbase
 namespace blocksstable
 {
 
+#define FIX_STRING_OFFSET_WIDTH_V 4 // represet fixed length string when do partial specialization for template
 typedef void (*ConvertStringToDatumFunc)(
     const ObBaseColumnDecoderCtx &base_col_ctx,
     const char *str_data,

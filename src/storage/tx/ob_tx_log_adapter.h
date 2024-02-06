@@ -67,7 +67,7 @@ public:
 
   virtual int get_role(bool &is_leader, int64_t &epoch) = 0;
   virtual int get_max_decided_scn(share::SCN &scn) = 0;
-  virtual int get_palf_committed_max_scn(share::SCN &scn) const = 0;
+
   virtual int get_append_mode_initial_scn(share::SCN &ref_scn) = 0;
 
   /**
@@ -111,7 +111,6 @@ public:
                  const bool need_nonblock);
   int get_role(bool &is_leader, int64_t &epoch);
   int get_max_decided_scn(share::SCN &scn);
-  int get_palf_committed_max_scn(share::SCN &scn) const;
 
   int get_append_mode_initial_scn(share::SCN &ref_scn);
 

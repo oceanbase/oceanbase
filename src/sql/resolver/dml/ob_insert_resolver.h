@@ -54,7 +54,6 @@ public:
   {
     return static_cast<ObInsertStmt*>(stmt_);
   }
-  bool is_mock_for_row_alias() {return is_mock_;}
 protected:
   int process_values_function(ObRawExpr *&expr) override;
   virtual int mock_values_column_ref(const ObColumnRefRawExpr *column_ref) override;
@@ -76,35 +75,14 @@ private:
                                  ObRawExpr *&expr,
                                  bool in_generated_column = false);
   int set();
-  int resolve_values(const ParseNode &value_node,
-                     ObIArray<uint64_t>& label_se_columns,
-                     TableItem* table_item,
-                     const ParseNode *duplicate_node);
-  int check_table_and_column_name(const ObIArray<ObColumnRefRawExpr*> & value_desc,
-                                  ObSelectStmt *select_stmt,
-                                  ObString &ori_table_name,
-                                  ObIArray<ObString> &ori_column_names,
-                                  ObString &row_alias_table_name,
-                                  ObIArray<ObString> &row_alias_column_names);
-  int check_validity_of_duplicate_node(const ParseNode* node,
-                                       ObString &ori_table_name,
-                                       ObIArray<ObString> &ori_column_names,
-                                       ObString &row_alias_table_name,
-                                       ObIArray<ObString> &row_alias_column_names);
-  int check_ambiguous_column(ObString &column_name,
-                             ObIArray<ObString> &ori_column_names,
-                             ObIArray<ObString> &row_alias_column_names);
-  bool find_in_column(ObString &column_name,
-                      ObIArray<ObString> &column_names);
+  int resolve_values(const ParseNode &value_node, ObIArray<uint64_t>& label_se_columns);
   virtual int resolve_insert_update_assignment(const ParseNode *node, ObInsertTableInfo& table_info) override;
   int replace_column_to_default(ObRawExpr *&origin);
   virtual int check_returning_validity() override;
   int resolve_insert_constraint();
   int check_view_insertable();
   int inner_cast(common::ObIArray<ObColumnRefRawExpr*> &target_columns, ObSelectStmt &select_stmt);
-  int check_insert_select_field(ObInsertStmt &insert_stmt,
-                                ObSelectStmt &select_stmt,
-                                bool is_mock = false);
+  int check_insert_select_field(ObInsertStmt &insert_stmt, ObSelectStmt &select_stmt);
 
   int replace_column_with_mock_column(ObColumnRefRawExpr *gen_col,
                                       ObColumnRefRawExpr *value_desc);
@@ -118,7 +96,6 @@ private:
   int64_t row_count_;
   ObSelectResolver *sub_select_resolver_;
   bool autoinc_col_added_;
-  bool is_mock_;
 };
 }  // namespace sql
 }  // namespace oceanbase

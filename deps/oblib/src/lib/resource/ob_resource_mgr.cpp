@@ -17,7 +17,6 @@
 #include <stdlib.h>
 
 #include "lib/alloc/memory_sanity.h"
-#include "lib/alloc/ob_malloc_time_monitor.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/utility/utility.h"
@@ -28,6 +27,8 @@ namespace oceanbase
 using namespace common;
 namespace lib
 {
+
+bool ObTenantMemoryMgr::error_log_when_tenant_500_oversize = false;
 ObTenantMemoryMgr::ObTenantMemoryMgr()
   : cache_washer_(NULL), tenant_id_(common::OB_INVALID_ID),
     limit_(INT64_MAX), sum_hold_(0), rpc_hold_(0), cache_hold_(0),
@@ -75,9 +76,10 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
         update_cache_hold(hold_size);
       }
     }
-    ObMallocTimeMonitor::click("ALLOC_CHUNK_END");
+
     if (!reach_ctx_limit && NULL != cache_washer_ && NULL == chunk && hold_size < cache_hold_
         && attr.label_ != ObNewModIds::OB_KVSTORE_CACHE_MB) {
+      common::ObTimeGuard time_guard("sync wash", 1000 * 1000);
       // try wash memory from cache
       ObICacheWasher::ObCacheMemBlock *washed_blocks = NULL;
       bool wash_single_mb = true;
@@ -151,7 +153,6 @@ AChunk *ObTenantMemoryMgr::alloc_chunk(const int64_t size, const ObMemAttr &attr
           }
         }
       }
-      ObMallocTimeMonitor::click("WASH_KVCACHE_END");
     }
   }
   return chunk;
@@ -265,6 +266,12 @@ bool ObTenantMemoryMgr::update_hold(const int64_t size, const uint64_t ctx_id,
       } else {
         updated = true;
       }
+    }
+    if (OB_UNLIKELY(error_log_when_tenant_500_oversize &&
+                    OB_SERVER_TENANT_ID == tenant_id_ &&
+                    sum_hold_ > (1LL<<30))) {
+      LOG_ERROR_RET(OB_ERROR, "the hold memory of tenant_500 is over the reserved memory",
+                        K_(sum_hold));
     }
   }
   if (!updated) {

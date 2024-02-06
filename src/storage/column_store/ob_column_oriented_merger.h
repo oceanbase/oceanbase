@@ -93,7 +93,7 @@ private:
   ObPartitionMergeIter *row_store_iter_;
   ObPartitionMergeProgress *merge_progress_;
   MERGEWRITERS merge_writers_;
-  ObSEArray<storage::ObSSTableWrapper, 16, common::ObIAllocator&> cg_wrappers_;
+  ObSEArray<storage::ObCGTableWrapper, 16, common::ObIAllocator&> cg_wrappers_;
   ObPartitionMergeLoserTreeCmp *cmp_;
   const uint32_t start_cg_idx_;
   const uint32_t end_cg_idx_;

@@ -281,8 +281,6 @@ private:
   int convert_limit_as_aggr(ObSelectStmt *subquery, TransformParam &trans_param);
   ObHint* get_sub_unnest_hint(ObSelectStmt &subquery, int64_t pullup_strategy);
   ObItemType get_unnest_strategy(int64_t pullup_strategy);
-  int check_nested_subquery(ObQueryRefRawExpr &query_ref, bool &is_valid);
-
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
   common::ObSEArray<TransStmtInfo, 4, common::ModulePageAllocator, true> trans_stmt_infos_;

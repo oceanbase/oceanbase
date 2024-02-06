@@ -42,8 +42,9 @@ namespace storage
 class ObTxCtxMemtableMgr : public ObIMemtableMgr
 {
 public:
-  ObTxCtxMemtableMgr();
-  virtual ~ObTxCtxMemtableMgr();
+  ObTxCtxMemtableMgr() : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_) {}
+  ~ObTxCtxMemtableMgr() {}
+  void reset();
 
   // ================== Unified Class Method ==================
   //

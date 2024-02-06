@@ -208,8 +208,6 @@ int ObAllVirtualSysStat::update_all_stats_(const int64_t tenant_id, ObStatEventS
             = static_cast<int64_t>(cpu_usage * 100);
         stat_events.get(ObStatEventIds::MEMORY_USAGE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = lib::get_tenant_memory_hold(tenant_id);
-        stat_events.get(ObStatEventIds::KV_CACHE_HOLD - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
-            = lib::get_tenant_cache_hold(tenant_id);
       } else {
         // it is ok to not have any records
       }

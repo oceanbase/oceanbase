@@ -34,8 +34,6 @@ struct ObPartitionEst
   int add(const ObPartitionEst &pe);
   int deep_copy(const ObPartitionEst &src);
   void reset() { logical_row_count_ = physical_row_count_ = 0; }
-  bool operator ==(const ObPartitionEst &other) const { return logical_row_count_ == other.logical_row_count_ &&
-                                                               physical_row_count_ == other.physical_row_count_; }
 };
 
 struct ObIndexSSTableEstimateContext

@@ -34,9 +34,7 @@ struct ObTableColumnItem : public sql::ColumnItem
         is_stored_generated_column_(false),
         is_virtual_generated_column_(false),
         is_auto_increment_(false),
-        is_nullable_(true),
-        rowkey_position_(-1),
-        column_type_(ObMaxType)
+        rowkey_position_(-1)
   {}
   TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
                KPC_(raw_expr),
@@ -47,9 +45,7 @@ struct ObTableColumnItem : public sql::ColumnItem
                K_(generated_expr_str),
                K_(dependant_exprs),
                K_(is_auto_increment),
-               K_(is_nullable),
-               K_(rowkey_position),
-               K_(column_type));
+               K_(rowkey_position));
   sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
   bool is_generated_column_;
   bool is_stored_generated_column_;
@@ -60,34 +56,7 @@ struct ObTableColumnItem : public sql::ColumnItem
   common::ObString generated_expr_str_;
   common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
   bool is_auto_increment_;
-  bool is_nullable_;
   int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
-  common::ObObjType column_type_;
-};
-
-struct ObTableColumnInfo
-{
-  ObTableColumnInfo()
-      : type_(),
-        is_auto_inc_(false),
-        is_nullable_(true)
-  {
-  }
-  ObTableColumnInfo(sql::ObExprResType type, const common::ObString &column_name, bool is_auto_inc = false, bool is_nullable = true)
-      : type_(type),
-        column_name_(column_name),
-        is_auto_inc_(is_auto_inc),
-        is_nullable_(is_nullable)
-  {
-  }
-  sql::ObExprResType type_;
-  common::ObString column_name_;
-  bool is_auto_inc_;
-  bool is_nullable_;
-  TO_STRING_KV(K_(type),
-               K_(column_name),
-               K_(is_auto_inc),
-               K_(is_nullable));
 };
 
 struct ObTableAssignment : public sql::ObAssignment
@@ -182,9 +151,6 @@ public:
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     is_ttl_table_ = false;
     is_skip_scan_ = false;
-    is_client_set_put_ = false;
-    binlog_row_image_type_ = ObBinlogRowImage::FULL;
-    is_full_table_scan_ = false;
   }
   virtual ~ObTableCtx()
   {}
@@ -218,9 +184,7 @@ public:
                K_(entity_type),
                K_(cur_cluster_version),
                K_(is_ttl_table),
-               K_(is_skip_scan),
-               K_(is_client_set_put),
-               K_(binlog_row_image_type));
+               K_(is_skip_scan));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -276,22 +240,12 @@ public:
   OB_INLINE const common::ObIArray<uint64_t>& get_select_col_ids() const { return select_col_ids_; }
   OB_INLINE const common::ObIArray<uint64_t>& get_query_col_ids() const { return query_col_ids_; }
   OB_INLINE const common::ObIArray<common::ObString>& get_query_col_names() const { return query_col_names_; }
-  OB_INLINE bool is_total_quantity_log() const { return binlog_row_image_type_ == ObBinlogRowImage::FULL; }
-  OB_INLINE bool is_full_table_scan() const { return is_full_table_scan_; }
   // for update
   OB_INLINE bool is_for_update() const { return is_for_update_; }
   OB_INLINE bool is_inc_or_append() const
   {
     return ObTableOperationType::Type::APPEND == operation_type_
       || ObTableOperationType::Type::INCREMENT == operation_type_;
-  }
-  OB_INLINE bool is_inc() const
-  {
-    return ObTableOperationType::Type::INCREMENT == operation_type_;
-  }
-  OB_INLINE bool is_append() const
-  {
-    return ObTableOperationType::Type::APPEND == operation_type_;
   }
   OB_INLINE bool is_dml() const
   {
@@ -345,8 +299,6 @@ public:
   // for delete
   OB_INLINE void set_skip_scan(bool skip_scan) { is_skip_scan_ = skip_scan; }
   OB_INLINE bool is_skip_scan() { return is_skip_scan_; }
-  // for put
-  OB_INLINE void set_client_use_put(bool is_client_use_put) { is_client_set_put_ = is_client_use_put; }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -371,7 +323,7 @@ public:
   // 初始化replace相关
   int init_replace();
   // 初始化insert_up相关
-  int init_insert_up(bool is_client_set_put);
+  int init_insert_up();
   // 初始化get相关
   int init_get();
   // 初始化increment相关
@@ -405,7 +357,6 @@ public:
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
   // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
-  int adjust_entity();
 private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
@@ -413,7 +364,7 @@ private:
   int init_sess_info(ObTableApiCredential &credential);
   // for scan
   int init_index_info(const common::ObString &index_name);
-  int generate_column_infos(common::ObIArray<ObTableColumnInfo> &columns_infos);
+  int generate_columns_type(common::ObIArray<sql::ObExprResType> &columns_type);
   int generate_key_range(const common::ObIArray<common::ObNewRange> &scan_ranges);
   // for dml
   int init_dml_related_tid();
@@ -436,12 +387,13 @@ private:
 
 private:
   int construct_column_items();
-  int cons_column_info(const share::schema::ObColumnSchemaV2 &column_schema,
-                       ObTableColumnInfo &column_info);
-  int adjust_column_type(const ObTableColumnInfo &column_info, ObObj &ob);
+  int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
+                       sql::ObExprResType &column_type);
+  int adjust_column_type(const ObExprResType &column_type, ObObj &obj);
   int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();
+  int adjust_entity();
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
                             const common::ObString &name,
                             int64_t *idx = nullptr) const;
@@ -521,11 +473,6 @@ private:
   bool is_ttl_table_;
   // for delete skip scan
   bool is_skip_scan_;
-  // for put
-  bool is_client_set_put_;
-  int64_t binlog_row_image_type_;
-  // for audit
-  bool is_full_table_scan_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

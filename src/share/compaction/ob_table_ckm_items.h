@@ -17,7 +17,6 @@ namespace oceanbase
 {
 namespace compaction
 {
-struct ObTabletLSPairCache;
 struct ObIndexCkmValidatePair
 {
 public:
@@ -83,8 +82,6 @@ public:
 private:
   int build_hash_map(const uint64_t tenant_id, const ObIArray<share::schema::ObColDesc> &column_descs);
   int build_sort_array(const ObIArray<share::schema::ObColDesc> &column_descs);
-  static int32_t get_func_from_array(ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &input_array_idx);
-  static int32_t get_func_from_map(ObSortColumnIdArray &sort_array, const int64_t column_id, int64_t &input_array_idx);
   typedef int32_t (*GET_FUNC)(ObSortColumnIdArray&, const int64_t, int64_t&);
   typedef hash::ObHashMap<int64_t, int64_t> ColIdToIdxMap;
   typedef common::ObSEArray<ObColumnIdToIdx, share::ObTabletReplicaReportColumnMeta::DEFAULT_COLUMN_CNT> ColIdToIdxArray;
@@ -106,12 +103,8 @@ public:
   void clear();
   void reset();
   int64_t get_table_id() const { return table_id_; }
-  const share::schema::ObTableSchema * get_table_schema() const { return table_schema_; }
-  const common::ObIArray<share::ObTabletReplicaChecksumItem> &get_ckm_items() const { return ckm_items_; }
-  const common::ObIArray<share::ObTabletLSPair> &get_tablet_ls_pairs() const { return tablet_pairs_; }
   int build(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const share::schema::ObSimpleTableSchemaV2 &simple_schema,
+    const share::schema::ObTableSchema &table_schema,
     const ObArray<share::ObTabletLSPair> &input_tablet_pairs,
     const ObArray<share::ObTabletReplicaChecksumItem> &input_ckm_items);
   int build(
@@ -119,13 +112,17 @@ public:
     const share::SCN &compaction_scn,
     common::ObMySQLProxy &sql_proxy,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache);
+    const share::schema::ObTableSchema *&table_schema,
+    const bool get_table_schema_flag = true);
   int build_column_ckm_sum_array(
     const share::SCN &compaction_scn,
     const share::schema::ObTableSchema &table_schema,
     int64_t &row_cnt);
+
   typedef int (*VALIDATE_CKM_FUNC)(
     const share::SCN &compaction_scn,
+    const share::schema::ObTableSchema &data_table_schema,
+    const share::schema::ObTableSchema &index_table_schema,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
@@ -138,11 +135,15 @@ public:
 private:
   static int validate_column_ckm_sum(
     const share::SCN &compaction_scn,
+    const share::schema::ObTableSchema &data_table_schema,
+    const share::schema::ObTableSchema &index_table_schema,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
   static int validate_tablet_column_ckm(
     const share::SCN &compaction_scn,
+    const share::schema::ObTableSchema &data_table_schema,
+    const share::schema::ObTableSchema &index_table_schema,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm);
@@ -162,12 +163,11 @@ private:
   bool is_inited_;
   uint64_t tenant_id_;
   uint64_t table_id_;
-  int64_t row_count_;
-  const share::schema::ObTableSchema *table_schema_;
   common::ObSEArray<share::ObTabletLSPair, DEFAULT_TABLET_CNT> tablet_pairs_;
   common::ObArray<share::ObTabletReplicaChecksumItem> ckm_items_; // order by TableSchema::tablet_ids
   ObSortColumnIdArray sort_col_id_array_; // column_id -> array_idx
   common::ObSEArray<int64_t, DEFAULT_COLUMN_CNT> ckm_sum_array_; // order by TableSchema::tablet_ids
+  int64_t row_count_;
 };
 
 typedef common::ObArray<ObIndexCkmValidatePair> ObIndexCkmValidatePairArray;

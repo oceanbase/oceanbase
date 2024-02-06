@@ -990,8 +990,6 @@ int ObSchemaServiceSQLImpl::get_full_table_schema_from_inner_table(
         tmp_table_schema->set_aux_lob_meta_tid(aux_table_meta.table_id_);
       } else if (AUX_LOB_PIECE == aux_table_meta.table_type_) {
         tmp_table_schema->set_aux_lob_piece_tid(aux_table_meta.table_id_);
-      } else if (MATERIALIZED_VIEW_LOG == aux_table_meta.table_type_) {
-        tmp_table_schema->set_mlog_tid(aux_table_meta.table_id_);
       }
     }
     if (OB_SUCC(ret)) {
@@ -1664,9 +1662,10 @@ int ObSchemaServiceSQLImpl::fetch_all_column_group_schema(
       LOG_WARN("fail to append sql", KR(ret), K(schema_version));
     } else if (OB_FAIL(sql.append_fmt(" ORDER BY TENANT_ID DESC, TABLE_ID DESC, COLUMN_GROUP_ID ASC"))) {
       LOG_WARN("fail to append sql", KR(ret));
-    } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION ASC"))) {
+    } else if (is_history && OB_FAIL(sql.append_fmt(", SCHEMA_VERSION DESC"))) {
       LOG_WARN("fail to append sql", KR(ret));
     }
+
     if (OB_SUCC(ret)) {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObMySQLResult *result = NULL;
@@ -4827,7 +4826,6 @@ int ObSchemaServiceSQLImpl::fetch_tables(
   const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
   const char *table_name = NULL;
   int64_t start_time = ObTimeUtility::current_time();
-  DEBUG_SYNC(BEFORE_FETCH_SIMPLE_TABLES);
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));

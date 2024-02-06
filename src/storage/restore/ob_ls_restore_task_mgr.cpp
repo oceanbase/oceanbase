@@ -840,45 +840,28 @@ int ObLSRestoreTaskMgr::is_tablet_restore_finish_(
     case ObLSRestoreStatus::QUICK_RESTORE:
     case ObLSRestoreStatus::WAIT_QUICK_RESTORE:
     case ObLSRestoreStatus::QUICK_RESTORE_FINISH: {
-      if (ha_status.is_restore_status_undefined()) {
-        bool is_deleted = true;
-        // UNDEFINED should be deleted after log has recovered.
-        if (ls_restore_status.is_quick_restore()) {
-          is_finish = true;
-        } else if (OB_FAIL(check_tablet_is_deleted_(tablet_handle, is_deleted))) {
-          LOG_WARN("failed to check tablet is deleted", K(ret), K_(ls_id), K(tablet_meta));
-        } else if (is_deleted) {
-          is_finish = true;
-          LOG_INFO("UNDEFINED tablet is deleted", K_(ls_id), K(tablet_meta));
-        } else {
-          is_finish = false;
-          LOG_INFO("UNDEFINED tablet is not deleted", K_(ls_id), K(tablet_meta));
-        }
+      is_finish = ha_status.is_restore_status_minor_and_major_meta()
+                  || ha_status.is_restore_status_undefined();
+
+      if (!ha_status.is_restore_status_full()) {
+      } else if (!tablet_meta.has_transfer_table()) {
+        is_finish = true;
+      } else if (OB_FAIL(check_need_discard_transfer_tablet_(tablet_handle, discard))) {
+        LOG_WARN("failed to check tablet need discard", K(ret), K_(ls_id), K(tablet_meta));
+      } else if (discard) {
+        // uncommitted tablet created by transfer, but log has been recovered.
+        is_finish = true;
       } else {
-        is_finish = ha_status.is_restore_status_minor_and_major_meta();
-        if (!ha_status.is_restore_status_full()) {
-        } else if (!tablet_meta.has_transfer_table()) {
-          is_finish = true;
-        } else if (OB_FAIL(check_need_discard_transfer_tablet_(tablet_handle, discard))) {
-          LOG_WARN("failed to check tablet need discard", K(ret), K_(ls_id), K(tablet_meta));
-        } else if (discard) {
-          // uncommitted tablet created by transfer, but log has been recovered.
-          is_finish = true;
-        } else {
-          // FULL tablet with transfer table, need wait the table be replaced.
-          is_finish = false;
-        }
+        // FULL tablet with transfer table, need wait the table be replaced.
+        is_finish = false;
       }
       break;
     }
 
     case ObLSRestoreStatus::RESTORE_MAJOR_DATA :
     case ObLSRestoreStatus::WAIT_RESTORE_MAJOR_DATA : {
-      is_finish = ha_status.is_restore_status_full();
-      if (ls_restore_status.is_restore_major_data()) {
-        is_finish |= ha_status.is_restore_status_undefined();
-        LOG_INFO("skip UNDEFINED tablet, whose major need not to be restored", K_(ls_id), K(tablet_meta));
-      }
+      is_finish = ha_status.is_restore_status_full()
+                  || ha_status.is_restore_status_undefined();
 
       if (!is_finish) {
         // If tablet is deleted, major is no need to be restored.

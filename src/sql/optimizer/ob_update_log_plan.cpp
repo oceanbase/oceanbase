@@ -407,8 +407,7 @@ int ObUpdateLogPlan::candi_allocate_pdml_update()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
       } else if (index_dml_info->is_update_part_key_ ||
-                 index_dml_info->is_update_unique_key_ ||
-                 index_dml_info->is_update_primary_key_) {
+                 index_dml_info->is_update_unique_key_) {
         IndexDMLInfo *index_delete_info = nullptr;
         IndexDMLInfo *index_insert_info = nullptr;
         // 更新了当前索引的分区键，需要做 row-movement
@@ -623,8 +622,6 @@ int ObUpdateLogPlan::prepare_table_dml_info_special(const ObDmlTableInfo& table_
   } else if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get table schema", K(table_info), K(ret));
-  } else if (OB_FAIL(check_update_primary_key(index_schema, table_dml_info))) {
-    LOG_WARN("failed to check update unique key", K(ret));
   } else if (!table_info.is_link_table_ &&
              OB_FAIL(check_update_part_key(index_schema, table_dml_info))) {
     LOG_WARN("failed to check update part key", K(ret));

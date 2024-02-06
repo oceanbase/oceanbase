@@ -50,7 +50,6 @@ public:
       allocator_(allocator),
       snapshot_(),
       savepoint_(),
-      write_branch_id_(0),
       del_ctx_list_(allocator),
       jump_read_group_id_(-1),
       flags_(0)
@@ -90,8 +89,6 @@ public:
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }
   transaction::ObTxSEQ get_savepoint() const { return savepoint_; }
   void set_savepoint(const transaction::ObTxSEQ savepoint) { savepoint_ = savepoint; }
-  void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
-  int16_t get_write_branch_id() const { return write_branch_id_; }
   ObDASLocationRouter &get_location_router() { return location_router_; }
   int build_related_tablet_loc(ObDASTabletLoc &tablet_loc);
   int build_related_table_loc(ObDASTableLoc &table_loc);
@@ -117,8 +114,7 @@ public:
                K_(external_table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
-               K_(savepoint),
-               K_(write_branch_id));
+               K_(savepoint));
 private:
   int check_same_server(const ObDASTabletLoc *tablet_loc);
 private:
@@ -135,11 +131,6 @@ private:
   common::ObIAllocator &allocator_;
   transaction::ObTxReadSnapshot snapshot_;           // Mvcc snapshot
   transaction::ObTxSEQ savepoint_;                   // DML savepoint
-  // for DML like `insert update` and `replace`, which use savepoint to
-  // resolve conflicts and when these DML executed under partition-wise
-  // style, they need rollback their own writes but not all, we assign
-  // id to data writes by different writer thread (named branch)
-  int16_t write_branch_id_;
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
 public:

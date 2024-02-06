@@ -391,25 +391,23 @@ public:
 
   virtual int get_multi_ranges_cost(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const int64_t timeout_us,
-      const common::ObIArray<ObStoreRange> &ranges,
+      const ObTabletID &tablet_id,
+      const ObIArray<ObStoreRange> &ranges,
       int64_t &total_size)
   {
-    UNUSEDx(ls_id, tablet_id, timeout_us, ranges, total_size);
+    UNUSEDx(ls_id, tablet_id, ranges, total_size);
     return OB_SUCCESS;
   }
 
   virtual int split_multi_ranges(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const int64_t timeout_us,
-      const common::ObIArray<ObStoreRange> &ranges,
+      const ObTabletID &tablet_id,
+      const ObIArray<ObStoreRange> &ranges,
       const int64_t expected_task_count,
       ObIAllocator &allocator,
       ObArrayArray<ObStoreRange> &multi_range_split_array)
   {
-    UNUSEDx(ls_id, tablet_id, timeout_us, ranges, expected_task_count, allocator, multi_range_split_array);
+    UNUSEDx(ls_id, tablet_id, ranges, expected_task_count, allocator, multi_range_split_array);
     return OB_SUCCESS;
   }
 };

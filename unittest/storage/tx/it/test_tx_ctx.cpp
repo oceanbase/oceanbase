@@ -21,45 +21,11 @@
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
 #include "tx_node.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 namespace oceanbase
 {
 using namespace ::testing;
 using namespace transaction;
 using namespace share;
-
-static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
-
-namespace share {
-int ObTenantTxDataAllocator::init(const char *label)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  throttle_tool_ = &(MTL_MEM_ALLOC_MGR.share_resource_throttle_tool());
-  if (OB_FAIL(slice_allocator_.init(
-                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
-    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
-  } else {
-    slice_allocator_.set_nway(ObTenantTxDataAllocator::ALLOC_TX_DATA_MAX_CONCURRENCY);
-    is_inited_ = true;
-  }
-  return ret;
-}
-int ObMemstoreAllocator::init()
-{
-  throttle_tool_ = &MTL_MEM_ALLOC_MGR.share_resource_throttle_tool();
-  return arena_.init();
-}
-int ObMemstoreAllocator::AllocHandle::init()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = 1;
-  ObSharedMemAllocMgr *mtl_alloc_mgr = &MTL_MEM_ALLOC_MGR;
-  ObMemstoreAllocator &host = mtl_alloc_mgr->memstore_allocator();
-  (void)host.init_handle(*this);
-  return ret;
-}
-};  // namespace share
 
 namespace concurrent_control
 {
@@ -89,7 +55,6 @@ public:
     ObClockGenerator::init();
     const testing::TestInfo *const test_info =
         testing::UnitTest::GetInstance()->current_test_info();
-    MTL_MEM_ALLOC_MGR.init();
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }
@@ -130,7 +95,7 @@ TEST_F(ObTestTxCtx, DelayAbort)
     ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->get_tx_ctx(tx.tx_id_, false /*for_replay*/, tx_ctx));
     GCONF._private_buffer_size = 1;
     // ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_log_impl_(ObTxLogType::TX_REDO_LOG));
-    ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_redo_after_write(false, ObTxSEQ()));
+    ASSERT_EQ(OB_SUCCESS, tx_ctx->submit_redo_log(false /*is_freeze*/));
     TRANS_LOG(INFO, "[TEST] after submit redo", K(tx_ctx->trans_id_),
               K(tx_ctx->exec_info_.max_applied_log_ts_));
     n1->wait_all_redolog_applied();

@@ -407,11 +407,7 @@ bool ObLogLSFetchMgr::CtxLSProgressCond::operator() (const logservice::TenantLSI
     LSFetchInfoForPrint ls_fetch_info;
 
     if (OB_FAIL(ls_fetch_info.init(*ctx))) {
-      if (OB_LS_NOT_EXIST != ret) {
-        LOG_ERROR("init ls_fetch_info fail", KR(ret), K(tls_id), KPC(ctx));
-      } else {
-        ret = OB_SUCCESS;
-      }
+      LOG_ERROR("init ls_fetch_info fail", KR(ret), K(tls_id), KPC(ctx));
     } else if (OB_FAIL(ls_fetch_info_array_.push_back(ls_fetch_info))) {
       LOG_ERROR("part_progress_array_ push back fail", KR(ret), K(tls_id), KPC(ctx), K(ctx_cnt_));
     } else {

@@ -40,7 +40,6 @@ class ObAlterTableResolver : public ObDDLResolver
   static const int64_t TABLE = 0;         // 0. table_node
   static const int64_t ACTION_LIST = 1;   // 1. alter table action list
   static const int64_t SPECIAL_TABLE_TYPE = 2;   // 2. special table type
-  static const int64_t ALTER_INDEX_CHILD_NUM = 6;
 public:
   explicit ObAlterTableResolver(ObResolverParams &params);
   virtual ~ObAlterTableResolver();
@@ -180,9 +179,8 @@ private:
   int check_alter_part_key_allowed(const share::schema::ObTableSchema &table_schema,
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
                                    const share::schema::ObColumnSchemaV2 &dst_col_schema);
-  int resolve_column_group_for_column();
+  int resolve_column_group();
   int generate_index_arg_cascade();
-  int resolve_alter_column_groups(const ParseNode &node);
   bool is_ttl_column(const common::ObString &orig_column_name, const ObIArray<common::ObString> &ttl_columns);
 
   int check_alter_column_schemas_valid(ObAlterTableStmt &stmt);

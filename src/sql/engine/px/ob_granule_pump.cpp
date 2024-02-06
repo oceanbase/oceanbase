@@ -457,9 +457,7 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
     // 表示取不到下一个GI task的op的个数；
     // 理论上end_op_count只能等于0（表示gi任务还没有被消费完）或者等于`op_ids.count()`（表示gi任务全部被消费完）
     int64_t end_op_count = 0;
-    if (OB_FAIL(fetch_task_ret_)) {
-      LOG_WARN("fetch task concurrently already failed", K(ret));
-    } else if (no_more_task_from_shared_pool_) {
+    if (no_more_task_from_shared_pool_) {
       ret = OB_ITER_END;
     } else if (GIT_FULL_PARTITION_WISE != splitter_type_) {
       ret = OB_ERR_UNEXPECTED;
@@ -491,7 +489,6 @@ int ObGranulePump::fetch_pw_granule_from_shared_pool(ObIArray<ObGranuleTaskInfo>
 
     // 防御性代码：检查full partition wise的情况下，每一个op对应的GI task是否被同时消费完毕
     if (OB_FAIL(ret)) {
-      fetch_task_ret_ = ret;
     } else if (OB_FAIL(check_pw_end(end_op_count, op_ids.count(), infos.count()))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("incorrect state", K(ret));
@@ -666,10 +663,10 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
   can_randomize = (need_start_ddl || need_start_pdml)
                   && (!(ObGranuleUtil::asc_order(args.gi_attri_flag_)
                         || ObGranuleUtil::desc_order(args.gi_attri_flag_)
-                        || ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)));
+                        || ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)));
   LOG_DEBUG("scan order is ", K(ObGranuleUtil::asc_order(args.gi_attri_flag_)),
             K(ObGranuleUtil::desc_order(args.gi_attri_flag_)),
-            K(ObGranuleUtil::is_partition_granule_flag(args.gi_attri_flag_)), K(can_randomize),
+            K(ObGranuleUtil::force_partition_granule(args.gi_attri_flag_)), K(can_randomize),
             K(need_start_ddl), K(need_start_pdml));
   return ret;
 }
@@ -741,13 +738,8 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
   } else if (tablets.count() <= 0 || OB_ISNULL(args.ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty tablets", K(ret), K(tablets));
-  } else if (!args.query_range_by_runtime_filter_.empty()
-             && OB_FAIL(ranges.assign(args.query_range_by_runtime_filter_))) {
-    LOG_WARN("failed to assign query range", K(ret), K(tablets));
-  } else if (args.query_range_by_runtime_filter_.empty()
-             && OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
-                                        table_id, op_id, partition_granule,
-                                        ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
+  } else if (OB_FAIL(get_query_range(*args.ctx_, tsc->get_query_range(), ranges, ss_ranges,
+      table_id, op_id, partition_granule, ObGranuleUtil::with_param_down(args.gi_attri_flag_)))) {
     LOG_WARN("get query range failed", K(ret));
   } else if (ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -1625,7 +1617,6 @@ int ObGranulePump::reset_gi_task()
     } else {
       is_taskset_reset_ = true;
       no_more_task_from_shared_pool_ = false;
-      fetch_task_ret_ = OB_SUCCESS;
       for (int64_t i = 0; i < gi_task_array_map_.count() && OB_SUCC(ret); ++i) {
         GITaskArrayItem &item = gi_task_array_map_.at(i);
         for(int64_t j = 0; j < item.taskset_array_.count() && OB_SUCC(ret); ++j) {

@@ -12,7 +12,7 @@
 
 #ifndef OCEANBASE_MEMTABLE_OB_MEMTABLE_
 #define OCEANBASE_MEMTABLE_OB_MEMTABLE_
-#include "share/allocator/ob_memstore_allocator.h"
+#include "share/allocator/ob_gmemstore_allocator.h"
 
 #include "share/ob_tenant_mgr.h"
 #include "share/ob_cluster_version.h"
@@ -25,7 +25,6 @@
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_row_compactor.h"
 #include "storage/memtable/ob_multi_source_data.h"
-#include "storage/ob_i_memtable_mgr.h"
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
@@ -52,10 +51,6 @@ namespace memtable
 class ObMemtableScanIterator;
 class ObMemtableGetIterator;
 
-
-/*
- * Attention! When tx is rollback, insert/update/delete row count and size will not reduced accordingly
- */
 struct ObMtStat
 {
   ObMtStat() { reset(); }
@@ -187,8 +182,8 @@ enum class MemtableRefOp
 class ObMemtable : public ObIMemtable, public storage::checkpoint::ObFreezeCheckpoint
 {
 public:
+  typedef common::ObGMemstoreAllocator::AllocHandle ObMemstoreAllocator;
   using ObMvccRowAndWriteResults = common::ObSEArray<ObMvccRowAndWriteResult, 16>;
-  typedef share::ObMemstoreAllocator::AllocHandle ObSingleMemstoreAllocator;
   ObMemtable();
   virtual ~ObMemtable();
 public:
@@ -323,7 +318,6 @@ public:
   // decrypt_buf is used for decryption
   virtual int replay_row(
       storage::ObStoreCtx &ctx,
-      const share::SCN &scn,
       ObMemtableMutatorIterator *mmi);
   virtual int replay_schema_version_change_log(
       const int64_t schema_version);
@@ -332,8 +326,9 @@ public:
   int set_freezer(storage::ObFreezer *handler);
   storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
-  int set_memtable_mgr_(storage::ObTabletMemtableMgr *mgr);
-  storage::ObTabletMemtableMgr *get_memtable_mgr_();
+  void set_memtable_mgr(storage::ObTabletMemtableMgr *mgr) { ATOMIC_STORE(&memtable_mgr_, mgr); }
+  void clear_memtable_mgr() { ATOMIC_STORE(&memtable_mgr_, nullptr); }
+  storage::ObTabletMemtableMgr *get_memtable_mgr() { return ATOMIC_LOAD(&memtable_mgr_); }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
@@ -371,7 +366,7 @@ public:
   int64_t get_freeze_state() const { return freeze_state_; }
   int64_t get_protection_clock() const { return local_allocator_.get_protection_clock(); }
   int64_t get_retire_clock() const { return local_allocator_.get_retire_clock(); }
-  int get_ls_current_right_boundary(share::SCN &current_right_boundary);
+  int get_current_right_boundary(share::SCN &current_right_boundary);
 
   inline bool& get_read_barrier() { return read_barrier_; }
   inline void set_write_barrier() { write_barrier_ = true; }
@@ -385,8 +380,8 @@ public:
   inline void set_is_flushed() { is_flushed_ = true; }
   inline bool get_is_flushed() { return is_flushed_; }
   inline void unset_active_memtable_logging_blocked() { ATOMIC_STORE(&unset_active_memtable_logging_blocked_, true); }
-  inline void set_resolved_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolved_active_memtable_left_boundary_, flag); }
-  inline bool get_resolved_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolved_active_memtable_left_boundary_); }
+  inline void set_resolve_active_memtable_left_boundary(bool flag) { ATOMIC_STORE(&resolve_active_memtable_left_boundary_, flag); }
+  inline bool get_resolve_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolve_active_memtable_left_boundary_); }
   void set_freeze_state(const int64_t state);
   void set_minor_merged();
   int64_t get_minor_merged_time() const { return minor_merged_time_; }
@@ -405,6 +400,9 @@ public:
   ObMvccEngine &get_mvcc_engine() { return mvcc_engine_; }
   const ObMvccEngine &get_mvcc_engine() const { return mvcc_engine_; }
   OB_INLINE bool is_inited() const { return is_inited_;}
+  int64_t get_memtable_mgr_op_cnt() { return ATOMIC_LOAD(&memtable_mgr_op_cnt_); }
+  int64_t inc_memtable_mgr_op_cnt() { return ATOMIC_AAF(&memtable_mgr_op_cnt_, 1); }
+  int64_t dec_memtable_mgr_op_cnt() { return ATOMIC_SAF(&memtable_mgr_op_cnt_, 1); }
   void pre_batch_destroy_keybtree();
   static int batch_remove_unused_callback_for_uncommited_txn(
     const share::ObLSID ls_id,
@@ -444,7 +442,7 @@ public:
   int set_rec_scn(share::SCN rec_scn);
   int set_start_scn(const share::SCN start_ts);
   int set_end_scn(const share::SCN freeze_ts);
-  int set_max_end_scn(const share::SCN scn, bool allow_backoff = false);
+  int set_max_end_scn(const share::SCN scn);
   int set_max_end_scn_to_inc_start_scn();
   inline int set_logging_blocked()
   {
@@ -474,6 +472,11 @@ public:
   int64_t get_unsubmitted_cnt() const { return ATOMIC_LOAD(&unsubmitted_cnt_); }
   int inc_unsubmitted_cnt();
   int dec_unsubmitted_cnt();
+  int64_t get_unsynced_cnt() { return ATOMIC_LOAD(&unsynced_cnt_); }
+  void inc_unsynced_cnt();
+  int dec_unsynced_cnt();
+  void inc_unsubmitted_and_unsynced_cnt();
+  void dec_unsubmitted_and_unsynced_cnt();
   virtual uint32_t get_freeze_flag() override;
   virtual OB_INLINE int64_t get_timestamp() const override { return timestamp_; }
   void inc_timestamp(const int64_t timestamp) { timestamp_ = MAX(timestamp_, timestamp + 1); }
@@ -505,10 +508,10 @@ public:
   int dump2text(const char *fname);
   // TODO(handora.qc) ready_for_flush interface adjustment
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
-  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(timestamp), K_(state),
+  INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), KP_(memtable_mgr), K_(timestamp), K_(state),
                        K_(freeze_clock), K_(max_schema_version), K_(max_data_schema_version), K_(max_column_cnt),
-                       K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt),
-                       K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolved_active_memtable_left_boundary),
+                       K_(write_ref_cnt), K_(local_allocator), K_(unsubmitted_cnt), K_(unsynced_cnt),
+                       K_(logging_blocked), K_(unset_active_memtable_logging_blocked), K_(resolve_active_memtable_left_boundary),
                        K_(contain_hotspot_row), K_(max_end_scn), K_(rec_scn), K_(snapshot_version), K_(migration_clog_checkpoint_scn),
                        K_(is_tablet_freeze), K_(contain_hotspot_row),
                        K_(read_barrier), K_(is_flushed), K_(freeze_state), K_(allow_freeze),
@@ -558,7 +561,6 @@ private:
   int lock_rows_on_frozen_stores_(
       const bool check_exist,
       const storage::ObTableIterParam &param,
-      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       ObMvccRowAndWriteResults &mvcc_rows,
       ObRowsInfo &rows_info);
@@ -587,7 +589,6 @@ private:
       const storage::ObStoreRow &new_row,
       const storage::ObStoreRow *old_row,
       const common::ObIArray<int64_t> *update_idx,
-      const ObMemtableKey &mtk,
       storage::ObTableAccessContext &context,
       ObMvccRowAndWriteResult *mvcc_row = nullptr,
       bool check_exist = false);
@@ -597,14 +598,12 @@ private:
       const storage::ObStoreRow *rows,
       const int64_t row_count,
       const bool check_exist,
-      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       storage::ObRowsInfo &rows_info);
   int lock_(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
-      const common::ObStoreRowkey &rowkey,
-      const ObMemtableKey &mtk);
+      const common::ObStoreRowkey &rowkey);
 
   int post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                const ObMemtableKey &row_key,
@@ -616,6 +615,8 @@ private:
   int64_t dec_write_ref_();
   int64_t inc_unsubmitted_cnt_();
   int64_t dec_unsubmitted_cnt_();
+  int64_t inc_unsynced_cnt_();
+  int64_t dec_unsynced_cnt_();
   int64_t try_split_range_for_sample_(const ObStoreRowkey &start_key,
                                       const ObStoreRowkey &end_key,
                                       const int64_t range_count,
@@ -627,9 +628,9 @@ private:
   bool is_inited_;
   storage::ObLSHandle ls_handle_;
   storage::ObFreezer *freezer_;
-  storage::ObMemtableMgrHandle memtable_mgr_handle_;
+  storage::ObTabletMemtableMgr *memtable_mgr_;
   mutable uint32_t freeze_clock_;
-  ObSingleMemstoreAllocator local_allocator_;
+  ObMemstoreAllocator local_allocator_;
   ObMTKVBuilder kv_builder_;
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;
@@ -638,10 +639,12 @@ private:
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log
   int64_t unsubmitted_cnt_; // number of trans node to be submitted logs
+  int64_t unsynced_cnt_; // number of trans node to be synced logs
+  int64_t memtable_mgr_op_cnt_; // number of operations for memtable_mgr
   bool logging_blocked_; // flag whether the memtable can submit log, cannot submit if true
   int64_t logging_blocked_start_time; // record the start time of logging blocked
   bool unset_active_memtable_logging_blocked_;
-  bool resolved_active_memtable_left_boundary_;
+  bool resolve_active_memtable_left_boundary_;
   // TODO(handora.qc): remove it as soon as possible
   // only used for decide special right boundary of memtable
   bool transfer_freeze_flag_;
@@ -681,6 +684,31 @@ private:
   uint32_t modify_count_;
   uint32_t acc_checksum_;
 };
+
+class MemtableMgrOpGuard
+{
+public:
+  explicit MemtableMgrOpGuard(ObMemtable *memtable): memtable_(memtable),
+                                                     memtable_mgr_(nullptr)
+  {
+    if (OB_NOT_NULL(memtable_)) {
+      memtable_->inc_memtable_mgr_op_cnt();
+      memtable_mgr_ = memtable_->get_memtable_mgr();
+    }
+  }
+  ~MemtableMgrOpGuard()
+  {
+    if (OB_NOT_NULL(memtable_)) {
+      memtable_->dec_memtable_mgr_op_cnt();
+      memtable_mgr_ = nullptr;
+    }
+  }
+  storage::ObTabletMemtableMgr *get_memtable_mgr() { return memtable_mgr_; }
+private:
+  ObMemtable *memtable_;
+  storage::ObTabletMemtableMgr *memtable_mgr_;
+};
+
 }
 }
 

@@ -33,17 +33,7 @@ public:
   static int calc_null(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_oracle_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_mysql_mode(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  static int calc_mysql_length_vector(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound);
-
 private:
-  template <typename ArgVec, typename ResVec>
-  static int calc_mysql_length_vector_dispatch(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const EvalBound &bound);
   DISALLOW_COPY_AND_ASSIGN(ObExprLength);
 };
 }

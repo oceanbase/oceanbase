@@ -173,59 +173,42 @@ int ObDiskUsageReportTask::report_tenant_disk_usage(const char *svr_ip,
   return ret;
 }
 
-
 int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  common::ObSArray<blocksstable::MacroBlockId> block_list;
-  ObDiskUsageReportKey meta_key;
-  ObDiskUsageReportKey data_key;
-  int64_t meta_size = 0;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  ObArenaAllocator iter_allocator("DiskReport", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  ObTenantTabletIterator tablet_iter(*t3m, iter_allocator);
+  ObTabletHandle tablet_handle;
+  ObDiskUsageReportKey report_key;
+
   int64_t data_size = 0;
-  int64_t tmp_meta_size = 0;
-  int64_t tmp_data_size = 0;
-
-  if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_meta_block_list(block_list))) {
-    STORAGE_LOG(WARN, "failed to get tenant's meta block list", K(ret));
-  } else {
-    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-    ObArenaAllocator iter_allocator("DiskReport", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
-    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator, nullptr/*no op*/);
-    ObTabletHandle tablet_handle;
-    while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
-      if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
-      } else if (tablet_handle.get_obj()->is_empty_shell()) {
-        // skip empty shell
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_size(
-          true /*ignore shared block*/, tmp_meta_size, tmp_data_size))) {
-        STORAGE_LOG(WARN, "failed to get tablet's meta and data size", K(ret));
-      } else {
-        meta_size += tmp_meta_size;
-        data_size += tmp_data_size;
-      }
-      tablet_handle.reset();
-      iter_allocator.reuse();
-      tmp_meta_size = 0;
-      tmp_data_size = 0;
+  int64_t sstable_size = 0;
+  while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
+    if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
+    } else if (tablet_handle.get_obj()->is_empty_shell()) {
+      // skip empty shell
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_sstables_size(sstable_size, true /*ignore shared block*/))) {
+      STORAGE_LOG(WARN, "failed to get new tablet's disk usage", K(ret), K(sstable_size));
+    } else {
+      data_size += sstable_size;
     }
-
-    if (OB_ITER_END == ret || OB_SUCCESS == ret) {
-      ret = OB_SUCCESS;
-      data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
-      meta_size += block_list.count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
-      meta_key.tenant_id_ = tenant_id;
-      meta_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA;
-      data_key.tenant_id_ = tenant_id;
-      data_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA;
-      if (OB_FAIL(result_map_.set_refactored(meta_key, meta_size, 1 /* whether allowed to override */))) {
-        STORAGE_LOG(WARN, "failed to insert meta info result_map_", K(ret), K(meta_key), K(meta_size));
-      } else if (OB_FAIL(result_map_.set_refactored(data_key, data_size, 1 /* whether allowed to override */))) {
-        STORAGE_LOG(WARN, "failed to insert data info result_map_", K(ret), K(data_key), K(data_size));
-      }
+    sstable_size = 0;
+    tablet_handle.reset();
+    iter_allocator.reuse();
+  }
+  if (OB_ITER_END == ret || OB_SUCCESS == ret) {
+    ret = OB_SUCCESS;
+    data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
+    report_key.tenant_id_ = tenant_id;
+    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA;
+    if (OB_FAIL(result_map_.set_refactored(report_key, data_size, 1))) {
+      STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(data_size));
     }
   }
+
   return ret;
 }
 
@@ -248,6 +231,8 @@ int ObDiskUsageReportTask::count_tenant()
         STORAGE_LOG(WARN, "failed to count tenant's slog", K(ret));
       } else if (OB_FAIL(count_tenant_clog(tenant_id))) {
         STORAGE_LOG(WARN, "failed to count tenant's clog", K(ret));
+      } else if (OB_FAIL(count_tenant_meta(tenant_id))) {
+        STORAGE_LOG(WARN, "failed to count tenant's meta", K(ret));
       } else if (OB_FAIL(count_tenant_data(tenant_id))) {
         STORAGE_LOG(WARN, "failed to count tenant's data", K(ret));
       }
@@ -315,6 +300,27 @@ int ObDiskUsageReportTask::count_tenant_clog(const uint64_t tenant_id)
     report_key.tenant_id_ = tenant_id;
     if (OB_FAIL(result_map_.set_refactored(report_key, clog_space, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(clog_space));
+    }
+  }
+  return ret;
+}
+
+int ObDiskUsageReportTask::count_tenant_meta(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObTenantCheckpointSlogHandler *ckp_handler = nullptr;
+  common::ObSArray<blocksstable::MacroBlockId> block_list;
+  ObDiskUsageReportKey report_key;
+  if (OB_ISNULL(ckp_handler = MTL(ObTenantCheckpointSlogHandler*))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "checkpoint slog handler is null", K(ret), KP(ckp_handler));
+  } else if (OB_FAIL(ckp_handler->get_meta_block_list(block_list))) {
+    STORAGE_LOG(WARN, "failed to get tenant's meta block list", K(ret));
+  } else {
+    report_key.tenant_id_ = tenant_id;
+    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA;
+    if (OB_FAIL(result_map_.set_refactored(report_key, block_list.count() * common::OB_DEFAULT_MACRO_BLOCK_SIZE, 1))) {
+      STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(block_list.count()));
     }
   }
   return ret;

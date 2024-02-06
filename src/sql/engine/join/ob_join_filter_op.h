@@ -24,9 +24,7 @@
 #include "sql/dtl/ob_dtl_channel_loop.h"
 #include "sql/dtl/ob_op_metric.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_msg.h"
-#include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "share/detect/ob_detectable_id.h"
-#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 
 
 namespace oceanbase
@@ -49,8 +47,6 @@ struct ObJoinFilterShareInfo
   uint64_t filter_ptr_;   //此指针将作为PX JOIN FILTER CREATE算子共享内存.
   uint64_t shared_msgs_;  //sqc-shared dh msgs
   OB_UNIS_VERSION_V(1);
-public:
-  TO_STRING_KV(KP(unfinished_count_ptr_), KP(ch_provider_ptr_), KP(release_ref_ptr_), KP(filter_ptr_), K(shared_msgs_));
 };
 
 struct ObJoinFilterRuntimeConfig
@@ -209,9 +205,6 @@ public:
   common::ObFixedArray<bool, common::ObIAllocator> need_null_cmp_flags_;
   bool is_shuffle_;
   int64_t each_group_size_;
-  common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_build_cmp_infos_;
-  common::ObFixedArray<ObRFCmpInfo, common::ObIAllocator> rf_probe_cmp_infos_;
-  ObPxQueryRangeInfo px_query_range_info_;
 };
 
 class ObJoinFilterOp : public ObOperator
@@ -262,9 +255,6 @@ private:
   int release_local_msg();
   int release_shared_msg();
   int mark_not_need_send_bf_msg();
-  int prepare_extra_use_info_for_vec20(ObExprJoinFilter::ObExprJoinFilterContext *join_filter_ctx,
-                                   ObP2PDatahubMsgBase::ObP2PDatahubMsgType dh_msg_type);
-
 private:
   static const int64_t ADAPTIVE_BF_WINDOW_ORG_SIZE = 4096;
   static constexpr double ACCEPTABLE_FILTER_RATE = 0.98;

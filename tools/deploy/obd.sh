@@ -34,7 +34,7 @@ function obd_exec {
 }
 alias obd="obd_exec"
 
-function variables_prepare {
+function variables_parpare {
   if [[ "$(readlink -f "$BASE_DIR"/..)" == "$OB_FLOW_WORK_DIR" ]]
   then
   path=$(readlink -f "$BASE_DIR")
@@ -74,7 +74,7 @@ function variables_prepare {
 function copy_sh {
   if [[ -f copy.sh ]]
   then
-  sh copy.sh $BUILD_PATH
+  sh copy.sh
   else
   echo 'can not find copy.sh'
   fi
@@ -559,7 +559,7 @@ Usage: $entrance <command> [options]
 
 Available commands:
 
-prepare  [-b BUILD_PATH -p DATA_PATH -h HOST]    Prepare for deployment.
+prepare  [-p DATA_PATH -h HOST]          Prepare for deployment.
 deploy -c YAML_CONF [-n DEPLOY_NAME]     Deploy a cluster by a deploy yaml file. Default deploy name will be the name of yaml file.
 redeploy [-c YAML_CONF -n DEPLOY_NAME]   Redeploy cluster.
 reinstall [-n DEPLOY_NAME]               Reinstall cluster. (Change bin file, sync libs and restart)
@@ -593,21 +593,20 @@ Options:
 -n DEPLOY_NAME, --deploy-name DEPLOY_NAME
                                          The name of the deployment.
 -v VERBOSE                               Activate verbose output.
--b BUILD_PATH, --build-path BUILD_PATH   The build path of oceanbase. If not specified, it will be chosen in alphabetical order.
 -p DATA_PATH, --data-path DATA_PATH      The data path for server deployment, it can be changed in the yaml file.
 --ip IPADDRESS                           The ipaddress for server deployment, it can be changed in the yaml file.
 --port PORT_BEGIN                        The port starting point. All the ports can be changed in the yaml file.
 --with-local-obproxy                     Use local obproxy.
 --skip-copy                              Skip copy.sh.
 --cp                                     Exec copy.sh.
---reboot                                 Redeploy cluster before mysqltest.
+--reboot                                 Redeploy cluster before mysqltest
 
 """
 }
 
 function main() {
   entrance=${OBD_SH_ENTRANCE:-obd.sh}
-  variables_prepare
+  variables_parpare
   command="$1"
   shift
   extra_args=""
@@ -626,7 +625,6 @@ function main() {
         fi
         ;;
       -n | --deploy-name ) DEPLOY_NAME="$2"; shift 2 ;;
-      -b | --build-path ) BUILD_PATH="$2"; shift 2 ;;
       -p | --data-path ) DATA_PATH="$2"; shift 2 ;;
       -N ) NO_CONFIRM="1"; shift ;;
       --ip ) IPADDRESS="$2"; shift 2 ;;
@@ -647,7 +645,6 @@ function main() {
 
   YAML_CONF=$(absolute_path ${YAML_CONF})
   DATA_PATH=$(absolute_path ${DATA_PATH})
-  BUILD_PATH=$(absolute_path ${BUILD_PATH})
   OBSERVER_PATH=$(absolute_path ${OBSERVER_PATH})
 
   if [[ "$MINI" == "1" && "$DISABLE_REBOOT" != "1" ]]

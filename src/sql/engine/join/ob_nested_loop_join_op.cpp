@@ -15,7 +15,6 @@
 #include "sql/engine/join/ob_nested_loop_join_op.h"
 #include "sql/engine/table/ob_table_scan_op.h"
 #include "sql/engine/ob_exec_context.h"
-#include "sql/engine/basic/ob_material_vec_op.h"
 
 namespace oceanbase
 {
@@ -66,23 +65,9 @@ int ObNestedLoopJoinOp::inner_open()
   } else if (OB_FAIL(ObBasicNestedLoopJoinOp::inner_open())) {
     LOG_WARN("failed to open in base class", K(ret));
   }
-  int64_t simulate_group_size = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_GROUP_SIZE);
-  int64_t group_size = 0;
-  if (simulate_group_size > 0) {
-    max_group_size_ = simulate_group_size;
-    group_size = simulate_group_size;
-    LOG_TRACE("simulate group size is", K(simulate_group_size));
-  } else {
-    group_size = MY_SPEC.group_size_;
-  }
   if (OB_SUCC(ret) && is_vectorized()) {
     if (MY_SPEC.group_rescan_) {
-      if (simulate_group_size > 0) {
-        max_group_size_ = simulate_group_size + MY_SPEC.plan_->get_batch_size();
-      } else {
-        max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
-      }
-      LOG_TRACE("max group size of NLJ is", K(max_group_size_), K(MY_SPEC.plan_->get_batch_size()));
+      max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
     }
     if (OB_ISNULL(batch_mem_ctx_)) {
       ObSQLSessionInfo *session = ctx_.get_my_session();
@@ -128,7 +113,7 @@ int ObNestedLoopJoinOp::inner_open()
   if (OB_SUCC(ret) && MY_SPEC.group_rescan_) {
     if (OB_FAIL(group_join_buffer_.init(this,
                                         max_group_size_,
-                                        group_size,
+                                        MY_SPEC.group_size_,
                                         &MY_SPEC.rescan_params_,
                                         &MY_SPEC.left_rescan_params_,
                                         &MY_SPEC.right_rescan_params_))) {
@@ -184,54 +169,6 @@ int ObNestedLoopJoinOp::rescan()
   OX(OB_ASSERT(false == brs_.end_));
 #endif
 
-  return ret;
-}
-
-int ObNestedLoopJoinOp::do_drain_exch_multi_lvel_bnlj()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(try_open())) {
-    LOG_WARN("fail to open operator", K(ret));
-  } else if (!exch_drained_) {
-    // the drain request is triggered by current NLJ operator, and current NLJ is a multi level Batch NLJ
-    // It will block rescan request for it's child operator, if the drain request is passed to it's child operator
-    // The child operators will be marked as iter-end_, and will not get any row if rescan is blocked
-    // So we block the drain request here; Only set current operator to end;
-    int tmp_ret = inner_drain_exch();
-    exch_drained_ = true;
-    brs_.end_ = true;
-    batch_reach_end_ = true;
-    row_reach_end_ = true;
-    if (OB_SUCC(ret)) {
-      ret = tmp_ret;
-    }
-  }
-  return ret;
-}
-
-int ObNestedLoopJoinOp::do_drain_exch()
-{
-  int ret = OB_SUCCESS;
-  if (!MY_SPEC.group_rescan_) {
-    if (OB_FAIL( ObOperator::do_drain_exch())) {
-      LOG_WARN("failed to drain NLJ operator", K(ret));
-    }
-  } else if (!group_join_buffer_.is_multi_level()) {
-    if (OB_FAIL( ObOperator::do_drain_exch())) {
-      LOG_WARN("failed to drain NLJ operator", K(ret));
-    }
-  } else {
-    if (!is_operator_end()) {
-      // the drain request is triggered by parent operator
-      // NLJ needs to pass the drain request to it's child operator
-      LOG_TRACE("The drain request is passed by parent operator");
-      if (OB_FAIL( ObOperator::do_drain_exch())) {
-        LOG_WARN("failed to drain normal NLJ operator", K(ret));
-      }
-    } else if (OB_FAIL(do_drain_exch_multi_lvel_bnlj())) {
-      LOG_WARN("failed to drain multi level NLJ operator", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -398,7 +335,6 @@ int ObNestedLoopJoinOp::join_end_func_end()
 int ObNestedLoopJoinOp::read_left_operate()
 {
   int ret = OB_SUCCESS;
-  clear_evaluated_flag();
   if (MY_SPEC.group_rescan_ || MY_SPEC.enable_px_batch_rescan_) {
     if (OB_FAIL(group_read_left_operate()) && OB_ITER_END != ret) {
       LOG_WARN("failed to read left group", K(ret));
@@ -436,12 +372,6 @@ int ObNestedLoopJoinOp::rescan_right_operator()
     // FIXME bin.lb: handle monitor dump + material ?
     if (PHY_MATERIAL == right_->get_spec().type_) {
       if (OB_FAIL(static_cast<ObMaterialOp*>(right_)->rewind())) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("rewind failed", K(ret));
-        }
-      }
-    } else if (PHY_VEC_MATERIAL == right_->get_spec().type_) {
-      if (OB_FAIL(static_cast<ObMaterialVecOp*>(right_)->rewind())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("rewind failed", K(ret));
         }
@@ -634,9 +564,10 @@ int ObNestedLoopJoinOp::read_left_func_end()
 int ObNestedLoopJoinOp::read_right_operate()
 {
   int ret = OB_SUCCESS;
-  clear_evaluated_flag();
   if (OB_FAIL(get_next_right_row()) && OB_ITER_END != ret) {
     LOG_WARN("failed to get next right row", K(ret));
+  } else {
+    clear_evaluated_flag();
   }
 
   return ret;

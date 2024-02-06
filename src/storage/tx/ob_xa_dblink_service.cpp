@@ -29,11 +29,6 @@ using namespace common::sqlclient;
 namespace transaction
 {
 // generate a xid with new gtrid
-// xid content:
-//  gtrid:
-//    base_version: "$tenant_id.$trans_id.$timestamp"
-//    using_ipv4: "$tenant_id.$trans_id.$timestamp,$ipv4"
-//  bqual: "10000"
 // @param[out] new_xid
 int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
 {
@@ -42,16 +37,19 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
   static const ObString BQUAL_STRING = ObString("10000");
   // gtrid
   int64_t txid_value = tx_id.get_id();
-  uint64_t tenant_id = MTL_ID();
-  char gtrid_base_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
-  int64_t timestamp = ObTimeUtility::current_time() / 1000000; // second level
-  const char *gtrid_base_format = "%llu.%lld.%lld";
-  int base_len = snprintf(gtrid_base_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_base_format,
-                          tenant_id, txid_value, timestamp);
-  if (ObXATransID::MAX_GTRID_LENGTH <= base_len || 0 > base_len) {
+  static const char *DBLINK_STR = "DBLINK.";
+  static const int DBLINK_STR_LENGTH = 7;
+  char txid_str[ObXATransID::MAX_GTRID_LENGTH];
+  memset(txid_str, 0, ObXATransID::MAX_GTRID_LENGTH);
+  int txid_str_length = sprintf(txid_str, "%ld", txid_value);
+  if (ObXATransID::MAX_GTRID_LENGTH < txid_str_length + DBLINK_STR_LENGTH) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(base_len));
+    TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(txid_str_length));
   } else {
+    char gtrid_str[ObXATransID::MAX_GTRID_LENGTH];
+    memset(gtrid_str, 0, ObXATransID::MAX_GTRID_LENGTH);
+    strncpy(gtrid_str, DBLINK_STR, DBLINK_STR_LENGTH);
+    strncpy(gtrid_str + DBLINK_STR_LENGTH, txid_str, txid_str_length);
     ObString gtrid_string;
     if (GCONF.self_addr_.using_ipv4()) {
       char ip_port[MAX_IP_PORT_LENGTH];
@@ -59,20 +57,17 @@ int ObXAService::generate_xid(const ObTransID &tx_id, ObXATransID &new_xid)
       memset(ip_port, 0, MAX_IP_PORT_LENGTH);
       if (OB_FAIL(GCONF.self_addr_.addr_to_buffer(ip_port, MAX_IP_PORT_LENGTH, ip_str_length))) {
         TRANS_LOG(WARN, "convert server to string failed", K(ret), K(tx_id));
+      } else if (ObXATransID::MAX_GTRID_LENGTH < 1 + ip_str_length + txid_str_length + DBLINK_STR_LENGTH) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(tx_id), K(txid_str_length), K(ip_port), K(ip_str_length));
       } else {
-        const char *gtrid_full_format = "%s,%s";
-        char gtrid_full_str[ObXATransID::MAX_GTRID_LENGTH] = {0};
-        int full_len = snprintf(gtrid_full_str, ObXATransID::MAX_GTRID_LENGTH, gtrid_full_format,
-                                gtrid_base_str, ip_port);
-        if (ObXATransID::MAX_GTRID_LENGTH <= full_len || 0 > full_len) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "unexpected gtrid length", K(ret), K(full_len));
-        } else {
-          gtrid_string = ObString(full_len, gtrid_full_str);
-        }
+        const char *comma = ",";
+        strncpy(gtrid_str + DBLINK_STR_LENGTH + txid_str_length, comma, 1);
+        strncpy(gtrid_str + DBLINK_STR_LENGTH + txid_str_length + 1, ip_port, ip_str_length);
+        gtrid_string = ObString(DBLINK_STR_LENGTH + txid_str_length + 1 + ip_str_length, gtrid_str);
       }
     } else {
-      gtrid_string = ObString(base_len, gtrid_base_str);
+      gtrid_string = ObString(DBLINK_STR_LENGTH + txid_str_length, gtrid_str);
     }
     if (OB_SUCC(ret)) {
       ret = new_xid.set(gtrid_string, BQUAL_STRING, DBLINK_FORMAT_ID);

@@ -19,7 +19,7 @@ drop table if exists t3;
 drop table if exists t4;
 --enable_warnings
 
-create table t1 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group (all columns, each column);
+create table t1 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group for all columns, each column;
 insert into t1 (b, c, d) values(1, "a", repeat('a', 1000));
 insert into t1 (b, c, d) values(2, "ab", repeat("ab", 500));
 insert into t1 (b, c, d) values(3, "ab ", repeat("ab", 500));
@@ -37,11 +37,11 @@ while($loop > 0)
 select count(1) from t1;
 
 # bug 
-create table t2 (a smallint(94) NOT NULL, b smallint(40) DEFAULT NULL, primary key(a)) row_format = compressed with column group (all columns, each column);
+create table t2 (a smallint(94) NOT NULL, b smallint(40) DEFAULT NULL, primary key(a)) row_format = compressed with column group for all columns, each column;
 insert into t2 values (39,845), (280,748), (520,693), (531,834), (548,17), (575,81), (576,711), (597,756), (680,594);
 insert into t2 values (751,576), (763,941), (797,906), (806,792), (841,320), (888,10), (952,398), (974,321);
 
-create table t3 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group (all columns, each column);
+create table t3 (a int auto_increment primary key, b bigint, c char(100), d varchar(1000)) row_format = compressed block_size = 2048 with column group for all columns, each column;
 insert into t3 (b, c, d) values(1, "a", repeat('a', 1000));
 insert into t3 (b, c, d) values(2, "ab", repeat("ab", 500));
 insert into t3 (b, c, d) values(3, "ab ", repeat("ab", 500));
@@ -83,7 +83,7 @@ alter system flush plan cache global;
 connection default;
 delete from t3 where a = 2;
 insert into t3 (a, b, c, d) values(31, 1, "a", repeat('a', 1000));
-create table t4(a int) row_format = compressed with column group (all columns, each column);
+create table t4(a int) row_format = compressed with column group for all columns, each column;
 insert into t4 values (-1), (0);
 explain select /*+ LEADING(t4,t3) USE_NL(t3,t4) NO_USE_NL_MATERIALIZATION(t3) */ t3.a from t4,t3 where (t3.a >= t4.a + 31 and t3.a <= t4.a + 35) or (t3.a >= t4.a + 1 and t3.a <= t4.a + 5) order by t3.a;
 select /*+ LEADING(t4,t3) USE_NL(t3,t4) NO_USE_NL_MATERIALIZATION(t3) */ t3.a from t4,t3 where (t3.a >= t4.a + 31 and t3.a <= t4.a + 35) or (t3.a >= t4.a + 1 and t3.a <= t4.a + 5) order by t3.a;

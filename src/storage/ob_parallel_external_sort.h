@@ -1215,7 +1215,7 @@ int ObExternalSortRound<T, Compare>::do_merge(
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(next_round.finish_write())) {
-        STORAGE_LOG(WARN, "fail to finish next round", K(ret));
+        STORAGE_LOG(WARN, "fail to finsh next round", K(ret));
       }
     }
     STORAGE_LOG(INFO, "external sort do merge end");

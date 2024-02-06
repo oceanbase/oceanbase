@@ -73,10 +73,6 @@ public:
   // commit(with one consensus round and 2*H transport round latency)
   int commit(const MockObParticipants& participants);
 
-  int64_t get_coordinator() { return coordinator_; }
-
-  bool is_real_downstream() { return true; }
-
   INHERIT_TO_STRING_KV("ObTxCycleTwoPhaseCommitter",
                        ObTxCycleTwoPhaseCommitter,
                        K_(addr),
@@ -86,7 +82,6 @@ public:
                        K_(tx_state),
                        K_(log_queue),
                        K_(participants),
-                       K_(intermediate_participants),
                        K_(coordinator),
                        K_(sender));
 protected:
@@ -125,19 +120,9 @@ protected:
   virtual ObTxState get_upstream_state() const override;
   virtual int set_upstream_state(const ObTxState state) override;
   virtual bool is_2pc_logging() const override;
-  virtual bool is_2pc_blocking() const { return false; };
   // for xa
   virtual bool is_sub2pc() const override;
 
-  virtual int merge_intermediate_participants() override;
-
-  void add_intermediate_participants(const int64_t ls_id);
-
-  void print_downstream();
-
-  virtual bool is_real_upstream() override;
-
-  bool need_to_advance();
 
   // Oceanbase's optimized log handler, if it returns success, the log is definitely proposed
   // to the consensus layer and we can rely on its sequential commitment to submit the log
@@ -153,7 +138,7 @@ private:
   int64_t find_participant_id(int64_t participant_key);
   virtual int apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type) override;
 
-public:
+private:
   common::ObSpinLock latch_;
   int64_t addr_;
   ObMailBox<ObTwoPhaseCommitMsgType> mailbox_;
@@ -165,7 +150,6 @@ public:
   int64_t coordinator_;
   int64_t sender_;
   MockObParticipants participants_;
-  MockObParticipants intermediate_participants_;
 
   ObMailBoxMgr<ObTwoPhaseCommitMsgType>* mailbox_mgr_;
 };

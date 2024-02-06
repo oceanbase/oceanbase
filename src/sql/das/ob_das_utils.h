@@ -57,12 +57,6 @@ public:
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,
                                    common::ObObj &value);
-  static int reshape_datum_value(const ObObjMeta &col_type,
-                                 const ObAccuracy &col_accuracy,
-                                 const bool enable_oracle_empty_char_reshape_to_null,
-                                 ObIAllocator &allocator,
-                                 blocksstable::ObStorageDatum &datum_value);
-  static int padding_fixed_string_value(int64_t max_len, ObIAllocator &alloc, ObObj &value);
   static int generate_spatial_index_rows(ObIAllocator &allocator,
                                          const ObDASDMLBaseCtDef &das_ctdef,
                                          const ObString &wkb_str,
@@ -70,11 +64,6 @@ public:
                                          const ObDASWriteBuffer::DmlRow &dml_row,
                                          ObSpatIndexRow &spat_rows);
   static int wait_das_retry(int64_t retry_cnt);
-  static int generate_mlog_row(const common::ObTabletID &tablet_id,
-                               const storage::ObDMLBaseParam &dml_param,
-                               common::ObNewRow &row,
-                               ObDASOpType op_type,
-                               bool is_old_row);
 };
 }  // namespace sql
 }  // namespace oceanbase

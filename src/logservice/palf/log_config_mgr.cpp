@@ -59,7 +59,6 @@ LogConfigMgr::LogConfigMgr()
       last_wait_barrier_time_us_(OB_INVALID_TIMESTAMP),
       last_wait_committed_end_lsn_(),
       last_sync_meta_for_arb_election_leader_time_us_(OB_INVALID_TIMESTAMP),
-      forwarding_config_proposal_id_(INVALID_PROPOSAL_ID),
       parent_lock_(common::ObLatchIds::PALF_CM_PARENT_LOCK),
       register_time_us_(OB_INVALID_TIMESTAMP),
       parent_(),
@@ -173,7 +172,6 @@ void LogConfigMgr::destroy()
     all_learnerlist_.reset();
     paxos_member_region_map_.destroy();
     last_sync_meta_for_arb_election_leader_time_us_ = OB_INVALID_TIMESTAMP;
-    forwarding_config_proposal_id_ = INVALID_PROPOSAL_ID;
     region_ = DEFAULT_REGION_NAME;
     state_ = ConfigChangeState::INIT;
     reconfig_barrier_.reset();
@@ -231,6 +229,7 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
   } else if (!member_list.is_valid() ||
              !arb_member.is_valid() ||
+             (replica_num & 1) != 0 ||
              replica_num <= 0 ||
              replica_num > OB_MAX_MEMBER_NUMBER ||
              INVALID_PROPOSAL_ID == proposal_id ||
@@ -246,7 +245,6 @@ int LogConfigMgr::set_initial_member_list(const common::ObMemberList &member_lis
     if (OB_FAIL(set_initial_config_info_(config_info, proposal_id, init_config_version))) {
       PALF_LOG(WARN, "set_initial_config_info failed", K(ret), K_(palf_id), K_(self), K(config_info), K(proposal_id));
     } else {
-      forwarding_config_proposal_id_ = proposal_id;
       PALF_LOG(INFO, "set_initial_member_list success", K(ret), K_(palf_id), K_(self), K_(log_ms_meta), K(member_list), K(arb_member), K(replica_num), K(proposal_id));
     }
   }
@@ -878,8 +876,9 @@ int LogConfigMgr::change_config_(const LogConfigChangeArgs &args,
       }
       case (ConfigChangeState::CHANGING): {
         if (is_reach_majority_()) {
-          (void) after_config_log_majority_(proposal_id, config_version);
+          (void) state_mgr_->reset_changing_config_with_arb();
           state_ = INIT;
+          (void) update_match_lsn_map_(running_args_, log_ms_meta_.curr_);
           ms_ack_list_.reset();
           resend_config_version_ = log_ms_meta_.curr_.config_.config_version_;
           last_submit_config_log_time_us_ = OB_INVALID_TIMESTAMP;
@@ -2060,11 +2059,9 @@ int LogConfigMgr::receive_config_log(const common::ObAddr &leader, const LogConf
 
 int LogConfigMgr::ack_config_log(const common::ObAddr &sender,
                                  const int64_t proposal_id,
-                                 const LogConfigVersion &config_version,
-                                 bool &is_majority)
+                                 const LogConfigVersion &config_version)
 {
   int ret = OB_SUCCESS;
-  is_majority = false;
   SpinLockGuard guard(lock_);
   const bool is_in_memberlist = alive_paxos_memberlist_.contains(sender);
   if (IS_NOT_INIT) {
@@ -2085,41 +2082,10 @@ int LogConfigMgr::ack_config_log(const common::ObAddr &sender,
     } else {
       ret = OB_SUCCESS;
       // NB: can set majority repeatedly.
-      is_majority = is_reach_majority_();
+      bool majority = is_reach_majority_();
       PALF_LOG(INFO, "ack_config_log success", KR(ret), K_(palf_id), K_(self), K(config_version), K(sender),
-          K(is_majority), K_(ms_ack_list), K(alive_paxos_replica_num_));
+          K(majority), K_(ms_ack_list), K(alive_paxos_replica_num_));
     }
-  }
-  return ret;
-}
-
-int LogConfigMgr::after_config_log_majority(const int64_t proposal_id,
-                                            const LogConfigVersion &config_version)
-{
-  int ret = OB_SUCCESS;
-  SpinLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    PALF_LOG(WARN, "LogConfigMgr not init", KR(ret));
-  } else {
-    ret = after_config_log_majority_(proposal_id, config_version);
-  }
-  return ret;
-}
-
-// do not change LogConfigMgr::state_
-int LogConfigMgr::after_config_log_majority_(const int64_t proposal_id,
-                                             const LogConfigVersion &config_version)
-{
-  int ret = OB_SUCCESS;
-  if (proposal_id != log_ms_meta_.proposal_id_ ||
-      config_version != log_ms_meta_.curr_.config_.config_version_) {
-    ret = OB_STATE_NOT_MATCH;
-    PALF_LOG(WARN, "config_version has been changed", KR(ret), K_(palf_id),
-        K_(self), K_(log_ms_meta), K(proposal_id), K_(state), K(config_version));
-  } else if (is_reach_majority_()) {
-    (void) state_mgr_->reset_changing_config_with_arb();
-    (void) update_match_lsn_map_(running_args_, log_ms_meta_.curr_);
   }
   return ret;
 }
@@ -2493,38 +2459,6 @@ int LogConfigMgr::sync_get_committed_end_lsn_(const LogConfigChangeArgs &args,
   return ret;
 }
 
-// need rlock of PalfHandleImpl
-// The arb server don't support set_initial_member_list,
-// so we need to forward LogConfigMeta to arb member. otherwise,
-// if only 1F1A are created successfully when creating PALF group,
-// A will not vote for the F because of empty config meta.
-int LogConfigMgr::forward_initial_config_meta_to_arb()
-{
-  int ret = OB_SUCCESS;
-  const common::ObMember &arb_member = log_ms_meta_.curr_.config_.arbitration_member_;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (INVALID_PROPOSAL_ID == forwarding_config_proposal_id_ ||
-      false == arb_member.is_valid()) {
-    // skip
-  } else {
-    common::ObMemberList forward_list;
-    if (forwarding_config_proposal_id_ != state_mgr_->get_proposal_id() ||
-        forwarding_config_proposal_id_ !=  log_ms_meta_.proposal_id_) {
-      forwarding_config_proposal_id_ = INVALID_PROPOSAL_ID;
-      PALF_LOG(INFO, "stop forward_initial_config_meta_to_arb", KR(ret), K_(palf_id), K_(self));
-    } else if (OB_FAIL(forward_list.add_member(arb_member))) {
-      PALF_LOG(WARN, "add_member failed", KR(ret), K_(palf_id), K_(self), K(forward_list), K(arb_member));
-    } else if (OB_FAIL(log_engine_->submit_change_config_meta_req(forward_list,
-        log_ms_meta_.proposal_id_, log_ms_meta_.prev_log_proposal_id_,
-        log_ms_meta_.prev_lsn_, log_ms_meta_.prev_mode_pid_, log_ms_meta_))) {
-      PALF_LOG(WARN, "submit_change_config_meta_req failed", KR(ret), K_(palf_id), K_(self),
-          K(arb_member), K_(log_ms_meta));
-    }
-  }
-  return ret;
-}
-
 //================================ Config Change ================================
 
 //================================ Child ================================
@@ -2743,16 +2677,6 @@ int LogConfigMgr::check_parent_health()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
-    {
-      SpinLockGuard parent_guard(parent_lock_);
-      SpinLockGuard child_guard(child_lock_);
-      // break learner loop
-      if (parent_.is_valid() &&
-          children_.contains(parent_) &&
-          OB_FAIL(retire_parent_())) {
-        PALF_LOG(WARN, "retire_parent_ failed", KR(ret), K_(palf_id), K_(self));
-      }
-    }
     SpinLockGuard guard(parent_lock_);
     const int64_t curr_time_us = common::ObTimeUtility::current_time();
     const bool is_registering_timeout = (is_registering_() && curr_time_us - last_submit_register_req_time_us_ > PALF_CHILD_RESEND_REGISTER_INTERVAL_US);

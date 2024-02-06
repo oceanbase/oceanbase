@@ -46,7 +46,7 @@ public:
     sql::ObBlackFilterExecutor &filter,
     sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap,
-    bool &filter_applied) const override;
+    bool &filter_applied) const;
 
   bool fast_decode_valid(const ObColumnCSDecoderCtx &ctx) const;
 

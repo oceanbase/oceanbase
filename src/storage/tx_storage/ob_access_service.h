@@ -108,17 +108,15 @@ public:
   virtual int get_multi_ranges_cost(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t timeout_us,
       const common::ObIArray<common::ObStoreRange> &ranges,
       int64_t &total_size) override;
   virtual int split_multi_ranges(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t timeout_us,
-      const common::ObIArray<ObStoreRange> &ranges,
+      const ObIArray<ObStoreRange> &ranges,
       const int64_t expected_task_count,
-      common::ObIAllocator &allocator,
-      common::ObArrayArray<ObStoreRange> &multi_range_split_array) override;
+      ObIAllocator &allocator,
+      ObArrayArray<ObStoreRange> &multi_range_split_array) override;
 
   // DML interface
   int delete_rows(
@@ -186,14 +184,12 @@ public:
   int estimate_row_count(
       const ObTableScanParam &param,
       const ObTableScanRange &scan_range,
-      const int64_t timeout_us,
       ObIArray<ObEstRowCountRecord> &est_records,
       int64_t &logical_row_count,
       int64_t &physical_row_count) const;
   int estimate_block_count_and_row_count(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const int64_t timeout_us,
       int64_t &macro_block_count,
       int64_t &micro_block_count,
       int64_t &sstable_row_count,
@@ -202,13 +198,13 @@ public:
       common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
+  int check_data_disk_full_(bool &is_full);
 
   int get_write_store_ctx_guard_(
       const share::ObLSID &ls_id,
       const int64_t timeout,
       transaction::ObTxDesc &tx_desc,
       const transaction::ObTxReadSnapshot &snapshot,
-      const int16_t branch_id,
       const concurrent_control::ObWriteFlag write_flag,
       ObStoreCtxGuard &ctx_guard,
       const transaction::ObTxSEQ &spec_seq_no = transaction::ObTxSEQ::INVL());
@@ -225,7 +221,6 @@ protected:
       const common::ObTabletID &tablet_id,
       const ObStoreAccessType access_type,
       const ObDMLBaseParam &dml_param,
-      const int64_t lock_wait_timeout_ts,
       transaction::ObTxDesc &tx_desc,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
@@ -244,11 +239,6 @@ protected:
       const share::SCN &snapshot,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
-  static OB_INLINE int64_t get_lock_wait_timeout_(const int64_t abs_lock_timeout, const int64_t stmt_timeout)
-  {
-    return (abs_lock_timeout < 0 ? stmt_timeout : (abs_lock_timeout > stmt_timeout ? stmt_timeout : abs_lock_timeout));
-  }
-
 private:
   bool is_inited_;
   uint64_t tenant_id_;

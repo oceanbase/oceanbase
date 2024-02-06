@@ -27,8 +27,6 @@ class ObRowData;
 // Arguments for building tx node
 struct ObTxNodeArg
 {
-  // trans id
-  transaction::ObTransID tx_id_;
   // data_ is the new row of the modifiction
   const ObMemtableData *data_;
   // old_row_ is the old row of the modificattion
@@ -48,8 +46,7 @@ struct ObTxNodeArg
   share::SCN scn_;
   int64_t column_cnt_;
 
-  TO_STRING_KV(K_(tx_id),
-               KP_(data),
+  TO_STRING_KV(KP_(data),
                KP_(old_row),
                K_(modify_count),
                K_(acc_checksum),
@@ -59,14 +56,12 @@ struct ObTxNodeArg
                K_(column_cnt));
 
   // Constructor for leader
-  ObTxNodeArg(const transaction::ObTransID tx_id,
-              const ObMemtableData *data,
+  ObTxNodeArg(const ObMemtableData *data,
               const ObRowData *old_row,
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
               const int64_t column_cnt)
-    : tx_id_(tx_id),
-    data_(data),
+    : data_(data),
     old_row_(old_row),
     modify_count_(UINT32_MAX),
     acc_checksum_(0),
@@ -76,8 +71,7 @@ struct ObTxNodeArg
     column_cnt_(column_cnt) {}
 
   // Constructor for follower
-  ObTxNodeArg(const transaction::ObTransID tx_id,
-              const ObMemtableData *data,
+  ObTxNodeArg(const ObMemtableData *data,
               const ObRowData *old_row,
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
@@ -85,8 +79,7 @@ struct ObTxNodeArg
               const uint32_t acc_checksum,
               const share::SCN scn,
               const int64_t column_cnt)
-    : tx_id_(tx_id),
-    data_(data),
+    : data_(data),
     old_row_(old_row),
     modify_count_(modify_count),
     acc_checksum_(acc_checksum),
@@ -96,7 +89,6 @@ struct ObTxNodeArg
     column_cnt_(column_cnt) {}
 
   void reset() {
-    tx_id_.reset();
     data_ = NULL;
     old_row_ = NULL;
     modify_count_ = 0;

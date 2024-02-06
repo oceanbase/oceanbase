@@ -50,8 +50,6 @@ class ObLSService
   static const int64_t SMALL_TENANT_MEMORY_LIMIT = 4 * 1024 * 1024 * 1024L; // 4G
   static const int64_t TENANT_MEMORY_PER_LS_NEED = 200 * 1024 * 1024L; // 200MB
 public:
-  int64_t break_point = -1; // just for test
-public:
   ObLSService();
   ~ObLSService();
 
@@ -62,7 +60,7 @@ public:
   int stop();
   int wait();
   void destroy();
-  bool is_empty();
+  bool safe_to_destroy();
   void inc_ls_safe_destroy_task_cnt();
   void dec_ls_safe_destroy_task_cnt();
   void inc_iter_cnt();
@@ -73,7 +71,7 @@ public:
   int create_ls(const obrpc::ObCreateLSArg &arg);
   // delete a LS
   // @param [in] ls_id, which LS is to be removed.
-  int remove_ls(const share::ObLSID &ls_id);
+  int remove_ls(const share::ObLSID &ls_id, const bool is_replay);
   // create a LS for HighAvaiable
   // @param [in] meta_package, all the parameters that is needed to create a LS for ha
   int create_ls_for_ha(const share::ObTaskId task_id, const ObMigrationOpArg &arg);
@@ -83,7 +81,8 @@ public:
   int replay_create_ls(const ObLSMeta &ls_meta);
   // replay create ls commit slog.
   // @param [in] ls_id, the create process of which is committed.
-  int replay_create_ls_commit(const share::ObLSID &ls_id);
+  // @param [in] create_type, the create type, it is maybe a normal ls/migrate ls/restore ls
+  int replay_create_ls_commit(const share::ObLSID &ls_id, const int64_t create_type);
   // create a LS for replay or update LS's meta
   // @param [in] ls_meta, all the parameters that is needed to create a LS for replay
   int replay_update_ls(const ObLSMeta &ls_meta);
@@ -156,25 +155,8 @@ private:
       CREATE_STATE_ADDED_TO_MAP = 2, // add_ls_to_map_ succ
       CREATE_STATE_WRITE_PREPARE_SLOG = 3, // write_prepare_create_ls_slog_ succ
       CREATE_STATE_PALF_ENABLED = 4, // enable_palf succ
-      CREATE_STATE_INNER_TABLET_CREATED = 5, // have created inner tablet
       CREATE_STATE_FINISH
   };
-  struct ObCreateLSCommonArg {
-    share::ObLSID ls_id_;
-    share::SCN create_scn_;
-    palf::PalfBaseInfo palf_base_info_;
-    ObTenantRole tenant_role_;
-    ObReplicaType replica_type_;
-    lib::Worker::CompatMode compat_mode_;
-    int64_t create_type_;
-    ObMigrationStatus migration_status_;
-    ObLSRestoreStatus restore_status_;
-    share::ObTaskId task_id_;
-    bool need_create_inner_tablet_;
-  };
-
-  int create_ls_(const ObCreateLSCommonArg &arg,
-                 const ObMigrationOpArg &mig_arg);
   // the tenant smaller than 5G can only create 8 ls.
   // other tenant can create 100 ls.
   int check_tenant_ls_num_();
@@ -186,12 +168,12 @@ private:
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
   int write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const;
-  int write_commit_create_ls_slog_(const share::ObLSID &ls_id) const;
+  int write_commit_create_ls_slog_(const share::ObLSID &ls_id,
+                                   const int64_t create_type) const;
   int write_abort_create_ls_slog_(const share::ObLSID &ls_id) const;
   int write_remove_ls_slog_(const share::ObLSID &ls_id) const;
   int remove_ls_from_map_(const share::ObLSID &ls_id);
-  void remove_ls_(ObLS *ls, const bool remove_from_disk, const bool write_slog);
-  int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
+  void remove_ls_(ObLS *ls, const bool remove_from_disk = true);
   int replay_update_ls_(const ObLSMeta &ls_meta);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);
   int replay_remove_ls_(const share::ObLSID &ls_id);
@@ -202,17 +184,13 @@ private:
 
   int alloc_ls_(ObLS *&ls);
   bool is_ls_to_restore_(const obrpc::ObCreateLSArg &arg) const;
-  bool is_ls_to_clone_(const obrpc::ObCreateLSArg &arg) const;
   bool need_create_inner_tablets_(const obrpc::ObCreateLSArg &arg) const;
   int get_restore_status_(
       share::ObLSRestoreStatus &restore_status);
-  ObLSRestoreStatus get_restore_status_by_tenant_role_(const ObTenantRole& tenant_role);
-  int64_t get_create_type_by_tenant_role_(const ObTenantRole& tenant_role);
 
 private:
   bool is_inited_;
-  bool is_running_; // used by create/remove, only can be used after start and before stop.
-  bool is_stopped_; // only for ls iter, get ls iter will cause OB_NOT_RUNNING after stop.
+  bool is_running_;
   uint64_t tenant_id_;
   // a map from ls id to ls
   ObLSMap ls_map_;

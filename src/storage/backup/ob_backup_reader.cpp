@@ -621,20 +621,26 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array_.count(); ++i) {
       int64_t pos = 0;
-      ObSSTable *sstable_ptr = sstable_array_.at(i).get_sstable();
-      if (OB_ISNULL(sstable_ptr)) {
+      ObITable *table_ptr = sstable_array_.at(i);
+      if (OB_ISNULL(table_ptr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid table ptr", K(ret), K(i));
       } else {
         // TODO(COLUMN_STORE) Attention !!! column store table key is COSSTable now! maybe should adapt.
-        const ObITable::TableKey &table_key = sstable_ptr->get_key();
+        const ObITable::TableKey &table_key = table_ptr->get_key();
         ObTablet *tablet = tablet_handle_->get_obj();
+        ObSSTable *sstable_ptr = NULL;
         ObBackupSSTableMeta backup_sstable_meta;
         backup_sstable_meta.tablet_id_ = tablet_id_;
-        if ((backup_data_type_.is_major_backup() && !sstable_ptr->is_major_sstable())
-            || (backup_data_type_.is_minor_backup() && !sstable_ptr->is_minor_sstable() && !sstable_ptr->is_ddl_dump_sstable())) {
+        if ((backup_data_type_.is_major_backup() && !table_ptr->is_major_sstable())
+            || (backup_data_type_.is_minor_backup() && !table_ptr->is_minor_sstable() && !table_ptr->is_ddl_dump_sstable())) {
           ret = OB_ERR_SYS;
-          LOG_WARN("get incorrect table type", K(ret), K(i), K_(backup_data_type), KP(sstable_ptr));
+          LOG_WARN("get incorrect table type", K(ret), K(i), K_(backup_data_type), KP(table_ptr));
+        } else {
+          // TODO(COLUMN_STORE) Attention !!! column store table key is COSSTable now! maybe should adapt.
+          sstable_ptr = static_cast<ObSSTable *>(table_ptr);
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(tablet->build_migration_sstable_param(table_key, backup_sstable_meta.sstable_meta_))) {
           LOG_WARN("failed to build migration sstable param", K(ret), K(table_key));
         } else if (OB_FAIL(get_macro_block_id_list_(*sstable_ptr, backup_sstable_meta))) {

@@ -12,7 +12,6 @@
 
 #include <gtest/gtest.h>
 #include <thread>
-#include <sys/resource.h>
 #include <functional>
 #define private public
 #define protected public
@@ -23,46 +22,11 @@
 #include "tx_node.h"
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 namespace oceanbase
 {
 using namespace ::testing;
 using namespace transaction;
 using namespace share;
-
-static ObSharedMemAllocMgr MTL_MEM_ALLOC_MGR;
-
-namespace share {
-int ObTenantTxDataAllocator::init(const char *label)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr mem_attr;
-  throttle_tool_ = &(MTL_MEM_ALLOC_MGR.share_resource_throttle_tool());
-  if (OB_FAIL(slice_allocator_.init(
-                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
-    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
-  } else {
-    slice_allocator_.set_nway(ObTenantTxDataAllocator::ALLOC_TX_DATA_MAX_CONCURRENCY);
-    is_inited_ = true;
-  }
-  return ret;
-}
-int ObMemstoreAllocator::init()
-{
-  throttle_tool_ = &MTL_MEM_ALLOC_MGR.share_resource_throttle_tool();
-  return arena_.init();
-}
-int ObMemstoreAllocator::AllocHandle::init()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = 1;
-  ObSharedMemAllocMgr *mtl_alloc_mgr = &MTL_MEM_ALLOC_MGR;
-  ObMemstoreAllocator &host = mtl_alloc_mgr->memstore_allocator();
-  (void)host.init_handle(*this);
-  return ret;
-}
-};  // namespace share
-
 namespace omt {
   bool the_ctrl_of_enable_transaction_free_route = true;
   ObTenantConfig *ObTenantConfigMgr::get_tenant_config_with_lock(const uint64_t tenant_id,
@@ -206,8 +170,7 @@ class MockObServer {
 public:
   MockObServer(const int64_t ls_id, const char*addr, const int32_t port, MsgBus &msg_bus)
     : addr_(ObAddr(ObAddr::VER::IPV4, addr, port)),
-      tx_node_ptr_(new ObTxNode(ls_id, addr_, msg_bus)),
-      tx_node_(*tx_node_ptr_),
+      tx_node_(ls_id, addr_, msg_bus),
       allocator_(), session_()
   {
     session_.test_init(1, 1111, 2222, &allocator_);
@@ -220,7 +183,6 @@ public:
       tx_node_.release_tx(*session_.get_tx_desc());
       session_.get_tx_desc() = NULL;
     }
-    delete tx_node_ptr_;
   }
   int start() { return tx_node_.start(); }
 public:
@@ -264,8 +226,7 @@ private:
   int handle_msg_(int type, void *msg);
   int handle_msg_check_alive_resp__(ObTxFreeRouteCheckAliveRespMsg *msg);
   ObAddr addr_;
-  ObTxNode *tx_node_ptr_;
-  ObTxNode &tx_node_;
+  ObTxNode tx_node_;
   ObMalloc allocator_;
   sql::ObSQLSessionInfo session_;
   TO_STRING_KV(K_(tx_node), K_(session));
@@ -652,18 +613,14 @@ public:
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-    ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1", 2023);
-    ObCurTraceId::init(ip_port);
+    const uint64_t tv = ObTimeUtility::current_time();
+    ObCurTraceId::set(&tv);
     GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     omt::the_ctrl_of_enable_transaction_free_route = true;
     common::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_1_0_0);
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
-    MTL_MEM_ALLOC_MGR.init();
-    struct rlimit rl;
-    getrlimit(RLIMIT_STACK, &rl);
-    setrlimit(20*1024*1024, &rl);
     auto test_name = test_info->name();
     _TRANS_LOG(INFO, ">>>> starting test : %s", test_name);
   }

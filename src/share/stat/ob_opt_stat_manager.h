@@ -23,7 +23,6 @@
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_ds_stat.h"
 #include "share/stat/ob_stat_item.h"
-#include "share/stat/ob_opt_system_stat.h"
 
 namespace oceanbase {
 namespace common {
@@ -51,10 +50,6 @@ public:
                               const ObIArray<int64_t> &part_ids,
                               bool &is_opt_stat_valid);
 
-  int check_system_stat_validity(sql::ObExecContext *ctx,
-                                 const uint64_t tenant_id,
-                                 bool &is_valid);
-
   int check_opt_stat_validity(sql::ObExecContext &ctx,
                               const uint64_t tenant_id,
                               const uint64_t tab_ref_id,
@@ -62,12 +57,11 @@ public:
                               bool &is_opt_stat_valid);
 
   int update_table_stat(const uint64_t tenant_id,
-                        sqlclient::ObISQLConnection *conn,
                         const ObOptTableStat *table_stats,
                         const bool is_index_stat);
 
   int update_table_stat(const uint64_t tenant_id,
-                        sqlclient::ObISQLConnection *conn,
+                        ObMySQLTransaction &trans,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
 
@@ -126,7 +120,7 @@ public:
                               ObOptColumnStatHandle &handle);
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
-                                 sqlclient::ObISQLConnection *conn,
+                                 ObMySQLTransaction &trans,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
                                  bool only_update_col_stat = false,
                                  const ObObjPrintParams &print_params = ObObjPrintParams());
@@ -139,15 +133,13 @@ public:
                         const uint64_t ref_id,
                         const ObIArray<int64_t> &part_ids,
                         const bool cascade_column,
-                        const int64_t degree,
                         int64_t &affected_rows);
 
   int delete_column_stat(const uint64_t tenant_id,
                          const uint64_t ref_id,
                          const ObIArray<uint64_t> &column_ids,
                          const ObIArray<int64_t> &part_ids,
-                         const bool only_histogram = false,
-                         const int64_t degree = 1);
+                         const bool only_histogram = false);
 
   int erase_column_stat(const ObOptColumnStat::Key &key);
   int erase_table_stat(const ObOptTableStat::Key &key);
@@ -163,11 +155,12 @@ public:
 
   int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                   const uint64_t tenant_id,
-                  sqlclient::ObISQLConnection *conn,
+                  ObMySQLTransaction &trans,
                   ObIArray<ObOptTableStat *> &table_stats,
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,
                   const bool is_index_stat,
+                  const bool is_history_stat,
                   const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
@@ -179,8 +172,6 @@ public:
   int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id);
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
-
-  int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
   int get_table_rowcnt(const uint64_t tenant_id,
                        const uint64_t table_id,
@@ -208,13 +199,6 @@ public:
                         ObOptDSStatHandle &ds_stat_handle);
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
-  ObOptStatService &get_stat_service() { return stat_service_; }
-
-  int get_system_stat(const uint64_t tenant_id,
-                      ObOptSystemStat &stat);
-  int update_system_stats(const uint64_t tenant_id,
-                        const ObOptSystemStat *system_stats);
-  int delete_system_stats(const uint64_t tenant_id);
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

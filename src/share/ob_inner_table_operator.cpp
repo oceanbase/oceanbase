@@ -93,7 +93,7 @@ int ObIInnerTableRow::build_assignments(ObSqlString &assignments) const
  * ------------------------------ObInnerTableOperator---------------------
  */
 ObInnerTableOperator::ObInnerTableOperator()
-  : is_inited_(false), table_name_(), exec_tenant_id_provider_(nullptr), group_id_(0)
+  : is_inited_(false), table_name_(), exec_tenant_id_provider_(nullptr)
 {
 
 }
@@ -104,21 +104,19 @@ ObInnerTableOperator::~ObInnerTableOperator()
 }
 
 int ObInnerTableOperator::init(
-    const char *tname, const ObIExecTenantIdProvider &exec_tenant_id_provider,
-    const int32_t group_id)
+    const char *tname, const ObIExecTenantIdProvider &exec_tenant_id_provider)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObInnerTableOperator init twice", K(ret));
-  } else if (OB_ISNULL(tname) || group_id < 0) {
+  } else if (OB_ISNULL(tname)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("empty table name", K(ret), K(tname), K(group_id));
+    LOG_WARN("empty table name", K(ret), K(tname));
   } else if (OB_FAIL(table_name_.assign(tname))) {
     LOG_WARN("failed to assign table name", K(ret), K(tname));
   } else {
     exec_tenant_id_provider_ = &exec_tenant_id_provider;
-    group_id_ = group_id;
     is_inited_ = true;
   }
 
@@ -644,7 +642,7 @@ int ObInnerTableOperator::do_insert_row_(ObISQLClient &proxy, const ObIInnerTabl
     LOG_WARN("fail to fill dml", K(ret), K(this), K(row));
   } else if (OB_FAIL(dml.splice_insert_sql(tname, sql))) {
     LOG_WARN("failed to splice insert sql", K(ret), K(this), K(row));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("insert one row", K(row), K(affected_rows), K(sql));
@@ -667,7 +665,7 @@ int ObInnerTableOperator::do_update_row_(ObISQLClient &proxy, const ObIInnerTabl
     LOG_WARN("fail to fill dml", K(ret), K(this), K(row));
   } else if (OB_FAIL(dml.splice_update_sql(tname, sql))) {
     LOG_WARN("failed to splice update sql", K(ret), K(this), K(row));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("update one row", K(row), K(affected_rows), K(sql));
@@ -690,7 +688,7 @@ int ObInnerTableOperator::do_insert_or_update_row_(ObISQLClient &proxy, const Ob
     LOG_WARN("fail to fill dml", K(ret), K(this), K(row));
   } else if (OB_FAIL(dml.splice_insert_update_sql(tname, sql))) {
     LOG_WARN("failed to splice insert update sql", K(ret), K(this), K(row));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("insert/update one row", K(row), K(affected_rows), K(sql));
@@ -713,7 +711,7 @@ int ObInnerTableOperator::do_delete_row_(
     LOG_WARN("fail to fill pkey dml", K(ret), K(this), K(key));
   } else if (OB_FAIL(dml.splice_delete_sql(tname, sql))) {
     LOG_WARN("failed to splice delete sql", K(ret), K(this), K(key));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("delete one row", K(key), K(affected_rows), K(sql));
@@ -748,7 +746,7 @@ int ObInnerTableOperator::do_get_column_(
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -787,7 +785,7 @@ int ObInnerTableOperator::do_get_int_column_(
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -829,7 +827,7 @@ int ObInnerTableOperator::do_get_string_column_(
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr(), group_id_))) {
+      if (OB_FAIL(proxy.read(res, exec_tenant_id, sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -864,7 +862,7 @@ int ObInnerTableOperator::do_increase_column_by_(
     LOG_WARN("fail to fill predicates", K(ret), K(key), K(column_name), K(value));
   } else if (OB_FAIL(sql.append_fmt(" where %s", predicates.ptr()))) {
     LOG_WARN("failed to append sql", K(ret), K(sql), K(predicates));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("update one column", K(key), K(column_name), K(value), K(affected_rows), K(sql));
@@ -893,7 +891,7 @@ int ObInnerTableOperator::do_update_column_(
     LOG_WARN("fail to fill predicates", K(ret), K(key), K(assignments));
   } else if (OB_FAIL(sql.append_fmt(" where %s", predicates.ptr()))) {
     LOG_WARN("failed to append sql", K(ret), K(sql), K(predicates));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("update one column", K(key), K(assignments), K(affected_rows), K(sql));
@@ -928,7 +926,7 @@ int ObInnerTableOperator::do_compare_and_swap_(
     LOG_WARN("failed to append sql", K(ret), K(sql), K(pkey_predicates));
   } else if (OB_FAIL(sql.append_fmt(" and %s", predicates))) {
     LOG_WARN("failed to append sql", K(ret), K(sql), K(assignments), K(predicates));
-  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), group_id_, affected_rows))) {
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(ret), K(sql), K(exec_tenant_id));
   } else {
     LOG_INFO("compare and swap one column", K(key), K(assignments), K(predicates), K(affected_rows), K(sql));

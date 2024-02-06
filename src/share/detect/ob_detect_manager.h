@@ -110,7 +110,6 @@ private:
 
   static const uint64_t ACTIVATE_DELAY_TIME = 5 * 1000L * 1000L; // dm only detects checkitems that have been present for at least "ACTIVATE_DELAY_TIME" seconds
 public:
-  static int mtl_new(ObDetectManager *&dm);
   static int mtl_init(ObDetectManager *&dm);
   static void mtl_destroy(ObDetectManager *&dm);
 public:

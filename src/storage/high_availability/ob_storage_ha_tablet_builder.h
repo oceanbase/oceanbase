@@ -83,6 +83,7 @@ public:
   // Otherwise, just update it to UNDEFINED.
   int update_pending_tablets_with_remote();
   int build_tablets_sstable_info();
+  int update_local_tablets();
   int create_all_tablets_with_4_1_rpc(
       CopyTabletSimpleInfoMap &simple_info_map);
 private:
@@ -116,7 +117,7 @@ private:
   int get_major_sstable_max_snapshot_(
       const ObSSTableArray &major_sstable_array,
       int64_t &max_snapshot_version);
-  int get_minor_scn_range_(
+  int get_remote_logical_minor_scn_range_(
       const ObSSTableArray &minor_sstable_array,
       ObTablet *tablet,
       share::ObScnRange &scn_range);
@@ -139,6 +140,29 @@ private:
       ObTablesHandleArray &tables_handle);
   int remove_uncomplete_tablet_(
       const common::ObTabletID &tablet_id);
+  int create_tablet_remote_logical_sstable_(
+      common::ObArenaAllocator &allocator,
+      const common::ObTabletID &tablet_id,
+      ObTablesHandleArray &tables_handle);
+  int create_remote_logical_sstable_(
+      common::ObArenaAllocator &allocator,
+      const common::ObTabletID &tablet_id,
+      const share::SCN start_scn,
+      const share::SCN end_scn,
+      ObTablet *tablet,
+      ObTableHandleV2 &table_handle);
+  int build_remote_logical_sstable_param_(
+      const share::SCN start_scn,
+      const share::SCN end_scn,
+      const ObStorageSchema &table_schema,
+      const common::ObTabletID &tablet_id,
+      ObTabletCreateSSTableParam &param);
+  int update_local_tablet_(
+      const obrpc::ObCopyTabletInfo &tablet_info,
+      ObLS *ls);
+  int create_tablet_remote_logical_sstable_(
+      ObTablet *tablet,
+      ObTablesHandleArray &tables_handle);
   int modified_tablet_info_(
       obrpc::ObCopyTabletInfo &tablet_info);
 
@@ -292,9 +316,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &minor_tables,
-      const ObTabletRestoreAction::ACTION &restore_action);
-  static int build_tablet_with_ddl_tables(
+      const ObTablesHandleArray &minor_tables);
+  static int build_table_with_ddl_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &ddl_tables);
@@ -302,6 +325,13 @@ public:
       ObTablet *tablet,
       bool &is_exist);
 private:
+  // TODO(@DanLing) tmp interface, remove after column_store_ddl branch merged.
+  static int build_tablet_for_ddl_kv_(
+      ObLS *ls,
+      const common::ObTabletID &tablet_id,
+      const ObTablesHandleArray &major_tables,
+      const ObStorageSchema &storage_schema,
+      const compaction::ObMediumCompactionInfoList &medium_info_list);
   static int build_tablet_for_row_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -342,9 +372,6 @@ private:
       const ObMigrationTabletParam *src_tablet_meta,
       ObTablet *tablet,
       bool &need_merge);
-  static int assemble_column_oriented_sstable_(
-      const ObTablesHandleArray &mixed_tables,
-      ObTablesHandleArray &co_tables);
   static int get_column_store_tables_(
       const ObTablesHandleArray &major_tables,
       common::ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &column_store_tables,
@@ -354,7 +381,9 @@ private:
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
       const int64_t multi_version_start,
-      const ObTablesHandleArray &co_tables);
+      const int64_t co_table_cnt,
+      const ObTablesHandleArray &major_tables,
+      common::ObIArray<ObITable *> &co_table_array);
 };
 
 

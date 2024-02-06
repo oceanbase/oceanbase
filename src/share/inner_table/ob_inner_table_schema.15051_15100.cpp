@@ -3254,6 +3254,21 @@ int ObInnerTableSchema::all_virtual_table_mgr_ora_schema(ObTableSchema &table_sc
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("DATA_CHECKSUM", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObNumberType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      38, //column_length
+      38, //column_precision
+      0, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("SIZE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -3390,21 +3405,6 @@ int ObInnerTableSchema::all_virtual_table_mgr_ora_schema(ObTableSchema &table_sc
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("CG_IDX", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObNumberType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      38, //column_length
-      38, //column_precision
-      0, //column_scale
-      false, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("DATA_CHECKSUM", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

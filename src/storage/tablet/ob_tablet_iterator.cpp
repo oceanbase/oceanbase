@@ -139,16 +139,6 @@ int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 }
 
 
-int ObLSTabletIterator::get_tablet_ids(ObIArray<ObTabletID> &ids)
-{
-  int ret = OB_SUCCESS;
-  ids.reset();
-  if (OB_FAIL(ids.assign(tablet_ids_))) {
-    LOG_WARN("fail to get tablet ids", K(ret));
-  }
-  return ret;
-}
-
 ObHALSTabletIDIterator::ObHALSTabletIDIterator(
     const share::ObLSID &ls_id,
     const bool need_initial_state)
@@ -251,64 +241,6 @@ int ObHALSTabletIterator::get_next_tablet(ObTabletHandle &handle)
 
   return ret;
 }
-
-
-
-ObLSTabletFastIter::ObLSTabletFastIter(ObITabletFilterOp &op, const ObMDSGetTabletMode mode)
-  : ls_tablet_service_(nullptr),
-    tablet_ids_(),
-    idx_(0),
-    mode_(mode),
-    op_(op)
-{
-}
-
-bool ObLSTabletFastIter::is_valid() const
-{
-  return nullptr != ls_tablet_service_
-      && mode_ <= ObMDSGetTabletMode::READ_WITHOUT_CHECK; // READ_READABLE_COMMITED is not supported
-}
-
-void ObLSTabletFastIter::reset()
-{
-  ls_tablet_service_ = nullptr;
-  tablet_ids_.reset();
-  idx_ = 0;
-}
-
-int ObLSTabletFastIter::get_next_tablet(ObTabletHandle &handle)
-{
-  int ret = OB_SUCCESS;
-
-  handle.reset();
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  if (OB_ISNULL(t3m)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant meta mem mgr is nullptr", K(ret), KP(t3m));
-  } else {
-    do {
-      if (OB_UNLIKELY(tablet_ids_.count() == idx_)) {
-        ret = OB_ITER_END;
-      } else {
-        const common::ObTabletID &tablet_id = tablet_ids_.at(idx_);
-        const ObTabletMapKey key(ls_tablet_service_->ls_->get_ls_id(), tablet_id);
-        if (OB_FAIL(t3m->get_tablet_with_filter(WashTabletPriority::WTP_LOW, key, op_, handle))) {
-          if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret && OB_NOT_THE_OBJECT != ret) {
-            LOG_WARN("fail to get tablet", K(ret), K_(idx), K(key));
-          } else {
-            ++idx_;
-          }
-        } else {
-          handle.set_wash_priority(WashTabletPriority::WTP_LOW);
-          ++idx_;
-        }
-      }
-    } while (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret || OB_NOT_THE_OBJECT == ret);
-  }
-
-  return ret;
-}
-
 
 } // namespace storage
 } // namespace oceanbase

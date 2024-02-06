@@ -441,10 +441,6 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObQueryRefRawExpr &query_
   if (OB_ISNULL(subquery = query_ref.get_ref_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret));
-  } else if (OB_FAIL(check_nested_subquery(query_ref, is_valid))) {
-    LOG_WARN("failed to check nested subquery", K(ret));
-  } else if (!is_valid) {
-    OPT_TRACE("exec param reference another subquery");
     // 0. check single set
   } else if (OB_FAIL(check_single_set_subquery(*subquery,
                                                is_valid,
@@ -1301,8 +1297,8 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
     }
   } else if (stmt.is_update_stmt()) {
     ObUpdateStmt &upd_stmt = static_cast<ObUpdateStmt &>(stmt);
-    if (OB_FAIL(ObTransformUtils::get_post_join_exprs(&stmt, pre_group_by_exprs, true))) {
-      LOG_WARN("failed to get post join exprs", K(ret));
+    if (OB_FAIL(upd_stmt.get_assign_values(pre_group_by_exprs, true))) {
+      LOG_WARN("failed to get assign values", K(ret));
     }
   }
   int64_t pre_count = pre_group_by_exprs.count();
@@ -1407,12 +1403,9 @@ int ObTransformAggrSubquery::check_stmt_valid(ObDMLStmt &stmt, bool &is_valid)
   int ret = OB_SUCCESS;
   is_valid = true;
   bool can_set_unique = false;
-  if (stmt.is_set_stmt()
-      || stmt.is_hierarchical_query()
-      || stmt.has_for_update()
-      || !stmt.is_sel_del_upd()) {
+  if (stmt.is_set_stmt() || stmt.is_hierarchical_query() || !stmt.is_sel_del_upd()) {
     is_valid = false;
-  } else if (OB_FAIL(StmtUniqueKeyProvider::check_can_set_stmt_unique(&stmt, can_set_unique))) {
+  } else if (OB_FAIL(ObTransformUtils::check_can_set_stmt_unique(&stmt, can_set_unique))) {
     LOG_WARN("failed to check can set stmt unque", K(ret));
   } else if (!can_set_unique) {
     is_valid = false;
@@ -1446,10 +1439,6 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
   if (OB_ISNULL(subquery = query_ref.get_ref_stmt()) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("subquery is null", K(ret));
-  } else if (OB_FAIL(check_nested_subquery(query_ref, is_valid))) {
-    LOG_WARN("failed to check nested subquery", K(ret));
-  } else if (!is_valid) {
-    OPT_TRACE("exec param reference another subquery");
     // 0. check single set
   } else if (OB_FAIL(check_single_set_subquery(*subquery,
                                                is_valid,
@@ -1813,7 +1802,7 @@ int ObTransformAggrSubquery::modify_vector_comparison_expr_if_necessary(
     select_exprs.assign(temp_expr);
     // replace parent_expr_of_query_ref with subquery comparison operator to the one of common comparison operator
     ObItemType value_cmp_type = T_INVALID;
-    if (FAILEDx(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
+    if (OB_FAIL(ObTransformUtils::query_cmp_to_value_cmp(parent_expr_of_query_ref->get_expr_type(), value_cmp_type))) {
       LOG_WARN("unexpected root_expr type", K(ret), K(value_cmp_type));
     } else {
       ObOpRawExpr *new_parent_expr = NULL;
@@ -1859,8 +1848,7 @@ int ObTransformAggrSubquery::get_unique_keys(ObDMLStmt &stmt,
     LOG_WARN("transform context is invalid", K(ret), K(ctx_), K(query_hint));
   } else if (is_first_trans) {
     // 第一次改写时需要生成所有from table的unique 可以
-    StmtUniqueKeyProvider unique_key_provider(false);
-    if (OB_FAIL(unique_key_provider.generate_unique_key(ctx_, &stmt, empty_ignore_tables, pkeys))) {
+    if (OB_FAIL(ObTransformUtils::generate_unique_key(ctx_, &stmt, empty_ignore_tables, pkeys))) {
       LOG_WARN("failed to generate unique key", K(ret));
     }
   } else if ((query_hint->has_outline_data() && stmt.get_table_items().count() < 1) ||
@@ -2679,26 +2667,6 @@ int ObTransformAggrSubquery::convert_limit_as_aggr(ObSelectStmt *subquery,
       } else {
         subquery->set_limit_offset(NULL, NULL);
       }
-    }
-  }
-  return ret;
-}
-
-int ObTransformAggrSubquery::check_nested_subquery(ObQueryRefRawExpr &query_ref,
-                                                   bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < query_ref.get_exec_params().count(); i++) {
-    ObExecParamRawExpr* exec_param = NULL;
-    ObRawExpr* outer_expr = NULL;
-    if (OB_ISNULL(exec_param = query_ref.get_exec_params().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_ISNULL(outer_expr = exec_param->get_ref_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (outer_expr->has_flag(CNT_SUB_QUERY)) {
-      is_valid = false;
     }
   }
   return ret;

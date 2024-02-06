@@ -19,8 +19,6 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "common/ob_smart_call.h"
 
-# define SYNTHETIC_FIELD_NAME "Name_exp_"
-
 namespace oceanbase
 {
 namespace sql
@@ -89,7 +87,6 @@ public:
                                 ObString &cycle_pseudo_column_name);
   void set_current_recursive_cte_table_item(TableItem *table_item) { current_recursive_cte_table_item_ = table_item; }
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
-  int check_auto_gen_column_names();
 
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
@@ -341,15 +338,13 @@ private:
   int check_cube_items_valid(const common::ObIArray<ObCubeItem> &cube_items);
   int recursive_check_grouping_columns(ObSelectStmt *stmt, ObRawExpr *expr);
 
+  int add_name_for_anonymous_view();
+  int add_name_for_anonymous_view_recursive(TableItem *table_item);
+
   int is_need_check_col_dup(const ObRawExpr *expr, bool &need_check);
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
   int adjust_recursive_cte_table_columns(const ObSelectStmt* parent_stmt, ObSelectStmt *right_stmt);
-  int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
-  int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
-  int check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr);
-
-  int add_alias_from_dot_notation(ObRawExpr *sel_expr, SelectItem& select_item);
 protected:
   // data members
   /*these member is only for with clause*/

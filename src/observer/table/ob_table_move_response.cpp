@@ -23,7 +23,7 @@ using namespace oceanbase::table;
 ////////////////////////////////////////////////////////////////
 
 int ObTableMoveResponseSender::get_replica(const uint64_t table_id,
-                                           const ObTabletID &tablet_id,
+                                           const common::ObTabletID &tablet_id,
                                            table::ObTableMoveReplicaInfo &replica)
 {
   int ret = OB_SUCCESS;
@@ -50,33 +50,28 @@ int ObTableMoveResponseSender::get_replica(const uint64_t table_id,
 }
 
 int ObTableMoveResponseSender::init(const uint64_t table_id,
-                                    const ObTabletID &tablet_id,
+                                    const common::ObTabletID &tablet_id,
                                     share::schema::ObMultiVersionSchemaService &schema_service)
 {
   int ret = OB_SUCCESS;
+
   ObTableMoveReplicaInfo &replica = result_.get_replica_info();
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const share::schema::ObTableSchema *table_schema = nullptr;
-
-  if (OB_FAIL(schema_service.get_tenant_schema_guard(MTL_ID(), schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(table_id), K(ret));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("NULL ptr", K(ret), K(table_id));
+  if (OB_FAIL(get_replica(table_id, tablet_id, replica))) {
+    LOG_WARN("fail to get partition info", K(ret), K(table_id), K(tablet_id));
   } else {
-    ObTabletID tmp_tablet_id = tablet_id;
-    if (!table_schema->is_partitioned_table()) {
-      tmp_tablet_id = table_schema->get_tablet_id();
-    }
-
-    if (OB_FAIL(get_replica(table_id, tmp_tablet_id, replica))) {
-      LOG_WARN("fail to get partition info", K(ret), K(table_id), K(tmp_tablet_id));
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_service.get_tenant_schema_guard(MTL_ID(), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", K(table_id), K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("NULL ptr", K(ret), K(table_id));
     } else {
       replica.set_table_id(table_id);
       replica.set_schema_version(table_schema->get_schema_version());
-      replica.set_tablet_id(tmp_tablet_id);
+      replica.set_tablet_id(tablet_id);
 
       // set move pcode
       response_sender_.set_pcode(obrpc::OB_TABLE_API_MOVE);

@@ -2707,25 +2707,25 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS,
 DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                        NULL,
                        "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding \
-                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu AND t2.table_type in (0, 3, 6)) \
+                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu) \
                         LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
-                        WHERE t1.tenant_id = %lu \
+                        WHERE t1.tenant_id = %lu AND t2.table_type in (0, 3, 6) \
                         ORDER BY t1.tablegroup_name, t2.table_name",
                         "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\", t1.SHARDING AS \"SHARDING\" \
-                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6)) \
+                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
                         LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
-                        WHERE T1.TENANT_ID = %lu \
+                        WHERE T1.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6) \
                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,
                        NULL,
-                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_GLOBAL_VARIABLES,
                        NULL,
-                       "SELECT /*+parallel(1)*/ variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
-                       R"(SELECT /*+parallel(1)*/ "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
+                       "SELECT variable_name AS `Variable_name`, value AS `Value` FROM %s.%s ORDER BY variable_name ASC",
+                       R"(SELECT "VARIABLE_NAME" AS "VARIABLE_NAME", "VALUE" AS "VALUE" FROM %s.%s ORDER BY VARIABLE_NAME ASC)",
                        "Variable_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLUMNS,
                        NULL,
@@ -2830,7 +2830,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLE_STATUS,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCEDURE_STATUS,
                        NULL,
-                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`, c.security_type AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld ORDER BY name COLLATE utf8mb4_bin ASC",
+                       "select database_name AS `Db`, routine_name AS `Name`, c.type AS `Type`, c.definer AS `Definer`, p.gmt_modified AS `Modified`, p.gmt_create AS `Created`,'DEFINER' AS `Security_type`, p.comment AS `Comment`, character_set_client, collation_connection, db_collation AS `Database Collation`from %s.%s p, %s.%s d, %s.%s c where p.tenant_id = d.tenant_id and p.database_id = d.database_id and d.database_name = c.db and p.routine_name = c.name and (case c.type when 'PROCEDURE' then 1 when 'FUNCTION' then 2 else 0 end) = p.routine_type and d.database_id = %ld and p.routine_type = %ld ORDER BY name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_TRIGGERS,

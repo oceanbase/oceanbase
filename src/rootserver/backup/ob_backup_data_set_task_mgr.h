@@ -57,14 +57,11 @@ private:
   int backup_sys_meta_();
   int do_backup_meta_(ObIArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int backup_user_meta_();
-  int backup_meta_finish_();
   int calc_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, share::SCN &consistent_scn);
   int check_need_change_meta_turn_(ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, bool &need_change_turn);
   int change_meta_turn_(const share::ObBackupLSTaskAttr &sys_ls_task);
   int get_backup_user_meta_task_(ObIArray<share::ObBackupLSTaskAttr> &ls_task);
-  int merge_tablet_to_ls_info_(const share::SCN &consistent_scn,
-      const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
-      common::ObIArray<share::ObLSID> &ls_ids);
+  int merge_tablet_to_ls_info_(const share::SCN &consistent_scn, const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
   int get_tablet_list_by_snapshot(
       const share::SCN &consistent_scn, common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);
   int fill_map_with_sys_tablets_(common::hash::ObHashMap<share::ObLSID, ObArray<ObTabletID>> &latest_ls_tablet_map);

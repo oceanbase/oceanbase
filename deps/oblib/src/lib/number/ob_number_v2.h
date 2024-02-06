@@ -123,8 +123,6 @@ struct ObCompactNumber
   uint32_t digits_[0];
 
   bool is_zero() const { return 0 == desc_.len_; }
-
-  TO_STRING_KV(K_(digits), K(desc_.desc_));
 };
 
 static_assert(sizeof(ObCompactNumber) == sizeof(uint32_t), "wrong compact number size");
@@ -297,9 +295,6 @@ public:
   //strict_mode = true, means only alloc necessary size. otherwise alloc max fixed-length
   int add_v3(const ObNumber &other, ObNumber &value, ObIAllocator &allocator,
              const bool strict_mode = true, const bool do_rounding = true) const;
-
-  static inline int add_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-          ObIAllocator &allocator);
   template <class T>
   int add(const T param1, const T param2, ObNumber &result, ObIAllocator &allocator) const;
   template <class T>
@@ -309,8 +304,6 @@ public:
   //strict_mode = true, means only alloc necessary size. otherwise alloc max fixed-length
   int sub_v3(const ObNumber &other, ObNumber &value, ObIAllocator &allocator,
              const bool strict_mode = true, const bool do_rounding = true) const;
-  static inline int sub_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-                           ObIAllocator &allocator);
   template <class T>
   int sub_v1(const ObNumber &other, ObNumber &value, T &allocator) const;
   template <class T>
@@ -321,10 +314,6 @@ public:
   int mul_v2(const ObNumber &other, ObNumber &value, T &allocator) const;
   int mul_v3(const ObNumber &other, ObNumber &value, ObIAllocator &allocator,
       const bool strict_mode = true, const bool do_rounding = true) const;
-
-  static inline int mul_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-          ObIAllocator &allocator);
-
   template <class T>
   int div(const ObNumber &other, ObNumber &value, T &allocator,
           const int32_t qscale = OB_MAX_DECIMAL_DIGIT, const bool do_rounding = true) const;
@@ -1715,12 +1704,6 @@ int ObNumber::add_v2(const ObNumber &other, ObNumber &value, T &allocator) const
   return add_v2_(other, value, ta);
 }
 
-inline int ObNumber::add_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-                  ObIAllocator &allocator)
-{
-  return left.add_v3(right, result, allocator);
-}
-
 template <class T>
 int ObNumber::add(const ObNumber &other, ObNumber &value, T &allocator) const
 {
@@ -1753,12 +1736,6 @@ int ObNumber::add(const IntegerT param1, const IntegerT param2, ObNumber &result
   return ret;
 }
 
-inline int ObNumber::sub_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-                  ObIAllocator &allocator)
-{
-  return left.sub_v3(right, result, allocator);
-}
-
 template <class T>
 int ObNumber::sub_v1(const ObNumber &other, ObNumber &value, T &allocator) const
 {
@@ -1780,12 +1757,6 @@ int ObNumber::sub(const ObNumber &other, ObNumber &value, T &allocator) const
   TAllocator<T> ta(allocator);
   return sub_v2_(other, value, ta);
 
-}
-
-inline int ObNumber::mul_v3(const ObNumber &left, const ObNumber &right, ObNumber &result,
-                  ObIAllocator &allocator)
-{
-  return left.mul_v3(right, result, allocator);
 }
 
 template <class T>

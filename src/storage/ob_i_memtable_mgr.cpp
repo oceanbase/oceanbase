@@ -17,7 +17,6 @@
 #include "storage/memtable/ob_multi_source_data.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
-#include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::memtable;
@@ -26,18 +25,6 @@ namespace oceanbase
 {
 namespace storage
 {
-
-ObIMemtableMgr::~ObIMemtableMgr()
-{
-  int ret = OB_SUCCESS;
-  const int64_t ref_cnt = get_ref();
-  if (OB_UNLIKELY(0 != ref_cnt)) {
-    STORAGE_LOG(ERROR, "ref cnt is NOT 0", K(ret), K(ref_cnt), K_(tablet_id), KPC(this));
-  }
-
-  reset_tables();
-  ATOMIC_STORE(&ref_cnt_, 0);
-}
 
 int ObIMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
 {
@@ -219,31 +206,6 @@ int ObIMemtableMgr::release_memtables()
 }
 
 int ObIMemtableMgr::init(
-    const ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    lib::Worker::CompatMode compat_mode)
-{
-  int ret = OB_SUCCESS;
-  ObLS *ls = nullptr;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
-  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "failed to get ObLSService from MTL", KR(ret), KPC(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
-    STORAGE_LOG(WARN, "failed to get ls", KR(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ls should not be NULL", KR(ret), KP(ls));
-  } else if (OB_FAIL(init(tablet_id, ls_id, 0, 0, compat_mode,
-          ls->get_log_handler(), ls->get_freezer(), t3m))) {
-    STORAGE_LOG(WARN, "failed to init memtable mgr", KR(ret), K(tablet_id), K(ls_id));
-  }
-  return ret;
-}
-
-int ObIMemtableMgr::init(
     const ObTabletID &tablet_id,
     const share::ObLSID &ls_id,
     const int64_t max_saved_schema_version,
@@ -383,7 +345,7 @@ ObMemtableMgrHandle::ObMemtableMgrHandle()
 {
 }
 
-ObMemtableMgrHandle::ObMemtableMgrHandle(ObIMemtableMgr *memtable_mgr, ObTabletMemtableMgrPool *pool)
+ObMemtableMgrHandle::ObMemtableMgrHandle(ObIMemtableMgr *memtable_mgr, ObITenantMetaObjPool *pool)
   : memtable_mgr_(memtable_mgr),
     pool_(pool)
 {
@@ -411,7 +373,7 @@ void ObMemtableMgrHandle::reset()
       memtable_mgr_ = nullptr;
     } else {
       if (0 == memtable_mgr_->dec_ref()) {
-        pool_->release(static_cast<ObTabletMemtableMgr*>(memtable_mgr_));
+        pool_->free_obj(static_cast<void *>(memtable_mgr_));
       }
       memtable_mgr_ = nullptr;
       pool_ = nullptr;
@@ -437,7 +399,7 @@ ObMemtableMgrHandle &ObMemtableMgrHandle::operator= (const ObMemtableMgrHandle &
   return *this;
 }
 
-int ObMemtableMgrHandle::set_memtable_mgr(ObIMemtableMgr *memtable_mgr, ObTabletMemtableMgrPool *pool)
+int ObMemtableMgrHandle::set_memtable_mgr(ObIMemtableMgr *memtable_mgr, ObITenantMetaObjPool *pool)
 {
   int ret = OB_SUCCESS;
   reset();

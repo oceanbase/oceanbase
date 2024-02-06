@@ -52,15 +52,6 @@ enum ObStoreFormatType
   OB_STORE_FORMAT_MAX
 };
 
-enum ObTableStoreType : uint8_t
-{
-  OB_TABLE_STORE_INVALID = 0,
-  OB_TABLE_STORE_ROW = 1,
-  OB_TABLE_STORE_COLUMN = 2,
-  OB_TABLE_STORE_ROW_WITH_COLUMN= 3,
-  OB_TABLE_STORE_MAX
-};
-
 struct ObStoreFormatItem
 {
   const char* format_name_;
@@ -150,27 +141,6 @@ public:
 private:
   static const ObStoreFormatItem store_format_items[OB_STORE_FORMAT_MAX];
   static const char *row_store_name[MAX_ROW_STORE];
-};
-
-class ObTableStoreFormat {
-public:
-  static inline bool is_row_store(const ObTableStoreType type)
-  {
-    return OB_TABLE_STORE_ROW == type;
-  }
-  static inline bool is_column_store(const ObTableStoreType type)
-  {
-    return OB_TABLE_STORE_COLUMN == type;
-  }
-  static inline bool is_row_with_column_store(const ObTableStoreType type)
-  {
-    return OB_TABLE_STORE_ROW_WITH_COLUMN == type;
-  }
-  static inline bool is_with_column (const ObTableStoreType type)
-  {
-    return type > OB_TABLE_STORE_ROW && type < OB_TABLE_STORE_MAX;
-  }
-  static int find_table_store_type(const ObString &store_format, ObTableStoreType &table_store_type);
 };
 
 }//end namespace common

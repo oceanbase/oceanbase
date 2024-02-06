@@ -17,7 +17,6 @@
 #include "rpc/ob_request.h"
 #define MULTI_LEVEL_QUEUE_SIZE (10)
 #define MULTI_LEVEL_THRESHOLD (2)
-#define GROUP_MULTI_LEVEL_THRESHOLD (1)
 
 namespace oceanbase
 {

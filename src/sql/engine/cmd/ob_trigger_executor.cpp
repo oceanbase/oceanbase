@@ -38,22 +38,15 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
   ObCreateTriggerArg &arg = stmt.get_trigger_arg();
   uint64_t tenant_id = arg.trigger_info_.get_tenant_id();
   ObString first_stmt;
-  obrpc::ObCreateTriggerRes res;
-  bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2);
   OZ (stmt.get_first_stmt(first_stmt));
   arg.ddl_stmt_str_ = first_stmt;
   OV (OB_NOT_NULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
   OZ (task_exec_ctx->get_common_rpc(common_rpc_proxy));
   OV (OB_NOT_NULL(common_rpc_proxy));
-  if (with_res) {
-    OZ (common_rpc_proxy->create_trigger_with_res(arg, res), common_rpc_proxy->get_server());
-  } else {
-    OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
-  }
+  OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
   //这里需要刷新schema，否则可能获取不到最新的trigger_info
   OZ (ObSPIService::force_refresh_schema(tenant_id));
   CK (OB_NOT_NULL(ctx.get_sql_ctx()));
-  CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(ctx.get_sql_proxy()));
   CK (OB_NOT_NULL(ctx.get_task_exec_ctx().schema_service_));
@@ -65,26 +58,11 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
                            ctx.get_sql_proxy(),
                            ctx.get_allocator(),
                            arg));
-  OZ (ctx.get_sql_ctx()->schema_guard_->reset());
   if (OB_SUCC(ret)) {
     arg.ddl_stmt_str_.reset();
-    if (with_res) {
-      arg.based_schema_object_infos_.reset();
-      OZ (arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.trigger_info_.get_base_object_id(),
-                                                                           TABLE_SCHEMA,
-                                                                           res.table_schema_version_)));
-      OZ (arg.based_schema_object_infos_.push_back(ObBasedSchemaObjectInfo(arg.trigger_info_.get_trigger_id(),
-                                                                           TRIGGER_SCHEMA,
-                                                                           res.trigger_schema_version_)));
-      OZ (common_rpc_proxy->create_trigger_with_res(arg, res), common_rpc_proxy->get_server());
-      if (OB_ERR_PARALLEL_DDL_CONFLICT == ret) {
-        LOG_WARN("trigger or base table maybe changed by other session, ignore the error", K(ret), K(res));
-        ret = OB_SUCCESS;
-      }
-    } else {
-      OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
-    }
+    OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
   }
+  OZ (ctx.get_sql_ctx()->schema_guard_->reset());
   return ret;
 }
 
@@ -130,7 +108,7 @@ int ObCreateTriggerExecutor::analyze_dependencies(ObSchemaGetterGuard &schema_gu
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = arg.trigger_info_.get_tenant_id();
-  const ObString &trigger_name = arg.trigger_info_.get_trigger_name();
+  const ObString &trigger_name = arg.trigger_info_.get_trigger_name();\
   const ObString &db_name = arg.trigger_database_;
   const ObTriggerInfo *trigger_info = NULL;
   if (OB_FAIL(schema_guard.get_trigger_info(tenant_id, arg.trigger_info_.get_database_id(),

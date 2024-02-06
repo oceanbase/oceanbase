@@ -164,66 +164,8 @@ private:
                               ObIArray<ObRawExpr *> &new_exprs);
   int check_remove_ora_decode_valid(ObRawExpr *&expr, int64_t &result_idx, bool &is_valid);
   int try_remove_ora_decode(ObRawExpr *&expr, ObRawExpr *&new_expr);
-
-  int canonicalize_conditions(ObDMLStmt *stmt, bool &trans_happened);
-  int recursive_canonicalize_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
-  int do_canonicalize(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int push_not(ObIArray<ObRawExpr*> &conditions,
-               bool &trans_happened);
-  int recursive_push_not(ObRawExpr *&expr,
-                         hash::ObHashMap<uint64_t, ObRawExpr *> &push_expr_map,
-                         bool &trans_happened);
-  int do_push_not(ObRawExpr *&expr,
-                  hash::ObHashMap<uint64_t, ObRawExpr *> &push_expr_map,
-                  bool &trans_happened);
-  int reverse_cmp_type_of_align_date4cmp(ObRawExpr* expr,
-                                         ObRawExprFactory *expr_factory,
-                                         const ObItemType cmp_type,
-                                         bool is_left);
-
-  int get_opposite_op(ObItemType type, ObItemType& opposit_type);
-  int remove_duplicate_exprs(ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int do_remove(ObRawExpr* &expr, bool &trans_happened);
-  int pull_similar_expr(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
-  int recursive_pull_similar(ObDMLStmt *stmt, ObRawExpr* &expr, bool &trans_happened);
-  int do_pull_similar(ObDMLStmt *stmt,
-                      ObRawExpr* &expr,
-                      ObIArray<ObRawExpr*> &exprs,
-                      ObItemType expr_type,
-                      bool &trans_happened);
-  int gen_not_intersect_param(ObRawExpr* &expr,
-                              ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
-                              ObItemType expr_type);
-  int get_intersection(ObDMLStmt *stmt,
-                       ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets,
-                       ObIArray<ObRawExpr *> &intersection);
-  int remove_intersect_item(ObIArray<ObSEArray<ObRawExpr *, 4>> &params_sets, ObIArray<ObRawExpr *> &intersection);
-  int get_params_array(ObIArray<ObRawExpr*> &exprs,
-                   ObRawExpr *&expr,
-                   ObItemType parent_type);
-  int convert_case_when_predicate(ObDMLStmt *stmt, bool &trans_happened);
-  int try_convert_case_when_by_then_exprs(ObRawExpr *&expr,
-                                          ObIArray<ObRawExpr *> &extracted_preds,
-                                          bool &trans_happened);
-  int check_convert_then_exprs_validity(ObRawExpr *parent_expr,
-                                        ObCaseOpRawExpr *&case_expr,
-                                        bool &is_all_false,
-                                        bool &is_all_true,
-                                        int64_t &reserved_branch_cnt,
-                                        ObIArray<ObRawExpr*> &true_exprs,
-                                        ObIArray<ObRawExpr*> &false_null_exprs,
-                                        ObIArray<ObRawExpr*> &extracted_preds,
-                                        bool &is_valid);
-  int get_preds_for_convert_case_when_by_then(ObCaseOpRawExpr *case_expr,
-                                              bool is_all_true,
-                                              bool is_all_false,
-                                              int64_t reserved_branch_cnt,
-                                              ObIArray<ObRawExpr*> &extracted_preds);
-  int add_constraint_for_convert_case_when_by_then(ObIArray<ObRawExpr *> &false_null_exprs,
-                                                   ObIArray<ObRawExpr *> &true_exprs);
-  int build_nvl_bool_exprs(ObIArray<ObRawExpr *> &exprs, const bool boolean);
-  int build_nvl_bool_expr(ObRawExpr *expr, const bool boolean, ObRawExpr *&nvl_expr);
 };
+
 }
 }
 

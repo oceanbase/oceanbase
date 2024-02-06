@@ -113,7 +113,7 @@ int ObBackupIoAdapter::get_and_init_device(ObIODevice*& dev_handle,
 int ObBackupIoAdapter::is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(device_handle->exist(uri.ptr(), exist))) {
@@ -123,23 +123,10 @@ int ObBackupIoAdapter::is_exist(const common::ObString &uri, const share::ObBack
   return ret;
 }
 
-int ObBackupIoAdapter::adaptively_is_exist(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &exist)
-{
-  int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_exist(uri.ptr(), exist))) {
-    OB_LOG(WARN, "fail to check exist!", K(ret), K(uri), KP(storage_info));
-  }
-  release_device(device_handle);
-  return ret;
-}
-
 int ObBackupIoAdapter::get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   ObIODFileStat statbuf;
   file_length = -1;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
@@ -153,27 +140,10 @@ int ObBackupIoAdapter::get_file_length(const common::ObString &uri, const share:
   return ret;
 }
 
-int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, int64_t &file_length)
-{
-  int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  ObIODFileStat statbuf;
-  file_length = -1;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_stat(uri.ptr(), statbuf))) {
-    OB_LOG(WARN, "fail to get file length!", K(ret), K(uri), KP(storage_info));
-  } else {
-    file_length = statbuf.size_;
-  }
-  release_device(device_handle);
-  return ret;
-}
-
 int ObBackupIoAdapter::del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(device_handle->unlink(uri.ptr()))) {
@@ -183,36 +153,10 @@ int ObBackupIoAdapter::del_file(const common::ObString &uri, const share::ObBack
   return ret;
 }
 
-int ObBackupIoAdapter::adaptively_del_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
-{
-  int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->adaptive_unlink(uri.ptr()))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), K(uri), KP(storage_info));
-  }
-  release_device(device_handle);
-  return ret;
-}
-
-int ObBackupIoAdapter::del_unmerged_parts(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
-{
-  int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
-    OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
-  } else if (OB_FAIL(device_handle->del_unmerged_parts(uri.ptr()))) {
-    OB_LOG(WARN, "fail to del file!", K(ret), K(uri), KP(storage_info));
-  }
-  release_device(device_handle);
-  return ret;
-}
-
 int ObBackupIoAdapter::mkdir(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(device_handle->mkdir(uri.ptr(), 0))) {
@@ -227,7 +171,7 @@ int ObBackupIoAdapter::mk_parent_dir(const common::ObString &uri, const share::O
 {
   int ret = OB_SUCCESS;
   char path[OB_MAX_URI_LENGTH];
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
 
   if (uri.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -267,7 +211,7 @@ int ObBackupIoAdapter::write_single_file(const common::ObString &uri, const shar
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
   ObIOFd fd; 
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   const int64_t start_ts = ObTimeUtility::current_time();
   int64_t file_length = -1;
   int64_t write_size = -1;
@@ -310,7 +254,7 @@ int ObBackupIoAdapter::read_single_file(const common::ObString &uri, const share
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
   ObIOFd fd;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   const int64_t start_ts = ObTimeUtility::current_time();
   int64_t file_length = -1;
 
@@ -319,38 +263,7 @@ int ObBackupIoAdapter::read_single_file(const common::ObString &uri, const share
     OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret));
   } else if (OB_FAIL(device_handle->pread(fd, 0, buf_size, buf, read_size))) {
     OB_LOG(WARN, "failed to do read single file", K(ret), K(uri));
-  } else if (OB_FAIL(get_file_length(uri, storage_info, file_length))) {
-    OB_LOG(WARN, "failed to get file size", K(ret), K(uri));
-  } else if (file_length != read_size) {
-    ret = OB_BUF_NOT_ENOUGH;
-    OB_LOG(WARN, "not whole file read, maybe buf not enough",
-          K(ret), K(read_size), K(file_length), K(uri));
-  }
-
-  if (OB_SUCCESS != (ret_tmp = close_device_and_fd(device_handle, fd))) {
-    ret = (OB_SUCCESS == ret) ? ret_tmp : ret;
-    STORAGE_LOG(WARN, "failed to close device and fd", K(ret), K(ret_tmp));
-  }
-
-  return ret;
-}
-
-int ObBackupIoAdapter::adaptively_read_single_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, char *buf,
-                                        const int64_t buf_size, int64_t &read_size)
-{
-  int ret = OB_SUCCESS;
-  int ret_tmp = OB_SUCCESS;
-  ObIOFd fd;
-  ObIODevice *device_handle = NULL;
-  const int64_t start_ts = ObTimeUtility::current_time();
-  int64_t file_length = -1;
-
-  if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
-                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER))) {
-    OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret));
-  } else if (OB_FAIL(device_handle->pread(fd, 0, buf_size, buf, read_size))) {
-    OB_LOG(WARN, "failed to do read single file", K(ret), K(uri));
-  } else if (OB_FAIL(adaptively_get_file_length(uri, storage_info, file_length))) {
+  } else if (OB_FAIL(get_file_size(device_handle, fd, file_length))) {
     OB_LOG(WARN, "failed to get file size", K(ret), K(uri));
   } else if (file_length != read_size) {
     ret = OB_BUF_NOT_ENOUGH;
@@ -382,46 +295,16 @@ int ObBackupIoAdapter::read_single_text_file(const common::ObString &uri, const 
   return ret;
 }
 
-int ObBackupIoAdapter::adaptively_read_single_text_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
-                                             char *buf, const int64_t buf_size)
-{
-  int ret = OB_SUCCESS;
-  int64_t read_size = -1;
-  if (OB_FAIL(ObBackupIoAdapter::adaptively_read_single_file(uri, storage_info, buf, buf_size, read_size))) {
-    OB_LOG(WARN, "failed to read_single_object", K(ret), K(uri));
-  } else if (read_size < 0 || read_size >= buf_size) {
-    ret = OB_BUF_NOT_ENOUGH;
-    OB_LOG(WARN, "buf not enough", K(ret), K(read_size), K(buf_size));
-  } else {
-    buf[read_size] = '\0';
-  }
-  return ret;
-}
-
 int ObBackupIoAdapter::list_files(const common::ObString &dir_path, const share::ObBackupStorageInfo *storage_info,
         common::ObBaseDirEntryOperator &op)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, dir_path))) {
     OB_LOG(WARN, "fail to get device!", K(ret));
   } else if (OB_FAIL(device_handle->scan_dir(dir_path.ptr(), op))) {
     OB_LOG(WARN, "fail to scan dir!", K(ret), K(dir_path), KP(storage_info));
   } 
-  release_device(device_handle);
-  return ret;
-}
-
-int ObBackupIoAdapter::adaptively_list_files(const common::ObString &dir_path, const share::ObBackupStorageInfo *storage_info,
-        common::ObBaseDirEntryOperator &op)
-{
-  int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
-  if (OB_FAIL(get_and_init_device(device_handle, storage_info, dir_path))) {
-    OB_LOG(WARN, "fail to get device!", K(ret));
-  } else if (OB_FAIL(device_handle->adaptive_scan_dir(dir_path.ptr(), op))) {
-    OB_LOG(WARN, "fail to scan dir!", K(ret), K(dir_path), KP(storage_info));
-  }
   release_device(device_handle);
   return ret;
 }
@@ -440,7 +323,7 @@ int ObBackupIoAdapter::list_directories(const common::ObString &uri, const share
 int ObBackupIoAdapter::is_tagging(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info, bool &is_tagging)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(device_handle->is_tagging(uri.ptr(), is_tagging))) {
@@ -456,7 +339,7 @@ int ObBackupIoAdapter::read_part_file(const common::ObString &uri, const share::
   int ret = OB_SUCCESS;
   int ret_tmp = OB_SUCCESS;
   ObIOFd fd;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
 
   if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info, 
                       uri, OB_STORAGE_ACCESS_READER))) {
@@ -472,29 +355,7 @@ int ObBackupIoAdapter::read_part_file(const common::ObString &uri, const share::
   return ret;
 }
 
-int ObBackupIoAdapter::adaptively_read_part_file(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info,
-      char *buf, const int64_t buf_size, const int64_t offset, int64_t &read_size)
-{
-  int ret = OB_SUCCESS;
-  int ret_tmp = OB_SUCCESS;
-  ObIOFd fd;
-  ObIODevice*device_handle = NULL;
-
-  if (OB_FAIL(open_with_access_type(device_handle, fd, storage_info,
-                      uri, OB_STORAGE_ACCESS_ADAPTIVE_READER))) {
-    OB_LOG(WARN, "fail to get device and open file !", K(uri), K(ret), KP(storage_info));
-  } else if (OB_FAIL(device_handle->pread(fd, offset, buf_size, buf, read_size))) {
-    OB_LOG(WARN, "fail to read file !", K(uri), K(ret), KP(storage_info));
-  }
-
-  if (OB_SUCCESS != (ret_tmp = close_device_and_fd(device_handle, fd))) {
-    ret = (OB_SUCCESS == ret) ? ret_tmp : ret;
-    STORAGE_LOG(WARN, "failed to close device and fd", K(ret), K(ret_tmp), KP(storage_info), K(uri));
-  }
-  return ret;
-}
-
-int ObBackupIoAdapter::get_file_size(ObIODevice *device_handle, const ObIOFd &fd, int64_t &file_length)
+int ObBackupIoAdapter::get_file_size(ObIODevice* device_handle, const ObIOFd &fd, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
   int flag = -1;
@@ -503,20 +364,15 @@ int ObBackupIoAdapter::get_file_size(ObIODevice *device_handle, const ObIOFd &fd
   file_length = -1;
   ObFdSimulator::get_fd_flag(fd, flag);
   ObObjectDevice* obj_device_handle = (ObObjectDevice*)device_handle;
-  if (OB_STORAGE_ACCESS_READER != flag
-             && OB_STORAGE_ACCESS_ADAPTIVE_READER != flag
-             && OB_STORAGE_ACCESS_APPENDER != flag ) {
+  if (flag != OB_STORAGE_ACCESS_READER && flag != OB_STORAGE_ACCESS_APPENDER) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "Invaild access type, object device only support reader and appender get file size!", K(flag));
   } else if (OB_FAIL(obj_device_handle->get_fd_mng().fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else {
-    if (OB_STORAGE_ACCESS_READER == flag) {
+    if (flag == OB_STORAGE_ACCESS_READER) {
       ObStorageReader *reader = static_cast<ObStorageReader*>(ctx);
       file_length = reader->get_length();
-    } else if (OB_STORAGE_ACCESS_ADAPTIVE_READER == flag) {
-      ObStorageAdaptiveReader *adaptive_reader = static_cast<ObStorageAdaptiveReader*>(ctx);
-      file_length = adaptive_reader->get_length();
     } else {
       ObStorageAppender *appender = static_cast<ObStorageAppender*>(ctx);
       file_length = appender->get_length();
@@ -528,7 +384,7 @@ int ObBackupIoAdapter::get_file_size(ObIODevice *device_handle, const ObIOFd &fd
 int ObBackupIoAdapter::del_dir(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_FAIL(device_handle->rmdir(uri.ptr()))) {
@@ -541,7 +397,7 @@ int ObBackupIoAdapter::del_dir(const common::ObString &uri, const share::ObBacku
 class ObDelTmpFileOp : public ObBaseDirEntryOperator
 {
 public: 
-  ObDelTmpFileOp(int64_t now_ts, char* dir_path, ObIODevice *device_handle) :
+  ObDelTmpFileOp(int64_t now_ts, char* dir_path, ObIODevice* device_handle) :
       now_ts_(now_ts), dir_path_(dir_path), device_handle_(device_handle)
       {}
   ~ObDelTmpFileOp() {}
@@ -549,7 +405,7 @@ public:
 private:
   int64_t now_ts_;
   char* dir_path_;
-  ObIODevice *device_handle_;
+  ObIODevice* device_handle_;
 };
 
 int get_tmp_file_format_timestamp(const char *file_name, 
@@ -650,8 +506,6 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
     prefix = OB_OSS_PREFIX;
   } else if (OB_STORAGE_COS == device_type) {
     prefix = OB_COS_PREFIX;
-  } else if (OB_STORAGE_S3 == device_type) {
-    prefix = OB_S3_PREFIX;
   } else if (OB_STORAGE_FILE == device_type) {
     prefix = OB_FILE_PREFIX;
   } else {
@@ -684,7 +538,7 @@ int get_real_file_path(const common::ObString &uri, char *buf, const int64_t buf
 int ObBackupIoAdapter::delete_tmp_files(const common::ObString &uri, const share::ObBackupStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
     OB_LOG(WARN, "fail to get device!", K(ret), K(uri), KP(storage_info));
   } else if (OB_STORAGE_FILE == device_handle->device_type_) {
@@ -724,7 +578,7 @@ int ObBackupIoAdapter::is_empty_directory(const common::ObString &uri,
                                         bool &is_empty_directory)
 {
   int ret = OB_SUCCESS;
-  ObIODevice *device_handle = NULL;
+  ObIODevice* device_handle = NULL;
   ObCheckDirEmptOp ept_dir_op;
   is_empty_directory = true;
   if (OB_FAIL(get_and_init_device(device_handle, storage_info, uri))) {
@@ -817,6 +671,36 @@ int ObFileListArrayOp::func(const dirent *entry)
     const ObString file_name(entry->d_name);
     ObString tmp_file;
     if (OB_FAIL(ob_write_string(allocator_, file_name, tmp_file, true))) {
+      OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
+    } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
+      OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
+    }
+  }
+  return ret;
+}
+
+
+int ObFullPathArrayOp::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid list entry, entry is null");
+  } else if (OB_ISNULL(entry->d_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid list entry, d_name is null");
+  } else {
+    ObSqlString full_path;
+    const ObString file_name(entry->d_name);
+    ObString tmp_file;
+    if (OB_FAIL(full_path.assign(path_))) {
+      OB_LOG(WARN, "assign string failed", K(ret));
+    } else if (full_path.length() > 0 && *(full_path.ptr() + full_path.length() - 1) != '/' &&
+                                                              OB_FAIL(full_path.append("/"))) {
+      OB_LOG(WARN, "append failed", K(ret)) ;
+    } else if (OB_FAIL(full_path.append(file_name))) {
+      OB_LOG(WARN, "append file name failed", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, full_path.string(), tmp_file))) {
       OB_LOG(WARN, "fail to save file name", K(ret), K(file_name));
     } else if (OB_FAIL(name_array_.push_back(tmp_file))) {
       OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));

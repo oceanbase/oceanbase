@@ -17,7 +17,7 @@
 #include "sql/dtl/ob_dtl_msg_type.h"
 #include "lib/container/ob_array_serialization.h"
 #include "share/detect/ob_detectable_id.h"
-#include "sql/engine/basic/ob_compact_row.h"
+
 namespace oceanbase {
 namespace sql {
 namespace dtl {
@@ -137,8 +137,7 @@ public:
         dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
         enable_channel_sync_(false),
-        register_dm_info_(),
-        row_meta_()
+        register_dm_info_()
   {}
   ObDtlLinkedBuffer(char * buf, int64_t size)
       : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
@@ -148,12 +147,11 @@ public:
         dfo_id_(common::OB_INVALID_ID),
         sqc_id_(common::OB_INVALID_ID),
         enable_channel_sync_(false),
-        register_dm_info_(),
-        row_meta_()
+        register_dm_info_()
   {}
   ~ObDtlLinkedBuffer() { reset_batch_info(); }
   TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid),
-      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(rows_cnt), K_(enable_channel_sync));
+      K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(enable_channel_sync));
 
   ObDtlLinkedBuffer *next() const {
     return reinterpret_cast<ObDtlLinkedBuffer*>(next_);
@@ -162,10 +160,6 @@ public:
   static int deserialize_msg_header(const ObDtlLinkedBuffer &buffer,
                                     ObDtlMsgHeader &header,
                                     bool keep_pos = false);
-  int serialize_vector(char *buf, int64_t pos, int64_t size) const;
-  int64_t get_serialize_vector_size() const;
-  int serialize_fixed_vector(char *buf, int64_t pos, int64_t size) const;
-  int64_t get_serialize_fixed_vector_size() const;
 
   void set_empty() {
     if (size_ > 0 && NULL != buf_) {
@@ -294,7 +288,6 @@ public:
     dst->sqc_id_ = src.sqc_id_;
     dst->enable_channel_sync_ = src.enable_channel_sync_;
     dst->register_dm_info_ = src.register_dm_info_;
-    dst->row_meta_ = src.row_meta_;
   }
 
   void shallow_copy(const ObDtlLinkedBuffer &src)
@@ -314,7 +307,6 @@ public:
     sqc_id_ = src.sqc_id_;
     enable_channel_sync_ = src.enable_channel_sync_;
     register_dm_info_ = src.register_dm_info_;
-    row_meta_ = src.row_meta_;
   }
 
   OB_INLINE ObDtlDfoKey &get_dfo_key() {
@@ -359,7 +351,6 @@ public:
     if (batch_info_valid_) {
       batch_info_.reset();
     }
-    row_meta_.reset();
   }
   int push_batch_id(int64_t batch_id, int64_t rows);
   int64_t get_batch_id() { return batch_id_; }
@@ -367,7 +358,6 @@ public:
   void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
   int64_t get_dfo_id() { return dfo_id_; }
   int64_t get_sqc_id() { return sqc_id_; }
-  RowMeta &get_row_meta() { return row_meta_; }
 
 private:
 /*
@@ -436,7 +426,6 @@ The memory layout is as below:
   int64_t sqc_id_;
   bool enable_channel_sync_;
   common::ObRegisterDmInfo register_dm_info_;
-  RowMeta row_meta_;
 };
 
 }  // dtl

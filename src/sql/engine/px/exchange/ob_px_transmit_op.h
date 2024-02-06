@@ -37,9 +37,6 @@ namespace oceanbase
 namespace sql
 {
 
-#define DO_TRANSMIT_FUNC(func) \
-  if (OB_FAIL(MY_SPEC.use_rich_format_ ? func<true>() : func<false>()))
-
 class ObPxTransmitOpInput : public ObPxExchangeOpInput
 {
   OB_UNIS_VERSION_V(1);
@@ -100,7 +97,6 @@ public:
   const static int64_t DYNAMIC_SAMPLE_ROW_COUNT = 90;
   const static int64_t MAX_DYNAMIC_SAMPLE_ROW_COUNT = 500;
   const static int64_t DYNAMIC_SAMPLE_INTERVAL = 10000;
-  const static int64_t MAX_BKT_FOR_REORDER = 1 << 16;
 
   ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObPxTransmitOp() {}
@@ -126,22 +122,13 @@ protected:
   int link_ch_sets(ObPxTaskChSet &ch_set,
                    common::ObIArray<dtl::ObDtlChannel *> &channels,
                    dtl::ObDtlFlowControl *dfc = nullptr);
-  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
   int send_rows(ObSliceIdxCalc &sc)
   {
-    return is_vectorized()
-            ? (get_spec().use_rich_format_
-                ? send_rows_in_vector<CALC_TYPE>(sc)
-                : send_rows_in_batch<CALC_TYPE>(sc))
-            : send_rows_one_by_one<CALC_TYPE>(sc);
+    return is_vectorized() ? send_rows_in_batch(sc) : send_rows_one_by_one(sc);
   }
-  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
   int send_rows_one_by_one(ObSliceIdxCalc &sc);
-  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
   int send_rows_in_batch(ObSliceIdxCalc &sc);
-  template <ObSliceIdxCalc::SliceCalcType CALC_TYPE>
-  int send_rows_in_vector(ObSliceIdxCalc &sc);
-  template <bool USE_VEC>
+
   int broadcast_rows(ObSliceIdxCalc &slice_calc);
 
   // for dynamic sample
@@ -154,28 +141,21 @@ protected:
   bool is_object_sample();
   bool is_row_sample();
 private:
-  int next_vector(const int64_t max_row_cnt);
-  int next_batch(const int64_t max_row_cnt);
   inline void update_row(const ObExpr *expr, int64_t tablet_id);
   int send_row_normal(int64_t slice_idx,
                int64_t &time_recorder,
-               int64_t tablet_id,
-               int64_t vector_row_idx);
+               int64_t tablet_id);
   int send_row(int64_t slice_idx,
                int64_t &time_recorder,
-               int64_t tablet_id,
-               int64_t vecotor_row_idx = OB_INVALID_ID);
+               int64_t tablet_id);
   int send_eof_row();
   int broadcast_eof_row();
   int next_row();
-  //template<bool USE_VEC>
   int set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc);
-  //template<bool USE_VEC>
   int set_wf_hybrid_slice_id_calc_type(ObSliceIdxCalc &slice_calc);
   int fetch_first_row();
   int set_expect_range_count();
   int wait_channel_ready_msg();
-  int hash_reorder_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard);
   int64_t get_random_seq()
   {
     return nrand48(rand48_buf_) % INT16_MAX;
@@ -184,12 +164,11 @@ private:
       1. already received the channel ready msg
       2. first DFO under PX (which is adjoin to PX/rootdfo)
       3. using single DFO scheduling policy (parallel = 1)*/
-  bool need_wait_sync_msg(const ObPxSQCProxy &proxy) const { return !receive_channel_ready_
+  bool need_wait_sync_msg(const ObPxSQCProxy &proxy, const uint64_t curr_cluster_version) const { return ObInitChannelPieceMsgCtx::enable_dh_channel_sync(curr_cluster_version >= CLUSTER_VERSION_4_1_0_0)
+                                                                    && !receive_channel_ready_
                                                                     && !proxy.adjoining_root_dfo()
                                                                     && !proxy.get_transmit_use_interm_result(); }
   int try_wait_channel();
-  void init_data_msg_type(const common::ObIArray<ObExpr *> &output);
-  dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
   ObArray<ObChunkDatumStore::BlockBufferWrap> blk_bufs_;
@@ -210,10 +189,11 @@ protected:
   ObPxPartChInfo part_ch_info_;
   dtl::ObDtlChTotalInfo *ch_info_;
   bool sample_done_;
+  common::ObSEArray<ObPxTabletRange, 1> ranges_;
   common::ObSEArray<ObChunkDatumStore *, 1> sample_stores_;
   // Row store to hold all sampled input rows
   ObRADatumStore sampled_input_rows_;
-  // Transmit sampled input rows ranges， pair is <start_pos, len>
+  // Transmit sampled input rows ranges
   common::ObSEArray<std::pair<int64_t, int64_t>, 1> sampled_rows2transmit_;
   // Current transmit sampled rows
   std::pair<int64_t, int64_t> *cur_transmit_sampled_rows_;
@@ -225,25 +205,12 @@ protected:
 
   unsigned short rand48_buf_[3];
   bool receive_channel_ready_;
-  dtl::ObDtlMsgType data_msg_type_;
-  bool disable_fast_append_;
-  //slice_idx, batch_idx
-  uint16_t **slice_info_bkts_;
-  uint16_t *slice_bkt_item_cnts_;
-  ObFixedArray<ObIVector *, common::ObIAllocator> vectors_;
-  uint16_t *selector_array_;
-  uint32_t *row_size_array_;
-  ObCompactRow **return_rows_;
-  bool use_hash_reorder_;
 };
 
 inline void ObPxTransmitOp::update_row(const ObExpr *expr, int64_t tablet_id)
 {
   OB_ASSERT(OB_NOT_NULL(expr));
   OB_ASSERT(expr->type_ == T_PDML_PARTITION_ID);
-  if (get_spec().use_rich_format_) {
-    expr->init_vector(eval_ctx_, VectorFormat::VEC_UNIFORM, 1);
-  }
   expr->locate_datum_for_write(eval_ctx_).set_int(tablet_id);
   expr->set_evaluated_projected(eval_ctx_);
 }

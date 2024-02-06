@@ -75,11 +75,6 @@ public:
     UNUSED(scn);
     return OB_SUCCESS;
   }
-  int get_palf_committed_max_scn(share::SCN &scn) const
-  {
-    UNUSED(scn);
-    return OB_SUCCESS;
-  }
   int get_append_mode_initial_scn(share::SCN &ref_scn) {
     int ret = OB_SUCCESS;
     ref_scn = share::SCN::invalid_scn();

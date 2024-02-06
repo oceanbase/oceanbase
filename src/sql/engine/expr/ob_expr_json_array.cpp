@@ -56,10 +56,7 @@ int ObExprJsonArray::calc_result_typeN(ObExprResType& type,
       type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]).get_length());
       for (int64_t i = 0; i < param_num; i++) {
         if (ob_is_string_type(types_stack[i].get_type())) {
-          if (types_stack[i].get_type() == ObVarcharType && types_stack[i].get_collation_type() == CS_TYPE_BINARY) {
-            types_stack[i].set_calc_type(ObHexStringType);
-            types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
-          } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
+          if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
             types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
         } else if (types_stack[i].get_type() == ObJsonType) {
@@ -273,6 +270,7 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   for (uint32_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
     ObIJsonBase *j_val;
     if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &temp_allocator, i, j_val))) {
+      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
       LOG_WARN("failed: get_json_val failed", K(ret));
     } else if (OB_FAIL(j_base->array_append(j_val))) {
       LOG_WARN("failed: json array append json value", K(ret));

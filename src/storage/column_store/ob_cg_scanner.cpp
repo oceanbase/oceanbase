@@ -26,14 +26,14 @@ ObCGScanner::~ObCGScanner()
 int ObCGScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObSSTableWrapper &wrapper)
+    ObCGTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
-  int64_t data_row_cnt = 0;
+
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGScanner has been inited", K(ret));
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument to init ObCGScanner", K(ret), K(wrapper), K(iter_param));
@@ -43,14 +43,12 @@ int ObCGScanner::init(
   } else if (OB_UNLIKELY(!sstable_->is_normal_cg_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
-  } else if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
+  } else if (OB_FAIL(prefetcher_.init(*sstable_, iter_param, access_ctx))) {
     LOG_WARN("fail to init prefetcher, ", K(ret));
-  } else if (OB_FAIL(table_wrapper_.get_merge_row_cnt(iter_param, data_row_cnt))) {
-    LOG_WARN("fail to get merge row cnt", K(ret), K(iter_param), K(sstable_row_cnt_), K(table_wrapper_));
   } else {
     iter_param_ = &iter_param;
     access_ctx_ = &access_ctx;
-    sstable_row_cnt_ = data_row_cnt;
+    sstable_row_cnt_ = sstable_->get_row_count();
     is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
   }
 
@@ -66,14 +64,14 @@ int ObCGScanner::init(
 int ObCGScanner::switch_context(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObSSTableWrapper &wrapper)
+    ObCGTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("The ObCGScanner is not inited");
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_or_ddl_merge_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));
@@ -84,20 +82,17 @@ int ObCGScanner::switch_context(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not normal cg sstable", K(ret), KPC_(sstable));
   } else {
-    int64_t data_row_cnt = 0;
     if (!prefetcher_.is_valid()) {
-      if (OB_FAIL(prefetcher_.init(get_type(), *sstable_, iter_param, access_ctx))) {
+      if (OB_FAIL(prefetcher_.init(*sstable_, iter_param, access_ctx))) {
         LOG_WARN("fail to init prefetcher, ", K(ret));
       }
-    } else if (OB_FAIL(prefetcher_.switch_context(get_type(), *sstable_, iter_param, access_ctx))) {
+    } else if (OB_FAIL(prefetcher_.switch_context(*sstable_, iter_param, access_ctx))) {
       LOG_WARN("Fail to switch context for prefetcher", K(ret));
-    } else if (OB_FAIL(table_wrapper_.get_merge_row_cnt(iter_param, data_row_cnt))) {
-      LOG_WARN("fail to get merge row cnt", K(ret), K(iter_param), K(data_row_cnt), K(table_wrapper_));
     }
     if (OB_SUCC(ret)) {
       iter_param_ = &iter_param;
       access_ctx_ = &access_ctx;
-      sstable_row_cnt_ = data_row_cnt;
+      sstable_row_cnt_ = sstable_->get_row_count();
       is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
     }
   }
@@ -151,7 +146,7 @@ int ObCGScanner::init_micro_scanner()
 {
   int ret = OB_SUCCESS;
   if (nullptr != micro_scanner_) {
-  } else if (OB_UNLIKELY(!sstable_->is_major_or_ddl_merge_sstable())) {
+  } else if (OB_UNLIKELY(!sstable_->is_major_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected not major sstable", K(ret), KPC_(sstable));
   } else if (nullptr == (micro_scanner_ = OB_NEWx(ObMicroBlockRowScanner,
@@ -435,10 +430,6 @@ void ObCGRowScanner::reset()
       access_ctx_->stmt_allocator_->free(row_ids_);
       row_ids_ = nullptr;
     }
-    if (nullptr != len_array_) {
-      access_ctx_->stmt_allocator_->free(len_array_);
-      len_array_ = nullptr;
-    }
   }
   filter_bitmap_ = nullptr;
   read_info_ = nullptr;
@@ -456,7 +447,7 @@ void ObCGRowScanner::reuse()
 int ObCGRowScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObSSTableWrapper &wrapper)
+    ObCGTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!iter_param.vectorized_enabled_ || nullptr == iter_param.op_ || !wrapper.is_valid() ||
@@ -467,19 +458,20 @@ int ObCGRowScanner::init(
     LOG_WARN("Fail to init cg scanner", K(ret));
   } else {
     read_info_ = iter_param.get_read_info();
+    datum_infos_.set_allocator(access_ctx_->stmt_allocator_);
     col_params_.set_allocator(access_ctx_->stmt_allocator_);
     void *buf = nullptr;
-    void *len_array_buf = nullptr;
     int64_t expr_count = iter_param.output_exprs_->count();
     const share::schema::ObColumnParam *col_param = nullptr;
     sql::ObEvalCtx &eval_ctx = iter_param.op_->get_eval_ctx();
     const common::ObIArray<int32_t>* out_cols_projector = iter_param.out_cols_project_;
     int64_t sql_batch_size = iter_param.op_->get_batch_size();
     const common::ObIArray<share::schema::ObColumnParam *>* out_cols_param = iter_param.get_col_params();
-    const bool use_new_format = iter_param.use_new_format();
     if (OB_UNLIKELY(sql_batch_size <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected sql batch size", K(ret), K(sql_batch_size), K(iter_param));
+    } else if (OB_FAIL(datum_infos_.init(expr_count))) {
+      LOG_WARN("Failed to init datum infos", K(ret), K(expr_count));
     } else if (OB_FAIL(col_params_.init(expr_count))) {
       LOG_WARN("Fail to init col params", K(ret));
       // TODO: remove these later
@@ -490,45 +482,35 @@ int ObCGRowScanner::init(
     } else if (OB_ISNULL(buf = access_ctx.stmt_allocator_->alloc(sizeof(int64_t) * sql_batch_size))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc row_ids", K(ret), K(sql_batch_size));
-    } else if (OB_ISNULL(len_array_buf = access_ctx.stmt_allocator_->alloc(sizeof(uint32_t) * sql_batch_size))) {
-      ret = common::OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to alloc len_array_buf", K(ret), K(sql_batch_size));
     } else if (FALSE_IT(row_ids_ = reinterpret_cast<int64_t *>(buf))) {
-    } else if (FALSE_IT(len_array_ = reinterpret_cast<uint32_t *>(len_array_buf))) {
     } else if (!iter_param.enable_pd_aggregate()) {
       bool need_padding = common::is_pad_char_to_full_length(access_ctx.sql_mode_);
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
-        col_param = nullptr;
-        int64_t col_offset = out_cols_projector->at(i);
-        const common::ObObjMeta &obj_meta = read_info_->get_columns_desc().at(col_offset).col_type_;
-        if (need_padding && obj_meta.is_fixed_len_char_type()) {
-          col_param = out_cols_param->at(col_offset);
-        } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
-          col_param = out_cols_param->at(col_offset);
-        }
-        if (OB_FAIL(col_params_.push_back(col_param))) {
-          LOG_WARN("Failed to push back col param", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        datum_infos_.set_allocator(access_ctx_->stmt_allocator_);
-        if (OB_FAIL(datum_infos_.init(expr_count))) {
-          LOG_WARN("Failed to init datum infos", K(ret), K(expr_count));
+        sql::ObExpr *expr = nullptr;
+        common::ObDatum *datums = nullptr;
+        if (OB_ISNULL(expr = iter_param.output_exprs_->at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null expr", K(ret), K(i), K(iter_param.output_exprs_));
+        } else if (OB_ISNULL(datums = expr->locate_batch_datums(eval_ctx))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null datums", K(ret), K(i), KPC(expr));
+        } else if (OB_UNLIKELY(!(expr->is_variable_res_buf())
+                               && datums->ptr_ != eval_ctx.frames_[expr->frame_idx_] + expr->res_buf_off_)) {
+          ret = OB_ERR_SYS;
+          LOG_ERROR("Unexpected sql expr datum buffer", K(ret), KP(datums->ptr_), K(eval_ctx), KPC(expr));
+        } else if (OB_FAIL(datum_infos_.push_back(ObSqlDatumInfo(datums, iter_param.output_exprs_->at(i)->obj_datum_map_)))) {
+          LOG_WARN("fail to push back datum", K(ret), K(datums));
         } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; i++) {
-            sql::ObExpr *expr = iter_param.output_exprs_->at(i);
-            common::ObDatum *datums = nullptr;
-            if (OB_ISNULL(datums = expr->locate_batch_datums(eval_ctx))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("Unexpected null datums", K(ret), K(i), KPC(expr));
-            } else if (OB_UNLIKELY(!use_new_format &&
-                                   !(expr->is_variable_res_buf()) &&
-                                   datums->ptr_ != eval_ctx.frames_[expr->frame_idx_] + expr->res_buf_off_)) {
-              ret = OB_ERR_SYS;
-              LOG_ERROR("Unexpected sql expr datum buffer", K(ret), KP(datums->ptr_), K(eval_ctx), KPC(expr));
-            } else if (OB_FAIL(datum_infos_.push_back(ObSqlDatumInfo(datums, iter_param.output_exprs_->at(i))))) {
-              LOG_WARN("fail to push back datum", K(ret), K(datums));
-            }
+          col_param = nullptr;
+          int64_t col_offset = out_cols_projector->at(i);
+          const common::ObObjMeta &obj_meta = read_info_->get_columns_desc().at(col_offset).col_type_;
+          if (need_padding && obj_meta.is_fixed_len_char_type()) {
+            col_param = out_cols_param->at(col_offset);
+          } else if (obj_meta.is_lob_storage() || obj_meta.is_decimal_int()) {
+            col_param = out_cols_param->at(col_offset);
+          }
+          if (OB_FAIL(col_params_.push_back(col_param))) {
+            LOG_WARN("Failed to push back col param", K(ret));
           }
         }
       }
@@ -566,9 +548,6 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
   } else {
     int64_t batch_size = MIN(iter_param_->op_->get_batch_size(), capacity);
     prefetcher_.recycle_block_data();
-    if (nullptr != micro_scanner_) {
-      micro_scanner_->reserve_reader_memory(false);
-    }
     while (OB_SUCC(ret) && count < batch_size) {
       if (OB_FAIL(prefetcher_.prefetch())) {
         LOG_WARN("Fail to prefetch micro block", K(ret), K_(prefetcher));
@@ -588,19 +567,13 @@ int ObCGRowScanner::get_next_rows(uint64_t &count, const uint64_t capacity, cons
         }
       }
     }
+    if (OB_SUCC(ret) && nullptr != micro_scanner_) {
+      micro_scanner_->reserve_reader_memory(false);
+    }
   }
   if (count > 0 && datum_infos_.count() > 0) {
-    if (iter_param_->op_->enable_rich_format_) {
-      LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
-                "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
-                                       nullptr,
-                                       sql::EvalBound(datum_offset + count, true)));
-    } else {
-      LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count), K(capacity),
-                "datums", ObArrayWrap<ObDatum>(datum_infos_.at(0).datum_ptr_, datum_offset + count));
-    }
+    LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K_(query_index_range), K_(current), K(count),
+              K(capacity), "datums", ObArrayWrap<ObDatum>(datum_infos_.at(0).datum_ptr_, datum_offset + count));
   }
   return ret;
 }
@@ -665,7 +638,7 @@ int ObCGRowScanner::inner_fetch_rows(const int64_t row_cap, const int64_t datum_
                                             row_cap,
                                             datum_infos_,
                                             datum_offset,
-                                            len_array_))) {
+                                            *iter_param_))) {
     LOG_WARN("Fail to get next rows", K(ret));
   }
   return ret;
@@ -688,14 +661,14 @@ int ObCGRowScanner::deep_copy_projected_rows(const int64_t datum_offset, const u
 {
   int ret = OB_SUCCESS;
   int64_t batch_size = iter_param_->op_->get_batch_size();
-  sql::ObEvalCtx &eval_ctx = iter_param_->op_->get_eval_ctx();
   if (OB_UNLIKELY(datum_offset + count > batch_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(datum_offset), K(count), K(batch_size));
-  } else if (!iter_param_->use_new_format()) {
+  } else {
+    sql::ObEvalCtx &eval_ctx = iter_param_->op_->get_eval_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_infos_.count(); ++i) {
       common::ObDatum *datums = datum_infos_.at(i).datum_ptr_;
-      sql::ObExpr *e = iter_param_->output_exprs_->at(i);
+      sql::ObExpr *e =iter_param_->output_exprs_->at(i);
       if (OBJ_DATUM_STRING == e->obj_datum_map_) {
         for (int64_t batch_idx = datum_offset; OB_SUCC(ret) && batch_idx < datum_offset + count; ++batch_idx) {
           char *ptr = nullptr;
@@ -712,46 +685,8 @@ int ObCGRowScanner::deep_copy_projected_rows(const int64_t datum_offset, const u
         }
       }
     }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < iter_param_->output_exprs_->count(); ++i) {
-      sql::ObExpr *expr = iter_param_->output_exprs_->at(i);
-      VectorFormat format = expr->get_format(eval_ctx);
-      if (format == VEC_DISCRETE) {
-        ObDiscreteFormat *discrete_format = static_cast<ObDiscreteFormat *>(expr->get_vector(eval_ctx));
-        for (int64_t batch_idx = datum_offset; OB_SUCC(ret) && batch_idx < datum_offset + count; ++batch_idx) {
-          if (!discrete_format->is_null(batch_idx)) {
-            const char *payload = nullptr;
-            ObLength length = 0;
-            discrete_format->get_payload(batch_idx, payload, length);
-            char *ptr = nullptr;
-            if (OB_ISNULL(ptr = expr->get_str_res_mem(eval_ctx, length, batch_idx))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("Failed to allocate memory", K(ret));
-            } else {
-              MEMCPY(const_cast<char *>(ptr), payload, length);
-              discrete_format->set_payload_shallow(batch_idx, ptr, length);
-            }
-          }
-        }
-      } else if (OB_UNLIKELY(format != VEC_FIXED && format != VEC_DISCRETE)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unexpected data format", K(ret), K(format), KPC(expr));
-      }
-    }
   }
-  if (count > 0 && !datum_infos_.empty()) {
-    if (iter_param_->op_->enable_rich_format_) {
-      LOG_TRACE("[COLUMNSTORE] get next rows in cg", K(ret), K(datum_offset), K(count),
-                "new format datums",
-                sql::ToStrVectorHeader(datum_infos_.at(0).expr_->get_vector_header(iter_param_->op_->get_eval_ctx()),
-                                       *datum_infos_.at(0).expr_,
-                                       nullptr,
-                                       sql::EvalBound(datum_offset + count, true)));
-    } else {
-      LOG_DEBUG("[COLUMNSTORE] deep copy projected rows", K(ret), K(datum_offset), K(count),
-                "datums", ObArrayWrap<ObDatum>(datum_infos_.at(0).datum_ptr_, datum_offset + count));
-    }
-  }
+  LOG_DEBUG("[COLUMNSTORE] deep copy projected rows", K(ret), K(datum_offset), K(count), "datums", ObArrayWrap<ObDatum>(datum_infos_.at(0).datum_ptr_, datum_offset + count));
   return ret;
 }
 
@@ -762,7 +697,7 @@ int ObCGScanner::build_index_filter(sql::ObPushdownFilterExecutor &filter)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected access context", K(ret), KP_(access_ctx), KP(access_ctx_->stmt_allocator_));
   } else if (OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
-              true, iter_param_->get_read_info(), filter, access_ctx_->allocator_, prefetcher_.sstable_index_filter_))) {
+              true, iter_param_->get_read_info(), filter, access_ctx_->stmt_allocator_, prefetcher_.sstable_index_filter_))) {
     LOG_WARN("Failed to construct skip filter", K(ret), K(filter));
   }
 

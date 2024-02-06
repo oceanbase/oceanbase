@@ -67,7 +67,6 @@ public:
                      const ObFunction<void(ElectionImpl *, common::ObRole, common::ObRole, RoleChangeReason)> &cb = DefaultRoleChangeCallBack());
   int revoke(const RoleChangeReason &reason) override;
   virtual void stop() override final;
-  virtual int can_set_memberlist(const palf::LogConfigVersion &new_config_version) const override final;
   virtual int set_memberlist(const MemberList &new_memberlist) override final;
   virtual int change_leader_to(const common::ObAddr &dest_addr) override final;
   /**

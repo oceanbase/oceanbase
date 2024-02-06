@@ -129,12 +129,7 @@ TEST_F(TestLSStatusOperator, SQLProxy)
 TEST_F(TestLSStatusOperator, LSLifeAgent)
 {
   int ret = OB_SUCCESS;
-  ASSERT_EQ(OB_SUCCESS, create_tenant());
-  ASSERT_EQ(OB_SUCCESS, get_tenant_id(tenant_id_));
-  ObSqlString sql;
-  //common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
-
-  tenant_id_ = 1002;
+  tenant_id_ = 1001;
   ObLSLifeAgentManager ls_life(get_curr_simple_server().get_observer().get_mysql_proxy());
   ObLSStatusOperator status_operator;
   ObLSStatusInfoArray ls_array;
@@ -157,7 +152,7 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   create_scn.set_min();
 
   //创建新日志流
-  ObLSID ls_id(1002);
+  ObLSID ls_id(1001);
   ret = info.init(tenant_id_, ls_id, 0, share::OB_LS_CREATING, 0, primary_zone, flag);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.create_new_ls(info, create_scn, zone_priority.str(), share::NORMAL_SWITCHOVER_STATUS);
@@ -246,21 +241,17 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
   ASSERT_EQ(OB_NEED_RETRY, ret);
   ObLSRecoveryStat recovery_stat;
   ObLSRecoveryStatOperator recovery_op;
-  palf::LogConfigVersion config_version;
-  ret = config_version.generate(1,2);
-  ASSERT_EQ(OB_SUCCESS, ret);
   scn.convert_for_logservice(99);
-  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, scn, config_version);
+  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, false, get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
-  scn.convert_for_logservice(100);
+  scn.convert_for_logservice(98);
   share::SCN recovery_scn;
-  recovery_scn.convert_for_logservice(98);
-  //readable scn 大于sync_scn
-  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn,config_version);
+  recovery_scn.convert_for_logservice(100);
+  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   //recovery_stat的取最大值
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, false, get_curr_simple_server().get_observer().get_mysql_proxy());
@@ -268,8 +259,8 @@ TEST_F(TestLSStatusOperator, LSLifeAgent)
 
   ret = ls_life.drop_ls(tenant_id_, ls_id, share::NORMAL_SWITCHOVER_STATUS);
   ASSERT_EQ(OB_NEED_RETRY, ret);
-  recovery_scn.convert_for_logservice(100);
-  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn, config_version);
+  scn.convert_for_logservice(100);
+  ret = recovery_stat.init_only_recovery_stat(tenant_id_, ls_id, scn, recovery_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = recovery_op.update_ls_recovery_stat(recovery_stat, false, get_curr_simple_server().get_observer().get_mysql_proxy());
   ASSERT_EQ(OB_SUCCESS, ret);

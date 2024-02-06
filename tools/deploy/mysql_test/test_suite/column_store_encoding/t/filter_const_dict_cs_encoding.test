@@ -15,7 +15,7 @@ set ob_trx_timeout=1000000000;
 drop table if exists t1;
 --enable_warnings
  
-create table t1 (a int auto_increment primary key, b smallint(6), c varchar(10)) row_format = compressed block_size = 2048 with column group (all columns, each column);
+create table t1 (a int auto_increment primary key, b smallint(6), c varchar(10)) row_format = compressed block_size = 2048 with column group for all columns, each column;
 --let $loop=1000
 while($loop > 0)
 {

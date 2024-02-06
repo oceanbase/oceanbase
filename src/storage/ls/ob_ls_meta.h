@@ -39,13 +39,10 @@ public:
   static const int64_t NORMAL = 0;
   static const int64_t RESTORE = 1;
   static const int64_t MIGRATE = 2;
-  static const int64_t CLONE = 3;
 };
 
 class ObLSMeta
 {
-  friend class ObLSMetaPackage;
-
   OB_UNIS_VERSION_V(1);
 public:
   ObLSMeta();
@@ -108,7 +105,6 @@ public:
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info);
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
-  int check_ls_need_online(bool &need_online) const;
 
   int init(
       const uint64_t tenant_id,
@@ -166,10 +162,6 @@ public:
   mutable common::ObLatch lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
-
-private:
-  void update_clog_checkpoint_in_ls_meta_package_(const share::SCN& clog_checkpoint_scn,
-                                                  const palf::LSN& clog_base_lsn);
 private:
   ObReplicaType unused_replica_type_;
   ObLSPersistentState ls_persistent_state_;

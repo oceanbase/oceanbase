@@ -103,7 +103,6 @@ public:
   common::ObFixedArray<ObExprResType, common::ObIAllocator> udf_attributes_types_;
   // indicate the argument is const expr or not
   common::ObFixedArray<bool, common::ObIAllocator> args_const_attr_;
-  TO_STRING_KV(K(udf_meta_), K(udf_attributes_), K(udf_attributes_types_), K(args_const_attr_));
 };
 
 OB_DEF_SERIALIZE(ObDllUdfInfo<UF>, template<typename UF>)

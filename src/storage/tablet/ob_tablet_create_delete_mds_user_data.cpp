@@ -88,7 +88,6 @@ void ObTabletCreateDeleteMdsUserData::on_redo(const share::SCN &redo_scn)
   case ObTabletMdsUserDataType::NONE :
   case ObTabletMdsUserDataType::CREATE_TABLET :
   case ObTabletMdsUserDataType::REMOVE_TABLET :
-  case ObTabletMdsUserDataType::START_TRANSFER_OUT_PREPARE:
   case ObTabletMdsUserDataType::START_TRANSFER_IN :
   case ObTabletMdsUserDataType::FINISH_TRANSFER_OUT : {
     break;
@@ -125,7 +124,6 @@ void ObTabletCreateDeleteMdsUserData::on_commit(const share::SCN &commit_version
   int ret = OB_SUCCESS;
   switch (data_type_) {
   case ObTabletMdsUserDataType::NONE :
-  case ObTabletMdsUserDataType::START_TRANSFER_OUT_PREPARE:
   case ObTabletMdsUserDataType::FINISH_TRANSFER_IN : {
     break;
   }

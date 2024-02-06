@@ -35,7 +35,7 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSpace);
 };

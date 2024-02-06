@@ -15,10 +15,9 @@
 #include "storage/tx_table/ob_tx_table.h"
 #include "share/rc/ob_tenant_base.h"
 
-using namespace oceanbase::share;
-
 namespace oceanbase
 {
+
 namespace storage
 {
 
@@ -46,16 +45,13 @@ int ObUndoStatusList::serialize(char *buf, const int64_t buf_len, int64_t &pos) 
 int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObUndoStatusNode *, 32> node_arr;
-  node_arr.reuse();
+  ObArray<ObUndoStatusNode *> node_arr;
+  node_arr.reset();
   ObUndoStatusNode *node = head_;
   // generate undo status node stack
   while (OB_NOT_NULL(node)) {
-    if (OB_FAIL(node_arr.push_back(node))) {
-      STORAGE_LOG(WARN, "push back undo status node failed", KR(ret), K(node_arr.count()));
-    } else {
-      node = node->next_;
-    }
+    node_arr.push_back(node);
+    node = node->next_;
   }
 
   LST_DO_CODE(OB_UNIS_ENCODE, undo_node_cnt_);
@@ -73,7 +69,7 @@ int ObUndoStatusList::serialize_(char *buf, const int64_t buf_len, int64_t &pos)
 int ObUndoStatusList::deserialize(const char *buf,
                                   const int64_t data_len,
                                   int64_t &pos,
-                                  ObTenantTxDataAllocator &tx_data_allocator)
+                                  ObSliceAlloc &slice_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
@@ -96,7 +92,7 @@ int ObUndoStatusList::deserialize(const char *buf,
   } else {
     int64_t original_pos = pos;
     pos = 0;
-    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, tx_data_allocator))) {
+    if (OB_FAIL(deserialize_(buf + original_pos, undo_status_list_len, pos, slice_allocator))) {
       STORAGE_LOG(WARN, "deserialize_ fail", "slen", undo_status_list_len, K(pos), K(ret));
     }
     pos += original_pos;
@@ -108,7 +104,7 @@ int ObUndoStatusList::deserialize(const char *buf,
 int ObUndoStatusList::deserialize_(const char *buf,
                                    const int64_t data_len,
                                    int64_t &pos,
-                                   ObTenantTxDataAllocator &tx_data_allocator)
+                                   ObSliceAlloc &slice_allocator)
 {
   int ret = OB_SUCCESS;
   ObUndoStatusNode *cur_node = nullptr;
@@ -119,7 +115,11 @@ int ObUndoStatusList::deserialize_(const char *buf,
     // allcate new undo status node if needed
     if (OB_ISNULL(cur_node) || cur_node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       void *undo_node_buf = nullptr;
-      if (OB_ISNULL(undo_node_buf = tx_data_allocator.alloc(false/* enable_throttle */))) {
+#ifdef OB_ENABLE_SLICE_ALLOC_LEAK_DEBUG
+      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc(true /*record_alloc_lbt*/))) {
+#else
+      if (OB_ISNULL(undo_node_buf = slice_allocator.alloc())) {
+#endif
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "allocate memory when deserialize ObTxData failed.", KR(ret));
       } else {
@@ -337,7 +337,7 @@ int64_t ObTxData::size() const
 int ObTxData::deserialize(const char *buf,
                           const int64_t data_len,
                           int64_t &pos,
-                          ObTenantTxDataAllocator &slice_allocator)
+                          ObSliceAlloc &slice_allocator)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
@@ -366,7 +366,7 @@ int ObTxData::deserialize(const char *buf,
 int ObTxData::deserialize_(const char *buf,
                            const int64_t data_len,
                            int64_t &pos,
-                           ObTenantTxDataAllocator &tx_data_allocator)
+                           ObSliceAlloc &slice_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -380,7 +380,7 @@ int ObTxData::deserialize_(const char *buf,
     STORAGE_LOG(WARN, "deserialize start_scn fail.", KR(ret), K(pos), K(data_len));
   } else if (OB_FAIL(end_scn_.deserialize(buf, data_len, pos))) {
     STORAGE_LOG(WARN, "deserialize end_scn fail.", KR(ret), K(pos), K(data_len));
-  } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, tx_data_allocator))) {
+  } else if (OB_FAIL(undo_status_list_.deserialize(buf, data_len, pos, slice_allocator))) {
     STORAGE_LOG(WARN, "deserialize undo_status_list fail.", KR(ret), K(pos), K(data_len));
   }
 
@@ -389,14 +389,14 @@ int ObTxData::deserialize_(const char *buf,
 
 void ObTxData::reset()
 {
-  if (OB_NOT_NULL(tx_data_allocator_) || ref_cnt_ != 0) {
+  if (OB_NOT_NULL(slice_allocator_) || ref_cnt_ != 0) {
     int ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(tx_data_allocator_), K(ref_cnt_));
+    STORAGE_LOG(WARN, "this tx data should not be reset", KR(ret), KP(this), KP(slice_allocator_), K(ref_cnt_));
     // TODO : @gengli remove ob_abort
     ob_abort();
   }
   ObTxCommitData::reset();
-  tx_data_allocator_ = nullptr;
+  slice_allocator_ = nullptr;
   ref_cnt_ = 0;
   undo_status_list_.reset();
 }
@@ -481,11 +481,8 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
   } else if (OB_ISNULL(tx_data_table = tx_table->get_tx_data_table())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "tx data table in tx table is nullptr.", KR(ret));
-  } else if (OB_FAIL(merge_undo_actions_(tx_data_table, node, new_undo_action))) {
-    STORAGE_LOG(WARN, "merge undo actions fail.", KR(ret), K(new_undo_action));
-  } else if (!new_undo_action.is_valid()) {
-    // if new_undo_action is merged, it will be set to invalid and skip insert
   } else {
+    merge_undo_actions_(tx_data_table, node, new_undo_action);
     // generate new node if current node cannot be inserted
     if (OB_ISNULL(node) || node->size_ >= TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE) {
       ObUndoStatusNode *new_node = nullptr;
@@ -527,12 +524,10 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
   int ret = OB_SUCCESS;
   while (OB_SUCC(ret) && OB_NOT_NULL(node)) {
     for (int i = node->size_ - 1; i >= 0; i--) {
-      if (new_undo_action.is_contain(node->undo_actions_[i])) {
-        node->size_--; // pop merged
-      } else if (node->undo_actions_[i].is_contain(new_undo_action)) {
-        // new undo is merged, reset it
-        new_undo_action.reset();
-        break;
+      if (new_undo_action.is_contain(node->undo_actions_[i])
+          || node->undo_actions_[i].is_contain(new_undo_action)) {
+        new_undo_action.merge(node->undo_actions_[i]);
+        node->size_--;
       } else {
         break;
       }
@@ -561,6 +556,7 @@ int ObTxData::merge_undo_actions_(ObTxDataTable *tx_data_table,
 
   return ret;
 }
+
 
 bool ObTxData::equals_(ObTxData &rhs)
 {

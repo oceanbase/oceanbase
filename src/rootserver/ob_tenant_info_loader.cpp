@@ -501,19 +501,6 @@ int ObTenantInfoLoader::get_sync_scn(share::SCN &sync_scn)
   return ret;
 }
 
-int ObTenantInfoLoader::get_recovery_until_scn(share::SCN &recovery_until_scn)
-{
-  int ret = OB_SUCCESS;
-  share::ObAllTenantInfo tenant_info;
-  recovery_until_scn.set_invalid();
-  if (OB_FAIL(get_tenant_info(tenant_info))) {
-    LOG_WARN("failed to get tenant info", KR(ret));
-  } else {
-    recovery_until_scn = tenant_info.get_recovery_until_scn();
-  }
-  return ret;
-}
-
 int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
@@ -582,7 +569,7 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObAllTenantInfo new_tenant_info;
   int64_t ora_rowscn = 0;
-  const int64_t new_refresh_time_us = ObClockGenerator::getClock();
+  const int64_t new_refresh_time_us = ObClockGenerator::getCurrentTime();
   content_changed = false;
   if (OB_ISNULL(sql_proxy) || !is_user_tenant(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;

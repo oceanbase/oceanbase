@@ -34,12 +34,6 @@ TEST(TestSampleRateLimiter, Basic)
   ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
   ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2, OB_LOG_LEVEL_INFO));
   ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_INFO));
-
-  sleep(1);
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_ERROR));
-  ASSERT_EQ(OB_EAGAIN, rl.try_acquire(2, OB_LOG_LEVEL_ERROR));
-  ASSERT_EQ(OB_SUCCESS, rl.try_acquire(1, OB_LOG_LEVEL_ERROR));
-
 }
 
 int main(int argc, char **argv)

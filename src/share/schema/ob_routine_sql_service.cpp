@@ -60,26 +60,27 @@ int ObRoutineSqlService::create_package(ObPackageInfo &package_info,
   return ret;
 }
 
-int ObRoutineSqlService::drop_package(const uint64_t tenant_id,
-                                      const uint64_t database_id,
-                                      const uint64_t package_id,
+int ObRoutineSqlService::drop_package(const ObPackageInfo &package_info,
                                       const int64_t new_schema_version,
                                       ObISQLClient &sql_client,
                                       const ObString *ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
+  uint64_t tenant_id = package_info.get_tenant_id();
+  uint64_t db_id = package_info.get_database_id();
+  uint64_t package_id = package_info.get_package_id();
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)
-      || OB_UNLIKELY(OB_INVALID_ID == database_id)
+      || OB_UNLIKELY(OB_INVALID_ID == db_id)
       || OB_UNLIKELY(OB_INVALID_ID == package_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid package info in drop procedure", KR(ret), K(tenant_id), K(database_id), K(package_id));
-  } else if (OB_FAIL(del_package(sql_client, tenant_id, package_id, new_schema_version))) {
+    LOG_WARN("invalid package info in drop procedure", K(tenant_id), K(db_id), K(package_id));
+  } else if (OB_FAIL(del_package(sql_client, package_info, new_schema_version))) {
     LOG_WARN("delete package failed", K(ret));
   } else {
     ObSchemaOperation opt;
-    opt.tenant_id_ = tenant_id;
-    opt.database_id_ = database_id;
-    opt.table_id_ = package_id;
+    opt.tenant_id_ = package_info.get_tenant_id();
+    opt.database_id_ = package_info.get_database_id();
+    opt.table_id_ = package_info.get_package_id();
     opt.op_type_ = OB_DDL_DROP_PACKAGE;
     opt.schema_version_ = new_schema_version;
     opt.ddl_stmt_str_ = (NULL != ddl_stmt_str) ? *ddl_stmt_str : ObString();
@@ -288,15 +289,16 @@ int ObRoutineSqlService::drop_routine(const ObRoutineInfo &routine_info,
 }
 
 int ObRoutineSqlService::del_package(ObISQLClient &sql_client,
-                                     const uint64_t tenant_id,
-                                     const uint64_t package_id,
+                                     const ObPackageInfo &package_info,
                                      int64_t new_schema_version)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObDMLSqlSplicer dml;
   ObSqlString sql;
+  uint64_t tenant_id = package_info.get_tenant_id();
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  uint64_t package_id = package_info.get_package_id();
 
   if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))

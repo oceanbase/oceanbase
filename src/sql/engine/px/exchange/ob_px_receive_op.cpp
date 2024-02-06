@@ -59,6 +59,20 @@ int ObPxReceiveOpInput::get_dfo_key(ObDtlDfoKey &key)
   return ret;
 }
 
+int ObPxReceiveOpInput::get_first_buffer_cache(dtl::ObDtlLocalFirstBufferCache *&first_buffer_cache)
+{
+  int ret = OB_SUCCESS;
+  ObPxSQCProxy *sqc_proxy = reinterpret_cast<ObPxSQCProxy *>(ch_provider_ptr_);
+  if (OB_ISNULL(sqc_proxy)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ch provider not init", K(ret));
+  } else {
+    first_buffer_cache = sqc_proxy->get_first_buffer_cache();
+    LOG_TRACE("trace first buffer cache", K(first_buffer_cache));
+  }
+  return ret;
+}
+
 int ObPxReceiveOpInput::get_data_ch(ObPxTaskChSet &task_ch_set, int64_t timeout_ts, ObDtlChTotalInfo &ch_info)
 {
   int ret = OB_SUCCESS;
@@ -107,14 +121,14 @@ ObPxReceiveOp::ObPxReceiveOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     iter_end_(false),
     channel_linked_(false),
     task_channels_(),
-    row_reader_(get_spec().id_),
+    row_reader_(),
     px_row_msg_proc_(&row_reader_),
     msg_loop_(op_monitor_info_),
     ts_cnt_(0),
     ts_(0),
+    proxy_first_buffer_cache_(nullptr),
     ch_info_(),
     stored_rows_(NULL),
-    vector_rows_(nullptr),
     bf_rpc_proxy_(),
     bf_ctx_idx_(0),
     bf_send_idx_(0),
@@ -133,14 +147,6 @@ int ObPxReceiveOp::inner_open()
       if (NULL == stored_rows_) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc stored rows pointer failed", K(ret));
-      }
-      if (OB_SUCC(ret) && get_spec().use_rich_format_) {
-        vector_rows_ = static_cast<const ObCompactRow **>(
-          ctx_.get_allocator().alloc(spec_.max_batch_size_ * sizeof(*vector_rows_)));
-        if (NULL == vector_rows_) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("alloc vector rows pointer failed", K(ret));
-        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -173,14 +179,19 @@ int ObPxReceiveOp::init_dfc(ObDtlDfoKey &key)
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  ObDtlLocalFirstBufferCache *buf_cache = nullptr;
   if (OB_FAIL(dfc_.init(ctx_.get_my_session()->get_effective_tenant_id(),
                         task_ch_set_.count()))) {
     LOG_WARN("Fail to init dfc", K(ret));
+  } else if (OB_FAIL(DTL.get_dfc_server().get_buffer_cache(
+              ctx_.get_my_session()->get_effective_tenant_id(), key, buf_cache))) {
+    LOG_WARN("failed to get buffer cache", K(key));
   } else {
     dfc_.set_timeout_ts(plan_ctx->get_timeout_timestamp());
     dfc_.set_receive();
     dfc_.set_dfo_key(key);
     dfc_.set_op_metric(&metric_);
+    dfc_.set_first_buffer_cache(buf_cache);
     dfc_.set_dtl_channel_watcher(&msg_loop_);
     if (0 == ch_info_.start_channel_id_) {
       dfc_.set_total_ch_info(nullptr);
@@ -219,12 +230,16 @@ int ObPxReceiveOp::init_channel(
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   ObDtlDfoKey key;
   LOG_TRACE("Try to get channel infomation from SQC");
+  uint64_t min_cluster_version = 0;
   CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(recv_input.get_data_ch(task_ch_set, phy_plan_ctx->get_timeout_timestamp(), ch_info_))) {
     LOG_WARN("Fail to get data dtl channel", K(ret));
   } else if (OB_FAIL(recv_input.get_dfo_key(key))) {
     LOG_WARN("Failed to get dfo key", K(ret));
+  } else if (OB_FAIL(recv_input.get_first_buffer_cache(proxy_first_buffer_cache_))) {
+    LOG_WARN("Failed to get first buffer cache", K(ret));
   } else if (OB_FAIL(init_dfc(key))) {
     LOG_WARN("Failed to init dfc", K(ret));
   } else if (OB_FAIL(link_ch_sets(task_ch_set, task_channels, &dfc_))) {
@@ -235,6 +250,7 @@ int ObPxReceiveOp::init_channel(
     metric_.init(enable_audit);
     common::ObIArray<dtl::ObDtlChannel*> &channels = task_channels;
     loop.set_tenant_id(ctx_.get_my_session()->get_effective_tenant_id());
+    loop.set_first_buffer_cache(proxy_first_buffer_cache_);
     loop.register_processor(px_row_msg_proc)
         .register_interrupt_processor(interrupt_proc);
     loop.set_process_query_time(ctx_.get_my_session()->get_process_query_time());
@@ -252,7 +268,7 @@ int ObPxReceiveOp::init_channel(
       } else {
         ch->set_audit(enable_audit);
         ch->set_interm_result(use_interm_result);
-        ch->set_enable_channel_sync(true);
+        ch->set_enable_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0);
         ch->set_ignore_error(recv_input.is_ignore_vtable_error());
         ch->set_batch_id(batch_id);
         ch->set_operator_owner();
@@ -280,7 +296,9 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
   int64_t hash_val = 0;
   int64_t offset = 0;
   const int64_t DTL_CHANNEL_SIZE = sizeof(ObDtlRpcChannel) > sizeof(ObDtlLocalChannel) ? sizeof(ObDtlRpcChannel) : sizeof(ObDtlLocalChannel);
+   uint64_t min_cluster_version = 0;
   CK (OB_NOT_NULL(ctx_.get_physical_plan_ctx()) && OB_NOT_NULL(ctx_.get_physical_plan_ctx()->get_phy_plan()));
+  OX (min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version());
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(channels.reserve(ch_set.count()))) {
     LOG_WARN("fail reserve channels", K(ret), K(ch_set.count()));
@@ -308,9 +326,9 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
         if (OB_FAIL(ch_set.get_channel_info(idx, ci))) {
           LOG_WARN("fail get channel info", K(idx), K(ret));
         } else if (nullptr != dfc && ci.type_ == DTL_CT_LOCAL) {
-          ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, dtl::ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
+          ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val);
         } else {
-          ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, dtl::ObDtlChannel::DtlChannelType::RPC_CHANNEL);
+          ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val);
         }
         if (OB_FAIL(ret)) {
         } else if (nullptr == ch) {
@@ -334,7 +352,8 @@ int ObPxReceiveOp::link_ch_sets(ObPxTaskChSet &ch_set,
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(send_channel_ready_msg(reinterpret_cast<ObPxReceiveOpInput*>(input_)->get_child_dfo_id()))) {
+  if (OB_SUCC(ret) && ObInitChannelPieceMsgCtx::enable_dh_channel_sync(min_cluster_version >= CLUSTER_VERSION_4_1_0_0)
+      && OB_FAIL(send_channel_ready_msg(reinterpret_cast<ObPxReceiveOpInput*>(input_)->get_child_dfo_id()))) {
     LOG_WARN("failed to send channel ready msg", K(ret));
   }
   LOG_TRACE("Data ch set all linked and ready to add to msg loop",
@@ -464,7 +483,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
             ObDatum *datum = NULL;
             if (OB_FAIL(e->eval(eval_ctx_, datum))) {
               LOG_WARN("expr eval failed", K(ret));
-            } else if (!datum->is_null()) {
+            } else {
               if (datum->len_ <= e->res_buf_len_) {
                 char *ptr = eval_ctx_.frames_[e->frame_idx_] + e->res_buf_off_
                     + idx * e->res_buf_len_;
@@ -480,11 +499,9 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
                   datum->ptr_ = ptr;
                 }
               }
-            } else {
-              // do nothing
             }
           }
-        } // for end
+        }
       }
     }
   }
@@ -788,9 +805,7 @@ int ObPxFifoReceiveOp::fetch_rows(const int64_t row_cnt)
     int64_t timeout_ts = phy_plan_ctx->get_timeout_timestamp();
     int64_t retry_cnt = 0;
     do {
-      ret = get_spec().use_rich_format_
-              ? get_rows_from_channels_vec(row_cnt, timeout_ts - get_timestamp())
-              : get_rows_from_channels(row_cnt, timeout_ts - get_timestamp());
+      ret = get_rows_from_channels(row_cnt, timeout_ts - get_timestamp());
       if (OB_SUCCESS == ret) {
         metric_.mark_first_out();
         metric_.set_last_out_ts(::oceanbase::common::ObTimeUtility::current_time());
@@ -907,49 +922,5 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
   return ret;
 }
 
-int ObPxFifoReceiveOp::get_rows_from_channels_vec(const int64_t row_cnt, int64_t timeout_us)
-{
-  int ret = OB_SUCCESS;
-  bool got_row = false;
-  UNUSED(timeout_us);
-  while (!got_row && OB_SUCC(ret)) {
-    // Check uniterated rows first, then check all channels are EOF.
-    // Because channel may mark to EOF after transfer buffer to reader, rows still in reader.
-    int64_t left = row_reader_.left_rows();
-    if (left >= row_cnt || (left > 0 && msg_loop_.all_eof(task_channels_.count()))) {
-      clear_evaluated_flag();
-      clear_dynamic_const_parent_flag();
-      int64_t read_rows = 0;
-      if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
-                                              MY_SPEC.dynamic_const_exprs_,
-                                              eval_ctx_,
-                                              row_cnt,
-                                              read_rows,
-                                              vector_rows_))) {
-        LOG_WARN("get next batch failed", K(ret));
-      } else {
-        got_row = true;
-        brs_.size_ = read_rows;
-      }
-      break;
-    }
-    if (msg_loop_.all_eof(task_channels_.count())) {
-      ret = OB_ITER_END;
-      LOG_TRACE("no more date in all channels", K(ret));
-      break;
-    }
-    if (OB_FAIL(msg_loop_.process_any())) {
-      if (OB_EAGAIN != ret) {
-        LOG_WARN("fail pop sqc execution result from channel", K(ret));
-      } else {
-        ret = OB_EAGAIN;
-      }
-    }
-  }
-  if (OB_SUCC(ret) && !got_row) {
-    ret = OB_EAGAIN;
-  }
-  return ret;
-}
 } // end namespace sql
 } // end namespace oceanbase

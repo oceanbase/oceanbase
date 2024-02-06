@@ -57,11 +57,8 @@ OB_SERIALIZE_MEMBER(ObStartTransParam, access_mode_, type_, isolation_, consiste
                     cluster_version_, is_inner_trans_, read_snapshot_type_);
 OB_SERIALIZE_MEMBER(ObElrTransInfo, trans_id_, commit_version_, result_);
 OB_SERIALIZE_MEMBER(ObLSLogInfo, id_, offset_);
-OB_SERIALIZE_MEMBER(ObStateInfo, ls_id_, state_, version_, snapshot_version_, check_info_);
+OB_SERIALIZE_MEMBER(ObStateInfo, ls_id_, state_, version_, snapshot_version_);
 OB_SERIALIZE_MEMBER(ObTransDesc, a_);
-
-OB_SERIALIZE_MEMBER(ObTxExecPart, ls_id_, exec_epoch_, transfer_epoch_);
-OB_SERIALIZE_MEMBER(ObStandbyCheckInfo, check_info_ori_ls_id_, check_part_);
 
 // class ObStartTransParam
 void ObStartTransParam::reset()
@@ -665,6 +662,21 @@ void ObTransNeedWaitWrap::set_trans_need_wait_wrap(const MonotonicTs receive_gts
 
 OB_SERIALIZE_MEMBER(ObUndoAction, undo_from_, undo_to_);
 
+int ObUndoAction::merge(const ObUndoAction &other)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_contain(other)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(*this), K(other));
+  } else {
+    undo_from_ = MAX(undo_from_, other.undo_from_);
+    undo_to_ = MIN(undo_to_, other.undo_to_);
+  }
+
+  return ret;
+}
+
 int ObEndParticipantsRes::add_blocked_trans_id(const ObTransID &trans_id)
 {
   return blocked_trans_ids_.push_back(trans_id);
@@ -684,7 +696,7 @@ DEF_TO_STRING(ObLockForReadArg)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K(mvcc_acc_ctx_), K(data_trans_id_), K(data_sql_sequence_), K(read_latest_), K(read_uncommitted_), K(scn_));
+  J_KV(K(mvcc_acc_ctx_), K(data_trans_id_), K(data_sql_sequence_), K(read_latest_), K(scn_));
   J_OBJ_END();
   return pos;
 }
@@ -692,56 +704,12 @@ DEF_TO_STRING(ObLockForReadArg)
 DEFINE_TO_STRING_AND_YSON(ObTransKey, OB_ID(hash), hash_val_,
                                       OB_ID(trans_id), trans_id_);
 
-bool is_transfer_ctx(PartCtxSource ctx_source)
-{
-  return PartCtxSource::TRANSFER == ctx_source || PartCtxSource::TRANSFER_RECOVER == ctx_source;
-}
-
-const char *to_str(PartCtxSource src)
-{
-  const char *str = "INVALID";
-  switch (src) {
-  case PartCtxSource::UNKOWN: {
-    str = "UNKOWN";
-    break;
-  }
-  case PartCtxSource::MVCC_WRITE: {
-    str = "MVCC_WRITE";
-    break;
-  }
-  case PartCtxSource::REGISTER_MDS: {
-    str = "REGISTER_MDS";
-    break;
-  }
-  case PartCtxSource::REPLAY: {
-    str = "REPLAY";
-    break;
-  }
-  case PartCtxSource::RECOVER: {
-    str = "RECOVER";
-    break;
-  }
-  case PartCtxSource::TRANSFER: {
-    str = "TRANSFER";
-    break;
-  }
-  case PartCtxSource::TRANSFER_RECOVER: {
-    str = "TRANSFER_RECOVER";
-    break;
-  }
-  }
-  return str;
-}
-
 void ObTxExecInfo::reset()
 {
   state_ = ObTxState::INIT;
   upstream_.reset();
   participants_.reset();
   incremental_participants_.reset();
-  intermediate_participants_.reset();
-  commit_parts_.reset();
-  transfer_parts_.reset();
   prev_record_lsn_.reset();
   redo_lsns_.reset();
   scheduler_.reset();
@@ -752,10 +720,8 @@ void ObTxExecInfo::reset()
   max_applying_log_ts_.reset();
   max_applying_part_log_no_ = INT64_MAX;
   max_submitted_seq_no_.reset();
-  checksum_.reset();
-  checksum_.push_back(0);
-  checksum_scn_.reset();
-  checksum_scn_.push_back(share::SCN::min_scn());
+  checksum_ = 0;
+  checksum_scn_.set_min();
   max_durable_lsn_.reset();
   data_complete_ = false;
   is_dup_tx_ = false;
@@ -765,14 +731,9 @@ void ObTxExecInfo::reset()
   xid_.reset();
   need_checksum_ = true;
   is_sub2pc_ = false;
-  is_transfer_blocking_ = false;
-  is_empty_ctx_created_by_transfer_ = false;
-  exec_epoch_ = 0;
-  serial_final_scn_.reset();
-  serial_final_seq_no_.reset();
 }
 
-void ObTxExecInfo::destroy(ObTxMDSCache &mds_cache)
+void ObTxExecInfo::destroy()
 {
   if (!mds_buffer_ctx_array_.empty()) {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds_buffer_ctx_array_ is valid when exec_info destroy",
@@ -784,8 +745,7 @@ void ObTxExecInfo::destroy(ObTxMDSCache &mds_cache)
   for (int64_t i = 0; i < multi_data_source_.count(); ++i) {
     ObTxBufferNode &node = multi_data_source_.at(i);
     if (nullptr != node.data_.ptr()) {
-      mds_cache.free_mds_node(node.data_, node.get_register_no());
-      // share::mtl_free(node.data_.ptr());
+      MultiTxDataFactory::free(node.data_.ptr());
       node.buffer_ctx_node_.destroy_ctx();
     }
   }
@@ -844,34 +804,6 @@ void ObTxExecInfo::clear_buffer_ctx_in_multi_data_source()
   }
 }
 
-int ObTxExecInfo::assign_commit_parts(const share::ObLSArray &participants,
-                                      const ObTxCommitParts &commit_parts)
-{
-  int ret = OB_SUCCESS;
-
-  if (participants.count() != commit_parts.count()) {
-    // recover old version log, we need mock the commit parts
-    for (int64_t i = 0; OB_SUCC(ret) && i < participants.count(); i++) {
-      if (OB_FAIL(commit_parts_.push_back(ObTxExecPart(participants[i],
-                                                       -1, /*exec_epoch*/
-                                                       -1  /*transfer_epoch*/)))) {
-        TRANS_LOG(WARN, "set commit parts error", K(ret), K(*this));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      // reset on failure to ensure atomicity
-      commit_parts_.reset();
-    }
-  } else {
-    if (OB_FAIL(commit_parts_.assign(commit_parts))) {
-      TRANS_LOG(WARN, "set commit parts error", K(ret), K(*this));
-    }
-  }
-
-  return ret;
-}
-
 int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
 {
   int ret = OB_SUCCESS;
@@ -883,8 +815,6 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     TRANS_LOG(WARN, "participants assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(incremental_participants_.assign(exec_info.incremental_participants_))) {
     TRANS_LOG(WARN, "incremental participants assign error", KR(ret), K(exec_info));
-  } else if (OB_FAIL(intermediate_participants_.assign(exec_info.intermediate_participants_))) {
-    TRANS_LOG(WARN, "intermediate participants assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(redo_lsns_.assign(exec_info.redo_lsns_))) {
     TRANS_LOG(WARN, "redo_lsns assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(multi_data_source_.assign(exec_info.multi_data_source_))) {
@@ -893,11 +823,6 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     TRANS_LOG(WARN, "mds_buffer_ctx_array assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(prepare_log_info_arr_.assign(exec_info.prepare_log_info_arr_))) {
     TRANS_LOG(WARN, "prepare log info array assign error", KR(ret), K(exec_info));
-  } else if (OB_FAIL(assign_commit_parts(exec_info.participants_,
-                                         exec_info.commit_parts_))) {
-    TRANS_LOG(WARN, "commit parts assign error", KR(ret), K(exec_info));
-  } else if (OB_FAIL(transfer_parts_.assign(exec_info.transfer_parts_))) {
-    TRANS_LOG(WARN, "transfer_epoch assign error", KR(ret), K(exec_info));
   } else {
     // Prepare version should be initialized before state_
     // for ObTransPartCtx::get_prepare_version_if_preapred();
@@ -912,22 +837,14 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     max_applying_log_ts_ = exec_info.max_applying_log_ts_;
     max_applying_part_log_no_ = exec_info.max_applying_part_log_no_;
     max_submitted_seq_no_ = exec_info.max_submitted_seq_no_;
-    if (OB_FAIL(checksum_.assign(exec_info.checksum_))) {
-      TRANS_LOG(WARN, "assign failed", K(ret));
-    } else if (OB_FAIL(checksum_scn_.assign(exec_info.checksum_scn_))) {
-      TRANS_LOG(WARN, "assign failed", K(ret));
-    }
+    checksum_ = exec_info.checksum_;
+    checksum_scn_ = exec_info.checksum_scn_;
     max_durable_lsn_ = exec_info.max_durable_lsn_;
     data_complete_ = exec_info.data_complete_;
     is_dup_tx_ = exec_info.is_dup_tx_;
     xid_ = exec_info.xid_;
     need_checksum_ = exec_info.need_checksum_;
     is_sub2pc_ = exec_info.is_sub2pc_;
-    is_transfer_blocking_ = exec_info.is_transfer_blocking_;
-    is_empty_ctx_created_by_transfer_ = exec_info.is_empty_ctx_created_by_transfer_;
-    exec_epoch_ = exec_info.exec_epoch_;
-    serial_final_scn_ = exec_info.serial_final_scn_;
-    serial_final_seq_no_ = exec_info.serial_final_seq_no_;
   }
   return ret;
 }
@@ -948,8 +865,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applied_log_ts_,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
-                    checksum_[0],
-                    checksum_scn_[0],
+                    checksum_,
+                    checksum_scn_,
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,
@@ -958,17 +875,7 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     xid_,
                     need_checksum_,
                     is_sub2pc_,
-                    mds_buffer_ctx_array_,
-                    intermediate_participants_,
-                    is_transfer_blocking_,
-                    commit_parts_,
-                    transfer_parts_,
-                    is_empty_ctx_created_by_transfer_,
-                    exec_epoch_,
-                    checksum_,
-                    checksum_scn_,
-                    serial_final_scn_,
-                    serial_final_seq_no_);
+                    mds_buffer_ctx_array_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 
@@ -1005,61 +912,6 @@ const char *trans_type_to_cstr(const TransType &trans_type)
       break;
   }
   return str;
-}
-
-int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exec_epoch, const int64_t transfer_epoch)
-{
-  int ret = OB_SUCCESS;
-  bool is_exist = false;
-  ObSpinLockGuard guard(lock_);
-  if (OB_ISNULL(rollback_parts_)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "rollback_parts is null", K(ret), K(add_ls_id));
-  } else {
-    for (int64_t i = 0; i < rollback_parts_->count(); i++) {
-      if (rollback_parts_->at(i).ls_id_ == add_ls_id) {
-        is_exist = true;
-        break;
-      }
-    }
-    if (!is_exist && OB_FAIL(rollback_parts_->push_back(ObTxExecPart(add_ls_id, exec_epoch, transfer_epoch)))) {
-      TRANS_LOG(WARN, "push part to array failed", KR(ret), K(add_ls_id));
-    }
-  }
-  return ret;
-}
-
-int RollbackMaskSet::find_part(const share::ObLSID ls_id,
-                               const int64_t orig_epoch,
-                               ObTxExecPart &part)
-{
-  int ret = OB_SUCCESS;
-  bool is_exist = false;
-  ObSpinLockGuard guard(lock_);
-  if (OB_ISNULL(rollback_parts_)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "rollback_parts is null", K(ret), K(ls_id));
-  } else {
-    for (int64_t idx = 0; idx < rollback_parts_->count(); idx++) {
-      if (rollback_parts_->at(idx).ls_id_ == ls_id) {
-        if (rollback_parts_->at(idx).exec_epoch_ != orig_epoch) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "check rollback part failed", K(ret), K(rollback_parts_), K(orig_epoch));
-        } else {
-          part = rollback_parts_->at(idx);
-          is_exist = true;
-        }
-        break;
-      }
-    }
-  }
-  if (OB_SUCC(ret) && !is_exist) {
-    ret = OB_ENTRY_NOT_EXIST;
-  }
-  if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "find part", K(ret), K(ls_id), K(orig_epoch), K(rollback_parts_));
-  }
-  return ret;
 }
 
 } // transaction

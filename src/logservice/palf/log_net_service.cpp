@@ -116,8 +116,7 @@ int LogNetService::submit_committed_info_req(
 int LogNetService::submit_push_log_resp(
     const ObAddr &server,
     const int64_t &msg_proposal_id,
-    const LSN &lsn,
-    const bool is_batch)
+    const LSN &lsn)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -130,11 +129,9 @@ int LogNetService::submit_push_log_resp(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id_),
         K(server), K(msg_proposal_id), K(lsn));
-  } else if (is_batch) {
-    LogBatchPushResp push_log_resp(msg_proposal_id, lsn);
-    ret = post_request_to_server_(server, push_log_resp);
   } else {
-    LogPushResp push_log_resp(msg_proposal_id, lsn);
+    LogPushResp push_log_resp(msg_proposal_id,
+                                lsn);
     ret = post_request_to_server_(server, push_log_resp);
   }
   return ret;

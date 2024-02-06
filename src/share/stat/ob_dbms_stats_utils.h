@@ -26,6 +26,10 @@ namespace common {
 class ObDbmsStatsUtils
 {
 public:
+  static int get_part_info(const ObTableStatParam &param,
+                           const ObExtraParam &extra,
+                           PartInfo &part_info);
+
   static int init_col_stats(ObIAllocator &allocator,
                             int64_t col_cnt,
                             ObIArray<ObOptColumnStat *> &col_stats);
@@ -39,13 +43,7 @@ public:
                                ObIArray<ObOptTableStat*> &table_stats,
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
-                               const bool is_online_stat = false);
-
-  static int split_batch_write(sql::ObExecContext &ctx,
-                               sqlclient::ObISQLConnection *conn,
-                               ObIArray<ObOptTableStat*> &table_stats,
-                               ObIArray<ObOptColumnStat*> &column_stats,
-                               const bool is_index_stat = false,
+                               const bool is_history_stat = false,
                                const bool is_online_stat = false);
 
   static int split_batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
@@ -54,15 +52,12 @@ public:
                                ObIArray<ObOptTableStat*> &table_stats,
                                ObIArray<ObOptColumnStat*> &column_stats,
                                const bool is_index_stat = false,
+                               const bool is_history_stat = false,
                                const bool is_online_stat = false);
 
-  static int split_batch_write(sqlclient::ObISQLConnection *conn,
-                               share::schema::ObSchemaGetterGuard *schema_guard,
-                               sql::ObSQLSessionInfo *session_info,
-                               ObIArray<ObOptTableStat*> &table_stats,
-                               ObIArray<ObOptColumnStat*> &column_stats,
-                               const bool is_index_stat = false,
-                               const bool is_online_stat = false);
+  static int batch_write_history_stats(sql::ObExecContext &ctx,
+                                       ObIArray<ObOptTableStatHandle> &history_tab_handles,
+                                       ObIArray<ObOptColumnStatHandle> &history_col_handles);
 
   static int cast_number_to_double(const number::ObNumber &src_val, double &dst_val);
 
@@ -103,16 +98,18 @@ public:
   static int merge_tab_stats(
     const ObTableStatParam &param,
     const TabStatIndMap &table_stats,
-    common::ObIArray<ObOptTableStat*> &old_tab_stats,
-    common::ObIArray<ObOptTableStat*> &dst_tab_stats);
+    common::ObIArray<ObOptTableStatHandle> &history_tab_handles,
+    common::ObIArray<ObOptTableStat*> &dst_table_stat);
 
   static int merge_col_stats(
     const ObTableStatParam &param,
     const ColStatIndMap &column_stats,
-    common::ObIArray<ObOptColumnStat*> &old_col_stats,
-    common::ObIArray<ObOptColumnStat*> &dst_col_stats);
+    common::ObIArray<ObOptColumnStatHandle> &history_col_handles,
+    common::ObIArray<ObOptColumnStat*> &dst_column_stat);
 
   static bool is_part_id_valid(const ObTableStatParam &param, const ObObjectID part_id);
+
+  static int get_part_ids_from_param(const ObTableStatParam &param, common::ObIArray<int64_t> &part_ids);
 
   static int get_part_infos(const ObTableSchema &table_schema,
                             ObIArray<PartInfo> &part_infos,
@@ -131,12 +128,9 @@ public:
                                            ObIAllocator &alloc,
                                            ObObj *&new_obj);
 
-  static int truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator);
+  static int shadow_truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator);
 
   static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
-
-  static int remove_stat_gather_param_partition_info(int64_t reserved_partition_id,
-                                                     ObOptStatGatherParam &param);
 
   static int64_t check_text_can_reuse(const ObObj &obj, bool &can_reuse);
 
@@ -144,48 +138,24 @@ public:
                                    ObIArray<ObOptTableStatHandle> &cur_tab_handles,
                                    ObIArray<ObOptColumnStatHandle> &cur_col_handles);
 
-  static int get_current_opt_stats(ObIAllocator &allocator,
-                                   sqlclient::ObISQLConnection *conn,
-                                   const ObTableStatParam &param,
-                                   ObIArray<ObOptTableStat *> &table_stats,
-                                   ObIArray<ObOptColumnStat *> &column_stats);
-
   static int get_part_ids_and_column_ids(const ObTableStatParam &param,
                                          ObIArray<int64_t> &part_ids,
-                                         ObIArray<uint64_t> &column_ids,
-                                         bool need_stat_column = false);
+                                         ObIArray<uint64_t> &column_ids);
 
   static int erase_stat_cache(const uint64_t tenant_id,
                               const uint64_t table_id,
                               const ObIArray<int64_t> &part_ids,
                               const ObIArray<uint64_t> &column_ids);
 
-  static bool find_part(const ObIArray<PartInfo> &part_infos,
-                        const ObString &part_name,
-                        bool is_sensitive_compare,
-                        PartInfo &part);
-
-  static int prepare_gather_stat_param(const ObTableStatParam &param,
-                                       StatLevel stat_level,
-                                       const PartitionIdBlockMap *partition_id_block_map,
-                                       bool is_split_gather,
-                                       int64_t gather_vectorize,
-                                       ObOptStatGatherParam &gather_param);
-
-  static int merge_split_gather_tab_stats(ObIArray<ObOptTableStat *> &all_tstats,
-                                          ObIArray<ObOptTableStat *> &cur_all_tstats);
-
-  static int check_all_cols_range_skew(const ObIArray<ObColumnStatParam> &column_params,
-                                       ObIArray<ObOptStat> &opt_stats);
-
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
-                         sqlclient::ObISQLConnection *conn,
+                         ObMySQLTransaction &trans,
                          ObIArray<ObOptTableStat *> &table_stats,
                          ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          const bool is_index_stat,
+                         const bool is_history_stat,
                          const bool is_online_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
 

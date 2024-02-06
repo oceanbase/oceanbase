@@ -26,10 +26,6 @@
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/optimizer/ob_log_temp_table_insert.h"
-#include "share/stat/ob_opt_system_stat.h"
-#include "sql/optimizer/ob_opt_cost_model_parameter.h"
-#include "src/share/stat/ob_opt_stat_manager.h"
-
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -281,7 +277,7 @@ int ObOptimizer::get_session_parallel_info(int64_t &force_parallel_dop,
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));
-  } else if (!session_info->is_user_session() && !session_info->get_ddl_info().is_refreshing_mview()) {
+  } else if (!session_info->is_user_session()) {
     // sys var是依赖于schema的方式实现的，获得最新的sys var需要通过inner SQL的方式，会产生循环依赖
     // 因此inner SQL情况下不考虑系统变量`SYS_VAR__ENABLE_PARALLEL_QUERY`的值
   } else if (OB_FAIL(session_info->get_parallel_degree_policy_enable_auto_dop(enable_auto_dop))) {
@@ -332,8 +328,6 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   bool session_enable_pdml = false;
   bool enable_auto_dop = false;
   uint64_t session_pdml_dop = ObGlobalHint::UNSET_PARALLEL;
-  bool disable_pdml = false;
-  bool is_pk_auto_inc = false;
   if (OB_ISNULL(ctx_.get_exec_ctx()) || OB_ISNULL(query_ctx = ctx_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(ctx_.get_exec_ctx()), K(query_ctx));
@@ -350,15 +344,8 @@ int ObOptimizer::check_pdml_enabled(const ObDMLStmt &stmt,
   } else if (ctx_.has_var_assign() && !ctx_.is_var_assign_only_in_root_stmt()) {
     can_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() &&
-      OB_FAIL(static_cast< const ObInsertStmt &>(stmt).check_pdml_disabled(ctx_.is_online_ddl(),
-                                                                           disable_pdml,
-                                                                           is_pk_auto_inc))) {
-    LOG_WARN("fail to check pdml disabled for insert stmt", K(ret));
-  } else if (disable_pdml) {
+             !static_cast< const ObInsertStmt &>(stmt).value_from_select()) {
     can_use_pdml = false;
-    if (is_pk_auto_inc) {
-      ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_PK_AUTO_INC);
-    }
   } else if ((stmt.is_update_stmt() || stmt.is_delete_stmt())
              && static_cast<const ObDelUpdStmt &>(stmt).dml_source_from_join()
              && static_cast<const ObDelUpdStmt &>(stmt).is_dml_table_from_join()) {
@@ -424,18 +411,20 @@ int ObOptimizer::check_pdml_supported_feature(const ObDelUpdStmt &pdml_stmt,
              static_cast< const ObInsertStmt &>(pdml_stmt).is_insert_up()) {
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_INSERT_UP);
-  } else if (pdml_stmt.is_pdml_disabled()) {
-    is_use_pdml = false;
-    ctx_.add_plan_note(PDML_DISABLED_BY_TRANSFORMATIONS);
   } else if (ctx_.has_dblink()) {
     is_use_pdml = false;
-  } else if (ctx_.contain_user_nested_sql()) {
+  } else if (!ctx_.has_trigger() && ctx_.contain_user_nested_sql()) {
     //user nested sql can't use PDML plan, force to use DAS plan
     //if online ddl has pl udf, only this way, allow it use PDML plan
     //such as:
     //create table t1(a int primary key, b int as(udf()));
     //create index i1 on t1(b);
     //create index with PL UDF allow to use PDML plan during build index table
+    is_use_pdml = false;
+    ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
+  } else if (!ctx_.is_online_ddl() && ctx_.has_trigger() && !ctx_.is_allow_parallel_trigger()) {
+    // if sql linked trigger, and trigger do not access package var, sequence, sql stmt etc..,
+    // allow it use PDML plan
     is_use_pdml = false;
     ctx_.add_plan_note(PDML_DISABLED_BY_NESTED_SQL);
   } else if (stmt::T_DELETE == pdml_stmt.get_stmt_type()) {
@@ -553,7 +542,6 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool has_subquery_in_function_table = false;
   bool has_dblink = false;
   bool force_serial_set_order = false;
-  bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
@@ -569,8 +557,6 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to get force_serial_set_order", K(ret));
   } else if (OB_FAIL(check_force_default_stat())) {
     LOG_WARN("failed to check force default stat", K(ret));
-  } else if (OB_FAIL(init_system_stat())) {
-    LOG_WARN("failed to init system stat", K(ret));
   } else if (OB_FAIL(calc_link_stmt_count(stmt, link_stmt_count))) {
     LOG_WARN("calc link stmt count failed", K(ret));
   } else if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(&stmt, has_dblink, true))) {
@@ -579,10 +565,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to check rowsets enabled", K(ret));
   } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
     LOG_WARN("fail to check cursor expression info", K(ret));
-  } else if (OB_FAIL(session.is_storage_estimation_enabled(storage_estimation_enabled))) {
-    LOG_WARN("fail to get storage_estimation_enabled", K(ret));
   } else {
-    ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
     ctx_.set_has_multiple_link_stmt(link_stmt_count > 1);
     ctx_.set_has_var_assign(has_var_assign);
@@ -747,6 +730,7 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
       const ObTableSchema *table_schema = nullptr;
       ObSQLSessionInfo *session = ctx_.get_session_info();
       bool trigger_exists = false;
+      bool is_forbid_parallel = false;
       if (OB_ISNULL(table_info) || OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql schema guard is nullptr", K(ret), K(table_info), K(schema_guard), K(session));
@@ -763,6 +747,13 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
           LOG_WARN("check has trigger on table failed", K(ret));
         } else if (trigger_exists) {
           ctx_.set_has_trigger(true);
+        }
+      }
+      if (OB_SUCC(ret) && trigger_exists) {
+        if (OB_FAIL(table_schema->is_allow_parallel_of_trigger(*schema_guard, is_forbid_parallel))) {
+          LOG_WARN("check allow parallel failed", K(ret));
+        } else if (!is_forbid_parallel) {
+          ctx_.set_allow_parallel_trigger(true);
         }
       }
     }
@@ -1035,49 +1026,6 @@ int ObOptimizer::check_force_default_stat()
     LOG_WARN("fail to check use default opt stat", K(ret));
   } else if (is_exists_opt && use_default_opt_stat) {
     ctx_.set_use_default_stat();
-  }
-  return ret;
-}
-
-int ObOptimizer::init_system_stat()
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-  OptSystemStat &meta = ctx_.get_system_stat();
-  ObOptStatManager *opt_stat_manager = ctx_.get_opt_stat_manager();
-  ObSQLSessionInfo* session = ctx_.get_session_info();
-  if (OB_ISNULL(opt_stat_manager) || OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null param", K(ret));
-  } else if (OB_FAIL(opt_stat_manager->check_system_stat_validity(ctx_.get_exec_ctx(),
-                                                                  session->get_effective_tenant_id(),
-                                                                  is_valid))) {
-    LOG_WARN("failed to check system stat is valid", K(ret));
-  } else if (!ctx_.use_default_stat() && is_valid) {
-    ObOptSystemStat stat;
-    if (OB_FAIL(opt_stat_manager->get_system_stat(session->get_effective_tenant_id(), stat))) {
-      LOG_WARN("failed to get system stat", K(ret));
-    } else {
-      meta.set_cpu_speed(stat.get_cpu_speed());
-      meta.set_disk_seq_read_speed(stat.get_disk_seq_read_speed());
-      meta.set_disk_rnd_read_speed(stat.get_disk_rnd_read_speed());
-      meta.set_network_speed(stat.get_network_speed());
-    }
-  }
-  if (OB_SUCC(ret)) {
-    //refine default stat
-    if (meta.get_cpu_speed() <= 0) {
-      meta.set_cpu_speed(DEFAULT_CPU_SPEED);
-    }
-    if (meta.get_disk_seq_read_speed() <= 0) {
-      meta.set_disk_seq_read_speed(DEFAULT_DISK_SEQ_READ_SPEED);
-    }
-    if (meta.get_disk_rnd_read_speed() <= 0) {
-      meta.set_disk_rnd_read_speed(DEFAULT_DISK_RND_READ_SPEED);
-    }
-    if (meta.get_network_speed() <= 0) {
-      meta.set_network_speed(DEFAULT_NETWORK_SPEED);
-    }
   }
   return ret;
 }

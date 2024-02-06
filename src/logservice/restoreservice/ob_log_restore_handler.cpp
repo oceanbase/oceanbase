@@ -353,7 +353,7 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
   while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
     do {
       ret = OB_SUCCESS;
-      RLockGuard guard(lock_);
+      WLockGuard guard(lock_);
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
       } else if (is_in_stop_state_) {
@@ -383,6 +383,13 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
           if (OB_SUCC(ret)) {
             uint64_t tenant_id = palf_env_->get_palf_env_impl()->get_tenant_id();
             EVENT_TENANT_ADD(ObStatEventIds::RESTORE_WRITE_LOG_SIZE, buf_size, tenant_id);
+            context_.max_fetch_lsn_ = lsn + buf_size;
+            context_.max_fetch_scn_ = scn;
+            context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
+            if (parent_->set_to_end(scn)) {
+              // To stop and clear all restore log tasks and restore context, reset context and advance issue version
+              CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
+            }
           }
         }
       }
@@ -398,38 +405,6 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
     } else {
       // other ret code, end loop
       break;
-    }
-  }
-  return ret;
-}
-
-int ObLogRestoreHandler::update_max_fetch_info(const int64_t proposal_id,
-                                                  const palf::LSN &lsn,
-                                                  const SCN &scn)
-{
-  int ret = OB_SUCCESS;
-  WLockGuard guard(lock_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (is_in_stop_state_) {
-    ret = OB_IN_STOP_STATE;
-  } else if (LEADER != role_) {
-    ret = OB_NOT_MASTER;
-  } else if (proposal_id != proposal_id_) {
-    ret = OB_NOT_MASTER;
-    CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
-  } else if (OB_UNLIKELY(!lsn.is_valid() || !scn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid lsn or scn", K(proposal_id), K(lsn), K(scn), KPC(this));
-  } else if (context_.max_fetch_lsn_.is_valid() && context_.max_fetch_lsn_ >= lsn) {
-    // do nothing
-  } else {
-    context_.max_fetch_lsn_ = lsn;
-    context_.max_fetch_scn_ = scn;
-    context_.last_fetch_ts_ = ObTimeUtility::fast_current_time();
-    if (parent_->set_to_end(scn)) {
-      // To stop and clear all restore log tasks and restore context, reset context and advance issue version
-      CLOG_LOG(INFO, "restore log to_end succ", KPC(this), KPC(parent_));
     }
   }
   return ret;
@@ -827,7 +802,7 @@ int ObLogRestoreHandler::refresh_error_context()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (! is_strong_leader(role_)) {
-    CLOG_LOG(TRACE, "not leader, no need refresh error context", K(id_));
+    CLOG_LOG(INFO, "not leader, no need refresh error context", K(id_));
   } else if (OB_FAIL(palf_handle_.get_end_lsn(end_lsn))) {
     CLOG_LOG(WARN, "get end_lsn failed", K(id_));
   } else if (end_lsn > context_.error_context_.err_lsn_ && OB_SUCCESS != context_.error_context_.ret_code_) {
@@ -966,9 +941,8 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
 {
   int ret = OB_SUCCESS;
   share::SCN replayed_scn;
-  palf::LSN replayed_lsn;
   palf::PalfHandleGuard guard;
-  palf::PalfBufferIterator iter;
+  palf::PalfGroupBufferIterator iter;
   done = false;
   if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(
           share::ObLSID(id_), replayed_scn))) {
@@ -977,37 +951,31 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
     CLOG_LOG(WARN, "open_palf failed", K(id_));
     // rewrite ret_code
     ret = OB_EAGAIN;
-  } else if (OB_FAIL(guard.locate_by_scn_coarsely(replayed_scn, replayed_lsn))) {
-    CLOG_LOG(WARN, "locate failed", K(id_), K(replayed_scn));
-  } else if (OB_FAIL(guard.seek(replayed_lsn, iter))) {
-    CLOG_LOG(WARN, "seek failed", K(id_), K(replayed_lsn));
+  } else if (OB_FAIL(guard.seek(replayed_scn, iter))) {
+    CLOG_LOG(WARN, "seek failed", K(id_));
   } else {
-    palf::LogEntry entry;
+    palf::LogGroupEntry entry;
     palf::LSN lsn;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter.next())) {
-        CLOG_LOG(WARN, "next failed", K(id_), K(lsn));
+        CLOG_LOG(WARN, "next failed", K(id_));
       } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
-        CLOG_LOG(WARN, "get entry failed", K(id_), K(lsn), K(entry));
+        CLOG_LOG(WARN, "get entry failed", K(id_), K(entry));
       } else {
-        int64_t header_pos = 0;
-        int64_t log_pos = 0;
+        int64_t pos = 0;
         const char *log_buf = entry.get_data_buf();
         const int64_t log_length = entry.get_data_len();
         logservice::ObLogBaseHeader header;
         const int64_t header_size = header.get_serialize_size();
-        if (OB_FAIL(header.deserialize(log_buf, header_size, header_pos))) {
-          CLOG_LOG(ERROR, "ObLogBaseHeader deserialize failed", K(id_), K(lsn), K(entry));
-        } else if (OB_UNLIKELY(!header.is_valid())) {
-          ret = OB_INVALID_DATA;
-          CLOG_LOG(ERROR, "log base header not valid", K(id_), K(lsn), K(entry), K(header));
-        } else if (OB_UNLIKELY(header_pos >= log_length)) {
+        if (OB_FAIL(header.deserialize(log_buf, header_size, pos))) {
+          CLOG_LOG(WARN, "ObLogBaseHeader deserialize failed", K(id_), K(entry));
+        } else if (OB_UNLIKELY(pos >= log_length)) {
           ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "unexpected log pos", K(id_), K(header_pos), K(log_length), K(entry));
+          CLOG_LOG(ERROR, "unexpected log pos", K(id_), K(pos), K(log_length), K(entry));
         } else if (logservice::GC_LS_LOG_BASE_TYPE == header.get_log_type()) {
           logservice::ObGCLSLog gc_log;
-          if (OB_FAIL(gc_log.deserialize(log_buf, log_length, log_pos))) {
-            CLOG_LOG(ERROR, "gc_log deserialize failed", K(id_), K(log_pos), K(log_length), K(entry));
+          if (OB_FAIL(gc_log.deserialize(log_buf, log_length, pos))) {
+            CLOG_LOG(WARN, "gc_log deserialize failed", K(id_), K(pos), K(log_length), K(entry));
           } else if (logservice::ObGCLSLOGType::OFFLINE_LS == gc_log.get_log_type()) {
             done = true;
             CLOG_LOG(INFO, "offline_log exist", K(id_), K(gc_log), K(lsn), K(entry));

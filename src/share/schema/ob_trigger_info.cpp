@@ -193,14 +193,14 @@ int64_t ObTriggerInfo::get_convert_size() const
 #define SPEC_BEGIN \
   "PACKAGE %c%.*s%c AS\n"
 #define SPEC_CALC_WHEN \
-  "FUNCTION calc_when(%.*s IN %c%.*s%c%%ROWTYPE, %.*s IN %c%.*s%c%%ROWTYPE) RETURN BOOL;\n"
+  "FUNCTION calc_when(%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, %.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE) RETURN BOOL;\n"
 #define SPEC_BEFORE_STMT \
   "PROCEDURE before_stmt;\n"
 // 在 instead of trigger 中, 第二个参数的第二个%.*s 传入的是 "IN", 其他情况传入的是 "IN OUT"
 #define SPEC_BEFORE_ROW \
-  "PROCEDURE before_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c%%ROWTYPE);\n"
+  "PROCEDURE before_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c.%c%.*s%c%%ROWTYPE);\n"
 #define SPEC_AFTER_ROW \
-  "PROCEDURE after_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c%%ROWTYPE);\n"
+  "PROCEDURE after_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE);\n"
 #define SPEC_AFTER_STMT \
   "PROCEDURE after_stmt;\n"
 #define SPEC_END \
@@ -218,7 +218,7 @@ int64_t ObTriggerInfo::get_convert_size() const
 #define BODY_BEGIN \
   "PACKAGE BODY %c%.*s%c AS\n"
 #define BODY_CALC_WHEN \
-  "FUNCTION calc_when(%.*s IN %c%.*s%c%%ROWTYPE, %.*s IN %c%.*s%c%%ROWTYPE) RETURN BOOL IS\n" \
+  "FUNCTION calc_when(%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, %.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE) RETURN BOOL IS\n" \
   "BEGIN\n" \
   "  RETURN (%.*s);\n" \
   "END;\n"
@@ -230,13 +230,13 @@ int64_t ObTriggerInfo::get_convert_size() const
   "END;\n"
 // 在 instead of trigger 中, 第二个参数的第二个%.*s 传入的是 "IN", 其他情况传入的是 "IN OUT"
 #define BODY_BEFORE_ROW \
-  "PROCEDURE before_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c%%ROWTYPE) IS\n" \
+  "PROCEDURE before_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c.%c%.*s%c%%ROWTYPE) IS\n" \
   "%.*s" \
   "BEGIN\n" \
   "%.*s" \
   "END;\n"
 #define BODY_AFTER_ROW \
-  "PROCEDURE after_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c%%ROWTYPE) IS\n" \
+  "PROCEDURE after_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE) IS\n" \
   "%.*s" \
   "BEGIN\n" \
   "%.*s" \
@@ -272,10 +272,10 @@ int64_t ObTriggerInfo::get_convert_size() const
   "PROCEDURE before_stmt IS\n" \
   "%.*s;\n"
 #define BODY_BEFORE_ROW_COMPOUND \
-  "PROCEDURE before_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c%%ROWTYPE) IS\n" \
+  "PROCEDURE before_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s %.*s %c%.*s%c.%c%.*s%c%%ROWTYPE) IS\n" \
   "%.*s;\n"
 #define BODY_AFTER_ROW_COMPOUND \
-  "PROCEDURE after_row(:%.*s IN %c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c%%ROWTYPE) IS\n" \
+  "PROCEDURE after_row(:%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE, :%.*s IN %c%.*s%c.%c%.*s%c%%ROWTYPE) IS\n" \
   "%.*s;\n"
 #define BODY_AFTER_STMT_COMPOUND \
   "PROCEDURE after_stmt IS\n" \
@@ -630,6 +630,7 @@ void ObTriggerInfo::calc_package_source_size(const ObTriggerInfo &trigger_info,
                        trigger_info.get_ref_old_name().length() * 3 +
                        trigger_info.get_ref_new_name().length() * 3 +
                        trigger_info.get_ref_parent_name().length() * 3 +
+                       base_object_database.length() * 6 +
                        base_object_name.length() * 6 + in_out_size;
     body_params_size = spec_params_size +
                        trigger_info.get_when_condition().length() +
@@ -749,9 +750,13 @@ int ObTriggerInfo::fill_row_routine_spec(const char *spec_fmt,
       OZ (BUF_PRINTF(spec_fmt,
                      trigger_info.get_ref_old_name().length(),
                      trigger_info.get_ref_old_name().ptr(),
+                     delimiter, base_object_database.length(),
+                     base_object_database.ptr(), delimiter,
                      delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                      trigger_info.get_ref_new_name().length(),
                      trigger_info.get_ref_new_name().ptr(),
+                     delimiter, base_object_database.length(),
+                     base_object_database.ptr(), delimiter,
                      delimiter, base_object_name.length(), base_object_name.ptr(), delimiter));
     } else {
       bool is_instead = trigger_info.is_instead_dml_type() 
@@ -759,11 +764,15 @@ int ObTriggerInfo::fill_row_routine_spec(const char *spec_fmt,
       OZ (BUF_PRINTF(spec_fmt,
                      trigger_info.get_ref_old_name().length(),
                      trigger_info.get_ref_old_name().ptr(),
+                     delimiter, base_object_database.length(),
+                     base_object_database.ptr(), delimiter,
                      delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                      trigger_info.get_ref_new_name().length(),
                      trigger_info.get_ref_new_name().ptr(),
                      is_instead ? 2 : 6,
                      is_instead ? "IN" : "IN OUT",
+                     delimiter, base_object_database.length(),
+                     base_object_database.ptr(), delimiter,
                      delimiter, base_object_name.length(), base_object_name.ptr(), delimiter));
     }
   } else {
@@ -791,8 +800,10 @@ int ObTriggerInfo::fill_when_routine_body(const char *body_fmt,
   OV (!base_object_name.empty());
   OZ (BUF_PRINTF(body_fmt,
                  trigger_info.get_ref_old_name().length(), trigger_info.get_ref_old_name().ptr(),
+                 delimiter, base_object_database.length(), base_object_database.ptr(), delimiter,
                  delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                  trigger_info.get_ref_new_name().length(), trigger_info.get_ref_new_name().ptr(),
+                 delimiter, base_object_database.length(), base_object_database.ptr(), delimiter,
                  delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                  body_execute.length(), body_execute.ptr()));
   return ret;
@@ -834,20 +845,28 @@ int ObTriggerInfo::fill_row_routine_body(const ObTriggerInfo &trigger_info,
         OZ (BUF_PRINTF(body_fmt,
                        trigger_info.get_ref_old_name().length(),
                        trigger_info.get_ref_old_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(),
                        base_object_name.ptr(), delimiter,
                        trigger_info.get_ref_new_name().length(),
                        trigger_info.get_ref_new_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                        body_execute.length(), body_execute.ptr()));
       } else {
         OZ (BUF_PRINTF(body_fmt,
                        trigger_info.get_ref_old_name().length(),
                        trigger_info.get_ref_old_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(),
                        base_object_name.ptr(), delimiter,
                        trigger_info.get_ref_new_name().length(),
                        trigger_info.get_ref_new_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                        trigger_ctx.after_row_declare_.length(), trigger_ctx.after_row_declare_.ptr(),
                        body_execute.length(), body_execute.ptr()));
@@ -859,24 +878,32 @@ int ObTriggerInfo::fill_row_routine_body(const ObTriggerInfo &trigger_info,
         OZ (BUF_PRINTF(body_fmt,
                        trigger_info.get_ref_old_name().length(),
                        trigger_info.get_ref_old_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(),
                        base_object_name.ptr(), delimiter,
                        trigger_info.get_ref_new_name().length(),
                        trigger_info.get_ref_new_name().ptr(),
                        is_instead ? 2 : 6,
                        is_instead ? "IN" : "IN OUT",
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                        body_execute.length(), body_execute.ptr()));
       } else {
         OZ (BUF_PRINTF(body_fmt,
                        trigger_info.get_ref_old_name().length(),
                        trigger_info.get_ref_old_name().ptr(),
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(),
                        base_object_name.ptr(), delimiter,
                        trigger_info.get_ref_new_name().length(),
                        trigger_info.get_ref_new_name().ptr(),
                        is_instead ? 2 : 6,
                        is_instead ? "IN" : "IN OUT",
+                       delimiter, base_object_database.length(),
+                       base_object_database.ptr(), delimiter,
                        delimiter, base_object_name.length(), base_object_name.ptr(), delimiter,
                        trigger_ctx.before_row_declare_.length(), trigger_ctx.before_row_declare_.ptr(),
                        body_execute.length(), body_execute.ptr()));

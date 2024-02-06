@@ -29,7 +29,6 @@ public:
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                         ObExpr &rt_expr) const override;
-  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int calc_result_type(ObExprResType &type, ObExprResType &type1) const;
   DISALLOW_COPY_AND_ASSIGN(ObExprChar);

@@ -52,6 +52,7 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
                        type_ctx.get_coll_type(),
                        lib::is_oracle_mode(),
                        default_length_semantics,
+                       type_ctx.get_session(),
                        true,
                        true,
                        is_called_in_sql_))) {
@@ -185,13 +186,6 @@ int ObExprCoalesce::calc_batch_coalesce_expr(const ObExpr &expr, ObEvalCtx &ctx,
         });
     }
   }
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprCoalesce, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

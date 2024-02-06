@@ -704,7 +704,7 @@ enum ObNLSFormatEnum {
   NLS_DATE = 0,
   NLS_TIMESTAMP,
   NLS_TIMESTAMP_TZ,
-  NLS_MAX, // does not support expansion due to error use in ob_rpc_struct.h
+  NLS_MAX,
 };
 
 /**

@@ -115,7 +115,7 @@ private:
   ObDictMetaType meta_type_;
   ObDictMetaStorageType storage_type_;
   int64_t dict_serialized_length_;
-}; // end of ObDictMetaHeader
+};
 
 class ObDictTenantMeta
 {
@@ -189,7 +189,7 @@ private:
   int64_t drop_tenant_time_;
   bool in_recyclebin_;
   share::ObLSArray ls_arr_;
-}; // end of ObDictTenantMeta
+};
 
 class ObDictDatabaseMeta
 {
@@ -250,7 +250,7 @@ private:
   common::ObCollationType collation_type_;//default:utf8mb4_general_ci
   common::ObNameCaseMode name_case_mode_;
   bool in_recyclebin_;
-}; // end of ObDictDatabaseMeta
+};
 
 class ObDictColumnMeta
 {
@@ -296,8 +296,7 @@ public:
   OB_INLINE bool is_virtual_generated_column() const { return column_flags_ & VIRTUAL_GENERATED_COLUMN_FLAG; }
   OB_INLINE bool is_stored_generated_column() const { return column_flags_ & STORED_GENERATED_COLUMN_FLAG; }
   OB_INLINE bool is_generated_column() const { return is_virtual_generated_column() || is_stored_generated_column(); }
-  OB_INLINE bool is_shadow_column() const { return (column_id_ > common::OB_MIN_SHADOW_COLUMN_ID)
-                                                    && !is_mlog_special_column(column_id_); }
+  OB_INLINE bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
   OB_INLINE bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   int get_cascaded_column_ids(ObIArray<uint64_t> &column_ids) const;
 
@@ -361,7 +360,7 @@ private:
   common::ObSEArray<uint64_t, 2> column_ref_ids_;
   uint64_t udt_set_id_;
   uint64_t sub_type_;
-}; // end of ObDictColumnMeta
+};
 
 class ObDictTableMeta
 {
@@ -527,7 +526,7 @@ private:
   common::ObIndexColumn *index_cols_;
   uint64_t data_table_id_;
   uint64_t association_table_id_;
-}; // end of ObDictTableMeta
+};
 
 } // namespace datadict
 } // namespace oceanbase

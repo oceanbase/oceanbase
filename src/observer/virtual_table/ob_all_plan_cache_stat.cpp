@@ -209,7 +209,7 @@ int ObAllPlanCacheStat::fill_cells(ObPlanCache &plan_cache)
       break;
     }
     case GV_SQL: {
-      SET_REF_HANDLE_COL(PC_DIAG_HANDLE);
+      SET_REF_HANDLE_COL(GV_SQL_HANDLE);
       break;
     }
     case PL_ANON: {

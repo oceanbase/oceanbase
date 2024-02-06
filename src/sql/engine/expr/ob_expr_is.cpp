@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include <math.h>
 #include "sql/engine/expr/ob_expr_is.h"
-#include "ob_expr_json_func_helper.h"
 #include "share/object/ob_obj_cast.h"
 //#include "sql/engine/expr/ob_expr_promotion_util.h"
 #include "objit/common/ob_item_type.h"
@@ -66,9 +65,6 @@ int ObExprIsBase::calc_result_type2(ObExprResType &type,
         type1.set_calc_accuracy(type1.get_accuracy());
     } else if (!const_param2->get_value().is_null()) {  // is true/false
       if (ob_is_numeric_type(type1.get_type())) {
-        type1.set_calc_meta(type1.get_obj_meta());
-        type1.set_calc_accuracy(type1.get_accuracy());
-      } else if (ob_is_json(type1.get_type())) {
         type1.set_calc_meta(type1.get_obj_meta());
         type1.set_calc_accuracy(type1.get_accuracy());
       } else {
@@ -248,10 +244,6 @@ int ObExprIsBase::cg_result_type_class(ObObjType type, ObExpr::EvalFunc &eval_fu
     }
     case ObDecimalIntType: {
       EVAL_FUNC(decimal_int);
-      break;
-    }
-    case ObJsonType: {
-      EVAL_FUNC(json);
       break;
     }
     case ObMaxType: {
@@ -550,7 +542,6 @@ NUMERIC_CALC_FUNC(float, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, true, is_not)
 NUMERIC_CALC_FUNC(decimal_int, ObExprIsNot, true, true, is_not)
-NUMERIC_CALC_FUNC(json, ObExprIsNot, true, true, is_not)
 
 
 NUMERIC_CALC_FUNC(int, ObExprIsNot, true, false, is_not)
@@ -558,21 +549,18 @@ NUMERIC_CALC_FUNC(float, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(double, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(number, ObExprIsNot, true, false, is_not)
 NUMERIC_CALC_FUNC(decimal_int, ObExprIsNot, true, false, is_not)
-NUMERIC_CALC_FUNC(json, ObExprIsNot, true, false, is_not)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, true, is)
 NUMERIC_CALC_FUNC(decimal_int, ObExprIs, false, true, is)
-NUMERIC_CALC_FUNC(json, ObExprIs, false, true, is)
 
 NUMERIC_CALC_FUNC(int, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(float, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(double, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(number, ObExprIs, false, false, is)
 NUMERIC_CALC_FUNC(decimal_int, ObExprIs, false, false, is)
-NUMERIC_CALC_FUNC(json, ObExprIs, false, false, is)
 
 }
 }

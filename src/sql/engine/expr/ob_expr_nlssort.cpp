@@ -223,7 +223,7 @@ int ObExprNLSSort::eval_nlssort(const ObExpr &expr,
         // so just use prefix for calc
         ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
         common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-        if (OB_FAIL(sql::ObTextStringHelper::read_prefix_string_data(ctx,
+        if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(ctx,
                                                                 *input,
                                                                 expr.args_[0]->datum_meta_,
                                                                 expr.args_[0]->obj_meta_.has_lob_header(),

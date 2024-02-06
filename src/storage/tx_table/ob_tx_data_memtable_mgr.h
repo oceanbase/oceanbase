@@ -21,12 +21,6 @@
 // It provides all operations related to tx data memtable.
 namespace oceanbase
 {
-
-namespace share
-{
-class ObTenantTxDataAllocator;
-};
-
 namespace storage
 {
 class TxDataMemtableMgrFreezeGuard;
@@ -88,8 +82,15 @@ private:
   static const int64_t TX_DATA_MEMTABLE_MAX_FREEZE_WAIT_TIME = 1000; // 1ms
 
 public:  // ObTxDataMemtableMgr
-  ObTxDataMemtableMgr();
-  virtual ~ObTxDataMemtableMgr();
+  ObTxDataMemtableMgr()
+    : ObIMemtableMgr(LockType::OB_SPIN_RWLOCK, &lock_def_),
+      is_freezing_(false),
+      ls_id_(0),
+      mini_merge_recycle_commit_versions_ts_(0),
+      tx_data_table_(nullptr),
+      ls_tablet_svr_(nullptr),
+      slice_allocator_(nullptr) {}
+  virtual ~ObTxDataMemtableMgr() = default;
   int init(const common::ObTabletID &tablet_id,
            const share::ObLSID &ls_id,
            ObFreezer *freezer,
@@ -156,12 +157,15 @@ public:  // ObTxDataMemtableMgr
                        K_(ls_id),
                        K_(mini_merge_recycle_commit_versions_ts),
                        KP_(tx_data_table),
-                       KP_(ls_tablet_svr));
+                       KP_(ls_tablet_svr),
+                       KP_(slice_allocator));
 
 public: // getter and setter
   ObLSTabletService *get_ls_tablet_svr() { return ls_tablet_svr_; }
   ObTxDataTable *get_tx_data_table() { return tx_data_table_; }
   int64_t get_mini_merge_recycle_commit_versions_ts() { return mini_merge_recycle_commit_versions_ts_; }
+
+  void set_slice_allocator(SliceAllocator *slice_allocator) { slice_allocator_ = slice_allocator; }
 
 protected:
   virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
@@ -189,6 +193,7 @@ private:  // ObTxDataMemtableMgr
   int64_t mini_merge_recycle_commit_versions_ts_;
   ObTxDataTable *tx_data_table_;
   ObLSTabletService *ls_tablet_svr_;
+  SliceAllocator *slice_allocator_;
   common::SpinRWLock lock_def_;
 };
 

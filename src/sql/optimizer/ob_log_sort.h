@@ -37,8 +37,7 @@ namespace sql
           topk_limit_expr_(NULL),
           topk_offset_expr_(NULL),
           is_fetch_with_ties_(false),
-          part_cnt_(0),
-          sort_key_width_(0.0)
+          part_cnt_(0)
     {}
     virtual ~ObLogSort()
     {}
@@ -97,14 +96,12 @@ namespace sql
       topk_precision_ = topk_precision;
     }
     inline int64_t get_topk_precision() const {return topk_precision_;}
-    inline double get_sort_key_width() const { return sort_key_width_; }
     virtual bool is_block_op() const override { return !is_prefix_sort(); }
     virtual int compute_op_ordering() override;
     virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
   protected:
     virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
-    int est_sort_key_width();
   private:
     OrderItem hash_sortkey_;
     common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
@@ -118,7 +115,6 @@ namespace sql
     ObRawExpr *topk_offset_expr_;
     bool is_fetch_with_ties_;
     int64_t part_cnt_;
-    double sort_key_width_;
   };
 } // end of namespace sql
 } // end of namespace oceanbase

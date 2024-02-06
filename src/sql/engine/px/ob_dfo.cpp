@@ -66,8 +66,7 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     px_detectable_ids_,
                     p2p_dh_map_info_,
                     sqc_count_,
-                    monitoring_info_,
-                    branch_id_base_);
+                    monitoring_info_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -80,8 +79,7 @@ OB_SERIALIZE_MEMBER(ObPxTask,
                     exec_addr_,
                     execution_id_,
                     px_int_id_,
-                    is_fulltree_,
-                    branch_id_);
+                    is_fulltree_);
 OB_SERIALIZE_MEMBER(ObPxRpcInitTaskResponse,
                     task_co_id_);
 
@@ -157,7 +155,6 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     qc_id_ = other.qc_id_;
     dfo_id_ = other.dfo_id_;
     sqc_id_ = other.sqc_id_;
-    branch_id_base_ = other.branch_id_base_;
     thread_inited_ = other.thread_inited_;
     thread_finish_ = other.thread_finish_;
     exec_addr_ = other.exec_addr_;
@@ -1003,7 +1000,11 @@ int ObPxRpcInitTaskArgs::deep_copy_assign(ObPxRpcInitTaskArgs &src,
   } else if (ser_pos != des_pos) {
     ret = OB_DESERIALIZE_ERROR;
     LOG_WARN("data_len and pos mismatch", K(ser_arg_len), K(ser_pos), K(des_pos), K(ret));
+  } else {
+    // PLACE_HOLDER: if want multiple px worker share trans_desc
+    // set exec_ctx_->session->set_effective_trans_desc(src.exec_ctx_->session->get_effective_trans_desc());
   }
+
   return ret;
 }
 

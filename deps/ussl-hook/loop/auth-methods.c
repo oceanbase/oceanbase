@@ -15,7 +15,6 @@ int g_ussl_client_auth_methods = USSL_AUTH_NONE;
 int g_ussl_server_auth_methods = USSL_AUTH_NONE |
                                  USSL_AUTH_SSL_HANDSHAKE |
                                  USSL_AUTH_SSL_IO;
-int g_ussl_enable_bypass_flag = 0;
 
 void set_server_auth_methods(const int methods)
 {
@@ -46,12 +45,4 @@ int get_client_auth_methods()
   return ATOMIC_LOAD(&g_ussl_client_auth_methods);
 }
 
-void ussl_set_auth_bypass_flag(int enable)
-{
-  g_ussl_enable_bypass_flag = enable;
-}
 
-int ussl_get_auth_bypass_flag()
-{
-  return g_ussl_enable_bypass_flag;
-}

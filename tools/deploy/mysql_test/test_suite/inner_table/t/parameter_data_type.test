@@ -15,7 +15,7 @@
 # | BOOL      | enable_sql_audit         | plsql_debug                  |           #
 # | INT       | max_string_print_length  | open_cursors                 |           #
 # | DOUBLE    | location_cache_cpu_quota | cpu_quota_concurrency        |           #
-# | STRING    | default_row_format       | plsql_code_type              |           #
+# | STRING    | default_row_format       | plsql_ccflags                |           #
 # | CAPACITY  | log_disk_size            | range_optimizer_max_mem_size |           #
 # | TIME      | rpc_timeout              | merger_check_interval        |           #
 # | STR_LIST  | config_additional_dir    | --                           |           #
@@ -56,7 +56,7 @@ let $para_name = open_cursors;                                            # INT
 --source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
 let $para_name = cpu_quota_concurrency;                                   # DOUBLE
 --source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
-let $para_name = plsql_code_type;                                           # STRING
+let $para_name = plsql_ccflags;                                           # STRING
 --source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
 let $para_name = range_optimizer_max_mem_size;                            # CAPACITY
 --source mysql_test/include/parameter_data_type/set_tenant_parameter.inc
@@ -91,7 +91,7 @@ let $para_name = open_cursors;
 --source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
 let $para_name = cpu_quota_concurrency;
 --source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
-let $para_name = plsql_code_type;
+let $para_name = plsql_ccflags;
 --source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
 let $para_name = range_optimizer_max_mem_size;
 --source mysql_test/include/parameter_data_type/check_tenant_parameter_has_set.inc
@@ -130,7 +130,7 @@ select name, data_type from __all_sys_parameter where name = '_obkv_feature_mode
 select name, data_type from __tenant_parameter where name = 'plsql_debug';                   # BOOL
 select name, data_type from __tenant_parameter where name = 'open_cursors';                  # INT
 select name, data_type from __tenant_parameter where name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __tenant_parameter where name = 'plsql_code_type';                 # STRING
+select name, data_type from __tenant_parameter where name = 'plsql_ccflags';                 # STRING
 select name, data_type from __tenant_parameter where name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __tenant_parameter where name = 'merger_check_interval';         # TIME
 select name, data_type from __tenant_parameter where name = 'major_freeze_duty_time';        # MOMENT
@@ -151,7 +151,7 @@ select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_sys_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
@@ -172,7 +172,7 @@ select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = h
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
@@ -183,7 +183,7 @@ select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = h
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
@@ -194,7 +194,7 @@ select name, data_type from __all_virtual_tenant_parameter_info where svr_ip = h
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
@@ -215,7 +215,7 @@ select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_po
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_debug';                   # BOOL
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'open_cursors';                  # INT
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_code_type';                 # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'merger_check_interval';         # TIME
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
@@ -236,7 +236,7 @@ select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';  
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_debug';                   # BOOL
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'open_cursors';                  # INT
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_code_type';                 # STRING
+select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'plsql_ccflags';                 # STRING
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'merger_check_interval';         # TIME
 select name, data_type from V$OB_PARAMETERS where tenant_id = 1 and name = 'major_freeze_duty_time';        # MOMENT
@@ -268,7 +268,7 @@ show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'o
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency' tenant = sys;         # DOUBLE
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
-show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type' tenant = sys;                 # STRING
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags' tenant = sys;                 # STRING
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size' tenant = sys;  # CAPACITY
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
@@ -309,7 +309,7 @@ select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = h
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
@@ -320,7 +320,7 @@ select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = h
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';                 # STRING
+select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
 select name, data_type from __all_virtual_tenant_parameter where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
@@ -341,7 +341,7 @@ select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_po
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';                   # BOOL
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';                  # INT
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';                 # STRING
+select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';         # TIME
 select name, data_type from GV$OB_PARAMETERS where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';        # MOMENT
@@ -362,7 +362,7 @@ select name, data_type from V$OB_PARAMETERS where name = '_obkv_feature_mode';  
 select name, data_type from V$OB_PARAMETERS where name = 'plsql_debug';                   # BOOL
 select name, data_type from V$OB_PARAMETERS where name = 'open_cursors';                  # INT
 select name, data_type from V$OB_PARAMETERS where name = 'cpu_quota_concurrency';         # DOUBLE
-select name, data_type from V$OB_PARAMETERS where name = 'plsql_code_type';                 # STRING
+select name, data_type from V$OB_PARAMETERS where name = 'plsql_ccflags';                 # STRING
 select name, data_type from V$OB_PARAMETERS where name = 'range_optimizer_max_mem_size';  # CAPACITY
 select name, data_type from V$OB_PARAMETERS where name = 'merger_check_interval';         # TIME
 select name, data_type from V$OB_PARAMETERS where name = 'major_freeze_duty_time';        # MOMENT
@@ -394,7 +394,7 @@ show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'o
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';         # DOUBLE
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
-show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';                 # STRING
+show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_ccflags';                 # STRING
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';  # CAPACITY
 --replace_column 1 zone1 3 server_ip 4 server_port 7 value 8 info

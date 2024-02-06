@@ -95,7 +95,7 @@ int ObLogDelete::inner_est_cost(double child_card, double &op_cost)
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     cost_info.constraint_count_ = delete_dml_info->ck_cst_exprs_.count();
-    if (OB_FAIL(ObOptEstCost::cost_delete(cost_info, op_cost, opt_ctx))) {
+    if (OB_FAIL(ObOptEstCost::cost_delete(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
       LOG_WARN("failed to get delete cost", K(ret));
     }
   }

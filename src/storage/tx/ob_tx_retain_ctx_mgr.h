@@ -16,6 +16,7 @@
 #include "lib/list/ob_dlink_node.h"
 #include "lib/list/ob_list.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "logservice/palf/lsn.h"
 #include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
@@ -79,16 +80,19 @@ public:
   ObMDSRetainCtxFunctor() : ObIRetainCtxCheckFunctor()
   {
     final_log_ts_.reset();
+    final_log_lsn_.reset();
   }
   int init(ObPartTransCtx *ctx,
            RetainCause cause,
-           const share::SCN &final_log_ts);
+           const share::SCN &final_log_ts,
+           palf::LSN final_log_lsn);
 
   virtual int operator()(storage::ObLS *ls, ObTxRetainCtxMgr *retain_mgr) override;
   virtual bool is_valid() override;
 
 private:
   share::SCN final_log_ts_;
+  palf::LSN final_log_lsn_;
 };
 
 typedef common::ObDList<ObIRetainCtxCheckFunctor> RetainCtxList;

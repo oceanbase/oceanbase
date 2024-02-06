@@ -158,7 +158,7 @@ int ObXACtx::init(const ObXATransID &xid,
 int ObXACtx::handle_timeout(const int64_t delay)
 {
   int ret = OB_SUCCESS;
-  TRANS_LOG(INFO, "start to handle timeout for xa trans", K(*this));
+  TRANS_LOG(INFO, "start to handle timeout for xa trans", K(*this), "lbt", lbt());
 
   if (OB_SUCC(lock_.wrlock(common::ObLatchIds::XA_CTX_LOCK, 5000000/*5 seconds*/))) {
     if (is_exiting_) {
@@ -490,7 +490,7 @@ int ObXACtx::get_branch_info_(const ObXATransID &xid,
 
 void ObXACtx::set_terminated_()
 {
-  TRANS_LOG(INFO, "set terminated", K_(is_terminated), K(*this));
+  TRANS_LOG(INFO, "set terminated", K_(is_terminated), K(*this), "lbt", lbt());
   is_terminated_ = true;
   need_print_trace_log_ = true;
   REC_TRACE_EXT(tlog_, terminate, OB_ID(ctx_ref), get_uref());
@@ -503,17 +503,8 @@ int ObXACtx::xa_rollback_terminate_(const int cause)
   int ret = OB_SUCCESS;
 
   (void)unregister_timeout_task_();
-  if (OB_ISNULL(tx_desc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "trans desc is null", K(ret), K(*this));
-  } else {
-    ObTransID tx_id = tx_desc_->get_tx_id();
-    const int tx_ref_count = tx_desc_->get_ref();
-    if (tx_id != trans_id_ || MIN_TX_REF_COUNT > tx_ref_count) {
-      TRANS_LOG(ERROR, "unexpected trans desc", K(tx_ref_count), K(tx_id), K(*this));
-    } else if (OB_FAIL(MTL(ObTransService*)->abort_tx(*tx_desc_, cause))) {
-      TRANS_LOG(WARN, "abort tx for session terminate failed", K(ret), K(*this));
-    }
+  if (OB_FAIL(MTL(ObTransService*)->abort_tx(*tx_desc_, cause))) {
+    TRANS_LOG(WARN, "abort tx for session terminate failed", K(ret), K(*this));
   }
   set_terminated_();
 
@@ -813,8 +804,7 @@ int ObXACtx::process_xa_start_response(const obrpc::ObXAStartRPCResponse &resp)
   } else if (OB_FAIL(MTL(ObTransService *)->recover_tx(tx_info, tx_desc_))) {
     TRANS_LOG(WARN, "recover tx failed", K(ret), K(*this), K(tx_info));
   } else {
-    // increment reference of tx_desc
-    tx_desc_->inc_ref(1);
+    // do nothing
   }
 
   TRANS_LOG(INFO, "xa start response", K(ret), K(*this));
@@ -842,19 +832,15 @@ int ObXACtx::process_xa_end(const obrpc::ObXAEndRPCRequest &req)
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(req), K(*this));
-  } else if (is_terminated_) {
-    ret = OB_TRANS_XA_BRANCH_FAIL;
-    TRANS_LOG(INFO, "xa trans is terminating", K(ret), K(xid));
   } else if (is_exiting_) {
-    if (is_tightly_coupled_) {
-      ret = OB_TRANS_XA_BRANCH_FAIL;
-    } else {
-      ret = OB_TRANS_IS_EXITING;
-    }
+    ret = OB_TRANS_IS_EXITING;
     TRANS_LOG(WARN, "xa trans is exiting", K(ret), K(req), K(*this));
   } else if (NULL == tx_desc_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected tx desc", K(ret), K(req), K(*this));
+  } else if (OB_FAIL(check_for_execution_(xid, false))) {
+    // include branch fail
+    TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
   } else {
     if (OB_FAIL(update_xa_branch_info_(xid,
                                        ObXATransState::IDLE,
@@ -1642,10 +1628,7 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
 int ObXACtx::save_tx_desc_(ObTxDesc *tx_desc)
 {
   int ret = OB_SUCCESS;
-  // NOTE that the tx_desc should be valid
   tx_desc_ = tx_desc;
-  // increment tx_desc ref
-  tx_desc_->inc_ref(1);
   return ret;
 }
 
@@ -1681,16 +1664,9 @@ int ObXACtx::xa_end(const ObXATransID &xid,
   } else if (tx_desc_ != tx_desc) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "unexpected tx desc", K(ret), K(xid), K(*this));
-  } else if (is_terminated_) {
-    ret = OB_TRANS_XA_BRANCH_FAIL;
-    TRANS_LOG(INFO, "xa trans is terminating", K(ret), K(xid));
-  } else if (is_exiting_) {
-    if (is_tightly_coupled_) {
-      ret = OB_TRANS_XA_BRANCH_FAIL;
-    } else {
-      ret = OB_TRANS_IS_EXITING;
-    }
-    TRANS_LOG(INFO, "xa trans is exiting", K(ret), K(xid));
+  } else if (OB_FAIL(check_for_execution_(xid, false))) {
+    // include branch fail
+    TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
   } else {
     if (is_executing_ && xid.all_equal_to(executing_xid_)) {
       TRANS_LOG(ERROR, "unexpected local lock", K(xid), K(*this));
@@ -2196,11 +2172,17 @@ int ObXACtx::xa_end_tight_local_(const ObXATransID &xid,
   int ret = OB_SUCCESS;
   const int64_t fake_timeout = 60;
 
-  if (OB_FAIL(update_xa_branch_info_(xid,
-                                     ObXATransState::IDLE,
-                                     GCTX.self_addr(),
-                                     fake_timeout,
-                                     flags))) {
+  if (OB_FAIL(check_for_execution_(xid, false))) {
+    if (OB_TRANS_XA_BRANCH_FAIL == ret) {
+      TRANS_LOG(WARN, "xa trans has terminated", K(ret), K(xid), K(*this));
+    } else {
+      TRANS_LOG(WARN, "check for execution failed", K(ret), K(xid), K(*this));
+    }
+  } else if (OB_FAIL(update_xa_branch_info_(xid,
+                                            ObXATransState::IDLE,
+                                            GCTX.self_addr(),
+                                            fake_timeout,
+                                            flags))) {
     TRANS_LOG(WARN, "update xa branch info failed", K(ret), K(xid), K(*this));
   } else if (OB_FAIL(register_xa_timeout_task_())) {
     TRANS_LOG(WARN, "register xa timeout task failed", K(ret), K(xid), K(*this));
@@ -2297,7 +2279,6 @@ void ObXACtx::try_exit_()
 int ObXACtx::set_exiting_()
 {
   int ret = OB_SUCCESS;
-  int tx_ref_count = -1;
 
   if (is_exiting_) {
     // do nothing
@@ -2310,24 +2291,15 @@ int ObXACtx::set_exiting_()
   } else {
     is_exiting_ = true;
     if (NULL != tx_desc_) {
-      ObTransID tx_id = tx_desc_->get_tx_id();
-      tx_ref_count = tx_desc_->get_ref();
-      if (tx_id != trans_id_ || MIN_TX_REF_COUNT > tx_ref_count) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexpected trans desc", K(ret), K(tx_ref_count), K(tx_id), K(*this));
-      } else {
-        const bool is_from_xa = true;
-        tx_desc_->dec_ref(1);
-        // tx_desc_->reset_for_xa();
-        MTL(ObTransService *)->release_tx(*tx_desc_, is_from_xa);
-      }
+      tx_desc_->reset_for_xa();
+      MTL(ObTransService *)->release_tx(*tx_desc_);
       tx_desc_ = NULL;
     }
     if (OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
       TRANS_LOG(WARN, "erase xa ctx failed", K(ret), K_(xid), K(*this));
     }
   }
-  TRANS_LOG(INFO, "xa ctx set exiting", K(ret), K(tx_ref_count), K_(xid), K(*this));
+  TRANS_LOG(INFO, "xa ctx set exiting", K(ret), K_(xid), K(*this));
 
   return ret;
 }
@@ -2730,7 +2702,6 @@ int ObXACtx::check_for_execution_(const ObXATransID &xid, const bool is_new_bran
       }
     } else {
       //join, xa end, lock...
-      // xa end no longer rollback
       if (ObXATransState::PREPARING == xa_trans_state_) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = xa_rollback_terminate_(ObTxAbortCause::IMPLICIT_ROLLBACK))) {
@@ -2930,11 +2901,16 @@ int ObXACtx::wait_xa_prepare(const ObXATransID &xid, const int64_t timeout_us)
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
   if (OB_SUCC(ret) || OB_ERR_READ_ONLY_TRANSACTION == ret) {
     xa_trans_state_ = ObXATransState::PREPARED;
-    MTL(ObXAService*)->get_xa_cache().insert_prepare_cache_item(xid, ObXATransState::PREPARED);
   }
 
   if (OB_LIKELY(!is_exiting_)) {
-    set_exiting_();
+    is_exiting_ = true;
+    if (OB_NOT_NULL(xa_ctx_mgr_)) {
+      xa_ctx_mgr_->erase_xa_ctx(trans_id_);
+    }
+    // release tx desc
+    MTL(ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
   }
 
   TRANS_LOG(INFO, "wait xa prepare", K(ret), K(*this));
@@ -2959,10 +2935,8 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
   } else if (OB_FAIL(check_trans_state_(is_rollback, request_id, false))) {
-    if (is_rollback && ObXATransState::ROLLBACKING == xa_trans_state_) {
-      ret = OB_SUCCESS;
-    } else if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
-                 || (!is_rollback && OB_TRANS_COMMITED == ret))) {
+    if (!((is_rollback && OB_TRANS_ROLLBACKED == ret)
+        || (!is_rollback && OB_TRANS_COMMITED == ret))) {
       TRANS_LOG(WARN, "check trans state fail", K(ret), K(xid), K(is_rollback), K(timeout_us));
     }
   } else {
@@ -2975,7 +2949,7 @@ int ObXACtx::two_phase_end_trans(const ObXATransID &xid,
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid trans descriptor", K(ret), K(xid));
     } else {
-      save_tx_desc_(tx);
+      tx_desc_ = tx;
       request_id_ = request_id;
       if (is_rollback) {
         xa_trans_state_ = ObXATransState::ROLLBACKING;

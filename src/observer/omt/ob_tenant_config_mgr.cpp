@@ -322,11 +322,6 @@ int ObTenantConfigMgr::del_tenant_config(uint64_t tenant_id)
   } else if (!config->is_ref_clear()) {
     ret = OB_EAGAIN;
     LOG_INFO("something hold config ref, try delete later...");
-  } else if (OB_ISNULL(GCTX.omt_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("omt is null", KR(ret));
-  } else if (GCTX.omt_->has_tenant(tenant_id)) {
-    LOG_WARN("local tenant resource still exist, try to delete tenant config later", K(tenant_id));
   } else {
     config->set_deleting();
     if (OB_FAIL(wait(config->get_update_task()))) {

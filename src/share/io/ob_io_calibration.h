@@ -137,7 +137,6 @@ public:
   int refresh(const bool only_refresh, const ObIArray<ObIOBenchResult> &items);
   int execute_benchmark();
   int get_benchmark_status(int64_t &start_ts, int64_t &finish_ts, int &ret_code);
-  bool is_valid() { return io_ability_.is_valid(); }
 private:
   ObIOCalibration();
   ~ObIOCalibration();

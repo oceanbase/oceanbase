@@ -549,27 +549,6 @@ int ObDiagnoseSessionInfo::notify_wait_end(ObDiagnoseTenantInfo *tenant_info, co
         }
       }
     }
-
-    switch (OB_WAIT_EVENTS[event_desc->event_no_].wait_class_) {
-      case ObWaitClassIds::CONCURRENCY:{
-        EVENT_ADD(ObStatEventIds::CCWAIT_TIME, event_desc->wait_time_);
-        break;
-      }
-      case ObWaitClassIds::USER_IO:{
-        EVENT_ADD(ObStatEventIds::USER_IO_WAIT_TIME, event_desc->wait_time_);
-        break;
-      }
-      case ObWaitClassIds::APPLICATION:{
-        EVENT_ADD(ObStatEventIds::APWAIT_TIME, event_desc->wait_time_);
-        break;
-      }
-      case ObWaitClassIds::SCHEDULER:{
-        EVENT_ADD(ObStatEventIds::SCHEDULE_WAIT_TIME, event_desc->wait_time_);
-        break;
-      }
-      default:
-        break;
-    }
     if (!is_atomic) {
       //LOG_ERROR("XXXX: end wait", "id", ObActiveSessionGuard::get_stat().id_,
       //          K(event_desc->wait_time_), K(event_desc->event_no_));

@@ -35,14 +35,13 @@ class ObTabletHandle : public ObMetaObjGuard<ObTablet>
 private:
   typedef ObMetaObjGuard<ObTablet> Base;
 public:
-  ObTabletHandle(const char *file = __builtin_FILE(),
-                 const int line = __builtin_LINE(),
-                 const char *func = __builtin_FUNCTION());
+  ObTabletHandle();
+  ObTabletHandle(
+      const Base &other,
+      const WashTabletPriority priority);
   ObTabletHandle(const ObTabletHandle &other);
   virtual ~ObTabletHandle();
   ObTabletHandle &operator = (const ObTabletHandle &other);
-  virtual void set_obj(ObMetaObj<ObTablet> &obj) override;
-  virtual void set_obj(ObTablet *obj, common::ObIAllocator *allocator, ObTenantMetaMemMgr *t3m) override;
   virtual void reset() override;
   virtual bool need_hold_time_check() const override { return true; }
   void set_wash_priority(const WashTabletPriority priority) { wash_priority_ = priority; }
@@ -53,16 +52,12 @@ public:
   int64_t get_buf_len() const { return get_buf_header().buf_len_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
-  int register_into_leak_checker(const char *file, const int line, const char *func);
-  int inc_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
-  int dec_ref_in_leak_checker(ObTenantMetaMemMgr *t3m);
   int64_t calc_wash_score(const WashTabletPriority priority) const;
   ObMetaObjBufferHeader &get_buf_header() const
   {
     return ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(obj_));
   }
 private:
-  int32_t index_;  // initialize as -1
   WashTabletPriority wash_priority_;
   bool allow_copy_and_assign_;
   DEFINE_OBJ_LEAK_DEBUG_NODE(node_);
@@ -75,7 +70,9 @@ class ObTabletTableIterator final
 public:
   ObTabletTableIterator() : tablet_handle_(), table_store_iter_(), transfer_src_handle_(nullptr) {}
   explicit ObTabletTableIterator(const bool is_reverse) : tablet_handle_(), table_store_iter_(is_reverse), transfer_src_handle_(nullptr) {}
-  int assign(const ObTabletTableIterator& other);
+
+  ObTabletTableIterator(const ObTabletTableIterator& other) { *this = other; } ;
+  void operator=(const ObTabletTableIterator& other);
   ~ObTabletTableIterator() { reset(); }
   void reset()
   {
@@ -93,7 +90,6 @@ public:
   const ObTablet *get_tablet() const { return tablet_handle_.get_obj(); }
   ObTablet *get_tablet() { return tablet_handle_.get_obj(); }
   const ObTabletHandle &get_tablet_handle() { return tablet_handle_; }
-  const ObTabletHandle *get_tablet_handle_ptr() const { return &tablet_handle_; }
   int set_tablet_handle(const ObTabletHandle &tablet_handle);
   int set_transfer_src_tablet_handle(const ObTabletHandle &tablet_handle);
   int refresh_read_tables_from_tablet(
@@ -105,7 +101,6 @@ private:
   ObTabletHandle tablet_handle_;
   ObTableStoreIterator table_store_iter_;
   ObTabletHandle *transfer_src_handle_;
-  DISALLOW_COPY_AND_ASSIGN(ObTabletTableIterator);
 };
 
 struct ObGetTableParam final

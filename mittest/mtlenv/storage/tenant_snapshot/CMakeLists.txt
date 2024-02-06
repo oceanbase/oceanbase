@@ -1,3 +1,0 @@
-storage_unittest(test_tenant_snapshot_mgr)
-storage_unittest(test_tenant_snapshot_def)
-storage_unittest(test_ls_snapshot_mgr)

@@ -73,7 +73,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
       // it). We use the common idea that all operations split in the storage
       // layer will use same sequence number, so we bypass the check if the writer
       // sequence number is equal to the locker sequence number.
-
       // } else if (writer_seq_no == locker_seq_no &&
       //            (blocksstable::ObDmlFlag::DF_UPDATE == writer_dml_flag
       //             && blocksstable::ObDmlFlag::DF_LOCK == locker_dml_flag)) {
@@ -151,17 +150,10 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
                   K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                   K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
       }
-    }
-
-    if (OB_SUCC(ret) && writer_seq_no < locker_seq_no) {
-      // Under the PDML scenario, there exists a case where a row may be
-      // concurrently modified by both a delete and an insert operation
-      // (consider a scenario like 'a = a + 1'). In such a situation, there is a
-      // possibility of sequence numbers becoming out of order on the row which
-      // may break the promise of the memtable semantics. We need to be aware of
-      // this situation and retry the entire SQL statement in such cases.
-      ret = OB_SEQ_NO_REORDER_UNDER_PDML;
-      TRANS_LOG(WARN, "wrong row of sequence on one row found", K(reader_seq_no),
+    } else if (writer_seq_no < locker_seq_no) {
+      // We need guarantee the right sequence of the same txn operations
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "wrong row of sequence on one row found", K(reader_seq_no),
                 K(writer_tx_id), K(writer_dml_flag), K(writer_seq_no),
                 K(locker_tx_id), K(locker_dml_flag), K(locker_seq_no));
     }

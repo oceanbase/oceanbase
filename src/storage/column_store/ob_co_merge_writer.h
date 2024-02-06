@@ -107,8 +107,7 @@ public:
       fuser_(allocator_),
       iter_(nullptr),
       default_row_(),
-      is_inited_(false),
-      error_location_(nullptr)
+      is_inited_(false)
   {}
   virtual ~ObCOMergeWriter();
   virtual int init(

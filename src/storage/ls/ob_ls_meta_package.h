@@ -34,8 +34,6 @@ public:
   ObLSMetaPackage &operator=(const ObLSMetaPackage &other);
   void reset();
   bool is_valid() const;
-  void update_clog_checkpoint_in_ls_meta(const share::SCN& clog_checkpoint_scn,
-                                         const palf::LSN& clog_base_lsn);
 
   TO_STRING_KV(K_(ls_meta), K_(palf_meta), K_(dup_ls_meta));
 public:

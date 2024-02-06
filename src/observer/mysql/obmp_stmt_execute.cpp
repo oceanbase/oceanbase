@@ -936,7 +936,6 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       // Step5: decode value
       for (int64_t i = 0; OB_SUCC(ret) && i < input_param_num; ++i) {
         ObObjParam &param = is_arraybinding_ ? arraybinding_params_->at(i) : params_->at(i);
-        param.reset();
         if (OB_SUCC(ret) && OB_FAIL(parse_request_param_value(alloc,
                                                               session,
                                                               pos,
@@ -1367,7 +1366,8 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     }
 
     //update v$sql statistics
-    if (session.get_local_ob_enable_plan_cache()
+    if ((OB_SUCC(ret) || audit_record.is_timeout())
+        && session.get_local_ob_enable_plan_cache()
         && !retry_ctrl_.need_retry()
         && !is_ps_cursor()) {
       // ps cursor do this in inner open
@@ -1446,8 +1446,7 @@ int ObMPStmtExecute::response_result(
       // NOTE: sql_end_cb必须在drv.response_result()之前初始化好
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
-                                    stmt_id_, params_num_,
-                                    is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
+                                    stmt_id_, params_num_))) {
         LOG_WARN("failed to init sql end callback", K(ret));
       } else if (OB_FAIL(drv.response_result(result))) {
         LOG_WARN("fail response async result", K(ret));
@@ -1473,8 +1472,7 @@ int ObMPStmtExecute::response_result(
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       ObAsyncCmdDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
-                                    stmt_id_, params_num_,
-                                    is_prexecute() ? packet_sender_.get_comp_seq() : 0))) {
+                                    stmt_id_, params_num_))) {
         LOG_WARN("failed to init sql end callback", K(ret));
       } else if (OB_FAIL(drv.response_result(result))) {
         LOG_WARN("fail response async result", K(ret));
@@ -1831,7 +1829,6 @@ int ObMPStmtExecute::process()
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     ObSQLSessionInfo::LockGuard lock_guard(session.get_query_lock());
     session.set_current_trace_id(ObCurTraceId::get_trace_id());
-    session.init_use_rich_format();
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
@@ -1842,8 +1839,6 @@ int ObMPStmtExecute::process()
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid session", K_(stmt_id), K(ret));
-    } else if (OB_FAIL(process_kill_client_session(session))) {
-      LOG_WARN("client session has been killed", K(ret));
     } else if (OB_UNLIKELY(session.is_zombie())) {
       //session has been killed some moment ago
       ret = OB_ERR_SESSION_INTERRUPTED;
@@ -2544,7 +2539,6 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
         LOG_WARN("failed to parse basic param value", K(ret));
       } else {
         param.set_param_meta();
-        param.set_length(param.get_val_len());
       }
     }
   } else if (!support_send_long_data(type)) {
@@ -2641,7 +2635,6 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
             LOG_WARN("failed to parse basic param value", K(ret));
           } else {
             param.set_param_meta();
-            param.set_length(param.get_val_len());
           }
         }
         piece->get_allocator()->free(tmp);

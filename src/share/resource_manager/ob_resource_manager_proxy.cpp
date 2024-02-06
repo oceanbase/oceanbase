@@ -25,13 +25,11 @@
 #include "share/resource_manager/ob_resource_manager.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/resource_manager/ob_resource_mapping_rule_manager.h"
-#include "share/io/ob_io_manager.h"
 #include "common/ob_timeout_ctx.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "observer/ob_server_struct.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "lib/utility/ob_fast_convert.h"
-#include "observer/ob_server.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::sqlclient;
@@ -655,8 +653,7 @@ int ObResourceManagerProxy::check_if_function_exist(const ObString &function_nam
       0 == function_name.compare("COMPACTION_LOW") ||
       0 == function_name.compare("HA_LOW") ||
       0 == function_name.compare("DDL_HIGH") ||
-      0 == function_name.compare("DDL") ||
-      0 == function_name.compare("OTHER_BACKGROUND")) {
+      0 == function_name.compare("DDL")) {
     exist = true;
   } else {
     exist = false;
@@ -820,92 +817,33 @@ int ObResourceManagerProxy::check_iops_validity(
   } else if (iops_maximum < iops_minimum) {
     // precheck
     valid = false;
-  } else if (iops_minimum == 0 && iops_maximum == 0) {
-    ret = OB_INVALID_CONFIG;
-    LOG_USER_ERROR(OB_INVALID_CONFIG, "io request cannot schedule with this config");
   } else {
-    //step 1: check io calibration status
-    if (!ObIOCalibration::get_instance().is_valid()) {
-      valid = false;
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("not run io_calibration yet", K(ret));
-      LOG_USER_ERROR(OB_INVALID_CONFIG, "not run io_calibration yet");
+    ObSEArray<ObPlanDirective, 8> directives;
+    if (OB_FAIL(get_all_plan_directives(tenant_id, plan_name, directives))) {
+      LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
     } else {
-      //step 2: check unit_config.min_iops
-      int64_t iops_16k = 0;
-      sqlclient::ObMySQLResult *result = nullptr;
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        ObSqlString sql_string;
-        char ip_str[INET6_ADDRSTRLEN] = { 0 };
-        const ObAddr &self_addr = OBSERVER.get_self();
-        if (OB_UNLIKELY(!self_addr.ip_to_string(ip_str, sizeof(ip_str)))) {
+      uint64_t total_min = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
+        ObPlanDirective &cur_directive = directives.at(i);
+        if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get self ip string failed", K(ret));
-        } else if (OB_FAIL(sql_string.append_fmt(
-                "SELECT iops FROM %s WHERE svr_ip = \"%s\" AND svr_port = %d AND mode = 'READ' AND size = 16384 AND storage_name = \"DATA\"",
-                share::OB_ALL_DISK_IO_CALIBRATION_TNAME, ip_str, self_addr.get_port()))) {
-          LOG_WARN("generate sql string failed", K(ret), K(self_addr));
-        } else if (OB_FAIL(OBSERVER.get_mysql_proxy().read(res, sql_string.ptr()))) {
-          LOG_WARN("query failed", K(ret), K(sql_string));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is null", K(ret), KP(result));
+          LOG_WARN("unexpected group id", K(cur_directive));
+        } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
+          ret = OB_INVALID_CONFIG;
+          LOG_WARN("invalid group io config", K(cur_directive));
+        } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
+          //skip cur group
         } else {
-          if (OB_FAIL(result->next())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("fail to read", K(ret), K(sql_string));
-          } else {
-            ObIOBenchResult item;
-            ObString mode_string;
-            EXTRACT_INT_FIELD_MYSQL(*result, "iops", iops_16k, int64_t);
-          }
+          total_min += cur_directive.min_iops_;
         }
       }
-      if (OB_SUCC(ret)) {
-        ObRefHolder<ObTenantIOManager> tenant_holder;
-        if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
-          LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
+      if(OB_SUCC(ret)) {
+        total_min += iops_minimum;
+        if (total_min > 100) {
+          valid = false;
+          LOG_WARN("invalid group io config", K(total_min), K(iops_minimum), K(iops_maximum), K(plan_name));
         } else {
-          if (iops_minimum != 0 && iops_minimum / 100 * (tenant_holder.get_ptr()->get_io_config().unit_config_.min_iops_) > iops_16k * 10) {
-            valid = false;
-            ret = OB_INVALID_CONFIG;
-            LOG_WARN("unit_config.min_iops is too big, iops isolation may not work", K(ret), K(iops_minimum), K(iops_16k));
-            LOG_USER_ERROR(OB_INVALID_CONFIG, "unit_config.min_iops is too big, iops isolation may not work");
-          }
-        }
-      }
-    }
-    //step 3: check min/max iops
-    if (OB_SUCC(ret)) {
-      ObSEArray<ObPlanDirective, 8> directives;
-      if (OB_FAIL(get_all_plan_directives(tenant_id, plan_name, directives))) {
-        LOG_WARN("fail get plan directive", K(tenant_id), K(plan_name), K(ret));
-      } else {
-        uint64_t total_min = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < directives.count(); ++i) {
-          ObPlanDirective &cur_directive = directives.at(i);
-          if (OB_UNLIKELY(!is_user_group(cur_directive.group_id_))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected group id", K(cur_directive));
-          } else if (OB_UNLIKELY(!cur_directive.is_valid())) {
-            ret = OB_INVALID_CONFIG;
-            LOG_WARN("invalid group io config", K(cur_directive));
-          } else if ((0 == group.compare(cur_directive.group_name_.get_value()))) {
-            //skip cur group
-          } else {
-            total_min += cur_directive.min_iops_;
-          }
-        }
-        if(OB_SUCC(ret)) {
-          total_min += iops_minimum;
-          if (total_min > 100) {
-            valid = false;
-            ret = OB_INVALID_CONFIG;
-            LOG_USER_ERROR(OB_INVALID_CONFIG, "invalid config, sum min_iops > 100");
-            LOG_WARN("invalid group io config", K(ret), K(total_min), K(iops_minimum), K(iops_maximum), K(plan_name));
-          } else {
-            valid = true;
-          }
+          valid = true;
         }
       }
     }

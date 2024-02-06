@@ -170,16 +170,14 @@ private:
  */
 class ObTxDataSingleRowGetter
 {
+  using SliceAllocator = ObSliceAlloc;
 public:
-  ObTxDataSingleRowGetter(const ObTableIterParam &iter_param,
-                          const ObSSTableArray &sstables,
-                          share::ObTenantTxDataAllocator &tx_data_allocator,
-                          share::SCN &recycled_scn)
-      : iter_param_(iter_param),
-        sstables_(sstables),
-        tx_data_allocator_(tx_data_allocator),
-        recycled_scn_(recycled_scn),
-        key_datums_() {}
+  ObTxDataSingleRowGetter(
+     const ObTableIterParam &iter_param,
+	   const ObSSTableArray &sstables,
+     SliceAllocator &slice_allocator,
+     share::SCN &recycled_scn)
+      : iter_param_(iter_param), sstables_(sstables), slice_allocator_(slice_allocator), recycled_scn_(recycled_scn), key_datums_() {}
   virtual ~ObTxDataSingleRowGetter() {}
 
   /**
@@ -203,7 +201,7 @@ private:
 private:
   const ObTableIterParam &iter_param_;
   const ObSSTableArray &sstables_;
-  share::ObTenantTxDataAllocator &tx_data_allocator_;
+  SliceAllocator &slice_allocator_;
   share::SCN &recycled_scn_;
   transaction::ObTransID tx_id_;
   ObArenaAllocator arena_allocator_;

@@ -211,7 +211,6 @@ public:
                                ObIArray<ObString> &gen_col_expr_arr);
   static int init_empty_session(const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                 const ObString *nls_formats,
-                                const share::schema::ObLocalSessionVar *local_session_var,
                                 common::ObIAllocator &allocator,
                                 share::schema::ObTableSchema &table_schema,
                                 const ObSQLMode sql_mode,
@@ -220,7 +219,6 @@ public:
   static int reformat_generated_column_expr(ObObj &default_value,
                                             const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                             const common::ObString *nls_formats,
-                                            const share::schema::ObLocalSessionVar &local_session_var,
                                             common::ObIAllocator &allocator,
                                             share::schema::ObTableSchema &table_schema,
                                             share::schema::ObColumnSchemaV2 &column,
@@ -235,13 +233,11 @@ public:
       ObSQLSessionInfo *session_info,
       ObSchemaChecker *schema_checker,
       ObRawExpr *&expr,
-      ObRawExprFactory &expr_factory,
-      bool coltype_not_defined = false);
+      ObRawExprFactory &expr_factory);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
-      const ObLocalSessionVar *local_session_var,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &table_schema,
       share::schema::ObColumnSchemaV2 &column_schema,
@@ -254,7 +250,6 @@ public:
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString *nls_formats,
-      const ObLocalSessionVar *local_session_var,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &table_schema,
       ObIArray<share::schema::ObColumnSchemaV2> &resolved_cols,
@@ -263,8 +258,7 @@ public:
       const ObSQLMode sql_mode,
       ObSQLSessionInfo *session_info,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker = NULL,
-      bool coltype_not_defined = false);
+      ObSchemaChecker *schema_checker = NULL);
   static int check_default_value(
       common::ObObj &default_value,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
@@ -277,8 +271,7 @@ public:
       const ObSQLMode sql_mode,
       ObSQLSessionInfo *session_info,
       bool allow_sequence,
-      ObSchemaChecker *schema_checker,
-      bool coltype_not_defined = false);
+      ObSchemaChecker *schema_checker);
   static int calc_default_value(
       share::schema::ObColumnSchemaV2 &column_schema,
       common::ObObj &default_value,
@@ -306,8 +299,6 @@ public:
   static int adjust_string_column_length_within_max(
       share::schema::ObColumnSchemaV2 &column,
       const bool is_oracle_mode);
-  static int adjust_number_decimal_column_accuracy_within_max(share::schema::ObColumnSchemaV2 &column,
-                                                              const bool is_oracle_mode);
   // { used for enum and set
   int fill_extended_type_info(
       const ParseNode &str_list_node,
@@ -467,9 +458,6 @@ protected:
       const common::ObIArray<uint64_t> &column_ids,
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
-  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
-  int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
-  bool need_column_group(const ObTableSchema &table_schema);
   int resolve_hints(const ParseNode *parse_node, ObDDLStmt &stmt, const ObTableSchema &table_schema);
   int calc_ddl_parallelism(const uint64_t hint_parallelism, const uint64_t table_dop, uint64_t &parallelism);
   int deep_copy_str(const common::ObString &src, common::ObString &dest);
@@ -548,8 +536,6 @@ protected:
       const ParseNode &skip_index_node,
       share::schema::ObColumnSchemaV2 &column_schema);
   int check_skip_index(share::schema::ObTableSchema &table_schema);
-  int resolve_lob_inrow_threshold(const ParseNode *option_node, const bool is_index_option);
-
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,
@@ -892,10 +878,6 @@ protected:
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
-  int get_mv_container_table(uint64_t tenant_id,
-                             const uint64_t mv_container_table_id,
-                             const share::schema::ObTableSchema *&mv_container_table_schema,
-                             common::ObString &mv_container_table_name);
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;
@@ -955,8 +937,6 @@ protected:
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
   ObNameGeneratedType name_generated_type_;
-  bool is_set_lob_inrow_threshold_;
-  int64_t lob_inrow_threshold_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

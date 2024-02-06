@@ -109,7 +109,6 @@ public:
   { set_sql_throttle_current_priority(100); }
 
   OB_INLINE void set_session(sql::ObSQLSessionInfo* session) { session_ = session; }
-  OB_INLINE sql::ObSQLSessionInfo *get_session() { return session_; }
 
 public:
   static void set_compatibility_mode(CompatMode mode);

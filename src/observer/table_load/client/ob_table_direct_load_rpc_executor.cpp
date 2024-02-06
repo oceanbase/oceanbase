@@ -218,11 +218,13 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
   if (OB_SUCC(ret)) {
     ObTableLoadRedefTableStartArg start_arg;
     ObTableLoadRedefTableStartRes start_res;
+    uint64_t data_version = 0;
     start_arg.tenant_id_ = tenant_id;
     start_arg.table_id_ = table_id;
     start_arg.parallelism_ = arg_.parallel_;
-    start_arg.is_load_data_ = true;
-    if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret));
+    } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res,
                                                     *client_task_->get_session_info()))) {
       LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
     } else {
@@ -230,7 +232,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       ddl_param.task_id_ = start_res.task_id_;
       ddl_param.schema_version_ = start_res.schema_version_;
       ddl_param.snapshot_version_ = start_res.snapshot_version_;
-      ddl_param.data_version_ = start_res.data_format_version_;
+      ddl_param.data_version_ = data_version;
     }
   }
   // init param
@@ -291,15 +293,22 @@ int ObTableDirectLoadBeginExecutor::do_begin()
 {
   int ret = OB_SUCCESS;
   ObTableLoadCoordinator coordinator(table_ctx_);
-  ObTableLoadTransId trans_id;
   if (OB_FAIL(coordinator.init())) {
     LOG_WARN("fail to init coordinator", KR(ret));
   } else if (OB_FAIL(coordinator.begin())) {
     LOG_WARN("fail to coordinator begin", KR(ret));
-  } else if (OB_FAIL(coordinator.start_trans(ObTableLoadSegmentID(1), trans_id))) {
-    LOG_WARN("fail to start trans", KR(ret));
-  } else {
-    client_task_->set_trans_id(trans_id);
+  }
+  // start trans
+  for (int64_t i = 1; OB_SUCC(ret) && i <= table_ctx_->param_.session_count_; ++i) {
+    ObTableLoadSegmentID segment_id(i);
+    ObTableLoadTransId trans_id;
+    if (OB_FAIL(coordinator.start_trans(segment_id, trans_id))) {
+      LOG_WARN("fail to start trans", KR(ret), K(i));
+    } else if (OB_FAIL(client_task_->add_trans_id(trans_id))) {
+      LOG_WARN("fail to add trans id", KR(ret), K(trans_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(client_task_->set_status_running())) {
       LOG_WARN("fail to set status running", KR(ret));
     }
@@ -453,14 +462,15 @@ int ObTableDirectLoadInsertExecutor::process()
       LOG_WARN("fail to get table ctx", KR(ret));
     } else {
       ObTableLoadCoordinator coordinator(table_ctx);
-      const ObTableLoadTransId &trans_id = client_task->get_trans_id();
-      const int64_t batch_id = client_task->get_next_batch_id();
-      const int32_t session_id = batch_id % table_ctx->param_.session_count_ + 1;
+      ObTableLoadTransId trans_id;
+      int64_t batch_id = client_task->get_next_batch_id();
       if (OB_FAIL(set_batch_seq_no(batch_id, obj_rows))) {
         LOG_WARN("fail to set batch seq no", KR(ret));
+      } else if (OB_FAIL(client_task->get_next_trans_id(trans_id))) {
+        LOG_WARN("fail to get next trans id", KR(ret));
       } else if (OB_FAIL(coordinator.init())) {
         LOG_WARN("fail to init coordinator", KR(ret));
-      } else if (OB_FAIL(coordinator.write(trans_id, session_id, 0 /*seq_no*/, obj_rows))) {
+      } else if (OB_FAIL(coordinator.write(trans_id, obj_rows))) {
         LOG_WARN("fail to coordinator write", KR(ret));
       }
     }

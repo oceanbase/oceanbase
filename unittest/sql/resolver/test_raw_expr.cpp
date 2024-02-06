@@ -16,6 +16,7 @@
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_print_visitor.h"
+#include "sql/resolver/expr/ob_raw_expr_canonicalizer_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
 #include "sql/ob_sql_init.h"
 #include "../test_sql_utils.h"

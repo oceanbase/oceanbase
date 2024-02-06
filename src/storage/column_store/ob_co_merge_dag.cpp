@@ -414,7 +414,6 @@ ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
    end_cg_idx_(0),
    retry_create_task_(false),
    progress_inited_(false),
-   time_guard_(),
    merge_progress_(nullptr)
 {
 }
@@ -491,12 +490,6 @@ int ObCOMergeBatchExeDag::create_first_task()
     LOG_WARN("execute task is unexpected null", KR(ret), KP(execute_task));
   } else if (OB_FAIL(create_task(execute_task/*parent*/, finish_task, *ctx, *dag_net))) {
     LOG_WARN("fail to create finish task", K(ret), KPC(dag_net));
-  } else { // fill compaction param
-    // the dag_net has been set, and the dag hasn't been added to the scheduler now
-    param_.compaction_param_.sstable_cnt_ = ctx->get_tables_handle().get_count();
-    param_.compaction_param_.estimate_concurrent_cnt_ = ctx->get_concurrent_cnt();
-    param_.compaction_param_.add_time_ = common::ObTimeUtility::fast_current_time();
-    param_.compaction_param_.batch_size_ = end_cg_idx_ - start_cg_idx_;
   }
 
   if (OB_FAIL(ret)) {
@@ -506,8 +499,16 @@ int ObCOMergeBatchExeDag::create_first_task()
     }
     if (OB_NOT_NULL(finish_task)) {
       remove_task(*finish_task);
-      finish_task = nullptr;
+      execute_task = nullptr;
     }
+  }
+
+  // the dag_net has been set, and the dag hasn't been added to the scheduler now
+  if (OB_SUCC(ret)) { // fill compaction param
+    param_.compaction_param_.sstable_cnt_ = ctx->get_tables_handle().get_count();
+    param_.compaction_param_.estimate_concurrent_cnt_ = ctx->get_concurrent_cnt();
+    param_.compaction_param_.add_time_ = common::ObTimeUtility::fast_current_time();
+    param_.compaction_param_.batch_size_ = end_cg_idx_ - start_cg_idx_;
   }
   return ret;
 }
@@ -723,12 +724,6 @@ int ObCOMergeBatchExeTask::process()
   }
 
   void *buf = nullptr;
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
-  if (OB_FAIL(ret)) {
-    LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST PROCESS FAILED", K(ret));
-  }
-#endif
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCOMerger)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -749,7 +744,9 @@ int ObCOMergeBatchExeTask::process()
     } else {
       FLOG_INFO("merge macro blocks ok", K(idx_), "task", *this, KPC(dag_));
     }
-    merger_->reset();
+    if (nullptr != merger_) {
+      merger_->reset();
+    }
   }
   return ret;
 }
@@ -770,7 +767,6 @@ void ObCOMergeBatchExeTask::merge_start()
     // execute time click init only once
     if (execute_dag->get_time_guard().is_empty()) {
       ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
-      execute_dag->get_time_guard().set_last_click_ts(execute_dag->get_add_time());
       execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
     }
   }
@@ -847,10 +843,7 @@ int ObCOMergeBatchFinishTask::process()
   } else if (OB_FAIL(execute_dag->create_sstable_after_merge())) {
     LOG_WARN("failed to create sstable after merge", K(ret), KPC(execute_dag));
   } else {
-    FLOG_INFO("co batch sstable merge finish", K(ret),
-              "start_cg sstable_merge_info", ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info(),
-              "time_guard", execute_dag->get_time_guard(),
-              KPC(dag_), "param", ctx_->get_dag_param(),
+    FLOG_INFO("co batch sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(),
               "mem_peak", ctx_->mem_ctx_.get_total_mem_peak());
   }
 
@@ -963,7 +956,7 @@ int ObCOMergeFinishTask::process()
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
     FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(),
-              "mem_peak", ctx_->mem_ctx_.get_total_mem_peak(), "time_guard", ctx_->info_collector_.time_guard_);
+              "mem_peak", ctx_->mem_ctx_.get_total_mem_peak(), K(ctx_->info_collector_.time_guard_));
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -999,12 +992,6 @@ ObCOMergeDagNet::ObCOMergeDagNet()
 {
 }
 
-/*
- * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
- * Destructor will be called when finish dag net.
- * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
- * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
- */
 ObCOMergeDagNet::~ObCOMergeDagNet()
 {
   finish_dag_ = nullptr;
@@ -1060,7 +1047,7 @@ int ObCOMergeDagNet::start_running()
   return ret;
 }
 
-// schedule_rest_dag is called in loop_running_dag_net_list(Timer)
+// schedule_rest_dag is called in loop_running_dag_net_map(Timer)
 // schedule dag may not finish yet, need wait merge_status >= PREPARE_FINISHED
 int ObCOMergeDagNet::schedule_rest_dag()
 {
@@ -1075,28 +1062,11 @@ int ObCOMergeDagNet::schedule_rest_dag()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge ctx is null or schema invalid", K(ret), KPC(co_merge_ctx_));
   } else if (!is_cancel() && COMergeStatus::PREPARE_FINISHED <= ATOMIC_LOAD(&merge_status_)) {
-#ifdef ERRSIM
-    ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
-    if (OB_FAIL(ret)) {
-      LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
-    }
-#endif
-    if (FAILEDx(inner_create_and_schedule_dags())) {
+    if (OB_FAIL(inner_create_and_schedule_dags())) {
       LOG_WARN("failed to create and schedule rest dags", K(ret));
     }
   }
   return ret;
-}
-
-/*
- * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
- * clear_dag_net_ctx() will be called when finish dag net.
- * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
- * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
- */
-int ObCOMergeDagNet::clear_dag_net_ctx()
-{
-  return ObIDagNet::clear_dag_net_ctx();
 }
 
 #define MARK_CG_SCHEDULE_STATUS(start_cg_idx, end_cg_idx, target_status) \
@@ -1140,7 +1110,7 @@ int ObCOMergeDagNet::create_co_execute_dags(share::ObIDag &schedule_dag)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge ctx is null or schema invalid", K(ret), KPC(co_merge_ctx_));
     SET_DAG_LOCATION(&schedule_dag);
-  } else if (OB_FAIL(choose_merge_batch_size(co_merge_ctx_->array_count_))) {
+  } else if (OB_FAIL(choose_merge_batch_size(*co_merge_ctx_))) {
     LOG_WARN("failed to choose merge batch size", K(ret));
   } else if (OB_FAIL(inner_create_and_schedule_dags(&schedule_dag))) {
     LOG_WARN("failed to create and schedule dags", K(ret));
@@ -1149,13 +1119,14 @@ int ObCOMergeDagNet::create_co_execute_dags(share::ObIDag &schedule_dag)
   return ret;
 }
 
-int ObCOMergeDagNet::choose_merge_batch_size(const int64_t column_group_cnt)
+int ObCOMergeDagNet::choose_merge_batch_size(ObCOTabletMergeCtx &co_ctx)
 {
   int ret = OB_SUCCESS;
+  const int64_t column_group_cnt = co_ctx.array_count_;
 
   if (OB_UNLIKELY(column_group_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected count", K(ret), K(column_group_cnt));
+    LOG_WARN("get unexpected count", K(ret), K(column_group_cnt), K(co_ctx));
   } else if (column_group_cnt < ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE * 2) {
     merge_batch_size_ = column_group_cnt;
   } else {
@@ -1210,15 +1181,13 @@ void ObCOMergeDagNet::try_update_merge_batch_size(const int64_t column_group_cnt
   int64_t batch_mem_allow_per_thread = MAX(mem_allow_used / merge_thread - ObCompactionEstimator::MAJOR_MEM_PER_THREAD, 0);
   int64_t mem_allow_batch_size = MAX(batch_mem_allow_per_thread / ObCompactionEstimator::CO_MAJOR_CG_BASE_MEM, 1);
 
-  if (mem_allow_batch_size > merge_batch_size_ * 2) {
-    merge_batch_size_ = MIN(merge_batch_size_ * 2, column_group_cnt);
-  } else if (OB_TMP_FAIL(choose_merge_batch_size(column_group_cnt))) {
-    merge_batch_size_ = ObCOTabletMergeCtx::DEFAULT_CG_MERGE_BATCH_SIZE;
-    LOG_WARN_RET(tmp_ret, "failed to choose merge batch size, use default batch size", K(column_group_cnt), K(merge_batch_size_));
+  if (mem_allow_batch_size >= column_group_cnt) {
+    merge_batch_size_ = column_group_cnt;
+  } else if (mem_allow_batch_size > merge_batch_size_) {
+    merge_batch_size_ = mem_allow_batch_size;
+  } else {
+    //TODO(@DanLing) use default batch size now, we need more experiment about mem stat to dec batch size
   }
-
-  FLOG_INFO("[ADAPTIVE_SCHED] update co merge batch size", K(merge_thread),
-      K(mem_allow_used), K(batch_mem_allow_per_thread), K(mem_allow_batch_size), K(merge_batch_size_));
 }
 
 int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
@@ -1500,7 +1469,6 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(ls_id_), K(tablet_id_));
   } else if (FALSE_IT(co_merge_ctx_ = new (buf) ObCOTabletMergeCtx(*this, basic_param_, tmp_allocator_))) { // will set thread local mem ctx
-  } else if (FALSE_IT(co_merge_ctx_->init_time_guard(get_add_time()))) {
   } else if (FALSE_IT(co_merge_ctx_->time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
   } else if (OB_FAIL(co_merge_ctx_->build_ctx(useless_finish_flag))) {
     LOG_WARN("failed to build ctx", KR(ret), "param", co_merge_ctx_->get_dag_param(), KP_(co_merge_ctx));

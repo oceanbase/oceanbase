@@ -300,7 +300,7 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   ASSERT_EQ(true, tmp == memtable1.get_rec_scn());
 
   handle.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
 }
 
 TEST_F(TestCheckpointExecutor, timer_verify_rec_scn_stable)
@@ -329,7 +329,7 @@ TEST_F(TestCheckpointExecutor, timer_verify_rec_scn_stable)
   ASSERT_EQ(3, data_checkpoint->active_list_.checkpoint_list_.get_size());
 
   handle.reset();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id, false));
 }
 
 }

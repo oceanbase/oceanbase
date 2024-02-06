@@ -47,11 +47,6 @@ public:
   virtual void destroy() override { ObOperator::destroy(); }
 
   int calc_hash_value();
-  int64_t get_monitored_row_count() const
-  {
-    return rows_;
-  }
-
 private:
   common::ObDatum op_name_;
   common::ObDatum tracefile_identifier_;

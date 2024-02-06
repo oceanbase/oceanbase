@@ -78,25 +78,20 @@ int ObAdminParserLogEntry::get_entry_header_(ObLogBaseHeader &header)
     LOG_WARN("deserialize ObLogBaseHeader failed", K(ret), K(pos_), K(buf_len_));
   } else {
     str_arg_.log_stat_->log_base_header_size_ +=  (pos_ - tmp_pos);
-    if (str_arg_.flag_ == LogFormatFlag::NO_FORMAT
-        && str_arg_.flag_ != LogFormatFlag::STAT_FORMAT ) {
-      fprintf(stdout, ", BASE_HEADER:%s", to_cstring(header));
-    }
     LOG_TRACE("get_entry_header success", K(header), K(pos_));
   }
   return ret;
 }
 
-int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, const logservice::ObLogBaseHeader &base_header)
+int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block)
 {
   int ret = OB_SUCCESS;
 
   str_arg_.log_stat_->total_tx_log_count_++;
   TxID tx_id;
-  ObTxLogBlockHeader &tx_block_header = tx_log_block.get_header();
-  if (OB_FAIL(tx_log_block.init_for_replay(buf_, buf_len_))) {
+  ObTxLogBlockHeader tx_block_header;
+  if (OB_FAIL(tx_log_block.init_with_header(buf_, buf_len_, tx_id, tx_block_header))) {
     LOG_WARN("ObTxLogBlock init failed", K(ret));
-  } else if (FALSE_IT(tx_id = tx_block_header.get_tx_id().get_id())) {
   } else if (str_arg_.filter_.is_tx_id_valid() && tx_id != str_arg_.filter_.get_tx_id()) {
     //just skip this
     LOG_TRACE("skip with tx_id", K(str_arg_), K(tx_id), K(block_name_), K(lsn_));
@@ -125,20 +120,6 @@ int ObAdminParserLogEntry::parse_trans_service_log_(ObTxLogBlock &tx_log_block, 
         str_arg_.writer_ptr_->dump_key(block_name_);
         str_arg_.writer_ptr_->dump_key("LSN");
         str_arg_.writer_ptr_->dump_int64((int64_t)(lsn_.val_));
-        str_arg_.writer_ptr_->dump_key("ReplayHint");
-        str_arg_.writer_ptr_->dump_int64(base_header.get_replay_hint());
-        str_arg_.writer_ptr_->dump_key("ReplayBarrier");
-        bool pre_b = base_header.need_pre_replay_barrier();
-        bool post_b = base_header.need_post_replay_barrier();
-        if (pre_b && post_b) {
-          str_arg_.writer_ptr_->dump_string("STRICT");
-        } else if (pre_b) {
-          str_arg_.writer_ptr_->dump_string("PRE");
-        } else if (post_b) {
-          str_arg_.writer_ptr_->dump_string("POST");
-        } else {
-          str_arg_.writer_ptr_->dump_string("NONE");
-        }
       }
       str_arg_.writer_ptr_->dump_key("TxID");
       str_arg_.writer_ptr_->dump_int64(tx_id);
@@ -629,13 +610,13 @@ int ObAdminParserLogEntry::parse_different_entry_type_(const logservice::ObLogBa
     if (oceanbase::logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
       //TX_FORMAT only cares trans_log
       ObTxLogBlock log_block;
-      ret = parse_trans_service_log_(log_block, header);
+      ret = parse_trans_service_log_(log_block);
     }
   } else {
     switch (header.get_log_type()) {
       case oceanbase::logservice::ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE: {
         ObTxLogBlock log_block;
-        ret = parse_trans_service_log_(log_block, header);
+        ret = parse_trans_service_log_(log_block);
         break;
       }
       case oceanbase::logservice::ObLogBaseType::STORAGE_SCHEMA_LOG_BASE_TYPE: {

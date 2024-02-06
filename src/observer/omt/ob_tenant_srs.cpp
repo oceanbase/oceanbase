@@ -138,10 +138,7 @@ int ObSrsCacheGuard::get_srs_item(uint64_t srs_id, const ObSrsItem *&srs_item)
 int ObTenantSrs::get_tenant_srs_guard(ObSrsCacheGuard &srs_guard)
 {
   int ret = OB_SUCCESS;
-  if (!srs_guard.empty()) {
-    // do nothing
-    LOG_TRACE("guard isn't empty");
-  } else if (OB_FAIL(try_get_last_snapshot(srs_guard))) {
+  if (OB_FAIL(try_get_last_snapshot(srs_guard))) {
     if (ret == OB_ERR_EMPTY_QUERY) {
       ret = OB_ERR_SRS_EMPTY;
       LOG_WARN("srs table might be empty", K(ret), K(MTL_ID()));
@@ -307,16 +304,12 @@ void ObTenantSrs::recycle_last_snapshots()
     last_sys_snapshot_->~ObSrsCacheSnapShot();
     allocator_.free(last_sys_snapshot_);
     last_sys_snapshot_ = NULL;
-  } else if (OB_NOT_NULL(last_sys_snapshot_)) {
-    LOG_INFO("unexpected srs snapshot ref count", K(last_sys_snapshot_->get_ref_count()));
   }
   if (OB_NOT_NULL(last_user_snapshot_) &&
       last_user_snapshot_->get_ref_count() <= 0) {
     last_user_snapshot_->~ObSrsCacheSnapShot();
     allocator_.free(last_user_snapshot_);
     last_user_snapshot_ = NULL;
-  } else if (OB_NOT_NULL(last_user_snapshot_)) {
-    LOG_INFO("unexpected srs snapshot ref count", K(last_user_snapshot_->get_ref_count()));
   }
 }
 
@@ -469,7 +462,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
         const ObSrsItem *tmp = NULL;
         res_count++;
         if (OB_ISNULL(snapshot)) {
-          snapshot = OB_NEWx(ObSrsCacheSnapShot, &allocator_, &alloc_, snapshot_type);
+          snapshot = OB_NEWx(ObSrsCacheSnapShot, &allocator_, &allocator_, snapshot_type);
           if (OB_ISNULL(snapshot)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to create ObSrsCacheSnapShot", K(ret));

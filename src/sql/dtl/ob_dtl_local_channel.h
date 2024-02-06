@@ -36,10 +36,12 @@ class ObDtlLocalChannel : public ObDtlBasicChannel
 {
 public:
   explicit ObDtlLocalChannel(const uint64_t tenant_id,
-     const uint64_t id, const common::ObAddr &peer, DtlChannelType type);
+     const uint64_t id, const common::ObAddr &peer);
   explicit ObDtlLocalChannel(const uint64_t tenant_id,
-     const uint64_t id, const common::ObAddr &peer, const int64_t hash_val, DtlChannelType type);
+     const uint64_t id, const common::ObAddr &peer, const int64_t hash_val);
   virtual ~ObDtlLocalChannel();
+
+  virtual DtlChannelType get_channel_type() { return DtlChannelType::LOCAL_CHANNEL; }
 
   virtual int init() override;
   virtual void destroy();

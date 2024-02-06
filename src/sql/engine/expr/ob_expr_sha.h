@@ -32,8 +32,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSha);
 };
@@ -52,8 +50,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
-  DECLARE_SET_LOCAL_SESSION_VARS;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprSha2);
 };

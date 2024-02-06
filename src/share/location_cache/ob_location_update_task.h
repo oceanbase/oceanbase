@@ -15,8 +15,6 @@
 
 #include "share/location_cache/ob_location_struct.h"
 #include "observer/ob_uniq_task_queue.h"
-#include "share/ob_balance_define.h"  // ObTransferTaskID
-#include "share/transfer/ob_transfer_info.h" // ObTransferTabletInfo
 
 namespace oceanbase
 {
@@ -57,6 +55,7 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
+  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -64,6 +63,7 @@ public:
   virtual bool operator!=(const ObLSLocationUpdateTask &other) const;
   virtual bool compare_without_version(const ObLSLocationUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
+  virtual int assign_when_equal(const ObLSLocationUpdateTask &other);
 
   inline int64_t get_cluster_id() const { return cluster_id_; }
   inline int64_t get_tenant_id() const { return tenant_id_; }
@@ -104,6 +104,7 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return false; }
+  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -111,6 +112,7 @@ public:
   virtual bool operator!=(const ObTabletLSUpdateTask &other) const;
   virtual bool compare_without_version(const ObTabletLSUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
+  virtual int assign_when_equal(const ObTabletLSUpdateTask &other);
 
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline ObTabletID get_tablet_id() const { return tablet_id_; }
@@ -177,6 +179,7 @@ public:
   virtual void reset();
   virtual bool is_barrier() const { return false; }
   virtual bool need_process_alone() const { return true; }
+  virtual bool need_assign_when_equal() const { return false; }
   virtual bool is_valid() const;
   virtual int64_t hash() const;
   virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
@@ -184,6 +187,7 @@ public:
   virtual bool operator!=(const ObVTableLocUpdateTask &other) const;
   virtual bool compare_without_version(const ObVTableLocUpdateTask &other) const;
   virtual uint64_t get_group_id() const { return tenant_id_; }
+  virtual int assign_when_equal(const ObVTableLocUpdateTask &other);
 
   inline int64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_table_id() const { return table_id_; }
@@ -206,44 +210,6 @@ private:
   ObTabletLSService &tablet_ls_service_;
 };
 
-class ObTabletLocationBroadcastTask
-    : public observer::ObIUniqTaskQueueTask<ObTabletLocationBroadcastTask>
-{
-  OB_UNIS_VERSION(1);
-public:
-  typedef ObSArray<ObTransferTabletInfo> TabletInfoList;
-  ObTabletLocationBroadcastTask();
-  virtual ~ObTabletLocationBroadcastTask() {}
-  int init(
-    const uint64_t tenant_id,
-    const ObTransferTaskID &task_id,
-    const ObLSID &ls_id,
-    const ObIArray<ObTransferTabletInfo> &tablet_list);
-  int assign(const ObTabletLocationBroadcastTask &other);
-  virtual void reset();
-  virtual bool is_barrier() const { return false; }
-  virtual bool need_process_alone() const { return true; }  // process 1 task each time
-  virtual bool is_valid() const;
-  virtual int64_t hash() const;
-  virtual int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
-  virtual bool operator==(const ObTabletLocationBroadcastTask &other) const;
-  virtual bool operator!=(const ObTabletLocationBroadcastTask &other) const;
-  virtual bool compare_without_version(const ObTabletLocationBroadcastTask &other) const;
-  virtual uint64_t get_group_id() const { return tenant_id_; }
-
-  inline uint64_t get_tenant_id() const { return tenant_id_; }
-  inline const ObTransferTaskID &get_task_id() const { return task_id_; }
-  inline const ObLSID &get_ls_id() const { return ls_id_; }
-  inline const TabletInfoList &get_tablet_list() const { return tablet_list_; }
-  inline int64_t get_tablet_cnt() const { return tablet_list_.count(); }
-
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(ls_id), K_(tablet_list));
-private:
-  uint64_t tenant_id_;
-  ObTransferTaskID task_id_;
-  ObLSID ls_id_;
-  TabletInfoList tablet_list_;
-};
 } // end namespace share
 } // end namespace oceanbase
 #endif

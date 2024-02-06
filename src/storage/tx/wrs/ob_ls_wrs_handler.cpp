@@ -10,13 +10,11 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX STORAGE
 #include "storage/tx/wrs/ob_ls_wrs_handler.h"
 #include "lib/utility/ob_print_utils.h"
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "logservice/ob_log_service.h"
-#include "share/ob_force_print_log.h"
 
 namespace oceanbase
 {
@@ -90,41 +88,39 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
   SCN timestamp;
   SCN gts_scn;
   need_skip = false;
+  ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
 
   ObSpinLockGuard guard(lock_);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObLSWRSHandler not init", K(ret), K(is_inited_), K(ls));
   } else if (!is_enabled_) {
-    need_skip = true;
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      STORAGE_LOG(INFO, "weak read handler not enabled", K(*this));
-    }
-  } else if (ls.get_transfer_status().get_transfer_prepare_enable()) {
     // do nothing
     need_skip = true;
     if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
-      STORAGE_LOG(INFO, "ls in transfer status", K(*this));
+      STORAGE_LOG(INFO, "weak read handler not enabled", K(*this));
     }
   } else if (OB_FAIL(generate_weak_read_timestamp_(ls, max_stale_time, timestamp))) {
+    STORAGE_LOG(DEBUG, "fail to generate weak read timestamp", KR(ret), K(max_stale_time));
     need_skip = true;
-    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      STORAGE_LOG(INFO, "fail to generate weak read timestamp", KR(ret), K(max_stale_time));
-    }
     ret = OB_SUCCESS;
   } else if (OB_FAIL(OB_TS_MGR.get_gts(MTL_ID(), NULL, gts_scn))) {
     TRANS_LOG(WARN, "get gts scn error", K(ret), K(max_stale_time), K(*this));
+  } else if (OB_FAIL(ls.get_migration_status(status))
+                  || ObMigrationStatus::OB_MIGRATION_STATUS_NONE == status ) {
+    // check the weak read timestamp of the migrated ls
+    if (timestamp.convert_to_ts() > gts_scn.convert_to_ts() - 500 * 1000) {
+      STORAGE_LOG(TRACE, "ls received the latest log", K(timestamp));
+      // clog chases within 500ms, then clear the mark
+      need_skip = false;
+    } else {
+      need_skip = true;
+    }
   } else {
     int64_t snapshot_version_barrier = gts_scn.convert_to_ts() - max_stale_time;
     if (timestamp.convert_to_ts() <= snapshot_version_barrier) {
       // rule out these ls to avoid too old weak read timestamp
       need_skip = true;
-      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        STORAGE_LOG(INFO, "wead read timestamp is too old", K(timestamp),
-                                                            K(gts_scn),
-                                                            K(max_stale_time),
-                                                            K(*this));
-      }
     } else {
       need_skip = false;
     }
@@ -144,9 +140,6 @@ int ObLSWRSHandler::generate_ls_weak_read_snapshot_version(ObLS &ls,
     if (!need_skip) {
       wrs_version = timestamp;
     }
-  }
-
-  if (timestamp.is_valid()) {
     // Update timestamp forcedly no matter how current ls leaves behind or not;
     ls_weak_read_ts_.inc_update(timestamp);
   }

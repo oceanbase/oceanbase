@@ -262,6 +262,7 @@ private:
   int create_tablets_sstable_();
   int generate_tablet_restore_dag_();
   int record_server_event_();
+  int try_update_local_tablets_();
 
 private:
   bool is_inited_;

@@ -82,8 +82,6 @@ int ObLogCount::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
-      &child->get_output_equal_sets(), child->get_card()))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                             get_plan()->get_selectivity_ctx(),
                                                             get_filter_exprs(),
@@ -148,7 +146,7 @@ int ObLogCount::inner_est_cost(double &child_card,
       }
     }
     op_cost = ObOptEstCost::cost_filter_rows(child_card, get_filter_exprs(),
-                                             opt_ctx);
+                                             opt_ctx.get_cost_model_type());
   }
   return ret;
 }

@@ -88,9 +88,7 @@ public:
   void destroy();
 
   bool is_paused() const;
-  int get_uncompacted_tablets(
-    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
-    common::ObArray<uint64_t> &uncompacted_table_ids) const;
+  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
 
 protected:
   virtual ObMajorFreezeServiceType get_service_type() const

@@ -15,7 +15,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "lib/lock/ob_latch.h"
+#include "lib/lock/ob_mutex.h"
 
 namespace oceanbase {
 namespace lib {
@@ -62,10 +62,10 @@ public:
   public:
     Guard(StackMgr& mgr) : mgr_(mgr), cur_(nullptr)
     {
-      mgr_.rwlock_.rdlock(common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
+      mgr_.mutex_.lock();
       cur_ = mgr_.dummy_.next_;
     }
-    ~Guard() { mgr_.rwlock_.unlock(); }
+    ~Guard() { mgr_.mutex_.unlock(); }
     ObStackHeader* operator*() { return (cur_ == &(mgr_.dummy_)) ? nullptr : cur_; }
     ObStackHeader* next()
     {
@@ -86,7 +86,7 @@ private:
   ObStackHeader *begin() { return dummy_.next_; }
   ObStackHeader *end() { return &dummy_; }
 private:
-  common::ObLatch rwlock_;
+  lib::ObMutex mutex_;
   ObStackHeader dummy_;
 };
 

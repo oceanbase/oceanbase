@@ -79,12 +79,13 @@ public:
 public:
   int read_row(ObExecContext &ctx,
                const ObExprPtrIArray *&row,
-               common::ObTabletID &tablet_id,
-               bool &is_skipped) override;
+               common::ObTabletID &tablet_id) override;
 
   int write_rows(ObExecContext &ctx,
                  const ObDASTabletLoc *tablet_loc,
                  ObPDMLOpRowIterator &iterator) override;
+
+  bool is_update_auto_filled_timestamp();
 
   virtual int inner_get_next_row();
   virtual int inner_open();

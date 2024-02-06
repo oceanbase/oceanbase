@@ -63,7 +63,9 @@ public:
   virtual int del() override;
   transaction::ObTxSEQ get_seq_no() const override;
   bool is_table_lock_callback() const override { return true; }
+  bool log_synced() const override { return share::SCN::max_scn() != scn_; }
   bool must_log() const;
+  int log_sync(const share::SCN scn) override;
   int64_t get_data_size() override { return 0; } // size of trans node.
   memtable::MutatorType get_mutator_type() const override
   { return memtable::MutatorType::MUTATOR_TABLE_LOCK; }

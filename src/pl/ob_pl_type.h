@@ -41,14 +41,12 @@ namespace oceanbase
 namespace sql
 {
 class ObRawExpr;
-class ObObjAccessRawExpr;
 class ObSqlExpression;
 class ObRawExprFactory;
 class ObExecContext;
 struct ObSPICursor;
 class ObSPIResultSet;
 class ObSQLSessionInfo;
-class ObSynonymChecker;
 }
 namespace common
 {
@@ -284,7 +282,6 @@ public:
       not_null_(other.not_null_),
       pls_type_(other.pls_type_)
   {
-    type_info_.set_tenant_id(MTL_ID());
     type_info_ = other.type_info_;
   }
 
@@ -484,7 +481,7 @@ public:
   static int get_datum_type(common::ObObjType obj_type, jit::ObLLVMHelper& helper, ObPLADTService &adt_service, jit::ObLLVMType &type);
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLINS &ns,
+                                        const ObPLBlockNS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(ObPLCodeGenerator &generator,
@@ -538,24 +535,12 @@ public:
 
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
-  static int collect_synonym_deps(uint64_t tenant_id,
-                                  sql::ObSynonymChecker &synonym_checker,
-                                  share::schema::ObSchemaGetterGuard &schema_guard,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
-  static int get_synonym_object(uint64_t tenant_id,
-                                uint64_t &owner_id,
-                                ObString &object_name,
-                                bool &exist,
-                                sql::ObSQLSessionInfo &session_info,
-                                share::schema::ObSchemaGetterGuard &schema_guard,
-                                ObIArray<share::schema::ObSchemaObjVersion> *deps);
   static int get_udt_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
                                   const common::ObString &udt,
-                                  sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  share::schema::ObSchemaObjVersion *obj_version);
 #ifdef OB_BUILD_ORACLE_PL
   static int get_pkg_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -567,7 +552,7 @@ public:
                                   common::ObMySQLProxy &sql_proxy,
                                   bool is_pkg_var, // pkg var or pkg type
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  share::schema::ObSchemaObjVersion *obj_version);
 #endif
   static int get_table_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -578,14 +563,14 @@ public:
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   bool is_rowtype,
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  share::schema::ObSchemaObjVersion *obj_version);
   static int transform_from_iparam(const share::schema::ObRoutineParam *iparam,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   sql::ObSQLSessionInfo &session_info,
                                   common::ObIAllocator &allocator,
                                   common::ObMySQLProxy &sql_proxy,
                                   pl::ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps = NULL,
+                                  share::schema::ObSchemaObjVersion *obj_version = NULL,
                                   pl::ObPLDbLinkGuard *dblink_guard = NULL);
   static int transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                   int64_t position,
@@ -754,7 +739,6 @@ public:
                             uint64_t &package_id, uint64_t &var_idx);
   static int get_package_id(const sql::ObRawExpr *expr,
                             uint64_t& package_id, uint64_t *p_var_idx = NULL);
-  static bool has_same_collection_access(const sql::ObRawExpr *expr, const sql::ObObjAccessRawExpr *access_expr);
   static bool has_collection_access(const sql::ObRawExpr *expr);
   static int datum_need_copy(const sql::ObRawExpr *into, const sql::ObRawExpr *value, AccessType &alloc_scop);
   static int64_t get_local_variable_idx(const common::ObIArray<ObObjAccessIdx> &access_idxs);

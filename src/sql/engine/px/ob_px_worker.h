@@ -198,7 +198,7 @@ public:
   ~PxWorkerFunctor() = default;
 
   // px thread will invoke this function.
-  void operator ()(bool need_exec);
+  void operator ()();
 
   PxWorkerFunctor &operator = (const PxWorkerFunctor &other) {
     if (&other != this) {

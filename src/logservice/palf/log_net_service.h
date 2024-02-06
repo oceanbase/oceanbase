@@ -73,33 +73,6 @@ public:
     return ret;
   }
 
-  template<class List>
-  int submit_batch_push_log_req(
-      const List &member_list,
-      const PushLogType &push_log_type,
-      const int64_t &msg_proposal_id,
-      const int64_t &prev_log_proposal_id,
-      const LSN &prev_lsn,
-      const LSN &curr_lsn,
-      const LogWriteBuf &write_buf)
-  {
-    int ret = OB_SUCCESS;
-    if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      PALF_LOG(ERROR, "LogNetService has not inited!!!", K(ret));
-    } else {
-      LogBatchPushReq push_log_req(push_log_type,
-                                   msg_proposal_id,
-                                   prev_log_proposal_id,
-                                   prev_lsn,
-                                   curr_lsn,
-                                   write_buf);
-      ret = post_request_to_member_list_(member_list, push_log_req);
-      PALF_LOG(TRACE, "post_request_to_member_list_ success", K(member_list), K(push_log_req));
-    }
-    return ret;
-  }
-
   int submit_push_log_req(
       const ObAddr &server,
       const PushLogType &push_log_type,
@@ -113,8 +86,7 @@ public:
   int submit_push_log_resp(
       const common::ObAddr &server,
       const int64_t &msg_proposal_id,
-      const LSN &lsn,
-      const bool is_batch);
+      const LSN &lsn);
 
   template<class List>
   int submit_prepare_meta_req(

@@ -34,8 +34,7 @@ static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
 static constexpr int64_t MAX_IO_WAIT_TIME_MS = 300L * 1000L; // 5min
 static constexpr int64_t GROUP_START_NUM = 8L;
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_US = 5000L * 1000L; // 5s
-static constexpr int64_t MAX_DETECT_READ_WARN_TIMES = 10L;
-static constexpr int64_t MAX_DETECT_READ_ERROR_TIMES = 100L;
+static constexpr int64_t MAX_DETECT_READ_TIMES = 10L;
 enum class ObIOMode : uint8_t
 {
   READ = 0,
@@ -385,7 +384,6 @@ private:
   ObCurTraceId::TraceId trace_id_;
 };
 
-typedef common::ObDList<ObIORequest> IOReqList;
 class ObPhyQueue final
 {
 public:
@@ -399,6 +397,7 @@ public:
   void set_stop_accept() { stop_accept_ = true; }
   bool reach_adjust_interval();
 public:
+  typedef common::ObDList<ObIORequest> IOReqList;
   TO_STRING_KV(K_(reservation_ts), K_(group_limitation_ts), K_(tenant_limitation_ts),
                K_(stop_accept), K_(last_empty_ts));
   bool is_inited_;
@@ -534,30 +533,29 @@ public:
                     int64_t &proportion_ts);
   int push_phyqueue(ObPhyQueue *phy_queue);
   int pop_phyqueue(ObIORequest *&req, int64_t &deadline_ts);
-  TO_STRING_KV(K(is_inited_), K(r_heap_.count()), K(gl_heap_.count()), K(tl_heap_.count()), K(ready_heap_.count()));
+  TO_STRING_KV(K(is_inited_));
 
   int remove_from_heap(ObPhyQueue *phy_queue);
 private:
   int pop_with_ready_queue(const int64_t current_ts, ObIORequest *&req, int64_t &deadline_ts);
 
-  template<typename T, int64_t T::*member_ts, IOReqList T::*list>
+  template<typename T, int64_t T::*member>
   struct HeapCompare {
     int get_error_code() { return OB_SUCCESS; }
     bool operator() (const T *left, const T *right) const {
-      return left->*member_ts != right->*member_ts ? left->*member_ts > right->*member_ts :
-             (left->*list).get_size() != (right->*list).get_size() ? (left->*list).get_size() < (right->*list).get_size() : (int64_t)left > (int64_t)right;
+      return left->*member != right->*member ? left->*member > right->*member: (int64_t)left > (int64_t)right;
     }
   };
 private:
   bool is_inited_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_, &ObPhyQueue::req_list_> r_cmp_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_, &ObPhyQueue::req_list_> gl_cmp_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_, &ObPhyQueue::req_list_> tl_cmp_;
-  HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_, &ObPhyQueue::req_list_> p_cmp_;
-  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_, &ObPhyQueue::req_list_>, &ObPhyQueue::reservation_pos_> r_heap_;
-  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_, &ObPhyQueue::req_list_>, &ObPhyQueue::group_limitation_pos_> gl_heap_;
-  ObRemovableHeap<ObPhyQueue *,HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_, &ObPhyQueue::req_list_>, &ObPhyQueue::tenant_limitation_pos_> tl_heap_;
-  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_, &ObPhyQueue::req_list_>, &ObPhyQueue::proportion_pos_> ready_heap_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_> r_cmp_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_> gl_cmp_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_> tl_cmp_;
+  HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_> p_cmp_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::reservation_ts_>, &ObPhyQueue::reservation_pos_> r_heap_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::group_limitation_ts_>, &ObPhyQueue::group_limitation_pos_> gl_heap_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::tenant_limitation_ts_>, &ObPhyQueue::tenant_limitation_pos_> tl_heap_;
+  ObRemovableHeap<ObPhyQueue *, HeapCompare<ObPhyQueue, &ObPhyQueue::proportion_ts_>, &ObPhyQueue::proportion_pos_> ready_heap_;
 };
 
 template <typename T>

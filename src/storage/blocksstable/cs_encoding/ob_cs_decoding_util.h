@@ -186,7 +186,6 @@ public:
     const int64_t rval_size,
     uint64_t &diff)
   {
-    // default: lval amd rval has same sign bit
     typedef typename ObEncodingTypeInference<L_IS_SIGNED, L_WIDTH_TAG>::Type LDataType;
     typedef typename ObEncodingTypeInference<R_IS_SIGNED, R_WIDTH_TAG>::Type RDataType;
 
@@ -196,64 +195,6 @@ public:
     const RDataType cast_rval = (RDataType)valid_rval;
 
     bool bool_ret = (cast_lval < cast_rval);
-    if (!bool_ret) {
-      diff = (uint64_t)(cast_lval - cast_rval);
-    }
-    return bool_ret;
-  }
-};
-
-template <int32_t L_WIDTH_TAG, int32_t R_WIDTH_TAG>
-class ObCSFilterCommonFunction<0/*L_IS_SIGNED*/, L_WIDTH_TAG, 1/*R_IS_SIGNED*/, R_WIDTH_TAG>
-{
-public:
-  OB_INLINE static bool less_than_func(
-    const uint64_t lval,
-    const int64_t lval_size,
-    const uint64_t rval,
-    const int64_t rval_size,
-    uint64_t &diff)
-  {
-    typedef typename ObEncodingTypeInference<0, L_WIDTH_TAG>::Type LDataType;
-    typedef typename ObEncodingTypeInference<1, R_WIDTH_TAG>::Type RDataType;
-
-    const uint64_t valid_lval = lval & INTEGER_MASK_TABLE[lval_size];
-    const LDataType cast_lval = (LDataType)valid_lval;
-    const uint64_t valid_rval = rval & INTEGER_MASK_TABLE[rval_size];
-    const RDataType cast_rval = (RDataType)valid_rval;
-    bool bool_ret = false;
-    if (cast_rval > 0) {
-      bool_ret = (cast_lval < cast_rval);
-    } // else {cast_rval <= 0, cast_lval(unsigned) < cast_rval(signed) must be false}
-    if (!bool_ret) {
-      diff = (uint64_t)(cast_lval - cast_rval);
-    }
-    return bool_ret;
-  }
-};
-
-template <int32_t L_WIDTH_TAG, int32_t R_WIDTH_TAG>
-class ObCSFilterCommonFunction<1/*L_IS_SIGNED*/, L_WIDTH_TAG, 0/*R_IS_SIGNED*/, R_WIDTH_TAG>
-{
-public:
-  OB_INLINE static bool less_than_func(
-    const uint64_t lval,
-    const int64_t lval_size,
-    const uint64_t rval,
-    const int64_t rval_size,
-    uint64_t &diff)
-  {
-    typedef typename ObEncodingTypeInference<1, L_WIDTH_TAG>::Type LDataType;
-    typedef typename ObEncodingTypeInference<0, R_WIDTH_TAG>::Type RDataType;
-
-    const uint64_t valid_lval = lval & INTEGER_MASK_TABLE[lval_size];
-    const LDataType cast_lval = (LDataType)valid_lval;
-    const uint64_t valid_rval = rval & INTEGER_MASK_TABLE[rval_size];
-    const RDataType cast_rval = (RDataType)valid_rval;
-    bool bool_ret = true;
-    if (cast_lval >= 0) {
-      bool_ret = (cast_lval < cast_rval);
-    } // else {cast_lval < 0, cast_lval(signed) < cast_rval(unsigned) must be true}
     if (!bool_ret) {
       diff = (uint64_t)(cast_lval - cast_rval);
     }

@@ -5,8 +5,8 @@
 --disable_warnings
 # 15:11:56 Starting
 # 15:11:56  gentest.pl \
-# 15:11:56  --dsn1=dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test \
-# 15:11:56  --dsn2=dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10 \
+# 15:11:56  --dsn1=dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test \
+# 15:11:56  --dsn2=dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10 \
 # 15:11:56  --gendata=conf/ob_subquery_semijoin_nested.mysql.zz \
 # 15:11:56  --grammar=conf/ob_subquery_semijoin_nested.mysql.yy \
 # 15:11:56  --threads=1 \
@@ -15,7 +15,7 @@
 # 15:11:56  --myprint
 # 15:11:56 -------------------------------
 # 15:11:56 Configuration
-# 15:11:56   dsn => ['dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10']
+# 15:11:56   dsn => ['dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test', 'dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10']
 # 15:11:56   duration => 3600
 # 15:11:56   gendata => conf/ob_subquery_semijoin_nested.mysql.zz
 # 15:11:56   grammar => conf/ob_subquery_semijoin_nested.mysql.yy
@@ -145,9 +145,9 @@ iNSERT INTO KK VALUES  ('2001-05-23 15:49:48', 1, 'ssotnefics', 'cssotnefi', NUL
 # 15:12:02 Starting 1 processes, 8000 queries each, duration 3600 seconds.
 # 15:12:02 GenTest::ErrorFilter(114401) started
 # 15:12:02 Default schema: test
-# 15:12:02 Caching metadata for dbi:mysql:host=127.0.0.2:port=44503:user=admin:password=admin:database=test
+# 15:12:02 Caching metadata for dbi:mysql:host=10.244.4.66:port=44503:user=admin:password=admin:database=test
 # 15:12:02 Default schema: test
-# 15:12:02 Caching metadata for dbi:mysql:host=127.0.0.1:port=3308:user=root:password=:database=test_obrqg_10
+# 15:12:02 Caching metadata for dbi:mysql:host=10.244.4.65:port=3308:user=root:password=:database=test_obrqg_10
 # 15:12:02 Started periodic reporting process...
 #SELECT DISTINCT GRANDPARENT1 . pk AS G1 FROM C AS GRANDPARENT1 WHERE GRANDPARENT1 . `col_varchar_20` IN ( #SELECT DISTINCT PARENT1 . `col_varchar_10_key` AS P1 FROM W AS PARENT1 LEFT JOIN GG AS PARENT2 ON ( PARENT1 . `pk` = PARENT2 . `pk` ) WHERE GRANDPARENT1 . `pk` IN ( #SELECT DISTINCT CHILD1 . `col_int_key` AS C1 FROM CC AS CHILD1 LEFT JOIN M AS CHILD2 ON ( CHILD1 . `col_varchar_20_key` > CHILD2 . `col_varchar_10_key` ) WHERE ( ( CHILD1 . pk IS NOT NULL ) OR NOT ( GRANDPARENT1 . `col_int` <> 6 ) ) ORDER BY CHILD1 . pk ) AND ( GRANDPARENT1 . pk IS UNKNOWN ) ORDER BY PARENT1 . pk ) AND GRANDPARENT1 . pk IS NOT NULL GROUP BY GRANDPARENT1 . pk HAVING G1 <= NULL ORDER BY GRANDPARENT1 . pk LIMIT 9;
 #SELECT  GRANDPARENT1 . col_date_key AS G1 FROM D AS GRANDPARENT1 WHERE GRANDPARENT1 . `col_varchar_10` IN ( #SELECT  PARENT1 . `col_varchar_20` AS P1 FROM KK AS PARENT1   ) AND ( GRANDPARENT1 . `col_varchar_10_key` > 'v' OR NOT GRANDPARENT1 . col_date_key IS NULL ) ;

@@ -3,10 +3,3 @@
 #insert into te1 values (0)
 #update te1 set c1 = 1 where c1 = 2
 #delete from te1 where c1 = 1
-#select avg(c1) from t7 group by c2;
-#select c2, sum(c1), min(c1), max(c1) from t7 group by c2;
-select/*+USE_HASH_AGGREGATION*/ c2, count(c1), sum(c1 + 1), min(c1*2), max(c1 - 1) from t7 group by c2;
-#select c2 from t7 order by c2;
-#select /*+blocking('all')*/* from t7;
-#select /*+blocking('all')*/* from t1;
-#select distinct(c2) from t7;

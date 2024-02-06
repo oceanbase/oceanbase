@@ -504,7 +504,7 @@ int ObExprJsonObjectStar::calc_result_typeN(ObExprResType& type,
     types_stack[0].set_calc_collation_type(types_stack[0].get_collation_type());
     ObExprResType dst_type;
     dst_type.set_type(ObObjType::ObVarcharType);
-    dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    dst_type.set_collation_type(CS_TYPE_INVALID);
     dst_type.set_full_length(4000, 1);
     if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[0], type, dst_type, type_ctx))) {
       LOG_WARN("set dest type failed", K(ret));

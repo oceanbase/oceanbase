@@ -19,6 +19,7 @@
 #include "share/ob_define.h"
 #include "lib/ob_running_mode.h"
 
+
 namespace oceanbase
 {
 using namespace common;
@@ -106,6 +107,13 @@ bool ObLSTableUpdateTask::compare_without_version(
     const ObLSTableUpdateTask &other) const
 {
   return (*this == other);
+}
+
+int ObLSTableUpdateTask::assign_when_equal(
+    const ObLSTableUpdateTask &other)
+{
+  UNUSED(other);
+  return OB_NOT_SUPPORTED;
 }
 
 ObLSTableUpdateQueueSet::ObLSTableUpdateQueueSet(
@@ -295,7 +303,7 @@ int ObLSTableUpdater::batch_process_tasks(
   } else if (1 != tasks.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected task count", KR(ret), "tasks count", tasks.count());
-  } else {
+	} else {
     const ObLSTableUpdateTask &task = tasks.at(0);
     const uint64_t tenant_id = task.get_tenant_id();
     const ObLSID &ls_id = task.get_ls_id();

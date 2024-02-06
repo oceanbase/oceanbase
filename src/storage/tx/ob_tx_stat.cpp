@@ -47,10 +47,6 @@ void ObTxStat::reset()
   xid_.reset();
   coord_.reset();
   last_request_ts_ = OB_INVALID_TIMESTAMP;
-  busy_cbs_cnt_ = 0;
-  replay_completeness_ = -1;
-  serial_final_scn_.reset();
-  callback_list_stats_.reset();
 }
 int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const uint64_t tenant_id,  const bool has_decided,
@@ -64,11 +60,7 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
                    const int64_t role_state,
                    const int64_t session_id, const common::ObAddr &scheduler,
                    const bool is_exiting, const ObXATransID &xid,
-                   const share::ObLSID &coord, const int64_t last_request_ts,
-                   SCN start_scn, SCN end_scn, SCN rec_scn, bool transfer_blocking,
-                   const int busy_cbs_cnt,
-                   int replay_completeness,
-                   share::SCN serial_final_scn)
+                   const share::ObLSID &coord, const int64_t last_request_ts)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -105,13 +97,6 @@ int ObTxStat::init(const common::ObAddr &addr, const ObTransID &tx_id,
       coord_ = coord;
     }
     last_request_ts_ = last_request_ts;
-    start_scn_ = start_scn;
-    end_scn_ = end_scn;
-    rec_scn_ = rec_scn;
-    transfer_blocking_ = transfer_blocking;
-    busy_cbs_cnt_ = busy_cbs_cnt;
-    replay_completeness_ = replay_completeness;
-    serial_final_scn_ = serial_final_scn;
   }
   return ret;
 }

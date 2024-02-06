@@ -388,8 +388,6 @@ public:
   int get_table_schema(uint64_t table_id,
                        const share::schema::ObTableSchema *&table_schema,
                        bool is_link = false) const;
-  int get_database_schema(const uint64_t database_id,
-                          const ObDatabaseSchema *&database_schema);
   int get_column_schema(uint64_t table_id, const common::ObString &column_name,
                         const share::schema::ObColumnSchemaV2 *&column_schema,
                         bool is_link = false) const;
@@ -404,7 +402,6 @@ public:
                                bool with_global_index = true,
                                bool with_domain_index = true,
                                bool with_spatial_index = true);
-  int get_table_mlog_schema(const uint64_t table_id, const ObTableSchema *&mlog_schema);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;
   int get_link_column_schema(uint64_t table_id, const common::ObString &column_name,
@@ -611,7 +608,6 @@ public:
   common::ObIArray<ObExprConstraint> *all_expr_constraints_;
   common::ObIArray<ObPCPrivInfo> *all_priv_constraints_;
   bool need_match_all_params_; //only used for matching plans
-  common::ObIArray<ObLocalSessionVar> *all_local_session_vars_; //store the old values of session vars which have changed after creating generated columns
   bool is_ddl_from_primary_;//备集群从主库同步过来需要处理的ddl sql语句
   const sql::ObStmt *cur_stmt_;
   const ObPhysicalPlan *cur_plan_;
@@ -642,7 +638,6 @@ public:
       uint32_t reserved_ : 29;
     };
   };
-  TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;
 };
@@ -686,9 +681,7 @@ public:
       res_map_rule_id_(common::OB_INVALID_ID),
       res_map_rule_param_idx_(common::OB_INVALID_INDEX),
       root_stmt_(NULL),
-      udf_has_select_stmt_(false),
-      has_pl_udf_(false),
-      optimizer_features_enable_version_(0)
+      udf_has_select_stmt_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -733,8 +726,6 @@ public:
     res_map_rule_param_idx_ = common::OB_INVALID_INDEX;
     root_stmt_ = NULL;
     udf_has_select_stmt_ = false;
-    has_pl_udf_ = false;
-    optimizer_features_enable_version_ = 0;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -762,7 +753,6 @@ public:
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
-  int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
 
 public:
   static const int64_t CALCULABLE_EXPR_NUM = 1;
@@ -793,7 +783,6 @@ public:
   common::ObDList<ObPreCalcExprConstraint> all_pre_calc_constraints_;
   common::ObSArray<ObExprConstraint, common::ModulePageAllocator, true> all_expr_constraints_;
   common::ObSArray<ObPCPrivInfo, common::ModulePageAllocator, true> all_priv_constraints_;
-  common::ObSArray<ObLocalSessionVar, common::ModulePageAllocator, true> all_local_session_vars_;
   common::ObSArray<ObUserVarIdentRawExpr *, common::ModulePageAllocator, true> all_user_variable_;
   common::hash::ObHashMap<uint64_t, ObObj, common::hash::NoPthreadDefendMode> calculable_expr_results_;
   bool need_match_all_params_; //only used for matching plans
@@ -818,8 +807,6 @@ public:
   int64_t res_map_rule_param_idx_;
   ObDMLStmt *root_stmt_;
   bool udf_has_select_stmt_; // udf has select stmt, not contain other dml stmt
-  bool has_pl_udf_; // used to mark sql contain pl udf
-  uint64_t optimizer_features_enable_version_;
 };
 } /* ns sql*/
 } /* ns oceanbase */

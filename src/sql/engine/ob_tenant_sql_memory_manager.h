@@ -43,7 +43,7 @@ public:
     session_id_(-1), max_bound_(INT64_MAX), delta_size_(0), data_size_(0),
     max_mem_used_(0), mem_used_(0),
     pre_mem_used_(0), dumped_size_(0), data_ratio_(0.5), active_time_(0), number_pass_(0),
-    calc_count_(0), disable_auto_mem_mgr_(false)
+    calc_count_(0)
   {
     sql_id_[0] = '\0';
     ObRandom rand;
@@ -111,7 +111,7 @@ public:
   OB_INLINE bool is_hash_join_wa() const { return ObSqlWorkAreaType::HASH_WORK_AREA == type_; }
   OB_INLINE bool is_sort_wa() const { return ObSqlWorkAreaType::SORT_WORK_AREA == type_; }
   OB_INLINE ObSqlWorkAreaType get_work_area_type() const { return type_; }
-  OB_INLINE bool get_auto_policy() const { return !disable_auto_mem_mgr_ && OB_INVALID_ID != expect_size_; }
+  OB_INLINE bool get_auto_policy() const { return OB_INVALID_ID != expect_size_; }
 
   OB_INLINE void set_active_time(int64_t active_time) { active_time_ = active_time; }
   OB_INLINE int64_t get_active_time() const { return active_time_; }
@@ -199,7 +199,6 @@ public:
   int64_t active_time_;   // init: start_time, unregister:
   int64_t number_pass_;
   int64_t calc_count_;    // the times of calculate global bound
-  bool disable_auto_mem_mgr_;
 };
 
 static constexpr const char *EXECUTION_OPTIMAL = "OPTIMAL";
@@ -581,11 +580,10 @@ public:
     mem_target_(0), max_workarea_size_(0), workarea_hold_size_(0), max_auto_workarea_size_(0),
     max_tenant_memory_size_(0),
     manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0),
-    lock_(), global_bound_update_lock_()
+    lock_()
   {}
   ~ObTenantSqlMemoryManager() {}
 public:
-  static int mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static int mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr);
   static void mtl_destroy(ObTenantSqlMemoryManager *&sql_mem_mgr);
 
@@ -634,12 +632,11 @@ private:
   OB_INLINE bool need_manual_by_drift();
 
   OB_INLINE void increase(int64_t size)
-  { (ATOMIC_AAF(&drift_size_, size)); }
+  { (ATOMIC_AAF(&drift_size_, size)); ATOMIC_INC(&profile_cnt_); }
   OB_INLINE void decrease(int64_t size)
-  { (ATOMIC_SAF(&drift_size_, size)); }
+  { (ATOMIC_SAF(&drift_size_, size)); ATOMIC_DEC(&profile_cnt_); }
   OB_INLINE int64_t get_drift_size() { return (ATOMIC_LOAD(&drift_size_)); }
-  OB_INLINE void increase_profile_cnt() { ATOMIC_INC(&profile_cnt_); }
-  OB_INLINE void decrease_profile_cnt() { ATOMIC_DEC(&profile_cnt_); }
+
   void reset();
   int try_push_profiles_work_area_size(int64_t global_bound_size);
   int calc_work_area_size_by_profile(int64_t global_bound_size, ObSqlWorkAreaProfile &profile);
@@ -705,7 +702,6 @@ private:
   static const int64_t DRIFT_CNT_PERCENT = 10;
 
   static const int64_t HASH_CNT = 256;
-  static const int64_t MIN_PROFILE_CHANEG_CNT = 8;
 
   ObTenantSqlMemoryCallback sql_mem_callback_;
   common::ObFIFOAllocator allocator_;
@@ -734,7 +730,6 @@ private:
   int64_t wa_end_;
   int64_t wa_cnt_;
   ObLatch lock_;
-  ObLatch global_bound_update_lock_;
   hash::ObHashMap<ObSqlWorkAreaStat::WorkareaKey,
       ObSqlWorkAreaStat*, hash::NoPthreadDefendMode> wa_ht_;
   ObSEArray<ObSqlWorkAreaStat, MAX_WORKAREA_STAT_CNT> workarea_stats_;
@@ -758,16 +753,14 @@ OB_INLINE bool ObTenantSqlMemoryManager::need_manual_calc_bound()
     if (need_manual_by_drift()) {
       manual_calc_bound = true;
     } else {
-      int64_t delta_cnt = std::abs(pre_profile_cnt_ - profile_cnt_);
-      if (delta_cnt >= MIN_PROFILE_CHANEG_CNT) {
+      int64_t delta_cnt = pre_profile_cnt_ - profile_cnt_;
+      if (delta_cnt > 0) {
         manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < delta_cnt;
+      } else {
+        manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < -delta_cnt;
       }
     }
   }
-  SQL_ENG_LOG(DEBUG, "print need calc bound", K(manual_calc_bound),
-             K(global_bound_size_),
-             K(drift_size_), K(mem_target_), K(profile_cnt_),
-             K(pre_profile_cnt_), K(profile_cnt_));
   return manual_calc_bound;
 }
 

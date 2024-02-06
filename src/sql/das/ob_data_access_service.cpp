@@ -744,8 +744,7 @@ int ObDataAccessService::setup_extra_result(ObDASRef &das_ref,
   } else if (OB_FAIL(extra_result->init(task_op->get_task_id(),
                                         timeout_ts,
                                         task_resp.get_runner_svr(),
-                                        GCTX.net_frame_->get_req_transport(),
-                                        das_ref.enable_rich_format_))) {
+                                        GCTX.net_frame_->get_req_transport()))) {
     LOG_WARN("init extra data failed", KR(ret));
   } else {
     extra_result->set_has_more(true);

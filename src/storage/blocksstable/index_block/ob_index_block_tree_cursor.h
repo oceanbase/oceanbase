@@ -178,6 +178,7 @@ public:
   int get_idx_parser(const ObIndexBlockRowParser *&parser);
   int get_idx_row_header(const ObIndexBlockRowHeader *&idx_header);
   int get_macro_block_id(MacroBlockId &macro_id);
+  int get_start_row_offset(int64_t &start_row_offset);
 
   // Need to release held item at the end of lifetime
   int get_child_micro_infos(

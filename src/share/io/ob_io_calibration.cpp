@@ -159,12 +159,6 @@ bool ObIOAbility::operator==(const ObIOAbility &other) const
 
 int ObIOAbility::add_measure_item(const ObIOBenchResult &item)
 {
-  struct {
-    bool operator()(const ObIOBenchResult &left, const ObIOBenchResult &right) const
-    {
-      return left.size_ < right.size_;
-    }
-  } sort_fn;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!item.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -173,7 +167,9 @@ int ObIOAbility::add_measure_item(const ObIOBenchResult &item)
     LOG_WARN("push back measure_items failed", K(ret), K(item));
   } else {
     std::sort(measure_items_[static_cast<int>(item.mode_)].begin(), measure_items_[static_cast<int>(item.mode_)].end(),
-              sort_fn);
+        [](const ObIOBenchResult &left, const ObIOBenchResult &right) {
+        return left.size_ < right.size_;
+        });
   }
   return ret;
 }
@@ -246,12 +242,6 @@ int ObIOAbility::get_rt(const ObIOMode mode, const int64_t size, double &rt_us) 
 
 int ObIOAbility::find_item(const ObIOMode mode, const int64_t size, int64_t &item_idx) const
 {
-  struct {
-    bool operator()(const ObIOBenchResult &left, const int64_t size) const
-    {
-      return left.size_ < size;
-    }
-  } bound_fn;
   int ret = OB_SUCCESS;
   const MeasureItemArray &item_array = measure_items_[static_cast<int>(mode)];
   if (OB_UNLIKELY(item_array.count() <= 0)) {
@@ -259,7 +249,9 @@ int ObIOAbility::find_item(const ObIOMode mode, const int64_t size, int64_t &ite
     LOG_WARN("invalid measure_items", K(ret), K(mode), K(item_array.count()));
   } else {
     MeasureItemArray::const_iterator found_it = std::lower_bound(item_array.begin(), item_array.end(), size,
-                                                                 bound_fn);
+        [](const ObIOBenchResult &left, const int64_t size) {
+          return left.size_ < size;
+        });
     if (found_it != item_array.end()) {
       item_idx = found_it - item_array.begin();
     } else {
@@ -709,6 +701,10 @@ int ObIOCalibration::read_from_table()
   } else if (tmp_ability.is_valid()) {
     if (OB_FAIL(update_io_ability(tmp_ability))) {
       LOG_WARN("update io ability failed", K(ret), K(tmp_ability));
+    }
+  } else {
+    if (OB_FAIL(reset_io_ability())) {
+      LOG_WARN("reset io ability failed", K(ret));
     }
   }
   return ret;

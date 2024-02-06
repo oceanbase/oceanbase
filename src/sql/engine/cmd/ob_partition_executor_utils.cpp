@@ -15,6 +15,8 @@
 #include "share/object/ob_obj_cast.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "share/ob_common_rpc_proxy.h"
+#include "sql/resolver/ddl/ob_create_table_stmt.h"
+#include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan.h"
@@ -22,8 +24,6 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/ob_sql_utils.h"
-#include "sql/resolver/ddl/ob_create_table_stmt.h"
-#include "sql/resolver/ddl/ob_create_tablegroup_stmt.h"
 
 namespace oceanbase
 {
@@ -37,35 +37,22 @@ int ObPartitionExecutorUtils::calc_values_exprs(
     ObExecContext &ctx,
     ObCreateTableStmt &stmt) {
   int ret = OB_SUCCESS;
-  ObArray<ObTableSchema *> table_schema_array;
-
-  if (OB_FAIL(table_schema_array.push_back(&(stmt.get_create_table_arg().schema_)))) {
-    LOG_WARN("fail to push back schema", KR(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_create_table_arg().mv_ainfo_.count(); i ++) {
-    if (OB_FAIL(table_schema_array.push_back(&(stmt.get_create_table_arg().mv_ainfo_.at(i).container_table_schema_)))) {
-      LOG_WARN("fail to push back schema", KR(ret));
+  ObTableSchema &table_schema = stmt.get_create_table_arg().schema_;
+  ObPartitionLevel level = table_schema.get_part_level();
+  if (PARTITION_LEVEL_ONE == level) {
+    if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
+      LOG_WARN("fail to calc_values_exprs", K(ret));
+    }
+  } else if (PARTITION_LEVEL_TWO == level) {
+    if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
+      LOG_WARN("fail to calc_values_exprs", K(ret));
+    } else if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, true))) {
+      LOG_WARN("fail to calc_values_exprs", K(ret));
     }
   }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_array.count(); i ++) {
-    ObTableSchema &table_schema = *(table_schema_array.at(i));
-    ObPartitionLevel level = table_schema.get_part_level();
-    if (PARTITION_LEVEL_ONE == level) {
-      if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
-        LOG_WARN("fail to calc_values_exprs", K(ret));
-      }
-    } else if (PARTITION_LEVEL_TWO == level) {
-      if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, false))) {
-        LOG_WARN("fail to calc_values_exprs", K(ret));
-      } else if (OB_FAIL(calc_values_exprs(ctx, stmt::T_CREATE_TABLE, table_schema, stmt, true))) {
-        LOG_WARN("fail to calc_values_exprs", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && table_schema.is_partitioned_table()) {
-      if (OB_FAIL(sort_list_paritition_if_need(table_schema))) {
-        LOG_WARN("failed to sort list partition if need", K(ret));
-      }
+  if (OB_SUCC(ret) && table_schema.is_partitioned_table()) {
+    if (OB_FAIL(sort_list_paritition_if_need(table_schema))) {
+      LOG_WARN("failed to sort list partition if need", K(ret));
     }
   }
   return ret;
@@ -635,13 +622,12 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
       LOG_WARN("Empty partition", K(i), K(ret));
     } else {
       bool is_increasing = true;
-      bool need_check_maxvalue = false;
       rowkey_cur = &array[i]->get_high_bound_val();
       if (rowkey_cur->get_obj_cnt() != rowkey_last->get_obj_cnt()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid object count", K(*rowkey_cur), K(*rowkey_last), K(ret));
       } else {
-        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && OB_SUCC(ret); j++) {
+        for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && is_increasing && OB_SUCC(ret); j++) {
           if (!ObSQLUtils::is_same_type_for_compare(rowkey_cur->get_obj_ptr()[j].get_meta(),
                                                     rowkey_last->get_obj_ptr()[j].get_meta())
               && !rowkey_cur->get_obj_ptr()[j].is_max_value()
@@ -650,31 +636,16 @@ int ObPartitionExecutorUtils::check_increasing_range_value(T **array,
             LOG_WARN("partiton value should have same meta info", K(ret), K(*rowkey_cur), K(*rowkey_last), K(j));
           } else if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
                      rowkey_last->get_obj_ptr()[j].is_max_value()) {
-            need_check_maxvalue = true;
+            is_increasing = false;
           }
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && is_increasing) {
         if (*rowkey_cur <= *rowkey_last) {
           is_increasing = false;
         } else {
-          if (OB_UNLIKELY(need_check_maxvalue)) {
-            for (int64_t j = 0; j < rowkey_cur->get_obj_cnt() && is_increasing && OB_SUCC(ret); j++) {
-              if (rowkey_cur->get_obj_ptr()[j].is_max_value() &&
-                  rowkey_last->get_obj_ptr()[j].is_max_value()) {
-                is_increasing = false;
-              } else if (0 != rowkey_cur->get_obj_ptr()[j].check_collation_free_and_compare(rowkey_last->get_obj_ptr()[j])) {
-                //  p0 (1, maxvalue), p1 (2, maxvalue) is allowed
-                //  p0 (1, maxvalue), p1 (1, maxvalue) is not allowed
-                //  p0 (maxvalue, 1), p1 (maxvalue, 2) is not allowed
-                break;
-              }
-            }
-          }
-          if (is_increasing) {
-            rowkey_last = rowkey_cur;
-            last_part = cur_part;
-          }
+          rowkey_last = rowkey_cur;
+          last_part = cur_part;
         }
       }
       if (OB_SUCC(ret) && !is_increasing) {

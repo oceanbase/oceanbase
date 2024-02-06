@@ -8,7 +8,6 @@ os=8
 arch=aarch64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/8/aarch64/
 
-
 [deps]
 devdeps-gtest-1.8.0-132022101316.el8.aarch64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el8.aarch64.rpm
@@ -23,13 +22,12 @@ devdeps-apr-1.6.5-32022090616.el8.aarch64.rpm
 devdeps-xz-5.2.2-42022090615.el8.aarch64.rpm
 devdeps-lua-5.4.6-22023082916.el8.aarch64.rpm
 devdeps-oss-c-sdk-3.9.2-182022100412.el8.aarch64.rpm
-devdeps-zlib-static-1.2.13-32023061421.el8.aarch64.rpm
+devdeps-zlib-static-1.2.7-132022100815.el8.aarch64.rpm
 devdeps-ncurses-static-6.2-72022100815.el8.aarch64.rpm
 devdeps-boost-1.74.0-22022110914.el8.aarch64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el8.aarch64.rpm
 devdeps-icu-69.1-72022112416.el8.aarch64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
-devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el8.aarch64.rpm
@@ -43,7 +41,6 @@ obdevtools-llvm-11.0.1-312022092921.el8.aarch64.rpm
 [tools-deps]
 devdeps-oblogmsg-1.0-52022113019.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
-obshell-4.2.2.0-102024011512.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-2.3.0-4.el8.aarch64.rpm target=community

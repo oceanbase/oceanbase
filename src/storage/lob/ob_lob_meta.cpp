@@ -68,7 +68,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
       } else if(OB_ISNULL(datum_row)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("row is null.", K(ret));
-      } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(datum_row, row, false))) {
+      } else if (OB_FAIL(ObLobMetaUtil::transform(datum_row, row))) {
         LOG_WARN("get meta info from row failed.", K(ret), KPC(datum_row));
       } else {
         cur_info_ = row;
@@ -146,7 +146,7 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaScanResult &result)
   return ret;
 }
 
-int ObLobMetaUtil::transform_lob_id(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_lob_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
   int ret = OB_SUCCESS;
   ObString buf = row->storage_datums_[ObLobMetaUtil::LOB_ID_COL_ID].get_string();
@@ -159,202 +159,60 @@ int ObLobMetaUtil::transform_lob_id(const blocksstable::ObDatumRow* row, ObLobMe
   return ret;
 }
 
-int ObLobMetaUtil::transform_seq_id(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
+int ObLobMetaUtil::transform_seq_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
   info.seq_id_ = row->storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID].get_string();
   return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_byte_len(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform_byte_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  int idx = (with_extra_rowkey) ?
-    ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN :
-    ObLobMetaUtil::BYTE_LEN_COL_ID;
-  info.byte_len_ = row->storage_datums_[idx].get_uint32();
+  info.byte_len_ = row->storage_datums_[ObLobMetaUtil::BYTE_LEN_COL_ID].get_uint32();
   return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_char_len(const blocksstable::ObDatumRow* row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform_char_len(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  int idx = (with_extra_rowkey) ?
-    ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN :
-    ObLobMetaUtil::CHAR_LEN_COL_ID;
-  info.char_len_ = row->storage_datums_[idx].get_uint32();
+  info.char_len_ = row->storage_datums_[ObLobMetaUtil::CHAR_LEN_COL_ID].get_uint32();
   return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_piece_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform_piece_id(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row is nullptr", K(ret));
-  } else {
-    int idx = (with_extra_rowkey) ?
-      ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN :
-      ObLobMetaUtil::PIECE_ID_COL_ID;
-    info.piece_id_ = row->storage_datums_[idx].get_uint64();
-  }
-  return ret;
+  info.piece_id_ = row->storage_datums_[ObLobMetaUtil::PIECE_ID_COL_ID].get_uint64();
+  return OB_SUCCESS;;
 }
 
-int ObLobMetaUtil::transform_lob_data(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform_lob_data(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
-  int ret = OB_SUCCESS;
-  ObString buf;
-  buf.reset();
-  if (OB_ISNULL(row)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("row is nullptr", K(ret));
-  } else {
-    info.lob_data_.reset();
-    int idx = (with_extra_rowkey) ?
-          ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN :
-          ObLobMetaUtil::LOB_DATA_COL_ID;
-    info.lob_data_ = row->storage_datums_[idx].get_string();
-  }
-  return ret;
+  info.lob_data_ = row->storage_datums_[ObLobMetaUtil::LOB_DATA_COL_ID].get_string();
+  return OB_SUCCESS;
 }
 
-int ObLobMetaUtil::transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform(blocksstable::ObDatumRow* row, ObLobMetaInfo &info)
 {
   int ret = OB_SUCCESS;
-  int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
-                        LOB_META_COLUMN_CNT;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is null", K(ret));
-  } else if (!row->is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
-  } else if (row->get_column_count() != expcect_row_cnt) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob meta row.", K(ret), KPC(row), K(expcect_row_cnt));
-  } else if (OB_FAIL(transform_lob_id(row, info))) {
-    LOG_WARN("transform lob id failed", K(ret));
-  } else if (OB_FAIL(transform_seq_id(row, info))) {
-    LOG_WARN("transform seq id failed", K(ret));
-  } else if (OB_FAIL(transform_byte_len(row, info, with_extra_rowkey))) {
-    LOG_WARN("transform byte len failed", K(ret));
-  } else if (OB_FAIL(transform_char_len(row, info, with_extra_rowkey))) {
-    LOG_WARN("transform char len failed", K(ret));
-  } else if (OB_FAIL(transform_piece_id(row, info, with_extra_rowkey))) {
-    LOG_WARN("transform piece id failed", K(ret));
-  } else if (OB_FAIL(transform_lob_data(row, info, with_extra_rowkey))) {
-    LOG_WARN("transform lob data failed", K(ret));
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_lob_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    row->storage_datums_[ObLobMetaUtil::LOB_ID_COL_ID].set_string(reinterpret_cast<char*>(&info.lob_id_), sizeof(ObLobId));
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_seq_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    row->storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID].set_string(info.seq_id_);
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_byte_len(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::BYTE_LEN_COL_ID + SKIP_INVALID_COLUMN :
-              ObLobMetaUtil::BYTE_LEN_COL_ID;
-    row->storage_datums_[idx].set_uint32(info.byte_len_);
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_char_len(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::CHAR_LEN_COL_ID + SKIP_INVALID_COLUMN :
-              ObLobMetaUtil::CHAR_LEN_COL_ID;
-    row->storage_datums_[idx].set_uint32(info.char_len_);
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_piece_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::PIECE_ID_COL_ID + SKIP_INVALID_COLUMN :
-              ObLobMetaUtil::PIECE_ID_COL_ID;
-    row->storage_datums_[idx].set_uint(info.piece_id_);
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_lob_data(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(row)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("row is NULL", K(ret));
-  } else {
-    int idx = (with_extra_rowkey) ?
-              ObLobMetaUtil::LOB_DATA_COL_ID + SKIP_INVALID_COLUMN :
-              ObLobMetaUtil::LOB_DATA_COL_ID;
-    row->storage_datums_[idx].set_string(info.lob_data_);
-  }
-  return ret;
-}
-
-int ObLobMetaUtil::transform_from_info_to_row(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
-{
-  int ret = OB_SUCCESS;
-  int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
-                        LOB_META_COLUMN_CNT;
   if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is null.", K(ret));
-  } else if (row->get_column_count() != expcect_row_cnt) {
+  } else if (!row->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob meta row.", K(ret), K(info), K(with_extra_rowkey));
-  } else if (OB_FAIL(transform_lob_id(info, row))) {
-    LOG_WARN("get lob id from row failed.", K(ret), K(info));
-  } else if (OB_FAIL(transform_seq_id(info, row))) {
-    LOG_WARN("get seq id from row failed.", K(ret), K(info));
-  } else if (OB_FAIL(transform_byte_len(info, row, with_extra_rowkey))) {
-    LOG_WARN("get byte len from row failed.", K(ret), K(info));
-  } else if (OB_FAIL(transform_char_len(info, row, with_extra_rowkey))) {
-    LOG_WARN("get char len from row failed.", K(ret), K(info));
-  } else if (OB_FAIL(transform_piece_id(info, row, with_extra_rowkey))) {
-    LOG_WARN("get macro id from row failed.", K(ret), K(info));
-  } else if (OB_FAIL(transform_lob_data(info, row, with_extra_rowkey))) {
-    LOG_WARN("get macro id from row failed.", K(ret), K(info));
+    LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
+  } else if (row->get_column_count() != LOB_META_COLUMN_CNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_lob_id(row, info))) {
+    LOG_WARN("get lob id from row failed.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_seq_id(row, info))) {
+    LOG_WARN("get seq id from row failed.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_byte_len(row, info))) {
+    LOG_WARN("get byte len from row failed.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_char_len(row, info))) {
+    LOG_WARN("get char len from row failed.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_piece_id(row, info))) {
+    LOG_WARN("get macro id from row failed.", K(ret), KPC(row));
+  } else if (OB_FAIL(transform_lob_data(row, info))) {
+    LOG_WARN("get macro id from row failed.", K(ret), KPC(row));
   }
   return ret;
 }
@@ -407,30 +265,6 @@ bool ObLobMetaScanIter::is_range_over(const ObLobMetaInfo& info)
   return cur_pos_ >= param_.offset_ + param_.len_;
 }
 
-ObLobMetaWriteIter::ObLobMetaWriteIter(ObIAllocator* allocator)
-  : seq_id_(allocator),
-    offset_(0),
-    lob_id_(),
-    piece_id_(0),
-    data_(),
-    coll_type_(CS_TYPE_BINARY),
-    piece_block_size_(ObLobMetaUtil::LOB_OPER_PIECE_DATA_SIZE),
-    scan_iter_(),
-    padding_size_(0),
-    seq_id_end_(allocator),
-    post_data_(),
-    remain_buf_(),
-    inner_buffer_(),
-    allocator_(allocator),
-    last_info_(),
-    iter_(nullptr),
-    iter_fill_size_(0),
-    read_param_(nullptr),
-    lob_common_(nullptr),
-    is_end_(false)
-{
-}
-
 ObLobMetaWriteIter::ObLobMetaWriteIter(
     const ObString& data, 
     ObIAllocator* allocator, 
@@ -446,11 +280,7 @@ ObLobMetaWriteIter::ObLobMetaWriteIter(
     inner_buffer_(),
     allocator_(allocator),
     last_info_(),
-    iter_(nullptr),
-    iter_fill_size_(0),
-    read_param_(nullptr),
-    lob_common_(nullptr),
-    is_end_(false)
+    iter_(nullptr)
 {
   data_ = data;
   offset_ = 0;
@@ -552,35 +382,6 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
   return ret;
 }
 
-int ObLobMetaWriteIter::open(ObLobAccessParam &param,
-                             void *iter, // ObLobQueryIter
-                             void *read_param, // ObLobAccessParam
-                             ObString &read_buf)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(iter) || OB_ISNULL(read_param)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null query iter", K(ret));
-  } else {
-    coll_type_ = param.coll_type_;
-    lob_id_ = param.lob_data_->id_;
-    piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
-    iter_ = iter;
-    read_param_ = read_param;
-    allocator_ = param.allocator_;
-    lob_common_ = param.lob_common_;
-    data_.assign_buffer(read_buf.ptr(), piece_block_size_);
-    char *buf = reinterpret_cast<char*>(allocator_->alloc(piece_block_size_));
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc buffer failed.", K(piece_block_size_));
-    } else {
-      inner_buffer_.assign_ptr(buf, piece_block_size_);
-    }
-  }
-  return ret;
-}
-
 int ObLobMetaWriteIter::try_fill_data(
     ObLobMetaWriteResult& row,
     bool &use_inner_buffer,
@@ -656,8 +457,6 @@ int ObLobMetaWriteIter::try_fill_data(
     row.info_.byte_len_ += by_len;
     row.info_.char_len_ += char_len;
     OB_ASSERT(row.info_.byte_len_ >= row.info_.char_len_);
-    offset_ += by_len;
-    iter_fill_size_ += by_len;
   }
   return ret;
 }
@@ -799,9 +598,7 @@ int ObLobMetaWriteIter::try_update_last_info(ObLobMetaWriteResult &row)
 int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
 {
   int ret = OB_SUCCESS;
-  if (is_end_) {
-    ret = OB_ITER_END; // mock for inrow situation
-  } else if (OB_FAIL(try_update_last_info(row))) {
+  if (OB_FAIL(try_update_last_info(row))) {
     LOG_WARN("fail to do try update last info.", K(ret));
   } else if (!row.is_update_) {
     // 1. init common info for ObLobMetaWriteResult
@@ -850,8 +647,8 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
           ret = try_fill_data(row, post_data_, post_data_.length(), true, use_inner_buffer, fill_full);
         } else if (!iter->is_end()) {
           ret = try_fill_data(row, use_inner_buffer, fill_full);
-        } else if (remain_buf_.length() > offset_ - post_data_.length() - padding_size_ - iter_fill_size_) {
-          ret = try_fill_data(row, remain_buf_, post_data_.length() + padding_size_ + iter_fill_size_, false, use_inner_buffer, fill_full);
+        } else if (remain_buf_.length() > offset_ - post_data_.length() - padding_size_) {
+          ret = try_fill_data(row, remain_buf_, post_data_.length() + padding_size_, false, use_inner_buffer, fill_full);
         } else {
           ret = OB_ITER_END;
         }
@@ -859,20 +656,6 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
     }
     if (ret == OB_ITER_END && row.info_.byte_len_ > 0) {
       ret = OB_SUCCESS;
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(lob_common_)) {
-      // refresh byte len
-      ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(lob_common_);
-      ObLobData *lob_data = reinterpret_cast<ObLobData*>(lob_common->buffer_);
-      lob_data->byte_size_ += row.info_.byte_len_;
-      // FIXME @haozheng direct load has no tx desc info, therefore do not need modified outrow ctx here
-      // maybe later we should need to update outrow ctx here for cdc
-      // refresh char len
-      char *ptr = reinterpret_cast<char*>(lob_common_);
-      int64_t *len = reinterpret_cast<int64_t*>(ptr + ObLobManager::LOB_WITH_OUTROW_CTX_SIZE);
-      *len = *len + row.info_.char_len_;
-      // set lob data
-      row.info_.lob_data_.assign_ptr(row.data_.ptr(), row.data_.length());
     }
   }
   return ret;
@@ -888,41 +671,7 @@ int ObLobMetaWriteIter::close()
     allocator_->free(inner_buffer_.ptr());
   }
   inner_buffer_.reset();
-  if (OB_NOT_NULL(read_param_)) {
-    if (OB_NOT_NULL(iter_)) {
-      ObLobQueryIter *iter = reinterpret_cast<ObLobQueryIter*>(iter_);
-      iter->reset();
-      OB_DELETE(ObLobQueryIter, "unused", iter);
-    }
-    if (OB_NOT_NULL(data_.ptr())) { // free read_buf
-      allocator_->free(data_.ptr());
-      data_.reset();
-    }
-    allocator_->free(read_param_);
-    read_param_ = nullptr;
-  }
   return ret;
-}
-
-void ObLobMetaWriteIter::reuse()
-{
-  close();
-  offset_ = 0;
-  piece_id_ = 0;
-  lob_id_.reset();
-  padding_size_ = 0;
-  post_data_.reset();
-  remain_buf_.reset();
-  last_info_.reset();
-  iter_ = nullptr;
-  iter_fill_size_ = 0;
-  lob_common_ = nullptr;
-  is_end_ = false;
-}
-
-void ObLobMetaWriteIter::set_data(const ObString& data)
-{
-  data_ = data;
 }
 
 int ObLobMetaManager::write(ObLobAccessParam& param, ObLobMetaInfo& in_row)
@@ -995,9 +744,7 @@ int ObLobMetaManager::update(ObLobAccessParam& param, ObLobMetaInfo& old_row, Ob
 int ObLobMetaManager::fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id)
 {
   int ret = OB_SUCCESS;
-  if (param.spec_lob_id_.is_valid()) {
-    lob_id = param.spec_lob_id_.lob_id_;
-  } else if (OB_FAIL(persistent_lob_adapter_.fetch_lob_id(param, lob_id))) {
+  if (OB_FAIL(persistent_lob_adapter_.fetch_lob_id(param, lob_id))) {
     LOG_WARN("fetch lob id failed.", K(ret), K(param));
   }
   return ret;

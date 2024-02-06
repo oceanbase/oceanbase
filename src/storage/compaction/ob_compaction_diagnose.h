@@ -29,10 +29,6 @@ namespace rootserver
 {
   class ObMajorFreezeService;
 }
-namespace share
-{
-  class ObTabletReplica;
-}
 using namespace storage;
 using namespace share;
 namespace compaction
@@ -540,8 +536,6 @@ private:
   int check_if_need_diagnose(rootserver::ObMajorFreezeService *&major_freeze_service,
                              bool &need_diagnose) const;
   int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
-  int add_uncompacted_tablet_to_diagnose(const ObIArray<share::ObTabletReplica> &uncompacted_tablets);
-  int add_uncompacted_table_ids_to_diagnose(const ObIArray<uint64_t> &uncompacted_table_ids);
 
 public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
@@ -635,28 +629,22 @@ private:
     if (__pos < buf_size) {                                                                   \
       buf[__pos-1] = '\0';                                                                    \
     } else {                                                                                  \
-      buf[buf_size - 1] = '\0';                                                               \
+      buf[__pos] = '\0';                                                                      \
     }                                                                                         \
     return ret;                                                                               \
   }
 
-#define DEFINE_COMPACITON_INFO_ADD_KV(n)                                       \
-  template <LOG_TYPENAME_TN##n>                                                \
-  void ADD_COMPACTION_INFO_PARAM(char *buf, const int64_t buf_size,            \
-                                 LOG_PARAMETER_KV##n) {                        \
-    int64_t __pos = strlen(buf);                                               \
-    int ret = OB_SUCCESS;                                                      \
-    SIMPLE_TO_STRING_##n                                                       \
-    if (__pos < 0) {                                                           \
-      __pos = 0;                                                               \
-    } else if (__pos > 0) {                                                    \
-      if (__pos >= buf_size) {                                                 \
-        __pos = buf_size - 1;                                                  \
-      } else {                                                                 \
-        buf[__pos - 1] = ';';                                                  \
-      }                                                                        \
-    }                                                                          \
-    buf[__pos] = '\0';                                                         \
+#define DEFINE_COMPACITON_INFO_ADD_KV(n)                                                               \
+  template <LOG_TYPENAME_TN##n>                                                                  \
+  void ADD_COMPACTION_INFO_PARAM(char *buf, const int64_t buf_size, LOG_PARAMETER_KV##n)                  \
+  {                                                                                              \
+    int64_t __pos = strlen(buf);                                                                  \
+    int ret = OB_SUCCESS;                                                                        \
+    SIMPLE_TO_STRING_##n                                                                        \
+    if (__pos > 0) {                                                                            \
+      buf[__pos - 1] = ';';                                                                      \
+    }                                                                                             \
+    buf[__pos] = '\0';                                                                             \
   }
 
 #define SIMPLE_TO_STRING(n)                                                                       \

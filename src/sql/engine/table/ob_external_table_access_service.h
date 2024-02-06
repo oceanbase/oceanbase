@@ -30,7 +30,6 @@ namespace common
 }
 
 namespace sql {
-class ObExprRegexpSessionVariables;
 
 class ObExternalDataAccessDriver
 {
@@ -44,11 +43,9 @@ public:
 
   int get_file_sizes(const ObString &location, const ObIArray<ObString> &urls, ObIArray<int64_t> &file_sizes);
   int pread(void *buf, const int64_t count, const int64_t offset, int64_t &read_size);
-  int get_file_list(const common::ObString &path,
-                    const common::ObString &pattern,
-                    const ObExprRegexpSessionVariables &regexp_vars,
-                    common::ObIArray<common::ObString> &file_urls,
-                    common::ObIAllocator &allocator);
+  int get_file_list(const ObString &path,
+                    ObIArray<ObString> &file_urls,
+                    ObIAllocator &allocator);
   static int resolve_storage_type(const ObString &location, common::ObStorageType &device_type);
   common::ObStorageType get_storage_type() { return storage_type_; }
   void close();

@@ -164,9 +164,6 @@ public:
       bool with_global_index = true,
       bool with_domain_index = true,
       bool with_spatial_index = true);
-  int get_table_mlog_schema(const uint64_t tenant_id,
-                            const uint64_t data_table_id,
-                            const ObTableSchema *&mlog_schema);
   int check_has_local_unique_index(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -285,15 +282,25 @@ public:
   int get_table_ids_in_tablegroup(const uint64_t tenant_id,
                                   const uint64_t tablegroup_id,
                                   common::ObIArray<uint64_t> &table_id_array);
-  int get_trigger_ids_in_database(const uint64_t tenant_id,
-                                  const uint64_t database_id,
-                                  common::ObIArray<uint64_t> &trigger_ids);
-  int get_routine_ids_in_database(const uint64_t tenant_id,
-                                  const uint64_t database_id,
-                                  common::ObIArray<uint64_t> &routine_ids);
-  int get_udt_ids_in_database(const uint64_t tenant_id,
-                              const uint64_t database_id,
-                              common::ObIArray<uint64_t> &udt_ids);
+  int get_outline_infos_in_database(const uint64_t tenant_id,
+                                    const uint64_t database_id,
+                                    common::ObIArray<const ObOutlineInfo *> &outline_infos);
+  int get_trigger_infos_in_database(const uint64_t tenant_id,
+                                    const uint64_t database_id,
+                                    common::ObIArray<const ObTriggerInfo *> &tg_infos);
+  int get_synonym_infos_in_database(const uint64_t tenant_id,
+                                    const uint64_t database_id,
+                                    common::ObIArray<const ObSynonymInfo *> &synonym_infos);
+
+  int get_package_infos_in_database(const uint64_t tenant_id,
+                                    const uint64_t database_id,
+                                    common::ObIArray<const ObPackageInfo *> &package_infos);
+  int get_routine_infos_in_database(const uint64_t tenant_id,
+                                    const uint64_t database_id,
+                                    common::ObIArray<const ObRoutineInfo *> &routine_infos);
+  int get_udt_infos_in_database(const uint64_t tenant_id,
+                                const uint64_t database_id,
+                                common::ObIArray<const ObUDTTypeInfo *> &udt_infos);
   int get_routine_info_in_udt(const uint64_t tenant_id,
                               const uint64_t udt_id,
                               const uint64_t subprogram_id,
@@ -308,9 +315,9 @@ public:
   int get_routine_infos_in_package(const uint64_t tenant_id,
                                    const uint64_t package_id,
                                    common::ObIArray<const ObRoutineInfo *> &routine_infos);
-  int get_sequence_schemas_in_database(const uint64_t tenant_id,
-                                       const uint64_t database_id,
-                                       common::ObIArray<const ObSequenceSchema*> &sequence_schemas);
+  int get_sequence_infos_in_database(const uint64_t tenant_id,
+                                   const uint64_t database_id,
+                                   common::ObIArray<const ObSequenceSchema *> &sequence_infos);
   int get_label_se_policy_infos_in_tenant(const uint64_t tenant_id,
                                           common::ObIArray<const ObLabelSePolicySchema *> &label_se_policy_infos);
   int get_label_se_component_infos_in_tenant(const uint64_t tenant_id,
@@ -459,8 +466,7 @@ public:
                                 const uint64_t table_id,
                                 uint64_t *index_tid_array,
                                 int64_t &size,
-                                bool only_global = false,
-                                bool with_mlog = false);
+                                bool only_global = false);
 
   // for readonly
   int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
@@ -783,9 +789,9 @@ public:
                                    const ObContextSchema *&context_schema);
 
   // mock_fk_parent_table begin
-  int get_mock_fk_parent_table_ids_in_database(const uint64_t tenant_id,
-                                               const uint64_t database_id,
-                                               ObIArray<uint64_t> &mock_fk_parent_table_ids);
+  int get_mock_fk_parent_table_schemas_in_database(const uint64_t tenant_id,
+                                                   const uint64_t database_id,
+                                                   ObIArray<const ObMockFKParentTableSchema *> &schemas);
   int get_simple_mock_fk_parent_table_schema(const uint64_t tenant_id,
                                              const uint64_t database_id,
                                              const common::ObString &name,
@@ -1000,6 +1006,8 @@ public:
 
   bool is_tenant_schema_guard() const { return common::OB_INVALID_TENANT_ID != tenant_id_; }
   uint64_t get_tenant_id() const { return tenant_id_; }
+
+  int get_tenant_mv_ids(const uint64_t tenant_id, common::ObArray<uint64_t> &mv_ids) const;
 
   SchemaGuardType get_schema_guard_type() const { return schema_guard_type_; }
 

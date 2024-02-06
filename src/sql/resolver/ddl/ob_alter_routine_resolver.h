@@ -53,7 +53,6 @@ protected:
     bool need_recreate, const ParseNode *source_tree);
   int resolve_clause_list(const ParseNode *node,
                           obrpc::ObCreateRoutineArg &crt_routine_arg);
-  int register_debug_info(const share::schema::ObRoutineInfo &routine_info);
 
 private:
   ObCreateRoutineResolver *crt_resolver_;

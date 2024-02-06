@@ -42,8 +42,6 @@ namespace storage
 {
 namespace mds
 {
-class MdsTableBase;
-using MdsTableMap = common::ObLinearHashMap<common::ObTabletID, MdsTableBase*, UniqueMemMgrTag>;
 
 enum class NodePosition {
   MDS_TABLE,

@@ -245,6 +245,8 @@ private:
   private:
     ObSQLSessionInfo &session_;
     int64_t worker_timeout_;
+    int64_t query_timeout_;
+    int64_t trx_timeout_;
   };
 
 private:

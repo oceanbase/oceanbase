@@ -31,79 +31,7 @@ class TestConstDecoder : public TestColumnDecoder
 public:
   TestConstDecoder() : TestColumnDecoder(ObColumnHeader::Type::CONST) {}
   virtual ~TestConstDecoder() {}
-private:
-  void batch_decode_to_vector_no_exc_test(const VectorFormat vector_format);
 };
-
-void TestConstDecoder::batch_decode_to_vector_no_exc_test(const VectorFormat vector_format)
-{
-  FLOG_INFO("start one batch decode to vector no exception test", K(vector_format));
-  ObArenaAllocator test_allocator;
-  encoder_.reuse();
-  void *row_buf = allocator_.alloc(sizeof(ObDatumRow) * ROW_CNT);
-  ObDatumRow *rows = new (row_buf) ObDatumRow[ROW_CNT];
-  for (int64_t i = 0; i < ROW_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, rows[i].init(test_allocator, full_column_cnt_));
-  }
-  ObDatumRow row;
-  ASSERT_EQ(OB_SUCCESS, row.init(test_allocator, full_column_cnt_));
-  int64_t seed0 = 10000;
-
-  for (int64_t i = 0; i < ROW_CNT; ++i) {
-    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(seed0, row));
-    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row)) << "i: " << i << std::endl;
-    rows[i].deep_copy(row, test_allocator);
-  }
-
-  char *buf = NULL;
-  int64_t size = 0;
-  ASSERT_EQ(OB_SUCCESS, encoder_.build_block(buf, size));
-  ObMicroBlockDecoder decoder;
-  ObMicroBlockData data(encoder_.data_buffer_.data(), encoder_.data_buffer_.length());
-  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
-
-  ObArenaAllocator frame_allocator;
-  sql::ObExecContext exec_context(test_allocator);
-  sql::ObEvalCtx eval_ctx(exec_context);
-  const char *ptr_arr[ROW_CNT];
-  uint32_t len_arr[ROW_CNT];
-  for (int64_t i = 0; i < full_column_cnt_; ++i) {
-    bool need_test_column = true;
-    ObObjMeta col_meta = col_descs_.at(i).col_type_;
-    const int16_t precision = col_meta.is_decimal_int() ? col_meta.get_stored_precision() : PRECISION_UNKNOWN_YET;
-    VecValueTypeClass vec_tc = common::get_vec_value_tc(
-        col_meta.get_type(),
-        col_meta.get_scale(),
-        precision);
-    if (i >= ROWKEY_CNT && i < read_info_.get_rowkey_count()) {
-      need_test_column = false;
-    } else {
-      need_test_column = VectorDecodeTestUtil::need_test_vec_with_type(vector_format, vec_tc);
-    }
-
-    if (!need_test_column) {
-      continue;
-    }
-
-    sql::ObExpr col_expr;
-    ASSERT_EQ(OB_SUCCESS, VectorDecodeTestUtil::generate_column_output_expr(
-        ROW_CNT, col_meta, vector_format, eval_ctx, col_expr, frame_allocator));
-    int32_t col_offset = i;
-    LOG_INFO("Current col: ", K(i), K(col_meta),  K(*decoder.decoders_[col_offset].ctx_), K(precision), K(vec_tc));
-
-    int64_t row_ids[ROW_CNT];
-    for (int64_t datum_idx = 0; datum_idx < ROW_CNT; ++datum_idx) {
-      row_ids[datum_idx] = datum_idx;
-    }
-
-    ObVectorDecodeCtx vector_ctx(ptr_arr, len_arr, row_ids, ROW_CNT, 0, col_expr.get_vector_header(eval_ctx));
-    ASSERT_EQ(OB_SUCCESS, decoder.decoders_[col_offset].decode_vector(decoder.row_index_, vector_ctx));
-    for (int64_t vec_idx = 0; vec_idx < ROW_CNT; ++vec_idx) {
-      ASSERT_TRUE(VectorDecodeTestUtil::verify_vector_and_datum_match(*(col_expr.get_vector_header(eval_ctx).get_vector()),
-          vec_idx, rows[vec_idx].storage_datums_[col_offset]));
-    }
-  }
-}
 
 TEST_F(TestConstDecoder, no_exception_nu_nn)
 {
@@ -802,33 +730,6 @@ TEST_F(TestConstDecoder, batch_decode_to_datum_test_with_expection)
   batch_decode_to_datum_test();
 }
 
-TEST_F(TestConstDecoder, batch_decode_to_vector_test)
-{
-  #define TEST_ONE_WITH_ALIGN(row_aligned, vec_format) \
-  batch_decode_to_vector_test(false, true, row_aligned, vec_format); \
-  batch_decode_to_vector_test(false, false, row_aligned, vec_format); \
-  batch_decode_to_vector_test(true, true, row_aligned, vec_format); \
-  batch_decode_to_vector_test(true, false, row_aligned, vec_format);
-
-  #define TEST_ONE(vec_format) \
-  TEST_ONE_WITH_ALIGN(true, vec_format) \
-  TEST_ONE_WITH_ALIGN(false, vec_format)
-
-  TEST_ONE(VEC_UNIFORM);
-  TEST_ONE(VEC_FIXED);
-  TEST_ONE(VEC_DISCRETE);
-  TEST_ONE(VEC_CONTINUOUS);
-  #undef TEST_ONE
-  #undef TEST_ONE_WITH_ALIGN
-}
-
-TEST_F(TestConstDecoder, batch_decode_to_vector_no_exc_test)
-{
-  batch_decode_to_vector_no_exc_test(VEC_UNIFORM);
-  batch_decode_to_vector_no_exc_test(VEC_FIXED);
-  batch_decode_to_vector_no_exc_test(VEC_DISCRETE);
-  batch_decode_to_vector_no_exc_test(VEC_CONTINUOUS);
-}
 
 TEST_F(TestConstDecoder, cell_decode_to_datum_test_without_expection)
 {

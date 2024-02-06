@@ -27,7 +27,6 @@ public:
   virtual const common::ObTabletID &get_tablet_id() const = 0;
   virtual int64_t get_row_count() const = 0;
   virtual bool is_valid() const = 0;
-  virtual void release_data() = 0;
   TO_STRING_EMPTY();
 };
 

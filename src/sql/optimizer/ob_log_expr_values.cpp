@@ -220,12 +220,12 @@ int ObLogExprValues::do_re_est_cost(EstimateCostInfo &param, double &card, doubl
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card = get_stmt()->is_insert_stmt() ? static_cast<const ObInsertStmt*>(get_stmt())->get_insert_row_count() :
                                           get_values_row_count();
-    op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx);
+    op_cost = ObOptEstCost::cost_get_rows(get_card(), opt_ctx.get_cost_model_type());
     cost = op_cost;
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     card = 1.0;
-    op_cost = ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx);
+    op_cost = ObOptEstCost::cost_filter_rows(get_card(), filter_exprs_, opt_ctx.get_cost_model_type());
     cost = op_cost;
   }
   return ret;
@@ -311,12 +311,7 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
     LOG_WARN("failed to construct sequence values", K(ret));
   } else if (OB_FAIL(mark_probably_local_exprs())) {
     LOG_WARN("failed to mark local exprs", K(ret));
-  } else if (is_values_table_) { /* defence code */
-    if (OB_UNLIKELY(value_desc_.count() != get_output_exprs().count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("defence code, EXPRESSION request output_exprs equals to value_desc", K(ret));
-    }
-  }
+  } else { /*do nothing*/ }
 
   return ret;
 }

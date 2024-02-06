@@ -24,7 +24,6 @@
 #include "share/ob_debug_sync_point.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/high_availability/ob_transfer_handler.h"
 
 namespace oceanbase
 {
@@ -136,10 +135,6 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // do nothing
       } else if (!tablet->get_tablet_meta().has_transfer_table()) {
         // do nothing
-      } else if (!tablet->get_tablet_meta().ha_status_.is_data_status_complete()) {
-        LOG_INFO("[TRANSFER_BACKFILL]skip tablet which data status is incomplete",
-            "tablet_id", tablet->get_tablet_meta().tablet_id_,
-            "ha_status", tablet->get_tablet_meta().ha_status_);
       } else if (!tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
         // Restore status is FULL when the tablet is created by transfer in. It can
         // turn into one of the following status.
@@ -169,10 +164,8 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
         // If source tablet is UNDEFINED, directly set dest tablet EMPTY, but keep
         // transfer table. Then the restore handler will schedule it to restore minor
         // without creating remote logical table.
-        // Remote logical table is no longer relyed needed during physical copy, just reset has tranfser table flag.
         if (OB_FAIL(dest_ls_->update_tablet_restore_status(tablet->get_tablet_meta().tablet_id_,
-                                                           ObTabletRestoreStatus::EMPTY,
-                                                           true/* need reset tranfser flag */))) {
+                                                           ObTabletRestoreStatus::EMPTY))) {
           LOG_WARN("fail to set empty", K(ret), KPC(tablet));
         } else {
           dest_ls_->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
@@ -331,20 +324,21 @@ int ObTransferWorkerMgr::process()
   int ret = OB_SUCCESS;
   bool is_exist = false;
   ObTransferBackfillTXParam param;
-  bool allow_transfer_backfill = true;
 
 #ifdef ERRSIM
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    allow_transfer_backfill = tenant_config->allow_transfer_backfill;
-  }
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_CHECK_TRANSFER_TASK_EXSIT) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        STORAGE_LOG(ERROR, "fake EN_CHECK_TRANSFER_TASK_EXSIT", K(ret));
+        is_exist = true;
+        ret = OB_SUCCESS;
+      }
+    }
 #endif
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer work not init", K(ret));
-  } else if (!allow_transfer_backfill) {
-    LOG_INFO("do not allow transfer backfill, need check errsim config", K(allow_transfer_backfill));
   } else if (task_id_.is_valid() && OB_FAIL(check_task_exist_(task_id_, is_exist))) {
     LOG_WARN("failed to check task exist", K(ret), "ls_id", dest_ls_->get_ls_id(), K(*this));
   } else if (is_exist) {
@@ -1291,11 +1285,15 @@ int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableHandleV2> memtables;
+  ObIMemtableMgr *memtable_mgr = nullptr;
   if (OB_ISNULL(tablet) || !transfer_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet should not be nullptr.", KR(ret), K(transfer_scn), KPC(this));
-  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
-    LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
+  } else if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
+  } else if (OB_FAIL(memtable_mgr->get_all_memtables(memtables))) {
+    LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
   } else if (!memtables.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       ObITable *table = memtables.at(i).get_table();
@@ -1592,14 +1590,10 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
       } else {
         sstable = static_cast<ObSSTable *>(table);
         if (sstable->contain_uncommitted_row()) {
-          if (sstable->get_filled_tx_scn() > ctx_->backfill_scn_) {
+          if (table->get_end_scn() >= ctx_->backfill_scn_) {
             ret = OB_TRANSFER_SYS_ERROR;
-            LOG_ERROR("src sstable filled_tx_scn bigger than transfer_scn, unexpected", K(ret), KPC(sstable), KPC(ctx_),
-                      K(sstable->get_filled_tx_scn()), K(ctx_->backfill_scn_));
-          } else if (sstable->get_filled_tx_scn() == ctx_->backfill_scn_) {
-            LOG_INFO("src minor has backfill to transfer_scn, when new transfer active tx has move to dest_ls", KPC(sstable), KPC(ctx_));
+            LOG_ERROR("src minor still has uncommitted row, unexpected", K(ret), KPC(sstable), KPC(ctx_));
           } else {
-            // filled_tx_scn < transfer_scn
             ret = OB_EAGAIN;
             LOG_WARN("sstable has not yet backfilled transactions", K(ret), KPC(sstable), KPC(ctx_));
           }

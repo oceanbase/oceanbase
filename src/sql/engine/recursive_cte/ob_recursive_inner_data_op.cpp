@@ -548,7 +548,6 @@ int ObRecursiveInnerDataOp::set_fake_cte_table_empty()
 
 void ObRecursiveInnerDataOp::destroy()
 {
-  dfs_pump_.destroy();
   stored_row_buf_.reset();
 }
 

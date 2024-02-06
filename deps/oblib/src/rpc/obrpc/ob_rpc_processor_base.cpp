@@ -45,12 +45,6 @@ int __attribute__((weak)) check_arb_white_list(int64_t cluster_id, bool& is_arb)
   return ret;
 }
 
-int64_t __attribute__((weak)) get_stream_rpc_max_wait_timeout(int64_t tenant_id)
-{
-  //do nothing
-  UNUSED(tenant_id);
-  return ObRpcProcessorBase::DEFAULT_WAIT_NEXT_PACKET_TIMEOUT;
-}
 void ObRpcProcessorBase::reuse()
 {
   rpc_pkt_ = NULL;
@@ -235,8 +229,6 @@ int ObRpcProcessorBase::deserialize()
           if (OB_FAIL(common::serialization::decode(ez_buf, len, pos, *OBTRACE))) {
             RPC_OBRPC_LOG(WARN, "decode trace info failed", K(ret), K(len), K(pos));
           }
-        } else if (OBTRACE->is_inited()) {
-          OBTRACE->reset();
         }
       }
       if (OB_FAIL(ret)) {
@@ -550,11 +542,6 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
   rpc::ObRequest *req = NULL;
   UNIS_VERSION_GUARD(unis_version_);
 
-  const int64_t stream_rpc_max_wait_timeout = get_stream_rpc_max_wait_timeout(tenant_id_);
-  if (0 == wait_timeout || wait_timeout > stream_rpc_max_wait_timeout) {
-    wait_timeout = stream_rpc_max_wait_timeout;
-  }
-
   if (nullptr == sc_) {
     sc_ = OB_NEWx(ObRpcStreamCond, (&lib::this_worker().get_sql_arena_allocator()), *sh_);
     if (nullptr == sc_) {
@@ -580,9 +567,7 @@ int ObRpcProcessorBase::flush(int64_t wait_timeout)
     req_ = NULL; //wait fail, invalid req_
     reuse();
     is_stream_end_ = true;
-    int pcode = m_get_pcode();
-    RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret),
-                   K(pcode), K(wait_timeout));
+    RPC_OBRPC_LOG(WARN, "wait next packet fail, set req_ to null", K(ret), K(wait_timeout));
   } else if (OB_ISNULL(req)) {
     ret = OB_ERR_UNEXPECTED;
     RPC_OBRPC_LOG(ERROR, "Req should not be NULL", K(ret));

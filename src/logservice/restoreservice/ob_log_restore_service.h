@@ -81,9 +81,12 @@ private:
   void update_restore_upper_limit_();
   void set_compressor_type_();
   void refresh_error_context_();
+  bool need_schedule_() const;
 
 private:
   bool inited_;
+  int64_t last_normal_work_ts_;
+  int64_t last_update_restore_upper_limit_ts_;
   ObLSService *ls_svr_;
   ObLogResSvrRpc proxy_;
   ObRemoteLocationAdaptor location_adaptor_;

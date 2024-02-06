@@ -138,6 +138,7 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
                   type_ctx.get_coll_type(),
                   lib::is_oracle_mode(),
                   default_length_semantics,
+                  type_ctx.get_session(),
                   FALSE, FALSE,
                   is_called_in_sql_))) {
       LOG_WARN("failed to get result type for cmp", K(ret));
@@ -148,6 +149,7 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
                          type_ctx.get_coll_type(),
                          lib::is_oracle_mode(),
                          default_length_semantics,
+                         type_ctx.get_session(),
                          true, false,
                          is_called_in_sql_))) {
       LOG_WARN("failed to get result type", K(ret));
@@ -315,13 +317,6 @@ int ObExprArgCase::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &) const
 {
   int ret = OB_ERR_UNEXPECTED;
   LOG_WARN("this expr should be rewrote in new engine", K(ret));
-  return ret;
-}
-
-DEF_SET_LOCAL_SESSION_VARS(ObExprArgCase, raw_expr) {
-  int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
   return ret;
 }
 

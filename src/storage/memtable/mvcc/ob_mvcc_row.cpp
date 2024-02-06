@@ -222,7 +222,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "snapshot_barrier=%ld "
                           "snapshot_barrier_flag=%ld "
                           "mtd=%s "
-                          "seq_no=%s",
+                          "seq_no=%ld",
                           this,
                           to_cstring(trans_version_),
                           to_cstring(scn_),
@@ -238,7 +238,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          to_cstring(seq_no_));
+                          seq_no_.cast_to_int());
   return pos;
 }
 
@@ -286,8 +286,8 @@ void ObMvccRow::reset()
   index_ = NULL;
   total_trans_node_cnt_ = 0;
   last_compact_cnt_ = 0;
-  max_modify_scn_.set_invalid();
-  min_modify_scn_.set_invalid();
+  max_modify_count_ = UINT32_MAX;
+  min_modify_count_ = UINT32_MAX;
 }
 
 int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
@@ -309,8 +309,8 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           "latest_compact_ts=%ld "
                           "last_compact_cnt=%ld "
                           "total_trans_node_cnt=%ld "
-                          "max_modify_scn=%s "
-                          "min_modify_scn=%s}",
+                          "max_modify_count=%u "
+                          "min_modify_count=%u}",
                           this,
                           (latch_.is_locked() ? "locked" : "unlocked"),
                           flag_,
@@ -326,8 +326,8 @@ int64_t ObMvccRow::to_string(char *buf, const int64_t buf_len) const
                           latest_compact_ts_,
                           last_compact_cnt_,
                           total_trans_node_cnt_,
-                          to_cstring(max_modify_scn_),
-                          to_cstring(min_modify_scn_));
+                          max_modify_count_,
+                          min_modify_count_);
   return pos;
 }
 
@@ -573,11 +573,6 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
             abort_unless(0);
-          } else if (prev->tx_id_ == node.tx_id_ && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)) {
-            ret = OB_ERR_UNEXPECTED;
-            TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
-            usleep(1000);
-            ob_abort();
           } else {
             next_node = next;
             ATOMIC_STORE(&(node.next_), next);
@@ -612,14 +607,6 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
           next_node = tmp;
           prev = &(tmp->prev_);
           tmp = ATOMIC_LOAD(prev);
-        }
-      }
-      if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
-        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
-          usleep(1000);
-          ob_abort();
         }
       }
       if (OB_SUCC(ret)) {
@@ -684,7 +671,7 @@ int ObMvccRow::elr(const ObTransID &tx_id,
       } else if (SCN::max_scn() != iter->trans_version_ && iter->trans_version_ > elr_commit_version) {
         // leader revoke
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexpected transaction version", K(*iter), K(elr_commit_version));
+        TRANS_LOG(ERROR, "unexected transaction version", K(*iter), K(elr_commit_version));
       } else {
         iter->trans_version_ = elr_commit_version;
         iter->set_elr();
@@ -755,7 +742,7 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
     }
 
     update_dml_flag_(node.get_dml_flag(),
-                     node.get_scn());
+                     node.modify_count_);
     update_max_trans_version(commit_version, node.tx_id_);
     update_max_elr_trans_version(commit_version, node.tx_id_);
   }
@@ -763,17 +750,23 @@ int ObMvccRow::trans_commit(const SCN commit_version, ObMvccTransNode &node)
   return ret;
 }
 
-void ObMvccRow::update_dml_flag_(const blocksstable::ObDmlFlag flag, const share::SCN modify_scn)
+void ObMvccRow::update_dml_flag_(blocksstable::ObDmlFlag flag,
+                                 uint32_t modify_count)
 {
   if (blocksstable::ObDmlFlag::DF_LOCK != flag) {
-    if (!max_modify_scn_.is_valid() || max_modify_scn_ <= modify_scn) {
-      max_modify_scn_ = modify_scn;
-      last_dml_flag_ = flag;
-    }
+    if (max_modify_count_ == modify_count || min_modify_count_ == modify_count) {
+      // TODO(handora.qc): add it back later
+      // TRANS_LOG(ERROR, "mvcc row never trans commit twice", KPC(this), K(flag), K(modify_count));
+    } else {
+      if (max_modify_count_ == UINT32_MAX || max_modify_count_ < modify_count) {
+        max_modify_count_ = modify_count;
+        last_dml_flag_ = flag;
+      }
 
-    if (!min_modify_scn_.is_valid() || min_modify_scn_ > modify_scn) {
-      min_modify_scn_ = modify_scn;
-      first_dml_flag_ = flag;
+      if (min_modify_count_ == UINT32_MAX || min_modify_count_ > modify_count) {
+        min_modify_count_ = modify_count;
+        first_dml_flag_ = flag;
+      }
     }
   }
 }
@@ -959,7 +952,6 @@ int ObMvccRow::mvcc_write_(ObIMemtableCtx &ctx,
   return ret;
 }
 
-__attribute__((noinline))
 int ObMvccRow::check_double_insert_(const SCN snapshot_version,
                                     ObMvccTransNode &node,
                                     ObMvccTransNode *prev)
@@ -1004,6 +996,7 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
 {
   int ret = OB_SUCCESS;
   const SCN snapshot_version = snapshot.version_;
+
   if (max_trans_version_.atomic_load() > snapshot_version
       || max_elr_trans_version_.atomic_load() > snapshot_version) {
     // Case 3. successfully locked while tsc
@@ -1033,6 +1026,7 @@ int ObMvccRow::mvcc_write(ObIMemtableCtx &ctx,
       (void)mvcc_undo();
     }
   }
+
   return ret;
 }
 

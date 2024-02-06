@@ -14,7 +14,6 @@
 
 #include "ob_table_direct_load_rpc_struct.h"
 #include "observer/table_load/ob_table_load_rpc_executor.h"
-#include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "share/table/ob_table_rpc_proxy.h"
 
 namespace oceanbase
@@ -38,7 +37,7 @@ public:
   {
   };
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_1(prio, name, pcode, Arg)                \
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_1(name, pcode, Arg)                      \
   int name(const Arg &arg)                                                            \
   {                                                                                   \
     int ret = OB_SUCCESS;                                                             \
@@ -52,9 +51,6 @@ public:
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \
                          .timeout(timeout_)                                           \
                          .by(tenant_id_)                                              \
-                         .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio          \
-                                     ? share::OBCG_DIRECT_LOAD_HIGH_PRIO              \
-                                     : share::OBCG_DEFAULT)                           \
                          .direct_load(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
     } else if (OB_UNLIKELY(result.header_.operation_type_ != pcode)) {                \
@@ -67,7 +63,7 @@ public:
     return ret;                                                                       \
   }
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_2(prio, name, pcode, Arg, Res)           \
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_2(name, pcode, Arg, Res)                 \
   int name(const Arg &arg, Res &res)                                                  \
   {                                                                                   \
     int ret = OB_SUCCESS;                                                             \
@@ -81,9 +77,6 @@ public:
     } else if (OB_FAIL(rpc_proxy_.to(addr_)                                           \
                          .timeout(timeout_)                                           \
                          .by(tenant_id_)                                              \
-                         .group_id(ObTableLoadRpcPriority::HIGH_PRIO == prio          \
-                                     ? share::OBCG_DIRECT_LOAD_HIGH_PRIO              \
-                                     : share::OBCG_DEFAULT)                           \
                          .direct_load(request, result))) {                            \
       SERVER_LOG(WARN, "fail to rpc call direct load", K(ret), K_(addr), K(request)); \
     } else if (OB_UNLIKELY(result.header_.operation_type_ != pcode)) {                \
@@ -95,15 +88,14 @@ public:
     return ret;                                                                       \
   }
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL(prio, name, pcode, ...)   \
-  CONCAT(OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_, ARGS_NUM(__VA_ARGS__)) \
-  (prio, name, pcode, __VA_ARGS__)
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL(name, pcode, ...) \
+  CONCAT(OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL_, ARGS_NUM(__VA_ARGS__))(name, pcode, __VA_ARGS__)
 
-#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC(prio, name, pcode, Processor, ...)                  \
+#define OB_DEFINE_TABLE_DIRECT_LOAD_RPC(name, pcode, Processor, ...)                        \
   OB_DEFINE_TABLE_LOAD_RPC(ObTableDirectLoadRpc, pcode, Processor,                          \
                            table::ObTableDirectLoadRequest, table::ObTableDirectLoadResult, \
                            __VA_ARGS__)                                                     \
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL(ObTableLoadRpcPriority::prio, name, pcode, __VA_ARGS__)
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC_CALL(name, pcode, __VA_ARGS__)
 
 public:
   ObTableDirectLoadRpcProxy(obrpc::ObTableRpcProxy &rpc_proxy)
@@ -141,29 +133,25 @@ public:
                       table::ObTableDirectLoadResult &result);
 
   // begin
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(NORMAL_PRIO, begin, table::ObTableDirectLoadOperationType::BEGIN,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(begin, table::ObTableDirectLoadOperationType::BEGIN,
                                   ObTableDirectLoadBeginExecutor, ObTableDirectLoadBeginArg,
                                   ObTableDirectLoadBeginRes);
   // commit
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(NORMAL_PRIO, commit,
-                                  table::ObTableDirectLoadOperationType::COMMIT,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(commit, table::ObTableDirectLoadOperationType::COMMIT,
                                   ObTableDirectLoadCommitExecutor, ObTableDirectLoadCommitArg);
   // abort
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(NORMAL_PRIO, abort, table::ObTableDirectLoadOperationType::ABORT,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(abort, table::ObTableDirectLoadOperationType::ABORT,
                                   ObTableDirectLoadAbortExecutor, ObTableDirectLoadAbortArg);
   // get_status
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(NORMAL_PRIO, get_status,
-                                  table::ObTableDirectLoadOperationType::GET_STATUS,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(get_status, table::ObTableDirectLoadOperationType::GET_STATUS,
                                   ObTableDirectLoadGetStatusExecutor, ObTableDirectLoadGetStatusArg,
                                   ObTableDirectLoadGetStatusRes);
   // insert
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(NORMAL_PRIO, insert,
-                                  table::ObTableDirectLoadOperationType::INSERT,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(insert, table::ObTableDirectLoadOperationType::INSERT,
                                   ObTableDirectLoadInsertExecutor, ObTableDirectLoadInsertArg);
 
   // heart_beat
-  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(HIGH_PRIO, heartbeat,
-                                  table::ObTableDirectLoadOperationType::HEART_BEAT,
+  OB_DEFINE_TABLE_DIRECT_LOAD_RPC(heartbeat, table::ObTableDirectLoadOperationType::HEART_BEAT,
                                   ObTableDirectLoadHeartBeatExecutor, ObTableDirectLoadHeartBeatArg,
                                   ObTableDirectLoadHeartBeatRes);
 

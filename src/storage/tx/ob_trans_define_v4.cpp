@@ -194,80 +194,6 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     parts_,
                     snapshot_ls_role_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
-
-DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
-{
-  int ret = OB_SUCCESS;
-  return serialization::encode_i64(buf, buf_len, pos, v_);
-}
-DEFINE_DESERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
-{
-  int ret = OB_SUCCESS;
-  return serialization::decode_i64(buf, data_len, pos, (int64_t*)&v_);
-}
-DEFINE_GET_SERIALIZE_SIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
-{
-  return serialization::encoded_length_i64(v_);
-}
-
-uint64_t ObTxDesc::FLAG::COMPAT_FOR_EXEC::get_serialize_v_() const
-{
-  FLAG ret_flag;
-  FLAG this_flag;
-  this_flag.compat_for_exec_.v_ = v_;
-  ret_flag.compat_for_exec_.v_ = 0;
-#define _SET_FLAG_(x) ret_flag.x = this_flag.x
-  LST_DO(_SET_FLAG_, (;),
-         EXPLICIT_,
-         SHADOW_,
-         REPLICA_,
-         TRACING_);
-#undef _SET_FLAG_
-  return ret_flag.compat_for_exec_.v_;
-}
-
-uint64_t ObTxDesc::FLAG::COMPAT_FOR_TX_ROUTE::get_serialize_v_() const
-{
-  FLAG ret_flag;
-  FLAG this_flag;
-  this_flag.compat_for_tx_route_.v_ = v_;
-  ret_flag.compat_for_tx_route_.v_ = 0;
-#define _SET_FLAG_(x) ret_flag.x = this_flag.x
-  LST_DO(_SET_FLAG_, (;),
-         EXPLICIT_,
-         SHADOW_,
-         REPLICA_,
-         TRACING_,
-         RELEASED_,
-         PARTS_INCOMPLETE_,
-         PART_EPOCH_MISMATCH_,
-         WITH_TEMP_TABLE_,
-         DEFER_ABORT_);
-#undef _SET_FLAG_
-  return ret_flag.compat_for_tx_route_.v_;
-}
-
-#define DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(THE_TYPE) \
-  DEFINE_SERIALIZE(ObTxDesc::FLAG::THE_TYPE)     \
-  {                                              \
-    int ret = OB_SUCCESS;                                               \
-    const uint64_t compat_v = get_serialize_v_();                       \
-    return serialization::encode_vi64(buf, buf_len, pos, compat_v);     \
-  }                                                                     \
-  DEFINE_DESERIALIZE(ObTxDesc::FLAG::THE_TYPE)                          \
-  {                                                                     \
-    int ret = OB_SUCCESS;                                               \
-    return serialization::decode_vi64(buf, data_len, pos, (int64_t*)&v_); \
-  }                                                                     \
-  DEFINE_GET_SERIALIZE_SIZE(ObTxDesc::FLAG::THE_TYPE)                   \
-  {                                                                     \
-    const uint64_t compat_v = get_serialize_v_();                       \
-    return serialization::encoded_length_vi64(compat_v);                \
-  }
-
-DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(COMPAT_FOR_EXEC)
-DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(COMPAT_FOR_TX_ROUTE)
-
 OB_SERIALIZE_MEMBER(ObTxDesc,
                     tenant_id_,
                     cluster_id_,
@@ -279,16 +205,14 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     access_mode_,
                     op_sn_,
                     state_,
-                    flags_.compat_for_exec_,
+                    flags_.v_,
                     expire_ts_,
                     active_ts_,
                     timeout_us_,
                     lock_timeout_us_,
                     active_scn_,
                     parts_,
-                    xid_,
-                    flags_.for_serialize_v_,
-                    seq_base_);
+                    xid_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
@@ -320,8 +244,7 @@ OB_SERIALIZE_MEMBER(ObTxInfo,
                     active_scn_,
                     parts_,
                     session_id_,
-                    savepoints_,
-                    seq_base_);
+                    savepoints_);
 OB_SERIALIZE_MEMBER(ObTxStmtInfo,
                     tx_id_,
                     op_sn_,
@@ -339,7 +262,6 @@ ObTxDesc::ObTxDesc()
     cluster_id_(-1),
     trace_info_(),
     cluster_version_(0),
-    seq_base_(0),
     tx_consistency_type_(ObTxConsistencyType::INVALID),
     addr_(),
     tx_id_(),
@@ -367,7 +289,6 @@ ObTxDesc::ObTxDesc()
     finish_ts_(-1),
     active_scn_(),
     min_implicit_savepoint_(),
-    last_branch_id_(0),
     parts_(),
     savepoints_(),
     cflict_txs_(),
@@ -383,7 +304,6 @@ ObTxDesc::ObTxDesc()
     lock_(common::ObLatchIds::TX_DESC_LOCK),
     commit_cb_lock_(common::ObLatchIds::TX_DESC_COMMIT_LOCK),
     commit_cb_(NULL),
-    cb_tid_(-1),
     exec_info_reap_ts_(0),
     brpc_mask_set_(),
     rpc_cond_(),
@@ -429,7 +349,6 @@ int ObTxDesc::switch_to_idle()
   abort_cause_ = 0;
   can_elr_ = false;
   commit_cb_ = NULL;
-  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   commit_task_.reset();
   state_ = State::IDLE;
@@ -443,24 +362,13 @@ inline void ObTxDesc::FLAG::switch_to_idle_()
   REPLICA_ = sv.REPLICA_;
 }
 
-// this function helper will update current flag with the given
-// and ensure private flags will not be overriden
 ObTxDesc::FLAG ObTxDesc::FLAG::update_with(const ObTxDesc::FLAG &flag)
 {
-  ObTxDesc::FLAG ret = flag;
-#define KEEP_PRIVATE_(x) ret.x = x
-  LST_DO(KEEP_PRIVATE_, (;),
-         SHADOW_,        // private for each scheduler node
-         REPLICA_,       // private for each scheduler node
-         INTERRUPTED_,   // private on original scheduler
-         RELEASED_,      // private on original scheduler
-         BLOCK_);        // private for single stmt scope
-#undef KEEP_PRIVATE_
-  // do merge for some flags, because it may be set asynchorously
-  // PART_ABORTED may be set on original scheduler while stmt executing on remote scheduler
-  // in such case, it should not be override by state update from remote scheduler
-  ret.PART_ABORTED_ |= PART_ABORTED_;
-  return ret;
+  ObTxDesc::FLAG n = flag;
+#define KEEP_(x) n.x = x
+LST_DO(KEEP_, (;), SHADOW_, REPLICA_, TRACING_, INTERRUPTED_, RELEASED_, BLOCK_);
+#undef KEEP_
+  return n;
 }
 
 ObTxDesc::~ObTxDesc()
@@ -487,7 +395,7 @@ void ObTxDesc::reset()
   cluster_id_ = -1;
   trace_info_.reset();
   cluster_version_ = 0;
-  seq_base_ = 0;
+
   tx_consistency_type_ = ObTxConsistencyType::INVALID;
 
   addr_.reset();
@@ -520,7 +428,6 @@ void ObTxDesc::reset()
 
   active_scn_.reset();
   min_implicit_savepoint_.reset();
-  last_branch_id_ = 0;
   parts_.reset();
   savepoints_.reset();
   cflict_txs_.reset();
@@ -536,7 +443,6 @@ void ObTxDesc::reset()
   can_elr_ = false;
 
   commit_cb_ = NULL;
-  cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   brpc_mask_set_.reset();
   rpc_cond_.reset();
@@ -683,15 +589,6 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       break;
     }
   }
-
-  if (ObTxDesc::State::IMPLICIT_ACTIVE == state_ && !active_scn_.is_valid()) {
-    /*
-     * it is a first stmt's retry, we should set active scn
-     * to enable recognizing it is first stmt
-     */
-    active_scn_ = get_tx_seq();
-  }
-
   if (!hit) {
     if (append) {
       a.last_touch_ts_ = exec_info_reap_ts_ + 1;
@@ -707,14 +604,6 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
   }
   state_change_flags_.PARTS_CHANGED_ = true;
   return ret;
-}
-
-void ObTxDesc::post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint)
-{
-  ARRAY_FOREACH_NORET(parts, i) {
-    parts[i].last_scn_ = savepoint;
-  }
-  state_change_flags_.PARTS_CHANGED_ = true;
 }
 
 int ObTxDesc::update_clean_part(const share::ObLSID &id,
@@ -928,25 +817,15 @@ bool ObTxDesc::execute_commit_cb()
         executed = true;
         cb = commit_cb_;
         commit_cb_ = NULL;
-        if (0 <= cb_tid_) {
-#ifdef ENABLE_DEBUG_LOG
-          ob_abort();
-#endif
-          TRANS_LOG(ERROR, "unexpected error happen, cb_tid_ should smaller than 0",
-                    KP(this), K(tx_id), KP(cb_tid_));
-        }
-        ATOMIC_STORE_REL(&cb_tid_, GETTID());
         // NOTE: it is required add trace event before callback,
         // because txDesc may be released after callback called
         REC_TRANS_TRACE_EXT(&tlog_, exec_commit_cb,
                             OB_ID(arg), (void*)cb,
                             OB_ID(ref), get_ref(),
                             OB_ID(thread_id), GETTID());
-        commit_cb_lock_.unlock();
         cb->callback(commit_out_);
-      } else {
-        commit_cb_lock_.unlock();
       }
+      commit_cb_lock_.unlock();
     }
     TRANS_LOG(TRACE, "execute_commit_cb", KP(this), K(tx_id), KP(cb), K(executed));
   }
@@ -1247,52 +1126,10 @@ void ObTxReadSnapshot::wait_consistency()
     }
   }
 }
-
-const char* ObTxReadSnapshot::get_source_name() const
+ObString ObTxReadSnapshot::get_source_name() const
 {
   static const char* const SRC_NAME[] = { "INVALID", "GTS", "LOCAL", "WEAK_READ", "USER_SPECIFIED", "NONE" };
-  return SRC_NAME[(int)source_];
-}
-
-/*
- * format snapshot info for sql audit display
- * contains: src, ls_id, ls_role, parts
- * when shorter than 128 char like:
- * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(id:1001,epoch:1111),(id:1002,epoch:12222)]"
- * when longer than 128 char, with "..." in the end
- * "src:GLOBAL;ls_id:1001;ls_role:LEADER;parts:[(lsid:1001,epoch:1111),(lsid:1002,epoch:122..."
-*/
-int ObTxReadSnapshot::format_source_for_display(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (OB_ISNULL(buf) || buf_len <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(ERROR, "invaild arguments", K(ret), KPC(this), K(buf_len));
-  } else {
-    const char *snapshot_src = get_source_name();
-    const char *ls_role = role_to_string(snapshot_ls_role_);
-    uint64_t ls_id = snapshot_lsid_.id();
-    int n = snprintf(buf, buf_len, "src:%s;ls_id:%ld;ls_role:%s;parts:",
-                     snapshot_src, ls_id, ls_role);
-    if (n < 0){
-      ret = OB_UNEXPECT_INTERNAL_ERROR;
-      TRANS_LOG(WARN, "fail to fill snapshot source", K(ret), KPC(this), K(n), K(pos), K(buf_len));
-    } else {
-      pos += n;
-      pos += parts_.to_string(buf + pos, buf_len - pos);
-      if (pos >= buf_len - 1) {
-        // buf full, parts fill not complete
-        // replace end 3 chars with ...
-        buf[pos - 2] = '.';
-        buf[pos - 3] = '.';
-        buf[pos - 4] = '.';
-      }
-      buf[pos - 1] = '\0';
-      TRANS_LOG(DEBUG, "succeed to generate snapshot source", KPC(this), K(pos), K(buf_len), K(ObString(buf)));
-    }
-  }
-  return ret;
+  return ObString(SRC_NAME[(int)source_]);
 }
 
 ObTxExecResult::ObTxExecResult()
@@ -1704,6 +1541,7 @@ void TxCtxStateHelper::restore_state()
   }
 }
 
+OB_SERIALIZE_MEMBER_SIMPLE(ObTxSEQ, raw_val_);
 DEF_TO_STRING(ObTxSEQ)
 {
   int64_t pos = 0;
@@ -1719,18 +1557,21 @@ DEF_TO_STRING(ObTxSEQ)
   return pos;
 }
 
-int ObTxDesc::alloc_branch_id(const int64_t count, int16_t &branch_id)
+ObTxSEQ ObTxDesc::get_tx_seq(int64_t seq_abs) const
 {
-  int ret = OB_SUCCESS;
-  ObSpinLockGuard guard(lock_);
-  if (count > MAX_BRANCH_ID_VALUE - last_branch_id_) {
-    ret = OB_ERR_OUT_OF_UPPER_BOUND;
-    TRANS_LOG(WARN, "can not alloc branch_id", KR(ret), K(count), KPC(this));
-  } else {
-    branch_id = last_branch_id_ + 1;
-    last_branch_id_ += count;
-  }
-  return ret;
+  return ObTxSEQ::mk_v0(seq_abs > 0 ? seq_abs : ObSequence::get_max_seq_no());
+}
+ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
+{
+  UNUSED(branch);
+  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
+  return ObTxSEQ::mk_v0(seq);
+}
+ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const
+{
+  UNUSED(branch);
+  int64_t seq = ObSequence::inc_and_get_max_seq_no();
+  return ObTxSEQ::mk_v0(seq);
 }
 void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
 {
@@ -1740,25 +1581,6 @@ void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
     abort_cause_ = abort_cause;
   }
 }
-
-int64_t ObTxDesc::get_coord_epoch() const
-{
-  int64_t epoch = -1;
-
-  if (OB_UNLIKELY(!coord_id_.is_valid())) {
-    epoch = -1;
-  } else {
-    ARRAY_FOREACH_NORET(commit_parts_, i) {
-      const ObTxExecPart &part = commit_parts_[i];
-      if (coord_id_ == part.ls_id_) {
-        epoch = part.exec_epoch_;
-      }
-    }
-  }
-
-  return epoch;
-}
-
 } // transaction
 } // oceanbase
 #undef USING_LOG_PREFIX

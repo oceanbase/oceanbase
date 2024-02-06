@@ -31,16 +31,12 @@ namespace share
 int ObGAISClient::init(const ObAddr &self, ObGAISRequestRpc *gais_request_rpc)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(OB_SERVER_TENANT_ID, ObModIds::OB_AUTOINCREMENT);
-  SET_USE_500(attr);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else if (OB_UNLIKELY(!self.is_valid()) || OB_ISNULL(gais_request_rpc)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(self), KP(gais_request_rpc));
-  } else if (OB_FAIL(gais_cache_leader_map_.create(32 /*init leader size*/, attr, attr))) {
-    LOG_WARN("fail to init leader map", K(ret));
   } else {
     self_ = self;
     gais_request_rpc_ = gais_request_rpc;
@@ -55,7 +51,7 @@ void ObGAISClient::reset()
   is_inited_ = false;
   self_.reset();
   gais_request_rpc_ = NULL;
-  gais_cache_leader_map_.clear();
+  reset_cache_leader_();
 }
 
 int ObGAISClient::get_value(const AutoincKey &key,
@@ -279,27 +275,22 @@ int ObGAISClient::clear_global_autoinc_cache(const AutoincKey &key)
 
 int ObGAISClient::get_leader_(const uint64_t tenant_id, ObAddr &leader)
 {
-  int ret = gais_cache_leader_map_.get_refactored(tenant_id, leader);
-  if (OB_SUCC(ret)) {
-  } else if (ret == OB_HASH_NOT_EXIST) {
-    ret = OB_SUCCESS;
-    const int64_t cluster_id = GCONF.cluster_id;
-    if (OB_ISNULL(GCTX.location_service_)) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("location cache is NULL", K(ret));
-    } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(
-                                              cluster_id, tenant_id, GAIS_LS, leader))) {
-      LOG_WARN("gais nonblock get leader failed", K(ret), K(tenant_id), K(GAIS_LS));
-    } else if (OB_UNLIKELY(!leader.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invaild lear from location adapter", K(ret), K(leader));
-    } else if (OB_FAIL(gais_cache_leader_map_.set_refactored(tenant_id, leader, 1))) {
-      LOG_WARN("fail to set leader to map", K(ret), K(tenant_id), K(leader));
-    } else {
-      LOG_INFO("succ to refresh leader", K(cluster_id), K(tenant_id), K(leader));
-    }
+  int ret = OB_SUCCESS;
+  const int64_t cluster_id = GCONF.cluster_id;
+  lib::ObMutexGuard guard(cache_leader_mutex_);
+  if (OB_LIKELY(gais_cache_leader_.is_valid())) {
+    leader = gais_cache_leader_;
+  } else if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("location cache is NULL", K(ret));
+  } else if (OB_FAIL(GCTX.location_service_->nonblock_get_leader(
+                                             cluster_id, tenant_id, GAIS_LS, leader))) {
+    LOG_WARN("gais nonblock get leader failed", K(ret), K(tenant_id), K(GAIS_LS));
+  } else if (OB_UNLIKELY(!leader.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invaild lear from location adapter", K(ret), K(leader));
   } else {
-    LOG_WARN("fail get cache from hash map", K(ret));
+    gais_cache_leader_ = leader;
   }
   return ret;
 }
@@ -308,7 +299,7 @@ int ObGAISClient::refresh_location_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   const int64_t cluster_id = GCONF.cluster_id;
-  gais_cache_leader_map_.erase_refactored(tenant_id);
+  reset_cache_leader_();
   if (OB_ISNULL(GCTX.location_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("location cache is NULL", K(ret));

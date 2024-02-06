@@ -80,13 +80,6 @@ public:
 class ObFreezeInfoManager
 {
 public:
-  static int fetch_new_freeze_info(
-      const int64_t tenant_id,
-      const share::SCN &min_frozen_scn,
-      common::ObMySQLProxy &sql_proxy,
-      common::ObIArray<ObFreezeInfo> &freeze_infos,
-      share::SCN &latest_snapshot_gc_scn);
-
   ObFreezeInfoManager()
     : is_inited_(false),
       tenant_id_(common::OB_INVALID_ID),
@@ -99,10 +92,7 @@ public:
   share::SCN get_snapshot_gc_scn() const { return freeze_info_.latest_snapshot_gc_scn_; }
   void reset_freeze_info() { freeze_info_.set_invalid(); }
   int init(uint64_t tenant_id, common::ObMySQLProxy &proxy);
-  int reload(const share::SCN &min_frozen_scn);
-  int update_freeze_info(
-      const common::ObIArray<ObFreezeInfo> &freeze_infos,
-      const share::SCN &latest_snapshot_gc_scn);
+  int reload(const share::SCN &min_frozen_scn, const bool reset_on_fail = true);
   int add_freeze_info(const share::ObFreezeInfo &frozen_status);
   int update_snapshot_gc_scn(const share::SCN &new_snapshot_gc_scn);
 

@@ -24,9 +24,7 @@ namespace blocksstable
 {
 
 ObTmpFileIOInfo::ObTmpFileIOInfo()
-    : fd_(0), dir_id_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
-      tenant_id_(OB_INVALID_TENANT_ID), buf_(NULL), io_desc_(),
-      disable_page_cache_(false)
+  : fd_(0), dir_id_(0), size_(0), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS), tenant_id_(OB_INVALID_TENANT_ID), buf_(NULL), io_desc_()
 {
 }
 
@@ -63,7 +61,6 @@ ObTmpFileIOHandle::ObTmpFileIOHandle()
     is_read_(false),
     has_wait_(false),
     is_finished_(false),
-    disable_page_cache_(false),
     ret_code_(OB_SUCCESS),
     expect_read_size_(0),
     last_read_offset_(-1),
@@ -72,9 +69,6 @@ ObTmpFileIOHandle::ObTmpFileIOHandle()
     last_fd_(OB_INVALID_FD),
     last_extent_id_(0)
 {
-  io_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_IO_HDL"));
-  page_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_PCACHE_HDL"));
-  block_cache_handles_.set_attr(ObMemAttr(MTL_ID(), "TMP_BCACHE_HDL"));
 }
 
 ObTmpFileIOHandle::~ObTmpFileIOHandle()
@@ -89,8 +83,7 @@ int ObTmpFileIOHandle::prepare_read(
     char *read_buf,
     int64_t fd,
     int64_t dir_id,
-    uint64_t tenant_id,
-    bool disable_page_cache)
+    uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(read_buf)) {
@@ -107,7 +100,6 @@ int ObTmpFileIOHandle::prepare_read(
     expect_read_size_ = read_size;
     last_read_offset_ = read_offset;
     io_flag_ = io_flag;
-    disable_page_cache_ = disable_page_cache;
     if (last_fd_ != fd_) {
       last_fd_ = fd_;
       last_extent_id_ = 0;
@@ -124,13 +116,11 @@ int ObTmpFileIOHandle::prepare_write(
     uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t bkt_cnt = 17;
-  lib::ObMemAttr bkt_mem_attr(tenant_id, "TmpBlkIDBkt");
   if (OB_ISNULL(write_buf)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP_(buf));
-  } else if (OB_FAIL(write_block_ids_.create(bkt_cnt, bkt_mem_attr))) {
-    STORAGE_LOG(WARN, "create write block id set failed", K(ret), K(bkt_cnt));
+  } else if (OB_FAIL(write_block_ids_.create(17))) {
+    STORAGE_LOG(WARN, "create write block id set failed", K(ret), KP_(buf));
   } else {
     buf_ = write_buf;
     size_ = write_size;
@@ -470,8 +460,7 @@ ObTmpFileExtent::ObTmpFileExtent(ObTmpFile *file)
     g_offset_end_(0),
     owner_(file),
     block_id_(-1),
-    lock_(common::ObLatchIds::TMP_FILE_EXTENT_LOCK),
-    is_truncated_(false)
+    lock_(common::ObLatchIds::TMP_FILE_EXTENT_LOCK)
 {
 }
 
@@ -569,7 +558,6 @@ void ObTmpFileExtent::reset()
   page_nums_ = 0;
   block_id_ = -1;
   ATOMIC_STORE(&is_closed_, false);
-  ATOMIC_STORE(&is_truncated_, false);
 }
 
 bool ObTmpFileExtent::is_valid()
@@ -701,7 +689,7 @@ int ObTmpFileMeta::clear()
   for (int64_t i = extents_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
     tmp = extents_.at(i);
     if (NULL != tmp) {
-      if (!tmp->is_alloced() || tmp->is_truncated()) {
+      if (!tmp->is_alloced()) {
         // nothing to do.
       } else if (OB_FAIL(OB_TMP_FILE_STORE.free(tmp->get_owner().get_tenant_id(), tmp))) {
         STORAGE_LOG(WARN, "fail to free extents", K(ret));
@@ -729,9 +717,7 @@ ObTmpFile::ObTmpFile()
     tenant_id_(-1),
     lock_(common::ObLatchIds::TMP_FILE_LOCK),
     allocator_(NULL),
-    file_meta_(),
-    read_guard_(0),
-    next_truncated_extent_id_(0)
+    file_meta_()
 {
 }
 
@@ -752,8 +738,6 @@ int ObTmpFile::clear()
       offset_ = 0;
       allocator_ = NULL;
       is_inited_ = false;
-      read_guard_ = 0;
-      next_truncated_extent_id_ = 0;
     }
   }
   return ret;
@@ -817,8 +801,7 @@ int ObTmpFile::aio_read_without_lock(const ObTmpFileIOInfo &io_info,
                                          io_info.buf_,
                                          file_meta_.get_fd(),
                                          file_meta_.get_dir_id(),
-                                         io_info.tenant_id_,
-                                         io_info.disable_page_cache_))) {
+                                         io_info.tenant_id_))){
     STORAGE_LOG(WARN, "fail to prepare read io handle", K(ret), K(io_info), K(offset));
   } else if (OB_UNLIKELY(io_info.size_ > 0 && offset >= tmp->get_global_end())) {
     ret = OB_ITER_END;
@@ -867,18 +850,6 @@ int ObTmpFile::once_aio_read_batch(
   return ret;
 }
 
-int ObTmpFile::fill_zero(char *buf, const int64_t size)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(buf) || size < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "buf is null or size is negative", K(ret), K(size), KP(buf));
-  } else {
-    MEMSET(buf, 0, size);
-  }
-  return ret;
-}
-
 int ObTmpFile::once_aio_read_batch_without_lock(
     const ObTmpFileIOInfo &io_info,
     int64_t &offset,
@@ -905,35 +876,9 @@ int ObTmpFile::once_aio_read_batch_without_lock(
         read_size = remain_size;
       }
       // read from the extent.
-      if (tmp->is_truncated()) {
-        if (read_guard_ < tmp->get_global_end()) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "extent is truncated but read_guard not set correctlly", K(ret), K(tmp), K(read_guard_));
-        } else if (OB_FAIL(fill_zero(buf, read_size))) {
-          STORAGE_LOG(WARN, "fail to fill zero data to buf", K(ret));
-        }
-      } else if (offset >= read_guard_) {
-        if (OB_FAIL(tmp->read(io_info, offset - tmp->get_global_start(), read_size, buf, handle))) {
-          STORAGE_LOG(WARN, "fail to read the extent", K(ret), K(io_info), K(buf), KP_(io_info.buf));
-        }
+      if (OB_FAIL(tmp->read(io_info, offset - tmp->get_global_start(), read_size, buf, handle))) {
+        STORAGE_LOG(WARN, "fail to read the extent", K(ret), K(io_info), K(buf), KP_(io_info.buf));
       } else {
-        if (read_guard_ < offset + read_size) {
-          const int64_t zero_size = read_guard_ - offset;
-          const int64_t file_read_size = read_size - zero_size;
-          if (OB_FAIL(fill_zero(buf, zero_size))) {
-            STORAGE_LOG(WARN, "fail to read zero from truncated pos", K(ret));
-          } else if (OB_FAIL(tmp->read(io_info, read_guard_ - tmp->get_global_start(), file_read_size, buf + zero_size, handle))) {
-            STORAGE_LOG(WARN, "fail to read the extent", K(ret), K(io_info), K(buf + zero_size), KP_(io_info.buf));
-          }
-        } else {
-          // read 0;
-          if (OB_FAIL(fill_zero(buf, read_size))) {
-            STORAGE_LOG(WARN, "fail to read zero from truncated pos", K(ret), KP(buf), K(read_size));
-          }
-        }
-
-      }
-      if (OB_SUCC(ret)) {
         offset += read_size;
         remain_size -= read_size;
         buf += read_size;
@@ -1310,66 +1255,6 @@ void ObTmpFile::get_file_size(int64_t &file_size)
   file_size = (nullptr == tmp) ? 0 : tmp->get_global_end();
 }
 
-/*
- * to avoid truncating blocks that is using now (e.g., the io request is in io manager but not finish).
- * we need to ensure there is no other file operation while calling truncate.
- */
-int ObTmpFile::truncate(const int64_t offset)
-{
-  int ret = OB_SUCCESS;
-
-  SpinWLockGuard guard(lock_);
-  // release extents
-  ObTmpFileExtent *tmp = nullptr;
-  //the extents before read_guard_ is truncated;
-  int64_t ith_extent = next_truncated_extent_id_;
-  common::ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
-  STORAGE_LOG(INFO, "truncate ", K(offset), K(read_guard_), K(ith_extent));
-
-  if (OB_ISNULL(tmp = file_meta_.get_last_extent())) {
-    ret = OB_BAD_NULL_ERROR;
-    STORAGE_LOG(WARN, "fail to truncate, because the tmp file is empty", K(ret), KP(tmp));
-  } else if (offset < 0 || offset > tmp->get_global_end()) {
-    ret = OB_INDEX_OUT_OF_RANGE;
-    STORAGE_LOG(WARN, "offset out of range", K(ret), K(tmp), K(offset));
-  }
-
-  while (OB_SUCC(ret) && ith_extent >= 0
-      && ith_extent < extents.count()) {
-    tmp = extents.at(ith_extent);
-    if (tmp->get_global_start() >= offset) {
-      break;
-    } else if (!tmp->is_closed()) {
-      // for extent that is not closed, shouldn't truncate.
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "the truncate extent is not closed", K(ret));
-    } else if (tmp->get_global_end() > offset) {
-      break;
-    } else {
-      // release space
-      if (!tmp->is_truncated()) {
-        tmp->set_truncated();
-        if (OB_FAIL(OB_TMP_FILE_STORE.free(get_tenant_id(), tmp->get_block_id(),
-                                          tmp->get_start_page_id(),
-                                          tmp->get_page_nums()))) {
-          STORAGE_LOG(WARN, "fail to release space", K(ret), K(read_guard_), K(tmp));
-        }
-        STORAGE_LOG(TRACE, "release extents", K(ith_extent), K(tmp->get_start_page_id()), K(tmp->get_page_nums()));
-      }
-      if (OB_SUCC(ret)) {
-        // if only part of extent is truncated, we only need to set the read_guard
-        ith_extent++;
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && offset > read_guard_) {
-    read_guard_ = offset;
-    next_truncated_extent_id_ = ith_extent;
-  }
-  return ret;
-}
-
 int ObTmpFile::write_file_extent(const ObTmpFileIOInfo &io_info, ObTmpFileExtent *file_extent,
     int64_t &size, char *&buf)
 {
@@ -1494,15 +1379,12 @@ int ObTmpFileManager::open(int64_t &fd, int64_t &dir)
 {
   int ret = OB_SUCCESS;
   ObTmpFile file;
-  common::ObIAllocator *allocator = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_tenant_extent_allocator(MTL_ID(), allocator))) {
-    STORAGE_LOG(WARN, "fail to get extent allocator", K(ret));
   } else if (OB_FAIL(get_next_fd(fd))) {
     STORAGE_LOG(WARN, "fail to get next fd", K(ret));
-  } else if (OB_FAIL(file.init(fd, dir, *allocator))) {
+  } else if (OB_FAIL(file.init(fd, dir, files_.get_allocator()))) {
     STORAGE_LOG(WARN, "fail to open file", K(ret));
   } else if (OB_FAIL(files_.set(fd, file))) {
     STORAGE_LOG(WARN, "fail to set tmp file", K(ret));
@@ -1663,21 +1545,6 @@ int ObTmpFileManager::seek(const int64_t fd, const int64_t offset, const int whe
   } else if (OB_FAIL(files_.get(fd, file_handle))) {
     STORAGE_LOG(WARN, "fail to get tmp file handle", K(ret), K(fd));
   } else if (OB_FAIL(file_handle.get_resource_ptr()->seek(offset, whence))) {
-    STORAGE_LOG(WARN, "fail to seek file", K(ret));
-  }
-  return ret;
-}
-
-int ObTmpFileManager::truncate(const int64_t fd, const int64_t offset)
-{
-  int ret = OB_SUCCESS;
-  ObTmpFileHandle file_handle;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObTmpFileManager has not been inited", K(ret));
-  } else if (OB_FAIL(files_.get(fd, file_handle))) {
-    STORAGE_LOG(WARN, "fail to get tmp file handle", K(ret), K(fd));
-  } else if (OB_FAIL(file_handle.get_resource_ptr()->truncate(offset))) {
     STORAGE_LOG(WARN, "fail to seek file", K(ret));
   }
   return ret;

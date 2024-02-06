@@ -77,9 +77,6 @@ public:
     pkt_rec_wrapper_.init();
     client_type_ = common::OB_CLIENT_INVALID_TYPE;
     client_version_ = 0;
-    client_sessid_ = INVALID_SESSID;
-    client_addr_port_ = 0;
-    client_create_time_ = 0;
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -205,10 +202,6 @@ public:
   obmysql::ObPacketRecordWrapper pkt_rec_wrapper_;
   ObClientType client_type_;
   uint64_t client_version_;
-  // The client establishes a connection ID to ensure that the tenant is globally unique.
-  uint32_t client_sessid_;
-  int32_t client_addr_port_;
-  int64_t client_create_time_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

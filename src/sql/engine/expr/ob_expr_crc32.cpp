@@ -11,7 +11,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
-#include <zlib.h>
+#include "lib/compress/zlib/zlib_src/zlib.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/ob_name_def.h"
 #include "lib/utility/ob_macro_utils.h"

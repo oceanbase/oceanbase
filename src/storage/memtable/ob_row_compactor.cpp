@@ -180,12 +180,8 @@ int ObMemtableRowCompactor::try_cleanout_tx_node_during_compact_(ObTxTableGuard 
       // So the case before will not happen again before v5 will not be delay
       // cleanout and filled back through commit callback. So we add the error
       // log back
-      //
-      // since 4.3 multiple callback list will not merged, in commiting phase
-      // if two TransNode of same row stay in different callback list, their
-      // fill back order is undefined, and this situation can happened
-      // ret = OB_ERR_UNEXPECTED;
-      // TRANS_LOG(ERROR, "unexpected non cleanout uncommitted node", KPC(tnode), KPC(row_));
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected non cleanout uncommitted node", KPC(tnode), KPC(row_));
     } else if (OB_FAIL(tx_table_guard.cleanout_tx_node(tnode->tx_id_, *row_, *tnode, false /*need_row_latch*/))) {
       TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(row_), KPC(tnode));
     }
@@ -223,7 +219,6 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
 
   TRANS_LOG(DEBUG, "chaser debug start compact memtable row", K(memtable_->get_key()));
   // Scan nodes till tail OR a previous compact node OR a delete node.
-  bool giveup_compaction = false;
   while (OB_SUCCESS == ret && NULL != cur) {
     // Read cells & compact them by a map.
     const ObMemtableDataHeader *mtd = NULL;
@@ -231,15 +226,8 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
     if (OB_FAIL(try_cleanout_tx_node_during_compact_(tx_table_guard, cur))) {
       TRANS_LOG(WARN, "cleanout tx state failed", K(ret), KPC(row_), KPC(cur));
     } else if (!(cur->is_aborted() || cur->is_committed() || cur->is_elr())) {
-      ObMvccTransNode *next = cur->next_;
-      if (next && (next->is_aborted() || next->is_committed() || next->is_elr())) {
-        // for safety, just giveup the compaction
-        giveup_compaction = true;
-        ret = OB_ITER_END;
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "unexpected cleanout state", K(snapshot_version), KP(next), K(*cur), K(*row_));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "unexpected cleanout state", K(*cur), K(*row_));
     } else if (cur->is_aborted()) {
       TRANS_LOG(INFO, "ignore aborted node when compact", K(*cur), K(*row_));
       cur = cur->prev_;
@@ -322,7 +310,7 @@ ObMvccTransNode *ObMemtableRowCompactor::construct_compact_node_(const SCN snaps
   ret = (OB_ITER_END == ret) ? OB_SUCCESS : ret;
 
   // Write compact row
-  if (OB_SUCC(ret) && !giveup_compaction && compact_row_cnt > 0) {
+  if (OB_SUCC(ret) && compact_row_cnt > 0) {
     EVENT_INC(MEMSTORE_ROW_COMPACTION_COUNT);
     SMART_VAR(blocksstable::ObRowWriter, row_writer) {
       char *buf = nullptr;

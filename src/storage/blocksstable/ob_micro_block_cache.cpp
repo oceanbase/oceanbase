@@ -424,12 +424,9 @@ int ObIMicroBlockIOCallback::read_block_and_copy(
 {
   int ret = OB_SUCCESS;
   block_data.type_ = cache_->get_type();
-  // In normal cases, full_transform is not required if not using block cache,
-  // The ObMicroBlockCSDecoder can do part_transform and use the memory whose life cycle
-  // is consistent with decoder. However, at present, there are cases where rows obtained from
-  // index block or data block are continued to be used after decoder deconstruction,
-  // so the full_transform is also done here.
-  if (ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
+  // only full_transform for index_block with cs_encoding when don't use block cache
+  if (ObMicroBlockData::INDEX_BLOCK == block_data.type_  &&
+      ObStoreFormat::is_row_store_type_with_cs_encoding(static_cast<ObRowStoreType>(header.row_store_type_))) {
     if (OB_FAIL(reader.decrypt_and_full_transform_data(header, block_des_meta_,
         buffer, size, block_data.get_buf(), block_data.get_buf_size(), nullptr))) {
       LOG_WARN("fail to decrypt_and_full_transform_data", K(ret), K(header), K_(block_des_meta));
@@ -1403,8 +1400,8 @@ int ObIndexMicroBlockCache::load_block(
         }
         if (nullptr != transform_buf) {
           allocator->free(transform_buf);
+          block_data.reset();
         }
-        block_data.reset();
       }
     }
   }

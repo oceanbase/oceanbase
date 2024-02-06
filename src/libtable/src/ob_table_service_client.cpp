@@ -195,6 +195,7 @@ int ObTableServiceClientEnv::init_schema_service()
     // refresh Schema
     share::schema::ObSchemaService::g_ignore_column_retrieve_error_ = true;
     share::schema::ObSchemaService::g_liboblog_mode_ = true;
+    share::schema::ObMultiVersionSchemaService::g_skip_resolve_materialized_view_definition_ = true;
     ObSEArray<uint64_t, 1> tenant_ids;
     // init GCTX
     bool check_bootstrap = false;

@@ -297,10 +297,6 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
     strncpy(str, "DBMS_LOCK", str_len);
     break;
   }
-  case ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW: {
-    strncpy(str, "MATERIALIZED_VIEW", str_len);
-    break;
-  }
   default: {
     strncpy(str, "UNKNOWN", str_len);
   }
@@ -430,17 +426,13 @@ public:
       create_timestamp_(0),
       create_schema_version_(-1)
   {
-    // here, ensure lock-callback was dispatched to single callback-list
-    // forcedly set the seq_no's branch to zero
-    ObTxSEQ seq_no2 = seq_no;
-    seq_no2.set_branch(0);
     set(lock_id,
         lock_mode,
         owner_id,
         trans_id,
         op_type,
         lock_op_status,
-        seq_no2,
+        seq_no,
         create_timestamp,
         create_schema_version);
   }
@@ -477,10 +469,6 @@ public:
             is_in_trans_common_lock_op_type(op_type_));
   }
   bool need_replay_or_recover(const ObTableLockOp &lock_op) const;
-
-  bool is_tablet_lock(const ObTabletID &tablet_id) {
-    return lock_id_.is_tablet_lock() && lock_id_.obj_id_ == tablet_id.id();
-  }
 private:
   bool is_need_record_lock_mode_() const
   {

@@ -170,6 +170,8 @@ enum ObMatchAgainstMode {
 
 #define IS_OUTER_OR_CONNECT_BY_JOIN(join_type) (IS_OUTER_JOIN(join_type) || CONNECT_BY_JOIN == join_type)
 
+#define IS_DUMMY_PHY_OPERATOR(op_type) ((op_type == PHY_MONITORING_DUMP))
+
 #define IS_LEFT_STYLE_JOIN(join_type) \
   ((join_type) == LEFT_SEMI_JOIN || \
    (join_type) == LEFT_ANTI_JOIN || \
@@ -645,70 +647,6 @@ ObTMSegmentArray<T, max_block_size, BlockAllocatorT, auto_free,
           BlockPointerArrayT>(alloc)
 {
   this->set_tenant_id(MTL_ID());
-}
-
-static bool is_fixed_length(ObObjType type) {
-  bool is_fixed = true;
-  ObObjTypeClass tc = ob_obj_type_class(type);
-  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
-  if (ObNumberTC == tc
-      || ObExtendTC == tc
-      || ObTextTC == tc
-      || ObStringTC == tc
-      || ObEnumSetInnerTC == tc
-      || ObRawTC == tc
-      || ObRowIDTC == tc
-      || ObLobTC == tc
-      || ObJsonTC == tc
-      || ObGeometryTC == tc
-      || ObUserDefinedSQLTC == tc
-      || ObDecimalIntTC == tc) {
-    is_fixed = false;
-  }
-  return is_fixed;
-}
-
-static int16_t get_type_fixed_length(ObObjType type) {
-  int16_t len = 0;
-  ObObjTypeClass tc = ob_obj_type_class(type);
-  OB_ASSERT(tc >= ObNullTC && tc < ObMaxTC);
-  switch (tc)
-  {
-    case ObUIntTC:
-    case ObIntTC:
-    case ObDoubleTC:
-    case ObDateTimeTC:
-    case ObTimeTC:
-    case ObBitTC:
-    case ObEnumSetTC:
-    {
-      len = 8;
-      break;
-    }
-    case ObDateTC:
-    case ObFloatTC:
-    {
-      len = 4;
-      break;
-    }
-    case ObYearTC:
-    {
-      len = 1;
-      break;
-    }
-    case ObOTimestampTC: {
-      len = (type == ObTimestampTZType) ? 12 : 10;
-      break;
-    }
-    case ObIntervalTC:
-    {
-      len = (type == ObIntervalYMType) ? 8 : 12;
-      break;
-    }
-    default:
-      break;
-  }
-  return len;
 }
 
 }  // namespace sql

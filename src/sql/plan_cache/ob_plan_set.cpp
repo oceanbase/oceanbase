@@ -538,11 +538,15 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       }
     }
     if (OB_SUCC(ret) && is_same) {
-      if (OB_FAIL(ObPlanCacheObject::match_pre_calc_cons(all_pre_calc_constraints_, pc_ctx,
-                                                         is_ignore_stmt_, is_same))) {
-        LOG_WARN("failed to match pre calc cons", K(ret));
-      } else if (!is_same) {
-        LOG_TRACE("pre calc constraints for plan set and cur plan not match");
+      DLIST_FOREACH(pre_calc_con, all_pre_calc_constraints_) {
+        if (OB_FAIL(ObPlanCacheObject::check_pre_calc_cons(is_ignore_stmt_,
+                                                           is_same,
+                                                           *pre_calc_con,
+                                                           pc_ctx.exec_ctx_))) {
+          LOG_WARN("failed to pre calculate expression", K(ret));
+        } else if (!is_same) {
+          break;
+        }
       }
     }
 
@@ -1057,8 +1061,6 @@ int ObPlanSet::match_constraint(const ParamStore &params, bool &is_matched)
       } else if (param1.is_float() && param2.is_float()) {
         is_matched = (0 == param1.get_float() + param2.get_float()) ||
                      (param1.get_float() == param2.get_float());
-      } else if (param1.is_decimal_int() && param2.is_decimal_int()) {
-        is_matched = wide::abs_equal(param1, param2);
       } else if (param1.can_compare(param2) &&
                  param1.get_collation_type() == param2.get_collation_type()) {
         is_matched = (0 == param1.compare(param2));
@@ -1206,18 +1208,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
                                        candi_table_locs))) {
     LOG_WARN("fail to get physical locations", K(ret));
   } else if (OB_FAIL(set_concurrent_degree(outline_param_idx, plan))) {
-    if (OB_REACH_MAX_CONCURRENT_NUM == ret && 0 == plan.get_max_concurrent_num()) {
-      pc_ctx.is_max_curr_limit_ = true;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to check concurrent degree", K(ret));
-    }
-  } else {
-    // do nothing
-  }
-
-  if (OB_FAIL(ret)) {
-    // do nothing
+    LOG_WARN("fail to check concurrent degree", K(ret));
   } else {
     if (pc_ctx.exec_ctx_.get_physical_plan_ctx()->get_or_expand_transformed()) {
       need_try_plan_ |= TRY_PLAN_OR_EXPAND;
@@ -1319,6 +1310,7 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
    //   }
    // }
   }
+
   return ret;
 }
 

@@ -223,7 +223,6 @@ int ObMvccEngine::estimate_scan_row_count(
               part_est.logical_row_count_, part_est.physical_row_count_))) {
     TRANS_LOG(WARN, "query engine estimate row count fail", K(ret));
   }
-
   return ret;
 }
 
@@ -318,7 +317,7 @@ int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
 
-  if (OB_FAIL(build_tx_node_(arg, node))) {
+  if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
     TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
   } else if (OB_FAIL(value.mvcc_write(ctx,
                                       write_flag,
@@ -336,29 +335,34 @@ int ObMvccEngine::mvcc_write(ObIMemtableCtx &ctx,
   return ret;
 }
 
-int ObMvccEngine::mvcc_replay(const ObTxNodeArg &arg,
+int ObMvccEngine::mvcc_replay(ObIMemtableCtx &ctx,
+                              const ObMemtableKey *stored_key,
+                              ObMvccRow &value,
+                              const ObTxNodeArg &arg,
                               ObMvccReplayResult &res)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
 
-  if (OB_FAIL(build_tx_node_(arg, node))) {
-    TRANS_LOG(WARN, "build tx node failed", K(ret), K(arg));
+  if (OB_FAIL(build_tx_node_(ctx, arg, node))) {
+    TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
   } else {
     res.tx_node_ = node;
-    TRANS_LOG(DEBUG, "mvcc replay succeed", K(ret), K(arg));
+    TRANS_LOG(DEBUG, "mvcc replay succeed", K(ret), K(ctx), K(arg));
   }
   return ret;
 }
 
-int ObMvccEngine::build_tx_node_(const ObTxNodeArg &arg,
+int ObMvccEngine::build_tx_node_(ObIMemtableCtx &ctx,
+                                 const ObTxNodeArg &arg,
                                  ObMvccTransNode *&node)
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(kv_builder_->dup_data(node, *engine_allocator_, arg.data_))) {
     TRANS_LOG(WARN, "MvccTranNode dup fail", K(ret), "node", node);
   } else {
-    node->tx_id_ = arg.tx_id_;
+    node->tx_id_ = ctx.get_tx_id();
     node->trans_version_ = SCN::max_scn();
     node->modify_count_ = arg.modify_count_;
     node->acc_checksum_ = arg.acc_checksum_;
@@ -387,6 +391,7 @@ int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key,
       TRANS_LOG(WARN, "ensure_row fail", K(ret));
     }
   }
+
   return ret;
 }
 

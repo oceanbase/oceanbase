@@ -17,13 +17,9 @@
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_rpc_process.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "share/detect/ob_detect_manager_utils.h"
-#include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
 using namespace oceanbase;
 using namespace common;
 using namespace sql;
-
-DEFINE_ENUM_FUNC(ObP2PDatahubMsgBase::ObP2PDatahubMsgType, p2p_datahub_msg_type,
-                 P2P_DATAHUB_MSG_TYPE, ObP2PDatahubMsgBase::);
 
 OB_SERIALIZE_MEMBER(ObP2PDatahubMsgBase,
     trace_id_, p2p_datahub_id_, px_sequence_id_,
@@ -110,7 +106,6 @@ int ObP2PDatahubMsgBase::process_receive_count(ObP2PDatahubMsgBase &msg)
 void ObP2PDatahubMsgBase::check_finish_receive()
 {
   if (msg_receive_expect_cnt_ == ATOMIC_LOAD(&msg_receive_cur_cnt_)) {
-    (void)after_process();
     is_ready_ = true;
   }
 }
@@ -126,9 +121,6 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
   ObP2PDatahubMsgGuard guard(this);
 
   bool need_merge = true;
-  // to avoid data racing in the process of check_finish_receive, protect it in hashmap lock
-  // if set succ, check_finish_receive() in P2PMsgSetCall
-  // if set failed(with OB_HASH_EXIST, need merge), check_finish_receive() in P2PMsgMergeCall
   if (OB_FAIL(map.set_refactored(dh_key, this, 0/*flag*/, 0/*broadcast*/, 0/*overwrite_key*/, &set_call))) {
     if (OB_HASH_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -148,88 +140,12 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
       }
     }
   }
-
+  if (OB_SUCC(ret) && !need_merge) {
+    (void)check_finish_receive();
+  }
   if (need_free) {
     // msg not in map, dec ref count
     guard.dec_msg_ref_count();
-  }
-  return ret;
-}
-
-template <>
-int ObP2PDatahubMsgBase::proc_filter_empty<IntegerFixedVec>(IntegerFixedVec *res_vec,
-                                                            const ObBitVector &skip,
-                                                            const EvalBound &bound,
-                                                            int64_t &total_count,
-                                                            int64_t &filter_count)
-{
-  int ret = OB_SUCCESS;
-  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
-
-  int64_t valid_cnt = bound.range_size() - skip.accumulate_bit_cnt(bound);
-  total_count += valid_cnt;
-  filter_count += valid_cnt;
-  return ret;
-}
-
-template <>
-int ObP2PDatahubMsgBase::proc_filter_empty<IntegerUniVec>(IntegerUniVec *res_vec,
-                                                          const ObBitVector &skip,
-                                                          const EvalBound &bound,
-                                                          int64_t &total_count,
-                                                          int64_t &filter_count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBitVector::flip_foreach(
-          skip, bound, [&](int64_t idx) __attribute__((always_inline)) {
-            res_vec->set_int(idx, 0);
-            ++filter_count;
-            ++total_count;
-            return OB_SUCCESS;
-          }))) {
-    LOG_WARN("fail to do for each operation", K(ret));
-  }
-  return ret;
-}
-
-int ObP2PDatahubMsgBase::preset_not_match(IntegerFixedVec *res_vec, const EvalBound &bound)
-{
-  int ret = OB_SUCCESS;
-  uint64_t *data = reinterpret_cast<uint64_t *>(res_vec->get_data());
-  MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
-  return ret;
-}
-
-int ObP2PDatahubMsgBase::fill_empty_query_range(const ObPxQueryRangeInfo &query_range_info,
-                             common::ObIAllocator &allocator, ObNewRange &query_range)
-{
-  int ret = OB_SUCCESS;
-  query_range.table_id_ = query_range_info.table_id_;
-
-  ObObj *start = NULL;
-  ObObj *end = NULL;
-  int64_t range_column_cnt = query_range_info.range_column_cnt_;
-  if (OB_ISNULL(start = static_cast<ObObj *>(
-                    allocator.alloc(sizeof(ObObj) * range_column_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory for start_obj failed", K(ret));
-  } else if (OB_ISNULL(end = static_cast<ObObj *>(
-                           allocator.alloc(sizeof(ObObj) * range_column_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc memory for end_obj failed", K(ret));
-  } else {
-    // fill all coloumns with (max, min)
-    for (int64_t i = 0; i < range_column_cnt; ++i) {
-      new (start + i) ObObj();
-      new (end + i) ObObj();
-      (start + i)->set_max_value();
-      (end + i)->set_min_value();
-    }
-    ObRowkey start_key(start, range_column_cnt);
-    ObRowkey end_key(end, range_column_cnt);
-    query_range.start_key_ = start_key;
-    query_range.end_key_ = end_key;
   }
   return ret;
 }

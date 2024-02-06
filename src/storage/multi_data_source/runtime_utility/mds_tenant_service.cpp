@@ -19,7 +19,6 @@
 #include "lib/utility/utility.h"
 #include "ob_clock_generator.h"
 #include "share/rc/ob_tenant_base.h"
-#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet.h"
@@ -39,6 +38,7 @@ namespace storage
 {
 namespace mds
 {
+
 /********************FOR MEMORY LEAK DEBUG***************************/
 thread_local char __thread_mds_tag__[TAG_SIZE] = {0};
 TLOCAL(const char *, __thread_mds_alloc_type__) = nullptr;
@@ -46,7 +46,7 @@ TLOCAL(const char *, __thread_mds_alloc_file__) = nullptr;
 TLOCAL(const char *, __thread_mds_alloc_func__) = nullptr;
 TLOCAL(uint32_t, __thread_mds_alloc_line__) = 0;
 
-void set_mds_mem_check_thread_local_info(const storage::mds::MdsWriter &writer,
+void set_mds_mem_check_thread_local_info(const MdsWriter &writer,
                                          const char *alloc_ctx_type,
                                          const char *alloc_file,
                                          const char *alloc_func,
@@ -85,6 +85,92 @@ void reset_mds_mem_check_thread_local_info()
 }
 /********************************************************************/
 
+int ObTenantMdsAllocator::init()
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  // TODO : @gengli new ctx id?
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.ctx_id_ = ObCtxIds::MDS_DATA_ID;
+  mem_attr.label_ = "MdsTable";
+  MDS_TG(10_ms);
+  if (MDS_FAIL(allocator_.init(OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
+    MDS_LOG(WARN, "init vslice allocator failed",
+            K(ret), K(OB_MALLOC_NORMAL_BLOCK_SIZE), KP(this), K(mem_attr));
+  } else {
+    allocator_.set_nway(MDS_ALLOC_CONCURRENCY);
+  }
+  return ret;
+}
+
+void *ObTenantMdsAllocator::alloc(const int64_t size)
+{
+  void *obj = allocator_.alloc(size);
+  MDS_LOG(DEBUG, "mds alloc ", K(size), KP(obj));
+  if (OB_NOT_NULL(obj)) {
+    MTL(ObTenantMdsService*)->record_alloc_backtrace(obj,
+                                                    __thread_mds_tag__,
+                                                    __thread_mds_alloc_type__,
+                                                    __thread_mds_alloc_file__,
+                                                    __thread_mds_alloc_func__,
+                                                    __thread_mds_alloc_line__);// for debug mem leak
+  }
+  return obj;
+}
+
+void *ObTenantMdsAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+{
+  UNUSED(attr);
+  void *obj = alloc(size);
+  MDS_LOG_RET(WARN, OB_INVALID_ARGUMENT, "VSLICE Allocator not support mark attr", KP(obj), K(size), K(attr));
+  return obj;
+}
+
+void ObTenantMdsAllocator::free(void *ptr)
+{
+  allocator_.free(ptr);
+  MTL(ObTenantMdsService*)->erase_alloc_backtrace(ptr);
+}
+
+void ObTenantMdsAllocator::set_attr(const ObMemAttr &attr)
+{
+  allocator_.set_attr(attr);
+}
+
+void *ObTenantBufferCtxAllocator::alloc(const int64_t size)
+{
+  void *obj = share::mtl_malloc(size, ObMemAttr(MTL_ID(), "MDS_CTX_DEFAULT", ObCtxIds::MDS_CTX_ID));
+  if (OB_NOT_NULL(obj)) {
+    MTL(ObTenantMdsService*)->record_alloc_backtrace(obj,
+                                                     __thread_mds_tag__,
+                                                     __thread_mds_alloc_type__,
+                                                     __thread_mds_alloc_file__,
+                                                     __thread_mds_alloc_func__,
+                                                     __thread_mds_alloc_line__);// for debug mem leak
+  }
+  return obj;
+}
+
+void *ObTenantBufferCtxAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+{
+  void *obj = share::mtl_malloc(size, attr);
+  if (OB_NOT_NULL(obj)) {
+    MTL(ObTenantMdsService*)->record_alloc_backtrace(obj,
+                                                     __thread_mds_tag__,
+                                                     __thread_mds_alloc_type__,
+                                                     __thread_mds_alloc_file__,
+                                                     __thread_mds_alloc_func__,
+                                                     __thread_mds_alloc_line__);// for debug mem leak
+  }
+  return obj;
+}
+
+void ObTenantBufferCtxAllocator::free(void *ptr)
+{
+  share::mtl_free(ptr);
+  MTL(ObTenantMdsService*)->erase_alloc_backtrace(ptr);
+}
+
 int ObTenantMdsService::mtl_init(ObTenantMdsService *&mds_service)
 {
   int ret = OB_SUCCESS;
@@ -94,6 +180,8 @@ int ObTenantMdsService::mtl_init(ObTenantMdsService *&mds_service)
     MDS_LOG(ERROR, "init mds tenant service twice!", KR(ret), KPC(mds_service));
   } else if (MDS_FAIL(mds_service->memory_leak_debug_map_.init("MdsDebugMap", MTL_ID()))) {
     MDS_LOG(WARN, "init map failed", K(ret));
+  } else if (MDS_FAIL(mds_service->mds_allocator_.init())) {
+    MDS_LOG(ERROR, "fail to init allocator", KR(ret), KPC(mds_service));
   } else if (MDS_FAIL(mds_service->mds_timer_.timer_.init_and_start(1/*worker number*/,
                                                                     100_ms/*precision*/,
                                                                     "MdsT"/*thread name*/))) {

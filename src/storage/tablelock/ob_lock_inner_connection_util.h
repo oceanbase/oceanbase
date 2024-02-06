@@ -45,12 +45,12 @@ class ObLockTableRequest;
 class ObLockTabletRequest;
 class ObLockPartitionRequest;
 class ObLockAloneTabletRequest;
-class ObUnLockObjRequest;
-class ObUnLockObjsRequest;
-class ObUnLockTableRequest;
-class ObUnLockPartitionRequest;
-class ObUnLockTabletRequest;
-class ObUnLockAloneTabletRequest;
+using ObUnLockObjRequest = ObLockObjRequest;
+using ObUnLockObjsRequest = ObLockObjsRequest;
+using ObUnLockTableRequest = ObLockTableRequest;
+using ObUnLockPartitionRequest = ObLockPartitionRequest;
+using ObUnLockTabletRequest = ObLockTabletRequest;
+using ObUnLockAloneTabletRequest = ObLockAloneTabletRequest;
 
 class ObInnerConnectionLockUtil
 {

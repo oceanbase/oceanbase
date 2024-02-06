@@ -86,8 +86,7 @@ public:
       const int64_t blacklist_history_overdue_time_min = 30,
       const int64_t blacklist_history_clear_interval_min = 20,
       const bool is_tenant_mode = false,
-      const uint64_t tenant_id = OB_INVALID_TENANT_ID,
-      const uint64_t self_tenant_id = OB_SERVER_TENANT_ID);
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID);
   int start();
   void stop();
   void wait();
@@ -274,15 +273,6 @@ public:
        const share::ObLSID &ls_id);
 
 private:
-  int get_ls_svr_list_(const ObLSRouterKey &router_key,
-      LSSvrList &svr_list);
-
-  int query_ls_log_info_and_update_(const ObLSRouterKey &router_key,
-      LSSvrList &svr_list);
-
-  int query_units_info_and_update_(const ObLSRouterKey &router_key,
-      LSSvrList &svr_list);
-
   int get_ls_router_value_(
       const ObLSRouterKey &router_key,
       ObLSRouterValue *&router_value);
@@ -341,19 +331,11 @@ private:
     ObIArray<ObLSRouterValue *> *router_values_;
   };
 
-  struct ObAllLSRouterKeyGetter
+  struct ObLSRouterKeyUpdater
   {
-    ObAllLSRouterKeyGetter(): router_keys_() {}
+    ObLSRouterKeyUpdater(ObLogRouteService &log_route_service) : log_route_service_(log_route_service) {}
     bool operator()(const ObLSRouterKey &key, ObLSRouterValue *value);
-
-    ObSEArray<ObLSRouterKey, 4> router_keys_;
-  };
-
-  struct ObLSRouterValueUpdater
-  {
-    ObLSRouterValueUpdater(const LSSvrList &svr_list): svr_list_(svr_list) {}
-    bool operator()(const ObLSRouterKey &key, ObLSRouterValue *value);
-    const LSSvrList &svr_list_;
+    ObLogRouteService &log_route_service_;
   };
 
   class ObLSRouteTimerTask : public common::ObTimerTask
@@ -376,7 +358,6 @@ private:
   int64_t cluster_id_;
   bool is_tenant_mode_;
   int64_t source_tenant_id_;
-  uint64_t self_tenant_id_;
   volatile bool is_stopped_ CACHE_ALIGNED;
   LSRouteKeySet ls_route_key_set_;
   LSRouterMap ls_router_map_;

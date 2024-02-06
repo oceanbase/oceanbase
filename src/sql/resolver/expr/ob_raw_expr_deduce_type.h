@@ -23,17 +23,11 @@ namespace sql
 class ObRawExprDeduceType: public ObRawExprVisitor
 {
 public:
-  ObRawExprDeduceType(const ObSQLSessionInfo *my_session,
-                      bool solidify_session_vars,
-                      const ObLocalSessionVar *local_vars,
-                      int64_t local_vars_id)
+  ObRawExprDeduceType(const ObSQLSessionInfo *my_session)
     : ObRawExprVisitor(),
       my_session_(my_session),
       alloc_(),
-      expr_factory_(NULL),
-      my_local_vars_(local_vars),
-      local_vars_id_(local_vars_id),
-      solidify_session_vars_(solidify_session_vars)
+      expr_factory_(NULL)
   {}
   virtual ~ObRawExprDeduceType()
   {
@@ -145,18 +139,10 @@ private:
   int adjust_cast_as_signed_unsigned(ObSysFunRawExpr &expr);
 
   bool ignore_scale_adjust_for_decimal_int(const ObItemType expr_type);
-  int try_replace_casts_with_questionmarks_ora(ObRawExpr *row_expr);
-
-  int try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;
   ObRawExprFactory *expr_factory_;
-  //deduce with current session vars if solidify_session_vars_ is true,
-  //otherwise deduce with my_local_vars_ if my_local_vars_ is not null
-  const ObLocalSessionVar *my_local_vars_;
-  int64_t local_vars_id_;
-  bool solidify_session_vars_;
   // data members
 };
 

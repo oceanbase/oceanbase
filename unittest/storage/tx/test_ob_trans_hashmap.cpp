@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "share/ob_light_hashmap.h"
+#include "storage/tx/ob_trans_hashmap.h"
 #include <gtest/gtest.h>
 #include "share/ob_errno.h"
 #include "lib/oblog/ob_log.h"
@@ -40,7 +40,7 @@ public :
 const char *TestObTrans::LOCAL_IP = "127.0.0.1";
 const int64_t TIME_OUT = 1;
 
-class ObTransTestValue : public share::ObLightHashLink<ObTransTestValue>
+class ObTransTestValue : public ObTransHashLink<ObTransTestValue>
 {
 public:
   ObTransTestValue() {}
@@ -84,7 +84,7 @@ public:
   }
 };
 
-typedef share::ObLightHashMap<ObTransID, ObTransTestValue, ObTransTestValueAlloc, common::SpinRWLock> TestHashMap;
+typedef ObTransHashMap<ObTransID, ObTransTestValue, ObTransTestValueAlloc, common::SpinRWLock> TestHashMap;
 
 class ForeachFunctor
 {

@@ -49,7 +49,7 @@ OB_SERIALIZE_MEMBER(ObDASEmptyCtDef);
 OB_SERIALIZE_MEMBER(ObDASEmptyRtDef);
 
 ObDASSplitRangesOp::ObDASSplitRangesOp(ObIAllocator &op_alloc)
-  : ObDASSimpleOp(op_alloc), expected_task_count_(0), timeout_us_(0) {}
+  : ObDASSimpleOp(op_alloc), expected_task_count_(0) {}
 
 int ObDASSplitRangesOp::open_op()
 {
@@ -57,7 +57,6 @@ int ObDASSplitRangesOp::open_op()
   ObAccessService *access_service = MTL(ObAccessService *);
   if (OB_FAIL(access_service->split_multi_ranges(ls_id_,
                                                  tablet_id_,
-                                                 timeout_us_,
                                                  ranges_,
                                                  expected_task_count_,
                                                  op_alloc_,
@@ -98,11 +97,10 @@ int ObDASSplitRangesOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASSplitRangesOp::init(const common::ObIArray<ObStoreRange> &ranges, int64_t expected_task_count, const int64_t timeout_us)
+int ObDASSplitRangesOp::init(const common::ObIArray<ObStoreRange> &ranges, int64_t expected_task_count)
 {
   int ret = OB_SUCCESS;
   expected_task_count_ = expected_task_count;
-  timeout_us_ = timeout_us;
   if (OB_FAIL(ranges_.assign(ranges))) {
     LOG_WARN("failed to assign ranges array", K(ret));
   }
@@ -111,8 +109,7 @@ int ObDASSplitRangesOp::init(const common::ObIArray<ObStoreRange> &ranges, int64
 
 OB_SERIALIZE_MEMBER((ObDASSplitRangesOp, ObIDASTaskOp),
                      ranges_,
-                     expected_task_count_,
-                     timeout_us_);
+                     expected_task_count_);
 
 ObDASSplitRangesResult::ObDASSplitRangesResult()
   : ObIDASTaskResult(), result_alloc_(nullptr) {}
@@ -199,7 +196,7 @@ OB_DEF_DESERIALIZE(ObDASSplitRangesResult)
 }
 
 ObDASRangesCostOp::ObDASRangesCostOp(common::ObIAllocator &op_alloc)
-  : ObDASSimpleOp(op_alloc), total_size_(0), timeout_us_(0) {}
+  : ObDASSimpleOp(op_alloc), total_size_(0) {}
 
 int ObDASRangesCostOp::open_op()
 {
@@ -207,7 +204,6 @@ int ObDASRangesCostOp::open_op()
   ObAccessService *access_service = MTL(ObAccessService *);
   if (OB_FAIL(access_service->get_multi_ranges_cost(ls_id_,
                                                     tablet_id_,
-                                                    timeout_us_,
                                                     ranges_,
                                                     total_size_))) {
     LOG_WARN("failed to get multi ranges cost", K(ret), K_(ls_id), K_(tablet_id));
@@ -244,20 +240,18 @@ int ObDASRangesCostOp::decode_task_result(ObIDASTaskResult *task_result)
   return ret;
 }
 
-int ObDASRangesCostOp::init(const common::ObIArray<ObStoreRange> &ranges, const int64_t timeout_us)
+int ObDASRangesCostOp::init(const common::ObIArray<ObStoreRange> &ranges)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ranges_.assign(ranges))) {
     LOG_WARN("failed to assign ranges array", K(ret));
   }
-  timeout_us_ = timeout_us;
   return ret;
 }
 
 OB_SERIALIZE_MEMBER((ObDASRangesCostOp, ObIDASTaskOp),
                      ranges_,
-                     total_size_,
-                     timeout_us_);
+                     total_size_);
 
 ObDASRangesCostResult::ObDASRangesCostResult()
   : ObIDASTaskResult(), total_size_(0) {}
@@ -297,13 +291,7 @@ int ObDASSimpleUtils::split_multi_ranges(ObExecContext &exec_ctx,
   } else {
     split_ranges_op = static_cast<ObDASSplitRangesOp*>(task_op);
     split_ranges_op->set_can_part_retry(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0);
-    ObPhysicalPlanCtx *plan_ctx = nullptr;
-    if (OB_ISNULL(plan_ctx = exec_ctx.get_physical_plan_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", K(ret));
-    } else if (OB_FAIL(split_ranges_op->init(ranges,
-                                             expected_task_count,
-                                             plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time()))) {
+    if (OB_FAIL(split_ranges_op->init(ranges, expected_task_count))) {
       LOG_WARN("failed to init das split ranges op", K(ret));
     } else if (OB_FAIL(das_ref.execute_all_task())) {
       LOG_WARN("execute das split_multi_ranges task failed", K(ret));
@@ -352,11 +340,7 @@ int ObDASSimpleUtils::get_multi_ranges_cost(ObExecContext &exec_ctx,
   } else {
     ranges_cost_op = static_cast<ObDASRangesCostOp*>(task_op);
     ranges_cost_op->set_can_part_retry(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_0);
-    ObPhysicalPlanCtx *plan_ctx = nullptr;
-    if (OB_ISNULL(plan_ctx = exec_ctx.get_physical_plan_ctx())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected nullptr", K(ret));
-    } else if (OB_FAIL(ranges_cost_op->init(ranges, plan_ctx->get_timeout_timestamp() - ObTimeUtility::current_time()))) {
+    if (OB_FAIL(ranges_cost_op->init(ranges))) {
       LOG_WARN("failed to init das ranges cost op", K(ret));
     } else if (OB_FAIL(das_ref.execute_all_task())) {
       LOG_WARN("execute das get_multi_ranges_cost task failed", K(ret));

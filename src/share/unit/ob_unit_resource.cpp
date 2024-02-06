@@ -589,38 +589,6 @@ OB_SERIALIZE_MEMBER(ObUnitResource,
                     iops_weight_);
 
 
-bool ObUnitResource::has_expanded_resource_than(const ObUnitResource &other) const
-{
-  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is greater than other
-  bool b_ret = false;
-  if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ > other.max_cpu())
-      || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ > other.min_cpu())
-      || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ > other.memory_size())
-      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ > other.log_disk_size()))
-  {
-    b_ret = true;
-  } else {
-    b_ret = false;
-  }
-  return b_ret;
-}
-
-bool ObUnitResource::has_shrunk_resource_than(const ObUnitResource &other) const
-{
-  // check if any of max_cpu, min_cpu, memory_size, log_disk_size is smaller than other
-  bool b_ret = false;
-  if ((is_max_cpu_valid() && other.is_max_cpu_valid() && max_cpu_ < other.max_cpu())
-      || (is_min_cpu_valid() && other.is_min_cpu_valid() && min_cpu_ < other.min_cpu())
-      || (is_memory_size_valid() && other.is_memory_size_valid() && memory_size_ < other.memory_size())
-      || (is_log_disk_size_valid() && other.is_log_disk_size_valid() && log_disk_size_ < other.log_disk_size()))
-  {
-    b_ret = true;
-  } else {
-    b_ret = false;
-  }
-  return b_ret;
-}
-
 int ObUnitResource::divide_meta_tenant(ObUnitResource &meta_resource)
 {
   int ret = OB_SUCCESS;

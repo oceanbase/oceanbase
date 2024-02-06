@@ -362,11 +362,10 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
   ASSERT_TRUE(cache_size == cache_size_before_renew);
 
   // test 1 million cache clear
-  const bool update_only = false;
   for (int64_t i = 0; i < 1000000; ++i) {
     ObTabletLSCache cache;
     ASSERT_EQ(OB_SUCCESS, cache.init(tenant_id, ObTabletID(i+300000), ObLSID(1002), ObClockGenerator::getClock(), 1));
-    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, update_only));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache));
   }
   cache_size = tablet_ls_service->inner_cache_.size();
   ASSERT_TRUE(1000000 == cache_size - cache_size_before_renew);

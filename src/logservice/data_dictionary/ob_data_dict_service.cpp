@@ -415,7 +415,6 @@ int ObDataDictService::generate_dict_and_dump_(const share::SCN &snapshot_scn)
   int64_t schema_version = OB_INVALID_VERSION;
   ObArray<uint64_t> database_ids;
   ObArray<uint64_t> table_ids;
-  int64_t filter_table_count = 0;
 
   if (OB_FAIL(sql_client_.get_schema_version(tenant_id_, snapshot_scn, schema_version))) {
     ret = OB_SCHEMA_EAGAIN;
@@ -425,7 +424,7 @@ int ObDataDictService::generate_dict_and_dump_(const share::SCN &snapshot_scn)
     DDLOG(WARN, "handle_tenant_meta_ failed", KR(ret), K(snapshot_scn));
   } else if (OB_FAIL(handle_database_metas_(schema_version, database_ids))) {
     DDLOG(WARN, "handle_database_metas_ failed", KR(ret), K(snapshot_scn));
-  } else if (OB_FAIL(handle_table_metas_(schema_version, table_ids, filter_table_count))) {
+  } else if (OB_FAIL(handle_table_metas_(schema_version, table_ids))) {
     DDLOG(WARN, "handle_table_metas_ failed", KR(ret), K(snapshot_scn), K(schema_version));
   }
 
@@ -434,8 +433,7 @@ int ObDataDictService::generate_dict_and_dump_(const share::SCN &snapshot_scn)
       K(snapshot_scn),
       K(schema_version),
       "database_count", database_ids.count(),
-      "table_count", table_ids.count(),
-      K(filter_table_count));
+      "table_count", table_ids.count());
 
   return ret;
 }
@@ -446,7 +444,6 @@ int ObDataDictService::get_tenant_schema_guard_(
     const bool is_force_fallback)
 {
   int ret = OB_SUCCESS;
-  const int64_t sleep_ts_on_schema_err = 100 * _MSEC_;
   ObMultiVersionSchemaService::RefreshSchemaMode refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::NORMAL;
 
   if (is_force_fallback) {
@@ -455,7 +452,7 @@ int ObDataDictService::get_tenant_schema_guard_(
     refresh_mode = ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY;
   }
 
-  RETRY_FUNC_ON_ERROR_WITH_SLEEP(OB_SCHEMA_EAGAIN, sleep_ts_on_schema_err, stop_flag_, *schema_service_, get_tenant_schema_guard,
+  RETRY_FUNC_ON_ERROR(OB_SCHEMA_EAGAIN, stop_flag_, *schema_service_, get_tenant_schema_guard,
       tenant_id_,
       schema_guard,
       schema_version,
@@ -604,15 +601,12 @@ int ObDataDictService::handle_database_metas_(
 
 int ObDataDictService::handle_table_metas_(
     const int64_t schema_version,
-    const ObIArray<uint64_t> &table_ids,
-    int64_t &filter_table_count)
+    const ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
-  lib::ObMemAttr mem_attr(tenant_id_, "ObDatDictTbMeta");
-  ObArenaAllocator tb_meta_allocator(mem_attr);
-  static const int64_t batch_table_meta_size = 200;
-  filter_table_count = 0;
+  ObArenaAllocator tb_meta_allocator("ObDatDictTbMeta");
   schema::ObSchemaGetterGuard schema_guard; // will reset while getting schem_guard
+  static const int64_t batch_table_meta_size = 200;
 
   for (int i = 0; OB_SUCC(ret) && ! stop_flag_ && i < table_ids.count(); i++) {
     const ObTableSchema *table_schema = NULL;
@@ -638,7 +632,6 @@ int ObDataDictService::handle_table_metas_(
     } else if (OB_FAIL(filter_table_(*table_schema, is_filtered))) {
       DDLOG(WARN, "filter_table_ failed", KR(ret), K(is_filtered), KPC(table_schema));
     } else if (is_filtered) {
-      filter_table_count++;
       DDLOG(DEBUG, "filter_table_",
           K(schema_version),
           "table_id", table_schema->get_table_id(),

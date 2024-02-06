@@ -44,12 +44,10 @@ void __attribute__((weak)) init_create_func()
 
 void lib_init_create_func()
 {
-  #define TG_DEF(id, name, type, args...)                           \
+  #define TG_DEF(id, name, type, args...)              \
     create_funcs_[TGDefIDs::id] = []() {                            \
-      TG_##type *ret = OB_NEW(TG_##type, SET_USE_500("tg"), args);  \
-      if (NULL != ret) {                                            \
-        ret->attr_ = {#name, TGType::type};                         \
-      }                                                             \
+      auto ret = OB_NEW(TG_##type, SET_USE_500("tg"), args); \
+      ret->attr_ = {#name, TGType::type};     \
       return ret;                                                   \
     };
   #include "lib/thread/thread_define.h"

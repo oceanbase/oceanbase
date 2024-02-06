@@ -13,15 +13,13 @@
 #define USING_LOG_PREFIX OBLOG
 
 #include "ob_cdc_global_info.h"
-#include "lib/ob_define.h"
 
 namespace oceanbase
 {
 namespace libobcdc
 {
 ObCDCGlobalInfo::ObCDCGlobalInfo() :
-  lob_aux_table_schema_info_(),
-  min_cluster_version_(0)
+  lob_aux_table_schema_info_()
 {
 }
 
@@ -39,7 +37,6 @@ int ObCDCGlobalInfo::init()
 void ObCDCGlobalInfo::reset()
 {
   lob_aux_table_schema_info_.reset();
-  min_cluster_version_ = 0;
 }
 
 } // namespace libobcdc

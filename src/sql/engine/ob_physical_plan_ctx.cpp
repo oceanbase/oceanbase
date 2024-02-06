@@ -111,16 +111,12 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_ps_protocol_(false),
       plan_start_time_(0),
       is_ps_rewrite_sql_(false),
-      spm_ts_timeout_us_(0),
-      subschema_ctx_(allocator_),
-      enable_rich_format_(false),
-      all_local_session_vars_(allocator)
+      spm_ts_timeout_us_(0)
 {
 }
 
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {
-  subschema_ctx_.destroy();
 }
 
 void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
@@ -442,12 +438,9 @@ int ObPhysicalPlanCtx::extend_datum_param_store(DatumParamStore &ext_datum_store
 
 void ObPhysicalPlanCtx::reset_datum_frame(char *frame, int64_t expr_cnt)
 {
-  int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
-  if (enable_rich_format_) {
-    item_size += sizeof(VectorHeader);
-  }
+  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
   for (int64_t j = 0; j < expr_cnt; ++j) {
-    ObDatum *datum = reinterpret_cast<ObDatum *>(frame + j * item_size);
+    ObDatum *datum = reinterpret_cast<ObDatum *>(frame + j * datum_eval_info_size);
     datum->set_null();
   }
 }
@@ -456,13 +449,8 @@ int ObPhysicalPlanCtx::reserve_param_frame(const int64_t input_capacity)
 {
   int ret = OB_SUCCESS;
   if (input_capacity > param_frame_capacity_) {
-    int64_t item_size = 0;
-    if (enable_rich_format_) {
-      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
-    } else {
-      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
-    }
-    int64_t cnt_per_frame = common::MAX_FRAME_SIZE / item_size;
+    const int64_t cnt_per_frame = ObExprFrameInfo::EXPR_CNT_PER_FRAME;
+    const int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     auto calc_frame_cnt = [&](int64_t cap) { return (cap + cnt_per_frame - 1) / cnt_per_frame; };
     // reserve original param frames first
     if (param_frame_capacity_ < original_param_cnt_) {
@@ -546,38 +534,28 @@ int ObPhysicalPlanCtx::extend_param_frame(const int64_t old_size)
     for (int64_t i = old_size; i < datum_param_store_.count(); i++) {
       ObDatum *datum = nullptr;
       ObEvalInfo *eval_info = nullptr;
-      VectorHeader *vec_header = nullptr;
-      get_param_frame_info(i, datum, eval_info, vec_header);
+      get_param_frame_info(i, datum, eval_info);
       *datum = datum_param_store_.at(i).datum_;
       eval_info->evaluated_ = false;
-      LOG_TRACE("extend param frame", K(i), K(*datum), K(enable_rich_format_));
     }
   }
-
   return ret;
 }
 
 OB_INLINE void ObPhysicalPlanCtx::get_param_frame_info(int64_t param_idx,
                                                        ObDatum *&datum,
-                                                       ObEvalInfo *&eval_info,
-                                                       VectorHeader *&vec_header)
+                                                       ObEvalInfo *&eval_info)
 {
-  int64_t item_size = 0;
-  if (enable_rich_format_) {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
-  } else {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
-  }
-  int64_t cnt_per_frame = common::MAX_FRAME_SIZE / item_size;
+  const int64_t cnt_per_frame = ObExprFrameInfo::EXPR_CNT_PER_FRAME;
+  const int64_t datum_eval_info_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
   int64_t datum_idx = param_idx < original_param_cnt_ ? param_idx : param_idx - original_param_cnt_;
   int64_t idx = datum_idx / cnt_per_frame;
-  int64_t off = (datum_idx % cnt_per_frame) * item_size;
+  int64_t off = (datum_idx % cnt_per_frame) * datum_eval_info_size;
   if (original_param_cnt_ > 0 && param_idx >= original_param_cnt_) {
     idx += (original_param_cnt_ + cnt_per_frame - 1) / cnt_per_frame;
   }
   datum = reinterpret_cast<ObDatum*>(param_frame_ptrs_.at(idx) + off);
   eval_info = reinterpret_cast<ObEvalInfo *>(param_frame_ptrs_.at(idx) + off + sizeof(ObDatum));
-  LOG_DEBUG("get_param_frame_info", K(param_idx), K(off), K(datum), K(item_size), K(enable_rich_format_), K(lbt()));
 }
 
 int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
@@ -595,8 +573,7 @@ int ObPhysicalPlanCtx::replace_batch_param_datum(const int64_t cur_group_id,
         //need to expand the real param to param frame
         ObDatum *datum = nullptr;
         ObEvalInfo *eval_info = nullptr;
-        VectorHeader *vec_header = nullptr;
-        get_param_frame_info(i, datum, eval_info, vec_header);
+        get_param_frame_info(i, datum, eval_info);
         const ObSqlDatumArray *datum_array = datum_param_store_.at(i).get_sql_datum_array();;
         if (OB_UNLIKELY(cur_group_id < 0) || OB_UNLIKELY(cur_group_id >= datum_array->count_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -754,11 +731,6 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
       OB_UNIS_ENCODE(array_param_groups_.at(i));
     }
   }
-  OB_UNIS_ENCODE(enable_rich_format_);
-  OB_UNIS_ENCODE(all_local_session_vars_.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars_.count(); ++i) {
-    OB_UNIS_ENCODE(*all_local_session_vars_.at(i));
-  }
   return ret;
 }
 
@@ -849,11 +821,6 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
       OB_UNIS_ADD_LEN(array_param_groups_.at(i));
     }
   }
-  OB_UNIS_ADD_LEN(enable_rich_format_);
-  OB_UNIS_ADD_LEN(all_local_session_vars_.count());
-  for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
-    OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i));
-  }
   return len;
 }
 
@@ -865,7 +832,6 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   int64_t param_idx = OB_INVALID_INDEX;
   ObObjParam param_obj;
   int64_t cursor_count = 0;
-  int64_t local_var_array_cnt = 0;
   // used for function sys_view_bigint_param(idx), @note unused anymore
   ObSEArray<common::ObObj, 1> sys_view_bigint_params_;
   char message_[1] = {'\0'}; //error msg buffer, unused anymore
@@ -949,32 +915,20 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       }
     }
   }
-  OB_UNIS_DECODE(enable_rich_format_);
-  OB_UNIS_DECODE(local_var_array_cnt);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(all_local_session_vars_.reserve(local_var_array_cnt))) {
-      LOG_WARN("reserve local session vars failed", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < local_var_array_cnt; ++i) {
-    ObLocalSessionVar *local_vars = OB_NEWx(ObLocalSessionVar, &allocator_);
-    if (NULL == local_vars) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("alloc local var failed", K(ret));
-    } else if (OB_FAIL(all_local_session_vars_.push_back(local_vars))) {
-      LOG_WARN("push back local session var array failed", K(ret));
-    } else {
-      local_vars->set_allocator(&allocator_);
-      OB_UNIS_DECODE(*local_vars);
-    }
-  }
-
-  // following is not deserialize, please add deserialize ahead.
   if (OB_SUCC(ret) && array_group_count > 0 &&
       datum_param_store_.count() == 0 &&
       datum_param_store_.count() != param_store_.count()) {
-    if (OB_FAIL(init_param_store_after_deserialize())) {
-      LOG_WARN("failed to deserialize param store", K(ret));
+    if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
+      LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
+      ObDatumObjParam &datum_param = datum_param_store_.at(i);
+      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(
+              param_store_.at(i).meta_, param_store_.at(i).get_precision(), allocator_))) {
+        LOG_WARN("alloc datum reserved buffer failed", K(ret));
+      } else if (OB_FAIL(datum_param.from_objparam(param_store_.at(i), &allocator_))) {
+        LOG_WARN("fail to convert obj param", K(ret), K(param_store_.at(i)));
+      }
     }
   }
   return ret;
@@ -995,76 +949,6 @@ int ObPhysicalPlanCtx::get_field(const int64_t idx, ObField &field)
     LOG_WARN("field array is not init", K(ret), K(field_array_), K(idx));
   } else {
     field = field_array_->at(idx);
-  }
-  return ret;
-}
-
-int ObPhysicalPlanCtx::set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars)
-{
-  int ret = OB_SUCCESS;
-  if (!all_local_session_vars_.empty()) {
-    all_local_session_vars_.reset();
-  }
-  if (!all_local_session_vars.empty()) {
-    if (OB_FAIL(all_local_session_vars_.reserve(all_local_session_vars.count()))) {
-      LOG_WARN("reserve for local_session_vars failed", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_local_session_vars.count(); ++i) {
-        if (OB_FAIL(all_local_session_vars_.push_back(&all_local_session_vars.at(i)))) {
-          LOG_WARN("push back local session var failed", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObPhysicalPlanCtx::get_local_session_vars(int64_t local_var_array_id, const ObLocalSessionVar *&local_vars)
-{
-  int ret = OB_SUCCESS;
-  local_vars = NULL;
-  if (local_var_array_id == OB_INVALID_INDEX_INT64) {
-    //do nothing
-  } else if (local_var_array_id + 1 > all_local_session_vars_.count() || local_var_array_id < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index out of array range", K(ret), K(local_var_array_id), K(all_local_session_vars_.count()));
-  } else {
-    local_vars = all_local_session_vars_.at(local_var_array_id);
-  }
-  return ret;
-}
-
-// white list: init param_store after deserialize which it's needed really.
-int ObPhysicalPlanCtx::init_param_store_after_deserialize()
-{
-  int ret = OB_SUCCESS;
-  datum_param_store_.reuse();
-  if (OB_FAIL(datum_param_store_.prepare_allocate(param_store_.count()))) {
-    LOG_WARN("fail to prepare allocate", K(ret), K(param_store_.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); i++) {
-    ObObjParam &obj_param = param_store_.at(i);
-    ObDatumObjParam &datum_param = datum_param_store_.at(i);
-    if (obj_param.is_ext_sql_array()) {
-      ObSqlArrayObj *array_obj = NULL;
-      if (OB_FAIL(ObSqlArrayObj::do_real_deserialize(allocator_,
-                                                     reinterpret_cast<char *>(obj_param.get_ext()),
-                                                     obj_param.get_val_len(),
-                                                     array_obj))) {
-        LOG_WARN("failed to alloc array_obj after decode", K(ret));
-      } else {
-        obj_param.set_extend(reinterpret_cast<int64_t>(array_obj), T_EXT_SQL_ARRAY);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(datum_param.alloc_datum_reserved_buff(obj_param.meta_,
-                                                        obj_param.get_precision(),
-                                                        allocator_))) {
-        LOG_WARN("alloc datum reserved buffer failed", K(ret));
-      } else if (OB_FAIL(datum_param.from_objparam(obj_param, &allocator_))) {
-        LOG_WARN("fail to convert obj param", K(ret), K(obj_param));
-      }
-    }
   }
   return ret;
 }

@@ -83,7 +83,6 @@ public:
   void destroy();
   int update_end_lsn(int64_t id,
                      const palf::LSN &end_lsn,
-                     const share::SCN &end_scn,
                      const int64_t proposal_id);
 private:
   ObApplyStatus *apply_status_;
@@ -174,8 +173,7 @@ public:
   int switch_to_leader(const int64_t new_proposal_id);
   int switch_to_follower();
   //palf相关
-  int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id);
-  share::SCN get_palf_committed_end_scn() const;
+  int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const int64_t proposal_id);
   int unregister_file_size_cb();
   void close_palf_handle();
   //最大连续回调位点
@@ -211,7 +209,6 @@ public:
                K(role_),
                K(proposal_id_),
                K(palf_committed_end_lsn_),
-               K(palf_committed_end_scn_),
                K(last_check_scn_),
                K(max_applied_cb_scn_));
 private:
@@ -249,7 +246,6 @@ private:
   int64_t proposal_id_;
   ObLogApplyService *ap_sv_;
   palf::LSN palf_committed_end_lsn_;
-  share::SCN palf_committed_end_scn_;
   //LSN standy_committed_end_lsn_;
   //palf::LSN min_committed_end_lsn_;
   share::SCN last_check_scn_; //当前待确认的最大连续回调位点
@@ -294,7 +290,6 @@ public:
   int switch_to_leader(const share::ObLSID &id, const int64_t proposal_id);
   int switch_to_follower(const share::ObLSID &id);
   int get_max_applied_scn(const share::ObLSID &id, share::SCN &scn);
-  int get_palf_committed_end_scn(const share::ObLSID &id, share::SCN &scn);
   int push_task(ObApplyServiceTask *task);
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);

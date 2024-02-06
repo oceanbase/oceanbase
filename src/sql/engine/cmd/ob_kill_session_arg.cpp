@@ -109,7 +109,7 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
             value_obj.set_string(value_obj.get_type(), str);
           }
           EXPR_DEFINE_CAST_CTX(expr_ctx, CM_WARN_ON_FAIL);
-          EXPR_CAST_OBJ_V2(ObIntType, value_obj, res_obj);
+          EXPR_CAST_OBJ_V2(ObUInt32Type, value_obj, res_obj);
           ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == ret ? OB_SUCCESS : ret;
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to cast expr", "orig type", value_obj.get_type(), "dest type", "ObUint32type", K(ret), K(res_obj));
@@ -117,7 +117,7 @@ int ObKillSessionArg::calculate_sessid(ObExecContext &ctx, const ObKillStmt &stm
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to cast expr", "orig type", value_obj.get_type(), "dest type", "ObUint32type", K(ret), K(res_obj));
           } else {
-            sess_id_ = static_cast<uint32_t>(res_obj->get_int());
+            sess_id_ = res_obj->get_uint32();
           }
         }
       }

@@ -28,8 +28,6 @@
 #include "sql/resolver/ddl/ob_drop_table_stmt.h"
 #include "sql/resolver/ddl/ob_drop_index_stmt.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
-#include "sql/resolver/ddl/ob_create_mlog_stmt.h"
-#include "sql/resolver/ddl/ob_drop_mlog_stmt.h"
 #include "sql/resolver/ddl/ob_alter_database_stmt.h"
 #include "sql/resolver/ddl/ob_drop_database_stmt.h"
 #include "sql/resolver/ddl/ob_create_database_stmt.h"
@@ -115,7 +113,6 @@
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/engine/cmd/ob_index_executor.h"
-#include "sql/engine/cmd/ob_mlog_executor.h"
 #include "sql/engine/cmd/ob_resource_executor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
@@ -145,10 +142,6 @@
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/engine/cmd/ob_context_executor.h"
-#include "sql/resolver/cmd/ob_tenant_snapshot_stmt.h"
-#include "sql/engine/cmd/ob_tenant_snapshot_executor.h"
-#include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
-#include "sql/engine/cmd/ob_clone_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -393,14 +386,6 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_DROP_INDEX: {
         DEFINE_EXECUTE_CMD(ObDropIndexStmt, ObDropIndexExecutor);
-        break;
-      }
-      case stmt::T_CREATE_MLOG: {
-        DEFINE_EXECUTE_CMD(ObCreateMLogStmt, ObCreateMLogExecutor);
-        break;
-      }
-      case stmt::T_DROP_MLOG: {
-        DEFINE_EXECUTE_CMD(ObDropMLogStmt, ObDropMLogExecutor);
         break;
       }
       case stmt::T_ALTER_VIEW: {
@@ -1020,24 +1005,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTableTTLStmt, ObTableTTLExecutor);
         break;
       }
-      case stmt::T_CREATE_TENANT_SNAPSHOT: {
-        DEFINE_EXECUTE_CMD(ObCreateTenantSnapshotStmt, ObCreateTenantSnapshotExecutor);
-        break;
-      }
-      case stmt::T_DROP_TENANT_SNAPSHOT: {
-        DEFINE_EXECUTE_CMD(ObDropTenantSnapshotStmt, ObDropTenantSnapshotExecutor);
-        break;
-      }
-      case stmt::T_CLONE_TENANT: {
-        DEFINE_EXECUTE_CMD(ObCloneTenantStmt, ObCloneTenantExecutor);
-        break;
-      }
       case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {
         DEFINE_EXECUTE_CMD(ObResetConfigStmt, ObResetConfigExecutor);
-        break;
-      }
-      case stmt::T_CANCEL_CLONE: {
-        DEFINE_EXECUTE_CMD(ObCancelCloneStmt, ObCancelCloneExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:
@@ -1062,8 +1031,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
                      "cmd_type", cmd.get_cmd_type(),
                      "sql_text", ObHexEscapeSqlStr(ctx.get_sql_ctx()->is_sensitive_ ?
                                                    ObString(OB_MASKED_STR) : sql_text),
-                     "return_code", ret,
-                     "tenant_id", MTL_ID());
+                     "return_code", ret);
   }
 
   if (is_ddl_or_dcl_stmt) {

@@ -577,7 +577,7 @@ public:
     ATOMIC_STORE(&is_running_, false);
     int64_t last_print_time = 0;
     while (ATOMIC_LOAD(&total_running_task_count_) != 0) {
-      int64_t current_time = ObClockGenerator::getClock();
+      int64_t current_time = ObClockGenerator::getCurrentTime();
       if (current_time - last_print_time > 500_ms) {// print log every 500ms
         last_print_time = current_time;
         OCCAM_LOG(INFO, "OccamTimr waiting running task finished",

@@ -13,8 +13,6 @@
 #include "ob_multiple_get_merge.h"
 #include "storage/ob_row_fuse.h"
 #include "storage/ob_storage_schema.h"
-#include "storage/tx_storage/ob_ls_service.h"
-#include "storage/concurrency_control/ob_data_validation_service.h"
 
 namespace oceanbase
 {
@@ -243,7 +241,6 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
                           K(rowkeys_->at(get_row_range_idx_ - 1)),
                           K(fuse_row),
                           KPC(access_ctx_->store_ctx_));
-            concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
             dump_table_statistic_for_4377();
             dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
           }

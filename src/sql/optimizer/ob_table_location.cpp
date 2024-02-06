@@ -32,7 +32,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "sql/engine/cmd/ob_table_executor.h"
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
-#include "sql/printer/ob_raw_expr_printer.h"
+#include "sql/resolver/expr/ob_raw_expr_printer.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
@@ -725,7 +725,7 @@ int ObTableLocation::assign(const ObTableLocation &other)
     is_non_partition_optimized_ = other.is_non_partition_optimized_;
     tablet_id_ = other.tablet_id_;
     object_id_ = other.object_id_;
-    check_no_partition_ = other.check_no_partition_;
+    check_no_partiton_ = other.check_no_partiton_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     }
@@ -855,7 +855,7 @@ void ObTableLocation::reset()
   is_non_partition_optimized_ = false;
   tablet_id_.reset();
   object_id_ = OB_INVALID_ID;
-  check_no_partition_ = false;
+  check_no_partiton_ = false;
 }
 int ObTableLocation::init(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObDMLStmt &stmt,
@@ -1706,7 +1706,7 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
         && 0 == partition_ids.count()
         && (stmt::T_INSERT == stmt_type_
             || stmt::T_REPLACE == stmt_type_
-            || check_no_partition_)) {
+            || check_no_partiton_)) {
       ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       LOG_USER_WARN(OB_NO_PARTITION_FOR_GIVEN_VALUE);
     }
@@ -2150,11 +2150,7 @@ int ObTableLocation::record_in_dml_partition_info(const ObDMLStmt &stmt,
       }
 
       ObOpRawExpr *value_expr = static_cast<ObOpRawExpr *>(tmp);
-      if (op_left_expr->get_param_count() != value_expr->get_param_count() ||
-          OB_ISNULL(value_expr->get_param_expr(pos1)) ||
-          OB_ISNULL(value_expr->get_param_expr(pos2)) ||
-          OB_UNLIKELY(!value_expr->get_param_expr(pos1)->is_const_expr() ||
-                      !value_expr->get_param_expr(pos2)->is_const_expr())) {
+      if (op_left_expr->get_param_count() != value_expr->get_param_count()) {
         hit = false;
         break;
       }
@@ -2432,25 +2428,28 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       if (OB_FAIL(analyze_filter(partition_columns, partition_expr, column_id, filter_exprs.at(idx),
                                  always_true, calc_node, cnt_func_expr, dtc_params, exec_ctx))) {
         LOG_WARN("Failed to analyze filter", K(ret));
-      } else if (!cnt_func_expr) {
-        if (OB_FAIL(normal_filters.push_back(filter_exprs.at(idx)))) {
-          LOG_WARN("Failed to add filter", K(ret));
-        }
-      } else if (OB_FAIL(add_and_node(calc_node, func_node))) {
-        //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
-        //如果是这种保证这个变量名就不太合适
-        LOG_WARN("Failed to add and node", K(ret));
       } else {
-        is_func_range_get = true;
-        func_always_true &= always_true || NULL == calc_node;
+        if (!always_true && NULL != calc_node) {
+          func_always_true = false;
+        }
+        if (!cnt_func_expr) {
+          if (OB_FAIL(normal_filters.push_back(filter_exprs.at(idx)))) {
+            LOG_WARN("Failed to add filter", K(ret));
+          }
+        } else if (OB_FAIL(add_and_node(calc_node, func_node))) {
+          //这里好像用cnt_func_expr来确保calc_node不为NULL。但是真的有这种保证么
+          //如果是这种保证这个变量名就不太合适
+          LOG_WARN("Failed to add and node", K(ret));
+        } else {
+          is_func_range_get = true;
+        }
       }
     }
 
     if (OB_SUCC(ret)) {
-      bool column_always_true = true;
+      bool column_always_true = false;
       ObPartLocCalcNode *column_node = NULL;
       if (normal_filters.count() > 0) {
-        column_always_true = false;
         if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
                                          column_node, dtc_params, exec_ctx, is_in_range_optimization_enabled))) {
           LOG_WARN("Failed to get query range node", K(ret));
@@ -2888,7 +2887,7 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
         LOG_WARN("Column id should not be OB_INVALID_ID", K(ret));
       } else if (only_gen_cols) {//only deal dependented columns for generated partition column
         if (OB_FAIL(add_partition_column(stmt, table_id, column_id, gen_cols, gen_row_desc))) {
-          LOG_WARN("Failed to add partition column", K(ret));
+          LOG_WARN("Failed to add partiton column", K(ret));
         }
       } else {
         if (col_expr->is_generated_column()) {
@@ -2915,7 +2914,7 @@ int ObTableLocation::add_partition_columns(const ObDMLStmt &stmt,
         if (OB_SUCC(ret)) {
           if (OB_FAIL(add_partition_column(stmt, table_id, column_id,
                                           partition_columns, row_desc))) {
-            LOG_WARN("Failed to add partition column", K(ret));
+            LOG_WARN("Failed to add partiton column", K(ret));
           }
         }
       }//end of else
@@ -3968,7 +3967,7 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
   if (OB_FAIL(ret) || range_columns) {
   } else if (OB_FAIL(calc_partition_id_by_func_value(tablet_mapper, func_result, false,
                                                       tablet_ids, partition_ids, part_ids))) {
-    LOG_WARN("Failed to calc partition id by func value", K(ret));
+    LOG_WARN("Failed to calc partiton id by func value", K(ret));
   }
   if (0 == partition_ids.count() && PARTITION_LEVEL_ONE == calc_range_part_level) {
     bool is_interval = false;
@@ -4748,7 +4747,7 @@ OB_DEF_SERIALIZE(ObTableLocation)
   OB_UNIS_ENCODE(object_id_);
   OB_UNIS_ENCODE(related_list_);
   OB_UNIS_ENCODE(table_type_);
-  OB_UNIS_ENCODE(check_no_partition_);
+  OB_UNIS_ENCODE(check_no_partiton_);
   return ret;
 }
 
@@ -4826,7 +4825,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLocation)
   OB_UNIS_ADD_LEN(object_id_);
   OB_UNIS_ADD_LEN(related_list_);
   OB_UNIS_ADD_LEN(table_type_);
-  OB_UNIS_ADD_LEN(check_no_partition_);
+  OB_UNIS_ADD_LEN(check_no_partiton_);
   return len;
 }
 
@@ -4982,7 +4981,7 @@ OB_DEF_DESERIALIZE(ObTableLocation)
   OB_UNIS_DECODE(object_id_);
   OB_UNIS_DECODE(related_list_);
   OB_UNIS_DECODE(table_type_);
-  OB_UNIS_DECODE(check_no_partition_);
+  OB_UNIS_DECODE(check_no_partiton_);
   return ret;
 }
 

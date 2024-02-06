@@ -26,7 +26,7 @@ class ObCreateIndexStmt;
 class ObCreateIndexResolver : public ObDDLResolver
 {
 public:
-  static const int64_t CREATE_INDEX_CHILD_NUM = 9;
+  static const int64_t CREATE_INDEX_CHILD_NUM = 8;
   explicit ObCreateIndexResolver(ObResolverParams &params);
   virtual ~ObCreateIndexResolver();
 

@@ -189,7 +189,7 @@ int ObOptStatService::load_column_stat_and_put_cache(const uint64_t tenant_id,
                                                      ObIArray<ObOptColumnStatHandle> &handles)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena("ObOptColStatGet", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  ObArenaAllocator arena(ObModIds::OB_SQL_PARSER);
   LOG_TRACE("begin load column stat and put cache", K(keys));
   ObSEArray<ObOptKeyColumnStat, 4> key_column_stats;
   // generate new entrys and load from global statistics table and store it in cache.
@@ -247,9 +247,6 @@ int ObOptStatService::init(common::ObMySQLProxy *proxy, ObServerConfig *config)
   } else if (OB_FAIL(ds_stat_cache_.init("opt_ds_stat_cache",
                                           DEFAULT_DS_STAT_CACHE_PRIORITY))) {
     LOG_WARN("fail to init table cache.", K(ret));
-  } else if (OB_FAIL(system_stat_cache_.init("opt_system_stat_cache",
-                                             DEFAULT_SYSTEM_STAT_CACHE_PRIORITY))) {
-    LOG_WARN("fail to init system stat cache.", K(ret));
   } else {
     inited_ = true;
   }
@@ -438,65 +435,6 @@ int ObOptStatService::add_ds_stat_cache(const ObOptDSStat::Key &key,
 int ObOptStatService::erase_ds_stat(const ObOptDSStat::Key &key)
 {
   return ds_stat_cache_.erase(key);
-}
-
-int ObOptStatService::get_system_stat(const uint64_t tenant_id,
-                                      const ObOptSystemStat::Key &key,
-                                      ObOptSystemStat &stat)
-{
-  int ret = OB_SUCCESS;
-  ObOptSystemStatHandle handle;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("statistics service is not initialized. ", K(ret), K(key));
-  } else if (OB_FAIL(system_stat_cache_.get_value(key, handle))) {
-    // we need to fetch statistics from inner table if it is not yet available from cache
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("get system stat from cache failed", K(ret), K(key));
-    } else if (OB_FAIL(load_system_stat_and_put_cache(tenant_id, key, handle))) {
-      LOG_WARN("load and put cache system stat failed.", K(ret), K(key));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_ISNULL(handle.stat_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cache hit but value is NULL. BUG here.", K(ret), K(key));
-  } else {
-    stat = *handle.stat_;
-  }
-  return ret;
-}
-
-int ObOptStatService::load_system_stat_and_put_cache(const uint64_t tenant_id,
-                                                    const ObOptSystemStat::Key &key,
-                                                    ObOptSystemStatHandle &handle)
-{
-  int ret = OB_SUCCESS;
-  ObOptSystemStat stat;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("statistics service is not initialized. ", K(ret), K(key));
-  } else if (OB_FAIL(system_stat_cache_.put_and_fetch_value(key, stat, handle))) {
-    LOG_WARN("put and fetch table stat failed.", K(ret), K(key));
-  } else if (OB_FAIL(sql_service_.fetch_system_stat(tenant_id, key, stat))) {
-    system_stat_cache_.erase(key);
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("fetch system stat failed. ", K(ret), K(key));
-    } else {
-      // it's not guaranteed that system stat exists.
-      stat.reset();
-      ret = OB_SUCCESS;
-    }
-  } else if (OB_FAIL(system_stat_cache_.put_and_fetch_value(key, stat, handle))) {
-    LOG_WARN("put and fetch table stat failed.", K(ret), K(key));
-  }
-  return ret;
-}
-
-int ObOptStatService::erase_system_stat(const ObOptSystemStat::Key &key)
-{
-  return system_stat_cache_.erase(key);
 }
 
 }

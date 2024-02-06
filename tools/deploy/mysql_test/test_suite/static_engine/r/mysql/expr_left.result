@@ -652,7 +652,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c1], [t1.c17], [left(cast(t1.c1, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c1, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c1], [t1.c17], [left(cast(t1.c1, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c1, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c1], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -1123,7 +1123,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c2], [t1.c17], [left(cast(t1.c2, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c2, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c2], [t1.c17], [left(cast(t1.c2, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c2, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c2], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -1594,7 +1594,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c3], [t1.c17], [left(cast(t1.c3, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c3, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c3], [t1.c17], [left(cast(t1.c3, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c3, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c3], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2065,7 +2065,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c4], [t1.c17], [left(cast(t1.c4, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c4, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c4], [t1.c17], [left(cast(t1.c4, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c4, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c4], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -2536,7 +2536,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c5], [t1.c17], [left(cast(t1.c5, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c5, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c5], [t1.c17], [left(cast(t1.c5, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c5, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c5], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -3007,7 +3007,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c6], [t1.c17], [left(cast(t1.c6, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c6, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c6], [t1.c17], [left(cast(t1.c6, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c6, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c6], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -3478,7 +3478,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c7], [t1.c17], [left(cast(t1.c7, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c7, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c7], [t1.c17], [left(cast(t1.c7, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c7, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c7], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -3949,7 +3949,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c8], [t1.c17], [left(cast(t1.c8, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c8, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c8], [t1.c17], [left(cast(t1.c8, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c8, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c8], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -4420,7 +4420,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c9], [t1.c17], [left(cast(t1.c9, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c9, VARCHAR(1048576)), cast(t1.c17, BIGINT(10,
+  0 - output([t1.c9], [t1.c17], [left(cast(t1.c9, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c9, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1,
        0)))]), filter(nil), rowset=16
       access([t1.c9], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -4891,8 +4891,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c10], [t1.c17], [left(cast(t1.c10, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c10, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c10], [t1.c17], [left(cast(t1.c10, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c10, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c10], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5362,8 +5362,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c11], [t1.c17], [left(cast(t1.c11, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c11, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c11], [t1.c17], [left(cast(t1.c11, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c11, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c11], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -5833,8 +5833,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c12], [t1.c17], [left(cast(t1.c12, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c12, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c12], [t1.c17], [left(cast(t1.c12, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c12, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c12], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6304,8 +6304,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c13], [t1.c17], [left(cast(t1.c13, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c13, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c13], [t1.c17], [left(cast(t1.c13, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c13, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c13], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -6775,8 +6775,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c14], [t1.c17], [left(cast(t1.c14, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c14, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c14], [t1.c17], [left(cast(t1.c14, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c14, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c14], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7246,8 +7246,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c15], [t1.c17], [left(cast(t1.c15, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c15, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c15], [t1.c17], [left(cast(t1.c15, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c15, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c15], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -7717,8 +7717,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c16], [t1.c17], [left(cast(t1.c16, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c16, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c16], [t1.c17], [left(cast(t1.c16, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c16, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c16], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8188,8 +8188,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c17], [t1.c17], [left(cast(t1.c17, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c17, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c17], [t1.c17], [left(cast(t1.c17, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c17, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -8659,8 +8659,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c18], [t1.c17], [left(cast(t1.c18, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c18, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c18], [t1.c17], [left(cast(t1.c18, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c18, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c18], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9130,8 +9130,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c19], [t1.c17], [left(cast(t1.c19, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c19, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c19], [t1.c17], [left(cast(t1.c19, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c19, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c19], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -9601,8 +9601,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c20], [t1.c17], [left(cast(t1.c20, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c20, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c20], [t1.c17], [left(cast(t1.c20, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c20, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c20], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10057,7 +10057,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c21], [t1.c17], [left(t1.c21, cast(t1.c17, BIGINT(10, 0)))], [right(t1.c21, cast(t1.c17, BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c21], [t1.c17], [left(t1.c21, cast(t1.c17, BIGINT(-1, 0)))], [right(t1.c21, cast(t1.c17, BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c21], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
@@ -10522,8 +10522,8 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([t1.c22], [t1.c17], [left(cast(t1.c22, VARCHAR(1048576)), cast(t1.c17, BIGINT(10, 0)))], [right(cast(t1.c22, VARCHAR(1048576)), cast(t1.c17,
-       BIGINT(10, 0)))]), filter(nil), rowset=16
+  0 - output([t1.c22], [t1.c17], [left(cast(t1.c22, VARCHAR(1048576)), cast(t1.c17, BIGINT(-1, 0)))], [right(cast(t1.c22, VARCHAR(1048576)), cast(t1.c17,
+       BIGINT(-1, 0)))]), filter(nil), rowset=16
       access([t1.c22], [t1.c17]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

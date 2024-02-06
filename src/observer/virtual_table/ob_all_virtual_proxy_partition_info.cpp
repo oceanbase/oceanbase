@@ -13,7 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_partition_info.h"
-#include "sql/printer/ob_raw_expr_printer.h"
+#include "sql/resolver/expr/ob_raw_expr_printer.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/parser/ob_parser_utils.h"
 #include "share/schema/ob_schema_getter_guard.h"

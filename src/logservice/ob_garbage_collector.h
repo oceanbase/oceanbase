@@ -120,10 +120,13 @@ public:
   ObGCLSLog(const int16_t log_type);
   ~ObGCLSLog();
 public:
+  int64_t to_string(char* buf, const int64_t buf_len) const
+  {
+    return 0;
+  }
   void reset();
   int16_t get_log_type();
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(header_), K(version_), K(log_type_));
 private:
   static const int16_t GC_LOG_VERSION = 1;
   ObLogBaseHeader header_;

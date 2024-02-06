@@ -64,7 +64,7 @@ public:
   virtual int64_t get_member_count() const;
   virtual const ObPLDataType *get_member(int64_t i) const;
   virtual int generate_assign_with_null(
-    ObPLCodeGenerator &generator, const ObPLINS &ns,
+    ObPLCodeGenerator &generator, const ObPLBlockNS &ns,
     jit::ObLLVMValue &allocator, jit::ObLLVMValue &dest) const;
   virtual int generate_default_value(
     ObPLCodeGenerator &generator,const ObPLINS &ns,
@@ -144,9 +144,7 @@ public:
 
   static int deep_copy_obj(
     ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator = true, bool ignore_del_element = false);
-  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL);
-  static int alloc_sub_composite(ObObj &dest_element, ObIAllocator &allocator);
-  static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
+  static int destruct_obj(ObObj &src, sql::ObSQLSessionInfo *session = NULL, bool set_null = true);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
   static int64_t get_serialize_obj_size(const ObObj &obj);
@@ -242,10 +240,9 @@ public:
   virtual int64_t get_member_count() const { return 0; }
   virtual const ObPLDataType *get_member(int64_t i) const { UNUSED(i); return NULL; }
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        ObPLINS &ns,
-                                        jit::ObLLVMValue &allocator,
-                                        jit::ObLLVMValue &dest) const
-  { UNUSED(generator); UNUSED(ns), UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
+                                      jit::ObLLVMValue &allocator,
+                                      jit::ObLLVMValue &dest) const
+  { UNUSED(generator); UNUSED(allocator); UNUSED(dest); return OB_SUCCESS;}
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
@@ -394,7 +391,7 @@ public:
   virtual const ObPLDataType *get_member(int64_t i) const { return get_record_member_type(i); }
 
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLINS &ns,
+                                        const ObPLBlockNS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
 
@@ -552,13 +549,13 @@ public:
                                  jit::ObLLVMValue &value,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
-                                        const ObPLINS &ns,
+                                        const ObPLBlockNS &ns,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &dest) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
-                           const ObPLINS &ns,
-                           jit::ObLLVMValue &value,
-                           const pl::ObPLStmt *s = NULL) const;
+                                                const ObPLINS &ns,
+                                                jit::ObLLVMValue &value,
+                                                const pl::ObPLStmt *s = NULL) const;
   virtual int newx(common::ObIAllocator &allocator,
                      const ObPLINS *ns,
                      int64_t &ptr) const;
@@ -1209,7 +1206,7 @@ public:
   inline bool is_xmltype() const { return ObPLOpaqueType::PL_XML_TYPE == type_; }
   inline bool is_json_type() const { return ObPLOpaqueType::PL_JSON_TYPE == type_; }
 
-  ObIAllocator& get_allocator(); // { return allocator_; }
+  inline ObIAllocator& get_allocator() { return allocator_; }
 
   virtual int deep_copy(ObPLOpaque *dst);
 
@@ -1433,8 +1430,7 @@ public:
   ObPLJsonBaseType()
     : ObPLOpaque(ObPLOpaqueType::PL_JSON_TYPE),
       data_(NULL),
-      behavior_(0),
-      is_shallow_copy_(0)
+      behavior_(0)
       {}
 
   virtual ~ObPLJsonBaseType()
@@ -1449,15 +1445,12 @@ public:
   void set_err_behavior(int behavior) { behavior_ = behavior; }
   int get_err_behavior() { return behavior_ ; }
   ObJsonNode* get_data() { return data_; }
-  bool need_shallow_copy() { return is_shallow_copy_ > 0; }
-  void set_shallow_copy(int value) { is_shallow_copy_ = value; }
 
-  TO_STRING_KV(KPC(data_), K_(behavior), K_(is_shallow_copy));
+  TO_STRING_KV(KPC(data_), K_(behavior));
 
 private:
   ObJsonNode *data_;
   int behavior_;
-  int is_shallow_copy_;
 };
 
 #endif

@@ -27,44 +27,6 @@ namespace storage
 /*
  * ------------------------------- ObColumnIndexArray -------------------------------
  */
-int64_t return_array_cnt(uint32_t schema_rowkey_cnt, const ObFixedMetaObjArray<int32_t> & array)
-{
-  return array.count();
-}
-int64_t return_schema_rowkey_cnt(uint32_t schema_rowkey_cnt, const ObFixedMetaObjArray<int32_t> & array)
-{
-  return schema_rowkey_cnt;
-}
-int32_t return_array_idx_for_memtable(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
-                         int64_t idx,
-                         const ObFixedMetaObjArray<int32_t> &array)
-{
-  int32_t ret_val = 0;
-  const int32_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-  OB_ASSERT(idx >= 0 && idx < column_cnt);
-  if (idx < schema_rowkey_cnt) {
-    ret_val = idx;
-  } else if (idx < schema_rowkey_cnt + extra_rowkey_cnt) {
-    ret_val = OB_INVALID_INDEX;
-  } else {
-    ret_val = idx - extra_rowkey_cnt;
-  }
-  return ret_val;
-}
-int32_t return_idx(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
-                         int64_t idx,
-                         const ObFixedMetaObjArray<int32_t> &array)
-{
-  OB_ASSERT(idx >= 0 && idx < column_cnt);
-  return (int32_t)idx;
-}
-int32_t return_array_idx(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
-                         int64_t idx,
-                         const ObFixedMetaObjArray<int32_t> &array)
-{
-  OB_ASSERT(idx >= 0 && idx < array.count());
-  return array[idx];
-}
 ObColumnIndexArray::ObColumnIndexArray(const bool rowkey_mode /* = false*/,
                                        const bool for_memtable /* = false*/)
     : version_(COLUMN_INDEX_ARRAY_VERSION),
@@ -77,14 +39,32 @@ ObColumnIndexArray::ObColumnIndexArray(const bool rowkey_mode /* = false*/,
 {
   if (rowkey_mode) {
     if (for_memtable) { // no multi_version rowkey in memtable
-      at_func_ = return_array_idx_for_memtable;
+      at_func_ =[](uint32_t schema_rowkey_cnt, uint32_t column_cnt, int64_t idx, const ObFixedMetaObjArray<int32_t> &array) -> int32_t {
+        int32_t ret_val = 0;
+        const int32_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+        OB_ASSERT(idx >= 0 && idx < column_cnt);
+        if (idx < schema_rowkey_cnt) {
+          ret_val = idx;
+        } else if (idx < schema_rowkey_cnt + extra_rowkey_cnt) {
+          ret_val = OB_INVALID_INDEX;
+        } else {
+          ret_val = idx - extra_rowkey_cnt;
+        }
+        return ret_val;
+      };
     } else {
-      at_func_ = return_idx;
+      at_func_ =[](uint32_t schema_rowkey_cnt, uint32_t column_cnt, int64_t idx, const ObFixedMetaObjArray<int32_t> &) -> int32_t {
+        OB_ASSERT(idx >= 0 && idx < column_cnt);
+        return (int32_t)idx;
+      };
     }
-    count_func_ = return_schema_rowkey_cnt;
+    count_func_ = [](uint32_t column_cnt, const ObFixedMetaObjArray<int32_t> &) -> int64_t { return column_cnt; };
   } else {
-    at_func_ = return_array_idx;
-    count_func_ = return_array_cnt;
+    at_func_ = [](uint32_t, uint32_t, int64_t idx, const ObFixedMetaObjArray<int32_t> &array) -> int32_t {
+      OB_ASSERT(idx >= 0 && idx < array.count());
+      return array[idx];
+    };
+    count_func_ = [](uint32_t, const ObFixedMetaObjArray<int32_t> &array) -> int64_t { return array.count(); };
   }
 }
 
@@ -574,6 +554,7 @@ int ObTableReadInfo::deserialize(
       cg_idxs_.reset();
       cols_extend_.reset();
       has_all_column_group_ = true;
+      compat_version_ = READ_INFO_VERSION_V2;
     }
   }
 
@@ -865,7 +846,7 @@ void ObCGReadInfoHandle::reset()
 
 /*
  * ------------------------------- ObTenantCGReadInfoMgr -------------------------------
-*/
+ */
 ObTenantCGReadInfoMgr::ObTenantCGReadInfoMgr()
   : allocator_(MTL_ID()),
     index_read_info_(),
@@ -873,7 +854,6 @@ ObTenantCGReadInfoMgr::ObTenantCGReadInfoMgr()
     lock_(),
     hold_cg_read_info_cnt_(0),
     in_progress_cnt_(0),
-    alloc_buf_(nullptr),
     is_inited_(false)
 {
 }
@@ -1101,30 +1081,30 @@ int ObTenantCGReadInfoMgr::construct_normal_cg_read_infos()
       read_info_array = new(buf) ObCGReadInfo[array_cnt];
       basic_info_array = new((char *)buf + (sizeof(ObCGReadInfo) * array_cnt)) ObReadInfoStruct[array_cnt];
       alloc_buf_ = buf;
-      ObColExtend tmp_col_extend;
-      tmp_col_extend.skip_index_attr_.set_min_max();
-      int64_t idx = 0;
-      for (int64_t i = 0 ; OB_SUCC(ret) && i < ObObjType::ObMaxType ; ++i) {
-        ObObjType type = static_cast<ObObjType>(i);
-        ObColDesc tmp_desc;
-        ObCGReadInfo &tmp_read_info = read_info_array[idx];
-        normal_cg_read_infos_.at(i) = &tmp_read_info;
-        if (not_in_normal_cg_array(type)) {
-        } else if (FALSE_IT(set_col_desc(type, tmp_desc))) {
-        } else if (FALSE_IT(tmp_read_info.cg_basic_info_ = &basic_info_array[idx])) {
-        } else if (OB_FAIL(tmp_read_info.cg_basic_info_->generate_for_column_store(allocator_, tmp_desc, index_read_info_.is_oracle_mode()))) {
-          STORAGE_LOG(WARN, "Fail to generate column group read info", K(ret));
-        } else if (OB_FAIL(tmp_read_info.cols_extend_.init(1, allocator_))) {
-          STORAGE_LOG(WARN, "Fail to init columns extend", K(ret));
-        } else if (OB_FAIL(tmp_read_info.cols_extend_.push_back(tmp_col_extend))) {
-          STORAGE_LOG(WARN, "Fail to push col extend", K(ret));
-        } else {
-          tmp_read_info.need_release_ = false;
-          idx++;
-        }
-      } // end of for
-      // if failed, will call destroy outside
     }
+    ObColExtend tmp_col_extend;
+    tmp_col_extend.skip_index_attr_.set_min_max();
+    int64_t idx = 0;
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < ObObjType::ObMaxType ; ++i) {
+      ObObjType type = static_cast<ObObjType>(i);
+      ObColDesc tmp_desc;
+      ObCGReadInfo &tmp_read_info = read_info_array[idx];
+      normal_cg_read_infos_.at(i) = &tmp_read_info;
+      if (not_in_normal_cg_array(type)) {
+      } else if (FALSE_IT(set_col_desc(type, tmp_desc))) {
+      } else if (FALSE_IT(tmp_read_info.cg_basic_info_ = &basic_info_array[idx])) {
+      } else if (OB_FAIL(tmp_read_info.cg_basic_info_->generate_for_column_store(allocator_, tmp_desc, index_read_info_.is_oracle_mode()))) {
+        STORAGE_LOG(WARN, "Fail to generate column group read info", K(ret));
+      } else if (OB_FAIL(tmp_read_info.cols_extend_.init(1, allocator_))) {
+        STORAGE_LOG(WARN, "Fail to init columns extend", K(ret));
+      } else if (OB_FAIL(tmp_read_info.cols_extend_.push_back(tmp_col_extend))) {
+        STORAGE_LOG(WARN, "Fail to push col extend", K(ret));
+      } else {
+        tmp_read_info.need_release_ = false;
+        idx++;
+      }
+    } // end of for
+    // if failed, will call destroy outside
   }
 
   return ret;

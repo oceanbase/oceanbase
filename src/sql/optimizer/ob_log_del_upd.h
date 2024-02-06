@@ -36,7 +36,6 @@ public:
     part_ids_(),
     is_update_unique_key_(false),
     is_update_part_key_(false),
-    is_update_primary_key_(false),
     distinct_algo_(T_DISTINCT_NONE),
     lookup_part_id_expr_(NULL),
     old_part_id_expr_(NULL),
@@ -66,7 +65,6 @@ public:
     part_ids_.reset();
     is_update_unique_key_ = false;
     is_update_part_key_ = false;
-    is_update_primary_key_ = false;
     distinct_algo_ = T_DISTINCT_NONE;
     lookup_part_id_expr_ = NULL;
     old_part_id_expr_ = NULL;
@@ -158,7 +156,6 @@ public:
   common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
   bool is_update_unique_key_;
   bool is_update_part_key_;
-  bool is_update_primary_key_;
   DistinctType distinct_algo_;
   ObRawExpr *lookup_part_id_expr_; // for replace and insert_up conflict scene
   ObRawExpr *old_part_id_expr_;
@@ -191,7 +188,6 @@ public:
                K_(ck_cst_exprs),
                K_(is_update_unique_key),
                K_(is_update_part_key),
-               K_(is_update_primary_key),
                K_(distinct_algo),
                K_(related_index_ids));
 };

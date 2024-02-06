@@ -387,8 +387,8 @@ TEST_F(TestCGGroupByScanner, test_init)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
   ASSERT_EQ(1, group_by_scanner.group_by_agg_idxs_.count());
@@ -409,8 +409,8 @@ TEST_F(TestCGGroupByScanner, test_decide_group_size)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
   int64_t start = 0;
@@ -434,8 +434,8 @@ TEST_F(TestCGGroupByScanner, test_decide_can_group_by)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
 
@@ -465,8 +465,8 @@ TEST_F(TestCGGroupByScanner, test_read_distinct)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
 
@@ -506,8 +506,8 @@ TEST_F(TestCGGroupByScanner, test_read_reference)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
 
@@ -556,8 +556,8 @@ TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
 
@@ -635,8 +635,8 @@ TEST_F(TestCGGroupByScanner, test_calc_aggregate_group_by_with_bitmap)
   context_.block_row_store_ = &vector_store;
 
   ObCGGroupByScanner group_by_scanner;
-  ObSSTableWrapper wrapper;
-  wrapper.sstable_ = &sstable_;
+  ObCGTableWrapper wrapper;
+  wrapper.cg_sstable_ = &sstable_;
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init(cg_access_param_.iter_param_, context_, wrapper));
   ASSERT_EQ(OB_SUCCESS, group_by_scanner.init_group_by_info());
 

@@ -16,8 +16,6 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
 #include "sql/engine/basic/ob_temp_table_insert_op.h"
-#include "sql/engine/basic/ob_temp_table_access_vec_op.h"
-#include "sql/engine/basic/ob_temp_table_insert_vec_op.h"
 #include "sql/engine/px/exchange/ob_transmit_op.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "lib/utility/ob_tracepoint.h"
@@ -27,7 +25,6 @@
 #include "sql/engine/px/ob_px_scheduler.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "sql/engine/px/ob_px_coord_op.h"
-#include "sql/engine/basic/ob_material_vec_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -127,7 +124,7 @@ bool ObDfoSchedDepthGenerator::check_if_need_do_earlier_sched(ObDfo &child)
     const ObOpSpec *phy_op = child.get_root_op_spec();
     if (OB_NOT_NULL(phy_op) && IS_PX_TRANSMIT(phy_op->type_)) {
       phy_op = static_cast<const ObTransmitSpec *>(phy_op)->get_child();
-      do_earlier_sched = phy_op && (PHY_MATERIAL == phy_op->type_ || PHY_MATERIAL == phy_op->type_);
+      do_earlier_sched = phy_op && PHY_MATERIAL == phy_op->type_;
     }
   } else {
     // dfo (child) 是 earlier sched，那么可以知道 dfo 的 material 会阻塞对外吐数据.
@@ -163,16 +160,6 @@ int ObDfoSchedDepthGenerator::try_set_dfo_block(ObExecContext &exec_ctx, ObDfo &
         LOG_WARN("operator is NULL", K(ret), KP(kit));
       } else {
         ObMaterialOpInput *mat_input = static_cast<ObMaterialOpInput *>(kit->input_);
-        mat_input->set_bypass(!block); // so that this dfo will have a blocked material op
-      }
-    } else if (PHY_VEC_MATERIAL == child->type_) {
-      const ObMaterialVecSpec *mat = static_cast<const ObMaterialVecSpec *>(child);
-      ObOperatorKit *kit = exec_ctx.get_operator_kit(mat->id_);
-      if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("operator is NULL", K(ret), KP(kit));
-      } else {
-        ObMaterialVecOpInput *mat_input = static_cast<ObMaterialVecOpInput *>(kit->input_);
         mat_input->set_bypass(!block); // so that this dfo will have a blocked material op
       }
     }
@@ -298,7 +285,7 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     // compatible with version before 4.2
     compatible_before_420 = true;
     scale_rate = static_cast<double>(admited_worker_count) / static_cast<double>(expected_worker_count);
-  } else if (0 >= admited_worker_count || minimal_worker_count == admited_worker_count) {
+  } else if (0 <= admited_worker_count || minimal_worker_count == admited_worker_count) {
     scale_rate = 0.0;
   } else if (OB_UNLIKELY(minimal_worker_count > admited_worker_count
                          || minimal_worker_count >= expected_worker_count)) {
@@ -325,8 +312,7 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     }
     LOG_TRACE("assign worker count to dfo",
               "dfo_id", child->get_dfo_id(), K(admited_worker_count),
-              K(expected_worker_count), K(minimal_worker_count),
-              "dop", child->get_dop(), K(scale_rate), K(val));
+              K(expected_worker_count), "dop", child->get_dop(), K(scale_rate), K(val));
   }
 
   // 因为上面取了 max，所以可能实际 assigned 的会超出 admission 数，这时应该报错
@@ -337,7 +323,6 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   } else if (total_assigned > admited_worker_count && admited_worker_count != 0) {
     // 意味着某些 dfo 理论上一个线程都分不到
     ret = OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH;
-    LOG_USER_ERROR(OB_ERR_PARALLEL_SERVERS_TARGET_NOT_ENOUGH, total_assigned);
     LOG_WARN("total assigned worker to dfos is more than admited_worker_count",
              K(total_assigned),
              K(admited_worker_count),
@@ -479,7 +464,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     LOG_WARN("NULL unexpected", K(ret));
   } else if (NULL == parent_dfo && !IS_PX_COORD(phy_op->type_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("the first phy_op must be a coord op", K(ret), K(phy_op->type_));
+    LOG_WARN("the first phy_op must be a coord op", K(ret));
   } else if (phy_op->is_table_scan() && NULL != parent_dfo) {
     parent_dfo->set_scan(true);
     parent_dfo->inc_tsc_op_cnt();
@@ -515,22 +500,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     parent_dfo->set_dml_op(true);
-    const ObPhyOperatorType op_type = phy_op->get_type();
-    LOG_TRACE("set DFO need_branch_id", K(op_type));
-    parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
-                                      || op_type == PHY_REPLACE
-                                      || op_type == PHY_LOCK);
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);
-    parent_dfo->set_temp_table_id(access->get_table_id());
-    if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
-      OZ(px_coord_info.p2p_temp_table_info_.temp_access_ops_.push_back(phy_op));
-      OZ(px_coord_info.p2p_temp_table_info_.dfos_.push_back(parent_dfo));
-    }
-  } else if (phy_op->get_type() == PHY_VEC_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
-    parent_dfo->set_temp_table_scan(true);
-    const ObTempTableAccessVecOpSpec *access = static_cast<const ObTempTableAccessVecOpSpec*>(phy_op);
     parent_dfo->set_temp_table_id(access->get_table_id());
     if (parent_dfo->need_p2p_info_ && parent_dfo->get_p2p_dh_addrs().empty()) {
       OZ(px_coord_info.p2p_temp_table_info_.temp_access_ops_.push_back(phy_op));

@@ -27,13 +27,13 @@ struct ObMetaDiskAddr;
 class ObTenantStorageCheckpointReader final
 {
 public:
-  using ObStorageMetaOp = common::ObFunction<int(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len)>;
+  using ObCheckpointMetaOp = common::ObFunction<int(const ObMetaDiskAddr &addr, const char *buf, const int64_t buf_len)>;
   ObTenantStorageCheckpointReader();
   ~ObTenantStorageCheckpointReader() = default;
   ObTenantStorageCheckpointReader(const ObTenantStorageCheckpointReader &) = delete;
   ObTenantStorageCheckpointReader &operator=(const ObTenantStorageCheckpointReader &) = delete;
-  int iter_read_meta_item(const blocksstable::MacroBlockId &entry_block,
-                                const ObStorageMetaOp &op,
+  int iter_read_checkpoint_item(const blocksstable::MacroBlockId &entry_block,
+                                const ObCheckpointMetaOp &op,
                                 ObIArray<blocksstable::MacroBlockId> &block_list);
 
   static int read_tablet_checkpoint_by_addr(const ObIArray<blocksstable::MacroBlockId> &block_list,
@@ -44,4 +44,4 @@ public:
 }  // end namespace storage
 }  // end namespace oceanbase
 
-#endif  // OB_STORAGE_CKPT_TENANT_STORAGE_META_READER_H_
+#endif  // OB_STORAGE_CKPT_TENANT_STORAGE_CHECKPOINT_READER_H_

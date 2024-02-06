@@ -85,12 +85,15 @@ TEST_F(TestLSLogWriter, submit_start_working_log)
   ObTxStartWorkingLog sw_log(tmp_ref);
   int64_t test_leader_epoch = 1308;
 
+  ObTxLogBlockHeader block_header;
+
   ASSERT_EQ(OB_SUCCESS, ls_log_writer.init(tmp_tenant_id, TEST_LS_ID, &tx_log_adapter,
                                            (ObLSTxCtxMgr *)&tmp_mgr));
   ASSERT_EQ(OB_SUCCESS, ls_log_writer.submit_start_working_log(test_leader_epoch, log_ts));
 
   ASSERT_EQ(true, tx_log_adapter.get_log(log_ts.get_val_for_gts(), log_string));
-  ASSERT_EQ(OB_SUCCESS, replay_block.init_for_replay(log_string.c_str(), log_string.size()));
+  ASSERT_EQ(OB_SUCCESS, replay_block.init_with_header(log_string.c_str(), log_string.size(),
+                                                      replay_hint, block_header));
   ASSERT_EQ(OB_SUCCESS, replay_block.get_next_log(log_header));
   EXPECT_EQ(ObTxLogType::TX_START_WORKING_LOG, log_header.get_tx_log_type());
   ASSERT_EQ(OB_SUCCESS, replay_block.deserialize_log_body(sw_log));

@@ -183,7 +183,7 @@ int ObLobMetaBuilder::set_lob_table_column_store_if_need(ObTableSchema &table_sc
   const uint64_t tenant_id = table_schema.get_tenant_id();
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
-  } else if (compat_version >= DATA_VERSION_4_3_0_0) {
+  } else if (compat_version >= DATA_VERSION_4_2_0_0) {
     table_schema.set_column_store(true);
     if (table_schema.get_column_group_count() == 0) {
       if (OB_FAIL(table_schema.add_default_column_group())) {

@@ -186,7 +186,7 @@ int ObServerZoneOpService::delete_servers(
   } else if (OB_FAIL(check_server_have_enough_resource_for_delete_server_(servers, zone))) {
     LOG_WARN("not enough resource, cannot delete servers", KR(ret), K(servers), K(zone));
   } else if (OB_FAIL(GCTX.root_service_->check_all_ls_has_leader("delete server"))) {
-    LOG_WARN("fail to check whether all ls has leader", KR(ret));
+    LOG_WARN("fail to check all ls has leader", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       if (OB_FAIL(delete_server_(servers.at(i), zone))) {
@@ -598,9 +598,6 @@ int ObServerZoneOpService::check_and_end_delete_server_(
       }
     } else {
       LOG_WARN("failed to find job", KR(ret), K(server));
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      }
     }
   }
   return ret;

@@ -30,7 +30,6 @@ public:
   ObSqlSessionMemPool(): pool_() {}
   virtual ~ObSqlSessionMemPool() {}
   void* alloc(int64_t sz) { return pool_.alloc(sz); }
-  void set_tenant_id(int64_t tenant_id) { pool_.set_tenant_id(tenant_id); }
   void reset() { pool_.destroy(); }
   void reuse() { pool_.reuse(); }
 private:
@@ -47,10 +46,8 @@ public:
   void destroy();
   void destroy_sock();
   bool has_error();
-  int create_read_handle(void*& read_handle);
-  int release_read_handle(void* read_handle);
-  int peek_data(void* read_handle, int64_t limit, const char*& buf, int64_t& sz);
-  int consume_data(void* read_handle, int64_t sz);
+  int peek_data(int64_t limit, const char*& buf, int64_t& sz);
+  int consume_data(int64_t sz);
   int write_data(const char* buf, int64_t sz);
   int async_write_data(const char* buf, int64_t sz);
   void on_flushed();

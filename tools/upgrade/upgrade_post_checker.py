@@ -41,14 +41,8 @@ def check_data_version(cur, query_cur, timeout):
   # check compatible sync
   parameter_count = int(server_count) * int(tenant_count)
   current_data_version = actions.get_current_data_version()
-
-  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 2, 60)
-  actions.set_session_timeout(cur, query_timeout)
-
   sql = """select count(*) as cnt from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible' and value = '{0}' and tenant_id in ({1})""".format(current_data_version, tenant_ids_str)
-
-  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 60)
-  times = wait_timeout / 5
+  times = (timeout if timeout > 0 else 60) / 5
   while times >= 0:
     logging.info(sql)
     cur.execute(sql)
@@ -68,8 +62,6 @@ def check_data_version(cur, query_cur, timeout):
       raise e
     time.sleep(5)
 
-  actions.set_session_timeout(cur, 10)
-
   # check target_data_version/current_data_version from __all_core_table
   int_current_data_version = actions.get_version(current_data_version)
   sql = "select count(*) from __all_virtual_core_table where column_name in ('target_data_version', 'current_data_version') and column_value = {0} and tenant_id in ({1})".format(int_current_data_version, tenant_ids_str)
@@ -84,20 +76,16 @@ def check_data_version(cur, query_cur, timeout):
     logging.info("all tenant's target_data_version/current_data_version are match with {0}".format(current_data_version))
 
 # 3 检查内部表自检是否成功
-def check_root_inspection(cur, query_cur, timeout):
+def check_root_inspection(query_cur, timeout):
   sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
-
-  wait_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 10, 600)
-
-  times = wait_timeout / 10
-  while times >= 0 :
+  times = timeout if timeout > 0 else 180
+  while times > 0 :
     (desc, results) = query_cur.exec_query(sql)
     if results[0][0] == 0:
       break
     time.sleep(10)
     times -= 1
-
-  if times == -1:
+  if times == 0:
     logging.warn('check root inspection failed!')
     raise e
   logging.info('check root inspection success')
@@ -125,7 +113,7 @@ def do_check(conn, cur, query_cur, timeout):
   try:
     check_cluster_version(cur, timeout)
     check_data_version(cur, query_cur, timeout)
-    check_root_inspection(cur, query_cur, timeout)
+    check_root_inspection(query_cur, timeout)
     enable_ddl(cur, timeout)
     enable_rebalance(cur, timeout)
     enable_rereplication(cur, timeout)

@@ -33,7 +33,6 @@
 #include "storage/lob/ob_lob_rpc_struct.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "share/rpc/ob_async_rpc_proxy.h"
-#include "storage/meta_mem/ob_tablet_pointer.h"
 
 namespace oceanbase
 {
@@ -664,35 +663,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCheckStartTransferTabletsRes);
 };
 
-struct ObStorageBlockTxArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObStorageBlockTxArg();
-  ~ObStorageBlockTxArg() {}
-  bool is_valid() const;
-  void reset();
-
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(gts));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-  share::SCN gts_;
-};
-
-struct ObStorageTransferCommonArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObStorageTransferCommonArg();
-  ~ObStorageTransferCommonArg() {}
-  bool is_valid() const;
-  void reset();
-
-  TO_STRING_KV(K_(tenant_id), K_(ls_id));
-  uint64_t tenant_id_;
-  share::ObLSID ls_id_;
-};
-
 struct ObStorageKillTxArg final
 {
   OB_UNIS_VERSION(1);
@@ -783,8 +753,7 @@ public:
   RPC_S(PR5 update_ls_meta, OB_HA_UPDATE_LS_META, (ObRestoreUpdateLSMetaArg));
   RPC_S(PR5 get_ls_active_trans_count, OB_GET_LS_ACTIVE_TRANSACTION_COUNT, (ObGetLSActiveTransCountArg), ObGetLSActiveTransCountRes);
   RPC_S(PR5 get_transfer_start_scn, OB_GET_TRANSFER_START_SCN, (ObGetTransferStartScnArg), ObGetTransferStartScnRes);
-  RPC_S(PR5 submit_tx_log, OB_HA_SUBMIT_TX_LOG, (ObStorageTransferCommonArg), share::SCN);
-  RPC_S(PR5 get_transfer_dest_prepare_scn, OB_HA_GET_TRANSFER_DEST_PREPARE_SCN, (ObStorageTransferCommonArg), share::SCN);
+  RPC_S(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (ObFetchLSReplayScnArg), ObFetchLSReplayScnRes);
   RPC_S(PR5 lock_config_change, OB_HA_LOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 unlock_config_change, OB_HA_UNLOCK_CONFIG_CHANGE, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
@@ -794,8 +763,7 @@ public:
   // RPC_AP stands for asynchronous RPC.
   RPC_AP(PR5 check_transfer_tablet_backfill_completed, OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, (obrpc::ObCheckTransferTabletBackfillArg), obrpc::ObCheckTransferTabletBackfillRes);
   RPC_AP(PR5 get_config_version_and_transfer_scn, OB_HA_CHANGE_MEMBER_SERVICE, (obrpc::ObStorageChangeMemberArg), obrpc::ObStorageChangeMemberRes);
-  RPC_AP(PR5 check_start_transfer_tablets, OB_CHECK_START_TRANSFER_TABLETS, (obrpc::ObTransferTabletInfoArg));
-  RPC_AP(PR5 fetch_ls_replay_scn, OB_HA_FETCH_LS_REPLAY_SCN, (obrpc::ObFetchLSReplayScnArg), obrpc::ObFetchLSReplayScnRes);
+  RPC_AP(PR5 check_start_transfer_tablets, OB_CHECK_START_TRANSFER_TABLETS, (obrpc::ObTransferTabletInfoArg), obrpc::Int64);
 };
 
 template <ObRpcPacketCode RPC_CODE>
@@ -983,26 +951,13 @@ protected:
 };
 
 class ObFetchLSReplayScnP:
-    public ObStorageRpcProxy::Processor<OB_HA_FETCH_LS_REPLAY_SCN>
+    public ObStorageStreamRpcP<OB_HA_FETCH_LS_REPLAY_SCN>
 {
 public:
-  ObFetchLSReplayScnP() = default;
+  explicit ObFetchLSReplayScnP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
   virtual ~ObFetchLSReplayScnP() {}
 protected:
   int process();
-};
-
-class OFetchLSReplayScnDelegate final
-{
-public:
-  OFetchLSReplayScnDelegate(obrpc::ObFetchLSReplayScnRes &result);
-  int init(const obrpc::ObFetchLSReplayScnArg &arg);
-  int process();
-private:
-  bool is_inited_;
-  obrpc::ObFetchLSReplayScnArg arg_;
-  obrpc::ObFetchLSReplayScnRes &result_;
-  DISALLOW_COPY_AND_ASSIGN(OFetchLSReplayScnDelegate);
 };
 
 class ObCheckTransferTabletsBackfillP:
@@ -1089,28 +1044,6 @@ protected:
   int process();
 protected:
   int64_t max_tablet_num_;
-};
-
-class ObStorageSubmitTxLogP:
-    public ObStorageStreamRpcP<OB_HA_SUBMIT_TX_LOG>
-{
-public:
-  explicit ObStorageSubmitTxLogP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
-  virtual ~ObStorageSubmitTxLogP() {}
-protected:
-  int process();
-private:
-};
-
-class ObStorageGetTransferDestPrepareSCNP:
-    public ObStorageStreamRpcP<OB_HA_GET_TRANSFER_DEST_PREPARE_SCN>
-{
-public:
-  explicit ObStorageGetTransferDestPrepareSCNP(common::ObInOutBandwidthThrottle *bandwidth_throttle);
-  virtual ~ObStorageGetTransferDestPrepareSCNP() {}
-protected:
-  int process();
-private:
 };
 
 class ObStorageLockConfigChangeP:
@@ -1224,18 +1157,11 @@ public:
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn) = 0;
 
-  virtual int submit_tx_log(
-    const uint64_t tenant_id,
-    const ObStorageHASrcInfo &src_info,
-    const share::ObLSID &ls_id,
-    SCN &data_end_scn) = 0;
-
-  virtual int get_transfer_dest_prepare_scn(
-    const uint64_t tenant_id,
-    const ObStorageHASrcInfo &src_info,
-    const share::ObLSID &ls_id,
-    SCN &scn) = 0;
-
+  virtual int fetch_ls_replay_scn(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      share::SCN &ls_replay_scn) = 0;
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1325,18 +1251,11 @@ public:
       const common::ObIArray<share::ObTransferTabletInfo> &tablet_list,
       share::SCN &transfer_start_scn);
 
-  virtual int submit_tx_log(
+  virtual int fetch_ls_replay_scn(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
       const share::ObLSID &ls_id,
-      SCN &data_end_scn);
-
-  virtual int get_transfer_dest_prepare_scn(
-      const uint64_t tenant_id,
-      const ObStorageHASrcInfo &src_info,
-      const share::ObLSID &ls_id,
-      SCN &scn);
-
+      share::SCN &ls_replay_scn);
   virtual int lock_config_change(
       const uint64_t tenant_id,
       const ObStorageHASrcInfo &src_info,
@@ -1382,7 +1301,7 @@ public:
   virtual ~ObStorageStreamRpcReader() {}
   int init(common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int fetch_next_buffer_if_need();
-  int check_need_fetch_next_buffer(bool &need_fetch);
+  int check_need_fetch_next_buffer(bool &need_fectch);
   int fetch_next_buffer();
   template<typename Data>
   int fetch_and_decode(Data &data);
@@ -1412,16 +1331,6 @@ private:
   common::ObArenaAllocator allocator_;
   int64_t last_send_time_;
   int64_t data_size_;
-};
-
-class ObHasTransferTableFilterOp final : public ObITabletFilterOp
-{
-public:
-  int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override
-  {
-    is_skipped = !info.has_transfer_table();
-    return OB_SUCCESS;
-  }
 };
 
 } // storage

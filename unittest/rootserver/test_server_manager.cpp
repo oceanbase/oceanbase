@@ -796,14 +796,14 @@ TEST_F(TestServerManager, with_partition)
   ASSERT_EQ(OB_SUCCESS, server_manager_.get_server_status(B, B_s));
 
   ASSERT_TRUE(B_s.with_partition_);
-  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partition(A, A_s.last_hb_time_));
+  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partiton(A, A_s.last_hb_time_));
 
   // last hb time mismatch, return success, keep with partition flag unchanged.
-  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partition(B, B_s.last_hb_time_ + 1));
+  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partiton(B, B_s.last_hb_time_ + 1));
   ASSERT_EQ(OB_SUCCESS, server_manager_.get_server_status(B, B_s));
   ASSERT_TRUE(B_s.with_partition_);
 
-  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partition(B, B_s.last_hb_time_));
+  ASSERT_EQ(OB_SUCCESS, server_manager_.clear_with_partiton(B, B_s.last_hb_time_));
   ASSERT_EQ(OB_SUCCESS, server_manager_.get_server_status(B, B_s));
   ASSERT_FALSE(B_s.with_partition_);
 }

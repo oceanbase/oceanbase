@@ -33,7 +33,6 @@ ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
     : is_inited_(false),
       pd_filter_info_(),
       context_(context),
-      iter_param_(nullptr),
       can_blockscan_(false),
       filter_applied_(false),
       disabled_(false)
@@ -50,7 +49,6 @@ void ObBlockRowStore::reset()
   filter_applied_ = false;
   pd_filter_info_.reset();
   disabled_ = false;
-  iter_param_ = nullptr;
 }
 
 void ObBlockRowStore::reuse()
@@ -73,7 +71,6 @@ int ObBlockRowStore::init(const ObTableAccessParam &param)
     LOG_WARN("Fail to init pd filter info", K(ret));
   } else {
     is_inited_ = true;
-    iter_param_ = &param.iter_param_;
   }
 
   if (IS_NOT_INIT) {
@@ -89,9 +86,6 @@ int ObBlockRowStore::apply_blockscan(
 {
   int ret = OB_SUCCESS;
   int64_t access_count = micro_scanner.get_access_cnt();
-  if (iter_param_->has_lob_column_out()) {
-    context_.reuse_lob_locator_helper();
-  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBlockRowStore is not inited", K(ret), K(*this));
@@ -117,9 +111,6 @@ int ObBlockRowStore::apply_blockscan(
       int64_t select_cnt = pd_filter_info_.filter_->get_result()->popcnt();
       table_store_stat.pushdown_row_select_cnt_ += select_cnt;
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, select_cnt);
-    }
-    if (iter_param_->has_lob_column_out()) {
-      context_.reuse_lob_locator_helper();
     }
     EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, access_count);
     LOG_DEBUG("[PUSHDOWN] apply blockscan succ", K(access_count), KPC(pd_filter_info_.filter_), K(*this));
