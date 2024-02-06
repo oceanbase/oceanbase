@@ -56,237 +56,34 @@ void ObMicroBlockDesc::reset()
  /**
  * -------------------------------------------------------------------ObMicroBufferWriter-------------------------------------------------------------------
  */
-int ObMicroBufferWriter::init(const int64_t capacity, const int64_t reserve_size)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    STORAGE_LOG(WARN, "micro buffer writer is inited", K(ret), K(capacity_));
-  } else if (OB_UNLIKELY(reserve_size < 0 || capacity > MAX_DATA_BUFFER_SIZE
-      || capacity < reserve_size)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(capacity), K(reserve_size));
-  } else {
-    capacity_ = capacity;
-    len_ = 0;
-    data_= nullptr;
-    buffer_size_ = 0;
-    reset_memory_threshold_ = DEFAULT_RESET_MEMORY_THRESHOLD;
-    memory_reclaim_cnt_ = 0;
-  }
-
-  if (OB_SUCC(ret)) {
-    if(OB_FAIL(reserve(reserve_size))) {
-      STORAGE_LOG(WARN, "failed to reserve", K(ret), K(reserve_size));
-    } else {
-      default_reserve_ = reserve_size;
-      is_inited_ = true;
-    }
-  }
-
-  return ret;
-}
-
-void ObMicroBufferWriter::reset()
-{
-  if (data_ != nullptr) {
-    allocator_.free(data_);
-    data_ = nullptr;
-  }
-  has_expand_ = false;
-  memory_reclaim_cnt_ = 0;
-  reset_memory_threshold_ = 0;
-  default_reserve_ = 0;
-  len_ = 0;
-  buffer_size_ = 0;
-  capacity_ = 0;
-  is_inited_ = false;
-  allocator_.reset();
-}
-
-void ObMicroBufferWriter::reuse()
-{
-  if (buffer_size_ > default_reserve_ && len_ <= default_reserve_) {
-    memory_reclaim_cnt_++;
-    if (memory_reclaim_cnt_ >= reset_memory_threshold_) {
-      reset_memory_threshold_ <<= 1;
-      memory_reclaim_cnt_ = 0;
-      void *buf = nullptr;
-      if (OB_ISNULL(buf = allocator_.alloc(default_reserve_))) {
-        int ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to reclaim memory", K(ret), K(default_reserve_));
-      } else {
-        allocator_.free(data_);
-        buffer_size_ = default_reserve_;
-        data_ = reinterpret_cast<char *>(buf);
-      }
-    }
-  } else {
-    memory_reclaim_cnt_ = 0;
-  }
-  has_expand_ = false;
-  len_ = 0;
-}
-
-int ObMicroBufferWriter::expand(const int64_t size)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(capacity_ <= buffer_size_ || size > capacity_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(buffer_size_), K(capacity_));
-  } else {
-    int64_t expand_size = buffer_size_ * 2;
-    while (expand_size < size) {
-      expand_size <<= 1;
-    }
-    expand_size = MIN(expand_size, capacity_);
-    if (OB_FAIL(reserve(expand_size))) {
-      STORAGE_LOG(WARN, "fail to reserve", K(ret), K(expand_size));
-    }
-  }
-
-  return ret;
-}
-
-int ObMicroBufferWriter::reserve(const int64_t size)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(size < 0 || size > capacity_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(capacity_));
-  } else if (size <= buffer_size_) {//do nothing
-  } else {
-    void* buf = nullptr;
-    const int64_t alloc_size = MAX(size, MIN_BUFFER_SIZE);
-    if (OB_ISNULL(buf = allocator_.alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      STORAGE_LOG(WARN, "failed to alloc memory", K(ret), K(alloc_size));
-    } else if (data_ != nullptr) {
-      has_expand_ = true;
-      MEMCPY(buf, data_, len_);
-      allocator_.free(data_);
-      data_ = nullptr;
-    }
-    if (OB_SUCC(ret)) {
-      data_ = reinterpret_cast<char *>(buf);
-      buffer_size_ = alloc_size;
-    }
-  }
-
-  return ret;
-}
-
-int ObMicroBufferWriter::ensure_space(const int64_t append_size)
-{
-  int ret = OB_SUCCESS;
-
-  if (len_ + append_size > capacity_) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else if (len_ + append_size > buffer_size_) {
-    if (OB_FAIL(expand(len_ + append_size))) {
-      STORAGE_LOG(WARN, "failed to expand size", K(ret), K(len_), K(append_size));
-    }
-  }
-
-  return ret;
-}
-
-int ObMicroBufferWriter::write_nop(const int64_t size, bool is_zero)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(len_), K(capacity_));
-  } else if (OB_FAIL(ensure_space(size))) {
-    if (ret != OB_BUF_NOT_ENOUGH) {
-      STORAGE_LOG(WARN, "failed to ensure space", K(ret), K(size));
-    }
-  } else {
-    if (is_zero) {
-      MEMSET(data_ + len_, 0, size);
-    }
-    len_ += size;
-  }
-
-  return ret;
-}
-
-int ObMicroBufferWriter::write(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &size)
+int ObMicroBufferWriter::write_row(const ObDatumRow &row, const int64_t rowkey_cnt, int64_t &size)
 {
   int ret = OB_SUCCESS;
   ObRowWriter row_writer;
 
-  if ((buffer_size_ == len_) && OB_FAIL(expand(buffer_size_))) {
-    STORAGE_LOG(WARN, "failed to reserve", K(ret), K(buffer_size_));
+  if (remain_buffer_size() <= 0 && OB_FAIL(expand(ObCompactionBuffer::size()))) {
+    STORAGE_LOG(WARN, "failed to reserve", K(ret));
   }
 
   while (OB_SUCC(ret)) {
-    if (OB_SUCC(row_writer.write(rowkey_cnt, row, data_ + len_, buffer_size_ - len_, size))) {
+    if (OB_SUCC(row_writer.write(rowkey_cnt, row, current(), remain_buffer_size(), size))) {
       break;
     } else {
       if (OB_UNLIKELY(ret != OB_BUF_NOT_ENOUGH)) {
-        STORAGE_LOG(WARN, "failed to write row", K(ret), K(buffer_size_), K(capacity_));
-      } else if (buffer_size_ >= capacity_) { //break
-      } else if (OB_FAIL(expand(buffer_size_))) {
-        STORAGE_LOG(WARN, "failed to reserve", K(ret), K(buffer_size_));
+        STORAGE_LOG(WARN, "failed to write row", K(ret), KPC(this));
+      } else if (!check_could_expand()) { //break
+      } else if (OB_FAIL(expand(ObCompactionBuffer::size()))) {
+        STORAGE_LOG(WARN, "failed to reserve", K(ret));
       }
     }
   }
 
   if (OB_SUCC(ret)) {
-    len_ += size;
+    write_nop(size);
   }
   return ret;
 }
 
-int ObMicroBufferWriter::write(const void *buf, int64_t size)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(buf == nullptr || size < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(buf), K(size), K(len_), K(capacity_));
-  } else if (OB_FAIL(ensure_space(size))) {
-    if (ret != OB_BUF_NOT_ENOUGH) {
-      STORAGE_LOG(WARN, "failed to ensure space", K(ret), K(size));
-    }
-  } else {
-    MEMCPY(data_ + len_, buf, size);
-    len_ += size;
-  }
-
-  return ret;
-}
-
-int ObMicroBufferWriter::advance(const int64_t size)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(size < 0 || len_ + size > buffer_size_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(len_), K(buffer_size_));
-  } else {
-    len_ += size;
-  }
-  return ret;
-}
-
-int ObMicroBufferWriter::set_length(const int64_t len)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(len > buffer_size_)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(len), K(len_), K(buffer_size_));
-  } else {
-    len_ = len;
-  }
-  return ret;
-}
  /**
  * -------------------------------------------------------------------ObIMicroBlockWriter-------------------------------------------------------------------
  */
