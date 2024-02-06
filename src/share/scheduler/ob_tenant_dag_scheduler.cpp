@@ -1266,7 +1266,9 @@ int ObIDagNet::add_dag_warning_info()
     dag_net = static_cast<compaction::ObCOMergeDagNet*>(this);
   }
   if (OB_NOT_NULL(first_fail_dag_info_) && is_cancel()) { // is_cancel means co dag net failed in the end
-    if (OB_FAIL(MTL(ObDagWarningHistoryManager*)->add_dag_warning_info(*first_fail_dag_info_))) {
+    if (OB_ISNULL(first_fail_dag_info_->info_param_)) { // maybe caused by 4013
+      COMMON_LOG(INFO, "info param is null", K_(first_fail_dag_info));
+    } else if (OB_FAIL(MTL(ObDagWarningHistoryManager*)->add_dag_warning_info(*first_fail_dag_info_))) {
       COMMON_LOG(WARN, "failed to add dag warning info", K(ret), KPC(this), KPC_(first_fail_dag_info));
     } else if (OB_NOT_NULL(dag_net)) {
       if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(
