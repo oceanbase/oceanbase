@@ -492,7 +492,6 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           LOG_WARN("failed to resolve inner call", K(parse_tree), K(ret));
         } else {
           func.set_is_all_sql_stmt(false);
-          func.set_external_state();
         }
       }
         break;
@@ -10326,6 +10325,7 @@ int ObPLResolver::resolve_inner_call(
         }
       } else if (access_idxs.at(idx_cnt - 1).is_procedure()) {
         ObPLCallStmt *call_stmt = NULL;
+        func.set_external_state();
         if (OB_FAIL(stmt_factory_.allocate(PL_CALL, current_block_, stmt))) {
           LOG_WARN("failed to alloc stmt", K(ret));
         } else if (OB_ISNULL(call_stmt = static_cast<ObPLCallStmt *>(stmt))) {

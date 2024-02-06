@@ -4630,7 +4630,6 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   }
   if (OB_SUCC(ret)) {
     OX (params_.is_resolve_table_function_expr_ = true);
-    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
     OZ (resolve_sql_expr(*(parse_tree.children_[0]), function_table_expr));
     OX (params_.is_resolve_table_function_expr_ = false);
     CK (OB_NOT_NULL(function_table_expr));
@@ -11141,6 +11140,7 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
                                               stmt_->get_query_ctx()->udf_has_select_stmt_));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf_expr->is_parallel_enable());
       if (OB_SUCC(ret) &&
+          T_FIELD_LIST_SCOPE == current_scope_ &&
           udf_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
            pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
@@ -11151,7 +11151,9 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
   } else if (T_FUN_PL_OBJECT_CONSTRUCT == expr->get_expr_type()) {
     ObObjectConstructRawExpr *object_expr = static_cast<ObObjectConstructRawExpr*>(expr);
     CK (OB_NOT_NULL(object_expr));
-    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+    if (T_FIELD_LIST_SCOPE == current_scope_) {
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+    }
     if (OB_SUCC(ret) && object_expr->need_add_dependency()) {
       uint64_t dep_obj_id = view_ref_id_;
       ObSchemaObjVersion coll_schema_version;
@@ -11162,7 +11164,9 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
   } else if (T_FUN_PL_COLLECTION_CONSTRUCT == expr->get_expr_type()) {
     ObCollectionConstructRawExpr *coll_expr = static_cast<ObCollectionConstructRawExpr*>(expr);
     CK (OB_NOT_NULL(coll_expr));
-    OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+    if (T_FIELD_LIST_SCOPE == current_scope_) {
+      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
+    }
     if (OB_SUCC(ret) && coll_expr->need_add_dependency()) {
       uint64_t dep_obj_id = view_ref_id_;
       ObSchemaObjVersion coll_schema_version;
