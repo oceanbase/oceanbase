@@ -2457,10 +2457,10 @@ OB_INLINE char* ob_get_tname()
   return tname;
 }
 
-OB_INLINE const char*& ob_get_origin_thread_name()
+OB_INLINE char* ob_get_origin_thread_name()
 {
-  thread_local const char* tname = nullptr;
-  return tname;
+  thread_local char ori_tname[oceanbase::OB_THREAD_NAME_BUF_LEN] = {0};
+  return ori_tname;
 }
 
 static const char* PARALLEL_DDL_THREAD_NAME = "DDLPQueueTh";
