@@ -40,9 +40,8 @@ int ObFastColumnConvExpr::assign(const ObFastExprOperator& other)
   } else {
     const ObFastColumnConvExpr& other_conv = static_cast<const ObFastColumnConvExpr&>(other);
     column_type_ = other_conv.column_type_;
-    if (OB_FAIL(value_item_.deep_copy(alloc_, other_conv.value_item_))) {
-      LOG_WARN("fail to deep copy value item", K(ret));
-    } else if (OB_FAIL(ob_write_string(alloc_, other_conv.column_info_, column_info_))) {
+    value_item_ = other_conv.value_item_;
+    if (OB_FAIL(ob_write_string(alloc_, other_conv.column_info_, column_info_))) {
       LOG_WARN("fail to set column info", K(ret));
     }
   }

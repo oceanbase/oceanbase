@@ -208,7 +208,6 @@ private:
   int clean_discard_log_archive_status_();
 
   bool is_force_cancel_() const;
-  bool is_rs_in_backup_zone() const;
 
 private:
   bool is_inited_;

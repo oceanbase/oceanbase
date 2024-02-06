@@ -1996,23 +1996,18 @@ int ObTableLocation::calculate_partition_ids(ObExecContext& exec_ctx, common::Ob
     // As in transaction and engine, partition_ids' count should not be 0,
     // fill fake id.
     if (OB_SUCCESS == ret && 0 == partition_ids.count()) {
-      if (report_err_for_pruned_partition_not_exist_) {
-        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
-        LOG_WARN("no partition for insert or replace", K(ret));
-      } else {
-        int64_t fake_id = first_partition_id_;
-        if (part_hint_ids_.count() > 0) {
-          fake_id = part_hint_ids_.at(0);
+      int64_t fake_id = first_partition_id_;
+      if (part_hint_ids_.count() > 0) {
+        fake_id = part_hint_ids_.at(0);
+      }
+      if (is_partitioned_ && is_virtual_table(ref_table_id_)) {
+        if (OB_FAIL(get_vt_partition_id(exec_ctx, ref_table_id_, NULL, &fake_id))) {
+          LOG_WARN("Get virtual table fake id error", K(ret));
         }
-        if (is_partitioned_ && is_virtual_table(ref_table_id_)) {
-          if (OB_FAIL(get_vt_partition_id(exec_ctx, ref_table_id_, NULL, &fake_id))) {
-            LOG_WARN("Get virtual table fake id error", K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(partition_ids.push_back(fake_id))) {
-            LOG_WARN("Add fake partition id error", K(ret));
-          }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(partition_ids.push_back(fake_id))) {
+          LOG_WARN("Add fake partition id error", K(ret));
         }
       }
     }

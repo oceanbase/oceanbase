@@ -220,8 +220,6 @@ public:
   int get_dblink_user(const uint64_t tenant_id, const common::ObString& dblink_name, common::ObString& dblink_user,
       common::ObIAllocator& allocator);
 
-  int remove_tmp_cte_schemas(const ObString &cte_table_name);
-
 private:
   int get_table_schema_inner(uint64_t table_id, const share::schema::ObTableSchema*& table_schema) const;
   int get_column_schema_inner(uint64_t table_id, const common::ObString& column_name,

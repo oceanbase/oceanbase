@@ -318,8 +318,6 @@ int ObOptimizer::check_pdml_supported_feature(const ObDMLStmt& stmt, const ObSQL
     is_use_pdml = false;
   } else if (stmt::T_INSERT == stmt.get_stmt_type() && static_cast<const ObInsertStmt&>(stmt).get_insert_up()) {
     is_use_pdml = false;
-  } else if (pdml_stmt.is_ignore()) {
-    is_use_pdml = false;
   } else if (OB_FAIL(schema_guard->get_table_schema(
                  pdml_stmt.get_all_table_columns().at(0).index_dml_infos_.at(0).index_tid_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));

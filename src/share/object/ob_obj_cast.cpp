@@ -6409,11 +6409,10 @@ static int json_datetime(const ObObjType expect_type, ObObjCastParams &params,
     int64_t value;
     ObString j_bin_str = in.get_string();
     ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
-    ObTimeConvertCtx cvrt_ctx(params.dtc_params_.tz_info_, ObTimestampType == expect_type);
     ObIJsonBase *j_base = &j_bin;
     if (OB_FAIL(j_bin.reset_iter())) {
       LOG_WARN("failed to reset json bin iter", K(ret), K(j_bin_str));
-    } else if (CAST_FAIL(j_base->to_datetime(value, &cvrt_ctx))) {
+    } else if (CAST_FAIL(j_base->to_datetime(value))) {
       LOG_WARN("fail to cast json to other type", K(ret), K(j_bin_str), K(expect_type));
       ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
       LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);

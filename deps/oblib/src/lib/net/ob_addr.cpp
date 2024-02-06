@@ -487,7 +487,7 @@ uint64_t ObAddr::get_ipv6_low() const
 void ObAddr::set_max()
 {
   port_ = UINT32_MAX;
-  memset(&ip_, 0xff, sizeof(ip_));
+  memset(&ip_, 1, sizeof(ip_));
 }
 
 void ObAddr::set_port(int32_t port)

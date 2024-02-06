@@ -2557,7 +2557,6 @@ int ObSelectResolver::resolve_with_clause_subquery(const ParseNode& parse_tree, 
       search_node, cycle_node, table_item, search_pseudo_column_name, cycle_pseudo_column_name));
   current_recursive_cte_table_item_ = NULL;
   current_cte_involed_stmt_ = NULL;
-  OZ(schema_checker_->remove_tmp_cte_schemas(select_resolver.cte_ctx_.get_current_cte_table_name()));
   return ret;
 }
 

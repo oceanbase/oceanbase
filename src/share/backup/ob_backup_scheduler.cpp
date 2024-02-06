@@ -775,9 +775,6 @@ int ObBackupScheduler::check_tenant_can_backup(
     LOG_WARN("failed to get tenant schema guard", K(ret), K(backup_schema_version));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(tenant_schema)) {
-    can_backup = false;
-    FLOG_INFO("tenant can no join in backup, skip backup", K(tenant_id));
   } else if (tenant_schema->is_dropping() || tenant_schema->is_restore()) {
     can_backup = false;
     FLOG_INFO("tenant can no join in backup, skip backup", K(*tenant_schema));

@@ -283,7 +283,7 @@ public:
   int to_uint(uint64_t &value, bool fail_on_negative = false, bool check_range = false) const;
   int to_double(double &value) const;
   int to_number(ObIAllocator *allocator, number::ObNumber &number) const;
-  int to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t = nullptr) const;
+  int to_datetime(int64_t &value) const;
   int to_date(int32_t &value) const;
   int to_time(int64_t &value) const;
   int to_bit(uint64_t &value) const;

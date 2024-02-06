@@ -12,19 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include <gtest/gtest.h>
-#include <thread>
-#include <vector>
-#include <gtest/gtest.h>
-
-#define private public
-
 #include "sql/engine/sort/ob_sort.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_physical_plan.h"
 #include "lib/utility/ob_test_util.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/container/ob_se_array.h"
+#include <gtest/gtest.h>
 #include "ob_fake_table.h"
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_worker.h"
@@ -33,6 +27,10 @@
 #include "storage/blocksstable/ob_tmp_file.h"
 #include "sql/engine/join/join_data_generator.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+
+#include <thread>
+#include <vector>
+#include <gtest/gtest.h>
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -79,7 +77,6 @@ public:
   virtual void TearDown() override
   {
     blocksstable::ObTmpFileManager::get_instance().destroy();
-    ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
     blocksstable::TestDataFilePrepare::TearDown();
     destroy_tenant_mgr();
   }

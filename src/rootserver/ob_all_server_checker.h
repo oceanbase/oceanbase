@@ -26,35 +26,24 @@ namespace sqlclient {
 class ObMySQLResult;
 }
 }  // namespace common
-namespace obrpc {
-class ObSrvRpcProxy;
-}
-namespace share {
-class ObPartitionTableOperator;
-}
+
 namespace rootserver {
 class ObServerManager;
-class ObRebalanceTaskMgr;
 class ObAllServerChecker {
 public:
   ObAllServerChecker();
   virtual ~ObAllServerChecker();
-  int init(ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_task_manager, obrpc::ObSrvRpcProxy& rpc_proxy,
-      share::ObPartitionTableOperator* pt_operator, const common::ObAddr& rs_addr);
+  int init(ObServerManager& server_manager, const common::ObAddr& rs_addr);
 
   int check_all_server();
 
 private:
   int check_status_same(const share::ObServerStatus& left, const share::ObServerStatus& right, bool& same) const;
-  int try_renew_rs_list(const common::ObIArray<common::ObAddr>& inactive_servers);
 
 private:
   bool inited_;
   ObServerManager* server_manager_;
-  ObRebalanceTaskMgr* rebalance_task_mgr_;
   common::ObAddr rs_addr_;
-  obrpc::ObSrvRpcProxy* rpc_proxy_;
-  share::ObPartitionTableOperator* pt_operator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllServerChecker);

@@ -384,8 +384,6 @@ int ObLogArchiveScheduler::init_new_sys_info_(
 
       sys_info.status_.start_piece_id_ = sys_info.status_.backup_piece_id_;
     } else {
-      // Note here, when piece is close, set the start_piece_id_ to 0, but keep the backup_piece_id_ with the max used
-      // piece id.
       sys_info.status_.start_piece_id_ = 0;
     }
 
@@ -1121,11 +1119,6 @@ int ObLogArchiveScheduler::do_schedule_(share::ObLogArchiveStatus::STATUS &last_
   } else if (FALSE_IT(last_log_archive_status = sys_info.status_.status_)) {
   } else if (ObLogArchiveStatus::STOP == sys_info.status_.status_) {
     LOG_INFO("log archive status is stop, do nothing");
-  } else if (!is_rs_in_backup_zone()) {
-    ret = OB_BACKUP_IO_PROHIBITED;
-    if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {  // 60s
-      LOG_ERROR("rs is not in backup zone, cannot do schedule", K(ret));
-    }
   } else if (inner_table_version_ >= OB_BACKUP_INNER_TABLE_V2 &&
              OB_FAIL(info_mgr.get_non_frozen_backup_piece(
                  *sql_proxy_, false /*for_update*/, sys_info, sys_non_frozen_piece))) {
@@ -2433,10 +2426,6 @@ int ObLogArchiveScheduler::do_stop_log_archive_backup_v2_(const bool force_stop,
     if (OB_FAIL(do_stop_sys_log_archive_backup_v2_(
             force_stop, cur_sys_info, sys_non_frozen_piece.cur_piece_info_.key_, max_ts))) {
       LOG_WARN("failed to do_stop_sys_log_archive_backup_v2_ for sys", K(ret));
-    } else {
-      FLOG_INFO("[LOG_ARCHIVE] succeed to commit update log archive stop", K(cur_sys_info));
-      ROOTSERVICE_EVENT_ADD(
-          "log_archive", "change_status", "new_status", "STOP", "round_id", cur_sys_info.status_.round_);
     }
   }
 
@@ -3520,9 +3509,4 @@ int ObLogArchiveScheduler::force_cancel(const uint64_t tenant_id)
   FLOG_WARN("force_cancel archive", K(ret));
 
   return ret;
-}
-
-bool ObLogArchiveScheduler::is_rs_in_backup_zone() const
-{
-  return !common::ObStorageGlobalIns::get_instance().is_io_prohibited();
 }

@@ -1800,20 +1800,5 @@ bool ObSchemaChecker::is_ora_priv_check()
     return false;
 }
 
-int ObSchemaChecker::remove_tmp_cte_schemas(const ObString &cte_table_name)
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < tmp_cte_schemas_.count(); i++) {
-    if (cte_table_name == tmp_cte_schemas_.at(i)->get_table_name()) {
-      if (OB_FAIL(tmp_cte_schemas_.remove(i))) {
-        LOG_WARN("remove from tmp_cte_schemas_ failed.", K(ret));
-      } else {
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
 }  // end of namespace sql
 }  // end of namespace oceanbase

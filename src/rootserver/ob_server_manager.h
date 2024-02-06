@@ -46,6 +46,7 @@ public:
   virtual int on_server_status_change(const common::ObAddr& server) = 0;
   virtual int on_start_server(const common::ObAddr& server) = 0;
   virtual int on_stop_server(const common::ObAddr& server) = 0;
+  virtual int on_offline_server(const common::ObAddr& server) = 0;
 };
 class ObIServerChangeCallback {
 public:

@@ -13,9 +13,6 @@
 #define USING_LOG_PREFIX SQL
 
 #include <gtest/gtest.h>
-
-#define private public
-
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
@@ -126,7 +123,6 @@ public:
     rs_.~ObChunkDatumStore();
 
     blocksstable::ObTmpFileManager::get_instance().destroy();
-    ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
     blocksstable::TestDataFilePrepare::TearDown();
     ObTenantManager::get_instance().destroy();
     LOG_WARN("TearDown finished", K_(rs));

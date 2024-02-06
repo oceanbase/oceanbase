@@ -15,39 +15,30 @@
 #include "ob_all_server_checker.h"
 
 #include "share/config/ob_server_config.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/ob_rpc_struct.h"
 #include "rootserver/ob_server_manager.h"
-#include "rootserver/ob_all_server_task.h"
-#include "rootserver/ob_update_rs_list_task.h"
 
 namespace oceanbase {
 using namespace common;
 using namespace share;
 namespace rootserver {
-ObAllServerChecker::ObAllServerChecker()
-    : inited_(false), server_manager_(NULL), rebalance_task_mgr_(NULL), rs_addr_(), rpc_proxy_(NULL), pt_operator_(NULL)
+ObAllServerChecker::ObAllServerChecker() : inited_(false), server_manager_(NULL), rs_addr_()
 {}
 
 ObAllServerChecker::~ObAllServerChecker()
 {}
 
-int ObAllServerChecker::init(ObServerManager& server_manager, ObRebalanceTaskMgr& rebalance_task_mgr,
-    obrpc::ObSrvRpcProxy& rpc_proxy, share::ObPartitionTableOperator* pt_operator, const ObAddr& rs_addr)
+int ObAllServerChecker::init(ObServerManager& server_manager, const ObAddr& rs_addr)
 {
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObAllServerChecker has already inited", K(ret));
-  } else if (!rs_addr.is_valid() || OB_ISNULL(pt_operator)) {
+  } else if (!rs_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(rs_addr), K(ret), KP(pt_operator));
+    LOG_WARN("invalid rs_addr", K(rs_addr), K(ret));
   } else {
     server_manager_ = &server_manager;
-    rebalance_task_mgr_ = &rebalance_task_mgr;
-    rpc_proxy_ = &rpc_proxy;
     rs_addr_ = rs_addr;
-    pt_operator_ = pt_operator;
     inited_ = true;
   }
   return ret;
@@ -56,17 +47,9 @@ int ObAllServerChecker::init(ObServerManager& server_manager, ObRebalanceTaskMgr
 int ObAllServerChecker::check_all_server()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ObCurTraceId::get_trace_id())) {
-    // Prevent the current trace_id from being overwritten
-    ObCurTraceId::init(GCONF.self_addr_);
-  }
-
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("all server checker is not inited", K(ret));
-  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(server_manager_) || OB_ISNULL(rebalance_task_mgr_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected", KR(ret), KP(rpc_proxy_), KP(server_manager_), KP(rebalance_task_mgr_));
   } else {
     if (!server_manager_->has_build()) {
       ret = OB_EAGAIN;
@@ -80,60 +63,42 @@ int ObAllServerChecker::check_all_server()
       } else if (OB_FAIL(server_manager_->get_persist_server_statuses(persist_statuses))) {
         LOG_WARN("read server statuses form all server table failed", K(ret));
       } else {
-        bool server_status_need_change = false;
-        int tmp_ret = OB_SUCCESS;
-        ObArray<ObAddr> inactive_server_list;
+        ObIStatusChangeCallback& cb = server_manager_->get_status_change_callback();
         for (int64_t i = 0; i < inmem_statuses.count(); ++i) {
           int64_t j = 0;
-          const ObServerStatus &in_memory_server_status = inmem_statuses[i];
-          const ObAddr &server = in_memory_server_status.server_;
-          server_status_need_change = false;
           for (j = 0; j < persist_statuses.count(); ++j) {
-            if (server == persist_statuses[j].server_) {
+            if (inmem_statuses[i].server_ == persist_statuses[j].server_) {
               break;
             }
           }
           if (j < persist_statuses.count()) {
             // find in persist_statuses
             bool same = false;
-            if (OB_FAIL(check_status_same(in_memory_server_status, persist_statuses[j], same))) {
+            if (OB_FAIL(check_status_same(inmem_statuses[i], persist_statuses[j], same))) {
               LOG_WARN("check_status_same failed",
                   "inmem_status",
-                  in_memory_server_status,
+                  inmem_statuses[i],
                   "persist_status",
                   persist_statuses[j],
                   K(ret));
             } else if (!same) {
               LOG_INFO("find server status not same",
                   "inmem_status",
-                  in_memory_server_status,
+                  inmem_statuses[i],
                   "persist_status",
                   persist_statuses[j]);
-              server_status_need_change = true;
+              if (OB_FAIL(cb.on_server_status_change(inmem_statuses[i].server_))) {
+                LOG_WARN("commit task failed", "server status", inmem_statuses[i], K(ret));
+              }
             } else {
               // do nothing
             }
           } else {
             // not find in persist_statues
-            LOG_INFO("find server not exist in all_server table", "inmem_status", in_memory_server_status);
-            server_status_need_change = true;
-          }
-          if (OB_SUCC(ret) && server_status_need_change) {
-            const bool with_rootserver = (server == rs_addr_);
-            ObAllServerTask task(*server_manager_, *rebalance_task_mgr_, server, with_rootserver);
-            if (OB_SUCCESS != (tmp_ret = task.process())) {
-              LOG_WARN("failed to process all server task", KR(tmp_ret), K(server), K(with_rootserver));
+            LOG_INFO("find server not exist in all_server table", "inmem_status", inmem_statuses[i]);
+            if (OB_FAIL(cb.on_server_status_change(inmem_statuses[i].server_))) {
+              LOG_WARN("commit task failed", "server status", inmem_statuses[i], K(ret));
             }
-          }
-          if (OB_SUCC(ret) && !in_memory_server_status.is_alive()) {
-            if (OB_FAIL(inactive_server_list.push_back(server))) {
-              LOG_WARN("failed to push back", KR(ret), K(server));
-            }
-          }
-        }  // end for i
-        if (OB_SUCC(ret) && inactive_server_list.count() > 0) {
-          if (OB_SUCCESS != (tmp_ret = try_renew_rs_list(inactive_server_list))) {
-            LOG_WARN("failed to renew rs list", KR(tmp_ret), K(inactive_server_list));
           }
         }
       }
@@ -161,50 +126,6 @@ int ObAllServerChecker::check_status_same(const ObServerStatus& left, const ObSe
            left.block_migrate_in_time_ == right.block_migrate_in_time_ && left.stop_time_ == right.stop_time_ &&
            left.start_service_time_ == right.start_service_time_ && left.with_rootserver_ == right.with_rootserver_ &&
            left.with_partition_ == right.with_partition_;
-  }
-  return ret;
-}
-
-int ObAllServerChecker::try_renew_rs_list(const common::ObIArray<ObAddr> &inactive_servers)
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("all server checker is not inited", K(ret));
-  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(server_manager_) || OB_ISNULL(rebalance_task_mgr_) ||
-             OB_ISNULL(pt_operator_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN(
-        "error unexpected", KR(ret), KP(rpc_proxy_), KP(server_manager_), KP(rebalance_task_mgr_), KP(pt_operator_));
-  } else if (0 == inactive_servers.count()) {
-  } else if (!server_manager_->has_build()) {
-    ret = OB_EAGAIN;
-    LOG_WARN("server_manager has not build from all server table, try it later", KR(ret));
-  } else {
-    obrpc::ObRsListArg arg;
-    bool rs_list_diff_member_list = false;
-    ObAddrList rs_list;
-    ObAddrList readonly_rs_list;
-    if (OB_FAIL(ObUpdateRsListTask::get_rs_list(
-            *pt_operator_, *server_manager_, rs_addr_, rs_list, readonly_rs_list, rs_list_diff_member_list))) {
-      LOG_WARN("failed to get rs list", KR(ret));
-    } else if (OB_FAIL(arg.init(rs_addr_, rs_list))) {
-      LOG_WARN("failed to init arg", KR(ret), K(rs_addr_), K(rs_list));
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      const int64_t timeout = GCONF.rpc_timeout;
-      LOG_INFO("renew rs list for inactive server", K(inactive_servers), K(arg));
-      for (int64_t i = 0; i < inactive_servers.count(); ++i) {
-        // ignore error of each server
-        if (OB_SUCCESS != (tmp_ret = rpc_proxy_->to(inactive_servers.at(i)).timeout(timeout).broadcast_rs_list(arg))) {
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
-          LOG_WARN(
-              "failed to broadcast rs list", KR(tmp_ret), K(timeout), K(i), "server", inactive_servers.at(i), K(arg));
-        } else {
-          LOG_INFO("success to broadcast rs list", K(i), "server", inactive_servers.at(i), K(arg));
-        }
-      }
-    }
   }
   return ret;
 }

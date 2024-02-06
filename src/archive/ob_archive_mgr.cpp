@@ -612,7 +612,6 @@ void ObArchiveMgr::run1()
 
 void ObArchiveMgr::do_thread_task_()
 {
-  DEBUG_SYNC(BEFORE_ARCHIVE_MGR_THREAD_TASK);
   if (need_check_switch_archive_()) {
     do_check_switch_archive_();
   }
@@ -694,13 +693,11 @@ void ObArchiveMgr::do_check_switch_archive_()
     }
   } else if (need_force_stop) {
     // force stop archive
-    cur_piece_id = backup_info.status_.is_piece_open() ? backup_info.status_.backup_piece_id_ : 0;
-    if (OB_FAIL(archive_round_mgr_.set_archive_force_stop(backup_info.status_.incarnation_,
-                                                          backup_info.status_.round_,
-                                                          cur_piece_id))) {
-      ARCHIVE_LOG(ERROR, "failed to force set log_archive_status STOPPED", K(backup_info), K(cur_piece_id), K(ret));
+    if (OB_FAIL(archive_round_mgr_.set_archive_force_stop(
+            backup_info.status_.incarnation_, backup_info.status_.round_, backup_info.status_.backup_piece_id_))) {
+      ARCHIVE_LOG(ERROR, "failed to force set log_archive_status STOPPED", K(backup_info), K(ret));
     } else {
-      ARCHIVE_LOG(INFO, "force set log_archive_status STOPPED", K(backup_info), K(cur_piece_id));
+      ARCHIVE_LOG(INFO, "force set log_archive_status STOPPED", K(backup_info));
     }
   } else if (need_switch_piece) {
 #ifdef ERRSIM

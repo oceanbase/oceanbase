@@ -83,8 +83,6 @@ private:
   int get_same_classify_exprs(ObIArray<ObRawExpr*>& validity_exprs, ObIArray<ObRawExpr*>& same_classify_exprs,
       ObItemType ctype, ObExprInfoFlag flag);
 
-  int check_select_items_same(const ObDMLStmt *first, const ObDMLStmt *second, ObStmtMapInfo &map_info, bool &is_same);
-
 private:
   ObQueryRefRawExpr* get_exists_query_expr(ObRawExpr* expr);
 

@@ -11,9 +11,6 @@
  */
 
 #include <gtest/gtest.h>
-
-#define private public
-
 #include "sql/ob_sql_init.h"
 #include "sql/engine/aggregate/ob_scalar_aggregate.h"
 #include "sql/engine/aggregate/ob_aggregate_test_utils.h"
@@ -55,7 +52,6 @@ void TestScalarAggregateTest::SetUp()
 void TestScalarAggregateTest::TearDown()
 {
   ObTmpFileManager::get_instance().destroy();
-  ObTmpPageCache::get_instance().allocator_.is_inited_ = false;
   TestDataFilePrepare::TearDown();
 }
 

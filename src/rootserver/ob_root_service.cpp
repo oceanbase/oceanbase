@@ -184,6 +184,21 @@ int ObRootService::ObStatusChangeCallback::on_stop_server(const common::ObAddr& 
   return ret;
 }
 
+int ObRootService::ObStatusChangeCallback::on_offline_server(const common::ObAddr& server)
+{
+  int ret = OB_SUCCESS;
+  if (!root_service_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("root service not inited", K(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(ret), K(server));
+  } else if (OB_FAIL(root_service_.submit_offline_server_task(server))) {
+    LOG_WARN("fail to submit stop server task", K(ret));
+  }
+  return ret;
+}
+
 int ObRootService::ObServerChangeCallback::on_server_change()
 {
   int ret = OB_SUCCESS;
@@ -242,6 +257,61 @@ ObAsyncTask* ObRootService::ObStartStopServerTask::deep_copy(char* buf, const in
     LOG_WARN("buf is not long enough", K(need_size), K(buf_size), K(ret));
   } else {
     task = new (buf) ObStartStopServerTask(root_service_, server_, start_);
+  }
+  return task;
+}
+
+int ObRootService::ObOfflineServerTask::process()
+{
+  int ret = OB_SUCCESS;
+  ObRsListArg arg;
+  ObPartitionInfo partition_info;
+  if (!server_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(server_));
+  } else if (OB_FAIL(root_service_.get_pt_operator().get(combine_id(OB_SYS_TENANT_ID, OB_ALL_CORE_TABLE_TID),
+                 ObIPartitionTable::ALL_CORE_TABLE_PARTITION_ID,
+                 partition_info))) {
+    LOG_WARN("fail to get", KR(ret));
+  } else {
+    arg.master_rs_ = GCONF.self_addr_;
+    FOREACH_CNT_X(replica, partition_info.get_replicas_v2(), OB_SUCCESS == ret)
+    {
+      if (replica->server_ == GCONF.self_addr_ ||
+          (replica->is_in_service() && ObReplicaTypeCheck::is_paxos_replica_V2(replica->replica_type_))) {
+        if (OB_FAIL(arg.rs_list_.push_back(replica->server_))) {
+          LOG_WARN("fail to push back", KR(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(root_service_.get_rpc_proxy().to(server_).broadcast_rs_list(arg))) {
+      LOG_DEBUG("fail to broadcast rs list", KR(ret));
+    } else {
+      LOG_INFO("broadcast rs list success", K(arg), K_(server));
+    }
+  }
+  return ret;
+}
+
+int64_t ObRootService::ObOfflineServerTask::get_deep_copy_size() const
+{
+  return sizeof(*this);
+}
+
+ObAsyncTask* ObRootService::ObOfflineServerTask::deep_copy(char* buf, const int64_t buf_size) const
+{
+  ObAsyncTask* task = NULL;
+  int ret = OB_SUCCESS;
+  const int64_t need_size = get_deep_copy_size();
+  if (NULL == buf) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is null", K(ret));
+  } else if (buf_size < need_size) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is not long enough", K(need_size), K(buf_size), K(ret));
+  } else {
+    task = new (buf) ObOfflineServerTask(root_service_, server_);
   }
   return task;
 }
@@ -788,8 +858,8 @@ int ObRootService::fake_init(ObServerConfig& config, ObConfigManager& config_mgr
       LOG_WARN("init server manager failed", K(ret));
     } else if (OB_FAIL(hb_checker_.init(server_manager_))) {
       LOG_WARN("init heartbeat checker failed", K(ret));
-    } else if (OB_FAIL(server_checker_.init(server_manager_, rebalance_task_mgr_, rpc_proxy_, pt_operator_, self))) {
-      LOG_WARN("init server checker failed", K(self), K(ret), KP(pt_operator_));
+    } else if (OB_FAIL(server_checker_.init(server_manager_, self))) {
+      LOG_WARN("init server checker failed", K(self), K(ret));
     }
   }
 
@@ -990,8 +1060,8 @@ int ObRootService::init(ObServerConfig& config, ObConfigManager& config_mgr, ObS
       LOG_WARN("init server manager failed", K(ret));
     } else if (OB_FAIL(hb_checker_.init(server_manager_))) {
       LOG_WARN("init heartbeat checker failed", K(ret));
-    } else if (OB_FAIL(server_checker_.init(server_manager_, rebalance_task_mgr_, rpc_proxy_, pt_operator_, self))) {
-      LOG_WARN("init server checker failed", K(self), K(ret), KP(pt_operator_));
+    } else if (OB_FAIL(server_checker_.init(server_manager_, self))) {
+      LOG_WARN("init server checker failed", K(self), K(ret));
     }
   }
   // init freeze info manager
@@ -2069,6 +2139,24 @@ int ObRootService::submit_stop_server_task(const common::ObAddr& server)
   } else {
     const bool start = false;
     ObStartStopServerTask task(*this, server, start);
+    if (OB_FAIL(task_queue_.add_async_task(task))) {
+      LOG_WARN("inner queue push task failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::submit_offline_server_task(const common::ObAddr& server)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!server.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server", K(ret), K(server));
+  } else {
+    ObOfflineServerTask task(*this, server);
     if (OB_FAIL(task_queue_.add_async_task(task))) {
       LOG_WARN("inner queue push task failed", K(ret));
     }

@@ -314,7 +314,6 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(
   ObSqlBitSet<> removed_items;
   int64_t remove_index = -1;
   is_happened = false;
-  bool is_select_same = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret));
@@ -340,11 +339,6 @@ int ObTransformSubqueryCoalesce::coalesce_same_any_all_exprs(
           LOG_WARN("failed to check stmt containment", K(ret));
         } else if (!map_info.is_select_item_equal_) {
           // stmts have different select items, can not coalesce
-        } else if (OB_FAIL(check_select_items_same(
-                       first_query_ref->get_ref_stmt(), second_query_ref->get_ref_stmt(), map_info, is_select_same))) {
-          LOG_WARN("check select items failed", K(ret));
-        } else if (!is_select_same) {
-          // The order of select items in two stmts is different, can not coalesce
         } else if (relation == QueryRelation::LEFT_SUBSET || relation == QueryRelation::EQUAL) {
           remove_index = (type == T_ANY ? j : i);
         } else if (relation == QueryRelation::RIGHT_SUBSET) {
@@ -569,7 +563,6 @@ int ObTransformSubqueryCoalesce::compare_any_all_subqueries(TransformParam& para
   ObQueryRefRawExpr* first_query_ref = get_any_all_query_expr(param.any_expr_);
   ObRawExpr* second_left_expr = get_any_all_left_hand_expr(param.all_expr_);
   ObQueryRefRawExpr* second_query_ref = get_any_all_query_expr(param.all_expr_);
-  bool is_select_same = false;
   if (OB_ISNULL(first_left_expr) || OB_ISNULL(first_query_ref) || OB_ISNULL(second_left_expr) ||
       OB_ISNULL(second_query_ref)) {
     ret = OB_ERR_UNEXPECTED;
@@ -579,13 +572,6 @@ int ObTransformSubqueryCoalesce::compare_any_all_subqueries(TransformParam& para
   } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(
                  second_query_ref->get_ref_stmt(), first_query_ref->get_ref_stmt(), param.map_info_, relation))) {
     LOG_WARN("failed to check stmt containment", K(ret));
-  } else if (!param.map_info_.is_select_item_equal_) {
-    // stmts have different select items, can not coalesce
-  } else if (OB_FAIL(check_select_items_same(
-                 first_query_ref->get_ref_stmt(), second_query_ref->get_ref_stmt(), param.map_info_, is_select_same))) {
-    LOG_WARN("check select items failed", K(ret));
-  } else if (!is_select_same) {
-    // The order of select items in two stmts is different, can not coalesce
   } else if (relation == QueryRelation::RIGHT_SUBSET || relation == QueryRelation::EQUAL) {
     has_false_conds = true;
     trans_params.reset();
@@ -1053,39 +1039,6 @@ int ObTransformSubqueryCoalesce::make_false(ObIArray<ObRawExpr*>& conds)
     LOG_WARN("failed to build const bool expr", K(ret));
   } else if (OB_FAIL(conds.push_back(false_expr))) {
     LOG_WARN("failed to push back false expr", K(ret));
-  }
-  return ret;
-}
-
-int ObTransformSubqueryCoalesce::check_select_items_same(
-    const ObDMLStmt *first, const ObDMLStmt *second, ObStmtMapInfo &map_info, bool &is_same)
-{
-  int ret = OB_SUCCESS;
-  is_same = true;
-  if (OB_ISNULL(first) || OB_ISNULL(second)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(first), KP(second));
-  } else if (first->is_select_stmt() && second->is_select_stmt()) {
-    const ObSelectStmt *first_sel = static_cast<const ObSelectStmt *>(first);
-    const ObSelectStmt *second_sel = static_cast<const ObSelectStmt *>(second);
-    ObStmtCompareContext context;
-    if (OB_FAIL(context.init(first, second, map_info.table_map_))) {
-      LOG_WARN("failed to set table map", K(ret));
-    } else if (first_sel->get_select_item_size() != second_sel->get_select_item_size()) {
-      is_same = false;
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && is_same && i < first_sel->get_select_item_size(); ++i) {
-      ObRawExpr *first_expr = first_sel->get_select_item(i).expr_;
-      ObRawExpr *second_expr = second_sel->get_select_item(i).expr_;
-      if (OB_ISNULL(first_expr) || OB_ISNULL(second_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), KP(first_expr), KP(second_expr));
-      } else if (!first_expr->same_as(*second_expr, &context)) {
-        is_same = false;
-      }
-    }
-  } else {
-    // do nothing
   }
   return ret;
 }

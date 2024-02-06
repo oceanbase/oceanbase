@@ -188,7 +188,6 @@ public:
   int assign(const common::ObObj& obj);
   int assign(ObExprOperator* op);
   int assign(ObItemType item_type);
-  int deep_copy(common::ObIAllocator &alloc, const ObPostExprItem &other);
   int set_column(int64_t index);
   // getters
   inline ObItemType get_item_type() const

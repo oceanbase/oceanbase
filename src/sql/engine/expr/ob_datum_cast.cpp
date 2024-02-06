@@ -4985,25 +4985,21 @@ CAST_FUNC_NAME(json, datetime)
 {
   EVAL_STRING_ARG()
   {
-    GET_SESSION()
-    {
-      int warning = OB_SUCCESS;
-      int64_t out_val;
-      ObObjType out_type = expr.datum_meta_.type_;
-      ObString j_text = child_res->get_string();
-      ObJsonBin j_bin(j_text.ptr(), j_text.length());
-      ObIJsonBase *j_base = &j_bin;
-      ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
+    int warning = OB_SUCCESS;
+    int64_t out_val;
+    ObObjType out_type = expr.datum_meta_.type_;
+    ObString j_text = child_res->get_string();
+    ObJsonBin j_bin(j_text.ptr(), j_text.length());
+    ObIJsonBase *j_base = &j_bin;
 
-      if (OB_FAIL(j_bin.reset_iter())) {
-        LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
-      } else if (CAST_FAIL(j_base->to_datetime(out_val, &cvrt_ctx))) {
-        LOG_WARN("fail to cast json to datetime type", K(ret), K(j_text));
-        ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
-        LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
-      } else {
-        SET_RES_DATETIME(out_val);
-      }
+    if (OB_FAIL(j_bin.reset_iter())) {
+      LOG_WARN("failed to reset json bin iter", K(ret), K(j_text));
+    } else if (CAST_FAIL(j_base->to_datetime(out_val))) {
+      LOG_WARN("fail to cast json to datetime type", K(ret), K(j_text));
+      ret = OB_ERR_INVALID_JSON_VALUE_FOR_CAST;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_VALUE_FOR_CAST);
+    } else {
+      SET_RES_DATETIME(out_val);
     }
   }
   return ret;

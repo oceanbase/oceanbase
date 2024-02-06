@@ -456,13 +456,7 @@ int ObArchiveSender::do_statisfy_converge_strategy_(const ObPGKey& pg_key, const
                    log_id,
                    log_submit_ts,
                    checkpoint_ts))) {
-      if (OB_LOG_ARCHIVE_LEADER_CHANGED == ret) {
-        ret = OB_SUCCESS;
-        can_send = true;
-        ARCHIVE_LOG(WARN, "pg leader changed and stale tasks exist, just skip it", K(pg_key));
-      } else {
-        ARCHIVE_LOG(WARN, "get max archived info fail", KR(ret), K(pg_key));
-      }
+      ARCHIVE_LOG(WARN, "get max archived info fail", KR(ret), K(pg_key));
     } else if (ObTimeUtility::current_time() - checkpoint_ts >= max_delay_time) {
       can_send = true;
       ARCHIVE_LOG(TRACE, "can send due to pg checkpoint ts delay reach limit", K(pg_key));

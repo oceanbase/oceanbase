@@ -49,7 +49,6 @@
 #include "sql/executor/ob_task_id.h"
 #include "sql/parser/ob_item_type.h"                           // ObCacheType
 #include "share/partition_table/ob_partition_location_task.h"  // ObPartitionBroadcastTask
-#include "share/ob_root_addr_agent.h"                          //ObIAddrList
 
 namespace oceanbase {
 namespace rootserver {
@@ -8110,14 +8109,6 @@ public:
   {
     return rs_list_.count() > 0 && master_rs_.is_valid();
   }
-  int init(const common::ObAddr &master_rs, const share::ObIAddrList &rs_list);
-  void reset()
-  {
-    rs_list_.reset();
-    master_rs_.reset();
-  }
-  int assign(const ObRsListArg &that);
-
   TO_STRING_KV(K_(rs_list), K_(master_rs));
   ObServerList rs_list_;
   common::ObAddr master_rs_;

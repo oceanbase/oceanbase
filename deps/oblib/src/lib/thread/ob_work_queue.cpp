@@ -19,7 +19,7 @@ void ObAsyncTimerTask::runTimerTask()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(work_queue_.add_async_task(*this))) {
-    LOG_ERROR("failed to submit async task", K(ret), KPC(this));
+    LOG_ERROR("failed to submit async task", K(ret));
   } else {
     LOG_INFO("add async task", KPC(this));
   }

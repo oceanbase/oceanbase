@@ -1242,9 +1242,6 @@ int ObRootBackup::do_extern_backup_tenant_locality_infos(const ObBaseBackupInfoS
     LOG_WARN("failed to get tenant schema guard", K(ret), K(info));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_info))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id), K(info));
-  } else if (OB_ISNULL(tenant_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant schema info should not be NULL", K(ret), K(tenant_id));
   } else if (OB_FAIL(extern_tenant_locality_info_mgr.init(tenant_id,
                  full_backup_set_id,
                  inc_backup_set_id,
@@ -1315,9 +1312,6 @@ int ObRootBackup::do_extern_tenant_infos(
         LOG_WARN("failed to get tenant schema guard", K(ret), K(info));
       } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
         LOG_WARN("failed to get tenant schema info", K(ret), K(tenant_id), K(info));
-      } else if (OB_ISNULL(tenant_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tenant schema should not be NULL", K(ret), K(tenant_id), K(info));
       } else if (OB_FAIL(tenant_info.tenant_name_.assign(tenant_schema->get_tenant_name()))) {
         LOG_WARN("failed to assign tenant name", K(ret), K(tenant_info), K(info));
       } else {
@@ -2491,7 +2485,6 @@ int ObRootBackup::insert_tenant_backup_task_failed(ObMySQLTransaction &trans, co
     tenant_backup_task.passwd_ = info.passwd_;
     tenant_backup_task.result_ = OB_CANCELED;
     tenant_backup_task.date_ = backup_date;
-    tenant_backup_task.compatible_ = OB_BACKUP_CURRENT_COMPAITBLE_VERSION;
     if (OB_FAIL(tenant_task_updater.init(trans))) {
       LOG_WARN("failed to init tenant backup task updater", K(ret), K(info));
     } else if (OB_FAIL(tenant_task_updater.insert_tenant_backup_task(tenant_backup_task))) {
@@ -2586,9 +2579,6 @@ int ObRootBackup::check_tenant_can_backup(const uint64_t tenant_id, ObSchemaGett
     LOG_WARN("check tenant can backup get invalid argument", K(ret), K(tenant_id));
   } else if (OB_FAIL(guard.get_tenant_info(tenant_id, tenant_schema))) {
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(tenant_schema)) {
-    can_backup = false;
-    LOG_WARN("tenant schema not exist, cannot backup", K(tenant_id));
   } else if (tenant_schema->is_restore()) {
     can_backup = false;
     LOG_WARN("tenant is doing restore", K(tenant_id));

@@ -3882,30 +3882,7 @@ int ObDDLOperator::force_drop_table_and_partitions(const uint64_t table_id,
       }
     }
   } else {  // !is_only_delete_part
-    if (!orig_table_schema->is_dropped_schema()) {
-      // force drop unavaliable index when tenant is in physical restore.
-      if (!orig_table_schema->is_index_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN(
-            "force drop schema when table is not index and is normal not supported", KR(ret), KPC(orig_table_schema));
-      } else {
-        HEAP_VAR(ObTableSchema, mock_data_table_schema)
-        {
-          const ObTableSchema &index_schema = *orig_table_schema;
-          if (OB_FAIL(drop_inner_generated_index_column(trans, schema_guard, index_schema, mock_data_table_schema))) {
-            LOG_WARN("fail to drop inner generated index column in data table", KR(ret), K(index_schema));
-          } else if (OB_FAIL(drop_table_for_not_dropped_schema(index_schema,
-                         trans,
-                         NULL /*ddl_stmt_str*/,
-                         false /*is_truncate_table*/,
-                         NULL /*drop_table_set*/,
-                         false /*is_drop_db*/,
-                         true /*force_drop*/))) {
-            LOG_WARN("fail to drop table", KR(ret), K(index_schema));
-          }
-        }  // end HEAP_VAR
-      }
-    } else if (OB_FAIL(drop_table_for_inspection(*orig_table_schema, trans))) {
+    if (OB_FAIL(drop_table_for_inspection(*orig_table_schema, trans))) {
       LOG_WARN("failed to drop table for inspection", K(ret));
     }
   }
@@ -5466,13 +5443,9 @@ int ObDDLOperator::drop_table(const ObTableSchema& table_schema, ObMySQLTransact
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!table_schema.is_dropped_schema() && OB_FAIL(drop_table_for_not_dropped_schema(table_schema,
-                                                      trans,
-                                                      ddl_stmt_str,
-                                                      is_truncate_table,
-                                                      drop_table_set,
-                                                      is_drop_db,
-                                                      false /*force_drop*/))) {
+  } else if (!table_schema.is_dropped_schema() &&
+             OB_FAIL(drop_table_for_not_dropped_schema(
+                 table_schema, trans, ddl_stmt_str, is_truncate_table, drop_table_set, is_drop_db))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
   }
 
@@ -5481,9 +5454,8 @@ int ObDDLOperator::drop_table(const ObTableSchema& table_schema, ObMySQLTransact
 
 // This function is specifically used to deal with tables that have not been deleted delayed
 int ObDDLOperator::drop_table_for_not_dropped_schema(const ObTableSchema& table_schema, ObMySQLTransaction& trans,
-    const ObString* ddl_stmt_str, const bool is_truncate_table,
-    DropTableIdHashSet* drop_table_set, const bool is_drop_db,
-    const bool force_drop)
+    const ObString* ddl_stmt_str /*=NULL*/, const bool is_truncate_table /*false*/,
+    DropTableIdHashSet* drop_table_set /*=NULL*/, const bool is_drop_db /*false*/)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
@@ -5497,7 +5469,7 @@ int ObDDLOperator::drop_table_for_not_dropped_schema(const ObTableSchema& table_
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service_impl must not null", K(ret));
-  } else if (!force_drop && OB_FAIL(check_is_delay_delete(tenant_id, is_delay_delete))) {
+  } else if (OB_FAIL(check_is_delay_delete(tenant_id, is_delay_delete))) {
     LOG_WARN("check is delay delete failed", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
