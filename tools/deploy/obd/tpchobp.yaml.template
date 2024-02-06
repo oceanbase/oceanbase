@@ -1,5 +1,5 @@
 oceanbase-ce:
-  {{%% SERVERS %%}}
+{{%% SERVERS %%}}
   tag: latest
   global:
     memory_limit: "56G"
@@ -21,7 +21,7 @@ oceanbase-ce:
   - src_path: wallet
     target_path: wallet
 obproxy-ce:
-  {{%% OBPORXY_SERVERS %%}}
+{{%% OBPORXY_SERVERS %%}}
   global:
     listen_port: {{%% LISTEN_PORT %%}}
     prometheus_listen_port: {{%% PROMETHEUS_LISTEN_PORT %%}}
