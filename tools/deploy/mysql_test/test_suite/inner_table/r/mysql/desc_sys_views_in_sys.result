@@ -2696,7 +2696,7 @@ FREELISTS	bigint(0)	NO
 FREELIST_GROUPS	bigint(0)	NO			
 LOGGING	varchar(3)	NO			
 BACKED_UP	varchar(1)	NO			
-NUM_ROWS	bigint(21)	NO			
+NUM_ROWS	bigint(20)	NO			
 BLOCKS	bigint(0)	NO			
 EMPTY_BLOCKS	bigint(0)	NO			
 AVG_SPACE	bigint(0)	NO			
