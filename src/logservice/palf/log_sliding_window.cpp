@@ -119,6 +119,7 @@ LogSlidingWindow::LogSlidingWindow()
     is_rebuilding_(false),
     last_rebuild_lsn_(),
     last_record_end_lsn_(PALF_INITIAL_LSN_VAL),
+    push_log_rpc_post_cost_stat_("[PALF STAT PUSH LOG TO FOLLOWERS RPC POST COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     fs_cb_cost_stat_("[PALF STAT FS CB EXCUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US),
     log_life_time_stat_("[PALF STAT LOG LIFE TIME]", PALF_STAT_PRINT_INTERVAL_US),
     accum_slide_log_cnt_(0),
@@ -1018,9 +1019,16 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
               // Using tmp_ret to avoid handling failure because of rpc exception.
               int tmp_ret = OB_SUCCESS;
               // Push log to paxos follower.
+              int64_t rpc_begin_ts = ObTimeUtility::current_time();
               if (OB_SUCCESS != (tmp_ret = try_push_log_to_paxos_follower_(curr_proposal_id,
                       last_submit_log_pid, last_submit_lsn, begin_lsn, log_write_buf))) {
                 PALF_LOG(WARN, "try_push_log_to_paxos_follower_ failed", K(tmp_ret), K_(palf_id), K_(self));
+              }
+              int64_t rpc_post_cost = ObTimeUtility::current_time() - rpc_begin_ts;
+              push_log_rpc_post_cost_stat_.stat(rpc_post_cost);
+              if (rpc_post_cost > 100 * 1000) {
+                PALF_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "push log to followers rpc post cost too much time", K(tmp_ret), K_(palf_id),
+                    K_(self), K(rpc_post_cost), K(tmp_log_id), K(begin_lsn), K(curr_proposal_id), K(log_proposal_id));
               }
               // Push log to children_list.
               if (OB_SUCCESS != (tmp_ret = try_push_log_to_children_(curr_proposal_id,

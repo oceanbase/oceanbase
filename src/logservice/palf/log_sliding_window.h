@@ -591,6 +591,7 @@ private:
   bool is_rebuilding_;
   LSN last_rebuild_lsn_;
   LSN last_record_end_lsn_;
+  ObMiniStat::ObStatItem push_log_rpc_post_cost_stat_;
   ObMiniStat::ObStatItem fs_cb_cost_stat_;
   ObMiniStat::ObStatItem log_life_time_stat_;
   int64_t accum_slide_log_cnt_;
