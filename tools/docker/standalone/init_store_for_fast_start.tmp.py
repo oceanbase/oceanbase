@@ -120,13 +120,22 @@ if __name__ == "__main__":
                             args.tenant_name, args.zone, args.tenant_name))
             create_tenant_end = datetime.datetime.now()
             logging.info('create tenant success: %s ms' % ((create_tenant_end - create_tenant_begin).total_seconds() * 1000))
-            # grant privilege
-            cursor.execute("CREATE USER '%s'@'%%'" % (args.tenant_name))
-            cursor.execute("GRANT ALL ON *.* TO '%s'@'%%'" % (args.tenant_name))
-            logging.info("grant privilege success")
         db.close()
     except mysql.err.Error as e:
         logging.warn("deploy observer failed")
+        kill_server()
+        exit(-1)
+
+    # grant privilege
+    try:
+        db = mysql.connect(host=args.ip, user="root@%s" % (args.tenant_name), port=int(args.mysql_port), passwd="")
+        cursor = db.cursor(cursor=mysql.cursors.DictCursor)
+        logging.info('connect by common tenant success!')
+        cursor.execute("CREATE USER '%s'@'%%'" % (args.tenant_name))
+        cursor.execute("GRANT ALL ON *.* TO '%s'@'%%'" % (args.tenant_name))
+        logging.info("grant privilege success!")
+    except mysql.err.Error as e:
+        logging.warn("grant privilege for common tenant failed")
         kill_server()
         exit(-1)
 
