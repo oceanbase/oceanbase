@@ -30,7 +30,6 @@
 #include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/slog/ob_storage_logger.h"
-#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
 namespace oceanbase
@@ -49,7 +48,6 @@ ObFailureDetector::ObFailureDetector()
       has_add_data_disk_hang_event_(false),
       has_add_clog_full_event_(false),
       has_schema_error_(false),
-      has_add_disk_full_event_(false),
       lock_(common::ObLatchIds::ELECTION_LOCK)
 {
   COORDINATOR_LOG(INFO, "ObFailureDetector constructed");
@@ -128,7 +126,6 @@ void ObFailureDetector::destroy()
   has_add_data_disk_hang_event_ = false;
   has_add_clog_full_event_ = false;
   has_schema_error_ = false;
-  has_add_disk_full_event_ = false;
   COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
 }
 
@@ -169,8 +166,6 @@ void ObFailureDetector::detect_failure()
   detect_palf_disk_full_();
   // schema refreshed check
   detect_schema_not_refreshed_();
-  // data disk full check
-  detect_data_disk_full_();
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)
@@ -472,53 +467,6 @@ void ObFailureDetector::detect_schema_not_refreshed_()
     } else {
       ATOMIC_SET(&has_schema_error_, false);
       COORDINATOR_LOG(INFO, "schema is refreshed, remove failure event", KR(ret), K(schema_not_refreshed));
-    }
-  }
-}
-
-void ObFailureDetector::detect_data_disk_full_()
-{
-  LC_TIME_GUARD(1_s);
-  int ret = OB_SUCCESS;
-  const int64_t now = ObTimeUtility::current_time();
-  ObTenantFreezer *freezer = MTL(ObTenantFreezer*);
-  int64_t memstore_used = 0;
-  const bool force_refresh = true;
-  bool is_disk_enough = true;
-  FailureEvent data_disk_full_event(FailureType::RESOURCE_NOT_ENOUGH, FailureModule::STORAGE, FailureLevel::NOTICE);
-  if (OB_FAIL(data_disk_full_event.set_info("data disk full event"))) {
-    COORDINATOR_LOG(ERROR, "data_disk_full_event set_info failed", K(ret));
-  } else if (OB_FAIL(freezer->get_tenant_memstore_used(memstore_used, force_refresh))) {
-    COORDINATOR_LOG(WARN, "get tenant memstore used failed", K(ret));
-  } else if (OB_FAIL(THE_IO_DEVICE->check_space_full(memstore_used)) &&
-             OB_SERVER_OUTOF_DISK_SPACE != ret) {
-    COORDINATOR_LOG(WARN, "check space full failed", K(ret));
-  } else if (OB_SERVER_OUTOF_DISK_SPACE == ret) {
-    is_disk_enough = false;
-    ret = OB_SUCCESS;
-  } else {
-    // do nothing
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (false == ATOMIC_LOAD(&has_add_disk_full_event_)) {
-    if (is_disk_enough) {
-      // data disk is not full, skip.
-    } else if (OB_FAIL(add_failure_event(data_disk_full_event))) {
-      COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(data_disk_full_event));
-    } else {
-      ATOMIC_SET(&has_add_disk_full_event_, true);
-      LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "data disk is full, add failure event",
-                    K(data_disk_full_event), K(now));
-    }
-  } else {
-    if (!is_disk_enough) {
-      // data disk is still full, cannot remove failure_event.
-    } else if (OB_FAIL(remove_failure_event(data_disk_full_event))) {
-      COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(data_disk_full_event));
-    } else {
-      ATOMIC_SET(&has_add_disk_full_event_, false);
-      COORDINATOR_LOG(INFO, "data disk has left space, remove failure event", K(ret), K(data_disk_full_event));
     }
   }
 }

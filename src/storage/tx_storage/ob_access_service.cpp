@@ -14,7 +14,6 @@
 
 #include "lib/ob_errno.h"
 #include "lib/objectpool/ob_server_object_pool.h"
-#include "logservice/leader_coordinator/ob_failure_detector.h"
 #include "share/ob_ls_id.h"
 #include "storage/ob_query_iterator_factory.h"
 #include "storage/access/ob_table_scan_iterator.h"
@@ -30,7 +29,6 @@ namespace oceanbase
 {
 using namespace common;
 using namespace share;
-using namespace logservice::coordinator;
 namespace storage
 {
 
@@ -97,19 +95,6 @@ int ObAccessService::check_tenant_out_of_memstore_limit_(bool &is_out_of_mem)
     LOG_WARN("check tenant out of memstore limit", K(ret));
   } else {
     // do nothing
-  }
-  return ret;
-}
-
-int ObAccessService::check_data_disk_full_(bool &is_full)
-{
-  int ret = OB_SUCCESS;
-  ObFailureDetector* detector = MTL(ObFailureDetector*);
-  if (OB_ISNULL(detector)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mtl module detector is null", K(ret), KP(detector));
-  } else {
-    is_full = detector->is_data_disk_full();
   }
   return ret;
 }
@@ -574,7 +559,6 @@ int ObAccessService::check_write_allowed_(
 {
   int ret = OB_SUCCESS;
   bool is_out_of_mem = false;
-  bool is_disk_full = false;
   ObLS *ls = nullptr;
   ObLockID lock_id;
   ObLockParam lock_param;
@@ -588,11 +572,6 @@ int ObAccessService::check_write_allowed_(
   } else if (is_out_of_mem && !tablet_id.is_inner_tablet()) {
     ret = OB_TENANT_OUT_OF_MEM;
     LOG_WARN("this tenant is already out of memstore limit", K(ret), K_(tenant_id));
-  } else if (OB_FAIL(check_data_disk_full_(is_disk_full))) {
-    LOG_WARN("fail to check data disk full", K(ret));
-  } else if (is_disk_full) {
-    ret = OB_SERVER_OUTOF_DISK_SPACE;
-    LOG_WARN("data disk full, you should not do io now", K(ret));
   } else if (OB_FAIL(get_write_store_ctx_guard_(ls_id,
                                                 dml_param.timeout_,
                                                 tx_desc,

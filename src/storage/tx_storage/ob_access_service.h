@@ -198,7 +198,6 @@ public:
       common::ObIArray<int64_t> &cg_micro_cnt_arr) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
-  int check_data_disk_full_(bool &is_full);
 
   int get_write_store_ctx_guard_(
       const share::ObLSID &ls_id,
