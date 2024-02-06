@@ -89,7 +89,7 @@ int ObInsertAllStmtPrinter::print_multi_insert_stmt()
         OB_ISNULL(sub_select_stmt = table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sub select stmt is null", K(ret), K(table_item), K(sub_select_stmt));
-    } else if (OB_FAIL(print_subquery(sub_select_stmt, PRINT_CTE | FORCE_COL_ALIAS))) {
+    } else if (OB_FAIL(print_subquery(sub_select_stmt, PRINT_CTE))) {
       LOG_WARN("failed to print subquery");
     } else {
       LOG_DEBUG("print multi insert stmt complete");
