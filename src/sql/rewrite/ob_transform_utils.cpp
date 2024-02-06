@@ -6725,7 +6725,8 @@ int ObTransformUtils::create_view_with_groupby_items(ObSelectStmt *stmt,
       LOG_WARN("failed to append", K(ret));
     } else if (OB_FAIL(create_select_item(*(ctx->allocator_), select_list, view_stmt))) {
       LOG_WARN("failed to create select items", K(ret));
-    } else if (OB_FAIL(view_stmt->formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(view_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                ctx->session_info_))) {
       LOG_WARN("failed to formalize stmt expr reference", K(ret));
     } else if (OB_FAIL(view_stmt->get_stmt_hint().set_simple_view_hint())) {
       LOG_WARN("failed to set simple view hint", K(ret));
@@ -12985,7 +12986,8 @@ int ObTransformUtils::create_view_with_pre_aggregate(ObSelectStmt *stmt,
       LOG_WARN("failed to append shared exprs", K(ret));
     } else if (OB_FAIL(create_select_item(*(ctx->allocator_), select_list, view_stmt))) {
       LOG_WARN("failed to create select items", K(ret));
-    } else if (OB_FAIL(view_stmt->formalize_stmt_expr_reference())) {
+    } else if (OB_FAIL(view_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                ctx->session_info_))) {
       LOG_WARN("failed to formalize stmt expr reference", K(ret));
     } else if (OB_FAIL(view_stmt->get_stmt_hint().set_simple_view_hint())) {
       LOG_WARN("failed to set simple view hint", K(ret));
@@ -13912,9 +13914,11 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
           LOG_WARN("unexpect null stmt", K(ret));
         } else if (OB_FAIL(temp_table_query->formalize_stmt(ctx->session_info_))) {
           LOG_WARN("failed to formalize stmt", K(ret));
-        } else if (OB_FAIL(temp_table_query->formalize_stmt_expr_reference())) {
+        } else if (OB_FAIL(temp_table_query->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                           ctx->session_info_))) {
           LOG_WARN("failed to formalize stmt reference", K(ret));
-        } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference())) {
+        } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                     ctx->session_info_))) {
           LOG_WARN("failed to formalize stmt reference", K(ret));
         }
       } else if (OB_FAIL(ctx->stmt_factory_->create_stmt<ObSelectStmt>(child_stmt))) {
@@ -13928,7 +13932,8 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
         LOG_WARN("failed to deep copy stmt", K(ret));
       } else if (OB_FAIL(child_stmt->formalize_stmt(ctx->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
-      } else if (OB_FAIL(child_stmt->formalize_stmt_expr_reference())) {
+      } else if (OB_FAIL(child_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                   ctx->session_info_))) {
         LOG_WARN("failed to formalize stmt reference", K(ret));
       } else if (OB_FAIL(child_stmt->recursive_adjust_statement_id(ctx->allocator_,
                                                                    ctx->src_hash_val_,
@@ -13936,7 +13941,8 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
         LOG_WARN("failed to recursive adjust statement id", K(ret));
       } else if (OB_FAIL(child_stmt->update_stmt_table_id(*temp_table_query))) {
         LOG_WARN("failed to update table id", K(ret));
-      } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference())) {
+      } else if (OB_FAIL(upper_stmt->formalize_stmt_expr_reference(ctx->expr_factory_,
+                                                                   ctx->session_info_))) {
         LOG_WARN("failed to formalize stmt reference", K(ret));
       } else {
         table->ref_query_ = child_stmt;

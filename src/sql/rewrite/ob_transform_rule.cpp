@@ -570,7 +570,8 @@ int ObTransformRule::prepare_eval_cost_stmt(common::ObIArray<ObParentDMLStmt> &p
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(copied_stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(copied_stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                                ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
   }
   return ret;
@@ -779,7 +780,8 @@ int ObTransformRule::transform_self(common::ObIArray<ObParentDMLStmt> &parent_st
     // do nothing
   } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_,
+                                                         ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if ((!stmt->is_delete_stmt() && !stmt->is_update_stmt())
               || stmt->has_instead_of_trigger()) {

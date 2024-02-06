@@ -1700,13 +1700,14 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
   return ret;
 }
 
-int ObDMLStmt::formalize_stmt_expr_reference()
+int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
+                                             ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 32> stmt_exprs;
   if (OB_FAIL(clear_sharable_expr_reference())) {
     LOG_WARN("failed to clear sharable expr reference", K(ret));
-  } else if (OB_FAIL(formalize_child_stmt_expr_reference())) {
+  } else if (OB_FAIL(formalize_child_stmt_expr_reference(expr_factory, session_info))) {
     LOG_WARN("failed to formalize child stmt expr reference", K(ret));
   } else if (OB_FAIL(get_relation_exprs(stmt_exprs))) {
     LOG_WARN("get relation exprs failed", K(ret));
@@ -1737,9 +1738,7 @@ int ObDMLStmt::formalize_stmt_expr_reference()
       } else { /*do nothing*/ }
     }
     if (OB_SUCC(ret)) {
-      if (is_select_stmt() && OB_FAIL(static_cast<ObSelectStmt*>(this)->maintain_scala_group_by_ref())) {
-        LOG_WARN("failed to meantain scala group by", K(ret));
-      } else if (OB_FAIL(remove_useless_sharable_expr())) {
+      if (OB_FAIL(remove_useless_sharable_expr(expr_factory, session_info))) {
         LOG_WARN("failed to remove useless sharable expr", K(ret));
       } else if (OB_FAIL(check_pseudo_column_valid())) {
         LOG_WARN("failed to check pseudo column", K(ret));
@@ -1749,7 +1748,10 @@ int ObDMLStmt::formalize_stmt_expr_reference()
   return ret;
 }
 
-int ObDMLStmt::formalize_child_stmt_expr_reference()
+
+
+int ObDMLStmt::formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
+                                                   ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 32> child_stmts;
@@ -1761,7 +1763,7 @@ int ObDMLStmt::formalize_child_stmt_expr_reference()
     if (OB_ISNULL(stmt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("stmt is null", K(ret));
-    } else if (OB_FAIL(SMART_CALL(stmt->formalize_stmt_expr_reference()))) {
+    } else if (OB_FAIL(SMART_CALL(stmt->formalize_stmt_expr_reference(expr_factory, session_info)))) {
       LOG_WARN("failed to formalize stmt reference", K(ret));
     } else { /*do nothing*/ }
   }
@@ -1924,9 +1926,12 @@ int ObDMLStmt::generated_column_depend_column_is_referred(ObRawExpr *expr, bool 
   return ret;
 }
 
-int ObDMLStmt::remove_useless_sharable_expr()
+int ObDMLStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
+                                            ObSQLSessionInfo *session_info)
 {
   int ret = OB_SUCCESS;
+  UNUSED(expr_factory);
+  UNUSED(session_info);
   for (int64_t i = column_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
     ObColumnRefRawExpr *expr = NULL;
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {

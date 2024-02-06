@@ -8789,5 +8789,29 @@ bool ObRawExprUtils::is_column_ref_skip_implicit_cast(const ObRawExpr *expr)
   return bret;
 }
 
+int ObRawExprUtils::build_dummy_count_expr(ObRawExprFactory &expr_factory,
+                                           const ObSQLSessionInfo *session_info,
+                                           ObAggFunRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *one_expr = NULL;
+  ObAggFunRawExpr *count_expr = NULL;
+  if (OB_FAIL(build_const_int_expr(expr_factory, ObInt32Type, static_cast<int32_t>(1), one_expr))) {
+    LOG_WARN("failed build const int expr for default expr", K(ret));
+  } else if (OB_ISNULL(one_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is unexpected null", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_COUNT, count_expr))) {
+    LOG_WARN("fail to create const raw expr", K(ret));
+  } else if (OB_FAIL(count_expr->add_real_param_expr(one_expr))) {
+    LOG_WARN("fail to push back", K(ret));
+  } else if (OB_FAIL(count_expr->formalize(session_info))) {
+    LOG_WARN("failed to extract expr info", K(ret));
+  } else {
+    expr = count_expr;
+  }
+  return ret;
+}
+
 }
 }

@@ -437,8 +437,8 @@ public:
   bool is_from_pivot() const { return is_from_pivot_; }
   bool has_hidden_rowid() const;
   virtual int clear_sharable_expr_reference() override;
-  virtual int remove_useless_sharable_expr() override;
-  int maintain_scala_group_by_ref();
+  virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
+                                           ObSQLSessionInfo *session_info) override;
 
   const common::ObIArray<OrderItem>& get_search_by_items() const { return search_by_items_; }
   const common::ObIArray<ColumnItem>& get_cycle_items() const { return cycle_by_items_; }

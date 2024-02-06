@@ -74,13 +74,13 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to do transform pre_precessing", K(ret));
   } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
     LOG_WARN("failed to formalize query ref exprs");
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
     LOG_WARN("failed to do transform", K(ret));
   } else if (OB_FAIL(do_transform_dblink_read(stmt))) {
     LOG_WARN("failed to do transform dblink read", K(ret));
-  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+  } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
   } else if (OB_FAIL(do_after_transform(stmt))) {
     LOG_WARN("failed deal after transform", K(ret));
@@ -302,7 +302,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
         need_next_iteration = false;
       } else if (OB_FAIL(stmt->formalize_query_ref_exprs())) {
         LOG_WARN("failed to formalize subquery exprs", K(ret));
-      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference())) {
+      } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt expr", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));
