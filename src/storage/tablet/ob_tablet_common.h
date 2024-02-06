@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_TABLET_COMMON
 
 #include <stdint.h>
+#include "lib/literals/ob_literals.h"
 
 namespace oceanbase
 {
@@ -55,8 +56,8 @@ public:
   static const int64_t BUCKET_LOCK_BUCKET_CNT = 10243L;
   static const int64_t TABLET_ID_SET_BUCKET_CNT = 10243L;
   static const int64_t DEFAULT_GET_TABLET_NO_WAIT = 0; // 0s
-  static const int64_t DEFAULT_GET_TABLET_DURATION_US = 1 * 1000 * 1000; // 1s
-  static const int64_t DEFAULT_GET_TABLET_DURATION_10_S = 10 * 1000 * 1000; // 10s
+  static const int64_t DEFAULT_GET_TABLET_DURATION_US = 1_s;
+  static const int64_t DEFAULT_GET_TABLET_DURATION_10_S = 10_s;
   static const int64_t FINAL_TX_ID = 0;
 };
 } // namespace storage

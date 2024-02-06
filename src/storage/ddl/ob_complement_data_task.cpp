@@ -197,6 +197,7 @@ int ObComplementDataParam::split_task_ranges(
     if (OB_FAIL(ranges.push_back(range))) {
       LOG_WARN("push back range failed", K(ret));
     } else if (OB_FAIL(tablet_service->get_multi_ranges_cost(tablet_id,
+                                                             ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                                                              ranges,
                                                              total_size))) {
       LOG_WARN("get multi ranges cost failed", K(ret));
@@ -209,6 +210,7 @@ int ObComplementDataParam::split_task_ranges(
                                                                expected_task_count))) {
       LOG_WARN("compute total task count failed", K(ret));
     } else if (OB_FAIL(tablet_service->split_multi_ranges(tablet_id,
+                                                          ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
                                                           ranges,
                                                           min(min(max(expected_task_count, 1), hint_parallelism), ObMacroDataSeq::MAX_PARALLEL_IDX + 1),
                                                           allocator_,
@@ -955,7 +957,8 @@ int ObComplementWriteTask::do_local_scan()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls_handle));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(param_->orig_tablet_id_,
-            param_->snapshot_version_, iterator, allow_not_ready))) {
+        ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+        param_->snapshot_version_, iterator, allow_not_ready))) {
       if (OB_REPLICA_NOT_READABLE == ret) {
         ret = OB_EAGAIN;
       } else {
