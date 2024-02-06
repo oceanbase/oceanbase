@@ -1939,17 +1939,20 @@ int ObIJsonBase::to_number(ObIAllocator *allocator, number::ObNumber &number) co
   return ret;
 }
 
-int ObIJsonBase::to_datetime(int64_t &value) const
+int ObIJsonBase::to_datetime(int64_t &value, ObTimeConvertCtx *cvrt_ctx_t) const
 {
   INIT_SUCC(ret);
   int64_t datetime = 0;
-
+  ObTimeConvertCtx cvrt_ctx(NULL, false);
+  if (OB_NOT_NULL(cvrt_ctx_t) && cvrt_ctx_t->is_timestamp_) {
+    cvrt_ctx.tz_info_ = cvrt_ctx_t->tz_info_;
+    cvrt_ctx.is_timestamp_ = cvrt_ctx_t->is_timestamp_;
+  }
   switch (json_type()) {
     case ObJsonNodeType::J_DATETIME:
     case ObJsonNodeType::J_DATE:
     case ObJsonNodeType::J_TIMESTAMP: {
       ObTime t;
-      ObTimeConvertCtx cvrt_ctx(NULL, false);
       if (OB_FAIL(get_obtime(t))) {
         LOG_WARN("fail to get json obtime", K(ret));
       } else if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(t, cvrt_ctx, datetime))) {
@@ -1966,7 +1969,6 @@ int ObIJsonBase::to_datetime(int64_t &value) const
         LOG_WARN("data is null", K(ret));
       } else {
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
-        ObTimeConvertCtx cvrt_ctx(NULL, false);
         if (OB_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, datetime))) {
           LOG_WARN("fail to cast string to datetime", K(ret), K(str));
         }
