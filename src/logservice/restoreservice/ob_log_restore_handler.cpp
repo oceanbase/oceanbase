@@ -941,8 +941,9 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
 {
   int ret = OB_SUCCESS;
   share::SCN replayed_scn;
+  palf::LSN replayed_lsn;
   palf::PalfHandleGuard guard;
-  palf::PalfGroupBufferIterator iter;
+  palf::PalfBufferIterator iter;
   done = false;
   if (OB_FAIL(MTL(ObLogService*)->get_log_replay_service()->get_max_replayed_scn(
           share::ObLSID(id_), replayed_scn))) {
@@ -951,31 +952,37 @@ int ObLogRestoreHandler::check_offline_log_(bool &done)
     CLOG_LOG(WARN, "open_palf failed", K(id_));
     // rewrite ret_code
     ret = OB_EAGAIN;
-  } else if (OB_FAIL(guard.seek(replayed_scn, iter))) {
-    CLOG_LOG(WARN, "seek failed", K(id_));
+  } else if (OB_FAIL(guard.locate_by_scn_coarsely(replayed_scn, replayed_lsn))) {
+    CLOG_LOG(WARN, "locate failed", K(id_), K(replayed_scn));
+  } else if (OB_FAIL(guard.seek(replayed_lsn, iter))) {
+    CLOG_LOG(WARN, "seek failed", K(id_), K(replayed_lsn));
   } else {
-    palf::LogGroupEntry entry;
+    palf::LogEntry entry;
     palf::LSN lsn;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(iter.next())) {
-        CLOG_LOG(WARN, "next failed", K(id_));
+        CLOG_LOG(WARN, "next failed", K(id_), K(lsn));
       } else if (OB_FAIL(iter.get_entry(entry, lsn))) {
-        CLOG_LOG(WARN, "get entry failed", K(id_), K(entry));
+        CLOG_LOG(WARN, "get entry failed", K(id_), K(lsn), K(entry));
       } else {
-        int64_t pos = 0;
+        int64_t header_pos = 0;
+        int64_t log_pos = 0;
         const char *log_buf = entry.get_data_buf();
         const int64_t log_length = entry.get_data_len();
         logservice::ObLogBaseHeader header;
         const int64_t header_size = header.get_serialize_size();
-        if (OB_FAIL(header.deserialize(log_buf, header_size, pos))) {
-          CLOG_LOG(WARN, "ObLogBaseHeader deserialize failed", K(id_), K(entry));
-        } else if (OB_UNLIKELY(pos >= log_length)) {
+        if (OB_FAIL(header.deserialize(log_buf, header_size, header_pos))) {
+          CLOG_LOG(ERROR, "ObLogBaseHeader deserialize failed", K(id_), K(lsn), K(entry));
+        } else if (OB_UNLIKELY(!header.is_valid())) {
+          ret = OB_INVALID_DATA;
+          CLOG_LOG(ERROR, "log base header not valid", K(id_), K(lsn), K(entry), K(header));
+        } else if (OB_UNLIKELY(header_pos >= log_length)) {
           ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(ERROR, "unexpected log pos", K(id_), K(pos), K(log_length), K(entry));
+          CLOG_LOG(ERROR, "unexpected log pos", K(id_), K(header_pos), K(log_length), K(entry));
         } else if (logservice::GC_LS_LOG_BASE_TYPE == header.get_log_type()) {
           logservice::ObGCLSLog gc_log;
-          if (OB_FAIL(gc_log.deserialize(log_buf, log_length, pos))) {
-            CLOG_LOG(WARN, "gc_log deserialize failed", K(id_), K(pos), K(log_length), K(entry));
+          if (OB_FAIL(gc_log.deserialize(log_buf, log_length, log_pos))) {
+            CLOG_LOG(ERROR, "gc_log deserialize failed", K(id_), K(log_pos), K(log_length), K(entry));
           } else if (logservice::ObGCLSLOGType::OFFLINE_LS == gc_log.get_log_type()) {
             done = true;
             CLOG_LOG(INFO, "offline_log exist", K(id_), K(gc_log), K(lsn), K(entry));
