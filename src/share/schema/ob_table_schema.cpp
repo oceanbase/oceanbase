@@ -1522,6 +1522,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       lob_inrow_threshold_ = src_schema.lob_inrow_threshold_;
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
+      mlog_tid_ = src_schema.mlog_tid_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3340,6 +3341,7 @@ void ObTableSchema::reset()
   column_group_arr_ = NULL;
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
+  mlog_tid_ = OB_INVALID_ID;
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6195,7 +6197,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
     K_(column_group_cnt),
-    "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_));
+    "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
+    K_(mlog_tid));
   J_OBJ_END();
 
   return pos;
@@ -6478,6 +6481,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   }
   }();
 
+  OB_UNIS_ENCODE(mlog_tid_);
   return ret;
 }
 
@@ -6907,6 +6911,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   }
   }();
 
+  OB_UNIS_DECODE(mlog_tid_);
   return ret;
 }
 
@@ -7058,6 +7063,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   }
   OB_UNIS_ADD_LEN(is_column_store_supported_);
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
+  OB_UNIS_ADD_LEN(mlog_tid_);
   return len;
 }
 
@@ -8687,7 +8693,8 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(aux_lob_meta_tid),
     K_(aux_lob_piece_tid),
     K_(is_column_store_supported),
-    K_(max_used_column_group_id)
+    K_(max_used_column_group_id),
+    K_(mlog_tid)
   );
   J_OBJ_END();
   return pos;
