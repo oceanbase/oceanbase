@@ -162,6 +162,7 @@ ob_set_subtarget(ob_storage ckpt
   slog_ckpt/ob_tenant_checkpoint_slog_handler.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_reader.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_writer.cpp
+  slog_ckpt/ob_tablet_replay_create_handler.cpp
 )
 
 ob_set_subtarget(ob_storage high_availability
@@ -266,7 +267,11 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_persister.cpp
   tablet/ob_tablet_obj_load_helper.cpp
   tablet/ob_tablet.cpp
+  tablet/ob_tablet_block_header.cpp
   tablet/ob_tablet_medium_info_reader.cpp
+  tablet/ob_tablet_space_usage.cpp
+  tablet/ob_tablet_block_aggregated_info.cpp
+  tablet/ob_tablet_macro_info_iterator.cpp
 )
 
 ob_set_subtarget(ob_storage tx_wrs

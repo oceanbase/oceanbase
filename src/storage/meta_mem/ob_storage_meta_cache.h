@@ -48,11 +48,6 @@ public:
   ObStorageMetaKey(
       const uint64_t tenant_id,
       const ObMetaDiskAddr &phy_addr);
-  ObStorageMetaKey(
-      const uint64_t tenant_id,
-      const blocksstable::MacroBlockId &block_id,
-      const int64_t offset,
-      const int64_t size);
   virtual ~ObStorageMetaKey();
   virtual bool operator ==(const ObIKVCacheKey &other) const override;
   virtual uint64_t get_tenant_id() const override;
@@ -250,29 +245,32 @@ public:
       common::ObSafeArenaAllocator &allocator,
       common::ObIArray<ObStorageMetaHandle> &meta_handles);
 private:
-  class ObStorageMetaIOCallback : public common::ObIOCallback
+  class ObStorageMetaIOCallback : public ObSharedBlockIOCallback
   {
   public:
-    ObStorageMetaIOCallback();
+    ObStorageMetaIOCallback(
+      common::ObIAllocator *io_allocator,
+      const ObStorageMetaValue::MetaType type,
+      const ObStorageMetaKey &key,
+      ObStorageMetaValueHandle &handle,
+      const ObTablet *tablet,
+      common::ObSafeArenaAllocator *arena_allocator);
     virtual ~ObStorageMetaIOCallback();
-    virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override;
-    virtual int inner_process(const char *data_buffer, const int64_t size) override;
+    virtual int do_process(const char *data_buffer, const int64_t size) override;
     virtual int64_t size() const override;
-    virtual const char *get_data() override;
-    virtual ObIAllocator *get_allocator() override { return allocator_; }
     bool is_valid() const;
-    TO_STRING_KV("callback_type:", "ObStorageMetaIOCallback", K_(offset), K_(buf_size), KP_(data_buf), K_(key), KP_(tablet), KP_(arena_allocator));
+
+    INHERIT_TO_STRING_KV("ObSharedBlockIOCallback", ObSharedBlockIOCallback,
+        K_(key), KP_(tablet), KP_(arena_allocator));
+
   private:
     DISALLOW_COPY_AND_ASSIGN(ObStorageMetaIOCallback);
+
   private:
     friend class ObStorageMetaCache;
     ObStorageMetaValue::MetaType meta_type_;
-    int64_t offset_;   // offset in block.
-    int64_t buf_size_; // read size in block.
-    char *data_buf_;   // actual data buffer
-    ObStorageMetaValueHandle handle_;
-    common::ObIAllocator *allocator_;
     ObStorageMetaKey key_;
+    ObStorageMetaValueHandle handle_;
     const ObTablet *tablet_;
     common::ObSafeArenaAllocator *arena_allocator_;
   };

@@ -124,6 +124,7 @@ void ObTabletPointer::reset_obj()
 }
 
 int ObTabletPointer::read_from_disk(
+    const bool is_full_load,
     common::ObArenaAllocator &allocator,
     char *&r_buf,
     int64_t &r_len,
@@ -136,12 +137,20 @@ int ObTabletPointer::read_from_disk(
   if (OB_ISNULL(ckpt_slog_hanlder)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "slog handler is nullptr", K(ret), KP(ckpt_slog_hanlder));
-  } else if (OB_FAIL(ckpt_slog_hanlder->read_from_disk(phy_addr_, allocator, r_buf, r_len))) {
-    if (OB_SEARCH_NOT_FOUND != ret) {
-      STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_));
-    }
   } else {
-    addr = phy_addr_;
+    ObMetaDiskAddr real_load_addr = phy_addr_;
+    if (!is_full_load && addr.is_raw_block()) {
+      if (phy_addr_.size() > ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE) {
+        real_load_addr.set_size(ObTabletCommon::MAX_TABLET_FIRST_LEVEL_META_SIZE);
+      }
+    }
+    if (OB_FAIL(ckpt_slog_hanlder->read_from_disk(phy_addr_, allocator, r_buf, r_len))) {
+      if (OB_SEARCH_NOT_FOUND != ret) {
+        STORAGE_LOG(WARN, "fail to read from addr", K(ret), K(phy_addr_));
+      }
+    } else {
+      addr = phy_addr_;
+    }
   }
   return ret;
 }

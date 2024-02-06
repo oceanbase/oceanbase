@@ -31,6 +31,8 @@
 #include "storage/tablet/ob_tablet_table_store_flag.h"
 #include "storage/tablet/ob_tablet_mds_data.h"
 #include "storage/tablet/ob_tablet_mds_data_cache.h"
+#include "storage/tablet/ob_tablet_block_aggregated_info.h"
+#include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
 #include "ob_i_tablet_mds_interface.h"
@@ -105,7 +107,6 @@ class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
 class ObMemtableArray;
 class ObCOSSTableV2;
-
 
 struct ObTableStoreCache
 {
@@ -237,6 +238,13 @@ public:
   bool is_valid() const;
   // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
   int refresh_memtable_and_update_seq(const uint64_t seq);
+  // TODO(zhouxinlan.zxl): replace ObIArray with iterator
+  int get_all_macro_ids(
+      ObIArray<blocksstable::MacroBlockId> &meta_block_arr,
+      ObIArray<blocksstable::MacroBlockId> &data_block_arr,
+      ObIArray<blocksstable::MacroBlockId> &shared_meta_block_arr,
+      ObIArray<blocksstable::MacroBlockId> &shared_data_block_arr) const;
+  bool is_old_tablet() { return version_ < ObTabletBlockHeader::TABLET_VERSION_V3; }
   void dec_macro_ref_cnt();
   int inc_macro_ref_cnt();
   // these interfaces is only for tiny mode
@@ -244,6 +252,7 @@ public:
   // fetch_$member: member may exist in memory or disk, if in memory, get it directly, if in disk,
   //                read from disk then put into kv cache, and return kv cache handle for caller
   int fetch_table_store(ObTabletMemberWrapper<ObTabletTableStore> &wrapper) const;
+  int load_macro_info(common::ObArenaAllocator &allocator, ObTabletMacroInfo *&tablet_macro_info, bool &in_memory) const;
   int load_storage_schema(
       common::ObIAllocator &allocator,
       ObStorageSchema *&storage_schema) const;
@@ -261,7 +270,18 @@ public:
   bool is_data_complete() const;
 
   // serialize & deserialize
-  int serialize(char *buf, const int64_t len, int64_t &pos) const;
+  // TODO: change the impl of serialize and get_serialize_size after rebase
+  int serialize(
+      char *buf,
+      const int64_t len,
+      int64_t &pos,
+      const ObSArray<ObInlineSecondaryMeta> &meta_arr = ObSArray<ObInlineSecondaryMeta>()) const;
+  int deserialize_for_replay(
+    common::ObArenaAllocator &allocator,
+    const char *buf,
+    const int64_t len,
+    int64_t &pos);
+
   // for normal tablet deserialize
   int load_deserialize(
       common::ObArenaAllocator &allocator,
@@ -285,7 +305,7 @@ public:
       const char *buf,
       const int64_t len,
       int64_t &pos);
-  int64_t get_serialize_size() const;
+  int64_t get_serialize_size(const ObSArray<ObInlineSecondaryMeta> &meta_arr = ObSArray<ObInlineSecondaryMeta>()) const;
   ObMetaObjGuard<ObTablet> &get_next_tablet_guard() { return next_tablet_guard_; }
   const ObMetaObjGuard<ObTablet> &get_next_tablet_guard() const { return next_tablet_guard_; }
   void set_next_tablet_guard(const ObTabletHandle &next_tablet_guard);
@@ -338,15 +358,14 @@ public:
       const int64_t schema_version,
       ObIAllocator &allocator,
       const int64_t timeout_ts);
-
+  int get_tablet_first_second_level_meta_ids(ObIArray<blocksstable::MacroBlockId> &meta_ids) const;
   // table operation
-  int get_tablet_meta_ids(ObIArray<blocksstable::MacroBlockId> &meta_ids) const;
   /* When need_unpack is true, if tablet is column store type, we should flatten the co sstable, and add all cg tables to iter.
      Else, we should add co sstable to iter as a whole.
    */
   int get_all_tables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
   int get_all_sstables(ObTableStoreIterator &iter, const bool need_unpack = false) const;
-  int get_sstables_size(int64_t &used_size, const bool ignore_shared_block = false) const;
+  int get_tablet_size(const bool ignore_shared_block, int64_t &meta_size, int64_t &data_size);
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
   int get_ddl_memtables(common::ObIArray<ObITable *> &ddl_memtables) const;
   int check_need_remove_old_table(const int64_t multi_version_start, bool &need_remove) const;
@@ -562,6 +581,7 @@ public:
       ObTabletFullMemoryMdsData &mds_data);
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
+  static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }
@@ -572,10 +592,24 @@ protected:// for MDS use
     return static_cast<ObTabletPointer*>(pointer_hdl_.get_resource_ptr());
   }
 private:
-  void set_mem_addr();
+  static int deserialize_macro_info(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t len,
+      int64_t &pos,
+      ObTabletMacroInfo *&tablet_macro_info);
+  int init_aggregated_info(common::ObArenaAllocator &allocator, ObLinkedMacroBlockItemWriter &linked_writer);
+  int get_sstables_size(int64_t &used_size, const bool ignore_shared_block = false) const;
+  void set_initial_addr();
   int check_meta_addr() const;
   static int parse_meta_addr(const ObMetaDiskAddr &addr, ObIArray<blocksstable::MacroBlockId> &meta_ids);
+  void dec_ref_with_aggregated_info();
+  void dec_ref_without_aggregated_info();
   int inner_inc_macro_ref_cnt();
+  // inc ref with existed ObTabletMacroInfo
+  int inc_macro_ref_with_macro_info(const ObTabletMacroInfo &tablet_macro_info);
+  int inc_ref_with_aggregated_info();
+  int inc_ref_without_aggregated_info();
   void dec_table_store_ref_cnt();
   int inc_table_store_ref_cnt(bool &inc_success);
   static int inc_addr_ref_cnt(const ObMetaDiskAddr &addr, bool &inc_success);
@@ -587,8 +621,8 @@ private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
   int get_min_medium_snapshot(int64_t &min_medium_snapshot) const;
-
-  int64_t get_self_size() const;
+  int self_serialize(char *buf, const int64_t len, int64_t &pos) const;
+  int64_t get_self_serialize_size() const;
   int get_memtable_mgr(ObIMemtableMgr *&memtable_mgr) const;
   int get_tablet_memtable_mgr(ObTabletMemtableMgr *&memtable_mgr) const;
   int check_schema_version(const int64_t schema_version);
@@ -692,13 +726,17 @@ private:
       const int64_t finish_medium_scn,
       const ObTabletMdsData &mds_data) const;
   int set_initial_state(const bool initial_state);
+  int set_macro_info_addr(
+      const blocksstable::MacroBlockId &macro_id,
+      const int64_t offset,
+      const int64_t size,
+      const ObMetaDiskAddr::DiskType block_type);
 
   int load_deserialize_v1(
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t len,
-      const int64_t pos,
-      int64_t &new_pos);
+      int64_t &pos);
   int deserialize_meta_v1(
       common::ObArenaAllocator &allocator,
       const char *buf,
@@ -711,9 +749,15 @@ private:
       common::ObArenaAllocator &allocator,
       const char *buf,
       const int64_t len,
-      const int64_t pos,
-      int64_t &new_pos,
+      int64_t &pos,
       const bool prepare_memtable = true /* whether to prepare memtable */);
+
+  int load_deserialize_v3(
+      common::ObArenaAllocator &allocator,
+      const char *buf,
+      const int64_t len,
+      int64_t &pos,
+      const bool prepare_memtable);
 
   static int convert_to_mds_dump_kv(
       common::ObIAllocator &allocator,
@@ -770,8 +814,8 @@ private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
   static const int64_t DDL_KV_ARRAY_SIZE = 64;
-  static const int32_t TABLET_VERSION = 1;
-  static const int32_t TABLET_VERSION_V2 = 2;
+  static const int64_t ON_DEMAND_LOAD_SIZE = 4096; //4k
+  static const int64_t SHARED_MACRO_BUCKET_CNT = 100;
 private:
   int32_t version_;
   int32_t length_;
@@ -785,6 +829,7 @@ private:
   ObTabletComplexAddr<ObTabletTableStore> table_store_addr_; // size: 48B, alignment: 8B
   // always in disk
   ObTabletComplexAddr<ObStorageSchema> storage_schema_addr_; // size: 48B, alignment: 8B
+  ObTabletComplexAddr<ObTabletMacroInfo> macro_info_addr_;     // size: 48B, alignment: 8B
   int64_t memtable_count_;
   ObITable **ddl_kvs_;
   int64_t ddl_kv_count_;

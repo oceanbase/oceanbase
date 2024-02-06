@@ -848,7 +848,7 @@ TEST_F(TestLSTabletService, test_serialize_sstable_full_and_shell)
   MacroBlockId macro_id;
   macro_id.set_block_index(1001);
   macro_id.set_write_seq(111);
-  addr.set_block_addr(macro_id, 0, 4096);
+  addr.set_block_addr(macro_id, 0, 4096, ObMetaDiskAddr::DiskType::BLOCK);
   ret = sstable.set_addr(addr);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
@@ -1039,6 +1039,49 @@ TEST_F(TestLSTabletService, update_tablet_release_memtable_for_offline)
   ObTabletMapKey key;
   key.ls_id_ = ls_id_;
   key.tablet_id_ = data_tablet_id;
+  ret = ls_tablet_service_->do_remove_tablet(key);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(TestLSTabletService, update_tablet_ddl_commit_scn)
+{
+  int ret = OB_SUCCESS;
+  const int64_t inner_tablet_count = INNER_TABLET_CNT;
+  ObTabletID data_tablet_id(90000002222);
+  ObTabletMapKey key;
+  key.ls_id_ = ls_id_;
+  key.tablet_id_ = data_tablet_id;
+  share::schema::ObTableSchema data_schema;
+
+  TestSchemaUtils::prepare_data_schema(data_schema);
+
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  valid_tablet_num(inner_tablet_count);
+  ASSERT_EQ(1 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
+  ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
+  ASSERT_EQ(OB_ENTRY_EXIST, ret);
+  valid_tablet_num(inner_tablet_count);
+  ASSERT_EQ(1 + INNER_TABLET_CNT, MTL(ObTenantMetaMemMgr*)->tablet_map_.map_.size());
+
+  ObTabletHandle tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
+  ASSERT_EQ(SCN::min_scn(), tablet_handle.get_obj()->tablet_meta_.ddl_commit_scn_);
+  share::SCN ddl_commit_scn;
+  ddl_commit_scn.convert_for_logservice(100);
+  ASSERT_EQ(OB_NOT_SUPPORTED, ls_handle.get_ls()->get_tablet_svr()->update_tablet_ddl_commit_scn(data_tablet_id, ddl_commit_scn));
+
+  ObTabletHandle new_tablet_hdl;
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(*tablet_handle.get_obj(), new_tablet_hdl));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr *)->compare_and_swap_tablet(key, tablet_handle, new_tablet_hdl));
+
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->update_tablet_ddl_commit_scn(data_tablet_id, ddl_commit_scn));
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(data_tablet_id, tablet_handle));
+  ASSERT_EQ(ddl_commit_scn, tablet_handle.get_obj()->tablet_meta_.ddl_commit_scn_);
+
   ret = ls_tablet_service_->do_remove_tablet(key);
   ASSERT_EQ(OB_SUCCESS, ret);
 }

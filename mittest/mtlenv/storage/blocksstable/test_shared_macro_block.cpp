@@ -54,7 +54,6 @@ TEST_F(TestSharedMacroBlk, test_used_size_mgr)
   MacroBlockId id1(0, MacroBlockId::AUTONOMIC_BLOCK_INDEX, 0);
   const int64_t illegal_size = ObSharedMacroBlockMgr::SMALL_SSTABLE_STHRESHOLD_SIZE;
   OK(shared_mgr.add_block(id1, illegal_size));
-  ASSERT_NE(OB_SUCCESS, shared_mgr.free_block(id1, illegal_size));
   OK(shared_mgr.free_block(id1, illegal_size - 1));
   OK(shared_mgr.free_block(id1, 1));
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, shared_mgr.block_used_size_.get(id1, size));

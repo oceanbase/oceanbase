@@ -227,45 +227,6 @@ int ObCOSSTableV2::fill_cg_sstables(const common::ObIArray<ObITable *> &cg_table
   return ret;
 }
 
-int ObCOSSTableV2::inc_macro_ref(bool &inc_success) const
-{
-  int ret = OB_SUCCESS;
-  inc_success = false;
-  bool co_success = false;
-  bool cg_success = false;
-  if (OB_FAIL(ObSSTable::inc_macro_ref(co_success))) {
-    LOG_WARN("fail to increase row store macro blocks' ref cnt", K(ret), K(co_success));
-  } else if (is_empty_co_) { // no cg sstable
-    inc_success = true;
-  } else if (!valid_for_cs_reading_) {
-    cg_success = true;
-  } else if (OB_FAIL(cg_sstables_.inc_macro_ref(cg_success))) {
-    LOG_WARN("fail to increase ref cnt of cg sstables' macro blocks", K(ret), K(cg_success));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (co_success) {
-      ObSSTable::dec_macro_ref();
-    }
-    if (cg_success) {
-      cg_sstables_.dec_macro_ref();
-    }
-  } else {
-    inc_success = true;
-  }
-  return ret;
-}
-
-void ObCOSSTableV2::dec_macro_ref() const
-{
-  ObSSTable::dec_macro_ref();
-  if (is_empty_co_) {
-    // do nothing
-  } else if (valid_for_cs_reading_) {
-    cg_sstables_.dec_macro_ref();
-  }
-}
-
 int ObCOSSTableV2::build_cs_meta()
 {
   int ret = OB_SUCCESS;

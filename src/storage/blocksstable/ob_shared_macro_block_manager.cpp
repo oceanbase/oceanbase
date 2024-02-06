@@ -375,8 +375,7 @@ int ObSharedMacroBlockMgr::free_block(const MacroBlockId &block_id, const int64_
 {
   int ret = OB_SUCCESS;
   int32_t curr_size = 0;
-  if (OB_UNLIKELY(!block_id.is_valid() || block_size <= 0
-      || block_size >= SMALL_SSTABLE_STHRESHOLD_SIZE)) {
+  if (OB_UNLIKELY(!block_id.is_valid() || block_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid block size or id", K(ret), K(block_id), K(block_size));
   } else {

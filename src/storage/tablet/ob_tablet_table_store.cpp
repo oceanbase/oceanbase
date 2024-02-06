@@ -1694,7 +1694,7 @@ int ObTabletTableStore::batch_cache_sstable_meta(
     LOG_WARN("invalid arguments", K(ret), K(remain_size));
   } else if (OB_UNLIKELY(remain_size < sizeof(ObSSTableMeta))) {
     // The remain_size is too small to hold an sstable meta.
-  } else if (OB_FAIL(get_need_to_cache_sstables(meta_types, cache_keys, sstables))) { /*include cg sstable*/
+  } else if (OB_FAIL(get_need_to_cache_sstables(meta_types, cache_keys, sstables))) { /*not include cg sstable*/
     LOG_WARN("fail to get need to cache keys", K(ret));
   } else if (OB_UNLIKELY(0 == cache_keys.count())) {
   } else if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().batch_get_meta_and_bypass_cache(
@@ -1728,6 +1728,9 @@ int ObTabletTableStore::get_need_to_cache_sstables(
   return ret;
 }
 
+
+// *NOTE: not include cg sstable here, because the remain size of tablet_buffer is not enough to
+// hold cg sstable now.
 int ObTabletTableStore::get_need_to_cache_sstables(
     const ObSSTableArray &sstable_array,
     common::ObIArray<ObStorageMetaValue::MetaType> &meta_types,
@@ -1740,16 +1743,6 @@ int ObTabletTableStore::get_need_to_cache_sstables(
     if (OB_ISNULL(sstable)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error, sstable is nullptr", K(ret), KP(sstable));
-    } else if (sstable->is_co_sstable()) {
-      ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(sstable);
-      if (co_sstable->is_empty_co_table()) {
-        // no cg sstable in empty co table, avoid to call this func recursively.
-      } else if (OB_FAIL(get_need_to_cache_sstables(co_sstable->get_cg_sstables(), meta_types, keys, sstables))) {
-        LOG_WARN("failed to get need to cache cg sstables", K(ret), KPC(co_sstable));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
     } else if (sstable->is_loaded()) { // sstable is already loaded to memory
     } else {
       ObStorageMetaValue::MetaType meta_type = sstable->is_co_sstable()
@@ -2557,6 +2550,7 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
         const ObSSTable *table = major_tables_[i];
         J_OBJ_START();
         J_KV(K(i), "addr", table->get_addr(),
+            "is_loaded", table->is_loaded(),
             "type", ObITable::get_table_type_name(table->get_key().table_type_),
             "tablet_id", table->get_key().tablet_id_,
             "scn_range", table->get_key().scn_range_,

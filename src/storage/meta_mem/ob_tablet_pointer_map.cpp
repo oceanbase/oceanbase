@@ -328,7 +328,7 @@ int ObTabletPointerMap::load_meta_obj(
         } else {
           STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
         }
-      } else if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      } else if (OB_FAIL(meta_pointer->read_from_disk(true/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       } else {
         t->tablet_addr_ = load_addr;
@@ -373,7 +373,7 @@ int ObTabletPointerMap::load_meta_obj(
         } else {
           STORAGE_LOG(INFO, "the tablet has been deleted", K(ret), K(key));
         }
-      } else if (OB_FAIL(meta_pointer->read_from_disk(arena_allocator, buf, buf_len, load_addr))) {
+      } else if (OB_FAIL(meta_pointer->read_from_disk(false/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
       } else {
         t->tablet_addr_ = load_addr;

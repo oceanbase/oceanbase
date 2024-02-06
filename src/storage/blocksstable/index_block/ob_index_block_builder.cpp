@@ -1388,7 +1388,8 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
         root_builder->block_to_row_desc(micro_block_desc, root_row_desc);
         if (OB_FAIL(root_addr.set_block_addr(root_row_desc.macro_id_,
                                              root_row_desc.block_offset_,
-                                             root_row_desc.block_size_))) {
+                                             root_row_desc.block_size_,
+                                             ObMetaDiskAddr::DiskType::BLOCK))) {
           STORAGE_LOG(WARN, "fail to set block address", K(ret), K(root_row_desc));
         }
       }

@@ -59,6 +59,11 @@ public:
   static const int64_t DEFAULT_GET_TABLET_DURATION_US = 1_s;
   static const int64_t DEFAULT_GET_TABLET_DURATION_10_S = 10_s;
   static const int64_t FINAL_TX_ID = 0;
+  // The length of tablet_addr contains first-level meta's length and inline-meta's length.
+  // We ensures that the first-level meta's length will not exceed MAX_TABLET_FIRST_LEVEL_META_SIZE by implementation,
+  // in fact, within 4k in most cases. So just use this length in the situation where only want to read first-level meta,
+  // although there is some IO amplification, but avoid the trouble of recording the first-level meta's length.
+  static const int64_t MAX_TABLET_FIRST_LEVEL_META_SIZE = 16 * 1024; // 16k
 };
 } // namespace storage
 } // namespace oceanbase
