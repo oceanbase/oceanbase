@@ -6373,6 +6373,7 @@ def_table_schema(
 # 499 :__all_transfer_partition_task_history
 # 500 : __all_tenant_snapshot_create_job
 # 501 : __wr_sqltext
+# 502 : __all_trusted_root_certificate
 #
 # 余留位置
 ################################################################################
@@ -13145,6 +13146,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12452: __all_virtual_transfer_partition_task_history
 # 12453: __all_virtual_tenant_snapshot_create_job
 # 12454: __all_virtual_wr_sqltext
+# 12455: __all_virtual_trusted_root_certificate_info
 # 余留位置
 #
 
@@ -30196,6 +30198,7 @@ def_table_schema(
 #21506 CDB_WR_SQLTEXT
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
+#21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
 # 余留位置
 
 ################################################################################
