@@ -624,7 +624,13 @@ int ObImportTableTaskScheduler::gen_import_ddl_task_()
   } else if (OB_FAIL(construct_import_table_arg_(arg))) {
     LOG_WARN("failed to construct import table arg", K(ret));
   } else if (OB_FAIL(ObDDLServerClient::execute_recover_restore_table(arg))) {
-    LOG_WARN("fail to start import table", K(ret), K(arg));
+    if (OB_ENTRY_EXIST == ret) {
+      // old and new leader both execute import ddl at the same time.
+      ret = OB_EAGAIN;
+      LOG_WARN("import ddl task exist, try again", K(ret), K(arg));
+    } else {
+      LOG_WARN("fail to start import table", K(ret), K(arg));
+    }
   } else {
     LOG_INFO("[IMPORT_TABLE]succeed execute_recover_restore_table", KPC_(import_task), K(arg));
   }
