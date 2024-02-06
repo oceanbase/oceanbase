@@ -11937,20 +11937,41 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
         LOG_WARN("failed to add table partition info", K(ret));
       } else { /*do nothing*/ }
-    } else if ((log_op_def::LOG_INSERT == op->get_type() ||
-                log_op_def::LOG_MERGE == op->get_type()) &&
-               !static_cast<ObLogInsert*>(op)->has_instead_of_trigger() &&
-               static_cast<ObLogInsert*>(op)->is_insert_select()) {
+    } else if (log_op_def::LOG_INSERT == op->get_type()
+               && static_cast<ObLogInsert*>(op)->is_insert_select()
+               && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
       ObLogInsert *insert_op = static_cast<ObLogInsert*>(op);
       ObTablePartitionInfo *table_partition_info = insert_op->get_table_partition_info();
       if (OB_ISNULL(table_partition_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(table_partition_info), K(ret));
-      } else if ((!insert_op->is_multi_part_dml() ||
-                 ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == insert_op->get_phy_plan_type())) {
+      } else if (!insert_op->is_multi_part_dml() ||
+                 ObPhyPlanType::OB_PHY_PLAN_DISTRIBUTED == insert_op->get_phy_plan_type()) {
         if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
           LOG_WARN("failed to add table partition info", K(ret));
         } else { /*do nothing*/ }
+      } else { /*do nothing*/ }
+    } else if (log_op_def::LOG_MERGE == op->get_type()
+               && !static_cast<ObLogDelUpd*>(op)->has_instead_of_trigger()) {
+      ObLogDelUpd *dml_op = static_cast<ObLogDelUpd*>(op);
+      ObTablePartitionInfo *table_partition_info = dml_op->get_table_partition_info();
+      const ObOptimizerContext &opt_ctx = get_optimizer_context();
+      if (OB_ISNULL(table_partition_info) || OB_ISNULL(opt_ctx.get_query_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(table_partition_info), K(opt_ctx.get_query_ctx()), K(ret));
+      } else if (!dml_op->is_multi_part_dml()) {
+        /* for merge into view, additional table location for insert sharding need add
+          create table tp1(c1 int, c2 int, c3 int) partition by hash(c1) partitions 2;
+          create table tp2(c1 int, c2 int, c3 int) partition by hash(c1) partitions 2;
+          create or replace view v as select * from tp1 where c1 = 3;
+          merge into v v1 using (select * from tp2 where c1 = 2) t2 on (v1.c1 = t2.c1)
+          when matched then update set v1.c2 = t2.c1 + 100
+          when not matched then insert values (t2.c1, t2.c2, t2.c3);
+        */
+        table_partition_info->get_table_location().set_table_id(opt_ctx.get_query_ctx()->available_tb_id_ - 1);
+        if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
+          LOG_WARN("failed to add table partition info", K(ret));
+        }
       } else { /*do nothing*/ }
     } else { /*do nothing*/ }
     if (OB_SUCC(ret) && OB_FAIL(collect_location_related_info(*op))) {

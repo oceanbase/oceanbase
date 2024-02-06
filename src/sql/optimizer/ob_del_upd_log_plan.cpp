@@ -239,8 +239,12 @@ int ObDelUpdLogPlan::calculate_insert_table_location_and_sharding(ObTablePartiti
                                                            &dml_table_infos.at(0)->part_ids_,
                                                            insert_sharding,
                                                            insert_table_part))) {
-    if (ret == OB_NO_PARTITION_FOR_GIVEN_VALUE &&
-        (trigger_exist || (del_upd_stmt->is_insert_stmt() && static_cast<const ObInsertStmt*>(del_upd_stmt)->value_from_select()))) {
+    if (ret != OB_NO_PARTITION_FOR_GIVEN_VALUE) {
+      LOG_WARN("failed to calculate table location and sharding", K(ret));
+    } else if (del_upd_stmt->is_merge_stmt()) {
+      insert_sharding = NULL; // get null insert sharding, use multi part merge into
+      ret = OB_SUCCESS;
+    } else if (trigger_exist || (del_upd_stmt->is_insert_stmt() && static_cast<const ObInsertStmt*>(del_upd_stmt)->value_from_select())) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to calculate table location and sharding", K(ret));
@@ -271,6 +275,7 @@ int ObDelUpdLogPlan::calculate_table_location_and_sharding(const ObDelUpdStmt &s
     table_partition_info = new(table_partition_info) ObTablePartitionInfo(allocator_);
     ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
     ObAddr &server = get_optimizer_context().get_local_server_addr();
+    table_partition_info->get_table_location().set_check_no_partiton(stmt.is_merge_stmt());
     if (OB_FAIL(calculate_table_location(stmt,
                                          filters,
                                          table_id,
