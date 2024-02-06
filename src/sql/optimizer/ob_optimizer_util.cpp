@@ -558,6 +558,20 @@ bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
   return found;
 }
 
+bool ObOptimizerUtil::is_exprs_equivalent(const common::ObIArray<ObRawExpr*> &from,
+                                          const common::ObIArray<ObRawExpr*> &to,
+                                          const EqualSets &equal_sets)
+{
+  bool b_ret = true;
+  if (from.count() != to.count()) {
+    b_ret = false;
+  }
+  for (int64_t i = 0; b_ret && i < from.count(); ++i) {
+    b_ret = is_expr_equivalent(from.at(i), to.at(i), equal_sets);
+  }
+  return b_ret;
+}
+
 bool ObOptimizerUtil::is_expr_equivalent(const ObRawExpr *from,
                                          const ObRawExpr *to)
 {

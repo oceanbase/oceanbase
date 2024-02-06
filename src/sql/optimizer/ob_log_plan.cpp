@@ -9580,7 +9580,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!top->is_distributed()) {
+  } else if (top->is_match_all()) {
     is_match_repart = false;
   } else if (OB_FAIL(append(input_esets, top->get_output_equal_sets()))) {
     LOG_WARN("failed to append equal sets", K(ret));
@@ -9589,7 +9589,8 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
     ObLogicalOperator *pre_child = NULL;
     ObSEArray<ObRawExpr *, 4> left_keys;
     ObSEArray<ObRawExpr *, 4> right_keys;
-    ObSEArray<ObRawExpr *, 4> pre_child_keys;
+    ObSEArray<ObRawExpr *, 4> pre_left_keys;
+    ObSEArray<ObRawExpr *, 4> pre_right_keys;
     ObSEArray<ObRawExpr*, 4> target_part_keys;
     ObSEArray<bool, 4> null_safe_info;
     is_match_repart = true;
@@ -9628,17 +9629,23 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
       } else if (!is_match_repart) {
         //do nothing
       } else if (i < 1) {
-        if (OB_FAIL(pre_child_keys.assign(right_keys))) {
+        if (OB_FAIL(pre_left_keys.assign(left_keys))) {
+          LOG_WARN("failed to assign exprs", K(ret));
+        } else if (OB_FAIL(pre_right_keys.assign(right_keys))) {
           LOG_WARN("failed to assign exprs", K(ret));
         } else {
           pre_child = child;
         }
+      } else if (!ObOptimizerUtil::is_exprs_equivalent(left_keys,
+                                                       pre_left_keys,
+                                                       input_esets)) {
+        is_match_repart = false;
       } else if(OB_ISNULL(pre_child)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(ObShardingInfo::check_if_match_partition_wise(
                                         input_esets,
-                                        pre_child_keys,
+                                        pre_right_keys,
                                         right_keys,
                                         pre_child->get_strong_sharding(),
                                         child->get_strong_sharding(),
