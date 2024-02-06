@@ -42,8 +42,6 @@ int ObMPStatistic::process()
     LOG_WARN("failed to alloc easy buf", K(ret));
   } else if (OB_FAIL(packet_sender_.update_last_pkt_pos())) {
     LOG_WARN("failed to update last packet pos", K(ret));
-  } else if (OB_FAIL(response_packet(pkt, NULL))) {
-    RPC_OBMYSQL_LOG(WARN, "fail to response statistic packet", K(ret));
   } else if (OB_ISNULL(conn = get_conn())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get connection fail", K(conn), K(ret));
@@ -62,14 +60,19 @@ int ObMPStatistic::process()
       LOG_WARN("update transmisson checksum flag failed", K(ret));
     } else {
       ObOKPParam ok_param; // use default values
-      if (OB_FAIL(send_ok_packet(*session, ok_param))) {
+      if (OB_FAIL(send_ok_packet(*session, ok_param, &pkt))) {
         LOG_WARN("fail to send ok pakcet in statistic response", K(ok_param), K(ret));
       }
     }
     if (OB_LIKELY(NULL != session)) {
       revert_session(session);
     }
+  } else if (OB_FAIL(response_packet(pkt, NULL))) {
+    RPC_OBMYSQL_LOG(WARN, "fail to response statistic packet", K(ret));
+  } else {
+    // do nothing
   }
+
   if (OB_FAIL(ret) && need_response_error) {
     send_error_packet(ret, NULL);
   }
