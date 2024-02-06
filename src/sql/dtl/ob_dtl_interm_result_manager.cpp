@@ -160,6 +160,8 @@ void ObDTLIntermResultManager::destroy()
   if (IS_INIT) {
     erase_tenant_interm_result_info();
     map_.destroy();
+    // Used to handle scenarios where destroy is called multiple times.
+    is_inited_ = false;
   }
 }
 
