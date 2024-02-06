@@ -79,8 +79,6 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sess_bt_buff_pos_(0),
       sess_ref_cnt_(0),
       sess_ref_seq_(0),
-      found_rows_(1),
-      affected_rows_(-1),
       block_allocator_(SMALL_BLOCK_SIZE, common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                        //这里减32是为了适配ObMalloc对齐规则, 防止超8k的内存分配
                        ObMalloc(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION_SBLOCK))),
@@ -438,8 +436,6 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
   sess_bt_buff_pos_ = 0;
-  found_rows_ = 1;
-  affected_rows_ = -1;
   ATOMIC_SET(&sess_ref_cnt_ , 0);
   // 最后再重置所有allocator
   // 否则thread_data_.user_name_之类的属性会有野指针，在session_mgr的foreach接口遍历时可能core掉。
@@ -2673,18 +2669,6 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
       break;
     }
-    case SYS_VAR__AFFECTED_ROWS: {
-      int64_t affect_rows = 0;
-      OZ (val.get_int(affect_rows), val);
-      set_affected_rows(affect_rows);
-      break;
-    }
-    case SYS_VAR__FOUND_ROWS: {
-      int64_t found_rows = 0;
-      OZ (val.get_int(found_rows), val);
-      set_found_rows(found_rows);
-      break;
-    }
     default: {
       //do nothing
     }
@@ -4412,9 +4396,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
               exec_min_cluster_version_,
-              is_client_sessid_support_,
-              found_rows_,
-              affected_rows_);
+              is_client_sessid_support_);
   }();
   return ret;
 }
@@ -4616,9 +4598,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   }
   if (OB_SUCC(ret) && pos < data_len) {
     LST_DO_CODE(OB_UNIS_DECODE,
-    is_client_sessid_support_,
-    found_rows_,
-    affected_rows_);
+    is_client_sessid_support_);
   }
   // deep copy string.
   if (OB_SUCC(ret)) {
@@ -4933,9 +4913,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               flt_vars_.row_traceformat_,
               flt_vars_.last_flt_span_id_,
               exec_min_cluster_version_,
-              is_client_sessid_support_,
-              found_rows_,
-              affected_rows_);
+              is_client_sessid_support_);
   return len;
 }
 
