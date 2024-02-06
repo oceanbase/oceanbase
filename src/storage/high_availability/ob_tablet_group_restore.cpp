@@ -40,7 +40,7 @@ static int update_deleted_and_undefine_tablet(ObLS &ls, const ObTabletID &tablet
     } else {
       LOG_WARN("failed to update expected status to DELETED", K(ret), K(expected_status), K(tablet_id));
     }
-  } else if (OB_FAIL(ls.update_tablet_restore_status(tablet_id, restore_status))) {
+  } else if (OB_FAIL(ls.update_tablet_restore_status(tablet_id, restore_status, true/* need reset transfer flag */))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_INFO("restore tablet maybe deleted, skip update restore status to UNDEFINED", K(ret), K(tablet_id));
       ret = OB_SUCCESS;
@@ -2787,7 +2787,9 @@ int ObTabletFinishRestoreTask::update_restore_status_()
     if (OB_FAIL(ObTabletRestoreAction::trans_restore_action_to_restore_status(
         tablet_restore_ctx_->action_, tablet_restore_status))) {
       LOG_WARN("failed to trans restore action to restore status", K(ret), KPC(tablet_restore_ctx_));
-    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet_restore_ctx_->tablet_id_, tablet_restore_status))) {
+    } else if (OB_FAIL(ls_->update_tablet_restore_status(tablet_restore_ctx_->tablet_id_,
+                                                         tablet_restore_status,
+                                                         false /* donot reset has transfer table flag */))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("restore tablet maybe deleted, skip it", K(ret), KPC(tablet_restore_ctx_));
         ret = OB_SUCCESS;

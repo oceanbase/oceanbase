@@ -250,7 +250,8 @@ public:
       const SCN scn);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
-      const ObTabletRestoreStatus::STATUS &restore_status);
+      const ObTabletRestoreStatus::STATUS &restore_status,
+      const bool need_reset_transfer_flag);
   int update_tablet_ha_data_status(
       const common::ObTabletID &tablet_id,
       const ObTabletDataStatus::STATUS &data_status);

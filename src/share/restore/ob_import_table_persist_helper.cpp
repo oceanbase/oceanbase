@@ -126,7 +126,7 @@ int ObImportTableJobPersistHelper::advance_status(
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, job.get_result().get_result_str()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, job.get_result().get_comment()))) {
+  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(job.get_result().get_comment_str())))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_END_TS, job.get_end_ts()))) {
     LOG_WARN("failed to add column", K(ret));
@@ -364,7 +364,7 @@ int ObImportTableTaskPersistHelper::advance_status(
     LOG_WARN("failed to add column", K(ret));
   } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_RESULT, task.get_result().get_result_str()))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, task.get_result().get_comment()))) {
+  } else if (next_status.is_finish() && OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(task.get_result().get_comment_str())))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_STATUS, next_status.get_str()))) {
     LOG_WARN("failed to add column", K(ret));

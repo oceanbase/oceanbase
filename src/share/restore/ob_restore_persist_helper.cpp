@@ -220,7 +220,7 @@ int ObLSHisRestorePersistInfo::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, comment_.ptr()))) {
+  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(comment_.string())))) {
     LOG_WARN("failed to add column", K(ret));
   }
 
@@ -371,7 +371,7 @@ int ObLSRestoreProgressPersistInfo::fill_dml(share::ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_RESULT, result_))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, comment_.ptr()))) {
+  } else if (OB_FAIL(dml.add_column(OB_STR_COMMENT, ObHexEscapeSqlStr(comment_.str())))) {
     LOG_WARN("failed to add column", K(ret));
   }
 
