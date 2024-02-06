@@ -41,9 +41,9 @@ public:
   void generate_row_by_seed(const int64_t seed, ObDatumRow &datum_row);
   void reset_min_max_row();
   void update_min_max_row(const ObDatumRow &row);
-  void validate_agg_row(const ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr);
-  void set_nop_cols(ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr);
-  bool is_col_in_nop_col_arr(const int64_t col_idx, const int64_t nop_col_cnt, int64_t *nop_col_idxs);
+  void validate_agg_row(const ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
+  void set_nop_cols(ObDatumRow &row, int64_t nop_col_cnt = 0, int64_t *nop_col_idxs = nullptr, ObSkipIndexColType *nop_col_types = nullptr);
+  bool is_col_in_nop_col_arr(const int64_t col_idx, const int64_t nop_col_cnt, int64_t *nop_col_idxs, int64_t &index);
   void serialize_agg_row(const ObDatumRow &agg_row, const char *&row_buf, int64_t &row_size);
   void get_cmp_func(const ObColDesc &col_desc, ObStorageDatumCmpFunc &cmp_func);
 
@@ -182,13 +182,14 @@ void TestIndexBlockAggregator::update_min_max_row(const ObDatumRow &row)
 }
 
 void TestIndexBlockAggregator::validate_agg_row(
-    const ObDatumRow &datum_row, int64_t nop_col_cnt, int64_t *nop_col_idxs)
+    const ObDatumRow &datum_row, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
 {
   for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
     ObSkipIndexColMeta idx_meta = full_agg_metas_.at(i);
     const int64_t col_idx = idx_meta.col_idx_;
-    bool is_nop_column = is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs);
-    if (is_nop_column) {
+    int64_t index = 0;
+    bool is_nop_column = is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs, index);
+    if (is_nop_column && ((nop_col_types == nullptr ) || (nop_col_types != nullptr && nop_col_types[index] == idx_meta.col_type_))) {
       ASSERT_TRUE(datum_row.storage_datums_[i].is_nop());
     } else if (datum_row.storage_datums_[i].is_nop() || datum_row.storage_datums_[i].is_null()) { // skip for not aggregate data
       ASSERT_TRUE(min_row_.storage_datums_[col_idx].is_null());
@@ -223,25 +224,33 @@ void TestIndexBlockAggregator::validate_agg_row(
 }
 
 void TestIndexBlockAggregator::set_nop_cols(
-    ObDatumRow &row, int64_t nop_col_cnt, int64_t *nop_col_idxs)
+    ObDatumRow &row, int64_t nop_col_cnt, int64_t *nop_col_idxs, ObSkipIndexColType *nop_col_types)
 {
   for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
     ASSERT_TRUE(i < row.get_column_count());
     ObSkipIndexColMeta idx_meta = full_agg_metas_.at(i);
     const int64_t col_idx = idx_meta.col_idx_;
-    if (is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs)) {
-      row.storage_datums_[i].set_nop();
+    int64_t index = 0;
+    if (is_col_in_nop_col_arr(col_idx, nop_col_cnt, nop_col_idxs, index)) {
+      if (nop_col_types != nullptr) {
+        if (nop_col_types[index] == idx_meta.col_type_) {
+          row.storage_datums_[i].set_nop();
+        }
+      } else {
+        row.storage_datums_[i].set_nop();
+      }
     }
   }
 }
 
 bool TestIndexBlockAggregator::is_col_in_nop_col_arr(
-    const int64_t col_idx, const int64_t nop_col_cnt, int64_t *nop_col_idxs)
+    const int64_t col_idx, const int64_t nop_col_cnt, int64_t *nop_col_idxs, int64_t &index)
 {
   bool is_nop_column = false;
   for (int64_t i = 0; i < nop_col_cnt; ++i) {
     if (col_idx == nop_col_idxs[i]) {
       is_nop_column = true;
+      index = i;
       break;
     }
   }
@@ -310,14 +319,14 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
       ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
       ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
       ASSERT_TRUE(nullptr != data_agg_row);
-      if (0 == test_row_cnt / 2) {
+      if (0 == i / 2) {
         ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
       } else {
         const char *row_buf = nullptr;
         int64_t row_size = 0;
         serialize_agg_row(*data_agg_row, row_buf, row_size);
         ASSERT_TRUE(nullptr != row_buf);
-        ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(row_buf, row_size));
+        ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(row_buf, row_size, i));
       }
       ASSERT_EQ(OB_SUCCESS, index_aggregator.get_aggregated_row(index_agg_row));
       ASSERT_TRUE(nullptr != index_agg_row);
@@ -348,13 +357,54 @@ TEST_F(TestIndexBlockAggregator, basic_aggregate)
     ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
     ASSERT_TRUE(nullptr != data_agg_row);
     set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), nop_col_cnt, nop_col_idxs);
-    ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
+    if (0 == i / 2) {
+      ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
+    } else {
+      const char *row_buf = nullptr;
+      int64_t row_size = 0;
+      serialize_agg_row(*data_agg_row, row_buf, row_size);
+      ASSERT_TRUE(nullptr != row_buf);
+      ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(row_buf, row_size, i));
+    }
     ASSERT_EQ(OB_SUCCESS, index_aggregator.get_aggregated_row(index_agg_row));
     ASSERT_TRUE(nullptr != index_agg_row);
     update_min_max_row(generate_row);
     validate_agg_row(*data_agg_row, nop_col_cnt, nop_col_idxs);
     validate_agg_row(*index_agg_row, nop_col_cnt, nop_col_idxs);
   }
+
+  // test null index row
+  ObSkipIndexColType nop_col_types[3] = {SK_IDX_MAX, SK_IDX_MIN, SK_IDX_NULL_COUNT};
+  reset_min_max_row();
+  data_agg_result.reuse();
+  index_agg_result.reuse();
+  data_aggregator.reuse();
+  index_aggregator.reuse();
+  data_agg_row = nullptr;
+  index_agg_row = nullptr;
+  for (int64_t i = 0; i < test_row_cnt; ++i) {
+    const int64_t seed = random() % test_row_cnt;
+    generate_row_by_seed(seed, generate_row);
+    ASSERT_EQ(OB_SUCCESS, data_aggregator.eval(generate_row));
+    ASSERT_EQ(OB_SUCCESS, data_aggregator.get_aggregated_row(data_agg_row));
+    ASSERT_TRUE(nullptr != data_agg_row);
+    set_nop_cols(*const_cast<ObDatumRow *>(data_agg_row), nop_col_cnt, nop_col_idxs, nop_col_types);
+    if (0 == i / 2) {
+      ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(*data_agg_row));
+    } else {
+      const char *row_buf = nullptr;
+      int64_t row_size = 0;
+      serialize_agg_row(*data_agg_row, row_buf, row_size);
+      ASSERT_TRUE(nullptr != row_buf);
+      ASSERT_EQ(OB_SUCCESS, index_aggregator.eval(row_buf, row_size, i));
+    }
+    ASSERT_EQ(OB_SUCCESS, index_aggregator.get_aggregated_row(index_agg_row));
+    ASSERT_TRUE(nullptr != index_agg_row);
+    update_min_max_row(generate_row);
+    validate_agg_row(*data_agg_row, nop_col_cnt, nop_col_idxs, nop_col_types);
+    validate_agg_row(*index_agg_row, nop_col_cnt, nop_col_idxs, nop_col_types);
+  }
+
 
   // test reuse
   reset_min_max_row();
