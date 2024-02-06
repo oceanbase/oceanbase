@@ -106,9 +106,7 @@ int ObCacheObjectFactory::alloc(
        * then the atomicity of hashmap can ensure that only one thread does the removal action, and
        * only this thread gets the CacheObject pointer to do subsequent destructuring
        */
-      if (!plan_cache->is_valid()) {
-        // do nothing
-      } else if (OB_FAIL(plan_cache->get_deleted_map().set_refactored(cache_obj_id, cache_obj))) {
+      if (OB_FAIL(plan_cache->get_deleted_map().set_refactored(cache_obj_id, cache_obj))) {
         LOG_WARN("failed to add element to hashmap", K(ret));
         inner_free(cache_obj);
         cache_obj = NULL;
