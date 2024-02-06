@@ -367,7 +367,6 @@ ObStorageSchema::ObStorageSchema()
     table_type_(ObTableType::MAX_TABLE_TYPE),
     table_mode_(),
     index_type_(ObIndexType::INDEX_TYPE_IS_NOT),
-    index_status_(ObIndexStatus::INDEX_STATUS_UNAVAILABLE),
     row_store_type_(ObStoreFormat::get_default_row_store_type()),
     schema_version_(OB_INVALID_VERSION),
     column_cnt_(0),
@@ -1533,7 +1532,6 @@ void ObStorageSchema::copy_from(const share::schema::ObMergeSchema &input_schema
   table_type_ = input_schema.get_table_type();
   table_mode_ = input_schema.get_table_mode_struct();
   index_type_ = input_schema.get_index_type();
-  index_status_ = input_schema.get_index_status();
   row_store_type_ = input_schema.get_row_store_type();
   schema_version_ = input_schema.get_schema_version();
   column_cnt_ = input_schema.get_column_count();

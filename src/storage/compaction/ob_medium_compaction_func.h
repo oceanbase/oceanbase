@@ -79,11 +79,10 @@ public:
     const int64_t major_snapshot,
     const bool force_schedule);
 
-  int decide_medium_snapshot(
-      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason);
-
   int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
+  int decide_medium_snapshot(
+      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason);
   static int get_status_from_inner_table(
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
