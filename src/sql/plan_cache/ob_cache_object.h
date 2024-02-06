@@ -132,6 +132,7 @@ struct ObParamInfo
   bool is_oracle_empty_string_;
   common::ObCollationType col_type_;
   common::ObPrecision precision_;
+  uint64_t udt_id_;
 
   OB_UNIS_VERSION_V(1);
 };

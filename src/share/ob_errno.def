@@ -1940,6 +1940,14 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_KEY, -7286, ER_INVALID_OPTION_
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_OPTION_VALUE, -7287, ER_INVALID_OPTION_VALUE, "22023", "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.", 600, "Invalid value for option in function.", "Invalid value \'%.192s\' for option \'%.192s\' in function \'%.192s\'.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_GEOMETRY_TYPE, -7288, ER_UNEXPECTED_GEOMETRY_TYPE, "22S01", "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).", 600, "Unknown WKB type.", "Unknown WKB type(%d)! Full WKB type number was (%d).");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_FTS_MUST_HAVE_TEXT_COL, -7289, ER_BAD_FT_COLUMN, "42000", "A FTS index may only contain a text type column.", "A FTS index may only contain a text type column.", 600, "A FTS index may only contain a text type column.", "A FTS index may only contain a text type column.");
+DEFINE_ORACLE_ERROR(OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE, -7290, -1, "HY000", "dimension number is out of range", 13000, "dimension number is out of range");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_GTYPE_IN_SDO_GEROMETRY, -7291, -1, "HY000", "Invalid Gtype in the SDO_GEOMETRY object", 13028, "Invalid Gtype in the SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY, -7292, -1, "HY000", "Invalid SRID in the SDO_GEOMETRY object", 13029, "Invalid SRID in the SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT, -7293, -1, "HY000", "Invalid Gtype in the SDO_GEOMETRY object for point object", 13031, "Invalid Gtype in the SDO_GEOMETRY object for point object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_NULL_SDO_GEOMETRY, -7294, -1, "HY000", "Invalid NULL  SDO_GEOMETRY object", 13032, "Invalid NULL  SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY, -7295, -1, "HY000", "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object", 13033, "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY, -7296, -1, "HY000", "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object", 13034, "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object");
+DEFINE_ORACLE_ERROR_DEP(OB_ERR_VALUE_NOT_ALLOWED, -7297, -1, "HY000", "value not allowed", 24323, "value not allowed");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_INVALID_XML_DATATYPE, -7402, -1, "22000", "Invalid data type for the operation", "inconsistent datatypes: expected %s got %s", 932, "inconsistent datatypes", "inconsistent datatypes: expected %s got %s");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_MISSING_COMMA, -7403, -1, "42000", "missing comma", 917, "missing comma");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XPATH_EXPRESSION, -7404, ER_UNKNOWN_ERROR, "42000", "invalid xpath expression", 31013, "invalid xpath expression");
@@ -1970,6 +1978,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_XQUERY_UNSUPPORTED, -7428, -1, "42000", "unsupported 
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_XML_CHILD_NAME, -7429, -1, "42000", "The document being inserted does not conform to specified child name", 31056, "The document being inserted does not conform to specified child name");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML node '' (type=%s) does not support this operation", 31195, "XML node '' (type=%s) does not support this operation");
 DEFINE_ORACLE_ERROR(OB_ERR_JSON_FUN_UNSUPPORTED_TYPE, -7431, -1, "HY000", "Input to JSON generation function has unsupported data type", 40654, "Input to JSON generation function has unsupported data type");
+DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 
 ////////////////////////////////////////////////////////////////
 // !!! Fatal errors and the client should close the connection, -8000 ~ -8999

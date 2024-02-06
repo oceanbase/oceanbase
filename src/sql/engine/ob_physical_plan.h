@@ -31,6 +31,7 @@
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/monitor/ob_plan_info_manager.h"
+#include "sql/engine/ob_subschema_ctx.h"
 
 namespace oceanbase
 {
@@ -659,6 +660,7 @@ public:
   ObLogicalPlanRawData logical_plan_;
   // for detector manager
   bool is_enable_px_fast_reclaim_;
+  ObSubSchemaCtx subschema_ctx_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
