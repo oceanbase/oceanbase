@@ -2094,6 +2094,7 @@ DEFINE_ERROR(OB_NO_TABLET_NEED_BACKUP, -9095, -1, "HY000", "No tablet need backu
 DEFINE_ERROR(OB_ERR_RESTORE_STANDBY_VERSION_LAG, -9096, -1, "HY000", "standby binary version is lower than primary data version, standby need upgrade");
 DEFINE_ERROR(OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED, -9097, -1, "HY000", "primary tenant has been dropped");
 DEFINE_ERROR_DEP(OB_CLOUD_OBJECT_NOT_APPENDABLE, -9098, -1, "HY000", "normal object in object_storage(oss,cos,etc.) can't be appended content");
+DEFINE_ERROR_EXT_DEP(OB_RESTORE_TENANT_FAILED, -9099, -1, "HY000", "restore tenant failed", "%s restore failed, %s");
 // end of backup and restore error codes 9001 ~ 9099
 
 ////////////////////////////////////////////////////////////////

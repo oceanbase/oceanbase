@@ -3713,6 +3713,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESTORE_STANDBY_VERSION_LAG__USER_ERROR_MSG "standby binary version is lower than primary data version, standby need upgrade"
 #define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__USER_ERROR_MSG "primary tenant has been dropped"
 #define OB_CLOUD_OBJECT_NOT_APPENDABLE__USER_ERROR_MSG "normal object in object_storage(oss,cos,etc.) can't be appended content"
+#define OB_RESTORE_TENANT_FAILED__USER_ERROR_MSG "%s restore failed, %s"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__USER_ERROR_MSG "no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
@@ -5889,6 +5890,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_RESTORE_STANDBY_VERSION_LAG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9096, standby binary version is lower than primary data version, standby need upgrade"
 #define OB_ERR_RESTORE_PRIMARY_TENANT_DROPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9097, primary tenant has been dropped"
 #define OB_CLOUD_OBJECT_NOT_APPENDABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9098, normal object in object_storage(oss,cos,etc.) can't be appended content"
+#define OB_RESTORE_TENANT_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9099, %s restore failed, %s"
 #define OB_NO_SUCH_FILE_OR_DIRECTORY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9100, no such file or directory"
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
@@ -6174,7 +6176,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2172];
+extern int g_all_ob_errnos[2173];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
