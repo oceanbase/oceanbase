@@ -1016,6 +1016,9 @@ int ObDelUpdResolver::set_base_table_for_view(TableItem &table_item, const bool 
       } else if (base->is_values_table()) {
         ret = OB_ERR_NON_UPDATABLE_TABLE;
         LOG_WARN("non update table", K(ret));
+      } else if (base->is_json_table()) {
+        ret = is_mysql_mode() ? OB_ERR_NON_UPDATABLE_TABLE : OB_ERR_O_DELETE_VIEW_NON_KEY_PRESERVED;
+        LOG_WARN("non update json table", K(ret));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table type in view", K(ret), K(*base));
