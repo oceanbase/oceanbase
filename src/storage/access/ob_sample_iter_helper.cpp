@@ -67,6 +67,7 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
     common::ObSEArray<ObITable *, 4> memtables;
 
     // iter all tables to estimate row count
+    get_table_param_.tablet_iter_.table_iter()->resume();
     while (OB_SUCC(ret)) {
       ObSSTableMetaHandle sst_meta_hdl;
       ObITable *table = nullptr;
