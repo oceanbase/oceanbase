@@ -117,7 +117,7 @@ void TestLSTabletService::SetUp()
   ls_tablet_service_ = ls->get_tablet_svr();
 
   while (true) {
-    if (nullptr != MTL(ObTenantMetaMemMgr*)->gc_head_) {
+    if (!MTL(ObTenantMetaMemMgr*)->tablet_gc_queue_.is_empty()) {
       LOG_INFO("wait t3m gc tablet clean");
       usleep(300 * 1000); // wait 300ms
     } else {
@@ -703,7 +703,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
 
   // gc empty tablet
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
-  ret = t3m->gc_tablet(empty_tablet);
+  ret = t3m->push_tablet_into_gc_queue(empty_tablet);
   ASSERT_EQ(OB_SUCCESS, ret);
   bool cleared = false;
   ret = t3m->gc_tablets_in_queue(cleared);
