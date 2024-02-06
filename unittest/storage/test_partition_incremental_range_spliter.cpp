@@ -29,8 +29,15 @@ namespace storage
 using namespace blocksstable;
 using namespace common;
 
+class ObTenantMetaMemMgr;
+
 void ObCompactionBufferWriter::reset()
 {
+}
+
+int ObTenantMetaMemMgr::fetch_tenant_config()
+{
+  return OB_SUCCESS;
 }
 
 static int get_number(const char *str, const char *&endpos, int64_t &num)

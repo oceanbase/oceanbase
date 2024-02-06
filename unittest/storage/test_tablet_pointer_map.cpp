@@ -35,6 +35,11 @@ int64_t ObTenantMetaMemMgr::cal_adaptive_bucket_num()
   return 1000;
 }
 
+int ObTenantMetaMemMgr::fetch_tenant_config()
+{
+  return OB_SUCCESS;
+}
+
 int ObTabletPointerMap::load_meta_obj(
     const ObTabletMapKey &key,
     ObTabletPointer *meta_pointer,
