@@ -1573,7 +1573,7 @@ int ObStartCompleteMigrationTask::check_need_wait_transfer_table_replace_(
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_in_restore_and_before_quick_restore()) {
+  } else if (ls_restore_status.is_before_restore_to_consistent_scn()) {
     need_wait = false;
   }
   return ret;
