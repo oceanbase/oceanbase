@@ -550,6 +550,28 @@ int ObIOManager::refresh_tenant_io_config(const uint64_t tenant_id, const ObTena
   return ret;
 }
 
+// for unittest
+int ObIOManager::modify_group_io_config(const uint64_t tenant_id,
+                                        const uint64_t index,
+                                        const int64_t min_percent,
+                                        const int64_t max_percent,
+                                        const int64_t weight_percent)
+{
+  int ret = OB_SUCCESS;
+  ObRefHolder<ObTenantIOManager> tenant_holder;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret), K(is_inited_));
+  } else if (OB_FAIL(get_tenant_io_manager(tenant_id, tenant_holder))) {
+    LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->modify_group_io_config(index, min_percent, max_percent, weight_percent, false, false))) {
+    LOG_WARN("update tenant io config failed", K(ret), K(tenant_id), K(min_percent), K(max_percent), K(weight_percent));
+  } else if (OB_FAIL(tenant_holder.get_ptr()->refresh_group_io_config())) {
+    LOG_WARN("fail to refresh group config", K(ret));
+  }
+  return ret;
+}
+
 int ObIOManager::get_tenant_io_manager(const uint64_t tenant_id, ObRefHolder<ObTenantIOManager> &tenant_holder)
 {
   int ret = OB_SUCCESS;
@@ -1082,7 +1104,7 @@ int ObTenantIOManager::reset_all_group_config()
     for (int64_t i = 0; i < io_config_.group_num_; ++i) {
       if(io_config_.group_configs_.at(i).deleted_) {
         //do nothing
-      } else if (OB_FAIL(modify_group_io_config(i, 0, 0, 0, false, true/*cleared*/))) {
+      } else if (OB_FAIL(modify_group_io_config(i, 0, 100, 0, false, true/*cleared*/))) {
          LOG_WARN("modify group io config failed", K(ret), K(i));
       }
     }
@@ -1123,7 +1145,7 @@ int ObTenantIOManager::reset_consumer_group_config(const int64_t group_id)
     } else if (OB_UNLIKELY(index == INT64_MAX || index < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid index, maybe try to reset OTHER_GROUPS or deleted_groups", K(ret), K(index), K(group_id));
-    } else if (OB_FAIL(modify_group_io_config(index, 0, 0, 0, false, true/*cleared*/))) {
+    } else if (OB_FAIL(modify_group_io_config(index, 0, 100, 0, false, true/*cleared*/))) {
       LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(index));
     } else {
       LOG_INFO ("stop group io control success when delete directive", K(tenant_id_), K(group_id), K(index), K(io_config_));
@@ -1173,7 +1195,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
     } else {
       if (OB_FAIL(group_id_index_map_.set_refactored(group_id, INT64_MAX, 1))) { //使用非法值覆盖
         LOG_WARN("stop phy queues failed", K(ret), K(tenant_id_), K(index));
-      } else if (OB_FAIL(modify_group_io_config(index, 0, 0, 0, true/*deleted*/, false))) {
+      } else if (OB_FAIL(modify_group_io_config(index, 0, 100, 0, true/*deleted*/, false))) {
         LOG_WARN("modify group io config failed", K(ret), K(tenant_id_), K(index));
       }
     }
