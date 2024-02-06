@@ -533,7 +533,8 @@ int ObTableCtx::read_real_lob(ObIAllocator &allocator, ObObj &obj)
   - check accuracy
 */
 int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
-                                   ObObj &obj)
+                                   ObObj &obj,
+                                   bool is_autoincrement/*=false*/)
 {
   int ret = OB_SUCCESS;
   const bool is_not_nullable = column_type.is_not_null_for_read();
@@ -541,7 +542,9 @@ int ObTableCtx::adjust_column_type(const ObExprResType &column_type,
 
   // 1. check nullable
   if (is_not_nullable && obj.is_null()) {
-    ret = OB_BAD_NULL_ERROR;
+    if (!is_autoincrement) {
+      ret = OB_BAD_NULL_ERROR;
+    }
   } else if (obj.is_null()) {
     // continue
   } else if (column_type.get_type() != obj.get_type()
@@ -601,7 +604,7 @@ int ObTableCtx::adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj)
 
   if (OB_FAIL(cons_column_type(col_schema, column_type))) {
     LOG_WARN("fail to construct column type", K(ret), K(col_schema));
-  } else if (OB_FAIL(adjust_column_type(column_type, obj))) {
+  } else if (OB_FAIL(adjust_column_type(column_type, obj, col_schema.is_autoincrement()))) {
     LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj));
   }
 

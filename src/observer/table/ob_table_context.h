@@ -389,7 +389,7 @@ private:
   int construct_column_items();
   int cons_column_type(const share::schema::ObColumnSchemaV2 &column_schema,
                        sql::ObExprResType &column_type);
-  int adjust_column_type(const ObExprResType &column_type, ObObj &obj);
+  int adjust_column_type(const ObExprResType &column_type, ObObj &obj, bool is_autoincrement = false);
   int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();
