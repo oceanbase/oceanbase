@@ -65,7 +65,6 @@ public:
       * OB_DEFAULT_MACRO_BLOCK_SIZE;
 
 private:
-  // TODO(zhuixin.gsy) reduce 128*2M size to 64*2M, which is expanded temporarily for generating index blocks
   static const int64_t MAX_MEMORY_IN_MINI_MODE = 64 * OB_DEFAULT_MACRO_BLOCK_SIZE; //128MB
 
   bool is_inited_;
