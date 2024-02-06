@@ -348,6 +348,10 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       OPT_TRACE("view has rand expr, can not transform");
     } else if (OB_FALSE_IT(helper.need_merge_ = (NULL != myhint 
                           && myhint->enable_group_by_pull_up(ctx_->src_qb_name_)))) {
+    } else if (!helper.need_merge_ && stmt->get_table_size() > 1 && sub_stmt->get_table_size() > 1 &&
+                stmt->get_table_size() + sub_stmt->get_table_size() - 1 > 10) {
+      // More than 10 tables may result in the inability to enumerate a valid join order.
+      OPT_TRACE("Too Many Table Items");
     } else if (OB_FAIL(valid_views.push_back(helper))) {
       LOG_WARN("failed to push back group stmt index", K(ret));
     } else {
