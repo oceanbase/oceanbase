@@ -298,6 +298,29 @@ int ObDMLResolver::pre_process_json_expr_constraint(ParseNode *node, common::ObI
   return ret;
 }
 
+int ObDMLResolver::expand_column_in_json_object_star(ParseNode *node)
+{
+  INIT_SUCC(ret);
+  ObSEArray<ColumnItem, 4> columns_list;
+  TableItem *table_item = NULL;
+  bool tab_has_alias = false;
+  ObString tab_name;
+  bool all_tab = true;
+  ObDMLStmt *stmt = static_cast<ObDMLStmt *>(stmt_);
+  if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node should not be null", K(ret));
+  } else if (OB_NOT_NULL(node->children_[1])) {
+    tab_name.assign_ptr(node->children_[1]->str_value_, node->children_[1]->str_len_);
+    all_tab = false;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_target_column_list(columns_list, tab_name, all_tab, tab_has_alias, table_item))) {
+    LOG_WARN("parse column fail");
+  }
+  return ret;
+}
+
 int ObDMLResolver::process_json_object_array_node(ParseNode *node, common::ObIAllocator &allocator)
 {
   INIT_SUCC(ret);
@@ -327,6 +350,9 @@ int ObDMLResolver::process_json_object_array_node(ParseNode *node, common::ObIAl
     if (OB_NOT_NULL(cur_node) && cur_node->type_ == T_COLUMN_REF
         && OB_NOT_NULL(cur_node->children_[2])
         && cur_node->children_[2]->type_ == T_STAR) { // ignore wild card node
+      if (OB_FAIL(expand_column_in_json_object_star(cur_node))) {  // append column item into stmt
+        LOG_WARN("fail to expand column item of json object star", K(ret));
+      }
     } else {
       if (OB_NOT_NULL(value_node) && OB_NOT_NULL(format_node)) {
         bool format_json = format_node->value_;
