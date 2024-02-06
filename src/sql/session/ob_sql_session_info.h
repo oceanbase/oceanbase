@@ -115,8 +115,14 @@ public:
 struct ObContextUnit
 {
   inline void free(common::ObIAllocator &alloc) {
-    alloc.free(value_.ptr());
-    alloc.free(attribute_.ptr());
+    if (nullptr != value_.ptr()) {
+      alloc.free(value_.ptr());
+      value_.reset();
+    }
+    if (nullptr != attribute_.ptr()) {
+      alloc.free(attribute_.ptr());
+      attribute_.reset();
+    }
   }
   int deep_copy(const common::ObString &attribute,
                 const common::ObString &value,
@@ -126,6 +132,7 @@ struct ObContextUnit
       SQL_ENG_LOG(WARN, "failed to copy attribute", K(ret));
     } else if (OB_FAIL(ob_write_string(alloc, value, value_))) {
       alloc.free(attribute_.ptr());
+      attribute_.reset();
       SQL_ENG_LOG(WARN, "failed to copy value", K(ret));
     }
     return ret;
@@ -367,9 +374,11 @@ struct ObInnerContextMap {
     if (OB_NOT_NULL(context_map_)) {
       context_map_->destroy();
       alloc_.free(context_map_);
+      context_map_ = nullptr;
     }
     if (OB_NOT_NULL(context_name_.ptr())) {
       alloc_.free(context_name_.ptr());
+      context_name_.reset();
     }
   }
   int init()
