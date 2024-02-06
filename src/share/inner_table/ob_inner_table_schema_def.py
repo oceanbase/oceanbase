@@ -30238,6 +30238,7 @@ def_table_schema(
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
 #21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
+#21510 DBA_OB_CLONE_JOBS
 # 余留位置
 
 ################################################################################
