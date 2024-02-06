@@ -381,16 +381,16 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
           LOG_WARN("procedure param is NULL", K(param), K(ret));
         }
         if (OB_SUCC(ret)) {
-          ObSchemaObjVersion obj_version;
+          ObSEArray<ObSchemaObjVersion, 1> deps;
           OZ (pl::ObPLDataType::transform_from_iparam(param,
                                                 schema_guard_,
                                                 session_info_,
                                                 allocator_,
                                                 sql_proxy_,
                                                 param_type,
-                                                &obj_version));
-          if (OB_SUCC(ret) && obj_version.is_valid()) {
-            OZ (func_ast.add_dependency_object(obj_version));
+                                                &deps));
+          if (OB_SUCC(ret) && deps.count() > 0) {
+            OZ (func_ast.add_dependency_objects(deps));
           }
         }
         if (OB_SUCC(ret)) {

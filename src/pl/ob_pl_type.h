@@ -47,6 +47,7 @@ class ObExecContext;
 struct ObSPICursor;
 class ObSPIResultSet;
 class ObSQLSessionInfo;
+class ObSynonymChecker;
 }
 namespace common
 {
@@ -535,12 +536,24 @@ public:
 
   int convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const;
 
+  static int collect_synonym_deps(uint64_t tenant_id,
+                                  sql::ObSynonymChecker &synonym_checker,
+                                  share::schema::ObSchemaGetterGuard &schema_guard,
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+  static int get_synonym_object(uint64_t tenant_id,
+                                uint64_t &owner_id,
+                                ObString &object_name,
+                                bool &exist,
+                                sql::ObSQLSessionInfo &session_info,
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                ObIArray<share::schema::ObSchemaObjVersion> *deps);
   static int get_udt_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
                                   const common::ObString &udt,
+                                  sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObPLDataType &pl_type,
-                                  share::schema::ObSchemaObjVersion *obj_version);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
 #ifdef OB_BUILD_ORACLE_PL
   static int get_pkg_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -552,7 +565,7 @@ public:
                                   common::ObMySQLProxy &sql_proxy,
                                   bool is_pkg_var, // pkg var or pkg type
                                   ObPLDataType &pl_type,
-                                  share::schema::ObSchemaObjVersion *obj_version);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
 #endif
   static int get_table_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -563,14 +576,14 @@ public:
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   bool is_rowtype,
                                   ObPLDataType &pl_type,
-                                  share::schema::ObSchemaObjVersion *obj_version);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
   static int transform_from_iparam(const share::schema::ObRoutineParam *iparam,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   sql::ObSQLSessionInfo &session_info,
                                   common::ObIAllocator &allocator,
                                   common::ObMySQLProxy &sql_proxy,
                                   pl::ObPLDataType &pl_type,
-                                  share::schema::ObSchemaObjVersion *obj_version = NULL,
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps = NULL,
                                   pl::ObPLDbLinkGuard *dblink_guard = NULL);
   static int transform_and_add_routine_param(const pl::ObPLRoutineParam *param,
                                   int64_t position,
