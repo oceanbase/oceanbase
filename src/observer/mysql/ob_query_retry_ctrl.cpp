@@ -266,6 +266,17 @@ public:
     return exec_ctx.get_table_direct_insert_ctx().get_is_direct();
   }
 
+  bool is_load_local(ObRetryParam &v) const
+  {
+    bool bret = false;
+    const ObICmd *cmd = v.result_.get_cmd();
+    if (OB_NOT_NULL(cmd) && cmd->get_cmd_type() == stmt::T_LOAD_DATA) {
+      const ObLoadDataStmt *load_data_stmt = static_cast<const ObLoadDataStmt *>(cmd);
+      bret = load_data_stmt->get_load_arguments().load_file_storage_ == ObLoadFileLocation::CLIENT_DISK;
+    }
+    return bret;
+  }
+
   virtual void test(ObRetryParam &v) const override
   {
     int err = v.err_;
@@ -286,6 +297,10 @@ public:
         v.client_ret_ = err;
         v.retry_type_ = RETRY_TYPE_NONE;
       }
+      v.no_more_test_ = true;
+    } else if (is_load_local(v)) {
+      v.client_ret_ = err;
+      v.retry_type_ = RETRY_TYPE_NONE;
       v.no_more_test_ = true;
     } else if (is_direct_load(v)) {
       if (is_direct_load_retry_err(err)) {
