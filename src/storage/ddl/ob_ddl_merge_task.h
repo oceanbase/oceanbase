@@ -150,6 +150,7 @@ public:
                                      const blocksstable::ObSSTable *first_ddl_sstable,
                                      blocksstable::ObWholeDataStoreDesc &data_desc);
   static int try_get_first_ddl_sstable(ObTablet &tablet,
+                                       ObTableStoreIterator &ddl_table_iter,
                                        blocksstable::ObSSTable *&first_sstable);
   static int create_ddl_sstable(ObTablet &tablet,
                                 const ObTabletDDLParam &ddl_param,
