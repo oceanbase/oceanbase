@@ -644,21 +644,6 @@ int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
   return ret;
 }
 
-int ObTabletCreateDeleteHelper::check_need_create_empty_major_sstable(
-    const ObTableSchema &table_schema,
-    bool &need_create_sstable)
-{
-  int ret = OB_SUCCESS;
-  need_create_sstable = false;
-  if (OB_UNLIKELY(!table_schema.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(table_schema));
-  } else {
-    need_create_sstable = !(table_schema.is_user_hidden_table() || (table_schema.is_index_table() && !table_schema.can_read_index()));
-  }
-  return ret;
-}
-
 int ObTabletCreateDeleteHelper::build_create_sstable_param(
     const ObStorageSchema &storage_schema,
     const ObTabletID &tablet_id,

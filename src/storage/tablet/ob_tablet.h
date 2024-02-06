@@ -186,17 +186,6 @@ public:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode compat_mode,
-      const bool need_empty_major_table,
-      ObFreezer *freezer);
-  int init_for_first_time_creation(
-      common::ObArenaAllocator &allocator,
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const common::ObTabletID &data_tablet_id,
-      const share::SCN &create_scn,
-      const int64_t snapshot_version,
       const ObStorageSchema &storage_schema,
       const bool need_empty_major_table,
       ObFreezer *freezer);

@@ -172,8 +172,7 @@ public:
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const share::SCN &frozen_timestamp,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       const share::SCN &create_scn);
   int remove_ls_inner_tablet(
       const share::ObLSID &ls_id,
@@ -511,8 +510,7 @@ private:
       const common::ObTabletID &data_tablet_id,
       const share::SCN &create_scn,
       const int64_t snapshot_version,
-      const share::schema::ObTableSchema &table_schema,
-      const lib::Worker::CompatMode &compat_mode,
+      const ObCreateTabletSchema &create_tablet_schema,
       ObTabletHandle &tablet_handle);
   int refresh_tablet_addr(
       const share::ObLSID &ls_id,

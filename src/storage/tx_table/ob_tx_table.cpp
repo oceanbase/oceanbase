@@ -284,13 +284,17 @@ int ObTxTable::create_ctx_tablet_(
 {
   int ret = OB_SUCCESS;
   share::schema::ObTableSchema table_schema;
+  ObArenaAllocator arena_allocator;
+  ObCreateTabletSchema create_tablet_schema;
   if (OB_FAIL(get_ctx_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get ctx table schema failed", K(ret));
+  } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+    LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(ls_->create_ls_inner_tablet(ls_id,
                                                  LS_TX_CTX_TABLET,
                                                  ObLS::LS_INNER_TABLET_FROZEN_SCN,
-                                                 table_schema,
-                                                 compat_mode,
+                                                 create_tablet_schema,
                                                  create_scn))) {
     LOG_WARN("create tx ctx tablet failed", K(ret), K(ls_id),
              K(LS_TX_CTX_TABLET), K(ObLS::LS_INNER_TABLET_FROZEN_SCN),
@@ -405,13 +409,17 @@ int ObTxTable::create_data_tablet_(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   share::schema::ObTableSchema table_schema;
+  ObArenaAllocator arena_allocator;
+  ObCreateTabletSchema create_tablet_schema;
   if (OB_FAIL(get_data_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get data table schema failed", K(ret));
+  } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+    LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(ls_->create_ls_inner_tablet(ls_id,
                                                  LS_TX_DATA_TABLET,
                                                  ObLS::LS_INNER_TABLET_FROZEN_SCN,
-                                                 table_schema,
-                                                 compat_mode,
+                                                 create_tablet_schema,
                                                  create_scn))) {
     LOG_WARN("create tx data tablet failed", K(ret), K(ls_id),
              K(LS_TX_DATA_TABLET), K(ObLS::LS_INNER_TABLET_FROZEN_SCN),

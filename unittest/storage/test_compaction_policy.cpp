@@ -388,6 +388,8 @@ int TestCompactionPolicy::mock_tablet(
   ObLSHandle ls_handle;
   ObLSService *ls_svr = nullptr;
 
+  ObArenaAllocator arena_allocator;
+  ObCreateTabletSchema create_tablet_schema;
 
   if (OB_ISNULL(t3m)) {
     ret = OB_ERR_UNEXPECTED;
@@ -401,8 +403,11 @@ int TestCompactionPolicy::mock_tablet(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
   } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+  } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
+         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+    LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
-      SCN::min_scn(), snapshot_version, table_schema, compat_mode, need_empty_major_table, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {

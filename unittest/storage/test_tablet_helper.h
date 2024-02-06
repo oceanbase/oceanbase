@@ -110,17 +110,22 @@ inline int TestTabletHelper::create_tablet(
   int ret = OB_SUCCESS;
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
+  const lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  ObArenaAllocator schema_allocator;
+  ObCreateTabletSchema create_tablet_schema;
 
   ObTabletCreateSSTableParam param;
   prepare_sstable_param(tablet_id, table_schema, param);
   void *buff = nullptr;
-  if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
+  if (OB_FAIL(create_tablet_schema.init(schema_allocator, table_schema, compat_mode,
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+    STORAGE_LOG(WARN, "failed to init storage schema", KR(ret), K(table_schema));
+  } else if (OB_FAIL(ObSSTableMergeRes::fill_column_checksum_for_empty_major(param.column_cnt_, param.column_checksums_))) {
     STORAGE_LOG(WARN, "fill column checksum failed", K(ret), K(param));
   } else {
     const int64_t snapshot_version = 1;
     const share::ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
     ObFreezer *freezer = ls_handle.get_ls()->get_freezer();
-    const lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
     ObTabletHandle tablet_handle;
     const ObTabletMapKey key(ls_id, tablet_id);
     if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, tablet_handle))) {
@@ -128,7 +133,7 @@ inline int TestTabletHelper::create_tablet(
     } else if (OB_FAIL(tablet_handle.get_obj()->init_for_first_time_creation(
         *tablet_handle.get_allocator(),
         ls_id, tablet_id, tablet_id, share::SCN::base_scn(),
-        snapshot_version, table_schema, compat_mode, true, freezer))){
+        snapshot_version, create_tablet_schema, true, freezer))){
       STORAGE_LOG(WARN, "failed to init tablet", K(ret), K(ls_id), K(tablet_id));
     } else if (ObTabletStatus::Status::MAX != tablet_status) {
       ObTabletCreateDeleteMdsUserData data;
