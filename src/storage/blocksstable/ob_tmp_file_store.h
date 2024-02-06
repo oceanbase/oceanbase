@@ -354,8 +354,6 @@ public:
   int dec_page_cache_num(const uint64_t tenant_id, const int64_t num);
   int inc_block_cache_num(const uint64_t tenant_id, const int64_t num);
   int dec_block_cache_num(const uint64_t tenant_id, const int64_t num);
-  int get_page_cache_num(const uint64_t tenant_id, int64_t &num);
-  int get_block_cache_num(const uint64_t tenant_id, int64_t &num);
 private:
   ObTmpFileStore();
   ~ObTmpFileStore();

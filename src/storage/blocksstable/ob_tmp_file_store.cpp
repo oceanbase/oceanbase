@@ -900,7 +900,7 @@ ObTmpTenantFileStore::ObTmpTenantFileStore()
     allocator_(),
     io_allocator_(),
     tmp_block_manager_(),
-    tmp_mem_block_manager_()
+    tmp_mem_block_manager_(*this)
 {
 }
 
@@ -1710,30 +1710,6 @@ int ObTmpFileStore::dec_page_cache_num(const uint64_t tenant_id, const int64_t n
     STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
   } else {
     store_handle.get_tenant_store()->dec_page_cache_num(num);
-  }
-  return ret;
-}
-
-int ObTmpFileStore::get_page_cache_num(const uint64_t tenant_id, int64_t &num)
-{
-  int ret = OB_SUCCESS;
-  ObTmpTenantFileStoreHandle store_handle;
-  if (OB_FAIL(get_store(tenant_id, store_handle))) {
-    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
-  } else {
-    num = store_handle.get_tenant_store()->get_page_cache_num();
-  }
-  return ret;
-}
-
-int ObTmpFileStore::get_block_cache_num(const uint64_t tenant_id, int64_t &num)
-{
-  int ret = OB_SUCCESS;
-  ObTmpTenantFileStoreHandle store_handle;
-  if (OB_FAIL(get_store(tenant_id, store_handle))) {
-    STORAGE_LOG(WARN, "fail to get tmp tenant file store", K(ret), K(tenant_id));
-  } else {
-    num = store_handle.get_tenant_store()->get_block_cache_num();
   }
   return ret;
 }
