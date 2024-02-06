@@ -139,20 +139,6 @@ public:
       const uint64_t tenant_id,
       const ObIArray<compaction::ObTabletCheckInfo> &pairs,
       ObIArray<ObTabletReplicaChecksumItem> &tablet_replica_checksum_items);
-
-  static int get_tablet_ls_pairs(
-      const uint64_t tenant_id,
-      const schema::ObSimpleTableSchemaV2 &simple_schema,
-      common::ObMySQLProxy &sql_proxy,
-      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
-
-  static int get_tablet_ls_pairs(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      common::ObMySQLProxy &sql_proxy,
-      const common::ObIArray<common::ObTabletID> &tablet_ids,
-      common::ObIArray<ObTabletLSPair> &tablet_ls_pairs);
-
   static int set_column_meta_with_hex_str(
       const ObString &hex_str,
       ObTabletReplicaReportColumnMeta &column_meta);
@@ -228,14 +214,10 @@ public:
   static int get_tablet_replica_checksum_items(
       const uint64_t tenant_id,
       common::ObMySQLProxy &mysql_proxy,
-      const schema::ObSimpleTableSchemaV2 &simple_schema,
       const SCN &compaction_scn,
-      common::ObIArray<ObTabletLSPair> &tablet_pairs,
+      const common::ObIArray<ObTabletLSPair> &tablet_pairs,
       common::ObIArray<ObTabletReplicaChecksumItem> &items);
 private:
-  static int get_table_all_tablet_ids_(
-      const schema::ObSimpleTableSchemaV2 &simple_schema,
-      common::ObIArray<common::ObTabletID> &schema_tablet_ids);
   const static int64_t MAX_BATCH_COUNT = 120;
   const static int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
 };

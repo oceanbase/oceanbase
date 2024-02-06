@@ -92,6 +92,7 @@ void TestCompactionIter::test_iter(
 {
   LOG_INFO("test_iter", K(ls_cnt), K(max_batch_tablet_cnt), K(tablet_cnt_per_ls), K(error_tablet_idx), K(input_errno));
   MockObCompactionScheduleIterator iter(max_batch_tablet_cnt);
+  iter.max_batch_tablet_cnt_ = max_batch_tablet_cnt;
   iter.prepare_ls_id_array(ls_cnt);
   iter.mock_tablet_id_cnt_ = tablet_cnt_per_ls;
   iter.error_tablet_idx_ = error_tablet_idx;

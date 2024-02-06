@@ -12,6 +12,7 @@
 #include "share/compaction/ob_compaction_time_guard.h"
 #include "share/ob_delegate.h"
 #include "share/ob_ls_id.h"
+#include "share/ob_balance_define.h"
 namespace oceanbase
 {
 namespace compaction
@@ -58,6 +59,7 @@ public:
   }
 
   ObTableCompactionInfo &operator=(const ObTableCompactionInfo &other);
+  void set_status(const Status status) { status_ = status;}
   void set_uncompacted() { status_ = Status::INITIAL; }
   void set_compacted() { status_ = Status::COMPACTED; }
   bool is_compacted() const { return Status::COMPACTED == status_; }
@@ -106,7 +108,10 @@ public:
     return total_table_cnt_ > 0
     && (total_table_cnt_ == get_finish_verified_table_cnt());
   }
-
+  bool exist_uncompacted_table() const
+  {
+    return table_cnt_[ObTableCompactionInfo::INITIAL] > 0;
+  }
   bool is_merge_abnomal() const
   {
     return total_table_cnt_ > 0
@@ -134,6 +139,7 @@ public:
   {
     // clear info that will change in cur loop
     unmerged_tablet_cnt_ = 0;
+    merged_tablet_cnt_ = 0;
     table_cnt_[ObTableCompactionInfo::INITIAL] = 0;
     table_cnt_[ObTableCompactionInfo::COMPACTED] = 0;
     table_cnt_[ObTableCompactionInfo::INDEX_CKM_VERIFIED] = 0;
@@ -156,7 +162,6 @@ struct ObUnfinishTableIds
 {
   ObUnfinishTableIds()
     : batch_start_idx_(0),
-      batch_end_idx_(0),
       array_()
   {
     array_.set_label("RSCompTableIds");
@@ -165,7 +170,6 @@ struct ObUnfinishTableIds
   void reset()
   {
     batch_start_idx_ = 0;
-    batch_end_idx_ = 0;
     array_.reset();
   }
   CONST_DELEGATE_WITH_RET(array_, empty, bool);
@@ -179,20 +183,14 @@ struct ObUnfinishTableIds
   }
   bool loop_finish() const
   {
-    return batch_end_idx_ >= array_.count();
-  }
-  void finish_cur_batch()
-  {
-    batch_start_idx_ = batch_end_idx_;
+    return batch_start_idx_ >= array_.count();
   }
   void start_looping()
   {
     batch_start_idx_ = 0;
-    batch_end_idx_ = 0;
   }
-  TO_STRING_KV(K_(batch_start_idx), K_(batch_end_idx), "count", array_.count());
+  TO_STRING_KV(K_(batch_start_idx), "count", array_.count());
   int64_t batch_start_idx_;
-  int64_t batch_end_idx_;
   // record the table_ids in the schema_guard obtained in check_merge_progress
   common::ObArray<uint64_t> array_;
 };
@@ -231,14 +229,44 @@ struct ObCkmValidatorStatistics
     use_cached_ckm_cnt_ = 0;
     write_ckm_sql_cnt_ = 0;
     update_report_scn_sql_cnt_ = 0;
+    checker_validate_idx_cnt_ = 0;
   }
-  TO_STRING_KV(K_(query_ckm_sql_cnt), K_(use_cached_ckm_cnt), K_(write_ckm_sql_cnt), K_(update_report_scn_sql_cnt));
+  TO_STRING_KV(K_(query_ckm_sql_cnt), K_(use_cached_ckm_cnt), K_(write_ckm_sql_cnt), K_(update_report_scn_sql_cnt), K_(checker_validate_idx_cnt));
   int64_t query_ckm_sql_cnt_;
   int64_t use_cached_ckm_cnt_;
   int64_t write_ckm_sql_cnt_;
   int64_t update_report_scn_sql_cnt_;
+  int64_t checker_validate_idx_cnt_;
 };
 
+// single thread operation
+struct ObTabletLSPairCache
+{
+public:
+  ObTabletLSPairCache();
+  ~ObTabletLSPairCache();
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  void reuse();
+  void destroy();
+  int try_refresh(const bool force_refresh = false);
+  int get_tablet_ls_pairs(
+    const uint64_t table_id,
+    const ObIArray<ObTabletID> &tablet_ids,
+    ObIArray<share::ObTabletLSPair> &pairs) const;
+  TO_STRING_KV(K_(tenant_id), K_(last_refresh_ts), K_(max_task_id), "map_cnt", map_.size());
+private:
+  int refresh();
+  int rebuild_map_by_tablet_cnt();
+  int check_exist_new_transfer_task(bool &exist, share::ObTransferTaskID &max_task_id);
+  const static int64_t RANGE_SIZE = 1000;
+  const static int64_t REFRESH_CACHE_TIME_INTERVAL = 60 * 1000 * 1000; // 1m
+  const static int64_t TABLET_LS_MAP_BUCKET_CNT = 3000;
+  const static int64_t TABLET_LS_MAP_BUCKET_MAX_CNT = 300000;
+  uint64_t tenant_id_;
+  int64_t last_refresh_ts_;
+  share::ObTransferTaskID max_task_id_;
+  hash::ObHashMap<common::ObTabletID, share::ObLSID> map_;
+};
 
 } // namespace compaction
 } // namespace oceanbase

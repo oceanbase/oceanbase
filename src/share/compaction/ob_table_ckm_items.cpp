@@ -10,6 +10,7 @@
 #define USING_LOG_PREFIX RS_COMPACTION
 #include "share/compaction/ob_table_ckm_items.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "rootserver/freeze/ob_major_merge_progress_util.h"
 namespace oceanbase
 {
 using namespace oceanbase::common;
@@ -134,11 +135,12 @@ ObTableCkmItems::ObTableCkmItems(const uint64_t tenant_id)
   : is_inited_(false),
     tenant_id_(tenant_id),
     table_id_(0),
+    row_count_(0),
+    table_schema_(nullptr),
     tablet_pairs_(),
     ckm_items_(),
     sort_col_id_array_(),
-    ckm_sum_array_(),
-    row_count_(0)
+    ckm_sum_array_()
 {
   ckm_items_.set_attr(ObMemAttr(tenant_id, "TableCkmItems"));
   ckm_sum_array_.set_attr(ObMemAttr(tenant_id, "TableCkmItems"));
@@ -150,11 +152,13 @@ ObTableCkmItems::~ObTableCkmItems()
 }
 
 int ObTableCkmItems::build(
-    const schema::ObTableSchema &table_schema,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const schema::ObSimpleTableSchemaV2 &simple_schema,
     const ObArray<share::ObTabletLSPair> &input_tablet_pairs,
     const ObArray<share::ObTabletReplicaChecksumItem> &input_ckm_items)
 {
   int ret = OB_SUCCESS;
+  const int64_t table_id = simple_schema.get_table_id();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("is inited before", KR(ret), KPC(this));
@@ -162,10 +166,12 @@ int ObTableCkmItems::build(
     LOG_WARN("failed to assgin tablet ls pair array", KR(ret), K(input_tablet_pairs));
   } else if (OB_FAIL(ckm_items_.assign(input_ckm_items))) {
     LOG_WARN("failed to assgin tablet replica ckm array", KR(ret), K(input_ckm_items));
-  } else if (!table_schema.is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, table_schema))) {
-    LOG_WARN("failed to build column id array for data table", KR(ret), K(table_schema));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema_))) {
+    LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
+  } else if (!simple_schema.is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
+    LOG_WARN("failed to build column id array for data table", KR(ret), KPC_(table_schema));
   } else {
-    table_id_ = table_schema.get_table_id();
+    table_id_ = simple_schema.get_table_id();
     is_inited_ = true;
   }
   if (OB_FAIL(ret)) {
@@ -179,31 +185,31 @@ int ObTableCkmItems::build(
     const share::SCN &compaction_scn,
     common::ObMySQLProxy &sql_proxy,
     schema::ObSchemaGetterGuard &schema_guard,
-    const schema::ObTableSchema *&table_schema,
-    const bool get_table_schema_flag)
+    const compaction::ObTabletLSPairCache &tablet_ls_pair_cache)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 64> tablet_id_array;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("is inited before", KR(ret), KPC(this));
-  } else if (OB_UNLIKELY(!get_table_schema_flag && nullptr == table_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(get_table_schema_flag), KP(table_schema));
-  } else if (get_table_schema_flag
-    && OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema_))) {
     LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
+  } else if (OB_ISNULL(table_schema_)) {
     // table schemas are changed, and index_table or data_table does not exist
     // in new table schemas. no need to check index column checksum.
     ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table schema is null", KR(ret), K(table_id), KP(table_schema));
+    LOG_WARN("table schema is null", KR(ret), K(table_id), KP_(table_schema));
+  } else if (OB_FAIL(table_schema_->get_tablet_ids(tablet_id_array))) {
+    LOG_WARN("fail to get tablet_ids from table schema", KR(ret), KPC(table_schema_));
+  } else if (OB_FAIL(tablet_ls_pair_cache.get_tablet_ls_pairs(table_id, tablet_id_array, tablet_pairs_))) {
+    LOG_WARN("failed to get tablet ls pairs", KR(ret), K_(tenant_id), K(table_id), K(tablet_id_array));
   } else if (OB_FAIL(ObTabletReplicaChecksumOperator::get_tablet_replica_checksum_items(
-                             tenant_id_, sql_proxy, *table_schema,
+                             tenant_id_, sql_proxy,
                              compaction_scn, tablet_pairs_,
                              ckm_items_))) {
     LOG_WARN("failed to get table column checksum items", KR(ret));
-  } else if (!table_schema->is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema))) {
-    LOG_WARN("failed to build column id array for data table", KR(ret), KPC(table_schema));
+  } else if (!table_schema_->is_index_table() && OB_FAIL(sort_col_id_array_.build(tenant_id_, *table_schema_))) {
+    LOG_WARN("failed to build column id array for data table", KR(ret), KPC(table_schema_));
   } else {
     table_id_ = table_id;
     is_inited_ = true;
@@ -270,8 +276,8 @@ int ObTableCkmItems::build_column_ckm_sum_array(
 #define RECORD_CKM_ERROR_INFO(tablet_array_idx) \
   ckm_error_info.tenant_id_ = data_ckm.tenant_id_; \
   ckm_error_info.frozen_scn_ = compaction_scn; \
-  ckm_error_info.data_table_id_ = data_table_schema.get_table_id(); \
-  ckm_error_info.index_table_id_ = index_table_schema.get_table_id(); \
+  ckm_error_info.data_table_id_ = data_table_schema->get_table_id(); \
+  ckm_error_info.index_table_id_ = index_table_schema->get_table_id(); \
   if (tablet_array_idx >= 0 && tablet_array_idx < data_ckm.tablet_pairs_.count()) { \
     ckm_error_info.data_tablet_id_ = data_ckm.tablet_pairs_.at(tablet_array_idx).get_tablet_id(); \
     ckm_error_info.index_tablet_id_ = index_ckm.tablet_pairs_.at(tablet_array_idx).get_tablet_id(); \
@@ -279,8 +285,6 @@ int ObTableCkmItems::build_column_ckm_sum_array(
 
 int ObTableCkmItems::validate_column_ckm_sum(
     const share::SCN &compaction_scn,
-    const schema::ObTableSchema &data_table_schema,
-    const schema::ObTableSchema &index_table_schema,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm)
@@ -291,21 +295,24 @@ int ObTableCkmItems::validate_column_ckm_sum(
   ObColumnChecksumErrorInfo ckm_error_info;
   int64_t data_row_cnt = 0;
   int64_t index_row_cnt = 0;
-  if (OB_UNLIKELY(data_table_schema.get_table_id() != index_table_schema.get_data_table_id())) {
+  const schema::ObTableSchema *data_table_schema = data_ckm.table_schema_;
+  const schema::ObTableSchema *index_table_schema = index_ckm.table_schema_;
+  if (OB_UNLIKELY(nullptr == data_table_schema || nullptr == index_table_schema
+      || data_table_schema->get_table_id() != index_table_schema->get_data_table_id())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data table and index table should not validate column checksum", KR(ret), K(data_table_schema),
-      K(index_table_schema));
-  } else if (OB_FAIL(data_ckm.build_column_ckm_sum_array(compaction_scn, data_table_schema, data_row_cnt))) {
+    LOG_WARN("data table and index table should not validate column checksum", KR(ret), KPC(data_table_schema),
+      KPC(index_table_schema));
+  } else if (OB_FAIL(data_ckm.build_column_ckm_sum_array(compaction_scn, *data_table_schema, data_row_cnt))) {
     LOG_WARN("failed to build column ckm sum map for data table", KR(ret));
-  } else if (OB_FAIL(index_ckm.build_column_ckm_sum_array(compaction_scn, index_table_schema, index_row_cnt))) {
+  } else if (OB_FAIL(index_ckm.build_column_ckm_sum_array(compaction_scn, *index_table_schema, index_row_cnt))) {
     LOG_WARN("failed to build column ckm sum map for index table", KR(ret));
   } else if (OB_UNLIKELY(data_row_cnt != index_row_cnt)) {
     ret = OB_CHECKSUM_ERROR;
     LOG_ERROR("sum row count in data & global index is not equal", KR(ret), K(data_row_cnt), K(index_row_cnt));
   } else if (OB_FAIL(compare_ckm_by_column_ids(
                  data_ckm,
-                 data_table_schema,
-                 index_table_schema,
+                 *data_table_schema,
+                 *index_table_schema,
                  data_ckm.ckm_sum_array_,
                  index_ckm.ckm_sum_array_,
                  ckm_error_info))) {
@@ -343,8 +350,6 @@ int64_t ObTableCkmItems::get_replica_checksum_idx(
 
 int ObTableCkmItems::validate_tablet_column_ckm(
     const share::SCN &compaction_scn,
-    const schema::ObTableSchema &data_table_schema,
-    const schema::ObTableSchema &index_table_schema,
     common::ObMySQLProxy &sql_proxy,
     ObTableCkmItems &data_ckm,
     ObTableCkmItems &index_ckm)
@@ -353,10 +358,13 @@ int ObTableCkmItems::validate_tablet_column_ckm(
   int tmp_ret = OB_SUCCESS;
   int64_t check_cnt = 0;
   ObColumnChecksumErrorInfo ckm_error_info;
-  if (OB_UNLIKELY(data_table_schema.get_table_id() != index_table_schema.get_data_table_id())) {
+  const schema::ObTableSchema *data_table_schema = data_ckm.table_schema_;
+  const schema::ObTableSchema *index_table_schema = index_ckm.table_schema_;
+  if (OB_UNLIKELY(nullptr == data_table_schema || nullptr == index_table_schema
+    || data_table_schema->get_table_id() != index_table_schema->get_data_table_id())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("data table and index table should not validate column checksum", KR(ret), K(data_table_schema),
-      K(index_table_schema));
+    LOG_WARN("data table and index table should not validate column checksum", KR(ret), KPC(data_table_schema),
+      KPC(index_table_schema));
   } else if (OB_UNLIKELY(index_ckm.tablet_pairs_.count() != data_ckm.tablet_pairs_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet ls pairs count are not equal", KR(ret), K(data_ckm), K(index_ckm),
@@ -395,8 +403,8 @@ int ObTableCkmItems::validate_tablet_column_ckm(
             "index_row_cnt", index_replica_ckm.row_count_);
         } else if (OB_FAIL(compare_ckm_by_column_ids(
             data_ckm,
-            data_table_schema,
-            index_table_schema,
+            *data_table_schema,
+            *index_table_schema,
             data_replica_ckm.column_meta_.column_checksums_,
             index_replica_ckm.column_meta_.column_checksums_,
             ckm_error_info))) {

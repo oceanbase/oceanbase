@@ -190,7 +190,10 @@ public:
       const uint64_t tenant_id,
       const ObIArray<common::ObTabletID> &tablet_ids,
       ObIArray<ObTabletLSPair> &tablet_ls_pairs);
-
+  static int get_tablet_ls_pairs_cnt(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      int64_t &input_cnt);
   const static int64_t MAX_BATCH_COUNT = 200;
 private:
   static int inner_batch_get_(

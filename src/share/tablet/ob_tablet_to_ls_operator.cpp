@@ -713,5 +713,39 @@ int ObTabletToLSTableOperator::inner_batch_get_(
   return ret;
 }
 
+int ObTabletToLSTableOperator::get_tablet_ls_pairs_cnt(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    int64_t &input_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  input_cnt = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.append_fmt(
+      "select count(*) as cnt from %s",
+      OB_ALL_TABLET_TO_LS_TNAME))) {
+    LOG_WARN("failed to append fmt", K(ret), K(tenant_id));
+  } else {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    int64_t cnt = 0;
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+      if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("fail to do read", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(result->get_int("cnt", cnt))) {
+        LOG_WARN("failed to get int", KR(ret), K(cnt));
+      } else {
+        input_cnt = cnt;
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
