@@ -21225,7 +21225,8 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         ObMockFKParentTableSchema *mock_fk_parent_table_ptr = NULL; // will use it when drop a fk_parent_table
         mock_fk_parent_table_schema.reset();
         const ObTableItem &table_item = drop_table_arg.tables_.at(i);
-        const ObTableSchema *table_schema = NULL;
+        const ObTableSchema *table_schema = nullptr;
+        const ObTableSchema *data_table_schema = nullptr;
         tmp_table_schema.reset();
         is_db_in_recyclebin = false;
         //ensure use the newest schema of each table
@@ -21246,7 +21247,6 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           LOG_WARN("can not drop table in recyclebin, use purge instead", K(ret), K(table_item));
         } else if (OB_FAIL(tmp_table_schema.assign(*table_schema))) {
           LOG_WARN("fail to assign table schema", K(ret));
-        } else if (FALSE_IT(tmp_table_schema.set_in_offline_ddl_white_list(table_item.is_hidden_))) {
         } else if (OB_FAIL(schema_guard.check_database_in_recyclebin(
                    tenant_id, table_schema->get_database_id(), is_db_in_recyclebin))) {
           LOG_WARN("check database in recyclebin failed", K(ret));
@@ -21255,6 +21255,17 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           LOG_WARN("can not drop table in recyclebin", K(ret), K(*table_schema));
         } else if (OB_FAIL(check_enable_sys_table_ddl(*table_schema, OB_DDL_DROP_TABLE))) {
           LOG_WARN("ddl is not allowed on sys table", K(ret));
+        } else if (drop_table_arg.table_type_ == USER_INDEX
+          && OB_FAIL(schema_guard.get_table_schema(tenant_id, tmp_table_schema.get_data_table_id(), data_table_schema))) {
+          LOG_WARN("failed to get data table schema", K(ret));
+        } else if (drop_table_arg.table_type_ == USER_INDEX
+          && OB_ISNULL(data_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
+        } else if (FALSE_IT(tmp_table_schema.set_in_offline_ddl_white_list(table_item.is_hidden_ ||
+            (nullptr != data_table_schema && ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL == data_table_schema->get_table_state_flag())))) {
+        // to drop a data table, in_offline_ddl_white_list is decided by the `table_item.is_hidden_`.
+          // to drop a index table, in_offline_ddl_white_list is decided by the `table_item.is_hidden_` or data tables' state flag.
         } else if (!tmp_table_schema.check_can_do_ddl()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("offline ddl is being executed, other ddl operations are not allowed",
@@ -21383,16 +21394,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                           mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */))) {
                 LOG_WARN("ddl_service_ drop_table failed", K(table_item), K(tenant_id), K(ret));
               } else if (drop_table_arg.task_id_ != 0 && drop_table_arg.table_type_ == USER_INDEX) {
-                const ObTableSchema *data_table_schema = nullptr;
-                if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tmp_table_schema.get_data_table_id(), data_table_schema))) {
-                  LOG_WARN("failed to get data table schema", K(ret));
-                } else if (OB_ISNULL(data_table_schema)) {
-                  ret = OB_TABLE_NOT_EXIST;
-                  LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
-                } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
-                                                                        tmp_table_schema,
-                                                                        ObTableLockOwnerID(drop_table_arg.task_id_),
-                                                                        trans))) {
+                if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                                tmp_table_schema,
+                                                                ObTableLockOwnerID(drop_table_arg.task_id_),
+                                                                trans))) {
                   LOG_WARN("failed to unlock for add drop index", K(ret));
                 }
               }
