@@ -1149,6 +1149,11 @@ int ObAutoincrementService::sync_insert_value(AutoincParam &param,
               table_node->curr_node_.cache_start_ = mock_node.curr_node_.cache_start_;
               table_node->curr_node_.cache_end_ = mock_node.curr_node_.cache_end_;
             }
+            // Synchronize the sync value from the inner table. For example, if we change
+            // the auto_increment value, this value needs to be kept in the cache to avoid access
+            // inner table for performance optimization.
+            atomic_update(table_node->local_sync_, mock_node.local_sync_);
+            atomic_update(table_node->last_refresh_ts_, mock_node.last_refresh_ts_);
             LOG_INFO("fetch table node success", K(param), K(*table_node));
           }
         }
