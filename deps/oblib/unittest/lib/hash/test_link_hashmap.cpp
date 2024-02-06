@@ -373,6 +373,54 @@ TEST(TestObHashMap, Retire)
   delete t;
 }
 
+/*
+TEST(TestObHashMap, Dummy)
+{
+  struct Fn {
+    bool operator()(HashKey& key, HashValue* value) {
+      return true;
+    }
+  };
+  Fn fn;
+  bool stop = false;
+  constexpr int64_t THREAD_COUNT = 8;
+  constexpr int64_t DATA_COUNT_PER_THREAD = 81920;
+  Hashmap hm(2);
+  EXPECT_EQ(OB_SUCCESS, hm.init());
+  std::thread insert_threads[THREAD_COUNT];
+  int64_t current = 0;
+  for (auto i = 0; i < THREAD_COUNT; ++i) {
+    insert_threads[i] = std::thread([&]() {
+      HashKey key;
+      HashValue *val_ptr = nullptr;
+      while (ATOMIC_LOAD(&current) < THREAD_COUNT * DATA_COUNT_PER_THREAD) {
+        key.v_ = ATOMIC_FAA(&current, 1);
+        EXPECT_EQ(OB_SUCCESS, hm.create(key, val_ptr));
+        hm.revert(val_ptr);
+        val_ptr = nullptr;
+      }
+    });
+  }
+  std::thread foreach_threads[THREAD_COUNT];
+  for (auto i = 0; i < THREAD_COUNT; ++i) {
+    foreach_threads[i] = std::thread([&]() {
+      while (!stop) {
+        hm.for_each(fn);
+      }
+    });
+  }
+  for (auto i = 0; i < THREAD_COUNT; ++i) {
+    insert_threads[i].join();
+  }
+  hm.reset();
+  hm.purge();
+  ATOMIC_STORE(&stop, true);
+  for (auto i = 0; i < THREAD_COUNT; ++i) {
+    foreach_threads[i].join();
+  };
+}
+*/
+
 int main(int argc, char **argv)
 {
   testing::InitGoogleTest(&argc, argv);
