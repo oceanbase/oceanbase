@@ -18,6 +18,7 @@
 #endif
 #include "lib/alloc/alloc_struct.h"
 #include "lib/allocator/ob_malloc.h"
+#include "lib/container/ob_se_array.h"  //ObSEArray
 #include "lib/string/ob_fixed_length_string.h"
 #include "lib/string/ob_string_buffer.h"
 #include "libobcdc.h"
@@ -30,9 +31,19 @@ typedef common::ObFixedLengthString<common::OB_MAX_DATABASE_NAME_LENGTH> DbName;
 typedef common::ObFixedLengthString<common::OB_MAX_TABLE_NAME_LENGTH> TableName;
 typedef common::ObFixedLengthString<common::OB_MAX_COLUMN_NAME_LENGTH> ColumnName;
 typedef common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH> TenantName;
+typedef common::ObSEArray<ObString, 4> KeyArray;
 
 int logminer_str2ll(const char *str, char* &endptr, int64_t &num);
 int logminer_str2ll(const char *str, int64_t &num);
+
+//record convert tool begin
+int write_keys(const KeyArray &key_arr, common::ObStringBuffer &buffer);
+int write_signed_number(const int64_t num, common::ObStringBuffer &buffer);
+int write_unsigned_number(const uint64_t num, common::ObStringBuffer &buffer);
+int write_string_no_escape(const ObString &str, common::ObStringBuffer &buffer);
+int write_string_escape(const ObString &str, common::ObStringBuffer &buffer);
+const char *strchr_array(const char *str, char c_arr[], const int32_t array_size, char &c);
+//record convert tool end
 
 bool is_number(const char *str);
 
