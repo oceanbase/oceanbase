@@ -1356,7 +1356,9 @@ int ObAutoincrementService::sync_insert_value_global(AutoincParam &param)
 {
   int ret = OB_SUCCESS;
   if (0 != param.global_value_to_sync_) {
-    if (param.autoinc_mode_is_order_) {
+    if (param.global_value_to_sync_ < param.autoinc_auto_increment_) {
+      // do nothing, insert value directly
+    } else if (param.autoinc_mode_is_order_) {
       if (OB_FAIL(sync_insert_value_order(param,
                                           param.cache_handle_,
                                           param.global_value_to_sync_))) {
