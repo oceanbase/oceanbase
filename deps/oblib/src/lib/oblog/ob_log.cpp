@@ -1757,6 +1757,7 @@ int ObLogger::async_audit_dump(const common::ObBasebLogPrint &info)
 
 int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem *&log_item)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   UNUSED(level);
   int ret = OB_SUCCESS;
   log_item = NULL;
@@ -1800,6 +1801,7 @@ int ObLogger::alloc_log_item(const int32_t level, const int64_t size, ObPLogItem
 
 void ObLogger::free_log_item(ObPLogItem *log_item)
 {
+  ObDisableDiagnoseGuard disable_diagnose_guard;
   if (NULL != log_item) {
     const int level = log_item->get_log_level();
     auto *p_alloc = (level == OB_LOG_LEVEL_ERROR
