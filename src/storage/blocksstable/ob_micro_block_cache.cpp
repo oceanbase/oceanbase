@@ -1400,8 +1400,8 @@ int ObIndexMicroBlockCache::load_block(
         }
         if (nullptr != transform_buf) {
           allocator->free(transform_buf);
-          block_data.reset();
         }
+        block_data.reset();
       }
     }
   }
