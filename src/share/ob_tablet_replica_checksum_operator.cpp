@@ -331,10 +331,11 @@ int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other
   int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
-    if (OB_FAIL(column_meta_.assign(other.column_meta_))) {
+    if (OB_FAIL(set_tenant_id(other.tenant_id_))) {
+      LOG_WARN("failed to set tenant id", KR(ret), K(other));
+    } else if (OB_FAIL(column_meta_.assign(other.column_meta_))) {
       LOG_WARN("fail to assign column meta", KR(ret), K(other));
     } else {
-      tenant_id_ = other.tenant_id_;
       tablet_id_ = other.tablet_id_;
       ls_id_ = other.ls_id_;
       server_ = other.server_;
@@ -342,6 +343,19 @@ int ObTabletReplicaChecksumItem::assign(const ObTabletReplicaChecksumItem &other
       compaction_scn_ = other.compaction_scn_;
       data_checksum_ = other.data_checksum_;
     }
+  }
+  return ret;
+}
+
+int ObTabletReplicaChecksumItem::set_tenant_id(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    column_meta_.column_checksums_.set_attr(ObMemAttr(tenant_id, "RepCkmItem"));
   }
   return ret;
 }
@@ -651,8 +665,9 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
 
   if (OB_FAIL(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
+  } else if (OB_FAIL(item.set_tenant_id((uint64_t)int_tenant_id))) {
+    LOG_WARN("failed to set tenant id", KR(ret), K(int_tenant_id));
   } else {
-    item.tenant_id_ = (uint64_t)int_tenant_id;
     item.tablet_id_ = (uint64_t)int_tablet_id;
     item.ls_id_ = ls_id;
     if (OB_UNLIKELY(!item.server_.set_ip_addr(ip, static_cast<int32_t>(port)))) {

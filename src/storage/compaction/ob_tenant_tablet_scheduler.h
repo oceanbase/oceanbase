@@ -198,7 +198,6 @@ public:
       const blocksstable::MacroBlockId &macro_id,
       const int64_t prefix_len);
   static bool check_tx_table_ready(ObLS &ls, const share::SCN &check_scn);
-  static int check_ls_state(ObLS &ls, bool &need_merge);
   static int fill_minor_compaction_param(
       const ObTabletHandle &tablet_handle,
       const ObGetMergeTablesResult &result,
@@ -206,7 +205,6 @@ public:
       const int64_t parallel_dag_cnt,
       const int64_t create_time,
       compaction::ObTabletMergeDagParam &param);
-  static int check_ls_state_in_major(ObLS &ls, bool &need_merge);
   template <class T>
   static int schedule_tablet_minor_merge(
       ObLSHandle &ls_handle,
@@ -244,6 +242,7 @@ public:
     const ObIArray<compaction::ObTabletCheckInfo> &tablet_ls_infos,
     const ObIArray<compaction::ObTabletCheckInfo> &finish_tablet_ls_infos);
   OB_INLINE int64_t get_schedule_batch_size() const { return batch_size_mgr_.get_schedule_batch_size(); }
+  OB_INLINE int64_t get_checker_batch_size() const { return batch_size_mgr_.get_checker_batch_size(); }
 private:
   friend struct ObTenantTabletSchedulerTaskMgr;
   int schedule_next_medium_for_leader(

@@ -252,7 +252,7 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
         tablet_ls_set_.clear();
       }
     }
-    const int64_t batch_size = MTL(ObTenantTabletScheduler *)->get_schedule_batch_size();
+    const int64_t batch_size = MTL(ObTenantTabletScheduler *)->get_checker_batch_size();
     if (OB_FAIL(ret) || tablet_ls_infos.empty()) {
     } else if (OB_FAIL(batch_tablet_ls_infos.reserve(batch_size))) {
       LOG_WARN("fail to reserve array", K(ret), "size", batch_size);

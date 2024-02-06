@@ -796,45 +796,6 @@ bool ObTenantTabletScheduler::check_tx_table_ready(ObLS &ls, const SCN &check_sc
   return tx_table_ready;
 }
 
-int ObTenantTabletScheduler::check_ls_state(ObLS &ls, bool &need_merge)
-{
-  int ret = OB_SUCCESS;
-  need_merge = false;
-  if (ls.is_deleted()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-      LOG_INFO("ls is deleted", K(ret), K(ls));
-    }
-  } else if (ls.is_offline()) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-      LOG_INFO("ls is offline", K(ret), K(ls));
-    }
-  } else {
-    need_merge = true;
-  }
-  return ret;
-}
-
-int ObTenantTabletScheduler::check_ls_state_in_major(ObLS &ls, bool &need_merge)
-{
-  int ret = OB_SUCCESS;
-  need_merge = false;
-  ObLSRestoreStatus restore_status;
-  if (OB_FAIL(check_ls_state(ls, need_merge))) {
-    LOG_WARN("failed to check ls state", KR(ret), "ls_id", ls.get_ls_id());
-  } else if (!need_merge) {
-    // do nothing
-  } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
-    LOG_WARN("failed to get restore status", K(ret), K(ls));
-  } else if (OB_UNLIKELY(!restore_status.is_restore_none())) {
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-      LOG_INFO("ls is in restore status, should not loop tablet to schedule", K(ret), "ls_id", ls.get_ls_id());
-    }
-  } else {
-    need_merge = true;
-  }
-  return ret;
-}
-
 int ObTenantTabletScheduler::schedule_merge_dag(
     const ObLSID &ls_id,
     const storage::ObTablet &tablet,
@@ -1156,7 +1117,7 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
   bool need_fast_freeze = false;
   ObLS &ls = *ls_handle.get_ls();
   const ObLSID &ls_id = ls.get_ls_id();
-  if (OB_FAIL(check_ls_state(ls, need_merge))) {
+  if (OB_FAIL(ObTabletMergeChecker::check_ls_state(ls, need_merge))) {
     LOG_WARN("failed to check ls state", K(ret), K(ls));
   } else if (!need_merge) {
     // no need to merge, do nothing
@@ -1386,7 +1347,7 @@ int ObTenantTabletScheduler::schedule_ls_medium_merge(
   ObLS &ls = *ls_handle.get_ls();
   const ObLSID &ls_id = ls.get_ls_id();
   bool ls_could_schedule_medium = false;
-  if (OB_FAIL(check_ls_state_in_major(ls, need_merge))) {
+  if (OB_FAIL(ObTabletMergeChecker::check_ls_state_in_major(ls, need_merge))) {
     LOG_WARN("failed to check ls can schedule medium", K(ret), K(ls));
   } else if (!need_merge) {
     // no need to merge, do nothing // TODO(@jingshui): add diagnose info
@@ -1822,7 +1783,7 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
     LOG_WARN("major compaction is suspended", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_FAIL(check_ls_state_in_major(*ls_handle.get_ls(), can_merge))) {
+  } else if (OB_FAIL(ObTabletMergeChecker::check_ls_state_in_major(*ls_handle.get_ls(), can_merge))) {
     LOG_WARN("failed to check ls can schedule medium", K(ret), K(ls_handle));
   } else if (!can_merge) {
     // can't merge, do nothing
@@ -1883,7 +1844,7 @@ int ObTenantTabletScheduler::update_report_scn_as_ls_leader(ObLS &ls)
   bool is_election_leader = false;
   const int64_t major_merged_scn = get_inner_table_merged_scn();
   bool need_merge = false;
-  if (OB_FAIL(check_ls_state(ls, need_merge))) {
+  if (OB_FAIL(ObTabletMergeChecker::check_ls_state(ls, need_merge))) {
     LOG_WARN("failed to check ls state", K(ret), K(ls_id));
   } else if (!need_merge) {
     ret = OB_STATE_NOT_MATCH; // do nothing

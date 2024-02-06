@@ -85,6 +85,7 @@ public:
   int verify_checksum(const ObTabletReplicaChecksumItem &other) const;
   int assign_key(const ObTabletReplicaChecksumItem &other);
   int assign(const ObTabletReplicaChecksumItem &other);
+  int set_tenant_id(const uint64_t tenant_id);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(server), K_(row_count),
       K_(compaction_scn), K_(data_checksum), K_(column_meta));

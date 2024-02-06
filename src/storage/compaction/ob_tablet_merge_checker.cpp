@@ -15,6 +15,7 @@
 #include "lib/ob_errno.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/ls/ob_ls.h"
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
@@ -79,6 +80,46 @@ int ObTabletMergeChecker::check_could_merge_for_medium(
   }
   return ret;
 }
+
+int ObTabletMergeChecker::check_ls_state(ObLS &ls, bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = false;
+  if (ls.is_deleted()) {
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is deleted", K(ret), K(ls));
+    }
+  } else if (ls.is_offline()) {
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is offline", K(ret), K(ls));
+    }
+  } else {
+    need_merge = true;
+  }
+  return ret;
+}
+
+int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = false;
+  ObLSRestoreStatus restore_status;
+  if (OB_FAIL(check_ls_state(ls, need_merge))) {
+    LOG_WARN("failed to check ls state", KR(ret), "ls_id", ls.get_ls_id());
+  } else if (!need_merge) {
+    // do nothing
+  } else if (OB_FAIL(ls.get_ls_meta().get_restore_status(restore_status))) {
+    LOG_WARN("failed to get restore status", K(ret), K(ls));
+  } else if (OB_UNLIKELY(!restore_status.is_restore_none())) {
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
+      LOG_INFO("ls is in restore status, should not loop tablet to schedule", K(ret), "ls_id", ls.get_ls_id());
+    }
+  } else {
+    need_merge = true;
+  }
+  return ret;
+}
+
 
 } // namespace compaction
 } // namespace oceanbase

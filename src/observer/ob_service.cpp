@@ -2448,12 +2448,13 @@ int ObService::inner_fill_tablet_info_(
       LOG_WARN("fail to init a tablet replica", KR(ret), K(tenant_id),
           K(tablet_id), K(tablet_replica));
     } else if (!need_checksum) {
+    } else if (OB_FAIL(tablet_checksum.set_tenant_id(tenant_id))) {
+      LOG_WARN("failed to set tenant id", KR(ret), K(tenant_id));
     } else if (OB_FAIL(tablet_checksum.column_meta_.init(column_checksums))) {
       LOG_WARN("fail to init report column meta with column_checksums", KR(ret), K(column_checksums));
     } else if (OB_FAIL(tablet_checksum.compaction_scn_.convert_for_tx(snapshot_version))) {
       LOG_WARN("failed to convert scn", KR(ret), K(snapshot_version));
     } else {
-      tablet_checksum.tenant_id_ = tenant_id;
       tablet_checksum.ls_id_ = ls->get_ls_id();
       tablet_checksum.tablet_id_ = tablet_id;
       tablet_checksum.server_ = gctx_.self_addr();
