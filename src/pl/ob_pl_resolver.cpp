@@ -10959,8 +10959,11 @@ int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ct
   ObString dblink_name;
   ObString db_name;
   ObString pkg_name;
-  OZ (ObPLDblinkUtil::separate_name_from_synonym(resolve_ctx.schema_guard_, resolve_ctx.allocator_,
+  ObSchemaChecker checker;
+  OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
+  OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                 resolve_ctx.session_info_.get_database_name(),
                                                  pkg_syn_id, dblink_name, db_name, pkg_name));
   OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx, dblink_name, db_name, pkg_name,
                                            routine_name, expr_params, routine_info),
@@ -10979,8 +10982,11 @@ int ObPLResolver::resolve_dblink_type_with_synonym(const uint64_t pkg_syn_id,
   ObString dblink_name;
   ObString db_name;
   ObString pkg_name;
-  OZ (ObPLDblinkUtil::separate_name_from_synonym(resolve_ctx_.schema_guard_, resolve_ctx_.allocator_,
+  ObSchemaChecker checker;
+  OZ (checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
+  OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx_.allocator_,
                                                  resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                 resolve_ctx_.session_info_.get_database_name(),
                                                  pkg_syn_id, dblink_name, db_name, pkg_name));
   OZ (resolve_dblink_type(dblink_name, db_name, pkg_name, type_name, func, pl_type));
 #endif
@@ -14902,7 +14908,7 @@ int ObPLResolver::resolve_sequence_object(const ObQualifiedName &q_name,
   ObSchemaChecker sc;
   if (0 == q_name.col_name_.case_compare("NEXTVAL") ||
       0 == q_name.col_name_.case_compare("CURRVAL")) {
-    if (OB_FAIL(sc.init(resolve_ctx_.schema_guard_))) {
+    if (OB_FAIL(sc.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()))) {
       LOG_WARN("init schemachecker failed.");
     } else {
       // check if sequence is created. will also check synonym
@@ -15199,7 +15205,7 @@ int ObPLResolver::resolve_cursor(ObPLCompileUnitAST &func,
     ObSchemaChecker checker;
     ObSEArray<uint64_t, 4> syn_id_array;
     ObString new_package_name;
-    OZ (checker.init(resolve_ctx_.schema_guard_));
+    OZ (checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
     OZ (checker.get_obj_info_recursively_with_synonym(
       tenant_id, database_id, package_name, database_id, new_package_name, syn_id_array, true));
     OZ (resolve_ctx_.schema_guard_.get_package_info(
