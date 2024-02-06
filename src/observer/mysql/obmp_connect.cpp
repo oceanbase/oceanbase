@@ -102,6 +102,9 @@ int ObMPConnect::init_process_single_stmt(
     const ObMultiStmtItem& multi_stmt_item, ObSQLSessionInfo& session, bool has_more_result) const
 {
   int ret = OB_SUCCESS;
+  // Do not change the order of SqlCtx and Allocator. ObSqlCtx uses the resultset's allocator to
+  // allocate memory for ObSqlCtx::base_constraints_. The allocator must be deconstructed after sqlctx.
+  ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   ObSqlCtx ctx;
   const ObString& sql = multi_stmt_item.get_sql();
   ctx.exec_type_ = MpQuery;
@@ -124,7 +127,7 @@ int ObMPConnect::init_process_single_stmt(
     }
     ctx.retry_times_ = 0;
     ctx.schema_guard_ = &schema_guard;
-    ObMySQLResultSet result(session);
+    ObMySQLResultSet result(session, allocator);
     result.init_partition_location_cache(gctx_.location_cache_, gctx_.self_addr_, &schema_guard);
     result.set_has_more_result(has_more_result);
     result.get_exec_context().get_task_exec_ctx().set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
