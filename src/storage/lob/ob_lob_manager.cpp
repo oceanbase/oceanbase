@@ -1021,8 +1021,23 @@ int ObLobManager::check_need_out_row(
     if (!param.lob_common_->is_init_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid lob data", K(ret), KPC(param.lob_common_), K(data));
-    } else {
+    } else if (param.byte_size_ > 0) {
+      LOG_DEBUG("update keey outrow ", K(param.byte_size_), K(add_len), KPC(param.lob_common_),KPC(param.lob_data_));
       need_out_row = true;
+    } else {
+      // currently only insert support outrow -> inrow
+      LOG_DEBUG("insert outrow to inrow", K(param.byte_size_), K(add_len), KPC(param.lob_common_),KPC(param.lob_data_));
+      ObLobCommon *lob_common = nullptr;
+      if (OB_ISNULL(lob_common = OB_NEWx(ObLobCommon, param.allocator_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc buf failed.", K(ret), "size", sizeof(ObLobCommon));
+      } else {
+        lob_common->in_row_ = 1;
+        param.lob_common_ = lob_common;
+        param.lob_data_ = nullptr;
+        param.lob_locator_ = nullptr;
+        param.handle_size_ = sizeof(ObLobCommon);
+      }
     }
   } else if (param.lob_common_->in_row_ && need_out_row) {
     // combine lob_data->buffer and data
@@ -1202,6 +1217,9 @@ int ObLobManager::append(
       LOG_WARN("fail to get append lob byte len", K(ret), K(lob));
     } else if (OB_FAIL(check_need_out_row(param, append_lob_len, ori_inrow_data, false, alloc_inside, need_out_row))) {
       LOG_WARN("process out row check failed.", K(ret), K(param), KPC(lob_common), KPC(lob_data), K(lob));
+    } else if (OB_ISNULL(lob_common = param.lob_common_)) { // check_need_out_row may change lob_common
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lob_common is nul", K(ret), K(param), KPC(lob_common), KPC(lob_data), K(lob));
     } else if (!need_out_row) {
       // do inrow append
       int32_t cur_handle_size = lob_common->get_handle_size(param.byte_size_);
@@ -1573,6 +1591,9 @@ int ObLobManager::append(
       LOG_WARN("Unsupport remote append", K(ret), K(param));
     } else if (OB_FAIL(check_need_out_row(param, data.length(), data, true, alloc_inside, need_out_row))) {
       LOG_WARN("process out row check failed.", K(ret), K(param), KPC(lob_common), KPC(lob_data), K(data));
+    } else if (OB_ISNULL(lob_common = param.lob_common_)) { // check_need_out_row may change lob_common
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lob_common is nul", K(ret), K(param), KPC(lob_common), KPC(lob_data), K(data));
     } else if (!need_out_row) {
       // do inrow append
       int32_t cur_handle_size = lob_common->get_handle_size(param.byte_size_);
