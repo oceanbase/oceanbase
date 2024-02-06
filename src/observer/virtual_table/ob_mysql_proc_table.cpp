@@ -205,17 +205,7 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                           SHARE_SCHEMA_LOG(WARN, "fail to get data type str", KPC(routine_info->get_ret_type()));
                         }
                       } else {
-                        ObDataType ret_type;
-                        if (OB_FAIL(ob_sql_type_str(returns_buf,
-                                                    returns_buf_size,
-                                                    pos,
-                                                    ret_type.get_obj_type(),
-                                                    ret_type.get_length(),
-                                                    ret_type.get_precision(),
-                                                    ret_type.get_scale(),
-                                                    ret_type.get_collation_type()))) {
-                          SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(ret_type));
-                        }
+                        // proc no returns, fill empty.
                       }
                       if (OB_SUCC(ret)) {
                         ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), returns_buf);
