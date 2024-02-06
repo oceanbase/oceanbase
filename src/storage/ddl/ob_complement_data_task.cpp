@@ -80,7 +80,16 @@ int ObComplementDataParam::init(const ObDDLBuildSingleReplicaRequestArg &arg)
     LOG_WARN("invalid arg", K(ret), K(arg));
   } else {
     MTL_SWITCH (OB_SYS_TENANT_ID) {
-      if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+      if (OB_FAIL(ObDDLUtil::check_schema_version_refreshed(orig_tenant_id, orig_schema_version))) {
+        if (OB_SCHEMA_EAGAIN != ret) {
+          LOG_WARN("check schema version refreshed failed", K(ret), K(orig_tenant_id), K(orig_schema_version));
+        }
+      } else if (orig_tenant_id != dest_tenant_id
+          && OB_FAIL(ObDDLUtil::check_schema_version_refreshed(dest_tenant_id, dest_schema_version))) {
+        if (OB_SCHEMA_EAGAIN != ret) {
+          LOG_WARN("check schema version refreshed failed", K(ret), K(dest_tenant_id), K(dest_schema_version));
+        }
+      } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
                 orig_tenant_id, src_tenant_schema_guard, orig_schema_version))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), K(orig_tenant_id), K(orig_schema_version));
       } else if (OB_FAIL(src_tenant_schema_guard.get_tenant_info(orig_tenant_id, tenant_schema))) {

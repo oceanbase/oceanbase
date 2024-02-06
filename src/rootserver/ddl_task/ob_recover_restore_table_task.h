@@ -58,6 +58,8 @@ protected:
   virtual int fail() override;
   virtual int success() override;
 private:
+  int check_health();
+private:
   static const int64_t OB_RECOVER_RESTORE_TABLE_TASK_VERSION = 1L;
 };
 

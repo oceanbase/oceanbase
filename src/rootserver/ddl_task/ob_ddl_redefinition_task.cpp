@@ -2432,7 +2432,7 @@ int ObSyncTabletAutoincSeqCtx::sync()
       }
     }
   }
-  if (OB_LS_NOT_EXIST == ret || is_location_service_renew_error(ret)) {
+  if (share::ObIDDLTask::in_ddl_retry_white_list(ret)) {
     need_renew_location_ = true;
   }
   return ret;

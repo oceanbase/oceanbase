@@ -161,7 +161,7 @@ int ObRecoverRestoreTableTask::success()
 int ObRecoverRestoreTableTask::fail()
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator tmp_arena;
+  ObArenaAllocator tmp_arena("RestoreDDLClean");
   int64_t rpc_timeout = 0;
   int64_t all_orig_index_tablet_count = 0;
   const ObDatabaseSchema *db_schema = nullptr;
@@ -171,8 +171,8 @@ int ObRecoverRestoreTableTask::fail()
   obrpc::ObTableItem table_item;
   obrpc::ObDropTableArg drop_table_arg;
   obrpc::ObDDLRes drop_table_res;
+  bool need_cleanup = true;
   {
-    ObSchemaGetterGuard src_tenant_schema_guard;
     ObSchemaGetterGuard dst_tenant_schema_guard;
     if (OB_UNLIKELY(!is_inited_)) {
       ret = OB_NOT_INIT;
@@ -180,16 +180,13 @@ int ObRecoverRestoreTableTask::fail()
     } else if (OB_ISNULL(root_service)) {
       ret = OB_ERR_SYS;
       LOG_WARN("error sys, root service must not be nullptr", K(ret));
-    } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, src_tenant_schema_guard))) {
-      LOG_WARN("get schema guard failed", K(ret), K(tenant_id_));
-    } else if (OB_FAIL(get_orig_all_index_tablet_count(src_tenant_schema_guard, all_orig_index_tablet_count))) {
-      LOG_WARN("get orig all tablet count failed", K(ret));
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(dst_tenant_id_, dst_tenant_schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret), K(dst_tenant_id_));
     } else if (OB_FAIL(dst_tenant_schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(dst_tenant_id_), K(target_object_id_));
     } else if (OB_ISNULL(table_schema)) {
       // already dropped.
+      need_cleanup = false;
       LOG_INFO("already dropped", K(ret), K(dst_tenant_id_), K(target_object_id_));
     } else if (OB_FAIL(dst_tenant_schema_guard.get_database_schema(dst_tenant_id_, table_schema->get_database_id(), db_schema))) {
       LOG_WARN("get db schema failed", K(ret), K(dst_tenant_id_), KPC(table_schema));
@@ -218,11 +215,11 @@ int ObRecoverRestoreTableTask::fail()
       drop_table_arg.compat_mode_        = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
     }
   }
-  if (OB_SUCC(ret)) {
-    obrpc::ObCommonRpcProxy common_rpc_proxy = root_service->get_common_rpc_proxy().to(GCTX.self_addr()).timeout(rpc_timeout);
+  if (OB_SUCC(ret) && need_cleanup) {
     if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
       LOG_WARN("push back failed", K(ret), K(drop_table_arg));
-    } else if (OB_FAIL(common_rpc_proxy.drop_table(drop_table_arg, drop_table_res))) {
+    } else if (OB_FAIL(root_service->get_common_rpc_proxy().to(GCTX.self_addr())
+        .timeout(rpc_timeout).drop_table(drop_table_arg, drop_table_res))) {
       LOG_WARN("drop table failed", K(ret), K(rpc_timeout), K(drop_table_arg));
     }
   }
@@ -230,6 +227,43 @@ int ObRecoverRestoreTableTask::fail()
     if (OB_FAIL(cleanup())) {
       LOG_WARN("clean up failed", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObRecoverRestoreTableTask::check_health()
+{
+  int ret = OB_SUCCESS;
+  ObRootService *root_service = GCTX.root_service_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("error sys", K(ret));
+  } else if (!root_service->in_service()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("root service not in service, do not need retry", K(ret), K(object_id_), K(target_object_id_));
+    need_retry_ = false;
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), tenant_id_))) {
+    // switch to build failed if the source tenant is been dropped,
+    // in order to remove the destination tenant's persistent task record.
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+      const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
+      const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
+      int tmp_ret = switch_status(new_status, false, ret);
+      LOG_INFO("switch status to build_failed", K(ret), K(tmp_ret), K_(task_status), K(old_status), K(new_status));
+      ret = OB_SUCCESS;
+    } else if (OB_STANDBY_READ_ONLY == ret) {
+      // do not care about the role of the source tenant is expected.
+      if (OB_FAIL(ObDDLRedefinitionTask::check_health())) {
+        LOG_WARN("check health failed", K(ret), K_(task_status));
+      }
+    } else {
+      LOG_WARN("check tenant status normal failed", K(ret), K_(tenant_id));
+    }
+  } else if (OB_FAIL(ObDDLRedefinitionTask::check_health())) {
+    LOG_WARN("check health failed", K(ret), K_(task_status));
   }
   return ret;
 }

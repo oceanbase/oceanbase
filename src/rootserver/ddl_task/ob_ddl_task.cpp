@@ -979,11 +979,10 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
-  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), dst_tenant_id_))
-          || OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), tenant_id_))) {
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
       need_retry_ = false;
-      LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K(task_id_), K(parent_task_id_), K(tenant_id_), K(dst_tenant_id_));
+      LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K_(task_id), K_(parent_task_id), K_(dst_tenant_id));
     }
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
@@ -1059,33 +1058,17 @@ int ObDDLTask::refresh_status()
 int ObDDLTask::refresh_schema_version()
 {
   int ret = OB_SUCCESS;
-  ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLTask has not been inited", K(ret));
-  }
-
-  if (OB_SUCC(ret) && (schema_version_ > 0 && schema_version_ != UINT64_MAX)) {
-    int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(tenant_id_, refreshed_schema_version))) {
-      LOG_WARN("get refreshed schema version failed", K(ret), K(tenant_id_));
-    } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < schema_version_) {
-      ret = OB_SCHEMA_EAGAIN;
-      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-        LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(tenant_id_), K(schema_version_), K(refreshed_schema_version));
-      }
+  } else if (OB_FAIL(ObDDLUtil::check_schema_version_refreshed(tenant_id_, schema_version_))) {
+    if (OB_SCHEMA_EAGAIN != ret) {
+      LOG_WARN("check schema version refreshed failed", K(ret), K_(tenant_id), K_(schema_version));
     }
-  }
-
-  if (OB_SUCC(ret) && (tenant_id_ != dst_tenant_id_) && (dst_schema_version_ > 0 && dst_schema_version_ != UINT64_MAX)) {
-    int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_service.get_tenant_refreshed_schema_version(dst_tenant_id_, refreshed_schema_version))) {
-      LOG_WARN("get refreshed schema version failed", K(ret), K(dst_tenant_id_));
-    } else if (!ObSchemaService::is_formal_version(refreshed_schema_version) || refreshed_schema_version < dst_schema_version_) {
-      ret = OB_SCHEMA_EAGAIN;
-      if (REACH_TIME_INTERVAL(1000L * 1000L)) {
-        LOG_INFO("tenant schema not refreshed to the target version", K(ret), K(dst_tenant_id_), K(dst_schema_version_), K(refreshed_schema_version));
-      }
+  } else if (tenant_id_ == dst_tenant_id_) {
+  } else if (OB_FAIL(ObDDLUtil::check_schema_version_refreshed(dst_tenant_id_, dst_schema_version_))) {
+    if (OB_SCHEMA_EAGAIN != ret) {
+      LOG_WARN("check schema version refreshed failed", K(ret), K_(dst_tenant_id), K_(dst_schema_version));
     }
   }
   return ret;
@@ -1119,7 +1102,7 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
-  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(tenant_id_, object_id_, is_oracle_mode))) {
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(dst_tenant_id_, object_id_, is_oracle_mode))) {
     LOG_WARN("check if oracle mode failed", K(ret), K(object_id_));
   } else {
     ObDDLErrorMessageTableOperator::ObBuildDDLErrorMessage error_message;
