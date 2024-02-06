@@ -2126,6 +2126,19 @@ int ObRpcBatchSetTabletAutoincSeqP::process()
   return ret;
 }
 
+int ObRpcClearTabletAutoincSeqCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(rpc_pkt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid rpc pkt", K(ret));
+  } else {
+    const int64_t abs_timeout_us = get_send_timestamp() + rpc_pkt_->get_timeout();
+    ret = ObTabletAutoincrementService::get_instance().clear_tablet_autoinc_seq_cache(MTL_ID(), arg_.tablet_ids_, abs_timeout_us);
+  }
+  return ret;
+}
+
 #ifdef OB_BUILD_TDE_SECURITY
 int ObDumpTenantCacheMasterKeyP::process()
 {

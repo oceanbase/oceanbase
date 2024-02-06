@@ -38,6 +38,7 @@
 #include "share/schema/ob_user_sql_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/ob_autoincrement_service.h"
+#include "share/ob_tablet_autoincrement_service.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_primary_zone_util.h"
 #include "share/ob_replica_info.h"
@@ -21694,6 +21695,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
   schema_guard.set_session_id(drop_table_arg.session_id_);
   uint64_t tenant_id = drop_table_arg.tenant_id_;
   ObSchemaService *schema_service = schema_service_->get_schema_service();
+  ObTabletAutoincCacheCleaner tablet_autoinc_cleaner(tenant_id);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check_inner_stat error", K(ret));
   } else if (OB_ISNULL(schema_service)) {
@@ -21944,6 +21946,14 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             }
           }
         }
+
+        if (OB_SUCC(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(tablet_autoinc_cleaner.add_table(schema_guard, *table_schema))) {
+            LOG_WARN("failed to add table to tablet autoinc cleaner", K(tmp_ret));
+          }
+        }
+
         LOG_INFO("finish drop table", K(tenant_id), K(table_item), K(ret));
         if (OB_ERR_TABLE_IS_REFERENCED == ret) {
           fail_for_fk_cons = true;
@@ -22018,6 +22028,12 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
       ret = tmp_ret;
       LOG_WARN("publish schema failed", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_TMP_FAIL(tablet_autoinc_cleaner.commit())) {
+        LOG_WARN("failed to commit tablet autoinc cleaner", K(tmp_ret));
+      }
     }
   }
   return ret;
@@ -26854,6 +26870,7 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
   ObArray<uint64_t> table_ids;
   ObSchemaGetterGuard schema_guard;
   const ObDatabaseSchema *db_schema = NULL;
+  ObTabletAutoincCacheCleaner tablet_autoinc_cleaner(tenant_id);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
@@ -26942,6 +26959,12 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
                  actual_trans, tenant_id, arg.task_id_))) {
         LOG_WARN("update ddl task status to success failed", K(ret));
       }
+      if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(tablet_autoinc_cleaner.add_database(*db_schema))) {
+          LOG_WARN("failed to add database to tablet autoinc cleaner", K(tmp_ret));
+        }
+      }
     }
   }
 
@@ -26960,6 +26983,13 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
       if (OB_FAIL(publish_schema(tenant_id))) {
         LOG_WARN("publish schema failed", K(ret));
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(tablet_autoinc_cleaner.commit())) {
+      LOG_WARN("failed to commit tablet autoinc cleaner", K(tmp_ret));
     }
   }
 
