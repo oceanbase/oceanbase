@@ -23622,12 +23622,6 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
       }
     }
 
-    if (OB_SUCC(ret) && arg.task_id_ > 0) {
-      if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, tenant_id, arg.task_id_, arg.error_code_))) {
-        LOG_WARN("update ret code failed", K(ret));
-      }
-    }
-
     if (trans.is_started()) {
       int commit_ret = trans.end(OB_SUCC(ret));
       if (OB_SUCCESS != commit_ret) {

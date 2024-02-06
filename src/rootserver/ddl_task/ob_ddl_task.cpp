@@ -1072,7 +1072,8 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   } else {
     int64_t table_task_status = 0;
     int64_t execution_id = -1;
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, dst_tenant_id_, task_id_, table_task_status, execution_id))) {
+    int64_t ret_code = OB_SUCCESS;
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, dst_tenant_id_, task_id_, table_task_status, execution_id, ret_code))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         need_retry_ = false;
       }
@@ -1082,8 +1083,10 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       real_new_status = FAIL;
       ret_code_ = OB_CANCELED;
     } else if (old_status != table_task_status) {
-      // refresh status
+      // refresh status and ret_code
       real_new_status = static_cast<ObDDLTaskStatus>(table_task_status);
+      ret_code_ = ret_code;
+      LOG_INFO("refresh status", K(task_id_), K(real_new_status), K(ret_code_));
     } else if (old_status == real_new_status) {
       // do nothing
     } else {
@@ -1096,7 +1099,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
               trans, dst_tenant_id_, task_id_, static_cast<int64_t>(real_new_status)))) {
         LOG_WARN("update task status failed", K(ret), K(task_id_), K(real_new_status));
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && FAIL == real_new_status) {
         if (OB_FAIL(ObDDLTaskRecordOperator::update_ret_code(trans, dst_tenant_id_, task_id_, ret_code_))) {
           LOG_WARN("failed to update ret code", K(ret));
         }
@@ -1416,13 +1419,14 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
   ObRootService *root_service = nullptr;
   int64_t task_status = 0;
   int64_t execution_id = 0;
+  int64_t ret_code = OB_SUCCESS;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id))) {
     LOG_WARN("start transaction failed", K(ret));
   } else {
-    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id))) {
+    if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
       LOG_WARN("update task status failed", K(ret));
@@ -3436,7 +3440,8 @@ int ObDDLTaskRecordOperator::select_for_update(
     const uint64_t tenant_id,
     const int64_t task_id,
     int64_t &task_status,
-    int64_t &execution_id)
+    int64_t &execution_id,
+    int64_t &ret_code)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_string;
@@ -3448,7 +3453,7 @@ int ObDDLTaskRecordOperator::select_for_update(
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id FROM %s WHERE task_id = %lu FOR UPDATE",
+      if (OB_FAIL(sql_string.assign_fmt("SELECT status, execution_id, ret_code FROM %s WHERE task_id = %lu FOR UPDATE",
           OB_ALL_DDL_TASK_STATUS_TNAME, task_id))) {
         LOG_WARN("assign sql string failed", K(ret), K(task_id), K(tenant_id));
       } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
@@ -3469,6 +3474,7 @@ int ObDDLTaskRecordOperator::select_for_update(
       } else {
         EXTRACT_INT_FIELD_MYSQL(*result, "status", task_status, int64_t);
         EXTRACT_INT_FIELD_MYSQL(*result, "execution_id", execution_id, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", ret_code, int64_t);
       }
     }
   }
