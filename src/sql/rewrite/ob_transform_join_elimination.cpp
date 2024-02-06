@@ -205,7 +205,9 @@ int ObTransformJoinElimination::check_eliminate_join_self_key_valid(ObDMLStmt *s
   } else if (!tmp_valid) {
     /*do nothing*/
     OPT_TRACE("hint disable transform");
-  } else if ((stmt->is_delete_stmt() || stmt->is_update_stmt()) &&
+  } else if ((stmt->is_delete_stmt() ||
+              stmt->is_update_stmt() ||
+              stmt->is_merge_stmt()) &&
              OB_FAIL(check_eliminate_delupd_table_valid(static_cast<ObDelUpdStmt *> (stmt),
                                                         target_table->table_id_,
                                                         tmp_valid))) {
