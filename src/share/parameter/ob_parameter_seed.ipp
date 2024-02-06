@@ -441,6 +441,11 @@ DEF_INT(_temporary_file_io_area_size, OB_TENANT_PARAMETER, "1", "[0, 50)",
     "memory buffer size of temporary file, as a percentage of total tenant memory. "
     "Range: [0, 50), percentage",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_temporary_file_meta_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+    "The memory limit of temporary file meta, and the value is a percentage of the tenant's memory. "
+    "For compatibility, the default value is 0, and the memory limit size is 15GB. "
+    "Range: [0, 100], percentage",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(__enable_small_tenant, OB_CLUSTER_PARAMETER, "true",
     "specify when small tenant configuration is on "
     "true: turn small tenant configuration on, false: turn small tenant configuration off",

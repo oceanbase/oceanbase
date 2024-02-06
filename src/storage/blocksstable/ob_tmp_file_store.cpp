@@ -13,6 +13,7 @@
 #include "ob_tmp_file_store.h"
 #include "ob_tmp_file.h"
 #include "share/ob_task_define.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::share;
 
@@ -715,7 +716,16 @@ int64_t ObTmpTenantMacroBlockManager::get_next_blk_id()
 }
 
 ObTmpTenantFileStore::ObTmpTenantFileStore()
-    : tmp_block_manager_(), page_cache_(NULL), tmp_mem_block_manager_(), file_handle_(), allocator_(), is_inited_(false), ref_cnt_(0)
+    : tmp_block_manager_(),
+      page_cache_(nullptr),
+      tmp_mem_block_manager_(),
+      file_handle_(),
+      allocator_(),
+      tenant_id_(0),
+      last_access_tenant_config_ts_(0),
+      last_meta_mem_limit_(TOTAL_LIMIT),
+      is_inited_(false),
+      ref_cnt_(0)
 {}
 
 ObTmpTenantFileStore::~ObTmpTenantFileStore()
@@ -747,7 +757,8 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id, const ObStorageFileHand
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObTmpTenantFileStore has not been inited", K(ret));
-  } else if (OB_FAIL(allocator_.init(TOTAL_LIMIT, HOLD_LIMIT, BLOCK_SIZE))) {
+  } else if (OB_FAIL(
+                 allocator_.init(BLOCK_SIZE, ObModIds::OB_TMP_BLOCK_MANAGER, tenant_id, get_memory_limit(tenant_id)))) {
     STORAGE_LOG(WARN, "fail to init allocator", K(ret));
   } else if (OB_ISNULL(page_cache_ = &ObTmpPageCache::get_instance())) {
     ret = OB_ERR_UNEXPECTED;
@@ -759,6 +770,7 @@ int ObTmpTenantFileStore::init(const uint64_t tenant_id, const ObStorageFileHand
   } else if (OB_FAIL(file_handle_.assign(file_handle))) {
     STORAGE_LOG(WARN, "fail to assign file handle", K(ret), K(file_handle));
   } else {
+    tenant_id_ = tenant_id;
     allocator_.set_label(ObModIds::OB_TMP_BLOCK_MANAGER);
     is_inited_ = true;
   }
@@ -777,6 +789,9 @@ void ObTmpTenantFileStore::destroy()
   }
   allocator_.destroy();
   file_handle_.reset();
+  last_access_tenant_config_ts_ = 0;
+  last_meta_mem_limit_ = TOTAL_LIMIT;
+  tenant_id_ = 0;
   is_inited_ = false;
 }
 
@@ -997,6 +1012,7 @@ int ObTmpTenantFileStore::alloc_macro_block(const int64_t dir_id, const uint64_t
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTmpMacroBlockManager has not been inited", K(ret));
+  } else if (FALSE_IT(refresh_memory_limit())) {
   } else if (OB_FAIL(tmp_block_manager_.alloc_macro_block(dir_id, tenant_id, t_mblk))) {
     STORAGE_LOG(WARN, "cannot allocate a tmp macro block", K(ret), K(dir_id), K(tenant_id));
   } else {
@@ -1158,7 +1174,45 @@ int ObTmpTenantFileStore::wait_write_io_finish_if_need()
   return ret;
 }
 
-int ObTmpTenantFileStore::write(const ObTmpBlockIOInfo& io_info)
+void ObTmpTenantFileStore::refresh_memory_limit()
+{
+  const int64_t old_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
+  const int64_t new_limit = get_memory_limit(tenant_id_);
+  if (old_limit != new_limit) {
+    allocator_.set_total_limit(new_limit);
+    ObTaskController::get().allow_next_syslog();
+    STORAGE_LOG(INFO, "succeed to refresh temporary file meta memory limit", K(tenant_id_), K(old_limit), K(new_limit));
+  }
+}
+
+int64_t ObTmpTenantFileStore::get_memory_limit(const uint64_t tenant_id)
+{
+  const int64_t last_access_ts = ATOMIC_LOAD(&last_access_tenant_config_ts_);
+  int64_t memory_limit = TOTAL_LIMIT;
+  if (last_access_ts > 0 && common::ObClockGenerator::getClock() - last_access_ts < REFRESH_CONFIG_INTERVAL) {
+    memory_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
+  } else {
+    omt::ObTenantConfigGuard config(TENANT_CONF(tenant_id));
+    const int64_t tenant_mem_limit = lib::get_tenant_memory_limit(tenant_id);
+    if (!config.is_valid() || 0 == tenant_mem_limit || INT64_MAX == tenant_mem_limit) {
+      COMMON_LOG(INFO, "failed to get tenant config", K(tenant_id), K(tenant_mem_limit));
+    } else if (0 == config->_temporary_file_meta_memory_limit_percentage) {
+      memory_limit = TOTAL_LIMIT;  // default value, 15GB
+    } else {
+      memory_limit = tenant_mem_limit * config->_temporary_file_meta_memory_limit_percentage / 100;
+      if (OB_UNLIKELY(memory_limit <= 0)) {
+        STORAGE_LOG(INFO, "memory limit isn't more than 0", K(memory_limit));
+        memory_limit = ATOMIC_LOAD(&last_meta_mem_limit_);
+      } else {
+        ATOMIC_STORE(&last_meta_mem_limit_, memory_limit);
+        ATOMIC_STORE(&last_access_tenant_config_ts_, common::ObClockGenerator::getClock());
+      }
+    }
+  }
+  return memory_limit;
+}
+
+int ObTmpTenantFileStore::write(const ObTmpBlockIOInfo &io_info)
 {
   int ret = OB_SUCCESS;
   ObTmpMacroBlock* block = NULL;
