@@ -154,7 +154,8 @@ int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
   }
   return ret;
 }
-int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
+int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
+                              bool &need_response_error)
 {
   int ret = OB_SUCCESS;
   ObAuditRecordData &audit_record = session.get_raw_audit_record();
@@ -199,7 +200,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
       // 本分支内如果出错，全部会在response_result内部处理妥当
       // 无需再额外处理回复错误包
       session.set_current_execution_id(execution_id);
-
+      OX (need_response_error = false);
       if (0 == fetch_limit && !cursor->is_streaming()
                            && cursor->is_ps_cursor()
                            && lib::is_oracle_mode()
@@ -214,6 +215,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session)
         // oracle return success when read nothing
         ret = OB_SUCCESS;
       }
+      OX (need_response_error = true);
     }
     if (enable_perf_event) {
       //监控项统计结束
@@ -598,7 +600,8 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
   return ret;
 }
 
-int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session)
+int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session,
+                                      bool &need_response_error)
 {
   int ret = OB_SUCCESS;
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
@@ -620,7 +623,7 @@ int ObMPStmtFetch::process_fetch_stmt(ObSQLSessionInfo &session)
       LOG_WARN("update transmisson checksum flag failed", K(ret));
     } else {
       // do the real work
-      ret = do_process(session);
+      ret = do_process(session, need_response_error);
     }
   }
   if (enable_trace_log) {
@@ -726,7 +729,7 @@ int ObMPStmtFetch::process()
       ObPLCursorInfo *cursor = NULL;
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();
-      ret = process_fetch_stmt(session);
+      ret = process_fetch_stmt(session, need_response_error);
       // set cursor fetched info. if cursor has be fetched, we need to disconnect
       cursor = session.get_cursor(cursor_id_);
       if (OB_NOT_NULL(cursor) && cursor->get_fetched()) {
