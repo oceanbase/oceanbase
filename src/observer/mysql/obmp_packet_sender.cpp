@@ -672,6 +672,8 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
 
   if (OB_SUCC(ret)) {
     bool ac = true;
+    bool is_no_backslash_escapes = false;
+    IS_NO_BACKSLASH_ESCAPES(session.get_sql_mode(), is_no_backslash_escapes);
     if (OB_FAIL(session.get_autocommit(ac))) {
       LOG_WARN("fail to get autocommit", K(ret));
     } else {
@@ -680,6 +682,9 @@ int ObMPPacketSender::send_ok_packet(ObSQLSessionInfo &session, ObOKPParam &ok_p
         = (session.is_server_status_in_transaction() ? 1 : 0);
       flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
       flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = ok_param.has_more_result_;
+      if (conn_->client_type_ == common::OB_CLIENT_NON_STANDARD) {
+        flags.status_flags_.OB_SERVER_STATUS_NO_BACKSLASH_ESCAPES = is_no_backslash_escapes;
+      }
       if (!conn_->is_proxy_) {
         // in java client or others, use slow query bit to indicate partition hit or not
         flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !ok_param.is_partition_hit_;
