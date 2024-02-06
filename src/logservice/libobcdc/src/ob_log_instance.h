@@ -92,7 +92,7 @@ public:
 
 typedef common::sqlclient::ObMySQLServerProvider ServerProviderType;
 
-class ObLogInstance : public IObCDCInstance, public IObLogErrHandler
+class ObLogInstance : public IObCDCInstance, public IObLogErrHandler, public lib::ThreadPool
 {
 public:
   virtual ~ObLogInstance();
@@ -218,6 +218,8 @@ private:
   static void *flow_control_thread_func_(void *args);
   int start_threads_();
   void wait_threads_stop_();
+  void run1() override;
+  int daemon_handle_storage_op_thd_();
   void reload_config_();
   void print_tenant_memory_usage_();
   void global_flow_control_();
@@ -288,7 +290,10 @@ private:
 
 private:
   static ObLogInstance *instance_;
-
+  // Threads that runs with instance
+  // thread count = 1, start from idx 0;
+  // thread 0: use to operate storage(manul flush and compact)
+  static const int64_t DAEMON_THREAD_COUNT;
 private:
   bool                    inited_;
   bool                    is_running_;

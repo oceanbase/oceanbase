@@ -220,7 +220,7 @@ int ObLogReader::handle_task_(ObLogEntryTask &log_entry_task,
     LOG_ERROR("get_tenant_guard fail", KR(ret));
   } else {
     tenant = guard.get_tenant();
-    column_family_handle = tenant->get_cf();
+    column_family_handle = tenant->get_redo_storage_cf_handle();
   }
 
   if (OB_FAIL(ret)) {

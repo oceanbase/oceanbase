@@ -998,7 +998,7 @@ int ObLogTenantMgr::remove_tenant_(const uint64_t tenant_id, ObLogTenant *tenant
   } else if (OB_ISNULL(tenant)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant is NULL", KR(ret), K(tenant_id), K(tenant));
-  } else if (OB_ISNULL(cf = tenant->get_cf())) {
+  } else if (OB_ISNULL(cf = tenant->get_redo_storage_cf_handle())) {
     ret= OB_ERR_UNEXPECTED;
     LOG_ERROR("cf is NULL", KR(ret), K(tid), KPC(tenant));
   } else if (OB_FAIL(store_service->drop_column_family(cf))) {
@@ -1434,7 +1434,7 @@ bool ObLogTenantMgr::TenantPrinter::operator()(const TenantID &tid, ObLogTenant 
       serving_tenant_count_++;
     }
     (void)tenant_ids_.push_back(tid.tenant_id_);
-    (void)cf_handles_.push_back(tenant->get_cf());
+    (void)cf_handles_.push_back(tenant->get_redo_storage_cf_handle());
     (void)lob_storage_cf_handles_.push_back(tenant->get_lob_storage_cf_handle());
   }
   return true;
@@ -1455,6 +1455,42 @@ void ObLogTenantMgr::print_stat_info()
   if (NULL != store_service) {
     store_service->get_mem_usage(printer.tenant_ids_, printer.cf_handles_);
     store_service->get_mem_usage(printer.tenant_ids_, printer.lob_storage_cf_handles_);
+  }
+}
+
+bool ObLogTenantMgr::TenantRedoStorageOperator::operator()(const TenantID &tid, ObLogTenant *tenant)
+{
+  if (OB_NOT_NULL(tenant)) {
+    if (TenantStorageOp::FLUSH == op_) {
+      tenant->flush_storage();
+    } else if (TenantStorageOp::COMPACT == op_) {
+      tenant->compact_storage();
+    } else {
+      LOG_INFO("UNKNOWN_TENANT_STORAGE_OPERATION, IGNORE", K(tid), K_(op));
+    }
+  }
+
+  return true;
+}
+
+void ObLogTenantMgr::flush_storaged_redo()
+{
+  IObStoreService *store_service = TCTX.store_service_;
+
+  if (OB_NOT_NULL(store_service)) {
+    TenantStorageOp op = TenantStorageOp::FLUSH;
+    TenantRedoStorageOperator redo_compactor(*store_service, op);
+    (void)tenant_hash_map_.for_each(redo_compactor);
+  }
+}
+void ObLogTenantMgr::compact_storaged_redo()
+{
+  IObStoreService *store_service = TCTX.store_service_;
+
+  if (OB_NOT_NULL(store_service)) {
+    TenantStorageOp op = TenantStorageOp::COMPACT;
+    TenantRedoStorageOperator redo_compactor(*store_service, op);
+    (void)tenant_hash_map_.for_each(redo_compactor);
   }
 }
 

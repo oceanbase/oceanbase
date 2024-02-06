@@ -139,6 +139,9 @@ public:
       palf::LSN &sys_ls_min_handle_log_lsn) = 0;
 
   virtual void print_stat_info() = 0;
+  // compact redo storaged in storage in case of occupy too much resource
+  virtual void flush_storaged_redo() = 0;
+  virtual void compact_storaged_redo() = 0;
 
   virtual int register_ls_add_callback(LSAddCallback *callback) = 0;
   virtual int register_ls_recycle_callback(LSRecycleCallback *callback) = 0;
@@ -229,6 +232,8 @@ public:
       palf::LSN &sys_ls_min_handle_log_lsn);
   virtual bool is_inited() { return inited_; }
   void print_stat_info();
+  void flush_storaged_redo();
+  void compact_storaged_redo();
 
   template <typename Func> int for_each_tenant(Func &func)
   {
@@ -335,6 +340,16 @@ private:
     std::vector<void *> lob_storage_cf_handles_;
 
     TenantPrinter() : serving_tenant_count_(0), offline_tenant_count_(0), cf_handles_(), lob_storage_cf_handles_() {}
+    bool operator()(const TenantID &tid, ObLogTenant *tenant);
+  };
+
+  enum TenantStorageOp {FLUSH = 0, COMPACT=1};
+
+  struct TenantRedoStorageOperator
+  {
+    IObStoreService &store_service_;
+    TenantStorageOp op_;
+    TenantRedoStorageOperator(IObStoreService &store_service, TenantStorageOp &op) : store_service_(store_service), op_(op) {}
     bool operator()(const TenantID &tid, ObLogTenant *tenant);
   };
 

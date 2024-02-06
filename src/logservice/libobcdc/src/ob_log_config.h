@@ -252,6 +252,8 @@ public:
   // the destination of archive log.
   DEF_STR(archive_dest, OB_CLUSTER_PARAMETER, "|", "the location of archive log");
   T_DEF_INT_INFT(rocksdb_write_buffer_size, OB_CLUSTER_PARAMETER, 64, 16, "write buffer size[M]");
+  DEF_TIME(rocksdb_flush_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,1d]", "rocksdb flush interval for redo_storage, 0s means never");
+  DEF_TIME(rocksdb_compact_interval, OB_CLUSTER_PARAMETER, "6h", "[0s,7d]", "rocksdb compact interval for redo_storage, 0s means never");
 
   T_DEF_INT_INFT(io_thread_num, OB_CLUSTER_PARAMETER, 4, 1, "io thread number");
   T_DEF_INT(idle_pool_thread_num, OB_CLUSTER_PARAMETER, 4, 1, 32, "idle pool thread num");
