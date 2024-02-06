@@ -1036,6 +1036,7 @@ int ObMicroBlockDecoder::acquire(
 int ObMicroBlockDecoder::acquire(const int64_t store_idx, const ObIColumnDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
+  decoder = nullptr;
   if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
     decoder = &cached_decoder_->at(store_idx);
   } else {
@@ -1047,6 +1048,12 @@ int ObMicroBlockDecoder::acquire(const int64_t store_idx, const ObIColumnDecoder
       LOG_WARN("add decoder failed", K(ret), K(store_idx), "column_header", col_header_[store_idx]);
     } else {
       ++need_release_decoder_cnt_;
+    }
+
+    if (OB_FAIL(ret) && decoder != nullptr) {
+      release_local_funcs_[decoder->get_type()]
+          (*local_decoder_pool_, const_cast<ObIColumnDecoder *>(decoder));
+      decoder = nullptr;
     }
   }
   return ret;

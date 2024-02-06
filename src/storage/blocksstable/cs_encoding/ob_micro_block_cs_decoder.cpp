@@ -767,16 +767,25 @@ int ObMicroBlockCSDecoder::acquire(
 int ObMicroBlockCSDecoder::acquire(const int64_t store_idx, const ObIColumnCSDecoder *&decoder)
 {
   int ret = OB_SUCCESS;
+  decoder = nullptr;
   const ObCSColumnHeader &col_header = transform_helper_.get_column_header(store_idx);
   if (NULL != cached_decoder_ && store_idx < cached_decoder_->count_) {
     decoder = &cached_decoder_->at(store_idx);
-  } else if (OB_FAIL(acquire_local_funcs_[(ObCSColumnHeader::Type)col_header.type_](
-                     *local_decoder_pool_, decoder))) {
-    LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header));
-  } else if (OB_FAIL(need_release_decoders_.push_back(decoder))) {
-    LOG_WARN("add decoder failed", K(ret), K(store_idx), K(col_header));
   } else {
-    ++need_release_decoder_cnt_;
+    if (OB_FAIL(acquire_local_funcs_[(ObCSColumnHeader::Type)col_header.type_](
+                      *local_decoder_pool_, decoder))) {
+      LOG_WARN("acquire decoder failed", K(ret), K(store_idx), K(col_header));
+    } else if (OB_FAIL(need_release_decoders_.push_back(decoder))) {
+      LOG_WARN("add decoder failed", K(ret), K(store_idx), K(col_header));
+    } else {
+      ++need_release_decoder_cnt_;
+    }
+
+    if (OB_FAIL(ret) && decoder != nullptr) {
+      release_local_funcs_[decoder->get_type()]
+          (*local_decoder_pool_, const_cast<ObIColumnCSDecoder *>(decoder));
+      decoder = nullptr;
+    }
   }
   return ret;
 }
