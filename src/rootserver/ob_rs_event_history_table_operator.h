@@ -38,6 +38,7 @@ private:
 
 #define ROOTSERVICE_EVENT_INSTANCE (::oceanbase::rootserver::ObRsEventHistoryTableOperator::get_instance())
 #define ROOTSERVICE_EVENT_ADD(args...)                                         \
-  ROOTSERVICE_EVENT_INSTANCE.add_event(args)
-
+  ROOTSERVICE_EVENT_INSTANCE.add_event<false>(args)
+#define ROOTSERVICE_EVENT_ADD_TRUNCATE(args...)                                \
+  ROOTSERVICE_EVENT_INSTANCE.add_event<true>(args)
 #endif // OCEANBASE_ROOTSERVER_OB_RS_EVENT_HISTORY_TABLE_OPERATOR_H_
