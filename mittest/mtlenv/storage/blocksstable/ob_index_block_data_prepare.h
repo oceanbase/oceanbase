@@ -35,6 +35,7 @@
 #include "storage/mock_access_service.h"
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
+#include "storage/ddl/ob_ddl_merge_task.h"
 
 namespace oceanbase
 {
@@ -102,6 +103,7 @@ protected:
   ObMergeType merge_type_;
   int64_t max_row_cnt_;
   int64_t max_partial_row_cnt_;
+  int64_t co_sstable_row_offset_;
   int64_t partial_kv_start_idx_;
   ObTableSchema table_schema_;
   ObTableSchema index_schema_;
@@ -193,6 +195,7 @@ TestIndexBlockDataPrepare::TestIndexBlockDataPrepare(
     const int64_t mirco_blocks_per_macro_block)
   : merge_type_(merge_type),
     max_row_cnt_(max_row_cnt),
+    co_sstable_row_offset_(0),
     row_cnt_(0),
     partial_sstable_row_cnt_(0),
     root_index_builder_(nullptr),
@@ -890,6 +893,36 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ASSERT_EQ(OB_SUCCESS, storage_schema->get_stored_column_count_in_sstable(column_cnt));
   prepare_partial_sstable(column_cnt);
   prepare_merge_ddl_kvs();
+
+  ObArray<blocksstable::ObSSTable *> ddl_tables;
+  ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(&partial_sstable_));
+  for (int64_t i = 0; i < DDL_KVS_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, ddl_tables.push_back(ddl_kvs_.get_obj()->get_ddl_memtables().at(i)));
+  }
+  share::SCN ddl_start_scn;
+  ddl_start_scn.convert_from_ts(ObTimeUtility::current_time());
+  ObTabletDDLParam ddl_param;
+  ddl_param.table_key_ = partial_sstable_.key_;
+  ddl_param.data_format_version_ = DATA_VERSION_4_3_0_0;
+  ddl_param.start_scn_ = ddl_start_scn;
+  ddl_param.commit_scn_ = ddl_start_scn;
+  ddl_param.direct_load_type_ = DIRECT_LOAD_DDL;
+  ddl_param.ls_id_ = ls_id_;
+  ddl_param.snapshot_version_ = SNAPSHOT_VERSION;
+  ObArray<ObDDLBlockMeta> sorted_metas;
+  ObArenaAllocator arena("compact_test", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ASSERT_EQ(OB_SUCCESS, ObTabletDDLUtil::get_compact_meta_array(
+                                         *tablet_handle.get_obj(),
+                                         ddl_tables,
+                                         ddl_param,
+                                         tablet_handle.get_obj()->get_rowkey_read_info(),
+                                         storage_schema,
+                                         arena,
+                                         sorted_metas));
+  if (co_sstable_row_offset_ != 0) {
+    ASSERT_EQ(sorted_metas.at(2).end_row_offset_, co_sstable_row_offset_);
+  }
+  arena.reset();
   ObTabletObjLoadHelper::free(allocator_, storage_schema);
 }
 
@@ -983,6 +1016,24 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
     STORAGE_LOG(INFO, "not supported root block", K(root_desc));
     ASSERT_TRUE(false);
   }
+  ObMicroBlockReaderHelper reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(merge_root_index_builder_->index_store_desc_.get_desc().row_store_type_, micro_reader));
+  ObMicroBlockData root_block(root_buf, root_size);
+  ObDatumRow row;
+  OK(row.init(allocator_, merge_root_index_builder_->index_store_desc_.get_desc().col_desc_->row_column_count_));
+  OK(micro_reader->init(root_block, nullptr));
+  ObIndexBlockRowParser idx_row_parser;
+  int64_t last_idx = 0;
+  for (int64_t it = 0; it != micro_reader->row_count(); ++it) {
+    idx_row_parser.reset();
+    OK(micro_reader->get_row(it, row));
+    OK(idx_row_parser.init(TEST_ROWKEY_COLUMN_CNT + 2, row));
+    int64_t before_last_idx = last_idx;
+    STORAGE_LOG(INFO, "check offset", K(idx_row_parser.get_row_offset()), K(it));
+  }
+
   // deserialize micro block header in root block buf
   ObMicroBlockHeader root_micro_header;
   int64_t des_pos = 0;

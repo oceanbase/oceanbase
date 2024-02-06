@@ -1624,6 +1624,70 @@ TEST_F(TestIndexTree, test_cg_row_offset)
   }
 }
 
+TEST_F(TestIndexTree, test_absolute_offset)
+{
+  int ret = OB_SUCCESS;
+  const int64_t test_row_num = 500;
+  ObArray<ObMacroBlocksWriteCtx *> data_write_ctxs;
+  ObArray<ObMacroBlocksWriteCtx *> index_write_ctxs;
+  ObMacroMetasArray *merge_info_list = nullptr;
+  ObSSTableMergeRes res;
+  IndexTreeRootCtxList *roots = nullptr;
+
+  ObWholeDataStoreDesc data_desc;
+  ObSSTableIndexBuilder sstable_builder;
+
+  prepare_data_desc(data_desc, &sstable_builder);
+  data_desc.get_desc().micro_block_size_ = 512; // make test index tree height > 2
+  ret = sstable_builder.init(data_desc.get_desc());
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObWholeDataStoreDesc index_desc;
+  prepare_index_desc(data_desc, index_desc);
+
+  ObIndexBlockRebuilder rebuilder;
+  OK(rebuilder.init(sstable_builder, false, nullptr, true/*use_absolute_offset*/));
+
+  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots);
+  ASSERT_EQ(test_row_num, merge_info_list->count());
+  vector<int64_t> absolute_offsets;
+  for (int meta_idx = 0; meta_idx < test_row_num; meta_idx += 10) {
+    rebuilder.append_macro_row(*merge_info_list->at(meta_idx), meta_idx);
+    absolute_offsets.push_back(meta_idx);
+  }
+  OK(rebuilder.close());
+  ObSSTableMergeRes res2;
+  OK(sstable_builder.close(res2));
+  ASSERT_GT(res2.root_desc_.height_, 2);
+
+  ObMicroBlockReaderHelper reader_helper;
+  ObIMicroBlockReader *micro_reader;
+  ASSERT_EQ(OB_SUCCESS, reader_helper.init(allocator_));
+  ASSERT_EQ(OB_SUCCESS, reader_helper.get_reader(sstable_builder.index_store_desc_.get_desc().row_store_type_, micro_reader));
+
+
+  ObMicroBlockData root_block(res2.root_desc_.buf_, res2.root_desc_.addr_.size_);
+  ObDatumRow row;
+  OK(row.init(allocator_, index_desc.get_desc().col_desc_->row_column_count_));
+  OK(micro_reader->init(root_block, nullptr));
+  ObIndexBlockRowParser idx_row_parser;
+  int64_t last_idx = 0;
+  for (int64_t it = 0; it != micro_reader->row_count(); ++it) {
+    idx_row_parser.reset();
+    OK(micro_reader->get_row(it, row));
+    OK(idx_row_parser.init(TEST_ROWKEY_COLUMN_CNT + 2, row));
+    int64_t before_last_idx = last_idx;
+    for (int absolute_idx = last_idx; absolute_idx < absolute_offsets.size(); absolute_idx ++) {
+      if (absolute_offsets[absolute_idx] == idx_row_parser.get_row_offset()) {
+        last_idx = absolute_idx;
+      }
+    }
+    ASSERT_GT(last_idx, before_last_idx);
+    if (it == micro_reader->row_count() - 1) {
+      ASSERT_EQ(absolute_offsets[absolute_offsets.size() - 1], idx_row_parser.get_row_offset());
+    }
+  }
+}
 
 TEST_F(TestIndexTree, test_close_with_old_schema)
 {

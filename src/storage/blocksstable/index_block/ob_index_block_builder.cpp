@@ -2808,6 +2808,8 @@ int ObIndexBlockRebuilder::append_macro_row(
       STORAGE_LOG(WARN, "failed to add macro block meta", K(ret), K(macro_meta));
     } else if (OB_FAIL(index_tree_root_ctx_->add_absolute_row_offset(absolute_row_offset))) {
       STORAGE_LOG(WARN, "failed to add abs row offset", K(ret), K(absolute_row_offset));
+    } else {
+      STORAGE_LOG(DEBUG, "append macro meta with absolute offset", K(absolute_row_offset), K(macro_meta));
     }
   }
   return ret;

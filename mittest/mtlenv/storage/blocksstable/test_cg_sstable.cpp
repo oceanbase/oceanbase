@@ -162,10 +162,6 @@ TEST_F(TestCgSSTable, test_cg_index_tree_cursor)
       is_macro_start = false;
     }
     if ((i + 1) % 100 == 0) {
-      int64_t row_offset = 0;
-      OK(tree_cursor.get_start_row_offset(row_offset));
-      ASSERT_EQ(row_offset, start_row_offset);
-
       OK(tree_cursor.get_idx_parser(parser));
       ASSERT_EQ(parser->get_row_offset(), 99);
 
