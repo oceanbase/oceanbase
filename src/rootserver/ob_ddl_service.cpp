@@ -26676,13 +26676,10 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
       LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
     }
     while (!stopped_) {
+      // reset ctx to retry to die
       common::ObTimeoutCtx ctx;
-      if (OB_FAIL(schema_service_->set_timeout_ctx(ctx))) {
-        LOG_ERROR("fail to set timeout_ctx, refresh schema failed", KR(ret), K(tenant_id));
-        break;
-      } else {
-        ret = schema_service_->refresh_and_add_schema(tenant_ids);
-      }
+      ctx.reset_timeout_us();
+      ret = schema_service_->refresh_and_add_schema(tenant_ids);
 
       if (OB_SUCC(ret)) {
         break;
@@ -26704,7 +26701,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         }
         ob_usleep(REFRESH_SCHEMA_INTERVAL_US);
       }
-    }
+    } // end while
     if (OB_SUCC(ret) && !stopped_) {
       int64_t schema_version = OB_INVALID_VERSION;
       if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(

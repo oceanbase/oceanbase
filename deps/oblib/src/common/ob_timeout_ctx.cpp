@@ -148,5 +148,13 @@ int64_t ObTimeoutCtx::get_trx_timeout_us() const
   }
   return timeout;
 }
+
+// Attention!! This function will ignore the result of previous ObTimeouCtx.
+void ObTimeoutCtx::reset_timeout_us()
+{
+  abs_timeout_us_ = -1;
+  trx_timeout_us_ = -1;
+}
+
 } // end namespace common
 } // end namespace oceanbase

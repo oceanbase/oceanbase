@@ -50,6 +50,8 @@ public:
   // return previous timeout context or an initialized one if no previous context.
   static const ObTimeoutCtx &get_ctx();
 
+  void reset_timeout_us();
+
   TO_STRING_KV(K_(abs_timeout_us));
 
 private:
