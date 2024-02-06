@@ -6418,6 +6418,25 @@ public:
   common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
 };
 
+struct ObCreateTriggerRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObCreateTriggerRes() :
+    table_schema_version_(OB_INVALID_VERSION),
+    trigger_schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObCreateTriggerRes &other) {
+    table_schema_version_ = other.table_schema_version_;
+    trigger_schema_version_ = other.trigger_schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(table_schema_version), K_(trigger_schema_version));
+  int64_t table_schema_version_;
+  int64_t trigger_schema_version_;
+};
+
 struct ObDropTriggerArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);

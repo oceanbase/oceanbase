@@ -128,6 +128,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAlterPackageP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropPackageP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTriggerP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateTriggerWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTriggerP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropTriggerP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateSynonymP, *gctx_.root_service_);

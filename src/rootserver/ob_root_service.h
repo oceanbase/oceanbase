@@ -607,6 +607,8 @@ public:
 
   //----Functions for managing trigger----
   int create_trigger(const obrpc::ObCreateTriggerArg &arg);
+  int create_trigger_with_res(const obrpc::ObCreateTriggerArg &arg,
+                              obrpc::ObCreateTriggerRes &res);
   int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
   int drop_trigger(const obrpc::ObDropTriggerArg &arg);
   //----End of functions for managing trigger----

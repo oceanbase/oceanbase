@@ -5397,6 +5397,10 @@ OB_SERIALIZE_MEMBER((ObCreateTriggerArg, ObDDLArg),
                     error_info_,
                     dependency_infos_);
 
+OB_SERIALIZE_MEMBER(ObCreateTriggerRes,
+                    table_schema_version_,
+                    trigger_schema_version_);
+
 bool ObDropTriggerArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
