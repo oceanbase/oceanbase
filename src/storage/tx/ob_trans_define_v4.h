@@ -425,9 +425,25 @@ protected:
   union FLAG                         // flags
   {
     uint64_t v_;
+    struct FOR_FIXED_SER_VAL {
+      uint64_t v_;
+      TO_STRING_KV(K_(v));
+      NEED_SERIALIZE_AND_DESERIALIZE;
+    } for_serialize_v_;
+    struct COMPAT_FOR_TX_ROUTE {
+      uint64_t v_;
+      uint64_t get_serialize_v_() const;
+      TO_STRING_KV(K_(v));
+      NEED_SERIALIZE_AND_DESERIALIZE;
+    } compat_for_tx_route_;
+    struct COMPAT_FOR_EXEC {
+      uint64_t v_;
+      uint64_t get_serialize_v_() const;
+      NEED_SERIALIZE_AND_DESERIALIZE;
+    } compat_for_exec_;
     struct
     {
-      bool EXPLICIT_:1;               // txn is explicted start
+      bool EXPLICIT_:1;              // txn is explicted start
       bool SHADOW_:1;                // this tx desc is a shadow copy, is not registered with tx_desc_mgr
       bool REPLICA_:1;               // a replica of primary/original, its state is transient, without whole lifecyle
       bool TRACING_:1;               // tracing the Tx
@@ -443,6 +459,7 @@ protected:
     void switch_to_idle_();
     FLAG update_with(const FLAG &flag);
   } flags_;
+  static_assert(sizeof(FLAG) == sizeof(int64_t), "ObTxDesc::FLAG should sizeof(int64_t)");
   union STATE_CHANGE_FLAG
   {
     uint8_t v_;

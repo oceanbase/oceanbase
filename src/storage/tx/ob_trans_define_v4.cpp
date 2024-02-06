@@ -194,6 +194,80 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     parts_,
                     snapshot_ls_role_);
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
+
+DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
+{
+  int ret = OB_SUCCESS;
+  return serialization::encode_i64(buf, buf_len, pos, v_);
+}
+DEFINE_DESERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
+{
+  int ret = OB_SUCCESS;
+  return serialization::decode_i64(buf, data_len, pos, (int64_t*)&v_);
+}
+DEFINE_GET_SERIALIZE_SIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
+{
+  return serialization::encoded_length_i64(v_);
+}
+
+uint64_t ObTxDesc::FLAG::COMPAT_FOR_EXEC::get_serialize_v_() const
+{
+  FLAG ret_flag;
+  FLAG this_flag;
+  this_flag.compat_for_exec_.v_ = v_;
+  ret_flag.compat_for_exec_.v_ = 0;
+#define _SET_FLAG_(x) ret_flag.x = this_flag.x
+  LST_DO(_SET_FLAG_, (;),
+         EXPLICIT_,
+         SHADOW_,
+         REPLICA_,
+         TRACING_);
+#undef _SET_FLAG_
+  return ret_flag.compat_for_exec_.v_;
+}
+
+uint64_t ObTxDesc::FLAG::COMPAT_FOR_TX_ROUTE::get_serialize_v_() const
+{
+  FLAG ret_flag;
+  FLAG this_flag;
+  this_flag.compat_for_tx_route_.v_ = v_;
+  ret_flag.compat_for_tx_route_.v_ = 0;
+#define _SET_FLAG_(x) ret_flag.x = this_flag.x
+  LST_DO(_SET_FLAG_, (;),
+         EXPLICIT_,
+         SHADOW_,
+         REPLICA_,
+         TRACING_,
+         RELEASED_,
+         PARTS_INCOMPLETE_,
+         PART_EPOCH_MISMATCH_,
+         WITH_TEMP_TABLE_,
+         DEFER_ABORT_);
+#undef _SET_FLAG_
+  return ret_flag.compat_for_tx_route_.v_;
+}
+
+#define DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(THE_TYPE) \
+  DEFINE_SERIALIZE(ObTxDesc::FLAG::THE_TYPE)     \
+  {                                              \
+    int ret = OB_SUCCESS;                                               \
+    const uint64_t compat_v = get_serialize_v_();                       \
+    return serialization::encode_vi64(buf, buf_len, pos, compat_v);     \
+  }                                                                     \
+  DEFINE_DESERIALIZE(ObTxDesc::FLAG::THE_TYPE)                          \
+  {                                                                     \
+    int ret = OB_SUCCESS;                                               \
+    return serialization::decode_vi64(buf, data_len, pos, (int64_t*)&v_); \
+  }                                                                     \
+  DEFINE_GET_SERIALIZE_SIZE(ObTxDesc::FLAG::THE_TYPE)                   \
+  {                                                                     \
+    const uint64_t compat_v = get_serialize_v_();                       \
+    return serialization::encoded_length_vi64(compat_v);                \
+  }
+
+DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(COMPAT_FOR_EXEC)
+DEF_SERIALIZE_COMPAT_FOR_TX_DESC_FLAG(COMPAT_FOR_TX_ROUTE)
+
 OB_SERIALIZE_MEMBER(ObTxDesc,
                     tenant_id_,
                     cluster_id_,
@@ -205,14 +279,15 @@ OB_SERIALIZE_MEMBER(ObTxDesc,
                     access_mode_,
                     op_sn_,
                     state_,
-                    flags_.v_,
+                    flags_.compat_for_exec_,
                     expire_ts_,
                     active_ts_,
                     timeout_us_,
                     lock_timeout_us_,
                     active_scn_,
                     parts_,
-                    xid_);
+                    xid_,
+                    flags_.for_serialize_v_);
 OB_SERIALIZE_MEMBER(ObTxParam,
                     timeout_us_,
                     lock_timeout_us_,
