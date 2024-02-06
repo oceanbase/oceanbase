@@ -217,7 +217,9 @@ private:
   int32_t stock_ CACHE_ALIGNED;
 };
 
-class ObBlockSlicer : public ObStockCtrl {
+class ObSliceAlloc;
+class ObBlockSlicer: public ObStockCtrl
+{
 public:
   typedef ObEmbedFixedQueue FList;
   typedef ObBlockSlicer Host;
@@ -235,8 +237,8 @@ public:
   ObDLink dlink_ CACHE_ALIGNED;
 
 public:
-  ObBlockSlicer(int32_t limit, int32_t slice_size, void* tmallocator = NULL) : tmallocator_(tmallocator)
-  {
+  ObBlockSlicer(int32_t limit, int32_t slice_size, ObSliceAlloc* slice_alloc, void* tmallocator = NULL)
+    : slice_alloc_(slice_alloc), tmallocator_(tmallocator) {
     int64_t isize = lib::align_up2((int32_t)sizeof(Item) + slice_size, 16);
     int64_t total = (limit - (int32_t)sizeof(*this)) / (isize + (int32_t)sizeof(void*));
     char* istart = (char*)lib::align_up2((uint64_t)((char*)(this + 1) + sizeof(void*) * total), 16);
@@ -248,13 +250,12 @@ public:
       flist_.push((void*)new (istart + i * isize) Item(this));
     }
     init_stock((int32_t)total);
-    hash_ = cal_hash_((uint64_t)this);
   }
   ~ObBlockSlicer()
   {
     tmallocator_ = NULL;
   }
-  uint64_t cal_hash_(uint64_t h)
+  static uint64_t hash(uint64_t h)
   {
     h ^= h >> 33;
     h *= 0xff51afd7ed558ccd;
@@ -272,17 +273,10 @@ public:
     flist_.push(p);
     return free_stock(first_free);
   }
-  uint64_t hash() const
-  {
-    return hash_;
-  }
-  void* get_tmallocator()
-  {
-    return tmallocator_;
-  }
-
+  void* get_tmallocator() { return tmallocator_; }
+  void* get_slice_alloc() { return slice_alloc_; }
 private:
-  uint64_t hash_;
+  ObSliceAlloc* slice_alloc_;
   void* tmallocator_;
   FList flist_ CACHE_ALIGNED;
 };
@@ -383,7 +377,7 @@ public:
         }
       } else {
         Block* blk2release = NULL;
-        int64_t slot_idx = blk->hash() % MAX_REF_NUM;
+        int64_t slot_idx = ObBlockSlicer::hash((uint64_t)blk) % MAX_REF_NUM;
         blk_ref_[slot_idx].ref(1);
         if (blk == arena.blk()) {
           if (NULL == (ret = blk->alloc_item())) {
@@ -394,7 +388,7 @@ public:
         }
         blk_ref_[slot_idx].ref(-1);
         if (NULL != blk2release) {
-          blk_ref_[blk2release->hash() % MAX_REF_NUM].sync();
+          blk_ref_[ObBlockSlicer::hash((uint64_t)blk2release) % MAX_REF_NUM].sync();
           release_block(blk2release);
         }
       }
@@ -406,6 +400,7 @@ public:
     if (NULL != p) {
       Block::Item* item = (Block::Item*)p - 1;
       Block* blk = item->host_;
+      abort_unless(blk->get_slice_alloc() == this);
       bool first_free = false;
       bool need_destroy = blk->free_item(item, first_free);
       if (need_destroy) {
@@ -421,7 +416,7 @@ public:
       Arena& arena = arena_[i];
       Block* old_blk = arena.clear();
       if (NULL != old_blk) {
-        blk_ref_[old_blk->hash() % MAX_REF_NUM].sync();
+        blk_ref_[ObBlockSlicer::hash((uint64_t)old_blk) % MAX_REF_NUM].sync();
         release_block(old_blk);
       }
     }
@@ -477,7 +472,7 @@ private:
     if (NULL == ret_blk) {
       void* ptr = NULL;
       if (NULL != (ptr = blk_alloc_.alloc_block(bsize_, attr_))) {
-        ret_blk = new (ptr) Block(bsize_, isize_, tmallocator_);
+        ret_blk = new(ptr)Block(bsize_, isize_, this, tmallocator_);
       }
     }
     return ret_blk;
