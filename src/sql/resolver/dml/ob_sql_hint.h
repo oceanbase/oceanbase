@@ -422,6 +422,7 @@ struct ObLogPlanHint
                                     const bool basic_table_only,
                                     LogTableHint *&log_table_hint);
   int check_status() const;
+  bool is_spm_evolution() const;
   const LogTableHint* get_log_table_hint(uint64_t table_id) const;
   const LogTableHint* get_index_hint(uint64_t table_id) const;
   int64_t get_parallel(uint64_t table_id) const;

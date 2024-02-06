@@ -2281,6 +2281,7 @@ struct NullAwareAntiJoinInfo {
                             ValidPathInfo &path_info);
     int get_valid_path_info_from_hint(const ObRelIds &table_set,
                                       bool both_access,
+                                      bool contain_fake_cte,
                                       ValidPathInfo &path_info);
 
     int check_depend_function_table(const ObJoinOrder &left_tree,
