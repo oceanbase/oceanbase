@@ -66,9 +66,6 @@ private:
   bool need_to_refresh_table(ObTableStoreIterator &iter);
   void check_if_need_log_(bool &need_log, bool &need_log_error);
   void throttle_if_needed_();
-  void do_throttle_(share::TxShareThrottleTool &throttle_tool,
-                    share::ObThrottleInfoGuard &share_ti_guard,
-                    share::ObThrottleInfoGuard &module_ti_guard);
 
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;        // 10s
