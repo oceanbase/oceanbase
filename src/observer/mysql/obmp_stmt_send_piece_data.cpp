@@ -490,17 +490,20 @@ int ObPieceCache::close_all(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   if (is_inited()) {
+    common::ObSEArray<int64_t, 32> piece_keys;
     for (PieceMap::iterator iter = piece_map_.begin();  //ignore ret
         iter != piece_map_.end();
         ++iter) {
       ObPiece *piece = iter->second;
-      int64_t key = get_piece_key(piece->get_stmt_id(), piece->get_param_id());
+      piece_keys.push_back(get_piece_key(piece->get_stmt_id(), piece->get_param_id()));
+    }
+    for (int64_t i = 0; i < piece_keys.count(); i++) {
+      int64_t key = piece_keys.at(i);
       int64_t tmp_ret = remove_piece(key, session);
       // only save first error ret
       ret = ret == OB_SUCCESS ? tmp_ret : ret;
       if (OB_SUCCESS != tmp_ret) {
-        LOG_WARN("remove piece fail.", K(piece->get_stmt_id()),
-                      K(piece->get_param_id()), K(tmp_ret));
+        LOG_WARN("remove piece fail.", K(key), K(tmp_ret));
       }
     }
   }
