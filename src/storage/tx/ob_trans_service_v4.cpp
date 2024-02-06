@@ -1040,7 +1040,11 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
                                       store_ctx.timeout_,
                                       store_ctx.tablet_id_,
                                       *store_ctx.ls_))) {
-    TRANS_LOG(WARN, "replica not readable", K(ret), K(snapshot), K(ls_id), K(store_ctx));
+      TRANS_LOG(WARN, "replica not readable", K(ret),
+              K(snapshot),
+              K(ls_id),
+              K(store_ctx),
+              "ls_weak_read_ts", store_ctx.ls_->get_ls_wrs_handler()->get_ls_weak_read_ts());
   }
 
   // setup tx_table_guard
