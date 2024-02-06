@@ -16,6 +16,13 @@
 #include "lib/ob_define.h"
 #include <cerrno>
 
+#define APPEND_STR(buf, args...) \
+  do {\
+    if (OB_SUCC(ret) && OB_FAIL(buf.append(args))) { \
+      LOG_ERROR("append str failed", "buf_len", buf.length(), "buf_cap", buf.capacity()); \
+    }\
+  } while(0)
+
 namespace oceanbase
 {
 namespace oblogminer
@@ -44,6 +51,88 @@ int logminer_str2ll(const char *str, int64_t &num)
 {
   char *endptr = nullptr;
   return logminer_str2ll(str, endptr, num);
+}
+
+int write_keys(const KeyArray &key_arr, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  int64_t total_size = 0;
+  char *tmp_buffer = nullptr;
+  const char *keys_delimiter = "/";
+  APPEND_STR(buffer, "\"");
+  ARRAY_FOREACH_N(key_arr, idx, key_num) {
+    const ObString &key = key_arr.at(idx);
+    APPEND_STR(buffer, key);
+    if (idx != key_num - 1) {
+      APPEND_STR(buffer, keys_delimiter);
+    }
+  }
+  APPEND_STR(buffer, "\"");
+
+  return ret;
+}
+
+int write_signed_number(const int64_t num, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_NUM_LEN = 30;
+  char buf[MAX_NUM_LEN];
+  int len = snprintf(buf, MAX_NUM_LEN, "%ld", num);
+  APPEND_STR(buffer, buf, len);
+  return ret;
+}
+
+int write_unsigned_number(const uint64_t num, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_NUM_LEN = 30;
+  char buf[MAX_NUM_LEN];
+  int len = snprintf(buf, MAX_NUM_LEN, "%lu", num);
+  APPEND_STR(buffer, buf, len);
+  return ret;
+}
+
+int write_string_no_escape(const ObString &str, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  APPEND_STR(buffer, "\"");
+  APPEND_STR(buffer, str);
+  APPEND_STR(buffer, "\"");
+  return ret;
+}
+
+int write_string_escape(const ObString &str, common::ObStringBuffer &buffer)
+{
+  int ret = OB_SUCCESS;
+  const char *data = str.ptr(), *prev_ptr = data;
+  APPEND_STR(buffer, "\"");
+  while (OB_SUCC(ret) && nullptr != prev_ptr && nullptr != (data = strchr(prev_ptr, '"'))) {
+    APPEND_STR(buffer, prev_ptr, data - prev_ptr + 1);
+    APPEND_STR(buffer, "\"");
+    prev_ptr = data + 1;
+  }
+
+  APPEND_STR(buffer, prev_ptr);
+  APPEND_STR(buffer, "\"");
+  return ret;
+}
+
+const char *strchr_array(const char *str, char c_arr[], const int32_t array_size, char &c){
+  const char *min_pos =  str + strlen(str);
+  int32_t index_num = -1;
+  for(int32_t i=0;i<array_size;i++){
+    const char *data = strchr(str, c_arr[i]);
+    if(nullptr != data && data < min_pos) {
+      min_pos = data;
+      c = c_arr[i];
+      index_num = i;
+    }
+  }
+  if(index_num != -1) {
+    return strchr(str, c_arr[index_num]);
+  } else {
+    return nullptr;
+  }
 }
 
 bool is_number(const char *str)
@@ -395,3 +484,5 @@ int uint_to_bit(const uint64_t bit_uint, ObStringBuffer &bit_str)
 
 }
 }
+
+#undef APPEND_STR
