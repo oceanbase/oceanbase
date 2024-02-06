@@ -2673,6 +2673,18 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
       break;
     }
+    case SYS_VAR__AFFECTED_ROWS: {
+      int64_t affect_rows = 0;
+      OZ (val.get_int(affect_rows), val);
+      set_affected_rows(affect_rows);
+      break;
+    }
+    case SYS_VAR__FOUND_ROWS: {
+      int64_t found_rows = 0;
+      OZ (val.get_int(found_rows), val);
+      set_found_rows(found_rows);
+      break;
+    }
     default: {
       //do nothing
     }
