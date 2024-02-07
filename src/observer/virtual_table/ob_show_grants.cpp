@@ -482,7 +482,7 @@ int ObShowGrants::print_privs_to_buff(
           ret = BUF_PRINTF(" SHOW VIEW,");
         }
         if ((priv_set & OB_PRIV_SHOW_DB) && OB_SUCCESS == ret) {
-          ret = BUF_PRINTF(" SHOW DB,");
+          ret = BUF_PRINTF(" SHOW DATABASES,");
         }
         if ((priv_set & OB_PRIV_SUPER) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" SUPER,");
