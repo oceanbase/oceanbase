@@ -1286,17 +1286,29 @@ int ObUpgradeExecutor::construct_tenant_ids_(
 {
   int ret = OB_SUCCESS;
   ObArray<uint64_t> standby_tenants;
-  bool is_standby = false;
+  ObTenantRole tenant_role(share::ObTenantRole::INVALID_TENANT);
+  ObSchemaGetterGuard schema_guard;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("fail to get sys tenant schema guard", KR(ret));
   } else if (src_tenant_ids.count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < src_tenant_ids.count(); i++) {
       const uint64_t tenant_id = src_tenant_ids.at(i);
-      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id, is_standby))) {
-        LOG_WARN("fail to check is standby tenant", KR(ret), K(tenant_id));
-      } else if (is_standby) {
+      const ObSimpleTenantSchema *tenant_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant schema is null", KR(ret), KP(tenant_schema));
+      } else if (!tenant_schema->is_normal()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support to upgrade a standby tenant", KR(ret), K(tenant_id));
+        LOG_WARN("tenant is not normal, can not do upgrade", KR(ret), K(tenant_id), KPC(tenant_schema));
+      } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(sql_proxy_, tenant_id, tenant_role))) {
+        LOG_WARN("fail to get tenant role", KR(ret), K(tenant_id), K(tenant_role));
+      } else if (!tenant_role.is_primary()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support to upgrade a non-primary tenant", KR(ret), K(tenant_id), K(tenant_role));
       }
     } // end for
     // tenant_list is specified
@@ -1310,10 +1322,23 @@ int ObUpgradeExecutor::construct_tenant_ids_(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
       const uint64_t tenant_id = tenant_ids.at(i);
-      if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id, is_standby))) {
-        LOG_WARN("fail to check is standby tenant", KR(ret), K(tenant_id));
-      } else if (is_standby) {
+      const ObSimpleTenantSchema *tenant_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+        LOG_WARN("fail to get tenant info", KR(ret), K(tenant_id));
+      } else if (OB_ISNULL(tenant_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant schema is null", KR(ret), KP(tenant_schema));
+      } else if (!tenant_schema->is_normal()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant is not normal, can not do upgrade", KR(ret), K(tenant_id), KPC(tenant_schema));
+      } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(sql_proxy_, tenant_id, tenant_role))) {
+        LOG_WARN("fail to get tenant role", KR(ret), K(tenant_id), K(tenant_role));
+      } else if (tenant_role.is_standby()) {
         // skip
+      } else if (!tenant_role.is_primary()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support do upgrade with tenant role is neither primary nor standby",
+                 KR(ret), K(tenant_id), K(tenant_role));
       } else if (OB_FAIL(dst_tenant_ids.push_back(tenant_id))) {
         LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
       }

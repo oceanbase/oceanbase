@@ -576,8 +576,8 @@ int ObPrimaryStandbyService::update_tenant_status_before_sw_to_standby_(
     } else if (cur_switchover_epoch != tenant_info.get_switchover_epoch()) {
       ret = OB_NEED_RETRY;
       LOG_WARN("tenant not expect switchover epoch", KR(ret), K(tenant_info), K(cur_switchover_epoch));
-    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
-                  tenant_id, &trans, cur_switchover_epoch,
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role_in_trans(
+                  tenant_id, trans, cur_switchover_epoch,
                   PRIMARY_TENANT_ROLE, cur_switchover_status,
                   share::PREP_SWITCHING_TO_STANDBY_SWITCHOVER_STATUS, new_switchover_ts))) {
       LOG_WARN("failed to update tenant role", KR(ret), K(tenant_id), K(cur_switchover_epoch), K(tenant_info));

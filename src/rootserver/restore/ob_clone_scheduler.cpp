@@ -1082,6 +1082,7 @@ int ObCloneScheduler::clone_user_finish(const share::ObCloneJob &job)
   uint64_t user_tenant_id = job.get_tenant_id();
   bool sync_satisfied = true;
 
+  DEBUG_SYNC(BEFORE_CREATE_CLONE_TENANT_END);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
