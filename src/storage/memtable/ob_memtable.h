@@ -561,6 +561,7 @@ private:
   int lock_rows_on_frozen_stores_(
       const bool check_exist,
       const storage::ObTableIterParam &param,
+      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       ObMvccRowAndWriteResults &mvcc_rows,
       ObRowsInfo &rows_info);
@@ -589,6 +590,7 @@ private:
       const storage::ObStoreRow &new_row,
       const storage::ObStoreRow *old_row,
       const common::ObIArray<int64_t> *update_idx,
+      const ObMemtableKey &mtk,
       storage::ObTableAccessContext &context,
       ObMvccRowAndWriteResult *mvcc_row = nullptr,
       bool check_exist = false);
@@ -598,12 +600,14 @@ private:
       const storage::ObStoreRow *rows,
       const int64_t row_count,
       const bool check_exist,
+      const ObMemtableKeyGenerator &memtable_keys,
       storage::ObTableAccessContext &context,
       storage::ObRowsInfo &rows_info);
   int lock_(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
-      const common::ObStoreRowkey &rowkey);
+      const common::ObStoreRowkey &rowkey,
+      const ObMemtableKey &mtk);
 
   int post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
                                const ObMemtableKey &row_key,

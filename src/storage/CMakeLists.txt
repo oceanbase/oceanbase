@@ -625,6 +625,7 @@ ob_set_subtarget(ob_storage concurrency_control
 ob_set_subtarget(ob_storage memtable
   memtable/ob_lock_wait_mgr.cpp
   memtable/ob_memtable.cpp
+  memtable/ob_memtable_key.cpp
   memtable/ob_memtable_compact_writer.cpp
   memtable/ob_memtable_context.cpp
   memtable/ob_memtable_interface.cpp

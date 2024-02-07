@@ -333,7 +333,13 @@ public:
 
     context.init(query_flag, store_ctx, allocator, trans_version_range);
 
-    return mt.set_(tm_->iter_param_, tm_->columns_, write_row, nullptr, nullptr, context);
+    ObStoreRowkey tmp_key;
+    ObMemtableKey mtk;
+
+    tmp_key.assign(write_row.row_val_.cells_, tm_->iter_param_.get_schema_rowkey_count());
+    mtk.encode(tm_->columns_, &tmp_key);
+
+    return mt.set_(tm_->iter_param_, tm_->columns_, write_row, nullptr, nullptr, mtk, context);
   }
   int write(int64_t key, int64_t val, ObMemtable &mt, int64_t snapshot_version = 1000) {
     ObDatumRowkey row_key;
