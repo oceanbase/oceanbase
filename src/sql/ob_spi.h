@@ -126,7 +126,8 @@ public:
       orign_session_value_(NULL),
       cursor_session_value_(NULL),
       nested_session_value_(NULL),
-      out_params_() {
+      out_params_(),
+      exec_params_str_() {
       }
   ~ObSPIResultSet() { reset(); }
   int init(sql::ObSQLSessionInfo &session_info);
@@ -157,8 +158,8 @@ public:
     cursor_session_value_ = NULL;
     nested_session_value_ = NULL;
     out_params_.reset();
+    exec_params_str_.reset();
     allocator_.reset();
-
     is_inited_ = false;
   }
   void reset_member_for_retry(sql::ObSQLSessionInfo &session_info)
@@ -167,6 +168,7 @@ public:
       result_set_->~ObResultSet();
     }
     sql_ctx_.reset();
+    exec_params_str_.reset();
     //allocator_.reset();
     mem_context_->get_arena_allocator().reset();
     result_set_ = new (buf_) ObResultSet(session_info, mem_context_->get_arena_allocator());
@@ -212,6 +214,7 @@ public:
   void end_cursor_stmt(pl::ObPLExecCtx *pl_ctx, int &result);
   int start_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, const ObString &sql, stmt::StmtType stmt_type, bool for_update);
   void end_nested_stmt_if_need(pl::ObPLExecCtx *pl_ctx, int &result);
+  ObString *get_exec_params_str_ptr() { return &exec_params_str_; }
 private:
   bool is_inited_;
   EndStmtType need_end_nested_stmt_;
@@ -232,6 +235,7 @@ private:
   sql::ObSQLSessionInfo::StmtSavedValue *cursor_session_value_;
   sql::ObSQLSessionInfo::StmtSavedValue *nested_session_value_;
   ObSPIOutParams out_params_; // 用于记录function的返回值
+  ObString exec_params_str_;
 };
 
 class ObSPIService
