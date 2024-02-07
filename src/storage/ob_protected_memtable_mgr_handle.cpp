@@ -83,6 +83,7 @@ int ObProtectedMemtableMgrHandle::reset()
       STORAGE_LOG(ERROR, "failed to release memtables", KR(ret), KPC(this));
     }
     memtable_mgr_handle_.reset();
+    STORAGE_LOG(INFO, "protected_memtable_mgr_handle reset", KR(ret), KPC(this));
   }
   return ret;
 }
