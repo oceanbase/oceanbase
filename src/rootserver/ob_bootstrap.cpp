@@ -334,6 +334,9 @@ int ObPreBootstrap::notify_sys_tenant_server_unit_resource()
               OB_SYS_TENANT_ID,
               sys_unit_id_array.at(i),
               lib::Worker::CompatMode::MYSQL,
+#ifdef OB_BUILD_TDE_SECURITY
+              obrpc::ObRootKeyResult()/*invalid root_key*/,
+#endif
               unit_config,
               ObReplicaType::REPLICA_TYPE_FULL,
               false/*if not grant*/,

@@ -518,14 +518,8 @@ int ObRpcSetTenantConfigP::process()
 int ObRpcNotifyTenantServerUnitResourceP::process()
 {
   int ret = OB_SUCCESS;
-  if (arg_.is_delete_) {
-    if (OB_FAIL(ObTenantNodeBalancer::get_instance().try_notify_drop_tenant(arg_.tenant_id_))) {
-      LOG_WARN("fail to try drop tenant", K(ret), K(arg_));
-    }
-  } else {
-    if (OB_FAIL(ObTenantNodeBalancer::get_instance().notify_create_tenant(arg_))) {
-      LOG_WARN("failed to notify update tenant", K(ret), K_(arg));
-    }
+  if (OB_FAIL(ObTenantNodeBalancer::get_instance().handle_notify_unit_resource(arg_))) {
+    LOG_WARN("fail to handle_notify_unit_resource", K(ret), K_(arg));
   }
   return ret;
 }

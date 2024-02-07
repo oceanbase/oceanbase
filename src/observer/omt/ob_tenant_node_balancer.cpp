@@ -136,6 +136,21 @@ void ObTenantNodeBalancer::run1()
   }
 }
 
+int ObTenantNodeBalancer::handle_notify_unit_resource(const obrpc::TenantServerUnitConfig &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_delete_) {
+    if (OB_FAIL(notify_create_tenant(arg))) {
+      LOG_WARN("failed to notify update tenant", KR(ret), K(arg));
+    }
+  } else {
+    if (OB_FAIL(try_notify_drop_tenant(arg.tenant_id_))) {
+      LOG_WARN("fail to try drop tenant", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
 int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConfig &unit)
 {
   LOG_INFO("succ to receive notify of creating tenant", K(unit));
@@ -197,10 +212,22 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
       LOG_INFO("succ to create new user tenant", KR(ret), K(unit), K(basic_tenant_unit), K(create_tenant_timeout_ts));
     }
 #ifdef OB_BUILD_TDE_SECURITY
-    if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
-      ObRootKey root_key;
-      if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id, root_key, true))) {
-        LOG_WARN("failed to get root key", K(ret));
+    // get and set root_key
+    if (OB_SUCC(ret)) {
+      if (!unit.with_root_key_) {
+        ObRootKey root_key;
+        if (OB_FAIL(ObMasterKeyGetter::instance().get_root_key(tenant_id, root_key, true))) {
+          LOG_WARN("failed to get root key", KR(ret));
+        }
+      } else {
+        const obrpc::ObRootKeyResult &root_key = unit.root_key_;
+        if (obrpc::RootKeyType::INVALID == root_key.key_type_) {
+          // do nothing
+          LOG_INFO("root_key got from RS is INVALID, won't set now", KR(ret));
+        } else if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(
+                            tenant_id, root_key.key_type_, root_key.root_key_))) {
+          LOG_WARN("failed to set root_key", KR(ret));
+        }
       }
     }
 #endif
