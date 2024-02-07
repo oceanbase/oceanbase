@@ -101,6 +101,7 @@ public:
     DDL_MERGE_CG_SSTABLE = 22, // used for column store ddl, for normal cg sstable, rowkey cg not supported
     DDL_MEM_CO_SSTABLE = 23,
     DDL_MEM_CG_SSTABLE = 24,
+    MDS_SSTABLE = 25,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
