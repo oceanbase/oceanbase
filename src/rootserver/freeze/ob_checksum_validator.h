@@ -63,7 +63,8 @@ public:
     compaction::ObIndexCkmValidatePairArray &idx_ckm_validate_array,
     compaction::ObCkmValidatorStatistics &statistics,
     ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array,
-    ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array)
+    ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array,
+    compaction::ObUncompactInfo &uncompact_info)
     : is_inited_(false),
       is_primary_service_(false),
       need_validate_index_ckm_(false),
@@ -83,6 +84,7 @@ public:
       idx_ckm_validate_array_(idx_ckm_validate_array),
       finish_tablet_ls_pair_array_(finish_tablet_ls_pair_array),
       finish_tablet_ckm_array_(finish_tablet_ckm_array),
+      uncompact_info_(uncompact_info),
       schema_guard_(nullptr),
       simple_schema_(nullptr),
       table_compaction_info_(),
@@ -141,7 +143,7 @@ private:
 
   /* Cross Cluster Checksum Section */
   int validate_cross_cluster_checksum();
-  int check_tablet_checksum_sync_finish();
+  int check_tablet_checksum_sync_finish(const bool force_check);
   int validate_replica_and_tablet_checksum();
   int check_column_checksum(
     const ObArray<share::ObTabletReplicaChecksumItem> &tablet_replica_checksum_items,
@@ -171,6 +173,7 @@ private:
   compaction::ObIndexCkmValidatePairArray &idx_ckm_validate_array_;
   ObArray<share::ObTabletLSPair> &finish_tablet_ls_pair_array_;
   ObArray<share::ObTabletChecksumItem> &finish_tablet_ckm_array_;
+  compaction::ObUncompactInfo &uncompact_info_;
 
   /* different for every table */
   share::schema::ObSchemaGetterGuard *schema_guard_;

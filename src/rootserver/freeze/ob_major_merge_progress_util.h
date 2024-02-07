@@ -15,6 +15,10 @@
 #include "share/ob_balance_define.h"
 namespace oceanbase
 {
+namespace share
+{
+class ObTabletReplica;
+}
 namespace compaction
 {
 
@@ -266,6 +270,27 @@ private:
   int64_t last_refresh_ts_;
   share::ObTransferTaskID max_task_id_;
   hash::ObHashMap<common::ObTabletID, share::ObLSID> map_;
+};
+
+struct ObUncompactInfo
+{
+public:
+  ObUncompactInfo();
+  ~ObUncompactInfo();
+  void reset();
+  void add_table(const uint64_t table_id);
+  void add_tablet(const share::ObTabletReplica &replica);
+  void add_tablet(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id);
+  int get_uncompact_info(
+    common::ObIArray<share::ObTabletReplica> &input_tablets,
+    common::ObIArray<uint64_t> &input_table_ids) const;
+  static const int64_t DEBUG_INFO_CNT = 3;
+  common::SpinRWLock diagnose_rw_lock_;
+  common::ObSEArray<share::ObTabletReplica, DEBUG_INFO_CNT> tablets_; // record for diagnose
+  common::ObSEArray<uint64_t, DEBUG_INFO_CNT> table_ids_; // record for diagnose
 };
 
 } // namespace compaction

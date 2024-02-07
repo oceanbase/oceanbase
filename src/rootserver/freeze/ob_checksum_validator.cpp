@@ -134,8 +134,12 @@ int ObChecksumValidator::set_need_validate()
   if (is_primary_service_) {
     // need to check index checksum on primary tenant
     need_validate_index_ckm_ = true;
-    if (OB_FAIL(check_tablet_checksum_sync_finish())) {
+    if (OB_FAIL(check_tablet_checksum_sync_finish(true /*force_check*/))) {
       LOG_WARN("failed to check tablet checksum sync finish", K(ret), K_(is_primary_service));
+    } else {
+      // for primary service, if cross cluster ckm sync finish, need to validate cur round checksum & inner_table
+      // else: write ckm into inner table
+      need_validate_cross_cluster_ckm_ = cross_cluster_ckm_sync_finish_;
     }
   } else { // standby tenant
     need_validate_index_ckm_ = false;
@@ -173,7 +177,7 @@ int ObChecksumValidator::check_inner_status()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compaction_scn/expected_epoch/schema_guard_", KR(ret), K_(tenant_id),
       K_(compaction_scn), K_(expected_epoch), KP_(schema_guard));
-  } else if (OB_FAIL(check_tablet_checksum_sync_finish())) {
+  } else if (OB_FAIL(check_tablet_checksum_sync_finish(false /*force_check*/))) {
     LOG_WARN("failed to set need_validate", K(ret), K_(tenant_id));
   }
   return ret;
@@ -334,6 +338,7 @@ int ObChecksumValidator::update_table_compaction_info_by_tablet()
       if (OB_HASH_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         table_compaction_info_.set_uncompacted();
+        (void) uncompact_info_.add_tablet(tenant_id_, cur_tablet_ls_pair_array_.at(idx).get_ls_id(), tablet_id);
         LOG_TRACE("tablet not exist in tablet status map", KR(ret), K(tablet_id),
           K_(cur_tablet_ls_pair_array), K_(table_compaction_info));
 #ifdef ERRSIM
@@ -522,24 +527,25 @@ int ObChecksumValidator::batch_update_report_scn()
   return ret;
 }
 
-int ObChecksumValidator::check_tablet_checksum_sync_finish()
+int ObChecksumValidator::check_tablet_checksum_sync_finish(const bool force_check)
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  if (cross_cluster_ckm_sync_finish_) {
+  // need check inner table:
+  // 1) force check when first init
+  // 2) ckm not sync finish in standby service
+  if (!force_check && (is_primary_service_ || cross_cluster_ckm_sync_finish_)) {
   } else if (OB_FAIL(ObTabletChecksumOperator::is_first_tablet_in_sys_ls_exist(*sql_proxy_,
     tenant_id_, compaction_scn_, is_exist))) {
     LOG_WARN("fail to check is first tablet in first ls exist", KR(ret), K_(tenant_id),  K_(compaction_scn));
   } else if (is_exist) {
     cross_cluster_ckm_sync_finish_ = true;
-    need_validate_cross_cluster_ckm_ = true;
   } else {
-    need_validate_cross_cluster_ckm_ = false;
     cross_cluster_ckm_sync_finish_ = check_waiting_tablet_checksum_timeout();
     if (!is_primary_service_ && TC_REACH_TIME_INTERVAL(PRINT_CROSS_CLUSTER_LOG_INVERVAL)) {
       LOG_WARN("can not check cross-cluster checksum now, please wait until first tablet"
              "in sys ls exists", K_(tenant_id),  K_(compaction_scn), K_(major_merge_start_us),
-             "fast_current_time_us", ObTimeUtil::fast_current_time());
+             "fast_current_time_us", ObTimeUtil::fast_current_time(), K(is_exist), K_(is_primary_service));
     }
   }
   return ret;

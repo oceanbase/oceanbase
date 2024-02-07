@@ -74,6 +74,10 @@ public:
       const int64_t required_size,
       const int64_t report_scn,
       const ScnStatus status);
+  void fake_for_diagnose(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id);
   bool is_equal_for_report(const ObTabletReplica &other) const;
   static bool is_status_valid(const ScnStatus status)
   {

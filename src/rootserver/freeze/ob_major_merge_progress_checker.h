@@ -68,7 +68,7 @@ public:
   int get_uncompacted_tablets(
     common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
     common::ObArray<uint64_t> &uncompacted_table_ids) const;
-  void reset_uncompacted_tablets();
+  OB_INLINE void reset_uncompacted_tablets() { uncompact_info_.reset(); }
   int check_progress(compaction::ObMergeProgress &progress);
   const compaction::ObTabletLSPairCache &get_tablet_ls_pair_cache() const { return tablet_ls_pair_cache_; }
 private:
@@ -123,7 +123,6 @@ private:
 private:
   static const int64_t ADD_RS_EVENT_INTERVAL = 10L * 60 * 1000 * 1000; // 10m
   static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000; // 2m
-  static const int64_t DEBUG_INFO_CNT = 3;
   static const int64_t DEAL_REST_TABLE_CNT_THRESHOLD = 100;
   static const int64_t DEAL_REST_TABLE_INTERVAL = 10 * 60 * 1000 * 1000L; // 10m
 private:
@@ -147,9 +146,7 @@ private:
   // record each table compaction/verify status
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
   ObChecksumValidator ckm_validator_;
-  common::ObSEArray<share::ObTabletReplica, DEBUG_INFO_CNT> uncompacted_tablets_; // record for diagnose
-  common::ObSEArray<uint64_t, DEBUG_INFO_CNT> uncompacted_table_ids_; // record for diagnose
-  common::SpinRWLock diagnose_rw_lock_;
+  compaction::ObUncompactInfo uncompact_info_;
   // cache of ls_infos in __all_ls_meta_table
   share::ObCompactionLocalityCache ls_locality_cache_;
   // statistics section
