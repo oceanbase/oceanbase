@@ -7382,7 +7382,7 @@ int ObJoinOrder::generate_json_table_paths()
     json_path = new(json_path) JsonTablePath();
     json_path->table_id_ = table_id_;
     json_path->parent_ = this;
-    ObExecParamRawExpr *nl_param = nullptr;
+    ObSEArray<ObExecParamRawExpr *, 4> nl_params;
     ObRawExpr* json_table_expr = NULL;
     // magic number ? todo refine this
     output_rows_ = 199;
@@ -7396,10 +7396,10 @@ int ObJoinOrder::generate_json_table_paths()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to extract param for json table expr", K(ret));
     } else if (OB_FAIL(param_json_table_expr(json_table_expr,
-                                             nl_param,
+                                             nl_params,
                                              json_path->subquery_exprs_))) {
       LOG_WARN("failed to extract param for json table expr", K(ret));
-    } else if (OB_NOT_NULL(nl_param) && OB_FAIL(json_path->nl_params_.push_back(nl_param))) {
+    } else if (OB_FAIL(json_path->nl_params_.assign(nl_params))) {
       LOG_WARN("failed to assign nl params", K(ret));
     } else {
       json_path->value_expr_ = json_table_expr;
@@ -7504,30 +7504,31 @@ int ObJoinOrder::param_funct_table_expr(ObRawExpr* &function_table_expr,
 
 
 int ObJoinOrder::param_json_table_expr(ObRawExpr* &json_table_expr,
-                                       ObExecParamRawExpr*& nl_params,
+                                       ObIArray<ObExecParamRawExpr *> &nl_params,
                                        ObIArray<ObRawExpr*> &subquery_exprs)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
   ObLogPlan *plan = get_plan();
+  ObSEArray<ObRawExpr *, 1> old_json_exprs;
   ObSEArray<ObRawExpr *, 1> new_json_exprs;
-  if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt())) {
+  if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(stmt = plan->get_stmt()) || OB_ISNULL(json_table_expr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(plan), K(ret));
+  } else if (OB_FAIL(old_json_exprs.push_back(json_table_expr))) {
+    LOG_WARN("failed to push back function table expr", K(ret));
+  } else if (OB_FAIL(extract_params_for_inner_path(json_table_expr->get_relation_ids(),
+                                                    nl_params,
+                                                    subquery_exprs,
+                                                    old_json_exprs,
+                                                    new_json_exprs))) {
+    LOG_WARN("failed to extract params", K(ret));
+  } else if (OB_UNLIKELY(new_json_exprs.count() != 1) ||
+              OB_ISNULL(new_json_exprs.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new function table expr is invalid", K(ret), K(new_json_exprs));
   } else {
-    bool need_add_exec_param = (json_table_expr->get_relation_ids().bit_count() > 0);
-    if (need_add_exec_param &&
-        OB_FAIL(ObRawExprUtils::create_new_exec_param(stmt->get_query_ctx(),
-                                                      get_plan()->get_optimizer_context().get_expr_factory(),
-                                                      json_table_expr))) {
-      LOG_WARN("failed to create quest mark expr", K(ret));
-    } else if (OB_FAIL(json_table_expr->extract_info())) {
-      LOG_WARN("failed to extract expr info", K(ret));
-    } else if (OB_FAIL(json_table_expr->pull_relation_id())) {
-      LOG_WARN("failed to formalize expr", K(ret));
-    } else if (need_add_exec_param) {
-      nl_params = static_cast<ObExecParamRawExpr*>(json_table_expr);
-    }
+    json_table_expr = new_json_exprs.at(0);
   }
   return ret;
 }
