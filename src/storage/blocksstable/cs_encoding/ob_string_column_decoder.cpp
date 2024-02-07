@@ -163,7 +163,10 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const char *start = ctx.str_data_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-
+    if (OB_UNLIKELY(!op_handle.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(op_handle));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
       row_id = i + row_start;
       if (0 == row_id) {
@@ -199,7 +202,10 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     const char *start = ctx.str_data_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-
+    if (OB_UNLIKELY(!op_handle.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(op_handle));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       if (ObCSDecodingUtil::test_bit(ctx.null_bitmap_, row_id)) {
@@ -239,7 +245,11 @@ struct FilterTranverseDatum_T<offset_width_V, ObBaseColumnDecoderCtx::ObNullFlag
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
 
-    for (int64_t i = 0; i < row_count; ++i) {
+    if (OB_UNLIKELY(!op_handle.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(op_handle));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
       row_id = i + row_start;
       if (0 == row_id) {
         cur_start = start;
@@ -283,6 +293,10 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
 
+    if (OB_UNLIKELY(!op_handle.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(op_handle));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       cur_start = start + row_id * str_len;
@@ -315,7 +329,10 @@ struct FilterTranverseDatum_T<FIX_STRING_OFFSET_WIDTH_V,
     const int64_t str_len = ctx.str_ctx_->meta_.fixed_str_len_;
     int64_t row_id = 0;
     typename std::conditional<need_padding_V, ObStorageDatum, ObDatum>::type cur_datum;
-
+    if (OB_UNLIKELY(!op_handle.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret), K(op_handle));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
       row_id = i + row_start;
       if (ObCSDecodingUtil::test_bit(ctx.null_bitmap_, row_id)) {
