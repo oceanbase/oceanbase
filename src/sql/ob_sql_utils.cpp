@@ -1782,6 +1782,7 @@ int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
   } else if (expr->get_result_type().has_result_flag(ZEROFILL_FLAG)) {
     cast_mode |= CM_ADD_ZEROFILL;
   }
+  cast_mode = CM_SET_BY_TRANSFORMERN(cast_mode);
   return ret;
 }
 
