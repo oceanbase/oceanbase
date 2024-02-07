@@ -116,7 +116,9 @@ int ObAllVirtualTenantSnapshotLSReplica::process_curr_tenant(ObNewRow *&row)
           if (LS_META_PACKAGE == col_id) {  // decode ls_meta_package column
             int64_t length = 0;
             EXTRACT_VARCHAR_FIELD_MYSQL(*result_, "ls_meta_package", ls_meta_package_str);
-            if (OB_ISNULL(ls_meta_buf_)) {
+            if (ls_meta_package_str.empty()) {
+              cur_row_.cells_[i].reset();
+            } else if (OB_ISNULL(ls_meta_buf_)) {
               ret = OB_ERR_UNEXPECTED;
               SERVER_LOG(WARN, "ls_meta_buf_ is null", KR(ret), KP(ls_meta_buf_), KP(allocator_));
             } else if (OB_FAIL(decode_hex_string_to_package_(ls_meta_package_str, *allocator_, ls_meta_package))){
