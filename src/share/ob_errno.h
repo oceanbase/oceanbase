@@ -463,6 +463,7 @@ constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
 constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_LS_NOT_LEADER = -4767;
 constexpr int OB_CONFLICT_WITH_CLONE = -4770;
+constexpr int OB_BREAK_BY_TEST = -4771;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2407,6 +2408,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_LOCK_CONFLICT__USER_ERROR_MSG "ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__USER_ERROR_MSG "%s"
 #define OB_CONFLICT_WITH_CLONE__USER_ERROR_MSG "Tenant (%ld) is in %s procedure, %s not allowed now"
+#define OB_BREAK_BY_TEST__USER_ERROR_MSG "process is breaked by test case"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4611,6 +4613,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4768, ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4769, %s"
 #define OB_CONFLICT_WITH_CLONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4770, Tenant (%ld) is in %s procedure, %s not allowed now"
+#define OB_BREAK_BY_TEST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4771, process is breaked by test case"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -6249,7 +6252,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2200];
+extern int g_all_ob_errnos[2201];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -672,6 +672,7 @@ DEFINE_ERROR(OB_LS_NOT_LEADER, -4767, -1, "HY000", "log stream is not leader log
 DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict", "ls lock conflict, %s");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ROOT_KEY, -4769, -1, "HY000", "invalid root key", "%s");
 DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %s procedure, %s not allowed now");
+DEFINE_ERROR(OB_BREAK_BY_TEST, -4771, -1, "HY000", "process is breaked by test case");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
