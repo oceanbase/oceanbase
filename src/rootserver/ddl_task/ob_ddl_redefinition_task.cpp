@@ -1505,7 +1505,7 @@ int ObDDLRedefinitionTask::get_estimated_timeout(const ObTableSchema *dst_table_
     estimated_timeout = tablet_ids.count() * dst_table_schema->get_column_count() * 120L * 1000L; // 120ms for each column
     estimated_timeout = max(estimated_timeout, 9 * 1000 * 1000L);
     estimated_timeout = min(estimated_timeout, 3600 * 1000 * 1000L);
-    estimated_timeout = max(estimated_timeout, GCONF.rpc_timeout);
+    estimated_timeout = max(estimated_timeout, GCONF._ob_ddl_timeout);
     LOG_INFO("get estimate timeout", K(estimated_timeout));
   }
   return ret;
@@ -2263,6 +2263,7 @@ int ObDDLRedefinitionTask::generate_sync_partition_level_stats_sql(const char *t
 {
   int ret = OB_SUCCESS;
   sql_string.reset();
+  ObSqlString in_partitions_sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
   if (OB_UNLIKELY(src_partition_ids.count() != dest_partition_ids.count() || batch_end < batch_start
       || batch_end >= dest_partition_ids.count())) {
@@ -2277,12 +2278,18 @@ int ObDDLRedefinitionTask::generate_sync_partition_level_stats_sql(const char *t
       const uint64_t dest_partition_id = dest_partition_ids.at(i);
       if (OB_FAIL(sql_string.append_fmt(" when %ld then %ld", src_partition_id, dest_partition_id))) {
         LOG_WARN("fail to append sql string", K(ret), K(src_partition_id), K(dest_partition_id));
+      } else if (batch_end != i) {
+        if (OB_FAIL(in_partitions_sql.append_fmt("%ld, ", src_partition_id))) {
+          LOG_WARN("append partition id failed", K(ret));
+        }
+      } else if (OB_FAIL(in_partitions_sql.append_fmt("%ld", src_partition_id))) {
+        LOG_WARN("append partition id failed", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql_string.append_fmt(" else partition_id end) where tenant_id=%ld and table_id=%ld",
-          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, dst_tenant_id_),
-          batch_start == 0 ? object_id_ : target_object_id_))) {
+    } else if (OB_FAIL(sql_string.append_fmt(" else partition_id end) where tenant_id=%ld and table_id=%ld and partition_id in (%.*s)",
+          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, dst_tenant_id_), object_id_,
+          static_cast<int>(in_partitions_sql.length()), in_partitions_sql.ptr()))) {
       LOG_WARN("fail to append sql string", K(ret), K(object_id_), K(dst_tenant_id_), K(exec_tenant_id));
     }
   }
@@ -2300,6 +2307,7 @@ int ObDDLRedefinitionTask::generate_sync_column_partition_level_stats_sql(const 
 {
   int ret = OB_SUCCESS;
   sql_string.reset();
+  ObSqlString in_partitions_sql;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
   if (OB_UNLIKELY(src_partition_ids.count() != dest_partition_ids.count() || batch_end < batch_start
       || batch_end >= dest_partition_ids.count())) {
@@ -2314,12 +2322,17 @@ int ObDDLRedefinitionTask::generate_sync_column_partition_level_stats_sql(const 
       const uint64_t dest_partition_id = dest_partition_ids.at(i);
       if (OB_FAIL(sql_string.append_fmt(" when %ld then %ld", src_partition_id, dest_partition_id))) {
         LOG_WARN("fail to append sql string", K(ret), K(src_partition_id), K(dest_partition_id));
+      } else if (batch_end != i) {
+        if (OB_FAIL(in_partitions_sql.append_fmt("%ld, ", src_partition_id))) {
+          LOG_WARN("append partition id failed", K(ret));
+        }
+      } else if (OB_FAIL(in_partitions_sql.append_fmt("%ld", src_partition_id))) {
+        LOG_WARN("append partition id failed", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql_string.append_fmt(" else partition_id end) where tenant_id=%ld and table_id=%ld and column_id=%ld",
-          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, dst_tenant_id_),
-          batch_start == 0 ? object_id_ : target_object_id_, batch_start == 0 ? old_col_id : new_col_id))) {
+    if (FAILEDx(sql_string.append_fmt(" else partition_id end) where tenant_id=%ld and table_id=%ld and partition_id in (%.*s) and column_id=%ld",
+          ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, dst_tenant_id_), object_id_,
+          static_cast<int>(in_partitions_sql.length()), in_partitions_sql.ptr(), old_col_id))) {
       LOG_WARN("fail to append sql string", K(ret), K(object_id_), K(dst_tenant_id_), K(exec_tenant_id), K(old_col_id));
     }
   }
