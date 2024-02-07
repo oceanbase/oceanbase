@@ -693,10 +693,16 @@ int ObTabletPointerMap::compare_and_swap_addr_and_object(
     }
 
     if (OB_SUCC(ret)) {
-      t_ptr->set_addr_with_reset_obj(new_addr);
-      t_ptr->set_obj(new_guard);
-      if (OB_FAIL(t_ptr->set_tablet_attr(*new_guard.get_obj()))) {
+      if (t_ptr->get_addr().is_equal_for_persistence(new_addr)) {
+        // no need to update tablet attr, including creating memtables or updating the same tablets
+        STORAGE_LOG(DEBUG, "no need to update tablet attr", K(ret), K(new_addr), K(t_ptr->get_addr()), K(new_guard), K(old_guard));
+      } else if (OB_FAIL(t_ptr->set_tablet_attr(*new_guard.get_obj()))) {
         STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(key), K(new_addr), K(new_guard));
+      }
+
+      if (OB_SUCC(ret)) {
+        t_ptr->set_addr_with_reset_obj(new_addr);
+        t_ptr->set_obj(new_guard);
       }
     }
   }
