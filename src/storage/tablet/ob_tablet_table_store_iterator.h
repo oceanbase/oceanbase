@@ -18,6 +18,12 @@
 
 namespace oceanbase
 {
+namespace blocksstable
+{
+class ObSSTableMetaHandle;
+class ObSSTable;
+}
+
 namespace storage
 {
 
@@ -82,7 +88,14 @@ public:
       K_(need_load_sstable), K_(table_store_handle), KPC_(transfer_src_table_store_handle));
 private:
   int inner_move_idx_to_next();
+  int get_table_ptr_with_meta_handle(
+      const blocksstable::ObSSTable *table,
+      TablePtr &table_ptr);
   int add_tables(const ObMemtableArray &memtable_array, const int64_t start_pos = 0);
+  int add_cg_tables(
+      const ObSSTableArray &sstable_array,
+      const bool is_loaded_co_table,
+      const blocksstable::ObSSTableMetaHandle &co_meta_handle);
   int get_ith_table(const int64_t pos, ObITable *&table);
 private:
   friend class ObTablet; // TODO: remove this friend class when possible

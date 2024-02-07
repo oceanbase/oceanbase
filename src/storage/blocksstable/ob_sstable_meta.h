@@ -18,6 +18,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "share/scn.h"
+#include "storage/tablet/ob_table_store_util.h"
 
 namespace oceanbase
 {
@@ -140,9 +141,12 @@ public:
   ObSSTableMeta();
   ~ObSSTableMeta();
   int init(const storage::ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
+  int fill_cg_sstables(common::ObArenaAllocator &allocator, const common::ObIArray<ObITable *> &cg_tables);
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool contain_uncommitted_row() const { return basic_meta_.contain_uncommitted_row_; }
+  OB_INLINE ObSSTableArray &get_cg_sstables() { return cg_sstables_; }
+  OB_INLINE const ObSSTableArray &get_cg_sstables() const { return cg_sstables_; }
   OB_INLINE bool is_empty() const {
     return 0 == basic_meta_.data_macro_block_count_;
   }
@@ -238,7 +242,7 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
-  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info));
+  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
@@ -262,6 +266,7 @@ private:
   ObSSTableBasicMeta basic_meta_;
   ObRootBlockInfo data_root_info_;
   ObSSTableMacroInfo macro_info_;
+  ObSSTableArray cg_sstables_;
   int64_t *column_checksums_;
   int64_t column_checksum_count_;
   // The following fields don't to persist

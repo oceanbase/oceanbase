@@ -108,8 +108,6 @@ public:
   bool is_empty_co_table() const { return is_empty_co_; }
   int fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables);
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
-  OB_INLINE ObSSTableArray &get_cg_sstables() { return cg_sstables_; }
-  OB_INLINE const ObSSTableArray &get_cg_sstables() const { return cg_sstables_; }
   OB_INLINE bool is_all_cg_base() const { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
   OB_INLINE bool is_rowkey_cg_base() const { return ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_; }
   OB_INLINE bool is_inited() const { return is_empty_co_table() || is_cs_valid(); }
@@ -145,7 +143,6 @@ public:
   {
     int64_t size = sizeof(ObCOSSTableV2);
     size += ObSSTable::get_deep_copy_size();
-    size += cg_sstables_.get_deep_copy_size();
     return size;
   }
 
@@ -176,13 +173,11 @@ public:
       ObTableAccessContext &context,
       const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
       ObStoreRowIterator *&row_iter) override;
-  INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta), K_(cg_sstables),
+  INHERIT_TO_STRING_KV("ObSSTable", ObSSTable, KP(this), K_(cs_meta),
       K_(base_type), K_(is_empty_co), K_(valid_for_cs_reading));
 private:
-  int prepare_cg_sstable_array(const int64_t column_group_cnt);
   int build_cs_meta();
 protected:
-  ObSSTableArray cg_sstables_;
   ObCOSSTableMeta cs_meta_;
   ObCOSSTableBaseType base_type_;
   bool is_empty_co_; // no need to create cg sstable when co sstable is empty

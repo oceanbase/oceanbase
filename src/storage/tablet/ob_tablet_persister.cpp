@@ -1066,7 +1066,7 @@ int ObTabletPersister::convert_macro_info_map(SharedMacroMap &shared_macro_map, 
 int ObTabletPersister::fetch_and_persist_co_sstable(
     common::ObArenaAllocator &allocator,
     ObCOSSTableV2 *co_sstable,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     common::ObIArray<ObMetaDiskAddr> &cg_addrs,
     int64_t &total_tablet_meta_size,
     ObBlockInfoSet &block_info_set,
@@ -1082,6 +1082,7 @@ int ObTabletPersister::fetch_and_persist_co_sstable(
   cg_write_infos.set_attr(lib::ObMemAttr(MTL_ID(), "CGWriteInfos", ctx_id));
   int64_t total_size = 0;
   cg_addrs.reset();
+  ObSSTableMetaHandle co_meta_handle;
 
   if (OB_ISNULL(co_sstable)) {
     ret = OB_INVALID_ARGUMENT;
@@ -1089,8 +1090,10 @@ int ObTabletPersister::fetch_and_persist_co_sstable(
   } else if (FALSE_IT(total_size = co_sstable->get_serialize_size())) {
   } else if (total_size < SSTABLE_MAX_SERIALIZE_SIZE) {
     // do nothing
+  } else if (OB_FAIL(co_sstable->get_meta(co_meta_handle))) {
+    LOG_WARN("failed to get co meta handle", K(ret), KPC(co_sstable));
   } else {
-    ObSSTableArray &cg_sstables = co_sstable->get_cg_sstables();
+    const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
     ObSSTable *cg_sstable = nullptr;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
       cg_sstable = cg_sstables[idx];
@@ -1104,7 +1107,7 @@ int ObTabletPersister::fetch_and_persist_co_sstable(
 
     if (OB_FAIL(ret)) {
     } else if (0 < cg_write_infos.count()
-        && OB_FAIL(batch_write_sstable_info(cg_write_infos, cg_write_ctxs, cg_addrs, meta_write_ctxs, block_info_set))) {
+        && OB_FAIL(batch_write_sstable_info(cg_write_infos, cg_write_ctxs, cg_addrs, sstable_meta_write_ctxs, block_info_set))) {
       LOG_WARN("failed to batch write sstable", K(ret));
     } else if (OB_UNLIKELY(cg_addrs.count() != cg_sstables.count())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1124,7 +1127,7 @@ int ObTabletPersister::fetch_and_persist_co_sstable(
 int ObTabletPersister::fetch_and_persist_sstable(
     ObTableStoreIterator &table_iter,
     ObTabletTableStore &new_table_store,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     int64_t &total_tablet_meta_size,
     ObBlockInfoSet &block_info_set)
 {
@@ -1164,19 +1167,22 @@ int ObTabletPersister::fetch_and_persist_sstable(
     } else if (table->is_co_sstable() && table->get_serialize_size() > SSTABLE_MAX_SERIALIZE_SIZE) {
       large_co_sstable_cnt++;
       ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-      cg_sstable_cnt += co_sstable->get_cg_sstables().count();
       // serialize full co sstable and shell cg sstables when the serialize size of CO reached the limit.
       FLOG_INFO("cannot full serialize CO within 2MB buffer, should serialize CO with Shell CG", K(ret), KPC(table));
       cg_addrs.reset();
       tmp_allocator.reuse();
       ObCOSSTableV2 *tmp_co_sstable = nullptr;
+      ObSSTableMetaHandle co_meta_handle;
 
-      if (OB_FAIL(fetch_and_persist_co_sstable(
-          allocator_, co_sstable, meta_write_ctxs, cg_addrs, total_tablet_meta_size, block_info_set, shared_macro_map))) {
+      if (OB_FAIL(co_sstable->get_meta(co_meta_handle))) {
+        LOG_WARN("failed to get co meta handle", K(ret), KPC(co_sstable));
+      } else if (OB_FAIL(fetch_and_persist_co_sstable(
+          allocator_, co_sstable, sstable_meta_write_ctxs, cg_addrs, total_tablet_meta_size, block_info_set, shared_macro_map))) {
         LOG_WARN("fail to persist co sstable", K(ret));
       } else if (OB_FAIL(co_sstable->deep_copy(tmp_allocator, cg_addrs, tmp_co_sstable))) {
         LOG_WARN("failed to deep copy co sstable", K(ret), KPC(co_sstable));
       } else {
+        cg_sstable_cnt += co_meta_handle.get_sstable_meta().get_cg_sstables().count();
         ObSSTablePersistWrapper wrapper(tmp_co_sstable);
         if (OB_FAIL(fill_write_info(allocator_, &wrapper, write_infos))) {
           LOG_WARN("failed to fill sstable write info", K(ret));
@@ -1192,22 +1198,29 @@ int ObTabletPersister::fetch_and_persist_sstable(
       if (table->is_co_sstable()) {
         small_co_sstable_cnt++;
         ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-        ObSSTableArray &cg_sstables = co_sstable->get_cg_sstables();
-        cg_sstable_cnt += cg_sstables.count();
-        ObSSTable *cg_sstable = nullptr;
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
-          cg_sstable = cg_sstables[idx];
-          const ObMetaDiskAddr &sstable_addr = cg_sstable->get_addr();
-          if (OB_FAIL(copy_sstable_macro_info(*cg_sstable, shared_macro_map, block_info_set))) {
-            LOG_WARN("fail to call sstable macro info", K(ret));
-          } else if (sstable_addr.is_block()) {
-            // this cg sstable has been persisted before
-            cg_sstable_meta_size += sstable_addr.size();
-            if (OB_FAIL(block_info_set.shared_meta_block_info_set_.set_refactored(sstable_addr.block_id(), 0 /*whether to overwrite*/))) {
-              if (OB_HASH_EXIST != ret) {
-                LOG_WARN("fail to push macro id into set", K(ret), K(sstable_addr));
-              } else {
-                ret = OB_SUCCESS;
+        ObSSTableMetaHandle co_meta_handle;
+
+        if (OB_FAIL(co_sstable->get_meta(co_meta_handle))) {
+          LOG_WARN("failed to get co meta handle", K(ret), KPC(co_sstable));
+        } else {
+          const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
+          cg_sstable_cnt += cg_sstables.count();
+
+          ObSSTable *cg_sstable = nullptr;
+          for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
+            cg_sstable = cg_sstables[idx];
+            const ObMetaDiskAddr &sstable_addr = cg_sstable->get_addr();
+            if (OB_FAIL(copy_sstable_macro_info(*cg_sstable, shared_macro_map, block_info_set))) {
+              LOG_WARN("fail to call sstable macro info", K(ret));
+            } else if (sstable_addr.is_block()) {
+              // this cg sstable has been persisted before
+              cg_sstable_meta_size += sstable_addr.size();
+              if (OB_FAIL(block_info_set.shared_meta_block_info_set_.set_refactored(sstable_addr.block_id(), 0 /*whether to overwrite*/))) {
+                if (OB_HASH_EXIST != ret) {
+                  LOG_WARN("fail to push macro id into set", K(ret), K(sstable_addr));
+                } else {
+                  ret = OB_SUCCESS;
+                }
               }
             }
           }
@@ -1228,12 +1241,12 @@ int ObTabletPersister::fetch_and_persist_sstable(
         }
       }
     }
-  }
+  } // end while
   if (OB_ITER_END == ret) {
     ret = OB_SUCCESS;
   }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(time_stats->set_extra_info("%s:%ld,%s:%ld,%s:%ld,%s:%ld",
+
+  if (FAILEDx(time_stats->set_extra_info("%s:%ld,%s:%ld,%s:%ld,%s:%ld",
       "large_co_sst_cnt", large_co_sstable_cnt, "small_co_sst_cnt", small_co_sstable_cnt,
       "normal_sst_cnt", normal_sstable_cnt, "cg_sst_cnt", cg_sstable_cnt))) {
     LOG_WARN("fail to set time stats extra info", K(ret));
@@ -1241,7 +1254,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
   } else if (OB_FAIL(convert_macro_info_map(shared_macro_map, block_info_set.shared_data_block_info_map_))) {
     LOG_WARN("fail to convert shared data block info map", K(ret));
   } else if (write_infos.count() > 0
-      && OB_FAIL(batch_write_sstable_info(write_infos, write_ctxs, addrs, meta_write_ctxs, block_info_set))) {
+      && OB_FAIL(batch_write_sstable_info(write_infos, write_ctxs, addrs, sstable_meta_write_ctxs, block_info_set))) {
     LOG_WARN("failed to batch write sstable", K(ret));
   } else if (FALSE_IT(time_stats->click("batch_write_sstable_info"))) {
   } else if (OB_FAIL(new_table_store.init(allocator_, tables, addrs))) {
@@ -1671,7 +1684,7 @@ int ObTabletPersister::fetch_table_store_and_write_info(
     const ObTablet &tablet,
     ObTabletMemberWrapper<ObTabletTableStore> &wrapper,
     common::ObIArray<ObSharedBlockWriteInfo> &write_infos,
-    common::ObIArray<ObSharedBlocksWriteCtx> &meta_write_ctxs,
+    common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     int64_t &total_tablet_meta_size,
     ObBlockInfoSet &block_info_set)
 {
@@ -1691,7 +1704,7 @@ int ObTabletPersister::fetch_table_store_and_write_info(
     LOG_WARN("fail to get all sstable iterator", K(ret), KPC(table_store));
   } else if (FALSE_IT(time_stats->click("get_all_sstable"))) {
   } else if (OB_FAIL(fetch_and_persist_sstable(
-      table_iter, new_table_store, meta_write_ctxs, total_tablet_meta_size, block_info_set))) {
+      table_iter, new_table_store, sstable_meta_write_ctxs, total_tablet_meta_size, block_info_set))) {
     LOG_WARN("fail to fetch and persist sstable", K(ret), K(table_iter));
   } else if (FALSE_IT(time_stats->click("fetch_and_persist_sstable"))) {
   } else if (OB_FAIL(fill_write_info(allocator_, &new_table_store, write_infos))) {
