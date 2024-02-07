@@ -580,7 +580,7 @@ public:
     mem_target_(0), max_workarea_size_(0), workarea_hold_size_(0), max_auto_workarea_size_(0),
     max_tenant_memory_size_(0),
     manual_calc_cnt_(0), wa_start_(0), wa_end_(0), wa_cnt_(0),
-    lock_()
+    lock_(), global_bound_update_lock_()
   {}
   ~ObTenantSqlMemoryManager() {}
 public:
@@ -632,11 +632,12 @@ private:
   OB_INLINE bool need_manual_by_drift();
 
   OB_INLINE void increase(int64_t size)
-  { (ATOMIC_AAF(&drift_size_, size)); ATOMIC_INC(&profile_cnt_); }
+  { (ATOMIC_AAF(&drift_size_, size)); }
   OB_INLINE void decrease(int64_t size)
-  { (ATOMIC_SAF(&drift_size_, size)); ATOMIC_DEC(&profile_cnt_); }
+  { (ATOMIC_SAF(&drift_size_, size)); }
   OB_INLINE int64_t get_drift_size() { return (ATOMIC_LOAD(&drift_size_)); }
-
+  OB_INLINE void increase_profile_cnt() { ATOMIC_INC(&profile_cnt_); }
+  OB_INLINE void decrease_profile_cnt() { ATOMIC_DEC(&profile_cnt_); }
   void reset();
   int try_push_profiles_work_area_size(int64_t global_bound_size);
   int calc_work_area_size_by_profile(int64_t global_bound_size, ObSqlWorkAreaProfile &profile);
@@ -702,6 +703,7 @@ private:
   static const int64_t DRIFT_CNT_PERCENT = 10;
 
   static const int64_t HASH_CNT = 256;
+  static const int64_t MIN_PROFILE_CHANEG_CNT = 8;
 
   ObTenantSqlMemoryCallback sql_mem_callback_;
   common::ObFIFOAllocator allocator_;
@@ -730,6 +732,7 @@ private:
   int64_t wa_end_;
   int64_t wa_cnt_;
   ObLatch lock_;
+  ObLatch global_bound_update_lock_;
   hash::ObHashMap<ObSqlWorkAreaStat::WorkareaKey,
       ObSqlWorkAreaStat*, hash::NoPthreadDefendMode> wa_ht_;
   ObSEArray<ObSqlWorkAreaStat, MAX_WORKAREA_STAT_CNT> workarea_stats_;
@@ -753,14 +756,16 @@ OB_INLINE bool ObTenantSqlMemoryManager::need_manual_calc_bound()
     if (need_manual_by_drift()) {
       manual_calc_bound = true;
     } else {
-      int64_t delta_cnt = pre_profile_cnt_ - profile_cnt_;
-      if (delta_cnt > 0) {
+      int64_t delta_cnt = std::abs(pre_profile_cnt_ - profile_cnt_);
+      if (delta_cnt >= MIN_PROFILE_CHANEG_CNT) {
         manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < delta_cnt;
-      } else {
-        manual_calc_bound = profile_cnt_ * DRIFT_CNT_PERCENT / 100 < -delta_cnt;
       }
     }
   }
+  SQL_ENG_LOG(DEBUG, "print need calc bound", K(manual_calc_bound),
+             K(global_bound_size_),
+             K(drift_size_), K(mem_target_), K(profile_cnt_),
+             K(pre_profile_cnt_), K(profile_cnt_));
   return manual_calc_bound;
 }
 
