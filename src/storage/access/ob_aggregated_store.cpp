@@ -108,6 +108,7 @@ int ObCGAggCells::process(
 
 ObAggRow::ObAggRow(common::ObIAllocator &allocator) :
     agg_cells_(allocator),
+    dummy_agg_cells_(allocator),
     can_use_index_info_(false),
     need_access_data_(false),
     has_lob_column_out_(false),
@@ -125,6 +126,8 @@ void ObAggRow::reset()
 {
   agg_cell_factory_.release(agg_cells_);
   agg_cells_.reset();
+  agg_cell_factory_.release(dummy_agg_cells_);
+  dummy_agg_cells_.reset();
   can_use_index_info_ = false;
   need_access_data_ = false;
   has_lob_column_out_ = false;
@@ -146,8 +149,10 @@ int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
   if (OB_ISNULL(out_cols_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null out cols param", K(ret), K_(param.iter_param));
-  } else if (OB_FAIL(agg_cells_.init(param.output_exprs_->count() + param.aggregate_exprs_->count()))) {
-    LOG_WARN("Failed to init agg cells array", K(ret), K(param.output_exprs_->count()));
+  } else if (OB_FAIL(agg_cells_.init(param.aggregate_exprs_->count()))) {
+    LOG_WARN("Failed to init agg cells array", K(ret), K(param.aggregate_exprs_->count()));
+  } else if (OB_FAIL(dummy_agg_cells_.init(param.output_exprs_->count()))) {
+    LOG_WARN("Failed to init first row agg cells array", K(ret), K(param.output_exprs_->count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.output_exprs_->count(); ++i) {
       // mysql compatibility, select a,count(a), output the first value of a
@@ -163,9 +168,9 @@ int ObAggRow::init(const ObTableAccessParam &param, const int64_t batch_size)
         const share::schema::ObColumnParam *col_param = out_cols_param->at(col_offset);
         sql::ObExpr *expr = param.output_exprs_->at(i);
         ObAggCellBasicInfo basic_info(col_offset, col_index, col_param, expr, batch_size);
-        if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, agg_cells_))) {
+        if (OB_FAIL(agg_cell_factory_.alloc_cell(basic_info, dummy_agg_cells_))) {
           LOG_WARN("Failed to alloc agg cell", K(ret), K(i));
-        } else if (FALSE_IT(cell = agg_cells_.at(agg_cells_.count() - 1))) {
+        } else if (FALSE_IT(cell = dummy_agg_cells_.at(dummy_agg_cells_.count() - 1))) {
         } else if (OB_UNLIKELY(PD_FIRST_ROW != cell->get_type())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected agg type", K(ret), KPC(cell));
@@ -448,6 +453,12 @@ int ObAggregatedStore::collect_aggregated_row(blocksstable::ObDatumRow *&row)
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
       ObAggCell *cell = agg_row_.at(i);
       if (OB_FAIL(cell->collect_result(eval_ctx_, is_pad_char_to_full_length(context_.sql_mode_)))) {
+        LOG_WARN("Failed to fill agg result", K(ret), K(i), K(*cell));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_dummy_agg_count(); ++i) {
+      ObAggCell *cell = agg_row_.at_dummy(i);
+      if (OB_FAIL(cell->collect_result(eval_ctx_, false))) {
         LOG_WARN("Failed to fill agg result", K(ret), K(i), K(*cell));
       }
     }
