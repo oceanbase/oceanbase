@@ -1490,8 +1490,7 @@ int ObDDLScheduler::create_build_index_task(
     } else if (OB_FAIL(insert_task_record(proxy, index_task, allocator, task_record))) {
       LOG_WARN("fail to insert task record", K(ret));
     }
-    index_task.add_event_info("create build index task finish");
-    LOG_INFO("ddl_scheduler create build index task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(index_task));
+    LOG_INFO("ddl_scheduler create build index task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   return ret;
 }
@@ -1539,8 +1538,7 @@ int ObDDLScheduler::create_drop_index_task(
       LOG_WARN("fail to insert task record", K(ret));
     }
   }
-  index_task.add_event_info("create drop index task finish");
-  LOG_INFO("ddl_scheduler create drop index task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(index_task));
+  LOG_INFO("ddl_scheduler create drop index task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   return ret;
 }
 
@@ -1576,8 +1574,7 @@ int ObDDLScheduler::create_constraint_task(
   } else if (OB_FAIL(insert_task_record(proxy, constraint_task, allocator, task_record))) {
     LOG_WARN("fail to insert task record", K(ret));
   }
-  constraint_task.add_event_info("create constraint task finish");
-  LOG_INFO("ddl_scheduler create constraint task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(constraint_task));
+  LOG_INFO("ddl_scheduler create constraint task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   return ret;
 }
@@ -1621,8 +1618,7 @@ int ObDDLScheduler::create_table_redefinition_task(
     } else if (OB_FAIL(insert_task_record(proxy, redefinition_task, allocator, task_record))) {
       LOG_WARN("fail to insert task record", K(ret));
     }
-    redefinition_task.add_event_info("create drop primary key task finish");
-    LOG_INFO("ddl_scheduler create table redefinition task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(redefinition_task), K(common::lbt()));
+    LOG_INFO("ddl_scheduler create table redefinition task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(common::lbt()), K(task_record));
   }
   return ret;
 }
@@ -1664,8 +1660,7 @@ int ObDDLScheduler::create_drop_primary_key_task(
   } else if (OB_FAIL(insert_task_record(proxy, drop_pk_task, allocator, task_record))) {
     LOG_WARN("fail to insert task record", K(ret));
   }
-  drop_pk_task.add_event_info("create drop primary key task finish");
-  LOG_INFO("ddl_scheduler create drop primary key task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(drop_pk_task));
+  LOG_INFO("ddl_scheduler create drop primary key task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   return ret;
 }
@@ -1707,8 +1702,7 @@ int ObDDLScheduler::create_column_redefinition_task(
   } else if (OB_FAIL(insert_task_record(proxy, redefinition_task, allocator, task_record))) {
     LOG_WARN("fail to insert task record", K(ret));
   }
-  redefinition_task.add_event_info("create column redefinition task finish");
-  LOG_INFO("ddl_scheduler create column redefinition task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(redefinition_task));
+  LOG_INFO("ddl_scheduler create column redefinition task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   return ret;
 }
@@ -1741,8 +1735,7 @@ int ObDDLScheduler::create_modify_autoinc_task(
     } else if (OB_FAIL(insert_task_record(proxy, modify_autoinc_task, allocator, task_record))) {
       LOG_WARN("fail to insert task record", K(ret));
     }
-    modify_autoinc_task.add_event_info("create modify autoinc task finish");
-    LOG_INFO("ddl_scheduler create modify autoinc task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(modify_autoinc_task));
+    LOG_INFO("ddl_scheduler create modify autoinc task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   return ret;
 }
@@ -1780,8 +1773,7 @@ int ObDDLScheduler::create_ddl_retry_task(
   } else if (OB_FAIL(insert_task_record(proxy, ddl_retry_task, allocator, task_record))) {
     LOG_WARN("fail to insert task record", K(ret));
   }
-  ddl_retry_task.add_event_info("create ddl retry task finish");
-  LOG_INFO("ddl_scheduler create ddl retry task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(ddl_retry_task));
+  LOG_INFO("ddl_scheduler create ddl retry task finished", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   return ret;
 }
 
@@ -1926,7 +1918,6 @@ int ObDDLScheduler::recover_task()
       }
       ret = OB_SUCCESS; // ignore ret
 
-      add_event_info(cur_record, "recover ddl task");
       LOG_INFO("recover ddl task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(cur_record));
     }
   }
@@ -2076,8 +2067,7 @@ int ObDDLScheduler::schedule_build_index_task(
     }
   }
   if (nullptr != build_index_task) {
-    build_index_task->add_event_info("schedule build index task finish");
-    LOG_INFO("ddl_scheduler schedule build index task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(build_index_task));
+    LOG_INFO("ddl_scheduler schedule build index task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != build_index_task) {
     build_index_task->~ObIndexBuildTask();
@@ -2106,8 +2096,7 @@ int ObDDLScheduler::schedule_drop_primary_key_task(const ObDDLTaskRecord &task_r
     }
   }
   if (nullptr != drop_pk_task) {
-    drop_pk_task->add_event_info("schedule drop primary key task finish");
-    LOG_INFO("ddl_scheduler schedule drop primary key task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(drop_pk_task));
+    LOG_INFO("ddl_scheduler schedule drop primary key task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != drop_pk_task) {
     drop_pk_task->~ObDropPrimaryKeyTask();
@@ -2138,10 +2127,7 @@ int ObDDLScheduler::schedule_table_redefinition_task(const ObDDLTaskRecord &task
             && OB_FAIL(manager_reg_heart_beat_task_.update_task_active_time(ObDDLTaskID(task_record.tenant_id_, task_record.task_id_)))) {
     LOG_WARN("register_task_time recover fail", K(ret));
   }
-  if (nullptr != redefinition_task) {
-    redefinition_task->add_event_info("schedule table redefinition task finish");
-    LOG_INFO("ddl_scheduler schedule table redefinition task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(redefinition_task));
-  }
+  LOG_INFO("ddl_scheduler schedule table redefinition task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   if (OB_FAIL(ret) && nullptr != redefinition_task) {
     redefinition_task->~ObTableRedefinitionTask();
     allocator_.free(redefinition_task);
@@ -2169,8 +2155,7 @@ int ObDDLScheduler::schedule_column_redefinition_task(const ObDDLTaskRecord &tas
     }
   }
   if (nullptr != redefinition_task) {
-    redefinition_task->add_event_info("schedule column redefinition task finish");
-    LOG_INFO("ddl_scheduler schedule column redefinition task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(redefinition_task));
+    LOG_INFO("ddl_scheduler schedule column redefinition task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != redefinition_task) {
     redefinition_task->~ObColumnRedefinitionTask();
@@ -2199,8 +2184,7 @@ int ObDDLScheduler::schedule_ddl_retry_task(const ObDDLTaskRecord &task_record)
     }
   }
   if (nullptr != ddl_retry_task) {
-    ddl_retry_task->add_event_info("schedule ddl retry task finish");
-    LOG_INFO("ddl_scheduler schedule ddl retry task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(ddl_retry_task));
+    LOG_INFO("ddl_scheduler schedule ddl retry task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != ddl_retry_task) {
     ddl_retry_task->~ObDDLRetryTask();
@@ -2229,8 +2213,7 @@ int ObDDLScheduler::schedule_constraint_task(const ObDDLTaskRecord &task_record)
     }
   }
   if (nullptr != constraint_task) {
-    constraint_task->add_event_info("schedule constraint task finish");
-    LOG_INFO("ddl_scheduler schedule constraint task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(constraint_task));
+    LOG_INFO("ddl_scheduler schedule constraint task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != constraint_task) {
     constraint_task->~ObConstraintTask();
@@ -2259,8 +2242,7 @@ int ObDDLScheduler::schedule_modify_autoinc_task(const ObDDLTaskRecord &task_rec
     }
   }
   if (nullptr != modify_autoinc_task) {
-    modify_autoinc_task->add_event_info("schedule modify autoinc task finish");
-    LOG_INFO("ddl_scheduler schedule modify autoinc task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(modify_autoinc_task));
+    LOG_INFO("ddl_scheduler schedule modify autoinc task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != modify_autoinc_task) {
     modify_autoinc_task->~ObModifyAutoincTask();
@@ -2289,8 +2271,7 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
     }
   }
   if (nullptr != drop_index_task) {
-    drop_index_task->add_event_info("schedule drop index task finish");
-    LOG_INFO("ddl_scheduler schedule drop index task", K(ret), "ddl_event_info", ObDDLEventInfo(), KPC(drop_index_task));
+    LOG_INFO("ddl_scheduler schedule drop index task", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_record));
   }
   if (OB_FAIL(ret) && nullptr != drop_index_task) {
     drop_index_task->~ObDropIndexTask();
