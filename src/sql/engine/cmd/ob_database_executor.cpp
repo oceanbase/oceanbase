@@ -80,7 +80,7 @@ int ObCreateDatabaseExecutor::execute(ObExecContext &ctx, ObCreateDatabaseStmt &
       "database_info", database_id,
       "schema_version", create_database_arg.database_schema_.get_schema_version());
   }
-  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(create_database_arg));
+  SQL_ENG_LOG(INFO, "finish execute create database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -186,7 +186,7 @@ int ObAlterDatabaseExecutor::execute(ObExecContext &ctx, ObAlterDatabaseStmt &st
       "database_info", alter_database_arg.database_schema_.get_database_id(),
       "schema_version", alter_database_arg.database_schema_.get_schema_version());
   }
-    SQL_ENG_LOG(INFO, "finish execute alter database", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(alter_database_arg));
+    SQL_ENG_LOG(INFO, "finish execute alter database", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -266,7 +266,7 @@ int ObDropDatabaseExecutor::execute(ObExecContext &ctx, ObDropDatabaseStmt &stmt
       "rpc_dst", common_rpc_proxy->get_server(),
       "database_info", database_id);
   }
-  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(drop_database_arg));
+  SQL_ENG_LOG(INFO, "finish execute drop database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -306,7 +306,7 @@ int ObFlashBackDatabaseExecutor::execute(ObExecContext &ctx, ObFlashBackDatabase
       "origin_db_name", flashback_database_arg.origin_db_name_,
       "new_db_name", flashback_database_arg.new_db_name_);
   }
-  SQL_ENG_LOG(INFO, "finish execute flashback database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(flashback_database_arg));
+  SQL_ENG_LOG(INFO, "finish execute flashback database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
@@ -345,7 +345,7 @@ int ObPurgeDatabaseExecutor::execute(ObExecContext &ctx, ObPurgeDatabaseStmt &st
       "rpc_dst", common_rpc_proxy->get_server(),
       "database_info", purge_database_arg.db_name_);
   }
-  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo(), K(stmt), K(purge_database_arg));
+  SQL_ENG_LOG(INFO, "finish purge database.", K(ret), "ddl_event_info", ObDDLEventInfo());
   return ret;
 }
 
