@@ -2315,6 +2315,13 @@ typedef enum ObItemType
   T_COL_SKIP_INDEX_SUM,
   T_ALTER_SYSTEM_RESET,
   T_ALTER_SYSTEM_RESET_PARAMETER,
+
+  //tenant clone
+  T_CREATE_TENANT_SNAPSHOT,
+  T_DROP_TENANT_SNAPSHOT,
+  T_CLONE_TENANT,
+  T_CANCEL_CLONE,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

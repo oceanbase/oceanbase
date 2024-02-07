@@ -464,7 +464,8 @@ struct ObDropResourcePoolArg : public ObDDLArg
 public:
   ObDropResourcePoolArg():
     ObDDLArg(),
-    if_exist_(false)
+    if_exist_(false),
+    pool_id_(OB_INVALID_ID)
   {}
   virtual ~ObDropResourcePoolArg() {}
   bool is_valid() const;
@@ -474,6 +475,7 @@ public:
 
   common::ObString pool_name_;
   bool if_exist_;
+  uint64_t pool_id_;
 };
 
 struct ObCmdArg

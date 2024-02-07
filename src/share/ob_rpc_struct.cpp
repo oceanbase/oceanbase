@@ -1058,7 +1058,8 @@ DEF_TO_STRING(ObDropResourcePoolArg)
 
 OB_SERIALIZE_MEMBER((ObDropResourcePoolArg, ObDDLArg),
                     pool_name_,
-                    if_exist_);
+                    if_exist_,
+                    pool_id_);
 
 
 OB_SERIALIZE_MEMBER(ObCmdArg,
