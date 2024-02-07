@@ -1174,6 +1174,8 @@ int ObIndexBlockTreeCursor::load_micro_block_data(const MacroBlockId &macro_bloc
       }
     }
   }
+  macro_handle.reset();
+  io_allocator.reset();
   return ret;
 }
 
