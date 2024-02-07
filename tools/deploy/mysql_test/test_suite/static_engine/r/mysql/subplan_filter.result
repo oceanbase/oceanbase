@@ -3384,3 +3384,33 @@ select /*+ no_rewrite*/ * from t1 where exists (select /*+no_unnest */ 1 from t3
 | 26 |    9 |   17 |   17 |
 | 28 |    3 |   18 |   18 |
 +----+------+------+------+
+
+drop table if exists t;
+drop table if exists t2;
+drop table if exists t3;
+create table t(c1 int);
+create table t2(c1 int);
+create table t3(c1 int, c2 varchar(1500)) partition by hash(c1) partitions 4;
+insert into t2 values(1000);
+insert into t3 values(0, repeat('0123456789', 100));
+insert into t3 values(0, repeat('0123456789', 101));
+insert into t3 values(0, repeat('0123456789', 101));
+insert into t3 values(0, repeat('0123456789', 101));
+insert into t3 values(0, repeat('0123456789', 101));
+insert into t3 values(0, repeat('0123456789', 101));
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+insert into t3 select * from t3 where length(c2) > 1000;
+select /*+ no_rewrite */ * from t where exists (select 1 from t2, t3 where t2.c1 = length(t3.c2));
++------+
+| c1   |
++------+
++------+
+
+drop table if exists t;
+drop table if exists t2;
+drop table if exists t3;
