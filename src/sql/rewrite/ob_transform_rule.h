@@ -66,7 +66,8 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
-    is_spm_outline_(false)
+    is_spm_outline_(false),
+    push_down_filters_()
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -126,6 +127,7 @@ struct ObTransformerCtx
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
   bool is_spm_outline_;
+  ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
 };
 
 enum TransMethod

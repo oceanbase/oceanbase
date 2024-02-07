@@ -1168,6 +1168,7 @@ public:
   bool is_in_range_optimization_enabled() const;
   int is_better_inlist_enabled(bool &enabled) const;
   bool is_index_skip_scan_enabled() const;
+  bool is_qualify_filter_enabled() const;
   int is_enable_range_extraction_for_not_in(bool &enabled) const;
   bool is_var_assign_use_das_enabled() const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;

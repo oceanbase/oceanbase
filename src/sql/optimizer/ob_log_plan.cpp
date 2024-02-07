@@ -8304,6 +8304,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                                  const OrderItem *hash_sortkey)
 {
   int ret = OB_SUCCESS;
+  bool is_part_topn = (NULL != hash_sortkey) && (NULL != topn_expr);
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
@@ -8313,7 +8314,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     } else { /*do nothing*/ }
   } else {
     // allocate push down limit if necessary
-    if (NULL != topn_expr && !need_sort) {
+    if (NULL != topn_expr && !need_sort && !is_part_topn) {
       bool is_pushed = false;
       if (!is_fetch_with_ties &&
           OB_FAIL(try_push_limit_into_table_scan(top, topn_expr, topn_expr, NULL, is_pushed))) {
@@ -8392,15 +8393,15 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                        sort_keys,
                                        real_prefix_pos,
                                        real_local_order,
-                                       NULL,
-                                       false,
+                                       topn_expr,
+                                       is_fetch_with_ties,
                                        hash_sortkey))) {
         LOG_WARN("failed to allocate sort as top", K(ret));
       } else { /*do nothing*/ }
     }
 
     // allocate final limit if necessary
-    if (OB_SUCC(ret) && NULL != topn_expr && exch_info.is_pq_local()) {
+    if (OB_SUCC(ret) && NULL != topn_expr && exch_info.is_pq_local() && !is_part_topn) {
       if (OB_FAIL(allocate_limit_as_top(top,
                                         topn_expr,
                                         NULL,

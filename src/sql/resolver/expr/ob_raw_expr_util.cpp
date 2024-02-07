@@ -5720,6 +5720,37 @@ int ObRawExprUtils::build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnI
   return ret;
 }
 
+int ObRawExprUtils::build_nvl_expr(ObRawExprFactory &expr_factory,
+                                   ObRawExpr *param_expr1,
+                                   ObRawExpr *param_expr2,
+                                   ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObSysFunRawExpr *nvl_func_expr = NULL;
+  if (OB_ISNULL(param_expr1) || OB_ISNULL(param_expr2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to build length expr", K(param_expr1), K(param_expr2), K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_SYS_NVL, nvl_func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(nvl_func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func expr is null", K(nvl_func_expr), K(ret));
+  } else {
+    nvl_func_expr->set_expr_type(T_FUN_SYS_NVL);
+    nvl_func_expr->set_func_name(ObString::make_string(N_NVL));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(nvl_func_expr->add_param_expr(param_expr1))) {
+      LOG_WARN("fail to add param expr", K(ret));
+    } else if (OB_FAIL(nvl_func_expr->add_param_expr(param_expr2))) {
+      LOG_WARN("fail to add param expr", K(ret));
+    } else {
+      expr = nvl_func_expr;
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::build_lnnvl_expr(ObRawExprFactory &expr_factory,
                                      ObRawExpr *param_expr,
                                      ObRawExpr *&expr)

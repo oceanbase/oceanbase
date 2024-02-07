@@ -276,6 +276,9 @@ private:
   int pushdown_through_winfunc(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &predicates,
                                ObIArray<ObRawExpr *> &down_preds);
+  int pushdown_into_qualify_filter(ObIArray<ObRawExpr *> &predicates,
+                                   ObSelectStmt &sel_stmt,
+                                   bool &is_happened);
 
   int pushdown_through_groupby(ObSelectStmt &stmt,
                                ObIArray<ObRawExpr *> &output_predicates);
@@ -373,6 +376,8 @@ private:
   int push_down_cte_filter(ObIArray<ObSqlTempTableInfo *> &temp_table_info, bool &trans_happened);
 
   int append_condition_array(ObIArray<ObRawExprCondition *> &conditions, int count, ObRawExprCondition *value);
+
+  int gather_basic_qualify_filter(ObSelectStmt &stmt, ObIArray<ObRawExpr*> &preds);
 
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;

@@ -107,7 +107,7 @@ public:
     int ret = OB_SUCCESS;
     if (OB_FAIL(add_row(expr, store_row))) {
       SQL_ENG_LOG(WARN, "failed to add row", K(ret));
-    } else if (use_heap_sort_) {
+    } else if (use_heap_sort_ || use_partition_topn_sort_) {
       sort_need_dump = false;
     } else {
       sort_need_dump = need_dump();
@@ -141,7 +141,7 @@ public:
     int ret = OB_SUCCESS;
     if (OB_FAIL(add_batch(exprs, skip, batch_size, start_pos, append_row_count))) {
       SQL_ENG_LOG(WARN, "failed to add batch", K(ret));
-    } else if (use_heap_sort_) {
+    } else if (use_heap_sort_ || use_partition_topn_sort_) {
       sort_need_dump = false;
     } else {
       sort_need_dump = need_dump();
@@ -179,7 +179,7 @@ public:
     if (!is_inited()) {
       ret = common::OB_NOT_INIT;
       SQL_ENG_LOG(WARN, "not init", K(ret));
-    } else if (outputted_rows_cnt_ >= topn_cnt_ && !is_fetch_with_ties_) {
+    } else if (outputted_rows_cnt_ >= topn_cnt_ && !is_fetch_with_ties_ && !use_partition_topn_sort_) {
       ret = OB_ITER_END;
     } else {
       blk_holder_.release();
@@ -188,7 +188,7 @@ public:
         reuse();
       }
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || use_partition_topn_sort_) {
     } else if (NULL != last_ties_row_ && 0 != comp_.with_ties_cmp(sr, last_ties_row_)) {
       ret = OB_ITER_END;
     } else if (OB_UNLIKELY(OB_FAIL(comp_.ret_))) {
@@ -436,6 +436,42 @@ protected:
     { get_extra_info().max_size_ = max_size; }
   };
 
+  typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow *, Compare> TopnHeap;
+
+  struct TopnHeapNode
+  {
+    TopnHeapNode(Compare &cmp, common::ObIAllocator *allocator = NULL): heap_(cmp, allocator), ties_array_() {}
+    ~TopnHeapNode() {
+      heap_.reset();
+      ties_array_.reset();
+    }
+    TO_STRING_EMPTY();
+    TopnHeap heap_;
+    common::ObArray<SortStoredRow *> ties_array_;
+  };
+
+  struct PartHeapNode
+  {
+    PartHeapNode(Compare &cmp, common::ObIAllocator *allocator = NULL):
+      hash_node_next_(NULL),
+      topn_heap_node_(cmp, allocator) {}
+    ~PartHeapNode() {hash_node_next_ = NULL; topn_heap_node_.~TopnHeapNode(); }
+    PartHeapNode *hash_node_next_;
+    TopnHeapNode topn_heap_node_;
+    TO_STRING_EMPTY();
+  };
+  class TopnHeapNodeComparer
+  {
+  public:
+    TopnHeapNodeComparer(Compare &compare) : compare_(compare) {}
+    bool operator()(const TopnHeapNode *l, const TopnHeapNode *r)
+    {
+      return compare_(l->heap_.top(),
+                      r->heap_.top());
+    }
+    Compare &compare_;
+  };
+
   int get_next_row(const common::ObIArray<ObExpr*> &exprs, const ObChunkDatumStore::StoredRow *&sr)
   {
     int ret = common::OB_SUCCESS;
@@ -459,10 +495,12 @@ protected:
 
   bool need_imms() const
   {
-    return !use_heap_sort_ && rows_->count() > datum_store_.get_row_cnt();
+    return !use_heap_sort_ && !use_partition_topn_sort_
+           && rows_->count() > datum_store_.get_row_cnt();
   }
   int sort_inmem_data();
   int do_dump();
+  int inner_dump_part_topn_heap();
 
   template <typename Input>
     int build_chunk(const int64_t level, Input &input, int64_t extra_size = 0);
@@ -472,12 +510,17 @@ protected:
   int heap_next(Heap &heap, const NextFunc &func, Item &item);
   int ems_heap_next(ObSortOpChunk *&chunk);
   int imms_heap_next(const ObChunkDatumStore::StoredRow *&store_row);
+  int imms_partition_topn_next(const ObChunkDatumStore::StoredRow *&store_row);
+  int part_topn_heap_next(int64_t &cur_heap_array_idx, int64_t &cur_heap_idx,
+                          const ObChunkDatumStore::StoredRow *&store_row);
 
   int array_next_stored_row(
       const ObChunkDatumStore::StoredRow *&sr);
   int imms_heap_next_stored_row(
       const ObChunkDatumStore::StoredRow *&sr);
   int ems_heap_next_stored_row(
+      const ObChunkDatumStore::StoredRow *&sr);
+  int part_heap_next_stored_row(
       const ObChunkDatumStore::StoredRow *&sr);
 
   // 这里need dump外加两个条件: 1) data_size > expect_size 2) mem_used > global_bound
@@ -510,8 +553,13 @@ protected:
   int is_equal_part(const ObChunkDatumStore::StoredRow *l, const ObChunkDatumStore::StoredRow *r, bool &is_equal);
   int do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRow *> &rows,
                         const int64_t rows_begin, const int64_t rows_end);
+  int do_partition_topn_sort();
   void set_blk_holder(ObChunkDatumStore::IteratedBlockHolder *blk_holder);
+  bool is_in_same_heap(const SortStoredRow *l,
+                       const SortStoredRow*r);
   // for topn sort
+  int init_topn();
+  void reuse_topn_heap(TopnHeapNode *topn_heap);
   int add_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
                         const ObChunkDatumStore::StoredRow *&store_row);
   int add_heap_sort_batch(const common::ObIArray<ObExpr *> &exprs,
@@ -543,13 +591,32 @@ protected:
                        SortStoredRow *&new_row);
   int generate_last_ties_row(const ObChunkDatumStore::StoredRow *orign_row);
   int adjust_topn_read_rows(ObChunkDatumStore::StoredRow **stored_rows, int64_t &read_cnt);
-
+  // for partition topn
+  int init_partition_topn();
+  void reuse_part_topn_heap();
+  int locate_current_heap(const common::ObIArray<ObExpr*> &exprs);
+  int locate_current_heap_in_bucket(PartHeapNode *first_node,
+                                  const common::ObIArray<ObExpr*> &exprs,
+                                  PartHeapNode *&exist);
+  void clean_up_topn_heap(TopnHeap *&topn_heap);
+  int add_part_heap_sort_row(const common::ObIArray<ObExpr*> &exprs,
+                             const ObChunkDatumStore::StoredRow *&store_row);
+  int add_part_heap_sort_batch(const common::ObIArray<ObExpr *> &exprs,
+                          const ObBitVector &skip,
+                          const int64_t batch_size,
+                          const int64_t start_pos /* 0 */,
+                          int64_t *append_row_count = nullptr);
+  int add_part_heap_sort_batch(const common::ObIArray<ObExpr *> &exprs,
+                          const ObBitVector &skip,
+                          const int64_t batch_size,
+                          const uint16_t selector[],
+                          const int64_t size);
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
 protected:
   typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow **, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<ObSortOpChunk *, Compare, MAX_MERGE_WAYS> EMSHeap;
-  typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow *, Compare> TopnHeap;
+  //typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow *, Compare> TopnHeap;
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t STORE_ROW_HEADER_SIZE = sizeof(SortStoredRow);
   static const int64_t STORE_ROW_EXTRA_SIZE = sizeof(uint64_t);
@@ -601,10 +668,14 @@ protected:
   // for topn sort
   bool use_heap_sort_;
   bool is_fetch_with_ties_;
-  TopnHeap *topn_heap_;
+  TopnHeapNode *topn_heap_;
   int64_t ties_array_pos_;
-  common::ObArray<SortStoredRow *> ties_array_;
   ObChunkDatumStore::StoredRow *last_ties_row_;
+  // for window function partition topn sort
+  PartHeapNode **pt_buckets_;
+  bool use_partition_topn_sort_;
+  ObSEArray<TopnHeapNode*, 16> heap_nodes_;
+  int64_t cur_heap_idx_;
   common::ObIArray<ObChunkDatumStore::StoredRow *> *rows_;
   ObChunkDatumStore::IteratedBlockHolder blk_holder_;
 };

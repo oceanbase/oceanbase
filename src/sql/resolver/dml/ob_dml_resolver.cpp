@@ -20,7 +20,6 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
-#include "sql/resolver/expr/ob_raw_expr_canonicalizer_impl.h"
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/resolver/expr/ob_raw_expr_info_extractor.h"
 #include "sql/resolver/dml/ob_view_table_resolver.h"
@@ -32,7 +31,6 @@
 #include "sql/parser/parse_malloc.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/schema/ob_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr_canonicalizer_impl.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
@@ -6066,22 +6064,13 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
     ctx.stmt_ = static_cast<ObStmt*>(get_stmt());
     ctx.query_ctx_ = params_.query_ctx_;
     ctx.session_info_ = params_.session_info_;
-    ObRawExprCanonicalizerImpl canonicalizer(ctx);
     if (OB_FAIL(resolve_sql_expr(node, expr))) {
       LOG_WARN("resolve sql expr failed", K(ret));
-    } else if ( !is_resolving_view_ && OB_FAIL(canonicalizer.canonicalize(expr))) { // canonicalize expression
-      LOG_WARN("resolve canonicalize expression", K(ret));
     } else if (OB_FAIL(expr->formalize(session_info_))) {
       LOG_WARN("failed to formalize expr", K(ret));
-    } else if (expr->get_expr_type() == T_OP_AND) {
-      // no T_OP_AND under another T_OP_AND, which is ensured by canonicalize
-      ObOpRawExpr *and_expr = static_cast<ObOpRawExpr *>(expr);
-      for (int64_t i = 0; OB_SUCC(ret) && i < and_expr->get_param_count(); i++) {
-        ObRawExpr *sub_expr = and_expr->get_param_expr(i);
-        OZ((and_exprs.push_back)(sub_expr));
-      }
-    } else {
-      OZ((and_exprs.push_back)(expr));
+    } else if (OB_FAIL(ObTransformUtils::flatten_expr(expr, and_exprs))) {
+      //canonicalizer move to rewrite, T_OP_AND may under T_OP_AND, so flatten expr
+      LOG_WARN("fail to flatten_expr", K(ret));
     }
   } else {
     for (int i = 0; OB_SUCC(ret) && i < node.num_child_; i++) {
@@ -14367,16 +14356,19 @@ int ObDMLResolver::resolve_win_dist_option(const ParseNode *option,
     const ParseNode *idx_node = NULL;
     const int64_t hash_sort_flag  = 1;
     const int64_t push_down_flag  = 1 << 1;
+    const int64_t topn_flag  = 1 << 2;
     switch (dist_method->type_) {
       case T_DISTRIBUTE_NONE: {
         dist_option.algo_ = WinDistAlgo::WIN_DIST_NONE;
         dist_option.use_hash_sort_ = dist_method->value_ & hash_sort_flag;
+        dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;
         break;
       }
       case T_DISTRIBUTE_HASH: {
         dist_option.algo_ = WinDistAlgo::WIN_DIST_HASH;
         dist_option.use_hash_sort_ = dist_method->value_ & hash_sort_flag;
         dist_option.is_push_down_ = dist_method->value_ & push_down_flag;
+        dist_option.use_topn_sort_ = dist_method->value_ & topn_flag;
         break;
       }
       case T_DISTRIBUTE_RANGE:  dist_option.algo_ = WinDistAlgo::WIN_DIST_RANGE;  break;

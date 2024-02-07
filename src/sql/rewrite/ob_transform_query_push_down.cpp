@@ -870,6 +870,9 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt *select_stmt,
   } else if (OB_FAIL(append(view_stmt->get_window_func_exprs(),
                             select_stmt->get_window_func_exprs()))) {
     LOG_WARN("append select_stmt window func exprs to view stmt window func exprs failed", K(ret));
+  } else if (OB_FAIL(append(view_stmt->get_qualify_filters(),
+                            select_stmt->get_qualify_filters()))) {
+    LOG_WARN("append select_stmt window func filters to view stmt window func filters failed", K(ret));
   } else {
     if (!view_stmt->is_from_pivot()) {
       view_stmt->set_from_pivot(select_stmt->is_from_pivot());

@@ -248,7 +248,11 @@ const char *ObLogSort::get_name() const
 {
   const char *ret = NULL;
   if (NULL != topn_expr_) {
-    ret = "TOP-N SORT";
+    if (part_cnt_ > 0) {
+      ret = "PARTITION TOP-N SORT";
+    } else {
+      ret = "TOP-N SORT";
+    }
   } else if (NULL == topk_limit_expr_ && prefix_pos_ <= 0 && part_cnt_ > 0) {
     ret = "PARTITION SORT";
   }
@@ -403,7 +407,33 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
     if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
     } else if (NULL != topn_expr_) {
-      double_topn_count = std::min(double_topn_count * parallel, child_card);
+      if (part_cnt_ > 0) {
+        //partition topn sort
+        ObSEArray<ObRawExpr*, 4> part_exprs;
+        for (int64_t i = 0; OB_SUCC(ret) && i < sort_keys_.count(); ++i) {
+          if (i < cost_info.part_cnt_) {
+            if (OB_FAIL(part_exprs.push_back(sort_keys_.at(i).expr_))) {
+              LOG_WARN("fail to push back expr", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          double child_rows = child_card / parallel;
+          double distinct_parts = child_rows;
+          if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_plan()->get_update_table_metas(),
+                                                            get_plan()->get_selectivity_ctx(),
+                                                            part_exprs,
+                                                            child_rows,
+                                                            distinct_parts))) {
+            LOG_WARN("failed to calculate distinct", K(ret));
+          } else if (OB_UNLIKELY(distinct_parts < 1.0 || distinct_parts > child_rows)) {
+            distinct_parts = child_rows;
+          }
+          double_topn_count = std::min(distinct_parts * double_topn_count * parallel, child_card);
+        }
+      } else {
+        double_topn_count = std::min(double_topn_count * parallel, child_card);
+      }
     }
   }
   return ret;

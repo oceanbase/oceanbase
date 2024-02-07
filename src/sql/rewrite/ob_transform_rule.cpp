@@ -66,6 +66,7 @@ void ObTransformerCtx::reset()
   used_trans_hints_.reset();
   groupby_pushdown_stmts_.reset();
   is_spm_outline_ = false;
+  push_down_filters_.reset();
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)

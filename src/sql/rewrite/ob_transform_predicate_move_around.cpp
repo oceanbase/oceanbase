@@ -899,6 +899,8 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates(
     LOG_WARN("failed to append conditions", K(ret));
   } else if (OB_FAIL(append(filter_preds, select_stmt.get_having_exprs()))) {
     LOG_WARN("failed to append having conditions", K(ret));
+  } else if (OB_FAIL(gather_basic_qualify_filter(select_stmt,  filter_preds))) {
+     LOG_WARN("failed to gather qualify filters", K(ret));
   } else if (OB_FAIL(remove_simple_op_null_condition(select_stmt, filter_preds))) {
     LOG_WARN("fail to chck and remove const simple conditions", K(ret));
   } else if (OB_FAIL(append(local_preds, input_pullup_preds))) {
@@ -908,6 +910,23 @@ int ObTransformPredicateMoveAround::generate_pullup_predicates(
   } else if (OB_FAIL(compute_pullup_predicates(
                        select_stmt, sel_ids, local_preds, output_pullup_preds))) {
     LOG_WARN("failed to deduce exported predicates", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::gather_basic_qualify_filter(ObSelectStmt &stmt,
+                                                                ObIArray<ObRawExpr*> &preds)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObRawExpr *> &qualify_filters = stmt.get_qualify_filters();
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_qualify_filters_count(); ++i) {
+    ObRawExpr *expr = qualify_filters.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (!expr->has_flag(CNT_WINDOW_FUNC) && OB_FAIL(preds.push_back(expr))) {
+      LOG_WARN("push back pred failed", K(ret));
+    }
   }
   return ret;
 }
@@ -1260,11 +1279,13 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   } else {
     const uint64_t pushdown_pred_count = pushdown_preds.count();
     bool is_happened = false;
+    bool has_distinct = false;
     if (OB_FAIL(stmt->has_rownum(has_rownum))) {
       LOG_WARN("failed to check stmt has rownum", K(ret));
     } else if (stmt->is_select_stmt()) {
       has_group = sel_stmt->has_group_by();
       has_winfunc = sel_stmt->has_window_function();
+      has_distinct = sel_stmt->has_distinct();
     }
     if (OB_SUCC(ret)) {
       if (stmt->has_limit() || stmt->has_sequence() ||
@@ -1276,7 +1297,10 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
         // but with rownum, it is impossible
         OPT_TRACE("stmt has rownum, can not pushdown into where");
       } else if (has_winfunc) {
-        if (OB_FAIL(pushdown_through_winfunc(*sel_stmt, pushdown_preds, candi_preds))) {
+        if (!has_distinct && !sel_stmt->is_dblink_stmt()
+            && OB_FAIL(pushdown_into_qualify_filter(pushdown_preds, *sel_stmt, is_happened))) {
+          LOG_WARN("extract winfunc topn exprs failed", K(ret));
+        } else if (OB_FAIL(pushdown_through_winfunc(*sel_stmt, pushdown_preds, candi_preds))) {
           LOG_WARN("failed to push down predicates throught winfunc", K(ret));
         }
       } else if (OB_FAIL(candi_preds.assign(pushdown_preds))) {
@@ -2124,6 +2148,57 @@ int ObTransformPredicateMoveAround::pushdown_through_winfunc(
   return ret;
 }
 
+//extract topn filters for ranking window functions and pushdown into qualify_filters_
+int ObTransformPredicateMoveAround::pushdown_into_qualify_filter(ObIArray<ObRawExpr *> &predicates, ObSelectStmt &sel_stmt, bool &is_happened)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> qualify_filters;
+  ObSEArray<ObRawExpr *, 4> remain_exprs;
+  if (OB_ISNULL(ctx_) && OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+    //do nothing
+  } else if (!ctx_->session_info_->is_qualify_filter_enabled()) {
+    //do nothing
+  } else if (OB_FAIL(qualify_filters.assign(sel_stmt.get_qualify_filters()))) {
+    LOG_WARN("assign window function filter expr failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < predicates.count(); ++i) {
+      ObRawExpr *pred = NULL;
+      bool is_topn_pred = false;
+      ObRawExpr *dummy_expr = NULL;
+      ObWinFunRawExpr *dummy_win_expr = NULL;
+      bool dummy_flag;
+      if (OB_ISNULL(pred = predicates.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("predicate is null", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::is_winfunc_topn_filter(sel_stmt.get_window_func_exprs(), pred,
+                                              is_topn_pred, dummy_expr, dummy_flag, dummy_win_expr))) {
+        LOG_WARN("check whether the filter is a winfunc topn filter failed", K(ret));
+      } else if (is_topn_pred) {
+        if (ObPredicateDeduce::find_equal_expr(qualify_filters, pred)) {
+          // the condition has been ensured
+        } else if (OB_FAIL(qualify_filters.push_back(pred))) {
+          LOG_WARN("push back topn filter failed", K(ret));
+        } else {
+          is_happened = true;
+        }
+      } else if (OB_FAIL(remain_exprs.push_back(pred))) {
+        LOG_WARN("push back filter failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sel_stmt.set_qualify_filters(qualify_filters))) {
+        LOG_WARN("assign topn filters failed", K(ret));
+      } else if (OB_FAIL(predicates.assign(remain_exprs))) {
+        LOG_WARN("assign remain filters failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * @brief ObTransformPredicateMoveAround::check_pushdown_validity
  * 检查一个谓词能否压过 group by
@@ -2186,7 +2261,7 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
       pushed = true;
     }
     if (OB_SUCC(ret) && !pushed) {
-      if (T_OP_OR == pred->get_expr_type()) {
+      if (T_OP_OR == pred->get_expr_type() && !ObOptimizerUtil::find_equal_expr(ctx_->push_down_filters_, pred)) {
         //对于having c1 > 1 or (c1 < 0 and count(*) > 1)
         //可以拆分出c1 > 1 or c1 < 0下推过group by
         ObRawExpr *new_pred = NULL;
@@ -2205,6 +2280,12 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
       if (OB_FAIL(new_having_exprs.push_back(pred))) {
         LOG_WARN("failed to push back new having expr", K(ret));
       }
+    }
+    //no matter new_pred is valid, pred not need to generate new_pred and try push again
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_FAIL(ctx_->push_down_filters_.push_back(pred))) {
+      LOG_WARN("failed to append table filters", K(ret));
     }
   }
   if (OB_SUCC(ret)) {

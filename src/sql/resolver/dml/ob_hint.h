@@ -960,7 +960,8 @@ public:
     common::ObSEArray<int64_t, 2, common::ModulePageAllocator, true> win_func_idxs_;
     bool use_hash_sort_;  // use hash sort for none/hash dist method
     bool is_push_down_;  // push down window function for hash dist method
-    TO_STRING_KV(K_(algo), K_(win_func_idxs), K_(use_hash_sort), K_(is_push_down));
+    bool use_topn_sort_;  // use part topn sort for none/hash dist method
+    TO_STRING_KV(K_(algo), K_(win_func_idxs), K_(use_hash_sort), K_(is_push_down), K_(use_topn_sort));
   };
 
   const ObIArray<WinDistOption> &get_win_dist_options() const { return win_dist_options_; }
@@ -969,11 +970,13 @@ public:
                           const ObIArray<ObWinFunRawExpr*> &cur_win_funcs,
                           const WinDistAlgo algo,
                           const bool is_push_down,
-                          const bool use_hash_sort);
+                          const bool use_hash_sort,
+                          const bool use_topn_sort);
   int add_win_dist_option(const ObIArray<int64_t> &win_func_idxs,
                           const WinDistAlgo algo,
                           const bool is_push_down,
-                          const bool use_hash_sort);
+                          const bool use_hash_sort,
+                          const bool use_topn_sort);
   static const char* get_dist_algo_str(WinDistAlgo dist_algo);
 
   virtual int print_hint_desc(PlanText &plan_text) const override;

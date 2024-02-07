@@ -1914,7 +1914,8 @@ bool ObTransformSubqueryCoalesce::check_subquery_can_coalesce(const ObStmtMapInf
          map_info.is_semi_info_equal_ &&
          map_info.is_cond_equal_ &&
          map_info.is_group_equal_ &&
-         map_info.is_having_equal_;
+         map_info.is_having_equal_ &&
+         map_info.is_qualify_filter_equal_;
 }
 
 int ObTransformSubqueryCoalesce::coalesce_subquery(StmtCompareHelper &helper, 

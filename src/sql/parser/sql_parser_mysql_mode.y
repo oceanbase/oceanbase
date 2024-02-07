@@ -181,7 +181,7 @@ LEADING_HINT ORDERED
 USE_NL USE_MERGE USE_HASH NO_USE_HASH NO_USE_MERGE NO_USE_NL
 USE_NL_MATERIALIZATION NO_USE_NL_MATERIALIZATION
 USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION
-PARTITION_SORT NO_PARTITION_SORT
+PARTITION_SORT NO_PARTITION_SORT WF_TOPN
 USE_LATE_MATERIALIZATION NO_USE_LATE_MATERIALIZATION
 PX_JOIN_FILTER NO_PX_JOIN_FILTER PX_PART_JOIN_FILTER NO_PX_PART_JOIN_FILTER
 PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET RANDOM_LOCAL BROADCAST BC2HOST LIST
@@ -395,7 +395,7 @@ END_P SET_VAR DELIMITER
 %type <node> case_arg when_clause_list when_clause case_default
 %type <node> window_function opt_partition_by generalized_window_clause win_rows_or_range win_preceding_or_following win_interval win_bounding win_window opt_win_window win_fun_lead_lag_params respect_or_ignore opt_respect_or_ignore_nulls win_fun_first_last_params first_or_last opt_from_first_or_last new_generalized_window_clause new_generalized_window_clause_with_blanket opt_named_windows named_windows named_window
 %type <node> win_dist_list win_dist_desc
-%type <ival> opt_hash_sort_and_pushdown
+%type <ival> opt_hash_sort_and_pushdown opts_hash_sort_and_pushdown
 %type <node> update_asgn_list update_asgn_factor
 %type <node> update_basic_stmt delete_basic_stmt
 %type <node> table_element_list table_element column_definition column_definition_ref column_definition_list column_name_list
@@ -10373,26 +10373,32 @@ win_dist_desc
 ;
 
 win_dist_desc:
-'(' intnum_list ')' distribute_method opt_hash_sort_and_pushdown
+'(' intnum_list ')' distribute_method opts_hash_sort_and_pushdown
 {
   ParseNode *win_func_idxs = NULL;
   merge_nodes(win_func_idxs, result, T_WIN_FUNC_IDX_LIST, $2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_METHOD_OPT, 2, win_func_idxs, $4);
   $4->value_ = $5[0];
 }
-| distribute_method opt_hash_sort_and_pushdown
+| distribute_method opts_hash_sort_and_pushdown
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_METHOD_OPT, 2, NULL, $1);
   $1->value_ = $2[0];
 }
 ;
 
-opt_hash_sort_and_pushdown:
+opts_hash_sort_and_pushdown:
 /*empty*/
 {
   $$[0] = 0;
 }
-| PARTITION_SORT
+| opts_hash_sort_and_pushdown opt_hash_sort_and_pushdown
+{
+  $$[0] = $1[0] | $2[0];
+}
+
+opt_hash_sort_and_pushdown:
+PARTITION_SORT
 {
   $$[0] = 1;
 }
@@ -10400,13 +10406,9 @@ opt_hash_sort_and_pushdown:
 {
   $$[0] = 2;
 }
-| PARTITION_SORT PUSHDOWN
+| WF_TOPN
 {
-  $$[0] = 3;
-}
-| PUSHDOWN PARTITION_SORT
-{
-  $$[0] = 3;
+  $$[0] = 4;
 }
 ;
 
