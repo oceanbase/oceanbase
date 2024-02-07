@@ -363,7 +363,9 @@ public:
     : ObStorageSchema(),
       table_id_(common::OB_INVALID_ID),
       index_status_(share::schema::ObIndexStatus::INDEX_STATUS_UNAVAILABLE),
-      truncate_version_(OB_INVALID_VERSION)
+      truncate_version_(OB_INVALID_VERSION),
+      tenant_data_version_(0),
+      need_create_empty_major_(true)
       {}
 
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -376,6 +378,12 @@ public:
   { return table_id_; }
   int64_t get_truncate_version() const
   { return truncate_version_; }
+  uint64_t get_tenant_data_version() const
+  { return tenant_data_version_; }
+  bool get_need_create_empty_major () const
+  { return need_create_empty_major_; }
+  void set_need_create_empty_major(const bool need_create_empty_major)
+  { need_create_empty_major_ = need_create_empty_major; }
   bool is_valid() const
   {
     return ObStorageSchema::is_valid() && common::OB_INVALID_ID != table_id_;
@@ -384,10 +392,13 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info,
-      const int64_t compat_version);
+      const int64_t compat_version,
+      const uint64_t tenant_data_version,
+      const bool need_create_empty_major);
   int init(common::ObIAllocator &allocator,
       const ObCreateTabletSchema &old_schema);
-  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version));
+  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version),
+      K_(tenant_data_version), K_(need_create_empty_major));
 private:
   // for cdc
   uint64_t table_id_;
@@ -395,6 +406,8 @@ private:
   share::schema::ObIndexStatus index_status_;
   // for tablet throttling
   int64_t truncate_version_;
+  uint64_t tenant_data_version_;
+  bool need_create_empty_major_;
 };
 
 template <typename T>

@@ -1728,6 +1728,9 @@ TEMP_DEF_INT(v4.3, encoding_test_seed, OB_CLUSTER_PARAMETER, "0", "[0,)"
 TEMP_DEF_BOOL(v4.3, enable_table_without_all_cg, OB_TENANT_PARAMETER, "True",
               "enables creating table without all column_group. The default value is False.",
               ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+TEMP_DEF_BOOL(v4.3, enable_store_compression, OB_TENANT_PARAMETER, "False",
+                "enable compression in ObTempBlockStore",
+                ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_prefetch_limiting, OB_TENANT_PARAMETER, "False",
          "enable limiting memory in prefetch for single query",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1785,6 +1788,8 @@ DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
 DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvFeatureModeParser,
     "_obkv_feature_mode is a option list to control specified OBKV features on/off.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
 DEF_BOOL(_enable_optimizer_qualify_filter, OB_TENANT_PARAMETER, "True",
         "Enable extracting qualify filters for window function",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

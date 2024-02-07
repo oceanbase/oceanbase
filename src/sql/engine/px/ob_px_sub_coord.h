@@ -64,6 +64,7 @@ public:
   int init_exec_env(ObExecContext &exec_ctx);
   ObPxSQCProxy &get_sqc_proxy() { return sqc_ctx_.sqc_proxy_; }
   ObSqcCtx &get_sqc_ctx() { return sqc_ctx_; }
+  int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
   int set_partitions_info(ObIArray<ObPxTabletInfo> &partitions_info) {
     return sqc_ctx_.partitions_info_.assign(partitions_info);
   }
@@ -78,7 +79,6 @@ public:
   int check_need_start_ddl(bool &need_start_ddl);
   int start_ddl();
   int end_ddl(const bool need_commit);
-  int64_t get_ddl_context_id() const { return ddl_ctrl_.context_id_; }
 
   int pre_setup_op_input(ObExecContext &ctx,
       ObOpSpec &root,
@@ -87,6 +87,9 @@ public:
       const ObIArray<ObSqcTableLocationKey> &tsc_location_keys);
   int rebuild_sqc_access_table_locations();
   void set_is_single_tsc_leaf_dfo(bool flag) { is_single_tsc_leaf_dfo_ = flag; }
+  int get_participants(ObPxSqcMeta &sqc,
+                       const int64_t table_id,
+                       ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids) const;
   void destroy_shared_rf_msgs();
 private:
   int setup_loop_proc(ObSqcCtx &sqc_ctx) const;
@@ -129,9 +132,6 @@ private:
   int try_prealloc_receive_channel(ObSqcCtx &sqc_ctx, ObPxSqcMeta &sqc);
 
   dtl::ObDtlLocalFirstBufferCache *get_first_buffer_cache() { return &first_buffer_cache_; }
-  int get_participants(ObPxSqcMeta &sqc,
-                       const int64_t table_id,
-                       ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids) const;
   void try_get_dml_op(ObOpSpec &root, ObTableModifySpec *&dml_op);
   int construct_p2p_dh_map() {
     return sqc_ctx_.sqc_proxy_.construct_p2p_dh_map(

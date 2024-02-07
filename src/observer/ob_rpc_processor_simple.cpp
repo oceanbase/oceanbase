@@ -45,6 +45,7 @@
 // for 4.0
 #include "share/ob_ls_id.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_service.h"
@@ -2319,14 +2320,12 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
   } else {
     MTL_SWITCH(tenant_id) {
       ObRole role = INVALID_ROLE;
-      ObDDLSSTableRedoWriter sstable_redo_writer;
+      ObDDLRedoLogWriter sstable_redo_writer;
       MacroBlockId macro_block_id;
       ObMacroBlockHandle macro_handle;
       ObMacroBlockWriteInfo write_info;
       ObLSService *ls_service = MTL(ObLSService*);
       ObLSHandle ls_handle;
-      ObTabletHandle tablet_handle;
-      ObDDLKvMgrHandle ddl_kv_mgr_handle;
       ObLS *ls = nullptr;
 
       // restruct write_info
@@ -2344,19 +2343,15 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       } else if (ObRole::LEADER != role) {
         ret = OB_NOT_MASTER;
         LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
-      } else if (OB_FAIL(ls->get_tablet(arg_.redo_info_.table_key_.tablet_id_, tablet_handle))) {
-        LOG_WARN("get tablet failed", K(ret));
-      } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-        LOG_WARN("get ddl kv manager failed", K(ret));
       } else if (OB_FAIL(ObBlockManager::async_write_block(write_info, macro_handle))) {
         LOG_WARN("fail to async write block", K(ret), K(write_info), K(macro_handle));
       } else if (OB_FAIL(macro_handle.wait())) {
         LOG_WARN("fail to wait macro block io finish", K(ret));
       } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.redo_info_.table_key_.tablet_id_))) {
         LOG_WARN("init sstable redo writer", K(ret), K_(arg));
-      } else if (OB_FAIL(sstable_redo_writer.write_redo_log(arg_.redo_info_, macro_handle.get_macro_id(), false, arg_.task_id_, tablet_handle, ddl_kv_mgr_handle))) {
+      } else if (OB_FAIL(sstable_redo_writer.write_macro_block_log(arg_.redo_info_, macro_handle.get_macro_id(), false, arg_.task_id_))) {
         LOG_WARN("fail to write macro redo", K(ret), K_(arg));
-      } else if (OB_FAIL(sstable_redo_writer.wait_redo_log_finish(arg_.redo_info_,
+      } else if (OB_FAIL(sstable_redo_writer.wait_macro_block_log_finish(arg_.redo_info_,
                                                                   macro_handle.get_macro_id()))) {
         LOG_WARN("fail to wait macro redo finish", K(ret), K_(arg));
       }
@@ -2373,12 +2368,15 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
   MTL_SWITCH(tenant_id) {
     ObRole role = INVALID_ROLE;
     const ObITable::TableKey &table_key = arg_.table_key_;
-    ObDDLSSTableRedoWriter sstable_redo_writer;
+    ObDDLRedoLogWriter sstable_redo_writer;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
-    ObTabletHandle tablet_handle;
-    ObDDLKvMgrHandle ddl_kv_mgr_handle;
     ObLS *ls = nullptr;
+    ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+    ObTabletFullDirectLoadMgr *data_tablet_mgr = nullptr;
+    ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
+    direct_load_mgr_handle.reset();
+    bool is_major_sstable_exist = false;
     if (OB_UNLIKELY(!arg_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K_(arg));
@@ -2392,31 +2390,54 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     } else if (ObRole::LEADER != role) {
       ret = OB_NOT_MASTER;
       LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
-    } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle))) {
-      LOG_WARN("get tablet failed", K(ret));
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_EAGAIN;
+    } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
+            arg_.ls_id_,
+            table_key.tablet_id_,
+            true /*is_full_direct_load*/,
+            direct_load_mgr_handle,
+            is_major_sstable_exist))) {
+      if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
+        ret = OB_TASK_EXPIRED;
+        LOG_INFO("major sstable already exist", K(ret), K(arg_));
       } else {
-        LOG_WARN("get ddl kv manager failed", K(ret));
+        LOG_WARN("get tablet direct load manager failed", K(ret), K(table_key));
       }
+    } else if (OB_ISNULL(data_tablet_mgr = direct_load_mgr_handle.get_full_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(table_key));
     } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, table_key.tablet_id_))) {
       LOG_WARN("init sstable redo writer", K(ret), K(table_key));
-    } else if (FALSE_IT(sstable_redo_writer.set_start_scn(arg_.start_scn_))) {
     } else {
+      uint32_t lock_tid = 0;
       SCN commit_scn;
       bool is_remote_write = false;
-      if (OB_FAIL(sstable_redo_writer.write_commit_log(tablet_handle,
-                                                       ddl_kv_mgr_handle,
-                                                       false,
-                                                       table_key,
-                                                       commit_scn,
-                                                       is_remote_write))) {
+      ObTabletHandle tablet_handle;
+      if (OB_FAIL(data_tablet_mgr->wrlock(ObTabletDirectLoadMgr::TRY_LOCK_TIMEOUT, lock_tid))) {
+        LOG_WARN("failed to wrlock", K(ret), K(arg_));
+      } else if (OB_FAIL(sstable_redo_writer.write_commit_log(false,
+                                                              table_key,
+                                                              arg_.start_scn_,
+                                                              direct_load_mgr_handle,
+                                                              commit_scn,
+                                                              is_remote_write,
+                                                              lock_tid))) {
         LOG_WARN("fail to remote write commit log", K(ret), K(table_key), K_(arg));
-      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->ddl_commit(*tablet_handle.get_obj(), arg_.start_scn_, commit_scn))) {
+      } else if (OB_FAIL(ls->get_tablet(table_key.tablet_id_, tablet_handle, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        LOG_WARN("get tablet failed", K(ret), K(table_key));
+      } else if (OB_FAIL(data_tablet_mgr->commit(*tablet_handle.get_obj(),
+                                                 arg_.start_scn_,
+                                                 commit_scn,
+                                                 arg_.table_id_,
+                                                 arg_.ddl_task_id_))) {
         LOG_WARN("failed to do ddl kv commit", K(ret), K(arg_));
       } else {
         result_ = commit_scn.get_val_for_tx();
+      }
+      if (lock_tid != 0) {
+        data_tablet_mgr->unlock(lock_tid);
       }
     }
   }

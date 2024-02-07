@@ -95,9 +95,12 @@ mysql_compatible_comment_with_version \/\*\![0-9]{5}
 mysql_compatible_comment_without_version \/\*\!
 mysql_compatible_comment_end \*\/
 
+ColumnStorePattern  (WITH{whitespace}COLUMN{whitespace}GROUP)
 
 %%
+{ColumnStorePattern}                { REPUT_TOKEN_NEG_SIGN(WITH_COLUMN_GROUP); }
 INTERVAL {
+
   ParseResult *p = (ParseResult *)yyextra;
   REPUT_NEG_SIGN(p); 
   return INTERVAL; 

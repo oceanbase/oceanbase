@@ -1368,7 +1368,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
                                                                 cur_logic_id,
                                                                 macro_block.get_data_buf(),
                                                                 upper_align(macro_block.get_data_size(), DIO_ALIGN_SIZE),
-                                                                current_macro_seq_))) {
+                                                                macro_block.get_row_count()))) {
     STORAGE_LOG(WARN, "fail to do callback flush", K(ret));
   }
   if (OB_SUCC(ret)) {

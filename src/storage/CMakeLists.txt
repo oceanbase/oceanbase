@@ -123,7 +123,9 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_aggregator.cpp
   blocksstable/index_block/ob_index_block_builder.cpp
   blocksstable/index_block/ob_index_block_macro_iterator.cpp
+  blocksstable/index_block/ob_ddl_sstable_scan_merge.cpp
   blocksstable/index_block/ob_index_block_row_scanner.cpp
+  blocksstable/index_block/ob_ddl_index_block_row_iterator.cpp
   blocksstable/index_block/ob_index_block_row_struct.cpp
   blocksstable/index_block/ob_index_block_tree_cursor.cpp
   blocksstable/index_block/ob_index_block_util.cpp
@@ -510,7 +512,8 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_redo_log_replayer.cpp
   ddl/ob_ddl_redo_log_writer.cpp
   ddl/ob_ddl_struct.cpp
-  ddl/ob_direct_insert_sstable_ctx.cpp
+  ddl/ob_direct_load_struct.cpp
+  ddl/ob_direct_insert_sstable_ctx_new.cpp
   ddl/ob_tablet_barrier_log.cpp
   ddl/ob_tablet_ddl_kv.cpp
   ddl/ob_tablet_ddl_kv_mgr.cpp
@@ -700,9 +703,10 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_external_table_compactor.cpp
   direct_load/ob_direct_load_fast_heap_table.cpp
   direct_load/ob_direct_load_fast_heap_table_builder.cpp
-  direct_load/ob_direct_load_fast_heap_table_ctx.cpp
   direct_load/ob_direct_load_insert_table_ctx.cpp
+  direct_load/ob_direct_load_insert_table_row_iterator.cpp
   direct_load/ob_direct_load_merge_ctx.cpp
+  direct_load/ob_direct_load_lob_builder.cpp
   direct_load/ob_direct_load_merge_task_iterator.cpp
   direct_load/ob_direct_load_multiple_datum_range.cpp
   direct_load/ob_direct_load_multiple_datum_row.cpp
@@ -731,6 +735,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_multiple_sstable_scanner.cpp
   direct_load/ob_direct_load_origin_table.cpp
   direct_load/ob_direct_load_partition_merge_task.cpp
+  direct_load/ob_direct_load_partition_rescan_task.cpp
   direct_load/ob_direct_load_range_splitter.cpp
   direct_load/ob_direct_load_rowkey_iterator.cpp
   direct_load/ob_direct_load_sstable_builder.cpp

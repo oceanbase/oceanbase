@@ -88,7 +88,6 @@
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
-#include "storage/ddl/ob_direct_insert_sstable_ctx.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
@@ -482,12 +481,12 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init server blacklist failed", KR(ret));
     } else if (OB_FAIL(ObLongopsMgr::get_instance().init())) {
       LOG_WARN("init longops mgr fail", KR(ret));
+    } else if (OB_FAIL(ObDDLRedoLock::get_instance().init())) {
+      LOG_WARN("init ddl redo lock failed", K(ret));
 #ifdef ERRSIM
     } else if (OB_FAIL(ObDDLSimPointMgr::get_instance().init())) {
       LOG_WARN("init ddl sim point mgr fail", KR(ret));
 #endif
-    } else if (OB_FAIL(ObDDLRedoLogWriter::get_instance().init())) {
-      LOG_WARN("init DDL redo log writer failed", KR(ret));
     }
 #ifdef OB_BUILD_ARBITRATION
     else if (OB_FAIL(arb_gcs_.init(GCTX.self_addr(),
@@ -2705,12 +2704,6 @@ int ObServer::init_storage()
       LOG_WARN("fail to init disk usage report task", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::DiskUseReport))) {
       LOG_WARN("fail to initialize disk usage report timer", KR(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObSSTableInsertManager::get_instance().init())) {
-      LOG_WARN("init direct insert sstable manager failed", KR(ret));
     }
   }
 

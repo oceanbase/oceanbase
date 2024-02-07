@@ -83,7 +83,7 @@ public:
   }
   OB_INLINE int64_t count() const { return cnt_; }
   OB_INLINE bool empty() const { return 0 == cnt_; }
-  TO_STRING_KV(K_(cnt), K_(serialize_table_type), K_(is_inited));
+  TO_STRING_KV(K_(cnt), KP_(sstable_array), K_(serialize_table_type), K_(is_inited));
 private:
   int inc_meta_ref_cnt(bool &inc_success) const;
   int inc_data_ref_cnt(bool &inc_success) const;
@@ -147,6 +147,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtableArray);
 };
 
+class ObDDLKV;
 class ObDDLKVArray final
 {
 public:
@@ -155,9 +156,9 @@ public:
   ObDDLKVArray() : is_inited_(false), ddl_kvs_(nullptr), count_(0) {}
   ~ObDDLKVArray() { reset(); }
 
-  OB_INLINE ObITable *operator[](const int64_t pos) const
+  OB_INLINE ObDDLKV *operator[](const int64_t pos) const
   {
-    ObITable *ddl_kv = nullptr;
+    ObDDLKV *ddl_kv = nullptr;
     if (OB_UNLIKELY(!is_valid() || pos < 0 || pos >= count_)) {
       ddl_kv = nullptr;
     } else {
@@ -174,13 +175,13 @@ public:
   OB_INLINE int64_t count() const { return count_; }
   OB_INLINE bool empty() const { return 0 == count_; }
   OB_INLINE bool is_valid() const { return 1 == count_ || (is_inited_ && count_ > 1 && nullptr != ddl_kvs_); }
-  OB_INLINE int64_t get_deep_copy_size() const { return count_ * sizeof(ObITable *); }
-  int init(ObArenaAllocator &allocator, common::ObIArray<ObITable *> &ddl_kvs);
+  OB_INLINE int64_t get_deep_copy_size() const { return count_ * sizeof(ObDDLKV *); }
+  int init(ObArenaAllocator &allocator, common::ObIArray<ObDDLKV *> &ddl_kvs);
   int deep_copy(char *buf, const int64_t buf_size, int64_t &pos, ObDDLKVArray &dst) const;
-  TO_STRING_KV(K_(count), K_(is_inited));
+  int64_t to_string(char *buf, const int64_t buf_len) const;
 private:
   bool is_inited_;
-  ObITable **ddl_kvs_;
+  ObDDLKV **ddl_kvs_;
   int64_t count_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDDLKVArray);
@@ -198,6 +199,14 @@ struct ObTableStoreUtil
 
   struct ObITableSnapshotVersionCompare {
     explicit ObITableSnapshotVersionCompare(int &sort_ret)
+      : result_code_(sort_ret) {}
+    bool operator()(const ObITable *ltable, const ObITable *rtable) const;
+
+    int &result_code_;
+  };
+
+  struct ObITableEndScnCompare {
+    explicit ObITableEndScnCompare(int &sort_ret)
       : result_code_(sort_ret) {}
     bool operator()(const ObITable *ltable, const ObITable *rtable) const;
 
@@ -230,10 +239,12 @@ struct ObTableStoreUtil
 
   static int compare_table_by_scn_range(const ObITable *ltable, const ObITable *rtable, const bool is_ascend, bool &bret);
   static int compare_table_by_snapshot_version(const ObITable *ltable, const ObITable *rtable, bool &bret);
+  static int compare_table_by_end_scn(const ObITable *ltable, const ObITable *rtable, bool &bret);
 
   static int sort_minor_tables(ObArray<ObITable *> &tables);
   static int reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> &table_handles);
   static int sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables);
+  static int sort_column_store_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables);
 
   static bool check_include_by_scn_range(const ObITable &ltable, const ObITable &rtable);
   static bool check_intersect_by_scn_range(const ObITable &ltable, const ObITable &rtable);

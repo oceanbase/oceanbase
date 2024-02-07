@@ -25,7 +25,6 @@ class ObDirectLoadTableDataDesc;
 class ObDirectLoadTmpFileManager;
 class ObDirectLoadTableBuilderAllocator;
 class ObDirectLoadInsertTableContext;
-class ObDirectLoadFastHeapTableContext;
 class ObDirectLoadDMLRowHandler;
 
 struct ObDirectLoadTableStoreParam
@@ -35,11 +34,12 @@ public:
   ~ObDirectLoadTableStoreParam();
   bool is_valid() const;
   TO_STRING_KV(K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
-               KP_(cmp_funcs), KP_(file_mgr), K_(is_multiple_mode), K_(is_fast_heap_table),
-               KP_(insert_table_ctx), KP_(fast_heap_table_ctx), KP_(dml_row_handler),
-               KP_(extra_buf), K_(extra_buf_size));
+               KP_(lob_column_cnt), KP_(cmp_funcs), KP_(file_mgr), K_(is_multiple_mode),
+               K_(is_fast_heap_table), K_(online_opt_stat_gather), K_(px_mode),
+               KP_(insert_table_ctx), KP_(dml_row_handler), KP_(extra_buf), K_(extra_buf_size));
 public:
   int64_t snapshot_version_;
+  int64_t lob_column_cnt_;
   ObDirectLoadTableDataDesc table_data_desc_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
@@ -48,8 +48,8 @@ public:
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
   bool online_opt_stat_gather_;
+  bool px_mode_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
-  ObDirectLoadFastHeapTableContext *fast_heap_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   char *extra_buf_;
   int64_t extra_buf_size_;

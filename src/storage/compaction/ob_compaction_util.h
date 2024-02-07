@@ -26,7 +26,7 @@ enum ObMergeType
   MINI_MERGE = 3,  // mini merge, only flush memtable
   MAJOR_MERGE = 4,
   MEDIUM_MERGE = 5,
-  DDL_KV_MERGE = 6,
+  DDL_KV_MERGE = 6, // only use for ddl dag
   BACKFILL_TX_MERGE = 7,
   MDS_TABLE_MERGE = 8,
   MERGE_TYPE_MAX

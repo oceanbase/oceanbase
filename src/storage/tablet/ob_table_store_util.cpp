@@ -24,6 +24,7 @@
 #include "storage/tablet/ob_tablet_table_store.h"
 #include "observer/ob_server_struct.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "share/scn.h"
 
 
@@ -196,7 +197,6 @@ int ObSSTableArray::add_tables_for_cg(
   }
   return ret;
 }
-
 
 int ObSSTableArray::inner_init(
     ObArenaAllocator &allocator,
@@ -1019,7 +1019,7 @@ bool ObMemtableArray::exist_memtable_with_end_scn(const ObITable *table, const S
 
 int ObDDLKVArray::init(
     ObArenaAllocator &allocator,
-    common::ObIArray<ObITable *> &ddl_kvs)
+    common::ObIArray<ObDDLKV *> &ddl_kvs)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -1029,14 +1029,14 @@ int ObDDLKVArray::init(
     count_ = 0;
     ddl_kvs_ = nullptr;
     if (0 != ddl_kvs.count()) {
-      const int64_t size = sizeof(ObITable *) * ddl_kvs.count();
-      if (OB_ISNULL(ddl_kvs_ = static_cast<ObITable **>(allocator.alloc(size)))) {
+      const int64_t size = sizeof(ObDDLKV *) * ddl_kvs.count();
+      if (OB_ISNULL(ddl_kvs_ = static_cast<ObDDLKV **>(allocator.alloc(size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate ddl kv pointer arrays", K(ret), K(size));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < ddl_kvs.count(); ++i) {
-          ObITable *table = ddl_kvs.at(i);
-          if (OB_UNLIKELY(nullptr == table || !table->is_ddl_sstable())) {
+          ObDDLKV *table = ddl_kvs.at(i);
+          if (OB_UNLIKELY(nullptr == table)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table must be ddl kv", K(ret), K(i), KPC(table));
           } else {
@@ -1069,8 +1069,8 @@ int ObDDLKVArray::deep_copy(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("finvalid argument", K(ret), KP(dst_buf), K(buf_size), K(pos), K(deep_copy_size), K(count_));
   } else {
-    dst.ddl_kvs_ = 0 == count_ ? nullptr : reinterpret_cast<ObITable **>(dst_buf + pos);
-    const int64_t array_size = count_ * sizeof(ObITable *);
+    dst.ddl_kvs_ = 0 == count_ ? nullptr : reinterpret_cast<ObDDLKV **>(dst_buf + pos);
+    const int64_t array_size = count_ * sizeof(ObDDLKV *);
     pos += array_size;
     for (int64_t i = 0; i < count_; ++i) {
       dst.ddl_kvs_[i] = ddl_kvs_[i];
@@ -1081,6 +1081,21 @@ int ObDDLKVArray::deep_copy(
   return ret;
 }
 
+int64_t ObDDLKVArray::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    J_NAME("ObDDLKVArray");
+    J_KV(KP(this),
+        K_(count),
+        "ddl_kv_ptr_array", ObArrayWrap<ObDDLKV *>(ddl_kvs_, count_));
+    J_OBJ_END();
+  }
+  return pos;
+}
 
 /* ObTableStoreUtil Section */
 bool ObTableStoreUtil::ObITableLogTsRangeCompare::operator()(
@@ -1101,6 +1116,17 @@ bool ObTableStoreUtil::ObITableSnapshotVersionCompare::operator()(
   if (OB_SUCCESS != result_code_) {
   } else if (OB_SUCCESS != (result_code_ = compare_table_by_snapshot_version(ltable, rtable, bret))) {
     LOG_WARN_RET(result_code_, "failed to compare table with SnapshotVersion", K(result_code_), KPC(ltable), KPC(rtable));
+  }
+  return bret;
+}
+
+bool ObTableStoreUtil::ObITableEndScnCompare::operator()(
+     const ObITable *ltable, const ObITable *rtable) const
+{
+  bool bret = false;
+  if (OB_SUCCESS != result_code_) {
+  } else if (OB_SUCCESS != (result_code_ = compare_table_by_end_scn(ltable, rtable, bret))) {
+    LOG_WARN_RET(result_code_, "failed to compare table with end scn", K(result_code_), KPC(ltable), KPC(rtable));
   }
   return bret;
 }
@@ -1206,6 +1232,26 @@ int ObTableStoreUtil::compare_table_by_snapshot_version(const ObITable *ltable, 
   return ret;
 }
 
+int ObTableStoreUtil::compare_table_by_end_scn(const ObITable *ltable, const ObITable *rtable, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  if (OB_ISNULL(ltable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("left store must not null", K(ret));
+  } else if (OB_ISNULL(rtable)) {
+    bret = true;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("right store must not null", K(ret));
+  } else {
+    bret = ltable->get_end_scn() < rtable->get_end_scn();
+    if (ltable->get_end_scn() == rtable->get_end_scn()) {
+      bret = ltable->get_column_group_id() < rtable->get_column_group_id();
+    }
+  }
+  return ret;
+}
+
 int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables)
 {
   int ret = OB_SUCCESS;
@@ -1214,6 +1260,22 @@ int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN
     // no need sort
   } else {
     ObITableSnapshotVersionCompare comp(ret);
+    std::sort(tables.begin(), tables.end(), comp);
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("failed to sort tables", K(ret), K(tables));
+    }
+  }
+  return ret;
+}
+
+int ObTableStoreUtil::sort_column_store_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> &tables)
+{
+  int ret = OB_SUCCESS;
+
+  if (tables.empty()) {
+    // no need sort
+  } else {
+    ObITableEndScnCompare comp(ret);
     std::sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(tables));

@@ -77,7 +77,7 @@ private:
         || common::OB_TRANS_NEED_ROLLBACK == ret_code || common::OB_RPC_SEND_ERROR == ret_code || common::OB_RPC_CONNECT_ERROR == ret_code
         || common::OB_RPC_POST_ERROR == ret_code || common::OB_TRANS_ROLLBACKED == ret_code || common::OB_TRANS_KILLED == ret_code
         || common::OB_GET_LOCATION_TIME_OUT == ret_code || common::OB_TRANS_RPC_TIMEOUT == ret_code || common::OB_LIBEASY_ERROR == ret_code
-        || common::OB_TRANS_CTX_NOT_EXIST == ret_code;
+        || common::OB_TRANS_CTX_NOT_EXIST == ret_code || OB_ERR_SESSION_INTERRUPTED == ret_code;
   }
   static bool is_retry(const int ret_code) {
     return common::OB_EAGAIN == ret_code || common::OB_DDL_SCHEMA_VERSION_NOT_MATCH == ret_code || common::OB_TASK_EXPIRED == ret_code || common::OB_NEED_RETRY == ret_code

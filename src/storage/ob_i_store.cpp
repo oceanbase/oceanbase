@@ -80,6 +80,7 @@ void ObStoreCtx::reset()
 }
 
 int ObStoreCtx::init_for_read(const ObLSID &ls_id,
+                              const common::ObTabletID tablet_id,
                               const int64_t timeout,
                               const int64_t tx_lock_timeout,
                               const SCN &snapshot_version)
@@ -90,6 +91,7 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
   if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
   } else {
+    tablet_id_ = tablet_id;
     ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);
   }
   return ret;

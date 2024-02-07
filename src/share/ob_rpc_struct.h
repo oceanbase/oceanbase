@@ -1254,6 +1254,7 @@ public:
   common::ObString table_name_;
   common::ObString database_name_;
   IndexActionType index_action_type_;
+  share::SortCompactLevel compact_level_;
 
   ObIndexArg():
       ObDDLArg(),
@@ -1262,7 +1263,8 @@ public:
       index_name_(),
       table_name_(),
       database_name_(),
-      index_action_type_(INVALID_ACTION)
+      index_action_type_(INVALID_ACTION),
+      compact_level_(share::SORT_COMPACT_LEVEL)
   {}
   virtual ~ObIndexArg() {}
   void reset()
@@ -1273,6 +1275,7 @@ public:
     table_name_.reset();
     database_name_.reset();
     index_action_type_ = INVALID_ACTION;
+    compact_level_ = share::SORT_COMPACT_LEVEL;
     ObDDLArg::reset();
   }
   bool is_valid() const;
@@ -1288,6 +1291,7 @@ public:
       table_name_ = other.table_name_;
       database_name_ = other.database_name_;
       index_action_type_ = other.index_action_type_;
+      compact_level_ = other.compact_level_;
     }
     return ret;
   }
@@ -2376,7 +2380,7 @@ public:
   DECLARE_TO_STRING;
 };
 
-struct ObColumnSortItem
+struct ObColumnSortItem final
 {
   OB_UNIS_VERSION(1);
 public:
@@ -2502,7 +2506,9 @@ public:
         sql_mode_(0),
         inner_sql_exec_addr_(),
         allocator_(),
-        local_session_var_(&allocator_)
+        local_session_var_(&allocator_),
+        exist_all_column_group_(false),
+        index_cgs_()
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2532,6 +2538,8 @@ public:
     inner_sql_exec_addr_.reset();
     local_session_var_.reset();
     allocator_.reset();
+    exist_all_column_group_ = false;
+    index_cgs_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2547,6 +2555,8 @@ public:
       SHARE_LOG(WARN, "fail to assign hidden store columns", K(ret));
     } else if (OB_FAIL(fulltext_columns_.assign(other.fulltext_columns_))) {
       SHARE_LOG(WARN, "fail to assign fulltext columns", K(ret));
+    } else if (OB_FAIL(index_cgs_.assign(other.index_cgs_))) {
+      SHARE_LOG(WARN, "fail to assign index cgs", K(ret));
     } else if (OB_FAIL(index_schema_.assign(other.index_schema_))) {
       SHARE_LOG(WARN, "fail to assign index schema", K(ret));
     } else if (OB_FAIL(local_session_var_.deep_copy(other.local_session_var_))){
@@ -2566,6 +2576,7 @@ public:
       sql_mode_ = other.sql_mode_;
       inner_sql_exec_addr_ = other.inner_sql_exec_addr_;
       consumer_group_id_ = other.consumer_group_id_;
+      exist_all_column_group_ = other.exist_all_column_group_;
     }
     return ret;
   }
@@ -2581,6 +2592,38 @@ public:
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL == index_type_
                                                 || share::schema::INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_; }
 
+//todo @qilu:only for each_cg now, when support customized cg ,refine this
+  typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;
+  struct ObIndexColumnGroupItem final
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    ObIndexColumnGroupItem() : is_each_cg_(false), column_list_()
+    {}
+    ObIndexColumnGroupItem(const bool is_each_cg) : is_each_cg_(is_each_cg), column_list_()
+    {}
+    ~ObIndexColumnGroupItem()
+    {
+      reset();
+    }
+    bool is_valid() const
+    {
+      return is_each_cg_;
+    }
+    void reset()
+    {
+      is_each_cg_ = false;
+      column_list_.reset();
+    }
+    int assign(const ObIndexColumnGroupItem &other);
+    TO_STRING_KV(K(is_each_cg_), K(column_list_));
+
+  public:
+    bool is_each_cg_;
+    ObCGColumnList column_list_;
+  };
+
+public:
   share::schema::ObIndexType index_type_;
   common::ObSEArray<ObColumnSortItem, common::OB_PREALLOCATED_NUM> index_columns_;
   common::ObSEArray<common::ObString, common::OB_PREALLOCATED_NUM> store_columns_;
@@ -2602,7 +2645,8 @@ public:
   common::ObAddr inner_sql_exec_addr_;
   common::ObArenaAllocator allocator_;
   ObLocalSessionVar local_session_var_;
-
+  bool exist_all_column_group_;
+  common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
 };
 
 typedef ObCreateIndexArg ObAlterPrimaryArg;
@@ -6051,13 +6095,16 @@ public:
     convert_status_(true),
     in_offline_ddl_white_list_(false),
     data_table_id_(common::OB_INVALID_ID),
-    database_name_()
+    database_name_(),
+    task_id_(0),
+    error_code_(OB_SUCCESS)
   {}
   bool is_valid() const;
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   virtual bool is_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
-  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id), K_(database_name));
+  int assign(const ObUpdateIndexStatusArg &other_arg);
+  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(task_id), K_(error_code), K_(data_table_id), K_(database_name));
 
   uint64_t index_table_id_;
   share::schema::ObIndexStatus status_;
@@ -6065,6 +6112,8 @@ public:
   bool in_offline_ddl_white_list_;
   uint64_t data_table_id_;
   ObString database_name_;
+  int64_t task_id_;
+  int error_code_;
 };
 
 struct ObUpdateMViewStatusArg : public ObDDLArg
@@ -9306,7 +9355,7 @@ public:
   int64_t parallelism_;
   int64_t execution_id_;
   int64_t tablet_task_id_;
-  int64_t data_format_version_;
+  uint64_t data_format_version_;
   int64_t consumer_group_id_;
   uint64_t dest_tenant_id_;
   share::ObLSID dest_ls_id_;

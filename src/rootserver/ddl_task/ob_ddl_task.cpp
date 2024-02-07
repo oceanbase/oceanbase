@@ -130,7 +130,7 @@ int ObDDLTaskID::assign(const ObDDLTaskID &other)
 
 ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const int64_t parallelism,
-                                                 const int64_t data_format_version,
+                                                 const uint64_t data_format_version,
                                                  const int64_t consumer_group_id,
                                                  const bool is_abort,
                                                  const int32_t sub_task_trace_id)
@@ -162,8 +162,9 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     sub_task_trace_id_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
-  : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), consumer_group_id_(0), parent_task_id_(0), task_id_(0),
-    type_(DDL_INVALID), src_table_schema_(nullptr), dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr)
+  : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
+    consumer_group_id_(0), parent_task_id_(0), task_id_(0), type_(DDL_INVALID), src_table_schema_(nullptr),
+    dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr), tenant_data_version_(0)
 {
 }
 
@@ -277,6 +278,7 @@ trace::ObSpanCtx* ObDDLTracing::begin_task_span()
       case DDL_ALTER_PARTITION_BY:
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
+      case DDL_ALTER_COLUMN_GROUP:
         span = FLT_BEGIN_SPAN(ddl_table_redefinition);
         break;
       case DDL_DROP_PRIMARY_KEY:
@@ -359,6 +361,7 @@ trace::ObSpanCtx* ObDDLTracing::restore_task_span()
       case DDL_ALTER_PARTITION_BY:
       case DDL_CONVERT_TO_CHARACTER:
       case DDL_TABLE_REDEFINITION:
+      case DDL_ALTER_COLUMN_GROUP:
         span = FLT_RESTORE_DDL_SPAN(ddl_table_redefinition, task_span_id_, task_start_ts_);
         break;
       case DDL_DROP_PRIMARY_KEY:
@@ -783,6 +786,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
       break;
     case DDL_DROP_INDEX:
       ddl_type_str = "drop index";
+      break;
+    case DDL_ALTER_COLUMN_GROUP:
+      ddl_type_str = "alter column group";
       break;
     case DDL_MVIEW_COMPLETE_REFRESH:
       ddl_type_str = "mview complete refresh";
@@ -1627,10 +1633,12 @@ int ObDDLTask::gather_inserted_rows(
     const uint64_t tenant_id,
     const int64_t task_id,
     ObMySQLProxy &sql_proxy,
-    int64_t &row_inserted)
+    int64_t &row_inserted_cg,
+    int64_t &row_inserted_file)
 {
   int ret = OB_SUCCESS;
-  row_inserted = 0;
+  row_inserted_cg = 0;
+  row_inserted_file = 0;
   char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
   trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
@@ -1641,7 +1649,7 @@ int ObDDLTask::gather_inserted_rows(
     sqlclient::ObMySQLResult *insert_result = NULL;
     SMART_VAR(ObMySQLProxy::MySQLResult, insert_res) {
       if (OB_FAIL(insert_sql.assign_fmt(
-          "SELECT OTHERSTAT_1_VALUE AS ROW_INSERTED FROM %s WHERE TENANT_ID=%lu "
+          "SELECT OTHERSTAT_1_VALUE AS CG_ROW_INSERTED, OTHERSTAT_2_VALUE AS SSTABLE_ROW_INSERTED FROM %s WHERE TENANT_ID=%lu "
           "AND TRACE_ID='%s' AND PLAN_OPERATION='PHY_PX_MULTI_PART_SSTABLE_INSERT' AND OTHERSTAT_5_VALUE='%ld'",
           OB_ALL_VIRTUAL_SQL_PLAN_MONITOR_TNAME, tenant_id, trace_id_str, task_id))) {
         LOG_WARN("failed to assign sql", K(ret));
@@ -1662,9 +1670,13 @@ int ObDDLTask::gather_inserted_rows(
             LOG_WARN("failed to get next row", K(ret));
           }
         } else {
-          int64_t row_inserted_tmp = 0;
-          EXTRACT_INT_FIELD_MYSQL(*insert_result, "ROW_INSERTED", row_inserted_tmp, int64_t);
-          row_inserted += row_inserted_tmp;
+          int64_t row_inserted_cg_tmp = 0;
+          EXTRACT_INT_FIELD_MYSQL(*insert_result, "CG_ROW_INSERTED", row_inserted_cg_tmp, int64_t);
+          row_inserted_cg += row_inserted_cg_tmp;
+
+          int64_t row_inserted_file_tmp = 0;
+          EXTRACT_INT_FIELD_MYSQL(*insert_result, "SSTABLE_ROW_INSERTED", row_inserted_file_tmp, int64_t);
+          row_inserted_file += row_inserted_file_tmp;
         }
       }
     }
@@ -1677,12 +1689,14 @@ int ObDDLTask::gather_redefinition_stats(const uint64_t tenant_id,
                                          ObMySQLProxy &sql_proxy,
                                          int64_t &row_scanned,
                                          int64_t &row_sorted,
-                                         int64_t &row_inserted)
+                                         int64_t &row_inserted_cg,
+                                         int64_t &row_inserted_file)
 {
   int ret = OB_SUCCESS;
   row_scanned = 0;
   row_sorted = 0;
-  row_inserted = 0;
+  row_inserted_cg = 0;
+  row_inserted_file = 0;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(task_id));
@@ -1690,7 +1704,7 @@ int ObDDLTask::gather_redefinition_stats(const uint64_t tenant_id,
     LOG_WARN("gather scanned rows failed", K(ret));
   } else if (OB_FAIL(gather_sorted_rows(tenant_id, task_id, sql_proxy, row_sorted))) {
     LOG_WARN("gather sorted rows failed", K(ret));
-  } else if (OB_FAIL(gather_inserted_rows(tenant_id, task_id, sql_proxy, row_inserted))) {
+  } else if (OB_FAIL(gather_inserted_rows(tenant_id, task_id, sql_proxy, row_inserted_cg, row_inserted_file))) {
     LOG_WARN("gather inserted rows failed", K(ret));
   }
   return ret;
@@ -2957,33 +2971,33 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
             LOG_WARN("failed to fill task record", K(ret));
           } else if (task_record.task_id_ != task_id) {
             switch (ddl_type) {
-            case ObDDLType::DDL_DROP_TABLE: {
-              if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
-                LOG_WARN("conflict with ddl", K(task_record));
-                has_conflict_ddl = true;
+              case ObDDLType::DDL_DROP_TABLE: {
+                if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
+                  LOG_WARN("conflict with ddl", K(task_record));
+                  has_conflict_ddl = true;
+                }
+                break;
               }
-              break;
-            }
-            case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
-            case ObDDLType::DDL_MODIFY_COLUMN:
-            case ObDDLType::DDL_ADD_PRIMARY_KEY:
-            case ObDDLType::DDL_DROP_PRIMARY_KEY:
-            case ObDDLType::DDL_ALTER_PRIMARY_KEY:
-            case ObDDLType::DDL_ALTER_PARTITION_BY:
-            case ObDDLType::DDL_DROP_COLUMN:
-            case ObDDLType::DDL_CONVERT_TO_CHARACTER:
-            case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
-            case ObDDLType::DDL_COLUMN_REDEFINITION:
-            case ObDDLType::DDL_TABLE_REDEFINITION:
-            case ObDDLType::DDL_DIRECT_LOAD:
-            case ObDDLType::DDL_DIRECT_LOAD_INSERT:
-            case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH: {
-              has_conflict_ddl = true;
-              break;
-            }
-            default: {
-              // do nothing
-            }
+              case ObDDLType::DDL_DOUBLE_TABLE_OFFLINE:
+              case ObDDLType::DDL_MODIFY_COLUMN:
+              case ObDDLType::DDL_ADD_PRIMARY_KEY:
+              case ObDDLType::DDL_DROP_PRIMARY_KEY:
+              case ObDDLType::DDL_ALTER_PRIMARY_KEY:
+              case ObDDLType::DDL_ALTER_PARTITION_BY:
+              case ObDDLType::DDL_DROP_COLUMN:
+              case ObDDLType::DDL_CONVERT_TO_CHARACTER:
+              case ObDDLType::DDL_ADD_COLUMN_OFFLINE:
+              case ObDDLType::DDL_COLUMN_REDEFINITION:
+              case ObDDLType::DDL_TABLE_REDEFINITION:
+              case ObDDLType::DDL_DIRECT_LOAD:
+              case ObDDLType::DDL_DIRECT_LOAD_INSERT:
+              case ObDDLType::DDL_ALTER_COLUMN_GROUP:
+              case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
+                has_conflict_ddl = true;
+                break;
+              default:
+                // do nothing
+                break;
             }
           }
         }

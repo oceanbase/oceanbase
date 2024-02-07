@@ -112,7 +112,7 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
     ObArray<storage::ObSSTableWrapper> ddl_sstable_array;
     if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
       LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
-    } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array))) {
+    } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
       LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
     } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
       LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
@@ -324,8 +324,8 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
   int ret = OB_SUCCESS;
   ObTablet *tablet = NULL;
   ObITable *last_table_ptr = NULL;
-  SCN ddl_start_scn = SCN::min_scn();
-  SCN ddl_checkpoint_scn = SCN::min_scn();
+  SCN compact_start_scn = SCN::min_scn();
+  SCN compact_end_scn = SCN::min_scn();
   ObTableStoreIterator ddl_table_iter;
   bool is_data_complete = false;
   if (ddl_sstable_array.empty()) {
@@ -333,8 +333,6 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
-  } else if (FALSE_IT(ddl_start_scn = tablet->get_tablet_meta().ddl_start_scn_)) {
-  } else if (FALSE_IT(ddl_checkpoint_scn = tablet->get_tablet_meta().ddl_checkpoint_scn_)) {
   } else if (OB_ISNULL(last_table_ptr = ddl_sstable_array.at(ddl_sstable_array.count() - 1).get_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid table ptr", K(ret), K(ddl_sstable_array));
@@ -343,14 +341,14 @@ int ObBackupUtils::check_tablet_ddl_sstable_validity_(const storage::ObTabletHan
     LOG_WARN("table ptr not correct", K(ret), KPC(last_table_ptr));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_sstables(ddl_table_iter))) {
     LOG_WARN("failed to get ddl sstables", K(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObTabletDDLUtil::check_data_integrity(ddl_table_iter, ddl_start_scn, ddl_checkpoint_scn, is_data_complete))) {
-    LOG_WARN("failed to check data integrity", K(ret), K(ddl_start_scn), K(ddl_checkpoint_scn));
+  } else if (OB_FAIL(ObTabletDDLUtil::check_data_continue(ddl_table_iter, is_data_complete, compact_start_scn, compact_end_scn))) {
+    LOG_WARN("failed to check data integrity", K(ret), K(ddl_table_iter));
   } else if (!is_data_complete) {
     ret = OB_INVALID_TABLE_STORE;
     LOG_WARN("get invalid ddl table store", K(ret), K(tablet_handle), K(ddl_sstable_array), K(ddl_table_iter));
   } else {
-    LOG_INFO("check data intergirty", K(tablet_handle), K(ddl_start_scn),
-        K(ddl_checkpoint_scn), K(ddl_table_iter), K(is_data_complete));
+    LOG_INFO("check data intergirty", K(tablet_handle), K(compact_start_scn),
+        K(compact_end_scn), K(ddl_table_iter), K(is_data_complete));
   }
   return ret;
 }

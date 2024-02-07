@@ -48,7 +48,9 @@ public:
   // @param [in] schemas, tables schema for creating tablets, the first is data table, others are its local indexes
   int add_create_tablets_of_tables_arg(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
-      const common::ObIArray<share::ObLSID> &ls_id_array);
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      const uint64_t tenant_data_version,
+      const common::ObIArray<bool> &need_create_empty_majors);
 
   // create tablets for local aux tables(include local_index/aux_lob_table), which are belong to a data table.
   //
@@ -57,25 +59,32 @@ public:
   int add_create_tablets_of_local_aux_tables_arg(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const share::schema::ObTableSchema *data_table_schema,
-      const common::ObIArray<share::ObLSID> &ls_id_array);
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      const uint64_t tenant_data_version,
+      const common::ObIArray<bool> &need_create_empty_majors);
 
   // create tablets of hidden table from original table, used by ddl table redefinition
   int add_create_bind_tablets_of_hidden_table_arg(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
-      const common::ObIArray<share::ObLSID> &ls_id_array);
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      const uint64_t tenant_data_version);
 
   // create tablets in a table
   //
   // @param [in] table_schema, table schema for creating tablets
   int add_create_tablets_of_table_arg(
       const share::schema::ObTableSchema &table_schema,
-      const common::ObIArray<share::ObLSID> &ls_id_array);
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      const uint64_t tenant_data_version,
+      const bool need_create_empty_major_sstable);
 private:
   int add_create_tablets_of_tables_arg_(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const share::schema::ObTableSchema *data_table_schema,
-      const common::ObIArray<share::ObLSID> &ls_id_array);
+      const common::ObIArray<share::ObLSID> &ls_id_array,
+      const uint64_t tenant_data_version,
+      const common::ObIArray<bool> &need_create_empty_majors);
   int generate_create_tablet_arg_(
       const common::ObIArray<const share::schema::ObTableSchema*> &schemas,
       const ObTableSchema &data_table_schema,
@@ -84,7 +93,9 @@ private:
       common::ObIArray<share::ObTabletTablePair> &pairs,
       const int64_t part_idx,
       const int64_t subpart_idx,
-      const bool is_create_bind_hidden_tablets);
+      const bool is_create_bind_hidden_tablets,
+      const uint64_t tenant_data_version,
+      const common::ObIArray<bool> &need_create_empty_majors);
   int get_tablet_list_str_(
       const share::schema::ObTableSchema &table_schema,
       ObSqlString &tablet_list);

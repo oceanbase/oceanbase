@@ -13,20 +13,18 @@ drop table if exists tt2;
 --enable_warnings
 --enable_query_log
 
-create table tt1(a int, b int, c int, primary key(a)) with column group for all columns, each column;
+create table tt1(a int, b int, c int, primary key(a)) with column group (all columns, each column);
 create index idx_tt1 on tt1(b);
 create table tt2(d int, e int);
---error 1235
-alter table tt1 drop column c;
---error 1235
 alter table tt1 modify column c varchar(20);
+alter table tt1 drop column c;
 
 let $tt1_table_id= query_get_value(select table_id from __all_virtual_table where table_name='tt1', table_id, 1);
 let $tt2_table_id= query_get_value(select table_id from __all_virtual_table where table_name='tt2', table_id, 1);
 
-## In tt1 table schema, there exists 5 column_group: __co_default, __co_all, __cg_a, __cg_b, __cg_c
+## In tt1 table schema, there exists 4 column_group: __cg_default, __cg_all, __cg_a, __cg_b
 let $tt1_cg_cnt = query_get_value(select count(*) as cg_cnt from __all_column_group where table_id=$tt1_table_id, cg_cnt, 1);
-if ($tt1_cg_cnt != 5)
+if ($tt1_cg_cnt != 4)
 {
     --echo unexpected column_group count of table tt1, real value is $tt1_cg_cnt
 }

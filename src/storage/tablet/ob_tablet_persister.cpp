@@ -916,7 +916,7 @@ int ObTabletPersister::transform(const ObTabletTransformArg &arg, char *buf, con
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet memory buffer not enough for ddl kvs", K(ret), K(remain), K(ddl_kvs_size));
       } else {
-        tiny_tablet->ddl_kvs_ = reinterpret_cast<ObITable**>(buf + start_pos);
+        tiny_tablet->ddl_kvs_ = reinterpret_cast<ObDDLKV**>(buf + start_pos);
         if (OB_FAIL(tiny_tablet->assign_ddl_kvs(arg.ddl_kvs_, arg.ddl_kv_count_))) {
           LOG_WARN("fail to assign ddl_kvs_", K(ret), KP(arg.ddl_kvs_), K(arg.ddl_kv_count_), KP(buf), K(start_pos));
         } else {

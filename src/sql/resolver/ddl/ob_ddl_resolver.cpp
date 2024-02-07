@@ -11176,7 +11176,7 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
   int ret = OB_SUCCESS;
   uint64_t hint_parallel = 1;
   uint64_t parallelism = 1;
-  if (OB_UNLIKELY(nullptr == node)) {
+  if (OB_UNLIKELY(nullptr == node) || OB_UNLIKELY(OB_ISNULL(session_info_))) {
   } else {
     for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
       ParseNode *hint_node = node->children_[i];
@@ -11193,6 +11193,37 @@ int ObDDLResolver::resolve_hints(const ParseNode *node, ObDDLStmt &stmt, const O
             hint_parallel = 1;  // ignore invalid hint
           } else {
             hint_parallel = parallel_node->value_;
+          }
+        } else if (T_OPT_PARAM_HINT == hint_node->type_) {
+          ParseNode *child0 = nullptr;
+          ParseNode *child1 = nullptr;
+          if (2 != hint_node->num_child_) {
+            ret = OB_ERR_UNEXPECTED;
+            // do not raise error, but print a message
+            LOG_WARN("the opt param hint is illegal", K(ret));
+          } else if (OB_ISNULL(child0 = hint_node->children_[0]) || OB_ISNULL(child1 = hint_node->children_[1])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null pointer");
+          } else if (child0->type_ == T_VARCHAR){
+            ObString param_name(child0->str_len_, child0->str_value_);
+            ObOptParamHint::OptParamType param_type = ObOptParamHint::get_opt_param_value(param_name);
+            uint64_t data_version = 0;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+              SQL_RESV_LOG(WARN, "fail to get min data version", K(ret));
+            } else if (param_type == ObOptParamHint::OptParamType::COMPACT_SORT_LEVEL
+                && data_version >= DATA_VERSION_4_3_0_0) {
+              if (T_INT != child1->type_) {
+                // do not raise error, but print a message
+                LOG_WARN("the second param is not int");
+              } else {
+                ObObj val;
+                val.set_int(child1->value_);
+                if (ObOptParamHint::is_param_val_valid(param_type, val)) {
+                  stmt.set_compact_level(child1->value_);
+                }
+              }
+            } else {
+            }
           }
         }
       }
@@ -11276,6 +11307,65 @@ int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
   return ret;
 }
 
+// TEMP: if use sql 'create table xxx with column group for yyy', single_type must exist.
+int ObDDLResolver::parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const
+{
+  int ret = OB_SUCCESS;
+  exist_all_column_group = false;
+
+  if (OB_UNLIKELY(T_COLUMN_GROUP != cg_node.type_ || cg_node.num_child_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(cg_node.type_), K(cg_node.num_child_));
+  } else {
+    const int64_t num_child = cg_node.num_child_;
+    bool exist_single_type = false;
+    bool already_exist_all_column_group = false;
+    bool already_exist_single_column_group = false;
+    // handle all_type column_group & single_type column_group
+    for (int64_t i = 0; OB_SUCC(ret) && (i < num_child); ++i) {
+      ParseNode *node = cg_node.children_[i];
+      if (OB_ISNULL(node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children of column_group_list should not be null", KR(ret));
+      } else if (T_ALL_COLUMN_GROUP == node->type_) {
+        if (already_exist_all_column_group) {
+          ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
+          SQL_RESV_LOG(WARN, "all column group already exist in sql",
+                        K(ret), K(node->children_[i]->type_));
+          const ObString error_msg = "all columns";
+          LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
+        } else {
+          already_exist_all_column_group = true;
+          exist_all_column_group = true;
+        }
+      } else if (T_SINGLE_COLUMN_GROUP == node->type_) {
+        if (already_exist_single_column_group) {
+          ret = OB_ERR_COLUMN_GROUP_DUPLICATE;
+          SQL_RESV_LOG(WARN, "single column group already exist in sql",
+                        K(ret), K(node->type_));
+          const ObString error_msg = "each column";
+          LOG_USER_ERROR(OB_ERR_COLUMN_GROUP_DUPLICATE, error_msg.length(), error_msg.ptr());
+        } else {
+          already_exist_single_column_group = true;
+          exist_single_type = true;
+        }
+      } else if (T_NORMAL_COLUMN_GROUP == node->type_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("column store table with customized column group are not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store tables with customized column group are");
+      }
+    }
+
+    if (OB_SUCC(ret) && exist_single_type == false) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_RESV_LOG(WARN, "each column not exist", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "column store tables without each column group are");
+    }
+  }
+
+  return ret;
+}
+
 int ObDDLResolver::check_ttl_definition(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
@@ -11325,6 +11415,33 @@ int ObDDLResolver::check_ttl_definition(const ParseNode *node)
   return ret;
 }
 
+int ObDDLResolver::resolve_index_column_group(const ParseNode *cg_node, obrpc::ObCreateIndexArg &create_index_arg)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  if (OB_ISNULL(cg_node) || cg_node->num_child_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "invalid parse tree, column group node is null or have no children!",
+                  K(ret), KP(cg_node));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), compat_version))) {
+    SQL_RESV_LOG(WARN, "fail to get min data version", K(ret));
+  } else if (compat_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "data_version not support for index column_group", K(ret), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3, create index with column group");
+  } else {
+    bool exist_all_column_group = false;
+    if (OB_FAIL(parse_cg_node(*cg_node, exist_all_column_group))) {
+      LOG_WARN("fail to parse cg node", KR(ret));
+    } else if (OB_FAIL(create_index_arg.index_cgs_.push_back(obrpc::ObCreateIndexArg::ObIndexColumnGroupItem(true/*each cg*/)))) {
+      LOG_WARN("fail to push each cg", K(ret));
+    } else {
+      create_index_arg.exist_all_column_group_ = exist_all_column_group;
+    }
+  }
+  return ret;
+}
+
 int ObDDLResolver::build_column_group(
     const ObTableSchema &table_schema,
     const ObColumnGroupType &cg_type,
@@ -11337,47 +11454,18 @@ int ObDDLResolver::build_column_group(
   if (cg_name.empty() || (cg_type >= ObColumnGroupType::MAX_COLUMN_GROUP)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(cg_name), K(cg_type), "column_id_cnt", column_ids.count());
-  } else {
-    column_group.set_column_group_id(cg_id);
-    column_group.set_column_group_type(cg_type);
-    column_group.set_block_size(table_schema.get_block_size());
-    column_group.set_compressor_type(table_schema.get_compressor_type());
-    const ObStoreFormatType store_format = table_schema.get_store_format();
-    int64_t storage_encoding_mode = 0;
-    omt::ObTenantConfigGuard tcg(TENANT_CONF(session_info_->get_effective_tenant_id()));
-    if (OB_LIKELY(tcg.is_valid())) {
-      storage_encoding_mode = tcg->storage_encoding_mode;
-    }
-    bool is_flat = lib::is_oracle_mode() ? ((OB_STORE_FORMAT_NOCOMPRESS_ORACLE == store_format)
-                                            || (OB_STORE_FORMAT_BASIC_ORACLE == store_format)
-                                            || (OB_STORE_FORMAT_OLTP_ORACLE == store_format))
-                                         : ((OB_STORE_FORMAT_REDUNDANT_MYSQL == store_format)
-                                            || (OB_STORE_FORMAT_COMPACT_MYSQL == store_format));
-    if (is_flat || (1 == storage_encoding_mode)) {
-      // all use encoding
-      column_group.set_row_store_type(table_schema.get_row_store_type());
-    } else if (2 == storage_encoding_mode) {
-      // all use cs_encoding
-      column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
-    } else {
-      // row_store uses encoding; column_store uses cs_encoding
-      if ((cg_type == ObColumnGroupType::DEFAULT_COLUMN_GROUP) || (cg_type == ObColumnGroupType::ALL_COLUMN_GROUP)) {
-        column_group.set_row_store_type(table_schema.get_row_store_type());
-      } else {
-        column_group.set_row_store_type(ObRowStoreType::CS_ENCODING_ROW_STORE);
-      }
-    }
-
-    if (OB_FAIL(column_group.set_column_group_name(cg_name))) {
-      LOG_WARN("fail to set column group name", KR(ret), K(cg_name));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && (i < column_ids.count()); ++i) {
-      if (OB_FAIL(column_group.add_column_id(column_ids.at(i)))) {
-        LOG_WARN("fail to add column_id into column_group", KR(ret), K(i), "column_id", column_ids.at(i));
-      }
-    }
+  } else if (OB_FAIL(ObSchemaUtils::build_column_group(table_schema, session_info_->get_effective_tenant_id(), cg_type, cg_name,
+                                                column_ids, cg_id, column_group))) {
+      LOG_WARN("fail to build column group", K(ret));
   }
   return ret;
+}
+
+
+
+bool ObDDLResolver::need_column_group(const ObTableSchema &table_schema)
+{
+  return table_schema.is_user_table() || table_schema.is_tmp_table() || table_schema.is_index_table();
 }
 
 int ObDDLResolver::resolve_column_skip_index(

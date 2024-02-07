@@ -431,7 +431,7 @@ private:
   Path path_;
   int64_t version_;
 public:
-  explicit ScanHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()), version_(INT64_MAX) { UNUSED(tree); }
+  explicit ScanHandle(const ObKeyBtree &tree): BaseHandle(tree.get_qclock()), version_(INT64_MAX) { UNUSED(tree); }
   ~ScanHandle() {}
   void reset()
   {
@@ -557,7 +557,7 @@ private:
   typedef CompHelper<BtreeKey, BtreeVal> CompHelper;
   typedef ScanHandle<BtreeKey, BtreeVal> ScanHandle;
 public:
-  explicit Iterator(ObKeyBtree &btree): btree_(btree), scan_handle_(btree), jump_key_(nullptr),
+  explicit Iterator(const ObKeyBtree &btree): btree_(btree), scan_handle_(btree), jump_key_(nullptr),
                                         cmp_result_(0), comp_(scan_handle_.get_comp()),
                                         start_key_(), end_key_(), start_exclude_(false), end_exclude_(false),
                                         scan_backward_(false), is_iter_end_(false), iter_count_(0) {}
@@ -585,7 +585,7 @@ private:
                                  const double ratio);
   int comp(BtreeKey& cur_key, BtreeKey* jump_key, int &cmp);
 private:
-  ObKeyBtree &btree_;
+  const ObKeyBtree &btree_;
   ScanHandle scan_handle_;
   BtreeKey* jump_key_;
   int cmp_result_;

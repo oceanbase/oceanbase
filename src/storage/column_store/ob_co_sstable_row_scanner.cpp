@@ -333,7 +333,7 @@ int ObCOSSTableRowScanner::init_project_iter(
   int ret = OB_SUCCESS;
   ObCOSSTableV2* co_sstable = static_cast<ObCOSSTableV2*>(table);
   common::ObSEArray<ObTableIterParam*, 8> iter_params;
-  if (OB_FAIL(construct_cg_iter_params(false, row_param, context, iter_params))) {
+  if (OB_FAIL(construct_cg_iter_params(row_param, context, iter_params))) {
     LOG_WARN("Failed to construct cg scan params", K(ret));
   } else if (nullptr == project_iter_) {
     if (1 == iter_params.count()) {
@@ -370,7 +370,7 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
     // use all cg if exists for getter
   } else if (OB_FAIL(init_fixed_array_param(getter_projector_, row_param.get_out_col_cnt()))) {
     LOG_WARN("Failed to reserve getter projector", K(ret));
-  } else if (OB_FAIL(construct_cg_iter_params(true, row_param, context, iter_params))) {
+  } else if (OB_FAIL(construct_cg_iter_params_for_single_row(row_param, context, iter_params))) {
     LOG_WARN("Failed to construct cg scan params", K(ret));
   } else if (iter_params.empty()) {
     if (OB_NOT_NULL(getter_project_iter_)) {
@@ -399,8 +399,44 @@ int ObCOSSTableRowScanner::init_project_iter_for_single_row(
   return ret;
 }
 
+int ObCOSSTableRowScanner::construct_cg_iter_params_for_single_row(
+    const ObTableIterParam &row_param,
+    ObTableAccessContext &context,
+    common::ObIArray<ObTableIterParam*> &iter_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!row_param.is_valid() || nullptr == row_param.out_cols_project_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(row_param));
+  } else {
+    ObTableIterParam* cg_param = nullptr;
+    const common::ObIArray<int32_t> *access_cgs = nullptr;
+    const int64_t schema_rowkey_cnt = row_param.get_read_info()->get_schema_rowkey_count();
+    if (OB_ISNULL(access_cgs = row_param.get_read_info()->get_cg_idxs())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected null access cg index", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < row_param.out_cols_project_->count(); ++i) {
+        const int32_t col_offset = row_param.out_cols_project_->at(i);
+        sql::ObExpr* expr = row_param.output_exprs_ == nullptr ? nullptr : row_param.output_exprs_->at(i);
+        if ((nullptr == expr || !is_group_idx_expr(expr)) && col_offset >= schema_rowkey_cnt) {
+          int32_t cg_idx = access_cgs->at(col_offset);
+          if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, expr, cg_param))) {
+            LOG_WARN("Fail to get cg iter param", K(ret), K(i), K(cg_idx), K(row_param), KPC(access_cgs));
+          } else if (OB_FAIL(iter_params.push_back(cg_param))) {
+            LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
+          } else if (OB_FAIL(getter_projector_.push_back(col_offset))) {
+            LOG_WARN("Fail to push back projector idx", K(ret));
+          }
+          LOG_DEBUG("[COLUMNSTORE] cons one cg param", K(ret), K(cg_idx), KPC(cg_param));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObCOSSTableRowScanner::construct_cg_iter_params(
-    const bool project_single_row,
     const ObTableIterParam &row_param,
     ObTableAccessContext &context,
     common::ObIArray<ObTableIterParam*> &iter_params)
@@ -416,15 +452,14 @@ int ObCOSSTableRowScanner::construct_cg_iter_params(
     const common::ObIArray<int32_t> *access_cgs = nullptr;
     const int64_t schema_rowkey_cnt = row_param.get_read_info()->get_schema_rowkey_count();
     // Assert only one column in one column group
-    if (!project_single_row && row_param.enable_pd_aggregate()) {
+    if (row_param.enable_pd_aggregate()) {
       if (OB_FAIL(construct_cg_agg_iter_params(row_param, context, iter_params))) {
         LOG_WARN("Fail to cons agg iter_params", K(ret));
       }
     } else if (0 == row_param.output_exprs_->count()) {
       const uint32_t cg_idx = OB_CS_VIRTUAL_CG_IDX;
-      if (project_single_row) {
-      } else if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.output_exprs_,
-                                                        cg_param, row_param.enable_pd_aggregate()))) {
+      if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.output_exprs_,
+                                                 cg_param, row_param.enable_pd_aggregate()))) {
         LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
       } else if (OB_FAIL(iter_params.push_back(cg_param))) {
         LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
@@ -436,18 +471,14 @@ int ObCOSSTableRowScanner::construct_cg_iter_params(
       int32_t idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < row_param.output_exprs_->count(); ++i) {
         const int32_t col_offset = row_param.out_cols_project_->at(i);
-        const bool need_iter_param = project_single_row ? (col_offset >= schema_rowkey_cnt)
-            : (nullptr == row_param.output_sel_mask_ || row_param.output_sel_mask_->at(i));
+        const bool need_iter_param = (nullptr == row_param.output_sel_mask_ || row_param.output_sel_mask_->at(i));
         if (!is_group_idx_expr(row_param.output_exprs_->at(i)) && need_iter_param) {
           int32_t cg_idx = access_cgs->at(row_param.out_cols_project_->at(i));
           if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, row_param.output_exprs_->at(i), cg_param))) {
             LOG_WARN("Fail to get cg iter param", K(ret), K(i), K(cg_idx), K(row_param), KPC(access_cgs));
           } else if (OB_FAIL(iter_params.push_back(cg_param))) {
             LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
-          } else if (project_single_row && OB_FAIL(getter_projector_.push_back(col_offset))) {
-            LOG_WARN("Fail to push back projector idx", K(ret));
-          } else if (!project_single_row &&
-                     row_param.enable_pd_group_by() &&
+          } else if (row_param.enable_pd_group_by() &&
                      row_param.out_cols_project_->at(i) == row_param.group_by_cols_project_->at(0)) {
             group_by_project_idx_ = idx;
           }

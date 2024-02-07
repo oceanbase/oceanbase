@@ -31,6 +31,7 @@ struct ObDropTableArg;
 struct ObDropIndexArg;
 struct ObTruncateTableArg;
 struct ObCreateIndexArg;
+struct ObIndexArg;
 }
 namespace sql
 {
@@ -41,6 +42,8 @@ namespace storage
 {
 class ObTabletHandle;
 class ObLSHandle;
+struct ObStorageColumnGroupSchema;
+class ObCOSSTableV2;
 }
 namespace share
 {
@@ -89,6 +92,7 @@ enum ObDDLType
   DDL_TABLE_RESTORE = 1013, // table restore
   DDL_MVIEW_COMPLETE_REFRESH = 1014,
   DDL_CREATE_MVIEW = 1015,
+  DDL_ALTER_COLUMN_GROUP = 1016, // alter table add/drop column group
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,
@@ -141,6 +145,16 @@ enum ObDDLTaskStatus {
   START_REFRESH_MVIEW_TASK = 18,
   FAIL = 99,
   SUCCESS = 100
+};
+
+enum SortCompactLevel
+{
+  SORT_DEFAULT_LEVEL = 0,
+  SORT_COMPACT_LEVEL = 1,
+  SORT_ENCODE_LEVEL = 2,
+  SORT_COMPRESSION_LEVEL = 3,
+  SORT_COMPRESSION_COMPACT_LEVEL = 4,
+  SORT_COMPRESSION_ENCODE_LEVEL = 5
 };
 
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
@@ -375,7 +389,8 @@ public:
       const bool use_heap_table_ddl_plan,
       const bool use_schema_version_hint_for_src_table,
       const ObColumnNameMap *col_name_map,
-      ObSqlString &sql_string);
+      ObSqlString &sql_string,
+      const share::SortCompactLevel compact_level = share::SORT_DEFAULT_LEVEL);
 
   static int generate_build_mview_replica_sql(
       const uint64_t tenant_id,
@@ -422,7 +437,7 @@ public:
       storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
       storage::ObTabletHandle &tablet_handle,
-      const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_READABLE_COMMITED);
+      const storage::ObMDSGetTabletMode mode = storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK);
 
   static int clear_ddl_checksum(sql::ObPhysicalPlan *phy_plan);
 
@@ -467,10 +482,12 @@ public:
   static int64_t get_default_ddl_rpc_timeout();
   static int64_t get_default_ddl_tx_timeout();
 
-  static int get_data_format_version(
+  static int get_data_information(
      const uint64_t tenant_id,
      const uint64_t task_id,
-     int64_t &data_format_version);
+     uint64_t &data_format_version,
+     int64_t &snapshot_version,
+     share::ObDDLTaskStatus &task_status);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
@@ -548,6 +565,28 @@ private:
       const sql::ObOpSpec *spec,
       uint64_t &table_id);
 };
+
+class ObCODDLUtil
+{
+public:
+  static int need_column_group_store(const storage::ObStorageSchema &table_schema, bool &need_column_group);
+  static int need_column_group_store(const schema::ObTableSchema &table_schema, bool &need_column_group);
+
+  static int get_base_cg_idx(
+      const storage::ObStorageSchema *storage_schema,
+      int64_t &base_cg_idx);
+
+  static int get_column_checksums(
+      const storage::ObCOSSTableV2 *co_sstable,
+      const storage::ObStorageSchema *storage_schema,
+      ObIArray<int64_t> &column_checksums);
+
+  static int is_rowkey_based_co_sstable(
+      const storage::ObCOSSTableV2 *co_sstable,
+      const storage::ObStorageSchema *storage_schema,
+      bool &is_rowkey_based);
+};
+
 
 
 class ObCheckTabletDataComplementOp

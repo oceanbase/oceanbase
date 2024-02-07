@@ -737,6 +737,7 @@ int ObTabletTableStore::calculate_read_tables(
           LOG_DEBUG("the snapshot_version of ddl major sstable is not match",
               "ddl_major_sstable_version", first_ddl_sstable->get_data_version(), K(snapshot_version));
         }
+        LOG_INFO("calc ddl read tables", K(ret), K(snapshot_version), K(ddl_major_sstables.count()), KPC(first_ddl_sstable));
       }
     }
   } else { // no major table, not ready for reading
@@ -1015,7 +1016,7 @@ int ObTabletTableStore::get_all_sstable(
     LOG_WARN("fail to add all major tables to iterator", K(ret), K_(major_tables));
   } else if (!minor_tables_.empty() && OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("fail to add all minor tables to iterator", K(ret), K_(major_tables));
-  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count()))) {
+  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count(), unpack_co_table))) {
     LOG_WARN("fail to add all ddl sstables to iterator", K(ret), K_(ddl_sstables));
   }
   return ret;
@@ -1108,7 +1109,7 @@ int ObTabletTableStore::get_ha_tables(ObTableStoreIterator &iter, bool &is_ready
     LOG_WARN("failed to add major table to iterator", K(ret));
   } else if (!minor_tables_.empty() && OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
     LOG_WARN("failed to add minor table to iterator", K(ret));
-  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count()))) {
+  } else if (!ddl_sstables_.empty() && OB_FAIL(iter.add_tables(ddl_sstables_, 0, ddl_sstables_.count(), true/*unpack_co*/))) {
     LOG_WARN("failed to add ddl table to iterator", K(ret));
   } else if (OB_FAIL(iter.set_retire_check())) {
     LOG_WARN("failed to set retire check to iterator", K(ret));
@@ -1510,8 +1511,15 @@ int ObTabletTableStore::get_ddl_major_sstables(ObIArray<ObITable *> &ddl_major_s
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_mem_sstables_.count(); ++i) {
-      if (OB_FAIL(ddl_major_sstables.push_back(ddl_mem_sstables_[i]))) {
-        LOG_WARN("push back old ddl sstable failed", K(ret), K(i));
+      ObIArray<ObDDLMemtable *> &ddl_memtables_in_kv = ddl_mem_sstables_[i]->get_ddl_memtables();
+      if (ddl_memtables_in_kv.empty()) {
+        // skip
+      } else {
+        ObDDLMemtable *ddl_memtable = ddl_memtables_in_kv.at(0);
+        if (ObITable::DDL_MEM_SSTABLE == ddl_memtable->get_key().table_type_
+            && OB_FAIL(ddl_major_sstables.push_back(ddl_memtable))) {
+          LOG_WARN("push back old ddl sstable failed", K(ret), K(i));
+        }
       }
     }
   }
@@ -1523,8 +1531,8 @@ int ObTabletTableStore::pull_ddl_memtables(
     const ObTablet &tablet)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObITable *> ddl_memtables;
-  if (OB_FAIL(tablet.get_ddl_memtables(ddl_memtables))) {
+  ObArray<ObDDLKV *> ddl_memtables;
+  if (OB_FAIL(tablet.get_ddl_kvs(ddl_memtables))) {
     LOG_WARN("failed to get ddl memtables array from tablet", K(ret));
   } else if (!ddl_memtables.empty() && OB_FAIL(ddl_mem_sstables_.init(allocator, ddl_memtables))) {
     LOG_WARN("assign ddl memtables failed", K(ret), K(ddl_memtables));
@@ -2506,14 +2514,17 @@ int64_t ObTabletTableStore::to_string(char *buf, const int64_t buf_len) const
     }
     if (ddl_mem_sstables_.is_valid()) {
       for (int64_t i = 0; i < ddl_mem_sstables_.count(); ++i) {
-        ObITable *table = ddl_mem_sstables_[i];
-        if (NULL != table && table->is_sstable()) {
+        ObDDLKV *table = ddl_mem_sstables_[i];
+        if (NULL != table) {
           J_OBJ_START();
-          J_KV(K(i), "type", ObITable::get_table_type_name(table->get_key().table_type_),
-              "tablet_id", table->get_key().tablet_id_,
-              "scn_range", table->get_key().scn_range_,
+          ObScnRange scn_range;
+          scn_range.start_scn_ = table->get_start_scn();
+          scn_range.end_scn_ = table->get_freeze_scn();
+          J_KV(K(i), "type", ObITable::get_table_type_name(ObITable::DDL_MEM_SSTABLE),
+              "tablet_id", table->get_tablet_id(),
+              "scn_range", scn_range,
               "ref", table->get_ref(),
-              "max_merge_version", static_cast<ObSSTable *>(table)->get_max_merged_trans_version());
+              "max_merge_version", table->get_snapshot_version());
           J_OBJ_END();
           J_COMMA();
         }
@@ -2577,9 +2588,9 @@ int64_t ObPrintTableStore::to_string(char *buf, const int64_t buf_len) const
       bool is_print = false;
       print_arr(major_tables_, "MAJOR", buf, buf_len, pos, is_print);
       print_arr(minor_tables_, "MINOR", buf, buf_len, pos, is_print);
-      print_arr(ddl_sstables_, "DDL_DUMP", buf, buf_len, pos, is_print);
       print_ddl_mem(ddl_mem_sstables_, "DDL_MEM", buf, buf_len, pos, is_print);
       print_mem(memtables_, "MEM", buf, buf_len, pos, is_print);
+      print_arr(ddl_sstables_, "DDL_SSTABLES", buf, buf_len, pos, is_print);
       print_arr(meta_major_tables_, "META_MAJOR", buf, buf_len, pos, is_print);
     } else {
       J_EMPTY_OBJ();
@@ -2623,7 +2634,7 @@ void ObPrintTableStore::print_ddl_mem(
     if (is_print && 0 == i) {
       J_NEWLINE();
     }
-    table_to_string(tables[i], i == 0 ? table_arr : " ", buf, buf_len, pos);
+    ddl_kv_to_string(tables[i], i == 0 ? table_arr : " ", buf, buf_len, pos);
     if (i < tables.count() - 1) {
       J_NEWLINE();
     }
@@ -2681,6 +2692,33 @@ void ObPrintTableStore::table_to_string(
       table->get_max_merged_trans_version(),
       table->get_start_scn().get_val_for_tx(),
       table->get_end_scn().get_val_for_tx(),
+      table->get_ref(),
+      uncommit_row);
+  }
+}
+
+void ObPrintTableStore::ddl_kv_to_string(
+     ObDDLKV *table,
+     const char* table_arr,
+     char *buf,
+     const int64_t buf_len,
+     int64_t &pos) const
+{
+  if (nullptr != table) {
+    ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
+    BUF_PRINTF("[%ld] [ ", GETTID());
+    BUF_PRINTO(PC(trace_id));
+    BUF_PRINTF(" ] ");
+    const char *table_name = ObITable::get_table_type_name(ObITable::DDL_MEM_SSTABLE);
+    const char *uncommit_row = "false";
+
+    BUF_PRINTF(" %-10s %-14s %-19lu %-19lu %-19lu %-19lu %-4ld %-16s ",
+      table_arr,
+      table_name,
+      table->get_snapshot_version(),
+      table->get_snapshot_version(),
+      table->get_start_scn().get_val_for_tx(),
+      table->get_freeze_scn().get_val_for_tx(),
       table->get_ref(),
       uncommit_row);
   }

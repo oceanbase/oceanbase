@@ -19,6 +19,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 
 namespace oceanbase
 {
@@ -67,30 +68,35 @@ void ObDDLClogCb::try_release()
 }
 
 ObDDLStartClogCb::ObDDLStartClogCb()
-  : is_inited_(false), status_(), lock_tid_(0), ddl_kv_mgr_handle_()
+  : is_inited_(false), status_(), lock_tid_(0), direct_load_mgr_handle_()
 {
 }
 
 int ObDDLStartClogCb::init(const ObITable::TableKey &table_key,
-                           const int64_t data_format_version,
+                           const uint64_t data_format_version,
                            const int64_t execution_id,
-                           const uint32_t lock_tid,
-                           ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+                           ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                           ObDDLKvMgrHandle &lob_kv_mgr_handle,
+                           ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+                           const uint32_t lock_tid)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version < 0
-          || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+  } else if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0
+          || 0 == lock_tid)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version), K(lock_tid));
+  } else if (OB_FAIL(direct_load_mgr_handle_.assign(direct_load_mgr_handle))) {
+    LOG_WARN("assign direct load mgr handle failed", K(ret));
   } else {
     table_key_ = table_key;
     data_format_version_ = data_format_version;
     execution_id_ = execution_id;
     lock_tid_ = lock_tid;
     ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
+    lob_kv_mgr_handle_ = lob_kv_mgr_handle;
     is_inited_ = true;
   }
   return ret;
@@ -100,14 +106,22 @@ int ObDDLStartClogCb::on_success()
 {
   int ret = OB_SUCCESS;
   const SCN &start_scn = __get_scn();
+  bool unused_brand_new = false;
+  ObTabletFullDirectLoadMgr *data_direct_load_mgr = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ddl_kv_mgr_handle_.get_obj()->ddl_start_nolock(table_key_, start_scn, data_format_version_,
-      execution_id_, SCN::min_scn()/*checkpoint_scn*/))) {
+  } else if (OB_ISNULL(data_direct_load_mgr
+      = (direct_load_mgr_handle_.get_full_obj()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(table_key_));
+  } else if (OB_FAIL(data_direct_load_mgr->start_nolock(table_key_, start_scn, data_format_version_,
+      execution_id_, SCN::min_scn()/*checkpoint_scn*/, ddl_kv_mgr_handle_, lob_kv_mgr_handle_))) {
     LOG_WARN("failed to start ddl in cb", K(ret), K(table_key_), K(start_scn), K(execution_id_));
   }
-  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  if (OB_NOT_NULL(data_direct_load_mgr)) {
+    data_direct_load_mgr->unlock(lock_tid_);
+  }
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
@@ -120,8 +134,11 @@ int ObDDLStartClogCb::on_failure()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(direct_load_mgr_handle_.get_full_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(table_key_), K(execution_id_));
   } else {
-    ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+    direct_load_mgr_handle_.get_full_obj()->unlock(lock_tid_);
   }
   status_.set_state(STATE_FAILED);
   try_release();
@@ -138,7 +155,7 @@ void ObDDLStartClogCb::try_release()
 
 ObDDLMacroBlockClogCb::ObDDLMacroBlockClogCb()
   : is_inited_(false), status_(), ls_id_(), redo_info_(), macro_block_id_(),
-    data_buffer_lock_(), is_data_buffer_freed_(false), ddl_kv_mgr_handle_()
+    data_buffer_lock_(), is_data_buffer_freed_(false), direct_load_mgr_handle_()
 {
 
 }
@@ -155,28 +172,40 @@ ObDDLMacroBlockClogCb::~ObDDLMacroBlockClogCb()
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
                                 const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
                                 const blocksstable::MacroBlockId &macro_block_id,
-                                ObTabletHandle &tablet_handle,
-                                ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+                                ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  direct_load_mgr_handle_.reset();
+  bool is_major_sstable_exist = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid() || !tablet_handle.is_valid() || !ddl_kv_mgr_handle.is_valid())) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !redo_info.is_valid() || !macro_block_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(redo_info), K(macro_block_id));
+  } else if (OB_ISNULL(tenant_direct_load_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
+          ls_id,
+          redo_info.table_key_.tablet_id_,
+          true/* is_full_direct_load */,
+          direct_load_mgr_handle_,
+          is_major_sstable_exist))) {
+    if (OB_ENTRY_NOT_EXIST == ret && is_major_sstable_exist) {
+      ret = OB_TASK_EXPIRED;
+      LOG_INFO("major sstable already exist", K(ret), K(redo_info_));
+    } else {
+      LOG_WARN("get tablet mgr failed", K(ret), K(redo_info_));
+    }
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.inc_ref(macro_block_id))) {
     LOG_WARN("inc reference count failed", K(ret), K(macro_block_id));
   } else {
-    redo_info_.data_buffer_.assign(const_cast<char *>(redo_info.data_buffer_.ptr()), redo_info.data_buffer_.length());
-    redo_info_.block_type_ = redo_info.block_type_;
-    redo_info_.logic_id_ = redo_info.logic_id_;
-    redo_info_.table_key_ = redo_info.table_key_;
-    redo_info_.start_scn_ = redo_info.start_scn_;
+    redo_info_ = redo_info;
     ls_id_ = ls_id;
     macro_block_id_ = macro_block_id;
     tablet_handle_ = tablet_handle;
-    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
   }
   return ret;
 }
@@ -210,8 +239,14 @@ int ObDDLMacroBlockClogCb::on_success()
       macro_block.buf_ = redo_info_.data_buffer_.ptr();
       macro_block.size_ = redo_info_.data_buffer_.length();
       macro_block.ddl_start_scn_ = redo_info_.start_scn_;
-      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle_.get_obj(), macro_block))) {
-        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle_), K(macro_block));
+      macro_block.table_key_ = redo_info_.table_key_;
+      macro_block.end_row_id_ = redo_info_.end_row_id_;
+      const int64_t snapshot_version = redo_info_.table_key_.get_snapshot_version();
+      const uint64_t data_format_version = redo_info_.data_format_version_;
+      if (OB_FAIL(ObDDLKVPendingGuard::set_macro_block(tablet_handle_.get_obj(), macro_block,
+        snapshot_version, data_format_version))) {
+        LOG_WARN("set macro block into ddl kv failed", K(ret), K(tablet_handle_), K(macro_block),
+            K(snapshot_version), K(data_format_version));
       }
     }
   }
@@ -229,7 +264,7 @@ int ObDDLMacroBlockClogCb::on_failure()
 }
 
 ObDDLCommitClogCb::ObDDLCommitClogCb()
-  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), ddl_kv_mgr_handle_()
+  : is_inited_(false), status_(), ls_id_(), tablet_id_(), start_scn_(SCN::min_scn()), lock_tid_(0), direct_load_mgr_handle_()
 {
 
 }
@@ -238,14 +273,16 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
                             const common::ObTabletID &tablet_id,
                             const share::SCN &start_scn,
                             const uint32_t lock_tid,
-                            ObDDLKvMgrHandle &ddl_kv_mgr_handle)
+                            ObTabletDirectLoadMgrHandle &direct_load_mgr_handle)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(direct_load_mgr_handle_.assign(direct_load_mgr_handle))) {
+    LOG_WARN("assign handle failed", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !start_scn.is_valid_and_not_min()
-      || 0 == lock_tid || !ddl_kv_mgr_handle.is_valid())) {
+      || 0 == lock_tid)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(start_scn), K(lock_tid));
   } else {
@@ -253,7 +290,6 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
     tablet_id_ = tablet_id;
     start_scn_ = start_scn;
     lock_tid_ = lock_tid;
-    ddl_kv_mgr_handle_ = ddl_kv_mgr_handle;
     is_inited_ = true;
   }
   return ret;
@@ -262,8 +298,18 @@ int ObDDLCommitClogCb::init(const share::ObLSID &ls_id,
 int ObDDLCommitClogCb::on_success()
 {
   int ret = OB_SUCCESS;
-  ddl_kv_mgr_handle_.get_obj()->set_commit_scn_nolock(__get_scn());
-  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  ObTabletFullDirectLoadMgr *data_direct_load_mgr = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(data_direct_load_mgr
+      = direct_load_mgr_handle_.get_full_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(tablet_id_));
+  } else {
+    data_direct_load_mgr->set_commit_scn_nolock(__get_scn());
+    data_direct_load_mgr->unlock(lock_tid_);
+  }
   status_.set_ret_code(ret);
   status_.set_state(STATE_SUCCESS);
   try_release();
@@ -273,7 +319,15 @@ int ObDDLCommitClogCb::on_success()
 int ObDDLCommitClogCb::on_failure()
 {
   int ret = OB_SUCCESS;
-  ddl_kv_mgr_handle_.get_obj()->unlock(lock_tid_);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(direct_load_mgr_handle_.get_full_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(tablet_id_));
+  } else {
+    direct_load_mgr_handle_.get_full_obj()->unlock(lock_tid_);
+  }
   status_.set_state(STATE_FAILED);
   try_release();
   return OB_SUCCESS;
@@ -331,25 +385,30 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 }
 
 ObDDLStartLog::ObDDLStartLog()
-  : table_key_(), data_format_version_(0), execution_id_(-1)
+  : table_key_(), data_format_version_(0), execution_id_(-1), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_DDL) /*for compatibility*/
 {
 }
 
-int ObDDLStartLog::init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id)
+int ObDDLStartLog::init(
+    const ObITable::TableKey &table_key,
+    const uint64_t data_format_version,
+    const int64_t execution_id,
+    const ObDirectLoadType direct_load_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version_ < 0)) {
+  if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type));
   } else {
     table_key_ = table_key;
     data_format_version_ = data_format_version;
     execution_id_ = execution_id;
+    direct_load_type_ = direct_load_type;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()

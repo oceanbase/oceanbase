@@ -126,7 +126,7 @@ public:
   }
   int fetch_cg_sstable(
       const uint32_t cg_idx,
-      ObSSTableWrapper &cg_wrapper);
+      ObSSTableWrapper &cg_wrapper) const;
   int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
   int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const;
 

@@ -20,6 +20,7 @@
 #include "storage/compaction/ob_tablet_merge_task.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/compaction/ob_tenant_medium_checker.h"
+#include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "lib/hash/ob_hashset.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler_task_mgr.h"
 #include "storage/compaction/ob_compaction_schedule_iterator.h"
@@ -220,6 +221,7 @@ public:
       const ObMergeType merge_type,
       const int64_t &merge_snapshot_version);
   static int schedule_tablet_ddl_major_merge(
+      const share::ObLSID &ls_id,
       ObTabletHandle &tablet_handle);
 
   int get_min_dependent_schema_version(int64_t &min_schema_version);

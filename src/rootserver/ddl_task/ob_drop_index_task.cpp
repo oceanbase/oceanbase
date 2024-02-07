@@ -402,6 +402,13 @@ int ObDropIndexTask::check_switch_succ()
     LOG_WARN("error sys", K(ret));
   } else if (OB_FAIL(refresh_schema_version())) {
     LOG_WARN("refresh schema version failed", K(ret));
+  } else if (OB_FAIL(ObDDLUtil::check_tenant_status_normal(&root_service_->get_sql_proxy(), tenant_id_))) {
+    if (OB_TENANT_HAS_BEEN_DROPPED == ret || OB_STANDBY_READ_ONLY == ret) {
+      need_retry_ = false;
+      LOG_INFO("tenant status is abnormal, exit anyway", K(ret), K(tenant_id_));
+    } else {
+      LOG_WARN("check tenant status failed", K(ret), K(tenant_id_));
+    }
   } else if (OB_FAIL(root_service_->get_schema_service().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("get tenant schema failed", K(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, target_object_id_, is_index_exist))) {

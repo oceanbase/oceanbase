@@ -13656,13 +13656,27 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_import_table_task_history',
   keywords = all_def_keywords['__all_import_table_task_history'],
   in_tenant_space = True))
+
 # 12428: __all_virtual_import_stmt_exec_history
 
 # 12429: __all_virtual_data_activity_metrics
 
-# 12430: __all_virtual_column_group_mapping
-# 12431: __all_virtual_column_group_history
-# 12432: __all_virtual_column_gorup_mapping_history
+def_table_schema(**gen_iterate_virtual_table_def(
+    table_id = '12430',
+    table_name = '__all_virtual_column_group_mapping',
+    keywords = all_def_keywords['__all_column_group_mapping'],
+    in_tenant_space = True))
+def_table_schema(**gen_iterate_virtual_table_def(
+    table_id = '12431',
+    table_name = '__all_virtual_column_group_history',
+    keywords = all_def_keywords['__all_column_group_history'],
+    in_tenant_space = True))
+def_table_schema(**gen_iterate_virtual_table_def(
+    table_id = '12432',
+    table_name = '__all_virtual_column_group_mapping_history',
+    keywords = all_def_keywords['__all_column_group_mapping_history'],
+    in_tenant_space = True))
+
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
 
@@ -14154,11 +14168,11 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15415: idx_dbms_lock_allocated_lockhandle_real_agent
 # 15416: idx_dbms_lock_allocated_expiration_real_agent
 
-# 15417: __all_virtual_column_group_mapping
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15417', all_def_keywords['__all_virtual_column_group_mapping']))
 
 # 15418: __all_virtual_cgroup_config
-# 15419: __all_virutal_column_group_history
-# 15420: __all_virutal_column_group_maping_history
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15419', all_def_keywords['__all_virtual_column_group_history']))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15420', all_def_keywords['__all_virtual_column_group_mapping_history']))
 # 15421: __all_virtual_wr_system_event
 # 15422: __all_virtual_wr_event_name
 # 15423: __all_tenant_scheduler_running_job
@@ -14185,6 +14199,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15441: __all_virtual_share_storage_quota_assignment
 # 15442: __all_virtual_column_group
 # 余留位置
+
 
 ################################################################################
 # System View (20000,30000]
@@ -16813,7 +16828,7 @@ SELECT
     when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'
-    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'DDL_MERGE'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.TENANT_ID,
@@ -51818,7 +51833,7 @@ SELECT
     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'
     when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
-    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT'
+    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT' when 20 then 'DDL_MERGE'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.LS_ID,

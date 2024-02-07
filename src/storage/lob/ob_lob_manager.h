@@ -139,6 +139,7 @@ public:
   static const int64_t LOB_WITH_OUTROW_CTX_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx);
   static const int64_t LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
   static const uint64_t LOB_READ_BUFFER_LEN = 1024L*1024L; // 1M
+  static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
   static const uint64_t REMOTE_LOB_QUERY_RETRY_MAX = 10L; // 1M
 private:
   explicit ObLobManager(const uint64_t tenant_id)
@@ -196,6 +197,9 @@ public:
   // Lob data interface
   int append(ObLobAccessParam& param,
              ObString& data);
+  int append(ObLobAccessParam& param,
+             ObLobLocatorV2& lob,
+             ObLobMetaWriteIter &iter);
   int append(ObLobAccessParam& param,
              ObLobLocatorV2 &lob);
   int query(ObLobAccessParam& param,
@@ -311,14 +315,12 @@ private:
   bool lob_handle_has_char_len(ObLobAccessParam& param);
   int64_t* get_char_len_ptr(ObLobAccessParam& param);
   int fill_lob_locator_extern(ObLobAccessParam& param);
-
   int compare(ObLobAccessParam& param_left,
               ObLobAccessParam& param_right,
               int64_t& result);
-
+  void transform_lob_id(uint64_t src, uint64_t &dst);
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
-  static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K
   const uint64_t tenant_id_;
   bool is_inited_;
   common::ObFIFOAllocator allocator_;

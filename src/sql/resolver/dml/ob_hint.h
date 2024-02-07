@@ -92,6 +92,7 @@ struct ObOptParamHint
     DEF(USE_DEFAULT_OPT_STAT,)            \
     DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
     DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)   \
+    DEF(COMPACT_SORT_LEVEL,)              \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

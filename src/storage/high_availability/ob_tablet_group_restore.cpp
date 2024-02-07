@@ -2577,6 +2577,10 @@ int ObTabletRestoreTask::check_need_copy_sstable_(
     LOG_WARN("failed to get table info", K(ret), KPC(tablet_restore_ctx_), K(table_key));
   } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, tablet_restore_ctx_->tablet_handle_, need_copy))) {
     LOG_WARN("failed to check need copy sstable", K(ret), KPC(tablet_restore_ctx_), K(table_key));
+    if (OB_INVALID_DATA == ret) {
+      LOG_ERROR("restore invalid data", K(ret), K(table_key), KPC(tablet_restore_ctx_));
+      abort(); // TODO@wenqu: remove this line
+    }
   }
   return ret;
 }

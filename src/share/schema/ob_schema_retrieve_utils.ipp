@@ -1501,7 +1501,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         int64_t, true/*skip null error*/, ignore_column_error, OB_DEFAULT_LOB_INROW_THRESHOLD);
     // field for column_group
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, max_used_column_group_id, table_schema,
-        uint64_t, true, true/*ignore_column_error*/, DEFAULT_TYPE_COLUMN_GROUP_ID);
+        uint64_t, true, true/*ignore_column_error*/, COLUMN_GROUP_START_ID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_store, table_schema,
         bool, true, true/*ignore_column_error*/, false);
   }

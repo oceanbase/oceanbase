@@ -1827,7 +1827,46 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortSpec &spec, const bool 
         }
         spec.enable_encode_sortkey_opt_ = op.enable_encode_sortkey_opt();
         spec.part_cnt_ = op.get_part_cnt();
-        LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_));
+        int64_t compact_level = 0;
+        OZ(op.get_plan()->get_optimizer_context().get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::COMPACT_SORT_LEVEL, compact_level));
+        if (OB_SUCC(ret)) {
+          int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+          spec.sort_compact_level_ = static_cast<SortCompactLevel>(compact_level);
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+          if (OB_UNLIKELY(!tenant_config.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail get tenant_config", K(ret), K(tenant_id));
+          } else if (tenant_config->enable_store_compression || compact_level == SORT_COMPRESSION_LEVEL ||
+                     compact_level == SORT_COMPRESSION_ENCODE_LEVEL ||
+                     compact_level == SORT_COMPRESSION_COMPACT_LEVEL) {
+            if (opt_ctx_->is_online_ddl()) {
+              // for normal sort we use default compress type. for online ddl, we use the compress type in source table
+              ObLogicalOperator *child_op = op.get_child(0);
+              while(OB_NOT_NULL(child_op) && child_op->get_type() != log_op_def::LOG_TABLE_SCAN ) {
+                child_op = child_op->get_child(0);
+                if (OB_NOT_NULL(child_op) && child_op->get_type() == log_op_def::LOG_TABLE_SCAN ) {
+                  share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
+                  const share::schema::ObTableSchema *table_schema = nullptr;
+                  uint64_t table_id = static_cast<ObLogTableScan*>(child_op)->get_ref_table_id();
+                  if (OB_ISNULL(schema_guard = opt_ctx_->get_schema_guard())) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("fail to get schema guard", K(ret));
+                  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id, table_id, table_schema))) {
+                    LOG_WARN("fail to get table schema", K(ret));
+                  } else if (OB_ISNULL(table_schema)) {
+                    ret = OB_TABLE_NOT_EXIST;
+                    LOG_WARN("can't find table schema", K(ret), K(table_id));
+                  } else {
+                    spec.compress_type_ = table_schema->get_compressor_type();
+                  }
+                }
+              }
+              LOG_TRACE("compact type is", K(spec.compress_type_));
+            }
+          }
+        }
+        LOG_TRACE("trace order by", K(spec.all_exprs_.count()), K(spec.all_exprs_),
+                  K(compact_level));
       }
       if (OB_SUCC(ret)) {
         if (spec.sort_collations_.count() != spec.sort_cmp_funs_.count()

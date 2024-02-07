@@ -362,6 +362,7 @@ private:
       const int64_t consumer_group_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObCreateIndexArg *create_index_arg,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   int create_constraint_task(
@@ -395,6 +396,7 @@ private:
       const int64_t task_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -408,6 +410,7 @@ private:
       const int64_t task_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -421,6 +424,7 @@ private:
       const int64_t task_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -470,6 +474,7 @@ private:
       const int64_t task_id,
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
+      const uint64_t tenant_data_version,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
@@ -490,6 +495,8 @@ private:
   int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
   int remove_ddl_task(ObDDLTask *ddl_task);
   void add_event_info(const ObDDLTaskRecord &ddl_record, const ObString &ddl_event_stmt);
+  int check_conflict_with_upgrade(
+      const uint64_t tenant_id);
 
 private:
   static const int64_t TOTAL_LIMIT = 1024L * 1024L * 1024L;

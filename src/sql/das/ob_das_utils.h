@@ -57,6 +57,11 @@ public:
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,
                                    common::ObObj &value);
+  static int reshape_datum_value(const ObObjMeta &col_type,
+                                 const ObAccuracy &col_accuracy,
+                                 const bool enable_oracle_empty_char_reshape_to_null,
+                                 ObIAllocator &allocator,
+                                 blocksstable::ObStorageDatum &datum_value);
   static int generate_spatial_index_rows(ObIAllocator &allocator,
                                          const ObDASDMLBaseCtDef &das_ctdef,
                                          const ObString &wkb_str,

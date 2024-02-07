@@ -41,6 +41,16 @@ int ObTabletCacheInterval::next_value(uint64_t &next_value)
   return ret;
 }
 
+int ObTabletCacheInterval::get_value(uint64_t &value)
+{
+  int ret = OB_SUCCESS;
+  value = next_value_;
+  if (value + 1 > end_) {
+    ret = OB_EAGAIN;
+  }
+  return ret;
+}
+
 int ObTabletCacheInterval::fetch(uint64_t count, ObTabletCacheInterval &dest)
 {
   int ret = OB_SUCCESS;

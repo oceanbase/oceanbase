@@ -2960,7 +2960,8 @@ DEF_TO_STRING(ObIndexArg)
        K_(index_name),
        K_(table_name),
        K_(database_name),
-       K_(index_action_type));
+       K_(index_action_type),
+       K_(compact_level));
   J_OBJ_END();
   return pos;
 }
@@ -2971,7 +2972,8 @@ OB_SERIALIZE_MEMBER((ObIndexArg, ObDDLArg),
                     table_name_,
                     database_name_,
                     index_action_type_,
-                    session_id_);
+                    session_id_,
+                    compact_level_);
 
 bool ObCreateIndexArg::is_valid() const
 {
@@ -2982,6 +2984,17 @@ bool ObCreateIndexArg::is_valid() const
          && index_option_.is_valid()
          && index_using_type_ >= USING_BTREE
          && index_using_type_ < USING_TYPE_MAX;
+}
+OB_SERIALIZE_MEMBER(ObCreateIndexArg::ObIndexColumnGroupItem, is_each_cg_, column_list_);
+
+int ObCreateIndexArg::ObIndexColumnGroupItem::assign(const ObCreateIndexArg::ObIndexColumnGroupItem &other)
+{
+  int ret = OB_SUCCESS;
+  is_each_cg_ = other.is_each_cg_;
+  if (OB_FAIL(column_list_.assign(other.column_list_))) {
+    LOG_WARN("fail to assign array", K(ret));
+  }
+  return ret;
 }
 
 DEF_TO_STRING(ObCreateIndexArg)
@@ -3008,7 +3021,9 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(nls_timestamp_tz_format),
        K_(sql_mode),
        K_(inner_sql_exec_addr),
-       K_(local_session_var));
+       K_(local_session_var),
+       K_(exist_all_column_group),
+       K_(index_cgs));
   J_OBJ_END();
   return pos;
 }
@@ -3032,7 +3047,9 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     nls_timestamp_tz_format_,
                     sql_mode_,
                     inner_sql_exec_addr_,
-                    local_session_var_);
+                    local_session_var_,
+                    exist_all_column_group_,
+                    index_cgs_);
 
 bool ObAlterIndexArg::is_valid() const
 {
@@ -5298,6 +5315,24 @@ bool ObUpdateIndexStatusArg::is_valid() const
       && status_ < INDEX_STATUS_MAX;
 }
 
+int ObUpdateIndexStatusArg::assign(const ObUpdateIndexStatusArg &other_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDDLArg::assign(other_arg))) {
+    LOG_WARN("assign other arg failed", K(ret));
+  } else {
+    index_table_id_ = other_arg.index_table_id_;
+    status_ = other_arg.status_;
+    convert_status_ = other_arg.convert_status_;
+    in_offline_ddl_white_list_ = other_arg.in_offline_ddl_white_list_;
+    data_table_id_ = other_arg.data_table_id_;
+    database_name_ = other_arg.database_name_;
+    task_id_ = other_arg.task_id_;
+    error_code_ = other_arg.error_code_;
+  }
+  return ret;
+}
+
 int ObUpdateMViewStatusArg::assign(const ObUpdateMViewStatusArg &other)
 {
   int ret = OB_SUCCESS;
@@ -5326,8 +5361,10 @@ OB_SERIALIZE_MEMBER((ObUpdateIndexStatusArg, ObDDLArg),
                     status_,
                     convert_status_,
                     in_offline_ddl_white_list_,
-		                data_table_id_,
-                    database_name_);
+                    data_table_id_,
+                    database_name_,
+                    task_id_,
+                    error_code_);
 
 OB_SERIALIZE_MEMBER((ObUpdateMViewStatusArg, ObDDLArg),
                     mview_table_id_,

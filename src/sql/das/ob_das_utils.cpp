@@ -295,6 +295,47 @@ int ObDASUtils::reshape_storage_value(const ObObjMeta &col_type,
   return ret;
 }
 
+int ObDASUtils::reshape_datum_value(const ObObjMeta &col_type,
+                                    const ObAccuracy &col_accuracy,
+                                    const bool enable_oracle_empty_char_reshape_to_null,
+                                    ObIAllocator &allocator,
+                                    blocksstable::ObStorageDatum &datum_value)
+{
+  int ret = OB_SUCCESS;
+  if (col_type.is_binary()) {
+    int32_t binary_len = col_accuracy.get_length();
+    int32_t len = datum_value.len_;
+    if (binary_len > len) {
+      char *dest_str = NULL;
+      const char *str = datum_value.ptr_;
+      if (OB_ISNULL(dest_str = (char *)(allocator.alloc(binary_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc mem to binary", K(ret), K(binary_len));
+      } else {
+        char pad_char = '\0';
+        MEMCPY(dest_str, str, len);
+        MEMSET(dest_str + len, pad_char, binary_len - len);
+        datum_value.set_string(ObString(binary_len, dest_str));
+      }
+    }
+  } else if (lib::is_oracle_mode() && !enable_oracle_empty_char_reshape_to_null && col_type.is_character_type() && datum_value.len_ == 0) {
+    // Oracle compatibility mode: '' as null
+    LOG_DEBUG("reshape empty string to null", K(datum_value));
+    datum_value.set_null();
+  } else if (col_type.is_fixed_len_char_type()) {
+    const char *str = datum_value.ptr_;
+    int32_t len = datum_value.len_;
+    ObString space_pattern = ObCharsetUtils::get_const_str(col_type.get_collation_type(), ' ');
+    for (; len >= space_pattern.length(); len -= space_pattern.length()) {
+      if (0 != MEMCMP(str + len - space_pattern.length(), space_pattern.ptr(), space_pattern.length())) {
+        break;
+      }
+    }
+    datum_value.set_string(ObString(len, str));
+  }
+  return ret;
+}
+
 int ObDASUtils::generate_spatial_index_rows(
     ObIAllocator &allocator,
     const ObDASDMLBaseCtDef &das_ctdef,

@@ -12,9 +12,9 @@ drop table if exists ct1,ct2,ct3;
 --enable_warnings
 
 --disable_query_log
-create table ct1 (c1 int, c2 int) with column group for all columns, each column;
-create table ct2(c1 int, c2 varchar(100), c3 varchar(1000)) block_size=2048 with column group for all columns, each column;
-create table ct3(c1 int primary key, c2 int, c3 int, c4 int) partition by hash(c1) partitions 2 with column group for all columns, each column;
+create table ct1 (c1 int, c2 int) with column group (all columns, each column);
+create table ct2(c1 int, c2 varchar(100), c3 varchar(1000)) block_size=2048 with column group (all columns, each column);
+create table ct3(c1 int primary key, c2 int, c3 int, c4 int) partition by hash(c1) partitions 2 with column group (all columns, each column);
 --let $count = 0
 while($count < 1000)
 {

@@ -35,7 +35,7 @@ alter system set _rowsets_enabled = true tenant = 'mysql';
 alter system flush plan cache global;
 delete from t3 where a = 2;
 insert into t3 (a, b, c, d) values(31, 1, "a", repeat('a', 1000));
-create table t4(a int) row_format = compressed with column group for all columns, each column;
+create table t4(a int) row_format = compressed with column group (all columns, each column);
 insert into t4 values (-1), (0);
 explain select /*+ LEADING(t4,t3) USE_NL(t3,t4) NO_USE_NL_MATERIALIZATION(t3) */ t3.a from t4,t3 where (t3.a >= t4.a + 31 and t3.a <= t4.a + 35) or (t3.a >= t4.a + 1 and t3.a <= t4.a + 5) order by t3.a;
 Query Plan

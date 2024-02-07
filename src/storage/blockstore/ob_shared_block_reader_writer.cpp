@@ -1013,6 +1013,7 @@ int ObSharedBlockReaderWriter::async_read(
   ObMacroBlockHandle macro_handle;
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   macro_read_info.io_timeout_ms_ = read_info.io_timeout_ms_;
+  macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
 
   macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
   macro_read_info.io_callback_ = read_info.io_callback_;

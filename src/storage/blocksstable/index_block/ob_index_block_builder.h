@@ -57,6 +57,7 @@ public:
      meta_block_offset_(0),
      meta_block_size_(0),
      last_macro_size_(0),
+     use_absolute_offset_(false),
      is_inited_(false) {}
   ~ObIndexTreeRootCtx();
   int init(common::ObIAllocator &allocator);
@@ -80,6 +81,7 @@ public:
   int64_t meta_block_offset_;
   int64_t meta_block_size_;
   int64_t last_macro_size_;
+  bool use_absolute_offset_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexTreeRootCtx);
 };
@@ -405,7 +407,8 @@ class ObIndexBlockRebuilder final
 public:
   ObIndexBlockRebuilder();
   ~ObIndexBlockRebuilder();
-  int init(ObSSTableIndexBuilder &sstable_builder, bool need_sort = true, const int64_t *task_idx = nullptr);
+  // TOOD(yunsong.lhp) rm use_absolute_offset from rebuilder
+  int init(ObSSTableIndexBuilder &sstable_builder, bool need_sort = true, const int64_t *task_idx = nullptr, const bool use_absolute_offset = false);
   int append_macro_row(
       const char *buf,
       const int64_t size,

@@ -354,6 +354,13 @@ private:
        const int64_t buf_len,
        int64_t &pos) const;
 
+  void ddl_kv_to_string(
+       ObDDLKV *table,
+       const char* table_arr,
+       char *buf,
+       const int64_t buf_len,
+       int64_t &pos) const;
+
   void print_arr(
       const ObSSTableArray &tables,
       const char* table_arr,

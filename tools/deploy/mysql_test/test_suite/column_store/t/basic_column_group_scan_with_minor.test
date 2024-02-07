@@ -20,8 +20,7 @@ set @@recyclebin = off;
 drop table if exists ct1;
 --enable_warnings
 set session ob_trx_timeout=100000000000;
-# create table without all column group
-create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);
 
 --disable_query_log
 --let $count = 0
@@ -123,8 +122,7 @@ alter system enable_table_without_all_cg = false;
 alter system set _rowsets_enabled = true;
 alter system flush plan cache;
 
-# create table with all column group
-create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group for all columns, each column;
+create table ct1(c1 int primary key, c2 int, c3 number, c4 varchar(60000), c5 varchar(60000)) ROW_FORMAT = redundant COMPRESSION = 'none' with column group (all columns, each column);
 
 --disable_query_log
 --let $count = 0

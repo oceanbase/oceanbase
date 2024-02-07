@@ -33,6 +33,7 @@ public:
   int do_create_mlog(share::schema::ObSchemaGetterGuard &schema_guard,
                      const obrpc::ObCreateMLogArg &create_mlog_arg,
                      const share::schema::ObTableSchema &table_schema,
+                     const uint64_t tenant_data_version,
                      obrpc::ObCreateMLogRes &create_mlog_res);
   int generate_mlog_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                            const obrpc::ObCreateMLogArg &create_mlog_arg,

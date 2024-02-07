@@ -161,6 +161,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_pushdown_filter.cpp
   engine/basic/ob_ra_datum_store.cpp
   engine/basic/ob_ra_row_store.cpp
+  engine/basic/ob_temp_block_store.cpp
   engine/basic/ob_select_into_op.cpp
   engine/basic/ob_temp_table_access_op.cpp
   engine/basic/ob_temp_table_insert_op.cpp
@@ -168,6 +169,15 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_topk_op.cpp
   engine/basic/ob_values_op.cpp
   engine/basic/ob_stat_collector_op.cpp
+  engine/basic/chunk_store/ob_chunk_block.cpp
+  engine/basic/chunk_store/ob_compact_store.cpp
+  engine/basic/chunk_store/ob_default_block_reader.cpp
+  engine/basic/chunk_store/ob_default_block_writer.cpp
+  engine/basic/chunk_store/ob_compact_block_reader.cpp
+  engine/basic/chunk_store/ob_compact_block_writer.cpp
+  engine/basic/chunk_store/ob_chunk_block_compressor.cpp
+  #engine/basic/chunk_store/ob_encoded_block_writer.cpp
+  #engine/basic/chunk_store/ob_encoded_block_reader.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd

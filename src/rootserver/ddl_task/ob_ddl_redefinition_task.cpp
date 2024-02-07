@@ -51,13 +51,14 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const bool is_mview_complete_refresh,
     const int64_t mview_table_id,
     ObRootService *root_service,
-    const common::ObAddr &inner_sql_exec_addr)
+    const common::ObAddr &inner_sql_exec_addr,
+    const int64_t data_format_version)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
     is_mview_complete_refresh_(is_mview_complete_refresh), mview_table_id_(mview_table_id),
-    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
+    root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0)
 {
   set_retry_times(0); // do not retry
 }
@@ -196,10 +197,41 @@ int ObDDLRedefinitionSSTableBuildTask::process()
           LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
         } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-          LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-        } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
-          LOG_WARN("fail to check sstable checksum_report_finish",
-            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+          if (ret == OB_SERVER_OUTOF_DISK_SPACE &&
+              data_format_version_ >= DATA_VERSION_4_3_0_0) {
+            // if version >= 4.3.0, would retry with compression.
+            int tmp_ret = OB_SUCCESS;
+            sql_string.reuse();
+            SortCompactLevel compress_level = SORT_COMPRESSION_LEVEL;
+            if (OB_SUCCESS != (tmp_ret = ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
+                                                            dest_table_id_,
+                                                            data_table_schema->get_schema_version(),
+                                                            snapshot_version_,
+                                                            execution_id_,
+                                                            task_id_,
+                                                            parallelism_,
+                                                            use_heap_table_ddl_plan_,
+                                                            true,
+                                                            &col_name_map_,
+                                                            sql_string,
+                                                            compress_level))) {
+              LOG_WARN("fail to generate build replica sql", K(tmp_ret));
+            } else if (OB_SUCCESS != (tmp_ret = user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE,
+                &session_param, sql_exec_addr))) {
+              LOG_WARN("fail to execute build replica sql", K(tmp_ret), K(tenant_id_));
+            } else {
+              ret = OB_SUCCESS;
+            }
+          } else {
+            LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+            LOG_WARN("fail to check sstable checksum_report_finish",
+              K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+          }
         }
       }
     }
@@ -251,7 +283,8 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         is_mview_complete_refresh_,
         mview_table_id_,
         root_service_,
-        inner_sql_exec_addr_);
+        inner_sql_exec_addr_,
+        data_format_version_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {

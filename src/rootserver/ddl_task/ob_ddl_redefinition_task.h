@@ -41,7 +41,8 @@ public:
       const bool is_mview_complete_refresh,
       const int64_t mview_table_id,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr);
+      const common::ObAddr &inner_sql_exec_addr,
+      const int64_t data_format_version = 0);
   int init(
       const ObTableSchema &orig_table_schema,
       const AlterTableSchema &alter_table_schema,
@@ -74,6 +75,7 @@ private:
   common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
+  int64_t data_format_version_;
 };
 
 class ObSyncTabletAutoincSeqCtx final

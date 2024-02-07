@@ -264,7 +264,7 @@ int ObCOSSTableV2::build_cs_meta()
           && ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected rowkey cg table", K(ret), K(base_type_), KPC(cg_sstable));
-      } else if (OB_UNLIKELY(cg_sstable->get_snapshot_version() != get_snapshot_version())) {
+      } else if (OB_UNLIKELY(cg_sstable->get_end_scn() != get_end_scn())) { // ddl sstable may only contain partial data
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the snapshot version of cg sstables must be equal", K(ret));
       } else if (OB_FAIL(cg_sstable->get_meta(cg_meta_handle))) {
@@ -272,7 +272,7 @@ int ObCOSSTableV2::build_cs_meta()
       } else if (OB_UNLIKELY(cg_meta_handle.get_sstable_meta().get_schema_version() != meta_->get_schema_version())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the schema version of cg sstables must be equal", K(ret), KPC(meta_), K(cg_meta_handle));
-      } else if (OB_UNLIKELY(cg_meta_handle.get_sstable_meta().get_row_count() != meta_->get_row_count())) {
+      } else if (OB_UNLIKELY(cg_sstable->is_major_sstable() && cg_meta_handle.get_sstable_meta().get_row_count() != meta_->get_row_count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the row count of cg sstables must be equal", K(ret), KPC(cg_sstable), KPC(meta_), K(cg_meta_handle));
       } else {
@@ -473,7 +473,7 @@ int ObCOSSTableV2::deep_copy(
 
 int ObCOSSTableV2::fetch_cg_sstable(
     const uint32_t cg_idx,
-    ObSSTableWrapper &cg_wrapper)
+    ObSSTableWrapper &cg_wrapper) const
 {
   int ret = OB_SUCCESS;
   cg_wrapper.reset();
@@ -522,7 +522,7 @@ int ObCOSSTableV2::get_cg_sstable(
     const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
     cg_wrapper.sstable_ = cg_idx < key_.column_group_idx_
                         ? cg_sstables[cg_idx]
-                        : cg_sstables[cg_idx - 1];
+                        : cg_sstables[cg_idx - 1]; // deal with that the rowkey/all cg idx is at the middle when add column online
   }
 
   if (OB_FAIL(ret)) {

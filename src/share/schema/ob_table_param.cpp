@@ -819,10 +819,21 @@ int ObTableParam::construct_columns_and_projector(
   share::schema::ObColDesc tmp_col_desc;
   share::schema::ObColExtend tmp_col_extend;
   int32_t cg_idx = 0;
+  bool is_cs = false;
   bool has_all_column_group = false;
-  bool is_cs = !table_schema.is_row_store();
   int64_t rowkey_count = 0;
-  if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
+
+  if (OB_SUCC(ret)) {
+    bool is_table_row_store = false;
+    if (OB_FAIL(table_schema.get_is_row_store(is_table_row_store))) {
+      LOG_WARN("fail to get is talbe row store", K(ret));
+    } else {
+      is_cs = !is_table_row_store;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
   }
 

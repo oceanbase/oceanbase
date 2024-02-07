@@ -32,7 +32,9 @@ bool ObTabletCreatorArg::is_valid() const
   bool is_valid = ls_key_.is_valid()
                   && table_schemas_.count() > 0
                   && table_schemas_.count() == tablet_ids_.count()
-                  && lib::Worker::CompatMode::INVALID != compat_mode_;
+                  && lib::Worker::CompatMode::INVALID != compat_mode_
+                  && tenant_data_version_ > 0
+                  && need_create_empty_majors_.count() == table_schemas_.count();
   for (int64_t i = 0; i < tablet_ids_.count() && is_valid; i++) {
     is_valid = tablet_ids_.at(i).is_valid();
   }
@@ -47,6 +49,8 @@ void ObTabletCreatorArg::reset()
   data_tablet_id_.reset();
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   is_create_bind_hidden_tablets_ = false;
+  tenant_data_version_ = 0;
+  need_create_empty_majors_.reset();
 }
 
 int ObTabletCreatorArg::assign(const ObTabletCreatorArg &arg)
@@ -59,11 +63,14 @@ int ObTabletCreatorArg::assign(const ObTabletCreatorArg &arg)
     LOG_WARN("failed to assign table schemas", KR(ret), K(arg));
   } else if (OB_FAIL(tablet_ids_.assign(arg.tablet_ids_))) {
     LOG_WARN("failed to assign table schemas", KR(ret), K(arg));
+  } else if (OB_FAIL(need_create_empty_majors_.assign(arg.need_create_empty_majors_))) {
+    LOG_WARN("failed to assign need create empty majors", KR(ret), K(arg));
   } else {
     data_tablet_id_ = arg.data_tablet_id_;
     ls_key_ = arg.ls_key_;
     compat_mode_ = arg.compat_mode_;
     is_create_bind_hidden_tablets_ = arg.is_create_bind_hidden_tablets_;
+    tenant_data_version_ = arg.tenant_data_version_;
   }
   return ret;
 }
@@ -74,27 +81,35 @@ int ObTabletCreatorArg::init(
     const ObTabletID data_tablet_id,
     const ObIArray<const share::schema::ObTableSchema*> &table_schemas,
     const lib::Worker::CompatMode &mode,
-    const bool is_create_bind_hidden_tablets)
+    const bool is_create_bind_hidden_tablets,
+    const uint64_t tenant_data_version,
+    const ObIArray<bool> &need_create_empty_majors)
 {
   int ret = OB_SUCCESS;
   bool is_valid = ls_key.is_valid() && table_schemas.count() > 0
-                  && table_schemas.count() == tablet_ids.count();
+                  && table_schemas.count() == tablet_ids.count()
+                  && tenant_data_version > 0
+                  && need_create_empty_majors.count() == table_schemas.count();
   for (int64_t i = 0; i < tablet_ids.count() && is_valid; i++) {
     is_valid = tablet_ids.at(i).is_valid();
   }
   if (OB_UNLIKELY(!is_valid)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tablet_ids),
-             "count", table_schemas.count(), K(tablet_ids), K(ls_key));
+             "count", table_schemas.count(), K(tablet_ids), K(ls_key),
+             K(tenant_data_version), "count_to_create_empty_major", need_create_empty_majors.count());
   } else if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
-    LOG_WARN("failed to assign table schemas", KR(ret), K(table_schemas));
+    LOG_WARN("failed to assign table schemas", KR(ret), K(tablet_ids));
   } else if (OB_FAIL(table_schemas_.assign(table_schemas))) {
     LOG_WARN("failed to assign table schemas", KR(ret), K(table_schemas));
+  } else if (OB_FAIL(need_create_empty_majors_.assign(need_create_empty_majors))) {
+    LOG_WARN("failed to assign need create empty majors", K(ret), K(need_create_empty_majors));
   } else {
     data_tablet_id_ = data_tablet_id;
     ls_key_ = ls_key;
     compat_mode_ = mode;
     is_create_bind_hidden_tablets_ = is_create_bind_hidden_tablets;
+    tenant_data_version_ = tenant_data_version;
   }
   return ret;
 }
@@ -102,7 +117,8 @@ int ObTabletCreatorArg::init(
 DEF_TO_STRING(ObTabletCreatorArg)
 {
   int64_t pos = 0;
-  J_KV(K_(compat_mode), K_(tablet_ids), K_(data_tablet_id), K_(ls_key), K_(table_schemas), K_(is_create_bind_hidden_tablets));
+  J_KV(K_(compat_mode), K_(tablet_ids), K_(data_tablet_id), K_(ls_key), K_(table_schemas), K_(is_create_bind_hidden_tablets),
+    K_(tenant_data_version), K_(need_create_empty_majors));
   return pos;
 }
 
@@ -139,12 +155,15 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
     ObArray<int64_t> index_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_arg.table_schemas_.count(); ++i) {
       const share::schema::ObTableSchema *table_schema = tablet_arg.table_schemas_.at(i);
+      const uint64_t tenant_data_version = tablet_arg.tenant_data_version_;
+      const bool need_create_empty_major = tablet_arg.need_create_empty_majors_.at(i);
       int64_t index = OB_INVALID_INDEX;
       if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", KR(ret), K(i), K(tablet_arg));
-      } else if (OB_FAIL(try_add_table_schema(table_schema, index, tablet_arg.compat_mode_))) {
-        LOG_WARN("failed to add table schema to batch", KR(ret), K(table_schema), K(index), K(batch_arg_));
+      } else if (OB_FAIL(try_add_table_schema(table_schema, tenant_data_version,
+          need_create_empty_major, index, tablet_arg.compat_mode_))) {
+        LOG_WARN("failed to add table schema to batch", KR(ret), K(table_schema), K(need_create_empty_major), K(index), K(batch_arg_));
       } else if (OB_UNLIKELY(OB_INVALID_INDEX == index)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index can not be invalid", KR(ret), K(index), K(tablet_arg), K(batch_arg_));
@@ -168,15 +187,15 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
   return ret;
 }
 
-int ObBatchCreateTabletHelper::add_table_schema_(const share::schema::ObTableSchema &table_schema,
+int ObBatchCreateTabletHelper::add_table_schema_(
+    const share::schema::ObTableSchema &table_schema,
     const lib::Worker::CompatMode compat_mode,
+    const uint64_t tenant_data_version,
+    const bool need_create_empty_major,
     int64_t &index)
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
-    LOG_WARN("failed to get data version", KR(ret), K(table_schema));
-  } else if (data_version < DATA_VERSION_4_2_2_0) {
+  if (tenant_data_version < DATA_VERSION_4_2_2_0) {
     // compatibility with DATA_VERSION_4_2_1.
     index = batch_arg_.table_schemas_.count();
     if (OB_FAIL(batch_arg_.table_schemas_.push_back(table_schema))) {
@@ -191,7 +210,8 @@ int ObBatchCreateTabletHelper::add_table_schema_(const share::schema::ObTableSch
       LOG_WARN("failed to allocate storage schema", KR(ret), K(table_schema));
     } else if (FALSE_IT(create_tablet_schema = new (create_tablet_schema_ptr)ObCreateTabletSchema())) {
     } else if (OB_FAIL(create_tablet_schema->init(batch_arg_.allocator_, table_schema, compat_mode,
-         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+         false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3,
+         tenant_data_version, need_create_empty_major))) {
       LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
     } else if (OB_FAIL(batch_arg_.create_tablet_schemas_.push_back(create_tablet_schema))) {
       LOG_WARN("failed to push back table schema", KR(ret), K(table_schema));
@@ -202,6 +222,8 @@ int ObBatchCreateTabletHelper::add_table_schema_(const share::schema::ObTableSch
 
 int ObBatchCreateTabletHelper::try_add_table_schema(
     const share::schema::ObTableSchema *table_schema,
+    const uint64_t tenant_data_version,
+    const bool need_create_empty_major,
     int64_t &index,
     const lib::Worker::CompatMode compat_mode)
 {
@@ -219,7 +241,8 @@ int ObBatchCreateTabletHelper::try_add_table_schema(
       if (OB_FAIL(temp_table_schema.assign(*table_schema))) {
         LOG_WARN("failed to assign temp_table_schema", KR(ret), KPC(table_schema));
       } else if (FALSE_IT(temp_table_schema.reset_partition_schema())) {
-      } else if (OB_FAIL(add_table_schema_(temp_table_schema, compat_mode, index))) {
+      } else if (OB_FAIL(add_table_schema_(temp_table_schema, compat_mode,
+          tenant_data_version, need_create_empty_major, index))) {
         LOG_WARN("failed to push back table schema", KR(ret), K(temp_table_schema));
       } else if (OB_FAIL(table_schemas_map_.set_refactored(temp_table_schema.get_table_id(), index))) {
         LOG_WARN("failed to set table schema map", KR(ret), K(index), K(temp_table_schema));

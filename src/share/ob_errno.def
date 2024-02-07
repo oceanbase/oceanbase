@@ -253,7 +253,7 @@ DEFINE_ERROR_DEP(OB_ERR_ALREADY_EXISTS, -4181, -1, "42S01", "Already exist");
 DEFINE_ERROR_DEP(OB_SEARCH_NOT_FOUND, -4182, -1, "HY000", "Value not found");
 DEFINE_ERROR(OB_BEYOND_THE_RANGE, -4183, -1, "HY000", "Key out of range");
 DEFINE_ERROR(OB_SERVER_OUTOF_DISK_SPACE, -4184, -1, "53100", "Server out of disk space");
-DEFINE_ERROR(OB_COLUMN_GROUP_NOT_FOUND, -4185, -1, "HY000", "Column group not found");
+DEFINE_ERROR(OB_COLUMN_GROUP_NOT_FOUND, -4185, -1, "HY000", "Column group not found", "Column group \'%.*s\' not found");
 DEFINE_ERROR(OB_CS_COMPRESS_LIB_ERROR, -4186, -1, "HY000", "Server failed to get compress library");
 DEFINE_ERROR_DEP(OB_ITEM_NOT_MATCH, -4187, -1, "HY000", "Item not match");
 DEFINE_ERROR(OB_SCHEDULER_TASK_CNT_MISMATCH, -4188, -1, "HY000", "Running task cnt and unfinished task cnt not consistent");

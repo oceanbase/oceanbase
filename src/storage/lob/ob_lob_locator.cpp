@@ -616,17 +616,27 @@ int ObLobLocatorHelper::build_lob_locatorv2(ObLobLocatorV2 &locator,
             output_data.assign_buffer(buffer + offset, param.len_);
             if (OB_FAIL(lob_mngr->query(param, output_data))) {
               COMMON_LOG(WARN,"Lob: falied to query lob tablets.", K(ret), K(param));
-            } else if (padding_char_size) {
-              ObString data_str;
-              if (OB_FAIL(locator.get_inrow_data(data_str))) {
-                STORAGE_LOG(WARN, "Lob: read lob data failed",
-                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
-              } else if (OB_ISNULL(char_len_ptr)) {
+            } else {
+              if (output_data.length() != param.byte_size_) {
                 ret = OB_ERR_UNEXPECTED;
-                STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
-                  K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
-              } else {
-                *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
+                ObLobData ld;
+                if (lob_common->is_init_) {
+                  ld = *(ObLobData*)lob_common->buffer_;
+                }
+                STORAGE_LOG(WARN, "Lob: read full data size not expected", K(ret), K(*lob_common),
+                            K(ld), K(output_data.length()), K(param.byte_size_));
+              } else if (padding_char_size) {
+                ObString data_str;
+                if (OB_FAIL(locator.get_inrow_data(data_str))) {
+                  STORAGE_LOG(WARN, "Lob: read lob data failed",
+                    K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+                } else if (OB_ISNULL(char_len_ptr)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  STORAGE_LOG(WARN, "Lob: get null char len ptr when need padding char len",
+                    K(ret), K(column_id), K(data_str), K(data_str.length()), K(full_loc_size), K(payload));
+                } else {
+                  *char_len_ptr = ObCharset::strlen_char(param.coll_type_, data_str.ptr(), data_str.length());
+                }
               }
             }
           }

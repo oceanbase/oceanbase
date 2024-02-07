@@ -16,6 +16,7 @@
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
+#include "storage/ddl/ob_ddl_struct.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "logservice/ob_append_callback.h"
 
@@ -80,7 +81,13 @@ class ObDDLStartClogCb : public logservice::AppendCb
 public:
   ObDDLStartClogCb();
   virtual ~ObDDLStartClogCb() = default;
-  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id, const uint32_t lock_tid, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+  int init(const ObITable::TableKey &table_key,
+      const uint64_t data_format_version,
+      const int64_t execution_id,
+      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+      ObDDLKvMgrHandle &lob_kv_mgr_handle,
+      ObTabletDirectLoadMgrHandle &direct_load_mgr_handle,
+      const uint32_t lock_tid);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -93,10 +100,12 @@ private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
   ObITable::TableKey table_key_;
-  int64_t data_format_version_;
+  uint64_t data_format_version_;
   int64_t execution_id_;
   uint32_t lock_tid_;
   ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+  ObDDLKvMgrHandle lob_kv_mgr_handle_;
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle_;
 };
 
 class ObDDLMacroBlockClogCb : public logservice::AppendCb
@@ -107,8 +116,7 @@ public:
   int init(const share::ObLSID &ls_id,
            const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
-           ObTabletHandle &tablet_handle,
-           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+           ObTabletHandle &tablet_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -124,8 +132,8 @@ private:
   blocksstable::MacroBlockId macro_block_id_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle_;
   ObTabletHandle tablet_handle_;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
 };
 
 class ObDDLCommitClogCb : public logservice::AppendCb
@@ -137,7 +145,7 @@ public:
            const common::ObTabletID &tablet_id,
            const share::SCN &start_scn,
            const uint32_t lock_tid,
-           ObDDLKvMgrHandle &ddl_kv_mgr_handle);
+           ObTabletDirectLoadMgrHandle &direct_load_mgr_handle);
   virtual int on_success() override;
   virtual int on_failure() override;
   inline bool is_success() const { return status_.is_success(); }
@@ -153,7 +161,7 @@ private:
   common::ObTabletID tablet_id_;
   share::SCN start_scn_;
   uint32_t lock_tid_;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle_;
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle_;
 };
 
 class ObDDLClogHeader final
@@ -177,16 +185,18 @@ class ObDDLStartLog final
 public:
   ObDDLStartLog();
   ~ObDDLStartLog() = default;
-  int init(const ObITable::TableKey &table_key, const int64_t data_format_version, const int64_t execution_id);
-  bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0; }
+  int init(const ObITable::TableKey &table_key, const uint64_t data_format_version, const int64_t execution_id, const ObDirectLoadType direct_load_type);
+  bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0 && is_valid_direct_load(direct_load_type_); }
   ObITable::TableKey get_table_key() const { return table_key_; }
-  int64_t get_data_format_version() const { return data_format_version_; }
+  uint64_t get_data_format_version() const { return data_format_version_; }
   int64_t get_execution_id() const { return execution_id_; }
-  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id));
+  ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
+  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type));
 private:
-  ObITable::TableKey table_key_;
-  int64_t data_format_version_; // used for compatibility
+  ObITable::TableKey table_key_; // use table type to distinguish column store, column group id is valid
+  uint64_t data_format_version_; // used for compatibility
   int64_t execution_id_;
+  ObDirectLoadType direct_load_type_;
 };
 
 class ObDDLRedoLog final

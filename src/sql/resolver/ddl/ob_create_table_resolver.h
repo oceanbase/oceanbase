@@ -131,12 +131,10 @@ private:
   typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnIdHashSet;
 
   // check this type of table_schema should build column_group or not
-  bool need_column_group(const share::schema::ObTableSchema &table_schema);
   uint64_t gen_column_group_id();
   int resolve_column_group(const ParseNode *cg_node);
-  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
-  int check_column_store_config();
 
+  bool need_column_group(const ObTableSchema &table_schema);
   int add_inner_index_for_heap_gtt();
 
 private:

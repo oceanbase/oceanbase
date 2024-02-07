@@ -324,13 +324,17 @@ int ObLockTable::create_tablet(const lib::Worker::CompatMode compat_mode, const 
   ObMemtableMgrHandle memtable_mgr_handle;
   ObArenaAllocator arena_allocator;
   ObCreateTabletSchema create_tablet_schema;
+  uint64_t tenant_data_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLockTable not inited", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("get data version failed", K(ret));
   } else if (OB_FAIL(get_table_schema_(tenant_id, table_schema))) {
     LOG_WARN("get lock table schema failed", K(ret));
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
-        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
+        false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3,
+        tenant_data_version, true/*need_create_empty_major*/))) {
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
   } else if (OB_FAIL(parent_->create_ls_inner_tablet(ls_id,
                                                      LS_LOCK_TABLET,

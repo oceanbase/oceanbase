@@ -1593,7 +1593,9 @@ int ObCreateTabletSchema::serialize(char *buf, const int64_t buf_len, int64_t &p
   LST_DO_CODE(OB_UNIS_ENCODE,
               table_id_,
               index_status_,
-              truncate_version_);
+              truncate_version_,
+              tenant_data_version_,
+              need_create_empty_major_);
   return ret;
 }
 
@@ -1606,7 +1608,9 @@ int ObCreateTabletSchema::deserialize(common::ObIAllocator &allocator, const cha
     LST_DO_CODE(OB_UNIS_DECODE,
                 table_id_,
                 index_status_,
-                truncate_version_);
+                truncate_version_,
+                tenant_data_version_,
+                need_create_empty_major_);
   }
   return ret;
 }
@@ -1617,7 +1621,9 @@ int64_t ObCreateTabletSchema::get_serialize_size() const
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               table_id_,
               index_status_,
-              truncate_version_);
+              truncate_version_,
+              tenant_data_version_,
+              need_create_empty_major_);
   return len;
 }
 
@@ -1626,7 +1632,9 @@ int ObCreateTabletSchema::init(
     const share::schema::ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info,
-    const int64_t compat_version)
+    const int64_t compat_version,
+    const uint64_t tenant_data_version,
+    const bool need_create_empty_major)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObStorageSchema::init(allocator, input_schema, compat_mode, skip_column_info, compat_version))) {
@@ -1635,6 +1643,8 @@ int ObCreateTabletSchema::init(
     table_id_ = input_schema.get_table_id();
     index_status_ = input_schema.get_index_status();
     truncate_version_ = input_schema.get_truncate_version();
+    tenant_data_version_ = tenant_data_version;
+    need_create_empty_major_ = need_create_empty_major;
   }
   return ret;
 }
@@ -1650,6 +1660,8 @@ int ObCreateTabletSchema::init(
     table_id_ = old_schema.get_table_id();
     index_status_ = old_schema.get_index_status();
     truncate_version_ = old_schema.get_truncate_version();
+    tenant_data_version_ = old_schema.get_tenant_data_version();
+    need_create_empty_major_ = old_schema.get_need_create_empty_major();
   }
   return ret;
 }

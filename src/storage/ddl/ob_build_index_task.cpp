@@ -155,18 +155,20 @@ int ObUniqueIndexChecker::scan_table_with_column_checksum(
       transaction::ObTransService *trans_service = nullptr;
       ObTabletTableIterator iterator;
       ObQueryFlag query_flag(ObQueryFlag::Forward,
-          true, /*is daily merge scan*/
-          true, /*is read multiple macro block*/
-          false, /*sys task scan, read one macro block in single io*/
-          false, /*is full row scan?*/
-          false,
-          false);
+          false, /* daily merge*/
+          true,  /* use *optimize */
+          false,  /* use whole macro scan*/
+          false, /* not full row*/
+          false, /* not index_back*/
+          false);/* query stat */
+      query_flag.disable_cache();
       query_flag.skip_read_lob_ = 1;
       ObDatumRange range;
       bool allow_not_ready = false;
       ObArray<bool> need_reshape;
       ObLSHandle ls_handle;
       range.set_whole_range();
+
       if (OB_ISNULL(trans_service = MTL(transaction::ObTransService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("trans_service is null", K(ret));
@@ -352,6 +354,7 @@ int ObUniqueIndexChecker::scan_main_table_with_column_checksum(
     param.org_col_ids_ = &org_col_ids;
     param.output_projector_ = &output_projector;
     param.is_scan_index_ = false;
+
     STORAGE_LOG(INFO, "scan main table column checksum", K(col_ids), K(org_col_ids));
     if (OB_FAIL(scan_table_with_column_checksum(param, column_checksum, row_count))) {
       STORAGE_LOG(WARN, "fail to scan table with column checksum", K(ret));
