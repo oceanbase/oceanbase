@@ -4341,7 +4341,7 @@ def_table_schema(
     ('this_date', 'timestamp', 'true'),
     ('next_date', 'timestamp', 'false'),
     ('total', 'int', 'true', '0'),
-    ('interval#', 'varchar:200', 'false'),
+    ('interval#', 'varchar:4000', 'false'),
     ('failures', 'int', 'true', '0'),
     ('flag', 'int', 'false'),
     ('what', 'varchar:4000', 'true'),
@@ -4353,10 +4353,10 @@ def_table_schema(
     ('job_style', 'varchar:128', 'true'),
     ('program_name', 'varchar:128', 'true'),
     ('job_type', 'varchar:128', 'true'),
-    ('job_action', 'varchar:128', 'true'),
+    ('job_action', 'varchar:4000', 'true'),
     ('number_of_argument', 'int', 'true'),
     ('start_date', 'timestamp', 'true'),
-    ('repeat_interval', 'varchar:128', 'true'),
+    ('repeat_interval', 'varchar:4000', 'true'),
     ('end_date', 'timestamp', 'true'),
     ('job_class', 'varchar:128', 'true'),
     ('enabled', 'bool', 'true'),
@@ -23857,7 +23857,7 @@ def_table_schema(
     CAST(NULL AS CHAR(5)) AS RESTARTABLE,
     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_OWNER,
     CAST(NULL AS CHAR(128)) AS CONNECT_CREDENTIAL_NAME
-  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard'
+  FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0
 """.replace("\n", " ")
 )
 
@@ -46683,7 +46683,7 @@ def_table_schema(
     CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS MANUAL_OPEN_TIME,
     CAST(NULL AS INTERVAL DAY(3) TO SECOND(0)) AS MANUAL_DURATION,
     CAST(T.COMMENTS AS VARCHAR2(4000)) AS COMMENTS
-  FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME in ('MONDAY_WINDOW',
+  FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB > 0 AND T.JOB_NAME in ('MONDAY_WINDOW',
     'TUESDAY_WINDOW', 'WEDNESDAY_WINDOW', 'THURSDAY_WINDOW', 'FRIDAY_WINDOW', 'SATURDAY_WINDOW', 'SUNDAY_WINDOW')
   """.replace("\n", " "),
 )
@@ -52687,7 +52687,7 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(5)) AS RESTARTABLE,
     CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_OWNER,
     CAST(NULL AS VARCHAR2(128)) AS CONNECT_CREDENTIAL_NAME
-    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME != '__dummy_guard'
+    FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0
 """.replace("\n", " ")
 )
 

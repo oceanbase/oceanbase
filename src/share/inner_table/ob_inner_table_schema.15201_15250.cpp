@@ -545,7 +545,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      200, //column_length
+      4000, //column_length
       2, //column_precision
       -1, //column_scale
       false, //is_nullable
@@ -725,7 +725,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      128, //column_length
+      4000, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -770,7 +770,7 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_real_agent_ora_schema(O
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      128, //column_length
+      4000, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
