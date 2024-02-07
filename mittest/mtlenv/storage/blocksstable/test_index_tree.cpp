@@ -828,7 +828,22 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
   // do not insert any data
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
+  ASSERT_EQ(1, sstable_builder.roots_.count());
   ObSSTableMergeRes res;
+  ret = sstable_builder.close(res);
+  ASSERT_EQ(0, sstable_builder.roots_.count());
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(res.root_desc_.is_empty());
+
+  // test rebuild macro blocks
+  ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
+  // do not insert any data
+  ASSERT_EQ(OB_SUCCESS, data_writer.close());
+  ASSERT_EQ(1, sstable_builder.roots_.count());
+  ObSSTableIndexBuilder::ObMacroMetaIter macro_iter;
+  sstable_builder.init_meta_iter(macro_iter);
+  ASSERT_EQ(0, sstable_builder.roots_.count());
+
   ret = sstable_builder.close(res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(res.root_desc_.is_empty());
