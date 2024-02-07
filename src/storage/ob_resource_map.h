@@ -395,7 +395,7 @@ int ObResourceMap<Key, Value>::foreach(Callback &callback)
   common::ObBucketWLockAllGuard guard(bucket_lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
-    STORAGE_LOG(WARN, "ObResrouceMap has not been inited", K(ret));
+    STORAGE_LOG(WARN, "ObResourceMap has not been inited", K(ret));
   } else if (OB_FAIL(map_.foreach_refactored(callback_adpator))) {
     STORAGE_LOG(WARN, "fail to foreach refactored", K(ret));
   }

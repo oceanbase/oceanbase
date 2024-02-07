@@ -307,7 +307,7 @@ public:
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
-  // because we add "allocator" param in deserialize fiunction,
+  // because we add "allocator" param in deserialize function,
   // so we should handle compatibility in the specified deserialize function,
   // thus we add a static variable STORAGE_SCHEMA_VERSION and a class member storage_schema_version_ here.
   // Compatibility code should be added if new variables occur in future
