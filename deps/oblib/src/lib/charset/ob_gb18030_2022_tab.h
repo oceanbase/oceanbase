@@ -46,38 +46,38 @@
   these arrays plus CHINESE_WEIGHT_BASE.
 */
 
-static const uint PINYIN_2_BYTE_START_2022 = 0x8140;
-static const uint PINYIN_2_BYTE_END_2022 = 0xFE9F;
+static const unsigned int PINYIN_2_BYTE_START_2022 = 0x8140;
+static const unsigned int PINYIN_2_BYTE_END_2022 = 0xFE9F;
 
-static const uint PINYIN_4_BYTE_1_START_2022 = 0x8138FD38;
-static const uint PINYIN_4_1_DIFF_2022 = 11328;
-static const uint PINYIN_4_BYTE_1_END_2022 = 0x82359737;
+static const unsigned int PINYIN_4_BYTE_1_START_2022 = 0x8138FD38;
+static const unsigned int PINYIN_4_1_DIFF_2022 = 11328;
+static const unsigned int PINYIN_4_BYTE_1_END_2022 = 0x82359737;
 
-static const uint PINYIN_4_BYTE_2_START_2022 = 0x95328236;
-static const uint PINYIN_4_2_DIFF_2022 = 254536;
-static const uint PINYIN_4_BYTE_2_END_2022 = 0x9A37F738;
+static const unsigned int PINYIN_4_BYTE_2_START_2022 = 0x95328236;
+static const unsigned int PINYIN_4_2_DIFF_2022 = 254536;
+static const unsigned int PINYIN_4_BYTE_2_END_2022 = 0x9A37F738;
 
-static const uint STROKE_2_BYTE_START_2022 = 0x8140;
-static const uint STROKE_2_BYTE_END_2022 = 0xFE9F;
+static const unsigned int STROKE_2_BYTE_START_2022 = 0x8140;
+static const unsigned int STROKE_2_BYTE_END_2022 = 0xFE9F;
 
-static const uint STROKE_4_BYTE_1_START_2022 = 0x8138FD38;
-static const uint STROKE_4_1_DIFF_2022 = 11328;
-static const uint STROKE_4_BYTE_1_END_2022 = 0x82359832;
+static const unsigned int STROKE_4_BYTE_1_START_2022 = 0x8138FD38;
+static const unsigned int STROKE_4_1_DIFF_2022 = 11328;
+static const unsigned int STROKE_4_BYTE_1_END_2022 = 0x82359832;
 
-static const uint STROKE_4_BYTE_2_START_2022 = 0x95328236;
-static const uint STROKE_4_2_DIFF_2022 = 254536;
-static const uint STROKE_4_BYTE_2_END_2022 = 0x9B31A337;
+static const unsigned int STROKE_4_BYTE_2_START_2022 = 0x95328236;
+static const unsigned int STROKE_4_2_DIFF_2022 = 254536;
+static const unsigned int STROKE_4_BYTE_2_END_2022 = 0x9B31A337;
 
-static const uint RADICAL_2_BYTE_START_2022 = 0x8140;
-static const uint RADICAL_2_BYTE_END_2022 = 0xFEA0;
+static const unsigned int RADICAL_2_BYTE_START_2022 = 0x8140;
+static const unsigned int RADICAL_2_BYTE_END_2022 = 0xFEA0;
 
-static const uint RADICAL_4_BYTE_1_START_2022 = 0x8139EE39;
-static const uint RADICAL_4_1_DIFF_2022 = 12439;
-static const uint RADICAL_4_BYTE_1_END_2022 = 0x8430AE33;
+static const unsigned int RADICAL_4_BYTE_1_START_2022 = 0x8139EE39;
+static const unsigned int RADICAL_4_1_DIFF_2022 = 12439;
+static const unsigned int RADICAL_4_BYTE_1_END_2022 = 0x8430AE33;
 
-static const uint RADICAL_4_BYTE_2_START_2022 = 0x95328236;
-static const uint RADICAL_4_2_DIFF_2022 = 254536;
-static const uint RADICAL_4_BYTE_2_END_2022 = 0x9B31A337;
+static const unsigned int RADICAL_4_BYTE_2_START_2022 = 0x95328236;
+static const unsigned int RADICAL_4_2_DIFF_2022 = 254536;
+static const unsigned int RADICAL_4_BYTE_2_END_2022 = 0x9B31A337;
 
 static const uint16 gb18030_2022_2_pinyin_weight_py[] = {
   16323, 28217, 34164, 10708, 21648, 4104,  28850, 6524,  26203, 18824, 39282, 1913,  15200, 13279, 14725, 10029,   /*[GB+8140, GB+814F]*/

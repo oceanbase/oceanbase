@@ -1470,6 +1470,9 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(common::ObCharset::charset_type_by_coll(collation_type),
                                                                               session_info_->get_effective_tenant_id()))) {
               SQL_RESV_LOG(WARN, "failed to check charset data version valid", K(ret));
+            } else if (OB_FAIL(sql::ObSQLUtils::is_collation_data_version_valid(collation_type,
+                                                                                session_info_->get_effective_tenant_id()))) {
+              SQL_RESV_LOG(WARN, "failed to check collation data version valid", K(ret));
             } else {
               collation_type_ = collation_type;
               if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {

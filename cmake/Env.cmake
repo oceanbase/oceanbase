@@ -82,8 +82,6 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_TDE_SECURITY ON)
   ob_define(OB_BUILD_AUDIT_SECURITY ON)
   ob_define(OB_BUILD_LABEL_SECURITY ON)
-  # 字符集
-  ob_define(OB_BUILD_FULL_CHARSET ON)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
 
@@ -119,10 +117,6 @@ endif()
 
 if(OB_BUILD_LABEL_SECURITY)
   add_definitions(-DOB_BUILD_LABEL_SECURITY)
-endif()
-
-if(OB_BUILD_FULL_CHARSET)
-  add_definitions(-DOB_BUILD_FULL_CHARSET)
 endif()
 
 if(OB_BUILD_SPM)
