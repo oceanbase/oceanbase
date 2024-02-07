@@ -1066,9 +1066,15 @@ int ObBackupSetTaskMgr::change_turn_(
     ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls)
 {
   int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  const int64_t DEFAULT_TIMEOUT = 60_s;
+  const int64_t INNER_SQL_TIMEOUT = GCONF.internal_sql_execute_timeout;
+  const int64_t timeout = MAX(DEFAULT_TIMEOUT, INNER_SQL_TIMEOUT);
   ObBackupStatus::BACKUP_DATA_MINOR == set_task_attr_.status_ ? set_task_attr_.minor_turn_id_++ : set_task_attr_.major_turn_id_++;
   if (OB_FAIL(write_or_update_tablet_to_ls_(tablets_to_ls))) {
-  LOG_WARN("[DATA_BACKUP]failed to write ls and tablets info when change turn", K(ret), K(tablets_to_ls));
+    LOG_WARN("[DATA_BACKUP]failed to write ls and tablets info when change turn", K(ret), K(tablets_to_ls));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, timeout))) {
+    LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout));
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
   } else if (OB_FAIL(change_task_turn_(ls_tasks, tablets_to_ls))) {
