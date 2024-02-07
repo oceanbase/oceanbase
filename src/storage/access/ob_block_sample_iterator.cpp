@@ -616,6 +616,7 @@ ObBlockSampleIterator::ObBlockSampleIterator(const SampleInfo &sample_info)
     read_info_(nullptr),
     scan_merge_(nullptr),
     block_num_(0),
+    sample_block_cnt_(0),
     range_allocator_(),
     range_iterator_(),
     micro_range_(),
@@ -630,6 +631,7 @@ ObBlockSampleIterator::~ObBlockSampleIterator()
 void ObBlockSampleIterator::reuse()
 {
   block_num_ = 0;
+  sample_block_cnt_ = 0;
   range_allocator_.reuse();
   range_iterator_.reset();
   micro_range_.reset();
@@ -642,6 +644,7 @@ void ObBlockSampleIterator::reset()
   read_info_ = nullptr;
   scan_merge_ = nullptr;
   block_num_ = 0;
+  sample_block_cnt_ = 0;
   range_allocator_.reset();
   range_iterator_.reset();
   micro_range_.reset();
@@ -697,6 +700,7 @@ int ObBlockSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
           STORAGE_LOG(WARN, "range is null", K(ret), K(block_num_));
         } else if (return_this_sample(block_num_++)) {
           STORAGE_LOG(DEBUG, "open a range", K(*range), K_(block_num));
+          ++sample_block_cnt_;
           micro_range_.reset();
           micro_range_ = *range;
           if (OB_FAIL(open_range(micro_range_))) {
@@ -708,6 +712,11 @@ int ObBlockSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
     if (OB_FAIL(ret) && OB_ITER_END != ret)  {
       STORAGE_LOG(WARN, "failed to get next row from ObBlockSampleIterator", K(ret), K(block_num_));
     }
+#ifdef ENABLE_DEBUG_LOG
+    if (OB_ITER_END == ret) {
+      STORAGE_LOG(INFO, "block sample scan finish", K(ret), K_(sample_block_cnt), K_(block_num), KPC_(sample_info));
+    }
+#endif
   }
 
   return ret;
