@@ -2428,6 +2428,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "
 //DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -12003, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
 //DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -12004, -1, "HY000", "Tenant clone job failed", "Tenant clone job failed during the %.*s stage");
 //DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -12005, -1, "HY000", "Tenant snapshot task failed", "%.*s");
+//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -12006, -1, "HY000", "Tenant snapshot lock conflict", "%s");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code
