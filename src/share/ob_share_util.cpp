@@ -311,8 +311,8 @@ int ObShareUtil::fetch_current_data_version(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id), K(exec_tenant_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "select value from %s where name = '%s'",
-      OB_TENANT_PARAMETER_TNAME, "compatible"))) {
+      "select value from %s where name = '%s' and tenant_id = %lu",
+      OB_TENANT_PARAMETER_TNAME, "compatible", tenant_id))) {
     LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(sql));
   } else if (OB_FAIL(client.read(res, exec_tenant_id, sql.ptr()))) {
     LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
