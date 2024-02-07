@@ -172,8 +172,10 @@ void do_flush_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
   ObTabletPointer *tablet_pointer = pointer_handle.get_resource_ptr();
   // 4. 做flush动作
   mds::MdsTableHandle handle;
+  share::SCN max_decided_scn;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_max_decided_scn(max_decided_scn));
   ASSERT_EQ(OB_SUCCESS, tablet_pointer->get_mds_table(tablet_id, handle));
-  ASSERT_EQ(OB_SUCCESS, handle.flush(share::SCN::max_scn()));
+  ASSERT_EQ(OB_SUCCESS, handle.flush(share::SCN::max_scn(), max_decided_scn));
   ASSERT_EQ(true, handle.p_mds_table_base_->flushing_scn_.is_valid());
   // 5. 等flush完成
   share::SCN rec_scn = share::SCN::min_scn();

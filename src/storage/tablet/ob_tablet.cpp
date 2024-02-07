@@ -5495,7 +5495,7 @@ int ObTablet::get_mds_table_rec_log_scn(SCN &rec_scn)
   return ret;
 }
 
-int ObTablet::mds_table_flush(const share::SCN &recycle_scn)
+int ObTablet::mds_table_flush(const share::SCN &decided_scn)
 {
   int ret = OB_SUCCESS;
   mds::MdsTableHandle mds_table;
@@ -5507,7 +5507,7 @@ int ObTablet::mds_table_flush(const share::SCN &recycle_scn)
     LOG_WARN("inner tablet does not have mds table", K(ret));
   } else if (OB_FAIL(inner_get_mds_table(mds_table))) {
     LOG_WARN("failed to get mds table", K(ret));
-  } else if (OB_FAIL(mds_table.flush(recycle_scn))) {
+  } else if (OB_FAIL(mds_table.flush(decided_scn, decided_scn))) {
     LOG_WARN("failed to flush mds table", KR(ret), KPC(this));
   }
   return ret;

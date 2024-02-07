@@ -376,7 +376,7 @@ void TestMdsTable::test_flush() {
   ctx2.on_redo(mock_scn(200));
 
   int idx = 0;
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(300)));// 1. 以300为版本号进行flush动作
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(300), mock_scn(500)));// 1. 以300为版本号进行flush动作
   ASSERT_EQ(mock_scn(199), mds_table_.p_mds_table_base_->flushing_scn_);// 2. 实际上以199为版本号进行flush动作
   ASSERT_EQ(OB_SUCCESS, mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
     [&idx](const MdsDumpKV &kv) -> int {// 2. 转储时扫描mds table
@@ -432,7 +432,7 @@ void TestMdsTable::test_multi_key_remove() {
     return OB_SUCCESS;
   }, is_committed);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(200)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(200), mock_scn(500)));
   ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(200)));
   ret = mds_table_.get_latest<ExampleUserKey, ExampleUserData1>(ExampleUserKey(2), [](const ExampleUserData1 &data){
     return OB_SUCCESS;
@@ -512,16 +512,16 @@ TEST_F(TestMdsTable, test_recycle) {
   int64_t valid_cnt = 0;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_node_cnt(valid_cnt));
   ASSERT_EQ(1, valid_cnt);// 此时还有一个19001版本的已提交数据，因为rec_scn没有推上去
-  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.flush(mock_scn(20000), mock_scn(40000)));
   mds_table_.for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump([](const MdsDumpKV &){
     return OB_SUCCESS;
   }, 0, true);
-  mds_table_.on_flush(mock_scn(20000), OB_SUCCESS);
+  mds_table_.on_flush(mock_scn(40000), OB_SUCCESS);
   share::SCN rec_scn;
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_rec_scn(rec_scn));
   MDS_LOG(INFO, "print rec scn", K(rec_scn));
   ASSERT_EQ(share::SCN::max_scn(), rec_scn);
-  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(20000)));
+  ASSERT_EQ(OB_SUCCESS, mds_table_.try_recycle(mock_scn(40000)));
   ASSERT_EQ(OB_SUCCESS, mds_table_.get_node_cnt(valid_cnt));
   ASSERT_EQ(0, valid_cnt);// 此时还有一个19001版本的已提交数据，因为rec_scn没有推上去
 }
@@ -541,17 +541,17 @@ TEST_F(TestMdsTable, test_recalculate_flush_scn_op) {
   ASSERT_EQ(OB_SUCCESS, mds_table.set(ExampleUserData1(3), ctx3));
   ctx3.on_redo(mock_scn(9));
   ctx3.on_commit(mock_scn(11), mock_scn(11));
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(4)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(4), mock_scn(4)));
   ASSERT_EQ(mock_scn(4), mds_table.p_mds_table_base_->flushing_scn_);
   mds_table.on_flush(mock_scn(4), OB_SUCCESS);
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(5)));// no need do flush, directly advance rec_scn
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(5), mock_scn(5)));// no need do flush, directly advance rec_scn
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(6)));// no need do flush, directly advance rec_scn
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(6), mock_scn(6)));// no need do flush, directly advance rec_scn
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(7)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(7), mock_scn(7)));
   ASSERT_EQ(mock_scn(7), mds_table.p_mds_table_base_->flushing_scn_);
   mds_table.on_flush(mock_scn(7), OB_SUCCESS);
-  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(8)));
+  ASSERT_EQ(OB_SUCCESS, mds_table.flush(mock_scn(8), mock_scn(8)));
   ASSERT_EQ(false, mds_table.p_mds_table_base_->flushing_scn_.is_valid());
   ASSERT_EQ(mock_scn(9), mds_table.p_mds_table_base_->rec_scn_);
 }
