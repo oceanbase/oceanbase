@@ -131,12 +131,14 @@ enum ObLogBaseType
 
   // for tenant snapshot
   SNAPSHOT_SCHEDULER_LOG_BASE_TYPE = 41,
-
   //for tenant clone
   CLONE_SCHEDULER_LOG_BASE_TYPE = 42,
 
   // for mview maintenance service
   MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE = 43,
+
+  // for share storage net throt
+  SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE = 44,
 
   // pay attention!!!
   // add log type in log_base_type_to_string
@@ -236,6 +238,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"TABLE_LOAD_RESOURCE_SERVICE", str_len);
   } else if (log_type == MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str, "MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE", str_len);
+  } else if (log_type == SHARE_STORAGE_NRT_THROT_LOG_BASE_TYPE) {
+    strncpy(str ,"SHARE_STORAGE_NRT_THROT_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
