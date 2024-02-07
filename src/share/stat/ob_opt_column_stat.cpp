@@ -177,7 +177,7 @@ int ObHistogram::assign(const ObHistogram &other)
 }
 
 ObOptColumnStat::ObOptColumnStat()
-    : table_id_(0),
+    : table_id_(OB_INVALID_ID),
       partition_id_(0),
       column_id_(0),
       object_type_(StatLevel::INVALID_LEVEL),
@@ -205,7 +205,7 @@ ObOptColumnStat::ObOptColumnStat()
 }
 
 ObOptColumnStat::ObOptColumnStat(ObIAllocator &allocator)
-    : table_id_(0),
+    : table_id_(OB_INVALID_ID),
       partition_id_(0),
       column_id_(0),
       object_type_(StatLevel::INVALID_LEVEL),
@@ -293,40 +293,59 @@ int ObOptColumnStat::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue
 int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!src.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments.", K(src));
-  } else {
-    table_id_ = src.table_id_;
-    partition_id_ = src.partition_id_;
-    column_id_ = src.column_id_;
-    object_type_ = src.object_type_;
-    version_ = src.version_;
-    num_null_ = src.num_null_;
-    num_not_null_ = src.num_not_null_;
-    num_distinct_ = src.num_distinct_;
-    avg_length_ = src.avg_length_;
-    last_analyzed_ = src.last_analyzed_;
-    cs_type_ = src.cs_type_;
-    llc_bitmap_size_ = src.llc_bitmap_size_;
-    total_col_len_ = src.total_col_len_;
-    cg_macro_blk_cnt_ = src.cg_macro_blk_cnt_;
-    cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
-    cg_skip_rate_ = src.cg_skip_rate_;
-    if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
-      LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
-      LOG_WARN("deep copy max_value_ failed.", K_(src.max_value), K(ret));
-    } else if (OB_FAIL(histogram_.deep_copy(allocator_, src.histogram_))) {
-      LOG_WARN("failed to deep copy histogram", K(ret));
-    } else if (src.llc_bitmap_size_ != 0 && src.llc_bitmap_ != NULL) {
-      if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(src.llc_bitmap_size_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for llc_bitmap_");
-      } else {
-        MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
-      }
+  table_id_ = src.table_id_;
+  partition_id_ = src.partition_id_;
+  column_id_ = src.column_id_;
+  object_type_ = src.object_type_;
+  version_ = src.version_;
+  num_null_ = src.num_null_;
+  num_not_null_ = src.num_not_null_;
+  num_distinct_ = src.num_distinct_;
+  avg_length_ = src.avg_length_;
+  last_analyzed_ = src.last_analyzed_;
+  cs_type_ = src.cs_type_;
+  llc_bitmap_size_ = src.llc_bitmap_size_;
+  total_col_len_ = src.total_col_len_;
+  cg_macro_blk_cnt_ = src.cg_macro_blk_cnt_;
+  cg_micro_blk_cnt_ = src.cg_micro_blk_cnt_;
+  cg_skip_rate_ = src.cg_skip_rate_;
+  if (OB_FAIL(ob_write_obj(allocator_, src.min_value_, min_value_))) {
+    LOG_WARN("deep copy min_value_ failed.", K_(src.min_value), K(ret));
+  } else if (OB_FAIL(ob_write_obj(allocator_, src.max_value_, max_value_))) {
+    LOG_WARN("deep copy max_value_ failed.", K_(src.max_value), K(ret));
+  } else if (OB_FAIL(histogram_.deep_copy(allocator_, src.histogram_))) {
+    LOG_WARN("failed to deep copy histogram", K(ret));
+  } else if (src.llc_bitmap_size_ != 0 && src.llc_bitmap_ != NULL) {
+    if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(src.llc_bitmap_size_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for llc_bitmap_");
+    } else {
+      MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
     }
+  }
+  return ret;
+}
+
+int ObOptColumnStat::deep_copy_llc_bitmap(const char *bitmap, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (size != 0 && bitmap != NULL) {
+    if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for llc_bitmap_");
+    } else {
+      MEMCPY(llc_bitmap_, bitmap, size);
+      llc_bitmap_size_ = size;
+    }
+  }
+  return ret;
+}
+
+int ObOptColumnStat::deep_copy_histogram(const ObHistogram &hist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(histogram_.deep_copy(allocator_, hist))) {
+    LOG_WARN("failed to deep copy histogram", K(ret));
   }
   return ret;
 }
@@ -367,6 +386,32 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src, char *buf, const int6
     llc_bitmap_size_ = src.llc_bitmap_size_;
     MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
     pos += llc_bitmap_size_;
+  }
+  return ret;
+}
+
+int ObOptColumnStat::assign(const ObOptColumnStat &other)
+{
+  int ret = OB_SUCCESS;
+  table_id_ = other.table_id_;
+  partition_id_ = other.partition_id_;
+  column_id_ = other.column_id_;
+  object_type_ = other.object_type_;
+  version_ = other.version_;
+  num_null_ = other.num_null_;
+  num_not_null_ = other.num_not_null_;
+  num_distinct_ = other.num_distinct_;
+  avg_length_ = other.avg_length_;
+  min_value_ = other.min_value_;
+  max_value_ = other.max_value_;
+  llc_bitmap_size_ = other.llc_bitmap_size_;
+  llc_bitmap_ = other.llc_bitmap_;
+  if (OB_FAIL(histogram_.assign(other.histogram_))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    last_analyzed_ = other.last_analyzed_;
+    cs_type_ = other.cs_type_;
+    total_col_len_ = other.total_col_len_;
   }
   return ret;
 }

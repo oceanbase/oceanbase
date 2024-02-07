@@ -634,7 +634,8 @@ private:
                          && parent_ctx->get_pl_stack_ctx() != nullptr
                          && !parent_ctx->get_pl_stack_ctx()->in_autonomous());
     bool is_fk_nested = (parent_ctx != nullptr && parent_ctx->get_das_ctx().is_fk_cascading_);
-    return is_pl_nested || is_fk_nested;
+    bool is_online_stat_gathering_nested = (parent_ctx != nullptr && parent_ctx->is_online_stats_gathering());
+    return is_pl_nested || is_fk_nested || is_online_stat_gathering_nested;
   }
 };
 

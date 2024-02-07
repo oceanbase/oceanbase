@@ -2639,16 +2639,28 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
         }
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else {
-        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
-        uint64_t datum_value = 0;
-        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
-          LOG_WARN("fail to do hash", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
-          LOG_WARN("failed to process row", K(ret));
+        common::ObArenaAllocator tmp_alloctor("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        const ObObjMeta obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+        ObDatum new_prev_datum;
+        if (!obj_meta.is_lob_storage() &&
+            OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row.cells()[0])))) {
+          LOG_WARN("failed to shadow truncate string for hist", K(ret));
+        } else if (obj_meta.is_lob_storage() &&
+                   OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                              obj_meta,
+                                                                              stored_row.cells()[0],
+                                                                              new_prev_datum))) {
+          LOG_WARN("failed to build prefix str datum for lob", K(ret));
+        } else {
+          const ObDatum &datum = obj_meta.is_lob_storage() ? new_prev_datum : stored_row.cells()[0];
+          ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+          uint64_t datum_value = 0;
+          if (OB_FAIL(hash_func(datum, datum_value, datum_value))) {
+            LOG_WARN("fail to do hash", K(ret));
+          } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, datum))) {
+            LOG_WARN("failed to process row", K(ret));
+          }
         }
       }
       break;
@@ -3098,16 +3110,28 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
         } else if (OB_FAIL(extra->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
           LOG_WARN("failed to process row", K(ret));
         }
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row.cells()[0])))) {
-        LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else {
-        ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
-        uint64_t datum_value = 0;
-        if (OB_FAIL(hash_func(stored_row.cells()[0], datum_value, datum_value))) {
-          LOG_WARN("fail to do hash", K(ret));
-        } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, stored_row.cells()[0]))) {
-          LOG_WARN("failed to process row", K(ret));
+        common::ObArenaAllocator tmp_alloctor("CalcTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+        const ObObjMeta obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
+        ObDatum new_prev_datum;
+        if (!obj_meta.is_lob_storage() &&
+            OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row.cells()[0])))) {
+          LOG_WARN("failed to shadow truncate string for hist", K(ret));
+        } else if (obj_meta.is_lob_storage() &&
+                   OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                              obj_meta,
+                                                                              stored_row.cells()[0],
+                                                                              new_prev_datum))) {
+          LOG_WARN("failed to build prefix str datum for lob", K(ret));
+        } else {
+          const ObDatum &datum = obj_meta.is_lob_storage() ? new_prev_datum : stored_row.cells()[0];
+          ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
+          uint64_t datum_value = 0;
+          if (OB_FAIL(hash_func(datum, datum_value, datum_value))) {
+            LOG_WARN("fail to do hash", K(ret));
+          } else if (OB_FAIL(extra->topk_fre_hist_.add_top_k_frequency_item(datum_value, datum))) {
+            LOG_WARN("failed to process row", K(ret));
+          }
         }
       }
       break;
@@ -4877,6 +4901,8 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
     uint64_t nth_row = selector.get_batch_index(it);
     ObDatum *datum = arg_datums.at(nth_row);
     int32_t origin_str_len = 0;
+    common::ObArenaAllocator tmp_alloctor("BatchTopkHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObDatum new_prev_datum;
     if (datum->is_null()) {
       continue;
     }
@@ -4887,9 +4913,17 @@ int ObAggregateProcessor::top_fre_hist_calc_batch(
       } else if (OB_FAIL(extra_info->topk_fre_hist_.merge_distribute_top_k_fre_items(obj))) {
         LOG_WARN("failed to process row", K(ret));
       }
-    } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum, &origin_str_len))) {
+    } else if (!obj_meta.is_lob_storage() &&
+               OB_FAIL(shadow_truncate_string_for_hist(obj_meta, *datum, &origin_str_len))) {
       LOG_WARN("failed to shadow truncate string for hist", K(ret));
+    } else if (obj_meta.is_lob_storage() &&
+               OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                          obj_meta,
+                                                                          *datum,
+                                                                          new_prev_datum))) {
+      LOG_WARN("failed to build prefix str datum for lob", K(ret));
     } else {
+      datum = obj_meta.is_lob_storage() ? &new_prev_datum : datum;
       ObExprHashFuncType hash_func = aggr_info.param_exprs_.at(0)->basic_funcs_->murmur_hash_;
       uint64_t datum_value = 0;
       if (OB_FAIL(hash_func(*datum, datum_value, datum_value))) {
@@ -4982,7 +5016,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
         has_null_cell = true;
       }
       OB_ASSERT(NULL != expr->basic_funcs_);
-      ObExprHashFuncType hash_func = expr->basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(*arg_datums.at(nth_row), hash_value, hash_value))) {
         LOG_WARN("fail to do hash", K(ret));
       }
@@ -5556,7 +5590,7 @@ int ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow
       has_null_cell = true;
     } else {
       OB_ASSERT(NULL != expr.basic_funcs_);
-      ObExprHashFuncType hash_func = expr.basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr.basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(datum, hash_value, hash_value))) {
         LOG_WARN("failed to do hash", K(ret));
       }
@@ -5978,17 +6012,25 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
   } else {
     ObDatum *window_size_result = NULL;
     ObDatum *item_size_result = NULL;
+    ObDatum *max_disuse_cnt_result = NULL;
     int64_t window_size = 0;
     int64_t item_size = 0;
+    int64_t max_disuse_cnt = 0;
     if (OB_UNLIKELY(!aggr_info.window_size_param_expr_->obj_meta_.is_numeric_type() ||
-                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type())) {
+                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type() ||
+                    (aggr_info.max_disuse_param_expr_ != NULL &&
+                     !aggr_info.max_disuse_param_expr_->obj_meta_.is_numeric_type()))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("expr node is null", K(ret), KPC(aggr_info.window_size_param_expr_),
-                                    KPC(aggr_info.item_size_param_expr_));
+                                    KPC(aggr_info.item_size_param_expr_),
+                                    KPC(aggr_info.max_disuse_param_expr_));
     } else if (OB_FAIL(aggr_info.window_size_param_expr_->eval(eval_ctx_, window_size_result)) ||
-               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result))) {
+               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result)) ||
+               (aggr_info.max_disuse_param_expr_ != NULL &&
+                OB_FAIL(aggr_info.max_disuse_param_expr_->eval(eval_ctx_, max_disuse_cnt_result)))) {
       LOG_WARN("eval failed", K(ret));
-    } else if (OB_ISNULL(window_size_result) || OB_ISNULL(item_size_result)) {
+    } else if (OB_ISNULL(window_size_result) ||
+               OB_ISNULL(item_size_result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
     } else if (OB_FAIL(ObExprUtil::get_int_param_val(
@@ -5996,13 +6038,20 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
                  window_size))
                || OB_FAIL(ObExprUtil::get_int_param_val(
                  item_size_result, aggr_info.item_size_param_expr_->obj_meta_.is_decimal_int(),
-                 item_size))) {
+                 item_size))
+               || (aggr_info.max_disuse_param_expr_ != NULL && OB_FAIL(ObExprUtil::get_int_param_val(
+                 max_disuse_cnt_result, aggr_info.max_disuse_param_expr_->obj_meta_.is_decimal_int(),
+                 max_disuse_cnt)))) {
       LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size),
-                                              K(*item_size_result), K(item_size), K(ret));
+                                              K(*item_size_result), K(item_size),
+                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt), K(ret));
     } else {
       topk_fre_hist->set_window_size(window_size);
       topk_fre_hist->set_item_size(item_size);
       topk_fre_hist->set_is_topk_hist_need_des_row(aggr_info.is_need_deserialize_row_);
+      topk_fre_hist->set_max_disuse_cnt(max_disuse_cnt);
+      LOG_TRACE("succeed to init topk fre histogram item", K(window_size), K(item_size),
+                                          K(aggr_info.is_need_deserialize_row_), K(max_disuse_cnt));
     }
   }
   return ret;
@@ -6228,6 +6277,7 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
     int64_t repeat_count = 0;
     const ObChunkDatumStore::StoredRow *stored_row = NULL;
     const ObChunkDatumStore::StoredRow *mat_stored_row = NULL;
+    const ObObjMeta &obj_meta = aggr_info.param_exprs_.at(0)->obj_meta_;
     // get null count
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row_from_sort(stored_row))) {
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
@@ -6235,8 +6285,7 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
         LOG_WARN("get unexpected null", K(ret), K(stored_row));
       } else if (stored_row->cells()[0].is_null()) {
         ++ null_count;
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row->cells()[0])))) {
         LOG_WARN("failed to shadow truncate string for hist", K(ret));
       } else if (OB_FAIL(prev_row.save_store_row(*stored_row))) {
         LOG_WARN("failed to deep copy limit last rows", K(ret));
@@ -6254,11 +6303,14 @@ int ObAggregateProcessor::compute_hybrid_hist_result(const ObAggrInfo &aggr_info
       if (OB_ISNULL(stored_row) || OB_UNLIKELY(stored_row->cnt_ != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(stored_row));
-      } else if (OB_FAIL(shadow_truncate_string_for_hist(aggr_info.param_exprs_.at(0)->obj_meta_,
-                                                         const_cast<ObDatum &>(stored_row->cells()[0])))) {
+      } else if (OB_FAIL(shadow_truncate_string_for_hist(obj_meta, const_cast<ObDatum &>(stored_row->cells()[0])))) {
         LOG_WARN("failed to shadow truncate string for hist", K(ret));
-      } else if (OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
+      } else if (!obj_meta.is_lob_storage() &&
+                 OB_FAIL(check_rows_equal(prev_row, *stored_row, aggr_info, is_equal))) {
         LOG_WARN("failed to is order by item equal with prev row", K(ret));
+      } else if (obj_meta.is_lob_storage() &&
+                 OB_FAIL(check_rows_prefix_str_equal_for_hybrid_hist(prev_row, *stored_row, aggr_info, obj_meta, is_equal))) {
+        LOG_WARN("failed to check rows prefix str equal for hybrid hist", K(ret));
       } else if (is_equal) {
         ++ repeat_count;
       } else if (OB_ISNULL(prev_row.store_row_)) {
@@ -6332,17 +6384,19 @@ int ObAggregateProcessor::shadow_truncate_string_for_hist(const ObObjMeta obj_me
 {
   int ret = OB_SUCCESS;
   if (ObColumnStatParam::is_valid_opt_col_type(obj_meta.get_type()) && obj_meta.is_string_type() && !datum.is_null()) {
-    const ObString &str = datum.get_string();
-    int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
-    if (OB_UNLIKELY(truncated_str_len < 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
-    } else {
-      datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
-      if (origin_str_len != NULL && static_cast<int32_t>(truncated_str_len) < str.length()) {
-        *origin_str_len = str.length();
+    if (!obj_meta.is_lob_storage()) {
+      const ObString &str = datum.get_string();
+      int64_t truncated_str_len = ObDbmsStatsUtils::get_truncated_str_len(str, obj_meta.get_collation_type());
+      if (OB_UNLIKELY(truncated_str_len < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(obj_meta), K(datum), K(truncated_str_len));
+      } else {
+        datum.set_string(str.ptr(), static_cast<uint32_t>(truncated_str_len));
+        if (origin_str_len != NULL && static_cast<int32_t>(truncated_str_len) < str.length()) {
+          *origin_str_len = str.length();
+        }
+        LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
       }
-      LOG_TRACE("Succeed to shadow truncate string for hist", K(datum));
     }
   }
   return ret;
@@ -7450,6 +7504,55 @@ int ObAggregateProcessor::fast_single_row_agg_batch(ObEvalCtx &eval_ctx, const i
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown aggr function type", K(ret), K(aggr_fun), K(*aggr_info.expr_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::check_rows_prefix_str_equal_for_hybrid_hist(const ObChunkDatumStore::LastStoredRow &prev_row,
+                                                                      const ObChunkDatumStore::StoredRow &cur_row,
+                                                                      const ObAggrInfo &aggr_info,
+                                                                      const ObObjMeta &obj_meta,
+                                                                      bool &is_equal)
+{
+  int ret = OB_SUCCESS;
+  is_equal = false;
+  if (OB_ISNULL(prev_row.store_row_) ||
+      OB_UNLIKELY(!obj_meta.is_lob_storage() ||
+                  prev_row.store_row_->cnt_ != cur_row.cnt_ ||
+                  aggr_info.sort_collations_.count() != cur_row.cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(prev_row.store_row_), K(obj_meta),
+                                     K(cur_row.cnt_), K(aggr_info.sort_collations_.count()));
+  } else {
+    is_equal = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_equal && i < aggr_info.sort_collations_.count(); ++i) {
+      uint32_t index = aggr_info.sort_collations_.at(i).field_idx_;
+      common::ObArenaAllocator tmp_alloctor("CalcHybridHist", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      ObDatum new_prev_datum;
+      ObDatum new_cur_datum;
+      if (OB_UNLIKELY(index >= prev_row.store_row_->cnt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid argument", K(ret), K(index), K(prev_row.store_row_->cnt_));
+      } else if (OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                            obj_meta,
+                                                                            prev_row.store_row_->cells()[index],
+                                                                            new_prev_datum)) ||
+                 OB_FAIL(ObHybridHistograms::build_prefix_str_datum_for_lob(tmp_alloctor,
+                                                                            obj_meta,
+                                                                            cur_row.cells()[index],
+                                                                            new_cur_datum))) {
+        LOG_WARN("failed to build prefix str datum for lob", K(ret));
+      } else {
+        int cmp_ret = 0;
+        if (OB_FAIL(aggr_info.sort_cmp_funcs_.at(i).cmp_func_(new_prev_datum,
+                                                              new_cur_datum,
+                                                              cmp_ret))) {
+          LOG_WARN("failed to cmp", K(ret), K(index));
+        } else {
+          is_equal = 0 == cmp_ret;
+        }
       }
     }
   }

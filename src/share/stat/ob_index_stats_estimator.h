@@ -27,8 +27,7 @@ class ObIndexStatsEstimator : public ObBasicStatsEstimator
 public:
   explicit ObIndexStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
-  int estimate(const ObTableStatParam &param,
-               const ObExtraParam &extra,
+  int estimate(const ObOptStatGatherParam &param,
                ObIArray<ObOptStat> &dst_opt_stats);
 
   static int fast_gather_index_stats(ObExecContext &ctx,
@@ -41,13 +40,11 @@ private:
                       const ObString &index_name);
 
   int fill_index_group_by_info(ObIAllocator &allocator,
-                               const ObTableStatParam &param,
-                               const ObExtraParam &extra,
+                               const ObOptStatGatherParam &param,
                                ObString &calc_part_id_str);
 
   int fill_partition_condition(ObIAllocator &allocator,
-                               const ObTableStatParam &param,
-                               const ObExtraParam &extra,
+                               const ObOptStatGatherParam &param,
                                const int64_t dst_partition_id);
 
   static int fast_get_index_avg_len(const int64_t data_partition_id,

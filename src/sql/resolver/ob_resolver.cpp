@@ -896,7 +896,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_ANALYZE:
       case T_MYSQL_UPDATE_HISTOGRAM:
-      case T_MYSQL_DROP_HISTOGRAM: {
+      case T_MYSQL_DROP_HISTOGRAM:
+      case T_MYSQL_ANALYZE: {
         REGISTER_STMT_RESOLVER(AnalyzeStmt);
         break;
       }

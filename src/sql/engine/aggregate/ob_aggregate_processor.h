@@ -989,6 +989,12 @@ private:
                                       ObDatum &datum,
                                       int32_t *origin_str_len = NULL);
 
+  int check_rows_prefix_str_equal_for_hybrid_hist(const ObChunkDatumStore::LastStoredRow &prev_row,
+                                                  const ObChunkDatumStore::StoredRow &cur_row,
+                                                  const ObAggrInfo &aggr_info,
+                                                  const ObObjMeta &obj_meta,
+                                                  bool &is_equal);
+
   OB_INLINE void clear_op_evaluated_flag()
   {
     if (OB_NOT_NULL(op_eval_infos_)) {

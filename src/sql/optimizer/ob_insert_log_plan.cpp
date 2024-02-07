@@ -95,7 +95,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         LOG_WARN("failed to compute dml parallel", K(ret));
       } else if (use_pdml() && OB_FAIL(set_is_direct_insert())) {
         LOG_WARN("failed to set is direct insert", K(ret));
-      } else if (OB_FAIL(check_need_online_stats_gather(need_osg))) {
+      } else if (!is_direct_insert() && OB_FAIL(check_need_online_stats_gather(need_osg))) {
         LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
       } else if (need_osg && OB_FAIL(generate_osg_share_info(osg_info))) {
         LOG_WARN("failed to generate osg share info");

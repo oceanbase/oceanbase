@@ -6414,32 +6414,39 @@ int ObStaticEngineCG::generate_top_fre_hist_expr_operator(ObAggFunRawExpr &raw_e
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(T_FUN_TOP_FRE_HIST != raw_expr.get_expr_type() ||
-                  raw_expr.get_param_count() != 3)) {
+                  raw_expr.get_param_count() != 4)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(raw_expr), K(ret));
   } else {
     ObRawExpr *win_raw_expr = raw_expr.get_param_expr(0);
     ObRawExpr *param_raw_expr = raw_expr.get_param_expr(1);
     ObRawExpr *item_raw_expr = raw_expr.get_param_expr(2);
+    ObRawExpr *max_disuse_raw_expr = raw_expr.get_param_expr(3);
     ObExpr *win_expr = NULL;
     ObExpr *item_expr = NULL;
+    ObExpr *max_disuse_expr = NULL;
     raw_expr.get_real_param_exprs_for_update().reset();
-    if (OB_ISNULL(win_raw_expr) || OB_ISNULL(param_raw_expr) || OB_ISNULL(item_raw_expr)) {
+    if (OB_ISNULL(win_raw_expr) || OB_ISNULL(param_raw_expr) ||
+        OB_ISNULL(item_raw_expr) || OB_ISNULL(max_disuse_raw_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(win_raw_expr), K(param_raw_expr), K(item_raw_expr), K(ret));
+      LOG_WARN("get unexpected null", K(win_raw_expr), K(param_raw_expr),
+                                      K(item_raw_expr), K(max_disuse_raw_expr), K(ret));
     } else if (OB_FAIL(generate_rt_expr(*win_raw_expr, win_expr)) ||
-               OB_FAIL(generate_rt_expr(*item_raw_expr, item_expr))) {
-      LOG_WARN("failed to generate_rt_expr", K(ret), K(*win_raw_expr), K(*item_raw_expr));
-    } else if (OB_ISNULL(win_expr) || OB_ISNULL(item_expr)) {
+               OB_FAIL(generate_rt_expr(*item_raw_expr, item_expr)) ||
+               OB_FAIL(generate_rt_expr(*max_disuse_raw_expr, max_disuse_expr))) {
+      LOG_WARN("failed to generate_rt_expr", K(ret), K(*win_raw_expr), K(*item_raw_expr), K(*max_disuse_raw_expr));
+    } else if (OB_ISNULL(win_expr) || OB_ISNULL(item_expr) || OB_ISNULL(max_disuse_expr)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null ", K(ret), K(win_expr), K(item_expr));
+      LOG_WARN("expr is null ", K(ret), K(win_expr), K(item_expr), K(max_disuse_expr));
     } else if (OB_UNLIKELY(!win_expr->obj_meta_.is_numeric_type() ||
-                           !item_expr->obj_meta_.is_numeric_type())) {
+                           !item_expr->obj_meta_.is_numeric_type() ||
+                           !max_disuse_expr->obj_meta_.is_numeric_type())) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("expr node is null", K(ret), K(win_expr->obj_meta_), K(item_expr->obj_meta_));
+      LOG_WARN("expr node is null", K(ret), K(win_expr->obj_meta_), K(item_expr->obj_meta_), K(max_disuse_expr->obj_meta_));
     } else {
       aggr_info.window_size_param_expr_ = win_expr;
       aggr_info.item_size_param_expr_ = item_expr;
+      aggr_info.max_disuse_param_expr_ = max_disuse_expr;
       aggr_info.is_need_deserialize_row_ = raw_expr.is_need_deserialize_row();
       if (OB_FAIL(raw_expr.add_real_param_expr(param_raw_expr))) {
         LOG_WARN("fail to add param expr to agg expr", K(ret));

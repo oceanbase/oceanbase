@@ -72,7 +72,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.parallel_ = parallel;
         param.session_count_ = MIN(parallel, (int64_t)tenant->unit_max_cpu() * 2);
         param.px_mode_ = true;
-        param.online_opt_stat_gather_ = false;
+        param.online_opt_stat_gather_ = true;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;

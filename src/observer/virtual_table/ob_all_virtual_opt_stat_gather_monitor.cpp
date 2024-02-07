@@ -161,8 +161,14 @@ int ObAllVirtualOptStatGatherMonitor::inner_get_next_row(ObNewRow *&row)
           cells[cell_idx].set_null();
           break;
         }
-        case SPARE2: {
-          cells[cell_idx].set_null();
+        case SPARE2: {//running table progress
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
+            cells[cell_idx].set_null();
+          } else {
+            cells[cell_idx].set_varchar(stat_array_.at(index_).get_table_gather_progress());
+            cells[cell_idx].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         default: {

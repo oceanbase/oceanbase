@@ -1849,7 +1849,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           if (OB_ISNULL(param_expr = expr.get_param_expr(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(param_expr), K(expr.get_param_count()));
-          } else if (i == 0 || i == 2) {
+          } else if (i == 0 || i == 2 || i == 3) {
             if (lib::is_oracle_mode()) {
               const_cast<ObExprResType&>(param_expr->get_result_type()).set_calc_type(ObNumberType);
             } else {

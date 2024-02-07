@@ -8068,7 +8068,7 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to pullup grouping aggr expr", K(ret));
     }
   } else if (T_FUN_TOP_FRE_HIST == origin_expr->get_expr_type()) {
-    if (OB_UNLIKELY(3 != origin_expr->get_real_param_count())) {
+    if (OB_UNLIKELY(4 != origin_expr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("real param count is invalid", K(ret));
     } else if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_TOP_FRE_HIST, pullup_aggr))) {
@@ -8081,6 +8081,9 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
                          origin_expr->get_real_param_exprs_for_update().at(2)))) {
+      LOG_WARN("failed to add real param expr", K(ret));
+    } else if (OB_FAIL(pullup_aggr->add_real_param_expr(
+                         origin_expr->get_real_param_exprs_for_update().at(3)))) {
       LOG_WARN("failed to add real param expr", K(ret));
     } else if (FALSE_IT(pullup_aggr->set_is_need_deserialize_row(true))) {
       // do nothing
