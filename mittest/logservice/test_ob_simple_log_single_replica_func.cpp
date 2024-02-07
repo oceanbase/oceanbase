@@ -26,6 +26,7 @@
 #include "logservice/palf/log_group_entry_header.h"
 #include "logservice/palf/log_io_worker.h"
 #include "logservice/palf/lsn.h"
+#include <thread>
 
 const std::string TEST_NAME = "single_replica";
 
@@ -1720,6 +1721,135 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
     EXPECT_EQ(OB_SUCCESS, submit_log(raw_write_leader, 100, leader_idx, 1000));
     EXPECT_EQ(OB_SUCCESS, buff_iterator_padding_start.next());
     EXPECT_EQ(OB_SUCCESS, group_buff_iterator_padding_start.next());
+  }
+}
+
+TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_iow");
+  OB_LOGGER.set_log_level("INFO");
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  // case1: palf epoch has been changed during do_task
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
+    ObILogAllocator *allocator = palf_env_impl->get_log_allocator();
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
+    LSN end_lsn = leader.get_palf_handle_impl()->get_end_lsn();
+
+    IOTaskCond cond(id, leader.palf_env_impl_->last_palf_epoch_);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&cond));
+    sleep(1);
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->set_base_lsn(end_lsn));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_GET_MC_REQ));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_NE(0, allocator->flying_log_task_);
+    EXPECT_NE(0, allocator->flying_meta_task_);
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    cond.cond_.signal();
+    PALF_LOG(INFO, "runlin trace submit log 1");
+    while (iow->queue_.size() > 0) {
+      PALF_LOG(INFO, "queue size is not zero", "size", iow->queue_.size());
+      sleep(1);
+    }
+    EXPECT_EQ(0, allocator->flying_log_task_);
+    EXPECT_EQ(0, allocator->flying_meta_task_);
+  }
+  delete_paxos_group(id);
+
+  // case2: palf epoch has been changed during after_consume
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
+    ObILogAllocator *allocator = palf_env_impl->get_log_allocator();
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
+    LSN end_lsn = leader.get_palf_handle_impl()->get_end_lsn();
+    IOTaskConsumeCond consume_cond(id, leader.palf_env_impl_->last_palf_epoch_);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&consume_cond));
+    sleep(1);
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->set_base_lsn(end_lsn));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_GET_MC_REQ));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_NE(0, allocator->flying_log_task_);
+    EXPECT_NE(0, allocator->flying_meta_task_);
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    consume_cond.cond_.signal();
+    PALF_LOG(INFO, "runlin trace submit log 2");
+    IOTaskVerify verify(id, leader.get_palf_handle_impl()->log_engine_.palf_epoch_);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&verify));
+    while (verify.count_ == 0) {
+      PALF_LOG(INFO, "queue size is not zero", "size", iow->queue_.size());
+      sleep(1);
+    }
+    EXPECT_EQ(0, allocator->flying_log_task_);
+    EXPECT_EQ(0, allocator->flying_meta_task_);
+  }
+  delete_paxos_group(id);
+  // case3: palf epoch has been changed during do_task when there is no io reduce
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
+    bool need_stop = false;
+    std::thread throttling_th([palf_env_impl, &need_stop](){
+      PalfEnvImpl *impl = dynamic_cast<PalfEnvImpl*>(palf_env_impl);
+      while (!need_stop) {
+        impl->log_io_worker_wrapper_.notify_need_writing_throttling(true);
+        usleep(1000);
+      }
+    });
+    ObILogAllocator *allocator = palf_env_impl->get_log_allocator();
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->sw_.get_max_lsn()));
+    LSN end_lsn = leader.get_palf_handle_impl()->get_end_lsn();
+    // case2: palf epoch has been changed during after_consume
+    IOTaskConsumeCond consume_cond(id, leader.palf_env_impl_->last_palf_epoch_);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&consume_cond));
+    sleep(1);
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->set_base_lsn(end_lsn));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.submit_purge_throttling_task(PurgeThrottlingType::PURGE_BY_GET_MC_REQ));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 2, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_NE(0, allocator->flying_log_task_);
+    EXPECT_NE(0, allocator->flying_meta_task_);
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, leader_idx));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, leader_idx, MAX_LOG_BODY_SIZE));
+    leader.get_palf_handle_impl()->log_engine_.palf_epoch_++;
+    consume_cond.cond_.signal();
+    PALF_LOG(INFO, "runlin trace submit log 3");
+    IOTaskVerify verify(id, leader.get_palf_handle_impl()->log_engine_.palf_epoch_);
+    EXPECT_EQ(OB_SUCCESS, iow->submit_io_task(&verify));
+    while (verify.count_ == 0) {
+      PALF_LOG(INFO, "queue size is not zero", "size", iow->queue_.size());
+      sleep(1);
+    }
+    EXPECT_EQ(0, allocator->flying_log_task_);
+    EXPECT_EQ(0, allocator->flying_meta_task_);
+    need_stop = true;
+    throttling_th.join();
   }
 }
 
