@@ -331,18 +331,25 @@ static void prepare_allocator(
   class DAG_NAME : public ObTabletMergeDag {                                   \
   public:                                                                      \
     DAG_NAME() : ObTabletMergeDag(DAG_TYPE) {}                                 \
-    ~DAG_NAME() = default;                                                     \
+    virtual ~DAG_NAME() = default;                                             \
   };
 
-DEFINE_MERGE_DAG(ObTxTableMergeDag, share::ObDagType::DAG_TYPE_TX_TABLE_MERGE);
 DEFINE_MERGE_DAG(ObTabletMajorMergeDag, share::ObDagType::DAG_TYPE_MAJOR_MERGE);
+
+class ObTxTableMergeDag : public ObTabletMergeDag {
+public:
+  ObTxTableMergeDag()
+    : ObTabletMergeDag(share::ObDagType::DAG_TYPE_TX_TABLE_MERGE)
+  {}
+  virtual ~ObTxTableMergeDag();
+};
 
 class ObTabletMiniMergeDag : public ObTabletMergeDag {
 public:
   ObTabletMiniMergeDag()
     : ObTabletMergeDag(share::ObDagType::DAG_TYPE_MINI_MERGE)
   {}
-  ~ObTabletMiniMergeDag();
+  virtual ~ObTabletMiniMergeDag();
 };
 
 } // namespace compaction
