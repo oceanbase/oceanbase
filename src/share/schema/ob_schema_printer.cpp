@@ -2841,9 +2841,7 @@ int ObSchemaPrinter::print_tablegroup_definition_tablegroup_options(
     } else if (compat_version >= DATA_VERSION_4_2_0_0) {
       const ObString sharding = tablegroup_schema.get_sharding();
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                  is_oracle_mode
-                                  ? " SHARDING = \"%.*s\""
-                                  : " SHARDING = %.*s",
+                                  " SHARDING = \'%.*s\'",
                                   sharding.length(), sharding.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print tablegroup sharding", K(ret), K(tablegroup_schema.get_sharding()));
       }
