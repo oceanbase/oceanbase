@@ -549,7 +549,7 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       }
 
       if (exec_info_.is_dup_tx_) {
-        if (ObTxState::REDO_COMPLETE == exec_info_.state_) {
+        if (!is_sub2pc() && ObTxState::REDO_COMPLETE == exec_info_.state_) {
           if (OB_SUCCESS != (tmp_ret = dup_table_tx_redo_sync_())) {
             TRANS_LOG(WARN, "dup table tx redo sync error", K(tmp_ret));
           }
@@ -1073,7 +1073,7 @@ bool ObPartTransCtx::is_in_2pc_() const
 bool ObPartTransCtx::is_in_durable_2pc_() const
 {
   ObTxState state = exec_info_.state_;
-  return state >= ObTxState::PREPARE;
+  return state >= ObTxState::PREPARE || (is_sub2pc() && state >= ObTxState::REDO_COMPLETE);
 }
 
 bool ObPartTransCtx::is_logging_() const { return !busy_cbs_.is_empty(); }
@@ -2086,7 +2086,7 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         } else {
           if (OB_FAIL(ret)) {
             // do nothing
-          } else if (OB_FAIL(dup_table_tx_redo_sync_())) {
+          } else if (!is_sub2pc() && OB_FAIL(dup_table_tx_redo_sync_())) {
             if (OB_EAGAIN != ret) {
               TRANS_LOG(WARN, "dup table redo sync error, need retry in trans_timer", K(ret), K(trans_id_), K(ls_id_));
               ret = OB_SUCCESS;
