@@ -231,6 +231,11 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
+        case MESSAGE: {
+          cells[i].set_varchar(job_status->message_);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

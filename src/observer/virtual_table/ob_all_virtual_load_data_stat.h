@@ -74,7 +74,8 @@ private:
     STORE_PROCESSED_ROWS,
     STORE_LAST_COMMIT_SEGMENT_ID,
     STORE_STATUS,
-    STORE_TRANS_STATUS
+    STORE_TRANS_STATUS,
+    MESSAGE
   };
   common::ObAddr addr_;
   char ip_buf_[common::OB_IP_STR_BUFF];

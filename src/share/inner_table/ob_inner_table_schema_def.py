@@ -11087,7 +11087,8 @@ def_table_schema(
     ('store_processed_rows', 'int'),
     ('store_last_commit_segment_id', 'int'),
     ('store_status', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH'),
-    ('store_trans_status', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH')
+    ('store_trans_status', 'varchar:OB_MAX_PARAMETERS_NAME_LENGTH'),
+    ('message', 'varchar:MAX_LOAD_DATA_MESSAGE_LENGTH')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
