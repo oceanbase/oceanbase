@@ -1471,7 +1471,16 @@ int ObDictDecoder::read_distinct(
     const char **cell_datas,
     storage::ObGroupByCell &group_by_cell) const
 {
-  return batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell);
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  if (OB_FAIL(batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell))) {
+    LOG_WARN("Failed to batch read distinct", K(ret));
+  } else if (check_has_null(ctx, ctx.col_header_->length_, has_null)) {
+    LOG_WARN("Failed to check has null", K(ret));
+  } else if (has_null) {
+    group_by_cell.add_distinct_null_value();
+  }
+  return ret;
 }
 
 int ObDictDecoder::batch_read_distinct(
@@ -1485,7 +1494,6 @@ int ObDictDecoder::batch_read_distinct(
   const char *dict_payload = meta_header_->payload_;
   const common::ObObjType obj_type = ctx.col_header_->get_store_obj_type();
   common::ObDatum *datums = group_by_cell.get_group_by_col_datums_to_fill();
-  bool has_null = false;
   group_by_cell.set_distinct_cnt(count);
   if (meta_header_->is_fix_length_dict()) {
     const int64_t dict_data_size = meta_header_->data_size_;
@@ -1513,10 +1521,6 @@ int ObDictDecoder::batch_read_distinct(
   }
   if (OB_FAIL(batch_load_data_to_datum(obj_type, cell_datas, count, integer_mask_, datums))) {
     LOG_WARN("Failed to batch load data to datum", K(ret));
-  } else if (check_has_null(ctx, meta_length, has_null)) {
-    LOG_WARN("Failed to check has null", K(ret));
-  } else if (has_null) {
-    group_by_cell.add_distinct_null_value();
   }
   return ret;
 }

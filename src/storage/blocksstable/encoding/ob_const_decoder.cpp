@@ -897,6 +897,8 @@ int ObConstDecoder::read_distinct(
       ctx.col_header_->length_ - meta_header_->offset_,
       group_by_cell))) {
     LOG_WARN("Failed to load dict", K(ret));
+  } else if (has_null_execption_value()) {
+    group_by_cell.add_distinct_null_value();
   }
   return ret;
 }
@@ -917,6 +919,23 @@ int ObConstDecoder::read_reference(
     LOG_WARN("Failed to extract ref", K(ret));
   }
   return ret;
+}
+
+bool ObConstDecoder::has_null_execption_value() const
+{
+  int ret = OB_SUCCESS;
+  bool has_null = false;
+  const int64_t dict_count = dict_decoder_.get_dict_header()->count_;
+  if (meta_header_->const_ref_ == dict_count) {
+    has_null = true;
+  } else {
+    int64_t ref;
+    for (int64_t pos = 0; !has_null && pos < meta_header_->count_; ++pos) {
+      ref = reinterpret_cast<const uint8_t*>(meta_header_->payload_)[pos];
+      has_null = ref >= dict_count;
+    }
+  }
+  return has_null;
 }
 
 } // end namespace blocksstable
