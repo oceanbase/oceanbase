@@ -13518,12 +13518,16 @@ int ObDDLService::rename_table(const obrpc::ObRenameTableArg &rename_table_arg)
       } else {
         //todo use array to replace hashmap and hashset @hualong
         //record table already be renamed in the schema mgr
-        common::hash::ObPlacementHashSet<ObTableItem, 32> delete_table_set;
+        common::hash::ObHashSet<ObTableItem> delete_table_set;
         //record new table name set
         //table_item -> table_id
         common::hash::ObHashMap<ObTableItem, uint64_t> new_table_map;
         ObArray<std::pair<uint64_t, share::schema::ObObjectType>> all_dep_objs;
-        if (OB_FAIL(new_table_map.create(32, ObModIds::OB_HASH_BUCKET_RENAME_TABLE_MAP))) {
+        const int64_t rename_items_count = rename_table_arg.rename_table_items_.size();
+
+        if (OB_FAIL(delete_table_set.create(rename_items_count))) {
+          LOG_WARN("failed to add create ObHashSet", KR(ret));
+        } else if (OB_FAIL(new_table_map.create(rename_items_count, ObModIds::OB_HASH_BUCKET_RENAME_TABLE_MAP))) {
           LOG_WARN("failed to add create ObHashMap", K(ret));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < rename_table_arg.rename_table_items_.size(); ++i) {
@@ -19496,7 +19500,7 @@ int ObDDLService::drop_table_in_trans(
         if (foreign_key_info.is_parent_table_mock_) {
           // TODO:@xiaofeng.lby, delete this restriction,
           if (OB_NOT_NULL(drop_table_set)) {
-            if (drop_table_set->count() > 1) {
+            if (drop_table_set->size() > 1) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("drop multi tables with mock fks in one sql is not supported ", K(ret));
             }
@@ -21170,7 +21174,10 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
     int64_t refreshed_schema_version = 0;
     ObDDLSQLTransaction trans(schema_service_);
     DropTableIdHashSet drop_table_set;
-    if (TMP_TABLE == drop_table_arg.table_type_
+    const int64_t drop_table_count = drop_table_arg.tables_.count();
+    if (OB_FAIL(drop_table_set.create(drop_table_count))) {
+      LOG_WARN("fail to add create ObHashSet", KR(ret));
+    } else if (TMP_TABLE == drop_table_arg.table_type_
         || TMP_TABLE_ORA_TRX == drop_table_arg.table_type_
         || TMP_TABLE_ORA_SESS == drop_table_arg.table_type_
         || TMP_TABLE_ALL == drop_table_arg.table_type_) {

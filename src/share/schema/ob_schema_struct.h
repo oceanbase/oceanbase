@@ -6114,7 +6114,7 @@ inline bool ObRecycleObject::is_valid() const
   return INVALID != type_ && !object_name_.empty() && !original_name_.empty();
 }
 
-typedef common::hash::ObPlacementHashSet<uint64_t, common::OB_MAX_TABLE_NUM_PER_STMT> DropTableIdHashSet;
+typedef common::hash::ObHashSet<uint64_t> DropTableIdHashSet;
 // Used to count vertical partition columns
 typedef common::hash::ObPlacementHashSet<common::ObString, common::OB_MAX_USER_DEFINED_COLUMNS_COUNT> VPColumnNameHashSet;
 
