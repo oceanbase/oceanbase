@@ -1105,7 +1105,6 @@ typedef enum ObItemType
   T_DIAGNOSTICS,
   T_JSON_TABLE_EXPRESSION,
   T_JSON_TABLE_COLUMN,
-  T_XML_TABLE_EXPRESSION,
 
   //pseudo_column
   T_PSEUDO_COLUMN,
@@ -2327,6 +2326,7 @@ typedef enum ObItemType
   T_CLONE_TENANT,
   T_CANCEL_CLONE,
 
+  T_XML_TABLE_EXPRESSION,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

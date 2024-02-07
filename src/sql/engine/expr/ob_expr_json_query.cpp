@@ -119,7 +119,7 @@ int ObExprJsonQuery::calc_result_typeN(ObExprResType& type,
           dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
         } else {
           dst_type.set_type(ObObjType::ObVarcharType);
-          dst_type.set_collation_type(CS_TYPE_INVALID);
+          dst_type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
           dst_type.set_full_length(4000, 1);
         }
       } else if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[2], dst_type))) {
