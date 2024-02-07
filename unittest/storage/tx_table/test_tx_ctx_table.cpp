@@ -143,7 +143,7 @@ protected:
   }
   virtual void TearDown() override
   {
-    ctx_mt_mgr_->reset();
+    ctx_mt_mgr_->destroy();
     ls_tx_ctx_mgr_.reset();
     delete mt_mgr_;
     mt_mgr_ = NULL;

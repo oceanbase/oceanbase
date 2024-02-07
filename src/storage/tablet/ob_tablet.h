@@ -115,9 +115,9 @@ public:
   ~ObTableStoreCache() { reset(); }
   void reset();
   int init(
-    const ObSSTableArray &major_tables,
-    const ObSSTableArray &minor_tables,
-    const bool is_row_store);
+      const ObSSTableArray &major_tables,
+      const ObSSTableArray &minor_tables,
+      const bool is_row_store);
   void assign(const ObTableStoreCache &other);
   TO_STRING_KV(K_(last_major_snapshot_version), K_(major_table_cnt),
       K_(minor_table_cnt), K_(recycle_version), K_(last_major_column_count), K_(is_row_store),

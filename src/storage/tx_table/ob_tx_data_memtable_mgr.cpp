@@ -26,6 +26,42 @@ namespace checkpoint
   class ObCheckpointExecutor;
 }
 
+ObTxDataMemtableMgr::ObTxDataMemtableMgr()
+  : is_freezing_(false),
+    ls_id_(),
+    mini_merge_recycle_commit_versions_ts_(0),
+    tx_data_table_(nullptr),
+    ls_tablet_svr_(nullptr),
+    slice_allocator_(nullptr)
+{
+  lock_.lock_type_ = LockType::OB_SPIN_RWLOCK;
+  lock_.lock_ = &lock_def_;
+}
+
+ObTxDataMemtableMgr::~ObTxDataMemtableMgr()
+{
+  destroy();
+}
+
+void ObTxDataMemtableMgr::destroy()
+{
+  int ret = OB_SUCCESS;
+  const int64_t ref_cnt = get_ref();
+  if (OB_UNLIKELY(0 != ref_cnt)) {
+    STORAGE_LOG(ERROR, "ref cnt is NOT 0", K(ret), K(ref_cnt), K_(ls_id), KPC(this));
+  }
+
+  MemMgrWLockGuard guard(lock_);
+  reset_tables();
+  ls_id_.reset();
+  tablet_id_.reset();
+  tx_data_table_ = nullptr;
+  ls_tablet_svr_ = nullptr;
+  freezer_ = nullptr;
+  mini_merge_recycle_commit_versions_ts_ = 0;
+  is_inited_ = false;
+}
+
 int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
                               const ObLSID &ls_id,
                               ObFreezer *freezer,
@@ -74,19 +110,6 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
     destroy();
   }
   return ret;
-}
-
-void ObTxDataMemtableMgr::destroy()
-{
-  MemMgrWLockGuard guard(lock_);
-  reset_tables();
-  ls_id_ = 0;
-  tablet_id_ = 0;
-  tx_data_table_ = nullptr;
-  ls_tablet_svr_ = nullptr;
-  freezer_ = nullptr;
-  mini_merge_recycle_commit_versions_ts_ = 0;
-  is_inited_ = false;
 }
 
 int ObTxDataMemtableMgr::offline()

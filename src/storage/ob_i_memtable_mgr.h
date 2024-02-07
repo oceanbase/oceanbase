@@ -48,6 +48,7 @@ enum LockType
 class MemtableMgrLock
 {
 public:
+  MemtableMgrLock() : lock_type_(OB_LOCK_UNKNOWN), lock_(nullptr) {}
   MemtableMgrLock(const LockType lock_type, void *lock) : lock_type_(lock_type), lock_(lock) {}
   ~MemtableMgrLock() { reset(); }
   void reset()
@@ -137,7 +138,7 @@ public:
     }
   }
 
-private:
+public:
   LockType lock_type_;
   void *lock_;
 };
@@ -193,7 +194,7 @@ private:
 class ObIMemtableMgr
 {
 public:
-  ObIMemtableMgr(const LockType lock_type, void *lock)
+  ObIMemtableMgr()
     : is_inited_(false),
       ref_cnt_(0),
       tablet_id_(),
@@ -202,11 +203,11 @@ public:
       memtable_head_(0),
       memtable_tail_(0),
       t3m_(nullptr),
-      lock_(lock_type, lock)
+      lock_()
   {
     memset(tables_, 0, sizeof(tables_));
   }
-  virtual ~ObIMemtableMgr() { reset_tables(); }
+  virtual ~ObIMemtableMgr();
 
   int init(
       const share::ObLSID &ls_id,
@@ -270,11 +271,7 @@ public:
   OB_INLINE int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1 /* just sub 1 */); }
   OB_INLINE int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   OB_INLINE void inc_ref() { ATOMIC_INC(&ref_cnt_); }
-  OB_INLINE void reset()
-  {
-    destroy();
-    ATOMIC_STORE(&ref_cnt_, 0);
-  }
+
   virtual int init_storage_recorder(
       const ObTabletID &tablet_id,
       const share::ObLSID &ls_id,
