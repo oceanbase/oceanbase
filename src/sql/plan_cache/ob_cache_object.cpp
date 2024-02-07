@@ -183,6 +183,95 @@ int ObPlanCacheObject::check_pre_calc_cons(const bool is_ignore_stmt,
   return ret;
 }
 
+// used for add plan
+int ObPlanCacheObject::match_pre_calc_cons(common::ObDList<ObPreCalcExprConstraint> &cached_cons,
+                                           const ObPlanCacheCtx &pc_ctx,
+                                           const bool is_ignore_stmt,
+                                           bool &is_matched)
+{
+  int ret = OB_SUCCESS;
+  is_matched = false;
+  const ObDList<ObPreCalcExprConstraint> *cur_cons = pc_ctx.sql_ctx_.all_pre_calc_constraints_;
+  if (OB_ISNULL(cur_cons)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(pc_ctx.sql_ctx_.all_pre_calc_constraints_));
+  } else if (cached_cons.get_size() != cur_cons->get_size()) {
+    is_matched = false;
+  } else {
+    is_matched = true;
+    bool finish = false;
+    ObPreCalcExprConstraint *cached_con = cached_cons.get_first();
+    const ObPreCalcExprConstraint *cur_con = cur_cons->get_first();
+    while (!finish && is_matched && OB_SUCC(ret)) {
+      if (cached_cons.get_header() == cached_con || cur_cons->get_header() == cur_con) {
+        finish = true;
+        is_matched = (cached_cons.get_header() == cached_con) && (cur_cons->get_header() == cur_con);
+      } else if (OB_ISNULL(cached_con) || OB_ISNULL(cur_con)) {
+        is_matched = false;
+      } else if (OB_FAIL(check_pre_calc_cons(is_ignore_stmt, is_matched, *cached_con, pc_ctx.exec_ctx_))) {
+        LOG_WARN("failed to pre calculate expression and match constraint", K(ret));
+      } else if (!is_matched) {
+      } else if (OB_FAIL(is_same_pre_calc_cons(*cached_con, *cur_con, is_matched))) {
+        LOG_WARN("failed to check is same pre calc cons", K(ret));
+      } else if (!is_matched) {
+      } else {
+        cached_con = cached_con->get_next();
+        cur_con = cur_con->get_next();
+      }
+    }
+  }
+  return ret;
+}
+
+// check two pre calc expr constraint is same
+int ObPlanCacheObject::is_same_pre_calc_cons(const ObPreCalcExprConstraint &cons1,
+                                             const ObPreCalcExprConstraint &cons2,
+                                             bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  const ObIArray<ObExpr*> &rt_exprs1 = cons1.pre_calc_expr_info_.pre_calc_rt_exprs_;
+  const ObIArray<ObExpr*> &rt_exprs2 = cons2.pre_calc_expr_info_.pre_calc_rt_exprs_;
+  if (cons1.expect_result_ != cons2.expect_result_
+      || rt_exprs1.count() != rt_exprs2.count()) {
+    is_same = false;
+  } else {
+    is_same = true;
+    for (int64_t i = 0; is_same && OB_SUCC(ret) && i < rt_exprs1.count(); ++i) {
+      if (OB_FAIL(is_same_expr(rt_exprs1.at(i), rt_exprs2.at(i), is_same))) {
+        LOG_WARN("failed to check is is_same_expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// just recursively check ObExpr count and type now
+// todo: compare more informations for ObExpr tree
+int ObPlanCacheObject::is_same_expr(const ObExpr *expr1,
+                                    const ObExpr *expr2,
+                                    bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  if (NULL == expr1 || NULL == expr2) {
+    is_same = (expr1 == expr2);
+  } else if (expr1->type_ != expr2->type_ || expr1->arg_cnt_ != expr2->arg_cnt_) {
+    is_same = false;
+  } else if (T_QUESTIONMARK == expr1->type_) {
+    // check param_idx is same
+    is_same = expr1->extra_ == expr2->extra_;
+  } else {
+    is_same = true;
+    for (int64_t i = 0; is_same && OB_SUCC(ret) && i < expr1->arg_cnt_; ++i) {
+      if (OB_FAIL(SMART_CALL(is_same_expr(expr1->args_[i], expr2->args_[i], is_same)))) {
+        LOG_WARN("failed to smart call check is is_same_expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPlanCacheObject::pre_calculation(const bool is_ignore_stmt,
                                    ObPreCalcExprFrameInfo &pre_calc_frame,
                                    ObExecContext &exec_ctx,

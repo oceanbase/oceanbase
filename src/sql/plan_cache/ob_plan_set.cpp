@@ -538,15 +538,11 @@ int ObPlanSet::match_params_info(const Ob2DArray<ObParamInfo,
       }
     }
     if (OB_SUCC(ret) && is_same) {
-      DLIST_FOREACH(pre_calc_con, all_pre_calc_constraints_) {
-        if (OB_FAIL(ObPlanCacheObject::check_pre_calc_cons(is_ignore_stmt_,
-                                                           is_same,
-                                                           *pre_calc_con,
-                                                           pc_ctx.exec_ctx_))) {
-          LOG_WARN("failed to pre calculate expression", K(ret));
-        } else if (!is_same) {
-          break;
-        }
+      if (OB_FAIL(ObPlanCacheObject::match_pre_calc_cons(all_pre_calc_constraints_, pc_ctx,
+                                                         is_ignore_stmt_, is_same))) {
+        LOG_WARN("failed to match pre calc cons", K(ret));
+      } else if (!is_same) {
+        LOG_TRACE("pre calc constraints for plan set and cur plan not match");
       }
     }
 
