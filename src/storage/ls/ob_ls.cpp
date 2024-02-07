@@ -1168,6 +1168,8 @@ int ObLS::online_without_lock()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (running_state_.is_running()) {
+    LOG_INFO("ls is running state, do nothing", K(ret));
   } else if (OB_FAIL(ls_tablet_svr_.online())) {
     LOG_WARN("tablet service online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(lock_table_.online())) {

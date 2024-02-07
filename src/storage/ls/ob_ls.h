@@ -385,7 +385,7 @@ public:
   int check_can_replay_clog(bool &can_replay);
   int check_can_online(bool &can_online);
 
-  TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
+  TO_STRING_KV(K_(running_state), K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
 private:
   void update_state_seq_();
   int ls_init_for_dup_table_();
