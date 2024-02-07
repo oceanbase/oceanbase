@@ -27,6 +27,7 @@ class ObOptimizerContext;
 class ObDMLStmt;
 class ObLogPlan;
 
+//Do not allocate a PwjTable on the heap. If it is necessary to allocate a PwjTable on the heap, manually free it after its lifecycle ends.
 struct PwjTable {
   PwjTable()
     : phy_table_loc_info_(NULL),
@@ -56,7 +57,7 @@ struct PwjTable {
                K_(server_list));
 
   const ObCandiTableLoc *phy_table_loc_info_;
-  ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
+  ObSEArray<common::ObAddr, 8> server_list_;
   // 分区级别
   share::schema::ObPartitionLevel part_level_;
   // 一级分区类型
@@ -73,13 +74,13 @@ struct PwjTable {
   int64_t part_number_;
   // phy_table_location_info_中所有的partition_id(物理分区id)
   // ObPwjComparer在生成_id的映射关系时要按照左表这个数组中的partition_id的顺序生成
-  common::ObSEArray<uint64_t, 8, common::ModulePageAllocator, true> ordered_tablet_ids_;
+  common::ObSEArray<uint64_t, 8> ordered_tablet_ids_;
   // phy_table_location_info_中每一个partition_id(物理分区id)的
   // part_id(一级逻辑分区id)在part_array中的偏移
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> all_partition_indexes_;
+  common::ObSEArray<int64_t, 8> all_partition_indexes_;
   // phy_table_location_info_中每一个partition_id(物理分区id)的
   // subpart_id(二级逻辑分区id)在subpart_array中的偏移
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> all_subpartition_indexes_;
+  common::ObSEArray<int64_t, 8> all_subpartition_indexes_;
 };
 
 // TODO yibo 用PartitionIdArray的指针作为value, 否则每次get都要拷贝一次array
@@ -95,6 +96,7 @@ typedef common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefen
 typedef common::hash::ObHashMap<uint64_t, const ObCandiTabletLoc *,
                                 common::hash::NoPthreadDefendMode> TabletIdLocationMap;
 
+//Do not allocate a ObPwjComparer on the heap. If it is necessary to allocate a ObPwjComparer on the heap, manually free it after its lifecycle ends.
 class ObPwjComparer
 {
 public:
@@ -176,7 +178,7 @@ protected:
   // 非严格模式要求两个基表的数据分布节点相同
   bool is_strict_;
   // 保存一组pwj约束涉及到的基表信息
-  common::ObSEArray<PwjTable, 4, common::ModulePageAllocator, true> pwj_tables_;
+  common::ObSEArray<PwjTable, 4> pwj_tables_;
   static const int64_t MIN_ID_LOCATION_BUCKET_NUMBER;
   static const int64_t DEFAULT_ID_ID_BUCKET_NUMBER;
   DISALLOW_COPY_AND_ASSIGN(ObPwjComparer);
