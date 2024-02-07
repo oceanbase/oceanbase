@@ -501,6 +501,7 @@ int ObTenantCheckpointSlogHandler::replay_new_ls(
   int ret = OB_SUCCESS;
   ObLSCkptMember ls_ckpt_member;
   int64_t pos = 0;
+  ObSArray<MacroBlockId> tmp_block_list(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator("ReplayCKPT", MTL_ID()));
   ObTenantStorageCheckpointReader tablet_ckpt_reader;
   ObTenantStorageCheckpointReader::ObStorageMetaOp replay_tablet_op =
       std::bind(&ObTenantCheckpointSlogHandler::replay_new_tablet,
@@ -513,8 +514,14 @@ int ObTenantCheckpointSlogHandler::replay_new_ls(
   } else if (OB_FAIL(replay_dup_table_ls_meta(ls_ckpt_member.dup_ls_meta_))) {
     LOG_WARN("fail to replay set dup table ls meta", K(ret), K(ls_ckpt_member));
   } else if (OB_FAIL(tablet_ckpt_reader.iter_read_meta_item(
-      ls_ckpt_member.tablet_meta_entry_, replay_tablet_op, tablet_block_list))) {
+      ls_ckpt_member.tablet_meta_entry_, replay_tablet_op, tmp_block_list))) {
     LOG_WARN("fail to iter replay tablet", K(ret), K(ls_ckpt_member));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tmp_block_list.count(); i++) {
+      if (OB_FAIL(tablet_block_list.push_back(tmp_block_list.at(i)))) {
+        LOG_WARN("fail to push back macro block id", K(ret), K(i));
+      }
+    }
   }
   return ret;
 }
