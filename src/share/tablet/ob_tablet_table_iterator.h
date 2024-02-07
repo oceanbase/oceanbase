@@ -34,7 +34,7 @@ public:
   ObTabletMetaIterator();
   ~ObTabletMetaIterator() { reset(); }
   virtual void reset();
-  int next(ObTabletInfo &tablet_info);
+  virtual int next(ObTabletInfo &tablet_info);
 protected:
   int inner_init(
     const uint64_t tenant_id);
@@ -59,6 +59,7 @@ public:
     const int64_t batch_size,
     share::ObIServerTrace &server_trace);
   virtual void reset() override;
+  virtual int next(ObTabletInfo &tablet_info) override;
 
 private:
    virtual int prefetch() override;

@@ -117,6 +117,26 @@ void ObCompactionTabletMetaIterator::reset()
   batch_size_ = 0;
 }
 
+int ObCompactionTabletMetaIterator::next(ObTabletInfo &tablet_info)
+{
+  int ret = OB_SUCCESS;
+  do {
+    if (OB_FAIL(ObTabletMetaIterator::next(tablet_info))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next tablet info", KR(ret));
+      }
+    } else if (!tablet_info.is_valid()) {
+      if (tablet_info.get_replicas().empty()) {
+        // ObTabletMetaIterator::next may fillter some replica members and make tablet_info invalid, skip and fetch next one
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet_info is invalid", KR(ret), K(tablet_info));
+      }
+    }
+  } while (OB_SUCC(ret) && !tablet_info.is_valid());
+  return ret;
+}
+
 int ObCompactionTabletMetaIterator::init(
     const uint64_t tenant_id,
     const int64_t batch_size,

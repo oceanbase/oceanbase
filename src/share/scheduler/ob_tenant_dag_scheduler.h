@@ -571,6 +571,7 @@ public:
   void set_cancel();
   bool is_cancel();
   bool is_inited();
+  bool is_started();
   virtual int deal_with_cancel()
   {
     return OB_SUCCESS;
@@ -745,7 +746,11 @@ public:
 
   bool is_empty() const { return 0 == dag_net_map_.size();} // only for unittest
   int add_dag_net(ObIDagNet &dag_net);
-  int finish_dag_net(ObIDagNet &dag_net);
+  void erase_dag_net_or_abort(ObIDagNet &dag_net);
+  void erase_dag_net_id_or_abort(ObIDagNet &dag_net);
+  void erase_block_dag_net_or_abort(ObIDagNet *dag_net);
+  void finish_dag_net_without_lock(ObIDagNet &dag_net);
+  void finish_dag_net(ObIDagNet &dag_net);
   void dump_dag_status();
   int64_t get_dag_net_count();
   void get_all_dag_scheduler_info(
@@ -1106,7 +1111,7 @@ public:
   int deal_with_finish_task(ObITask &task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);
-  int finish_dag_net(ObIDagNet *dag_net);
+  void finish_dag_net(ObIDagNet *dag_net);
   // for unittest
   int get_first_dag_net(ObIDagNet *&dag_net);
 
