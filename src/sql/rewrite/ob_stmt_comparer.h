@@ -219,10 +219,12 @@ public:
                                   const ObDMLStmt *second,
                                   ObStmtMapInfo &map_info);
 
+  /* is_strict_select_list = true, it requerys same order select list between two stmts. */
   static int check_stmt_containment(const ObDMLStmt *first,
                                     const ObDMLStmt *second,
                                     ObStmtMapInfo &map_info,
-                                    QueryRelation &relation);
+                                    QueryRelation &relation,
+                                    bool is_strict_select_list = false);
 
   static int compute_conditions_map(const ObDMLStmt *first,
                                     const ObDMLStmt *second,
@@ -230,7 +232,8 @@ public:
                                     const ObIArray<ObRawExpr*> &second_exprs,
                                     ObStmtMapInfo &map_info,
                                     ObIArray<int64_t> &condition_map,
-                                    int64_t &match_count);
+                                    int64_t &match_count,
+                                    bool is_same_by_order = false);
 
   static int compute_orderby_map(const ObDMLStmt *first,
                                  const ObDMLStmt *second,
