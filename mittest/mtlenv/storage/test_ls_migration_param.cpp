@@ -345,6 +345,7 @@ TEST_F(TestLSMigrationParam, test_deleted_tablet_info)
   char buf[buf_len] = {};
   share::ObLSID ls_id(1);
   ObTabletID tablet_id(200001);
+  set_compat_mode(Worker::CompatMode::MYSQL);
   ObMigrationTabletParam param;
   ret = param.build_deleted_tablet_info(ls_id, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);

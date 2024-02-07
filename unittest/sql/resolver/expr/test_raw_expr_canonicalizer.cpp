@@ -96,6 +96,7 @@ void TestRawExprCanonicalizer::canon(const char* expr, const char *&canon_expr)
 
 TEST_F(TestRawExprCanonicalizer, basic_test)
 {
+  set_compat_mode(Worker::CompatMode::MYSQL);
   std::ifstream if_tests("./expr/test_raw_expr_canonicalizer.test");
   ASSERT_TRUE(if_tests.is_open());
   std::string line;

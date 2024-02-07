@@ -704,6 +704,7 @@ void ObQueryRangeTest::get_query_range_collation(const char *sql_expr, const cha
 
 TEST_F(ObQueryRangeTest, collation_test)
 {
+  set_compat_mode(lib::Worker::CompatMode::MYSQL);
   static const char* test_file = "./test_query_range_collation.test";
   static const char* tmp_file = "./test_query_range_collation.tmp";
   static const char* result_file = "./test_query_range_collation.result";
