@@ -1817,7 +1817,7 @@ int ObMacroBlockWriter::init_pre_agg_util(const ObDataStoreDesc &data_store_desc
   int ret = OB_SUCCESS;
   const ObIArray<ObSkipIndexColMeta> &full_agg_metas = data_store_desc.get_agg_meta_array();
   const bool need_pre_aggregation =
-      data_store_desc.is_major_merge_type()
+      data_store_desc.is_major_or_meta_merge_type()
       && nullptr != data_store_desc.sstable_index_builder_
       && full_agg_metas.count() > 0;
   if (!need_pre_aggregation) {
