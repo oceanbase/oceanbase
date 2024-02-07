@@ -966,7 +966,10 @@ int ObPartTransCtx::handle_tx_2pc_clear_req(const Ob2pcClearReqMsg &msg)
   ObTwoPhaseCommitMsgType msg_type = switch_msg_type_(msg.get_msg_type());
 
   msg_2pc_cache_ = &msg;
-  if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
+  if (is_exiting()) {
+    ret = OB_TRANS_CTX_NOT_EXIST;
+    TRANS_LOG(WARN, "trans ctx is exiting", K(ret), K(msg), KPC(this));
+  } else if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(handle_2pc_req(msg_type))) {
     TRANS_LOG(WARN, "handle 2pc request failed", KR(ret), K(msg), K(*this));
