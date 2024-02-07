@@ -611,7 +611,7 @@ int ObLogTenantMgr::add_tenant(
         ObDictTenantInfoGuard dict_tenant_info_guard;
         ObDictTenantInfo *tenant_info = nullptr;
 
-        if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
+        if (FAILEDx(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id, dict_tenant_info_guard))) {
           LOG_ERROR("get_tenant_info_guard failed", KR(ret), K(tenant_id));
         } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
           ret = OB_ERR_UNEXPECTED;
