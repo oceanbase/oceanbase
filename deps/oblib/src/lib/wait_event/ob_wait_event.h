@@ -91,6 +91,8 @@ WAIT_EVENT_DEF(TENANT_IO_POOL_WAIT, 15261, "rwlock: tenant io pool wait", "addre
 WAIT_EVENT_DEF(DISPLAY_TASKS_LOCK_WAIT, 15262, "latch: display tasks lock wait", "address", "number", "tries", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(RESOURCE_SERVICE_LOCK_WAIT, 15263, "latch: resource_service lock wait", "address", "number", "tries", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(RESOURCE_SERVICE_SWITCH_LOCK_WAIT, 15264, "latch:resource_service switch lock wait", "address", "number", "tries", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(COLUMN_STORE_DDL_RESCAN_LOCK_WAIT, 15265, "latch: column store ddl rescan lock wait", "address", "number", "tries", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(TABLET_DIRECT_LOAD_MGR_SCHEMA_WAIT, 15266, "latch: tablet direct load mgr schema wait", "address", "number", "tries", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(END_TRANS_WAIT, 16001, "wait end trans", "rollback", "trans_hash_value", "participant_count", COMMIT,false, false)
 WAIT_EVENT_DEF(START_STMT_WAIT, 16002, "wait start stmt", "trans_hash_value", "physic_plan_type", "participant_count", CLUSTER, false, false)
 WAIT_EVENT_DEF(END_STMT_WAIT, 16003, "wait end stmt", "rollback", "trans_hash_value", "physic_plan_type", CLUSTER, false, false)
