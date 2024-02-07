@@ -119,6 +119,7 @@ oblib_addtest(wait_event/test_wait_event.cpp)
 oblib_addtest(utility/test_fast_convert.cpp)
 oblib_addtest(utility/test_defer.cpp)
 oblib_addtest(hash/test_ob_ref_mgr.cpp)
+oblib_addtest(compress/test_compressor.cpp)
 
 ##codec
 oblib_addtest(codec/test_composite.cpp)
