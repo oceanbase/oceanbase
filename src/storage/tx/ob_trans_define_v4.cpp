@@ -692,6 +692,14 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
   return ret;
 }
 
+void ObTxDesc::post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint)
+{
+  ARRAY_FOREACH_NORET(parts, i) {
+    parts[i].last_scn_ = savepoint;
+  }
+  state_change_flags_.PARTS_CHANGED_ = true;
+}
+
 int ObTxDesc::update_clean_part(const share::ObLSID &id,
                                 const int64_t epoch,
                                 const ObAddr &addr)
