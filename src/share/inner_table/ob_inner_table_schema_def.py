@@ -6376,6 +6376,8 @@ def_table_schema(
 # 500 : __all_tenant_snapshot_create_job
 # 501 : __wr_sqltext
 # 502 : __all_trusted_root_certificate
+# 503 : __all_audit_log_filter
+# 504 : __all_audit_log_user
 #
 # 余留位置
 ################################################################################
@@ -13191,6 +13193,8 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12457: __all_virtual_sharing_storage_compaction_info
 # 12458: __all_virtual_ls_snapshot_in_storage_node
 # 12459: __all_virtual_index_usage_info
+# 12460: __all_virtual_audit_log_filter
+# 12461: __all_virtual_audit_log_user
 
 # 余留位置
 #
@@ -30254,6 +30258,8 @@ def_table_schema(
 #21511 mysql.role_edges
 #21512 mysql.default_roles
 #21513 CDB_INDEX_USAGE
+#21514 mysql.audit_log_filter
+#21515 mysql.audit_log_user
 
 # 余留位置
 
