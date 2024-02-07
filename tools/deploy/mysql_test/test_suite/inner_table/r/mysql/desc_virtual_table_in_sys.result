@@ -2333,6 +2333,9 @@ outline_params	varbinary(65536)	NO
 outline_target	longtext	NO		NULL	
 sql_id	varbinary(32)	NO			
 owner_id	bigint(20)	YES		NULL	
+format_sql_text	longtext	YES		NULL	
+format_sql_id	varbinary(32)	NO			
+format_outline	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_outline;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2359,6 +2362,9 @@ outline_params	varbinary(65536)	YES
 outline_target	longtext	YES		NULL	
 sql_id	varbinary(32)	YES			
 owner_id	bigint(20)	YES		NULL	
+format_sql_text	longtext	YES		NULL	
+format_sql_id	varbinary(32)	YES			
+format_outline	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_outline_history;
 IF(count(*) >= 0, 1, 0)
 1

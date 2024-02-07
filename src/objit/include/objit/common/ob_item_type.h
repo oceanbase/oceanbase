@@ -2336,6 +2336,10 @@ typedef enum ObItemType
   T_ROW_ITER_EXPR,
   T_FULLTEXT_COLUMN_LIST,
   T_MATCH_COLUMN_LIST,
+
+  T_CREATE_FMT_OUTLINE,
+  T_ALTER_FMT_OUTLINE,
+  T_DROP_FMT_OUTLINE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
