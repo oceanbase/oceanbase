@@ -8661,3 +8661,29 @@ network_speed	bigint(20)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_aux_stat;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_index_usage_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+object_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+name	varchar(128)	NO		NULL	
+owner	varchar(128)	NO		NULL	
+total_access_count	bigint(20)	NO		NULL	
+total_exec_count	bigint(20)	NO		NULL	
+total_rows_returned	bigint(20)	NO		NULL	
+bucket_0_access_count	bigint(20)	NO		NULL	
+bucket_1_access_count	bigint(20)	NO		NULL	
+bucket_2_10_access_count	bigint(20)	NO		NULL	
+bucket_2_10_rows_returned	bigint(20)	NO		NULL	
+bucket_11_100_access_count	bigint(20)	NO		NULL	
+bucket_11_100_rows_returned	bigint(20)	NO		NULL	
+bucket_101_1000_access_count	bigint(20)	NO		NULL	
+bucket_101_1000_rows_returned	bigint(20)	NO		NULL	
+bucket_1000_plus_access_count	bigint(20)	NO		NULL	
+bucket_1000_plus_rows_returned	bigint(20)	NO		NULL	
+last_used	timestamp(6)	NO		NULL	
+last_flush_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_index_usage_info;
+IF(count(*) >= 0, 1, 0)
+1

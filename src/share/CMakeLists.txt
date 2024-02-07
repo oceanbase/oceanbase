@@ -270,6 +270,8 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table_load_sql_statistics.cpp
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
+  index_usage/ob_index_usage_info_mgr.cpp
+  index_usage/ob_index_usage_report_task.cpp
 )
 
 ob_set_subtarget(ob_share tablet
