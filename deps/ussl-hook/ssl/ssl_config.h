@@ -21,7 +21,7 @@ enum SSL_ROLE {
 };
 
 int ssl_load_config(int ctx_id, const ssl_config_item_t *ssl_config);
-int fd_enable_ssl_for_server(int fd, int ctx_id, int type);
+int fd_enable_ssl_for_server(int fd, int ctx_id, int type, int has_method_none);
 int fd_enable_ssl_for_client(int fd, int ctx_id, int type);
 void fd_disable_ssl(int fd);
 int ssl_do_handshake(int fd);
