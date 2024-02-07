@@ -395,7 +395,7 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
     // read lock to avoid reset map.
     SpinRLockGuard rlock_guard(spin_lock_); // Just for avoid multiple SQL applications at the same time
     // for pmas
-    int64_t target = session_target != INT64_MAX ? session_target : parallel_servers_target_;
+    int64_t target = session_target;
     uint64_t version = version_;
     bool is_first_query = true;
     bool is_target_enough = true;
