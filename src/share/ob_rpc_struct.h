@@ -10282,6 +10282,129 @@ public:
   share::ObLSID ls_id_;
   int64_t lock_id_;
 };
+// kill client session arg
+struct ObKillClientSessionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillClientSessionArg() : create_time_(0), client_sess_id_(0) {}
+  ~ObKillClientSessionArg() {}
+  bool is_valid() const;
+  void reset() { create_time_ = 0;
+                 client_sess_id_ = 0; }
+  int assign(const ObKillClientSessionArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    create_time_ = other.create_time_;
+    client_sess_id_ = other.client_sess_id_;
+    return ret;
+  }
+  void set_create_time(int64_t create_time) { create_time_ = create_time; }
+  int64_t get_create_time() { return create_time_; }
+  void set_client_sess_id(uint32_t client_sess_id) { client_sess_id_ = client_sess_id; }
+  uint32_t get_client_sess_id() { return client_sess_id_; }
+  TO_STRING_KV(K_(create_time), K_(client_sess_id));
+private:
+  int64_t create_time_;
+  uint32_t client_sess_id_;
+};
+
+// kill client session result
+struct ObKillClientSessionRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillClientSessionRes() : can_kill_client_sess_(false) {}
+  ~ObKillClientSessionRes() {}
+  bool is_valid() const;
+  void reset() {  can_kill_client_sess_ = false;}
+  int assign(const ObKillClientSessionRes &other)
+  {
+    int ret = common::OB_SUCCESS;
+    can_kill_client_sess_ = other.can_kill_client_sess_;
+    return ret;
+  }
+  void set_can_kill_client_sess(bool can_kill_client_sess) { can_kill_client_sess_ = can_kill_client_sess; }
+  bool get_can_kill_client_sess() {return can_kill_client_sess_;}
+  TO_STRING_KV(K_(can_kill_client_sess));
+  bool can_kill_client_sess_;
+};
+
+// kill client session arg & Authentication
+struct ObClientSessionCreateTimeAndAuthArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObClientSessionCreateTimeAndAuthArg() : client_sess_id_(0),
+    tenant_id_(0), user_id_(0), has_user_super_privilege_(false) {}
+  ~ObClientSessionCreateTimeAndAuthArg() {}
+  bool is_valid() const;
+  void reset()
+  {
+    client_sess_id_ = 0;
+    tenant_id_ = 0;
+    user_id_ = 0;
+    has_user_super_privilege_ = false;
+  }
+  int assign(const ObClientSessionCreateTimeAndAuthArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    client_sess_id_ = other.client_sess_id_;
+    tenant_id_ = other.tenant_id_;
+    user_id_ = other.user_id_;
+    has_user_super_privilege_ = other.has_user_super_privilege_;
+    return ret;
+  }
+  void set_client_sess_id(uint32_t client_sess_id) { client_sess_id_ = client_sess_id; }
+  uint32_t get_client_sess_id() { return client_sess_id_; }
+  void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_tenant_id() { return tenant_id_; }
+  void set_user_id(uint64_t user_id) { user_id_ = user_id; }
+  uint64_t get_user_id() { return user_id_; }
+  void set_has_user_super_privilege(bool has_user_super_privilege)
+  {
+    has_user_super_privilege_ = has_user_super_privilege;
+  }
+  bool is_has_user_super_privilege() { return has_user_super_privilege_; }
+  TO_STRING_KV(K_(client_sess_id), K_(tenant_id), K_(user_id), K_(has_user_super_privilege));
+private:
+  uint32_t client_sess_id_;
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  bool has_user_super_privilege_;
+};
+
+// kill client session result
+struct ObClientSessionCreateTimeAndAuthRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObClientSessionCreateTimeAndAuthRes() : client_sess_create_time_(0), have_kill_auth_(false) {}
+  ~ObClientSessionCreateTimeAndAuthRes() {}
+  bool is_valid() const;
+  void reset()
+  {
+    client_sess_create_time_ = 0;
+    have_kill_auth_ = false;
+  }
+  int assign(const ObClientSessionCreateTimeAndAuthRes &other)
+  {
+    int ret = common::OB_SUCCESS;
+    client_sess_create_time_ = other.client_sess_create_time_;
+    have_kill_auth_ = other.have_kill_auth_;
+    return ret;
+  }
+  void set_client_create_time(int64_t client_sess_create_time)
+  {
+    client_sess_create_time_ = client_sess_create_time;
+  }
+  int64_t get_client_create_time() { return client_sess_create_time_; }
+  void set_have_kill_auth(bool have_kill_auth) { have_kill_auth_ = have_kill_auth; }
+  bool is_have_kill_auth() {return have_kill_auth_;}
+  TO_STRING_KV(K_(client_sess_create_time), K_(have_kill_auth));
+  int64_t client_sess_create_time_;
+  bool have_kill_auth_;
+};
 
 struct ObTabletLocationSendArg final
 {

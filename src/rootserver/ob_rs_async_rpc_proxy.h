@@ -78,7 +78,7 @@ RPC_F(obrpc::OB_NOTIFY_SWITCH_LEADER, obrpc::ObNotifySwitchLeaderArg,
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_NOTIFY_SWITCH_LEADER>::Response, ObNotifySwitchLeaderProxy);
 RPC_F(obrpc::OB_UPDATE_TENANT_INFO_CACHE, obrpc::ObUpdateTenantInfoCacheArg, obrpc::ObUpdateTenantInfoCacheRes, ObUpdateTenantInfoCacheProxy);
 RPC_F(obrpc::OB_BROADCAST_CONSENSUS_VERSION, obrpc::ObBroadcastConsensusVersionArg, obrpc::ObBroadcastConsensusVersionRes, ObBroadcstConsensusVersionProxy);
-// RPC_F(obrpc::OB_KILL_CLIENT_SESSION, obrpc::ObKillClientSessionArg, obrpc::ObKillClientSessionRes, ObKillClientSessionProxy);
+RPC_F(obrpc::OB_KILL_CLIENT_SESSION, obrpc::ObKillClientSessionArg, obrpc::ObKillClientSessionRes, ObKillClientSessionProxy);
 #ifdef OB_BUILD_TDE_SECURITY
 RPC_F(obrpc::OB_RESTORE_KEY, obrpc::ObRestoreKeyArg, obrpc::ObRestoreKeyResult, ObRestoreKeyProxy);
 RPC_F(obrpc::OB_SET_ROOT_KEY, obrpc::ObRootKeyArg, obrpc::ObRootKeyResult, ObSetRootKeyProxy);

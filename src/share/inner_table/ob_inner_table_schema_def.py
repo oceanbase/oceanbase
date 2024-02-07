@@ -14135,7 +14135,7 @@ def_table_schema(
   table_type = 'SYSTEM_VIEW',
   gm_columns = [],
   rowkey_columns = [],
-  view_definition = """SELECT id AS ID, user AS USER, host AS HOST, db AS DB, command AS COMMAND, time AS TIME, state AS STATE, info AS INFO FROM oceanbase.__all_virtual_processlist WHERE  is_serving_tenant(svr_ip, svr_port, effective_tenant_id())
+  view_definition = """SELECT id AS ID, user AS USER, concat(user_client_ip, ':', user_client_port) AS HOST, db AS DB, command AS COMMAND, time AS TIME, state AS STATE, info AS INFO FROM oceanbase.__all_virtual_processlist WHERE  is_serving_tenant(svr_ip, svr_port, effective_tenant_id())
 """.replace("\n", " "),
 
   in_tenant_space = True,

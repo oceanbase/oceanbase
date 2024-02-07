@@ -402,7 +402,7 @@ int ObExprSysContext::eval_sessionid(const ObExpr &expr, ObDatum &res, const ObD
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   CK(OB_NOT_NULL(session));
   if (OB_SUCC(ret)) {
-    const uint64_t sid = session->get_sessid();
+    const uint64_t sid = session->get_compatibility_sessid();
     char out_id[256];
     sprintf(out_id, "%lu", sid);
     ObString out_id_str(strlen(out_id), out_id);

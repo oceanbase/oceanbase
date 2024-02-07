@@ -214,7 +214,7 @@ ObSQLSessionInfo::~ObSQLSessionInfo()
 
 int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     common::ObIAllocator *bucket_allocator, const ObTZInfoMap *tz_info, int64_t sess_create_time,
-    uint64_t tenant_id)
+    uint64_t tenant_id, int64_t client_create_time)
 {
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
@@ -245,6 +245,7 @@ int ObSQLSessionInfo::init(uint32_t sessid, uint64_t proxy_sessid,
     } else {
       sess_create_time_ = ObTimeUtility::current_time();
     }
+    set_client_create_time(client_create_time);
     const char *sup_proxy_min_version = "1.8.4";
     min_proxy_version_ps_ = 0;
     if (OB_FAIL(ObClusterVersion::get_version(sup_proxy_min_version, min_proxy_version_ps_))) {

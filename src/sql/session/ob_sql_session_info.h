@@ -732,7 +732,8 @@ public:
            common::ObIAllocator *bucket_allocator,
            const ObTZInfoMap *tz_info = NULL,
            int64_t sess_create_time = 0,
-           uint64_t tenant_id = OB_INVALID_TENANT_ID);
+           uint64_t tenant_id = OB_INVALID_TENANT_ID,
+           int64_t client_create_time = 0);
   //for test
   int test_init(uint32_t version, uint32_t sessid, uint64_t proxy_sessid,
            common::ObIAllocator *bucket_allocator);
@@ -1410,7 +1411,6 @@ private:
   bool is_ob20_protocol_; // mark as whether use oceanbase 2.0 protocol
 
   bool is_session_var_sync_; //session var sync support flag.
-
   common::hash::ObHashSet<common::ObString> *pl_sync_pkg_vars_ = NULL;
 
   void *inner_conn_;  // ObInnerSQLConnection * will cause .h included from each other.

@@ -763,7 +763,7 @@ class EventTable
       EN_SESS_POOL_MGR_CTRL = 1186,
       // session info diagnosis control
       // EN_SESS_INFO_DIAGNOSIS_CONTROL = 1187,
-      // EN_SESS_CLEAN_KILL_MAP_TIME = 1188,
+      EN_SESS_CLEAN_KILL_MAP_TIME = 1188,
       EN_ENABLE_NEWSORT_FORCE = 1200,
 
       // Transaction // 2001 - 2100

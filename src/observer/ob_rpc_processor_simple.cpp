@@ -2861,6 +2861,83 @@ int ObAdminUnlockMemberListP::process()
   return ret;
 }
 
+int ObKillClientSessionP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  uint32_t server_sess_id = INVALID_SESSID;
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_client_sess_map().get_refactored(
+          arg_.get_client_sess_id(), server_sess_id))) {
+    if (ret == OB_HASH_NOT_EXIST) {
+      // no need to display info, if current server no this proxy session id.
+      ret = OB_SUCCESS;
+      LOG_DEBUG("current client session id not find", K(ret), K(arg_.get_client_sess_id()));
+    } else {
+      COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+    }
+  } else if (OB_FAIL(gctx_.session_mgr_->get_session(server_sess_id, session))) {
+    LOG_INFO("fail to get session", K(ret), K(server_sess_id));
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret), K(arg_.get_client_sess_id()));
+  } else {
+    session->set_mark_killed(true);
+    // Ensure smooth exit of executed requests.
+    session->set_session_state(SESSION_KILLED);
+  }
+  if (NULL != session) {
+    gctx_.session_mgr_->revert_session(session);
+  }
+  if (OB_SUCC(ret)) {
+    // record kill_client_sess_map.
+    int flag = 1;
+    gctx_.session_mgr_->get_kill_client_sess_map().set_refactored(arg_.get_client_sess_id(),
+                                      arg_.get_create_time(), flag);
+    result_.set_can_kill_client_sess(true);
+  }
+  return ret;
+}
+
+int ObClientSessionConnectTimeP::process()
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session = NULL;
+  ObString str_result;
+  uint32_t server_sess_id = INVALID_SESSID;
+  if (OB_ISNULL(gctx_.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "session_mgr_ is null", KR(ret));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_client_sess_map().get_refactored(
+          arg_.get_client_sess_id(), server_sess_id))) {
+      COMMON_LOG(WARN, "get session failed", KR(ret), K(arg_));
+  } else if (OB_FAIL(gctx_.session_mgr_->get_session(server_sess_id, session))) {
+    LOG_WARN("fail to get session", K(ret), K(server_sess_id));
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret), K(arg_.get_client_sess_id()));
+  } else {
+    result_.set_client_create_time(session->get_client_create_time());
+    if (((OB_SYS_TENANT_ID == arg_.get_tenant_id())
+             || ((arg_.get_tenant_id() == session->get_priv_tenant_id())
+              && (arg_.is_has_user_super_privilege() ||
+              arg_.get_user_id() == session->get_user_id())))) {
+      result_.set_have_kill_auth(true);
+    } else {
+      result_.set_have_kill_auth(false);
+    }
+    LOG_DEBUG("get connect time rpc", K(session->get_client_create_time()),
+        K(session->get_sessid()), K(session->get_client_sessid()));
+  }
+  if (NULL != session) {
+    gctx_.session_mgr_->revert_session(session);
+  }
+  return ret;
+}
+
 int ObTabletLocationReceiveP::process()
 {
   int ret = OB_SUCCESS;

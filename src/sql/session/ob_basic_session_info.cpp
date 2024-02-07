@@ -68,6 +68,8 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       driver_version_(),
       sessid_(0),
       master_sessid_(INVALID_SESSID),
+      client_sessid_(INVALID_SESSID),
+      client_create_time_(0),
       proxy_sessid_(VALID_PROXY_SESSID),
       global_vars_version_(0),
       sys_var_base_version_(OB_INVALID_VERSION),
@@ -338,6 +340,8 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   driver_version_.reset();
   sessid_ = 0;
   master_sessid_ = INVALID_SESSID;
+  client_sessid_ = INVALID_SESSID;
+  client_create_time_ = 0,
   proxy_sessid_ = VALID_PROXY_SESSID;
   global_vars_version_ = 0;
 
@@ -652,7 +656,7 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
   return ret;
 }
 
-int ObBasicSessionInfo::set_real_client_ip(const common::ObString &client_ip)
+int ObBasicSessionInfo::set_real_client_ip_and_port(const common::ObString &client_ip, int32_t client_addr_port)
 {
   int ret = OB_SUCCESS;
   char tmp_buf[common::OB_MAX_USER_NAME_LENGTH + common::OB_MAX_HOST_NAME_LENGTH + 2] = {};
@@ -667,7 +671,8 @@ int ObBasicSessionInfo::set_real_client_ip(const common::ObString &client_ip)
   } else if (OB_FAIL(name_pool_.write_string(tmp_string, &thread_data_.user_at_client_ip_))) {
     LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
   } else {
-    thread_data_.user_client_addr_.set_ip_addr(client_ip, 0);
+    thread_data_.client_addr_port_ = client_addr_port;
+    thread_data_.user_client_addr_.set_ip_addr(client_ip, client_addr_port);
   }
   return ret;
 }

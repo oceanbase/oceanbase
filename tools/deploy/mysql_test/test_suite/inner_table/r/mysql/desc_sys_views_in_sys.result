@@ -200,7 +200,7 @@ desc information_schema.PROCESSLIST;
 Field	Type	Null	Key	Default	Extra
 ID	bigint(20) unsigned	NO			
 USER	varchar(32)	NO			
-HOST	varchar(128)	NO			
+HOST	varchar(67)	YES		NULL	
 DB	varchar(128)	YES		NULL	
 COMMAND	varchar(4096)	NO			
 TIME	bigint(20)	NO			
