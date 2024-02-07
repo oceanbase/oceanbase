@@ -344,7 +344,13 @@ int ObTabletMetaTableCompactionOperator::inner_batch_update_unequal_report_scn_t
   int64_t affected_rows = 0;
   const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
   ObSqlString sql;
-  if (OB_FAIL(sql.append_fmt(
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_COMPACTION_UPDATE_REPORT_SCN) ret;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("ERRSIM EN_COMPACTION_UPDATE_REPORT_SCN", K(ret));
+  }
+#endif
+  if (FAILEDx(sql.append_fmt(
           "UPDATE %s t1 SET report_scn=if(compaction_scn>'%lu' ,'%lu', compaction_scn) WHERE "
           "tenant_id='%lu' AND ls_id='%ld' AND tablet_id IN (",
           OB_ALL_TABLET_META_TABLE_TNAME, major_frozen_scn, major_frozen_scn,
