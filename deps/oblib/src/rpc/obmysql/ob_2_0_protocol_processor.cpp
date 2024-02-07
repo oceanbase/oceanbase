@@ -410,7 +410,9 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         && pkt20->get_extra_info().exist_extra_info()) {
       char* tmp_buffer = NULL;
       int64_t total_len = pkt20->get_extra_info().get_total_len();
-      if (OB_ISNULL(tmp_buffer = reinterpret_cast<char *>(context.arena_.alloc(total_len)))) {
+      if (total_len <= 0) {
+        // empty extra info, do nothing
+      } else if (OB_ISNULL(tmp_buffer = reinterpret_cast<char *>(context.arena_.alloc(total_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("no memory available", "alloc_size", total_len, K(ret));
       } else if (OB_FAIL(context.extra_info_.assign(pkt20->get_extra_info(), tmp_buffer, total_len))) {
@@ -440,7 +442,9 @@ inline int Ob20ProtocolProcessor::process_ob20_packet(ObProto20PktContext& conte
         input_packet->set_proxy_switch_route(pkt20->get_flags().proxy_switch_route());
         const int64_t t_len = context.extra_info_.get_total_len();
         char *t_buffer = NULL;
-        if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
+        if (t_len <= 0) {
+          // empty extra info, do nothing
+        } else if (OB_ISNULL(t_buffer = reinterpret_cast<char *>(pool.alloc(t_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_ERROR("no memory available", "alloc_size", t_len, K(ret));
         } else if (OB_FAIL(input_packet->extra_info_.assign(context.extra_info_, t_buffer, t_len))) {

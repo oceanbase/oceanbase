@@ -9,7 +9,6 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
 #pragma once
 
 #include "lib/allocator/page_arena.h"
@@ -20,6 +19,7 @@
 #include "share/table/ob_table_load_define.h"
 #include "sql/engine/cmd/ob_load_data_impl.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "common/storage/ob_io_device.h"
 #include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "observer/table_load/ob_table_load_instance.h"
@@ -170,61 +170,6 @@ private:
     int64_t pos_;
   };
 
-  class IRandomIODevice
-  {
-  public:
-    virtual ~IRandomIODevice() = default;
-    virtual int open(const DataAccessParam &data_access_param, const ObString &filename) = 0;
-    virtual int pread(char *buf, int64_t count, int64_t offset, int64_t &read_size) = 0;
-    virtual int get_file_size(int64_t &file_size) = 0;
-  };
-
-  class RandomFileReader : public IRandomIODevice
-  {
-  public:
-    RandomFileReader();
-    virtual ~RandomFileReader();
-    int open(const DataAccessParam &data_access_param, const ObString &filename) override;
-    int pread(char *buf, int64_t count, int64_t offset, int64_t &read_size) override;
-    int get_file_size(int64_t &file_size) override;
-  private:
-    ObString filename_;
-    ObFileReader file_reader_;
-    bool is_inited_;
-  };
-
-  class RandomOSSReader : public IRandomIODevice
-  {
-  public:
-    RandomOSSReader();
-    virtual ~RandomOSSReader();
-    int open(const DataAccessParam &data_access_param, const ObString &filename) override;
-    int pread(char *buf, int64_t count, int64_t offset, int64_t &read_size) override;
-    int get_file_size(int64_t &file_size) override;
-  private:
-    ObIODevice *device_handle_;
-    ObIOFd fd_;
-    bool is_inited_;
-  };
-
-  class SequentialDataAccessor
-  {
-  public:
-    SequentialDataAccessor();
-    ~SequentialDataAccessor();
-    int init(const DataAccessParam &data_access_param, const ObString &filename);
-    int read(char *buf, int64_t count, int64_t &read_size);
-    int get_file_size(int64_t &file_size);
-    void seek(int64_t offset) { offset_ = offset; }
-    int64_t get_offset() const { return offset_; }
-  private:
-    RandomFileReader random_file_reader_;
-    RandomOSSReader random_oss_reader_;
-    IRandomIODevice *random_io_device_;
-    int64_t offset_;
-    bool is_inited_;
-  };
-
   struct DataBuffer
   {
   public:
@@ -256,20 +201,25 @@ private:
   {
   public:
     DataReader();
+    ~DataReader();
     int init(const DataAccessParam &data_access_param, LoadExecuteContext &execute_ctx,
              const DataDesc &data_desc, bool read_raw = false);
     int get_next_buffer(ObLoadFileBuffer &file_buffer, int64_t &line_count,
                         int64_t limit = INT64_MAX);
     int get_next_raw_buffer(DataBuffer &data_buffer);
     bool has_incomplate_data() const { return data_trimer_.has_incomplate_data(); }
-    bool is_end_file() const { return io_accessor_.get_offset() >= end_offset_; }
+    bool is_end_file() const;
     ObCSVGeneralParser &get_csv_parser() { return csv_parser_; }
+
+  private:
+    int read_buffer(ObLoadFileBuffer &file_buffer);
+
   private:
     LoadExecuteContext *execute_ctx_;
     ObCSVGeneralParser csv_parser_; // 用来计算完整行
     ObLoadFileDataTrimer data_trimer_; // 缓存不完整行的数据
-    SequentialDataAccessor io_accessor_;
-    int64_t end_offset_;
+    ObFileReader *file_reader_;
+    int64_t end_offset_; // use -1 in stream file such as load data local
     bool read_raw_;
     bool is_iter_end_;
     bool is_inited_;

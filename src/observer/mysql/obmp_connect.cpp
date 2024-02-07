@@ -1689,6 +1689,7 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_SESSION_VAR_SYNC = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT = 1;
     server_proxy_cap_flag.cap_flags_.OB_CAP_SERVER_DUP_SESS_INFO_SYNC = 1;
+    server_proxy_cap_flag.cap_flags_.OB_CAP_LOCAL_FILES = 1;
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
       server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID = 1;
     } else {

@@ -48,6 +48,7 @@ ob_set_subtarget(oblib_rpc obmysql_packet
   obmysql/packet/ompk_field.cpp
   obmysql/packet/ompk_handshake.cpp
   obmysql/packet/ompk_handshake_response.cpp
+  obmysql/packet/ompk_local_infile.cpp
   obmysql/packet/ompk_ok.cpp
   obmysql/packet/ompk_piece.cpp
   obmysql/packet/ompk_prepare.cpp

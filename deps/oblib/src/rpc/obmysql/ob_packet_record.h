@@ -72,11 +72,13 @@ struct ObpMysqHeader {
   uint8_t seq_;
   uint8_t type_;
   uint8_t com_seq_; // compress head sequence
-  uint8_t is_send_;
+  uint8_t is_send_:1;
+  uint8_t is_file_content_:1;
   ObpMysqHeader() {
     rec_ = 0;
     seq_ = 0;
     mysql_header_.len_ = 0;
+    is_file_content_ = 0;
   }
   ~ObpMysqHeader() {}
 
@@ -168,6 +170,10 @@ public:
     obp_mysql_header_.type_ = static_cast<uint8_t>(type);
   }
 
+  inline void set_file_content() __restrict__ {
+    obp_mysql_header_.is_file_content_ = 1;
+  }
+
   int64_t to_string(char *buf, const int64_t buf_len) const;
   Obp20Header obp20_header_;         // 16 byte
   ObpMysqHeader obp_mysql_header_;   // 16  byte
@@ -182,6 +188,7 @@ class ObPacketRecordWrapper {
       cur_pkt_pos_ = 0;
       last_type_ = obmysql::ObMySQLPacketType::INVALID_PKT;
       enable_proto_dia_ = false;
+      receiving_file_contents_ = false;
     }
     ~ObPacketRecordWrapper() {}
     void init() {
@@ -189,6 +196,7 @@ class ObPacketRecordWrapper {
       cur_pkt_pos_ = 0;
       last_type_ = obmysql::ObMySQLPacketType::INVALID_PKT;
       enable_proto_dia_ = observer::enable_proto_dia();
+      receiving_file_contents_ = false;
     }
     int64_t to_string(char *buf, int64_t buf_len) const;
 
@@ -214,6 +222,13 @@ class ObPacketRecordWrapper {
       rec.record_recieve_obp20_packet(obp20_pkt);
       rec.record_recieve_mysql_packet(pkt);
       cur_pkt_pos_++;
+
+      if (OB_UNLIKELY(receiving_file_contents_)) {
+        pkt_rec_[idx].set_file_content();
+        if (0 == pkt.get_clen()) {
+          receiving_file_contents_ = false;
+        }
+      }
     }
     // for 20 protocol end
 
@@ -236,6 +251,13 @@ class ObPacketRecordWrapper {
       rec.record_recieve_comp_packet(com_pkt);
       rec.record_recieve_mysql_packet(pkt);
       cur_pkt_pos_++;
+
+      if (OB_UNLIKELY(receiving_file_contents_)) {
+        pkt_rec_[idx].set_file_content();
+        if (0 == pkt.get_clen()) {
+          receiving_file_contents_ = false;
+        }
+      }
     }
     // for compress protocol end
 
@@ -251,12 +273,23 @@ class ObPacketRecordWrapper {
       int64_t idx = (cur_pkt_pos_-1) % ObPacketRecordWrapper::REC_BUF_SIZE;
       pkt_rec_[idx].record_send_mysql_packet(pkt, len);
       last_type_ = pkt.get_mysql_packet_type();
+
+      if (OB_UNLIKELY(pkt.get_mysql_packet_type() == ObMySQLPacketType::PKT_FILENAME)) {
+        receiving_file_contents_ = true;
+      }
     }
     inline void record_recieve_mysql_packet(obmysql::ObMySQLRawPacket &__restrict__ pkt) __restrict__
     {
       int64_t idx = cur_pkt_pos_ % ObPacketRecordWrapper::REC_BUF_SIZE;
       pkt_rec_[idx].record_recieve_mysql_packet(pkt);
       cur_pkt_pos_++;
+
+      if (OB_UNLIKELY(receiving_file_contents_)) {
+        pkt_rec_[idx].set_file_content();
+        if (0 == pkt.get_clen()) {
+          receiving_file_contents_ = false;
+        }
+      }
     }
     inline void record_recieve_mysql_pkt_fragment(int32_t recive) __restrict__
     {
@@ -274,6 +307,9 @@ class ObPacketRecordWrapper {
     uint32_t cur_pkt_pos_;
     obmysql::ObMySQLPacketType last_type_;
     bool enable_proto_dia_;
+    // in load local infile, we will receive some file content packets and there is no `cmd` in the packet.
+    // so we use a flag to mark the context.
+    bool receiving_file_contents_;
 };
 
 

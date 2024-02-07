@@ -137,7 +137,8 @@ int ObAllVirtualLoadDataStat::inner_get_next_row(ObNewRow *&row)
         case ESTIMATED_REMAINING_TIME: {
           int64_t load_time = current_time - job_status->start_time_;
           int64_t estimated_remaining_time = 0;
-          if ((job_status->parsed_bytes_ != 0) && OB_LIKELY(load_time != 0)) {
+          // in load data local infile, the total_bytes_ is 0 or -1
+          if ((job_status->parsed_bytes_ != 0) && OB_LIKELY(load_time != 0) && job_status->total_bytes_ > 0) {
             double speed = (double)job_status->parsed_bytes_ / load_time;
             if (OB_LIKELY(speed != 0)) {
               int64_t remain_bytes = job_status->total_bytes_ - job_status->parsed_bytes_;
