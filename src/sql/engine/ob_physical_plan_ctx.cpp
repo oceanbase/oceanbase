@@ -111,12 +111,14 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       is_ps_protocol_(false),
       plan_start_time_(0),
       is_ps_rewrite_sql_(false),
-      spm_ts_timeout_us_(0)
+      spm_ts_timeout_us_(0),
+      subschema_ctx_(allocator_)
 {
 }
 
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {
+  subschema_ctx_.destroy();
 }
 
 void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
