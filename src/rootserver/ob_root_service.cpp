@@ -6152,12 +6152,22 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
     const ObRoutineInfo* old_routine_info = NULL;
     uint64_t tenant_id = routine_info.get_tenant_id();
     ObString database_name = arg.db_name_;
-    bool is_or_replace = lib::is_oracle_mode() ? arg.is_or_replace_ : arg.is_need_alter_;
-    bool is_inner = lib::is_mysql_mode() ? arg.is_or_replace_ : false;
+    bool is_or_replace = false;
+    bool is_inner = false;
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else {
+      is_or_replace = is_oracle_mode ? arg.is_or_replace_ : arg.is_need_alter_;
+      is_inner = is_oracle_mode ? false : arg.is_or_replace_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
@@ -6175,7 +6185,7 @@ int ObRootService::create_routine(const ObCreateRoutineArg &arg)
     }
     if (OB_SUCC(ret)
         && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0
-        && lib::is_oracle_mode()) {
+        && is_oracle_mode) {
       if (OB_FAIL(schema_guard.get_user_info(
           tenant_id, database_name, ObString(OB_DEFAULT_HOST_NAME), user_info))) {
         LOG_WARN("failed to get user info", K(ret), K(database_name));
@@ -6272,8 +6282,12 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
     ObErrorInfo error_info = arg.error_info_;
     const ObRoutineInfo *routine_info = NULL;
     ObSchemaGetterGuard schema_guard;
+    bool is_oracle_mode = false;
     const uint64_t tenant_id = arg.routine_info_.get_tenant_id();
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
                                   tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_routine_info(
@@ -6284,8 +6298,8 @@ int ObRootService::alter_routine(const ObCreateRoutineArg &arg)
       LOG_WARN("routine info is not exist!", K(ret), K(arg.routine_info_));
     }
     if (OB_FAIL(ret)) {
-    } else if ((lib::is_oracle_mode() && arg.is_or_replace_) ||
-               (lib::is_mysql_mode() && arg.is_need_alter_)) {
+    } else if ((is_oracle_mode && arg.is_or_replace_) ||
+               (!is_oracle_mode && arg.is_need_alter_)) {
       if (OB_FAIL(create_routine(arg))) {
         LOG_WARN("failed to alter routine with create", K(ret));
       }
@@ -6879,7 +6893,11 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
     ObSchemaGetterGuard schema_guard;
     const ObDatabaseSchema *db_schema = NULL;
     const ObUserInfo *user_info = NULL;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+                tenant_id, is_oracle_mode))) {
+      LOG_WARN("fail to check is oracle mode", K(ret));
+    } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, db_schema))) {
       LOG_WARN("get database schema failed", K(ret));
@@ -6897,7 +6915,7 @@ int ObRootService::create_package(const obrpc::ObCreatePackageArg &arg)
     }
     if (OB_SUCC(ret)
         && database_name.case_compare(OB_SYS_DATABASE_NAME) != 0
-        && lib::is_oracle_mode()) {
+        && is_oracle_mode) {
       if (OB_FAIL(schema_guard.get_user_info(
         tenant_id, database_name, ObString(OB_DEFAULT_HOST_NAME), user_info))) {
         LOG_WARN("failed to get user info", K(ret), K(database_name));
