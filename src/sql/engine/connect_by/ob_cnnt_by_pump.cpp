@@ -194,7 +194,7 @@ void ObConnectByOpPump::free_pump_node(PumpNode &pop_node)
   pop_node.row_fetcher_.iterator_ = NULL;
 }
 
-int ObConnectByOpPump::free_pump_node_stack(ObIArray<PumpNode> &stack)
+int ObConnectByOpPump::free_pump_node_stack(ObSegmentArray<PumpNode> &stack)
 {
   int ret = OB_SUCCESS;
   PumpNode pop_node;

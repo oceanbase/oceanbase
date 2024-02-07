@@ -300,7 +300,7 @@ private:
   int check_child_cycle(PumpNode &node, PumpNode *left_node);
   void free_pump_node(PumpNode &node);
   int alloc_iter(PumpNode &node);
-  int free_pump_node_stack(ObIArray<PumpNode> &stack);
+  int free_pump_node_stack(ObSegmentArray<PumpNode> &stack);
   void set_row_store_constructed() { datum_store_constructed_ = true; }
   bool get_row_store_constructed() { return datum_store_constructed_; }
   void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
@@ -311,7 +311,7 @@ private:
   //用于初始化检测环的hash_set
   static const int64_t CONNECT_BY_TREE_HEIGHT = 16;
 //  ObNewRow prior_exprs_result_row_;//用来存放计算connect by prior表达式的结果
-  ObArray<PumpNode> pump_stack_;
+  ObSegmentArray<PumpNode> pump_stack_;
   ObChunkDatumStore datum_store_;
   const ObIArray<ObExpr *> *cur_output_exprs_;
   RowMap hash_filter_rows_;
