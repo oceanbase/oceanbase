@@ -3724,6 +3724,20 @@ int ObTableSchema::is_unique_key_column(ObSchemaGetterGuard &schema_guard,
                                         uint64_t column_id,
                                         bool &is_uni) const
 {
+  // This interface is compatible with MySQL.
+  // For table t1(c1 int, c2 int, UNIQUE u1(c1, c2)), the
+  // show columns query result is as following.
+  // > show columns from t1;
+  // +-------+---------+------+-----+---------+-------+
+  // | Field | Type    | Null | Key | Default | Extra |
+  // +-------+---------+------+-----+---------+-------+
+  // | c1    | int(11) | YES  | MUL | NULL    |       |
+  // | c2    | int(11) | YES  |     | NULL    |       |
+  // +-------+---------+------+-----+---------+-------+
+  // Only column within a single column unique index is considered
+  // as UNI key.
+  // So we cannot use this interface to judge whether one column
+  // is really an unique index column.
   int ret = OB_SUCCESS;
   is_uni = false;
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -5855,6 +5869,112 @@ int ObTableSchema::get_generated_column_ids(ObIArray<uint64_t> &column_ids) cons
   }
   return ret;
 }
+
+int ObTableSchema::is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
+                                               uint64_t column_id,
+                                               bool &is_uni) const
+{
+  // Whether the argument column with column_id is an unique index column.
+  // This interface is different with is_unique_index_column(), the latter one
+  // is compatible with MySQL, for multiple columns unique index, the first column
+  // is considered as MUL key but not unique key.
+  int ret = OB_SUCCESS;
+  is_uni = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; !is_uni && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObSimpleTableSchemaV2 *simple_index_schema = NULL;
+      const ObTableSchema *index_schema = NULL;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(get_tenant_id(),
+                        simple_index_infos.at(i).table_id_,
+                        simple_index_schema))) {
+        LOG_WARN("fail to get simple table schema", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_UNLIKELY(NULL == simple_index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("simple index schema from schema guard is NULL", K(ret), K(simple_index_schema));
+      } else if (!simple_index_schema->is_unique_index()) {
+        // This is not an unique index, skip.
+      } else if (OB_FAIL(schema_guard.get_table_schema(get_tenant_id(),
+                                                simple_index_infos.at(i).table_id_,
+                                                index_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_UNLIKELY(NULL == index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
+      } else {
+        // check whether the columns of unique index are not nullable
+        ObTableSchema::const_column_iterator iter = index_schema->column_begin();
+        for ( ; OB_SUCC(ret) && !is_uni && iter != index_schema->column_end(); iter++) {
+          const ObColumnSchemaV2 *column = *iter;
+          if (OB_ISNULL(column)) {
+            ret = OB_ERR_UNDEFINED;
+            LOG_WARN("unexpected err", K(ret), KPC(column));
+          } else if (!column->is_index_column()) {
+            // this column is not index column, skip
+          } else if (column_id == column->get_column_id()) {
+            is_uni = true;
+          } else { /*do nothing*/ }
+        }
+      }
+    } // for
+  }
+  return ret;
+}
+
+int ObTableSchema::has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const
+{
+  int ret = OB_SUCCESS;
+  bool_result = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (!is_valid()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("The ObTableSchema is invalid", K(ret));
+  } else if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  } else {
+    const uint64_t tenant_id = get_tenant_id();
+    for (int64_t i = 0; !bool_result && OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_table_schema = NULL;
+      const ObSimpleTableSchemaV2 *simple_index_schema = NULL;
+      if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
+          simple_index_infos.at(i).table_id_, simple_index_schema))) {
+        LOG_WARN("fail to get simple table schema", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else if (OB_UNLIKELY(NULL == simple_index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("simple index schema from schema guard is NULL", K(ret), K(simple_index_schema));
+      } else if (!simple_index_schema->is_unique_index()) {
+        // This is not an unique index, skip.
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+          simple_index_infos.at(i).table_id_, index_table_schema))) {
+        LOG_WARN("fail to get table schema", K(tenant_id),
+                K(simple_index_infos.at(i).table_id_), K(ret));
+      } else if (OB_ISNULL(index_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("index table schema must not be NULL", K(ret), "table_id", simple_index_infos.at(i).table_id_);
+      } else {
+        // check whether the columns of unique index are not nullable
+        ObTableSchema::const_column_iterator iter = index_table_schema->column_begin();
+        for ( ; OB_SUCC(ret) && !bool_result && iter != index_table_schema->column_end(); iter++) {
+          const ObColumnSchemaV2 *column = *iter;
+          if (OB_ISNULL(column)) {
+            ret = OB_ERR_UNDEFINED;
+            LOG_WARN("unexpected err", K(ret), KPC(column));
+          } else if (!column->is_index_column()) {
+            // this column is not index column, skip
+          } else if (false == column->is_nullable() ||             // mysql mode
+                     true == column->has_not_null_constraint()) {  // oracle mode
+            // find not null column, end loop
+            bool_result = true;
+          } else { /*do nothing*/ }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObTableSchema::has_generated_and_partkey_column() const
 {
   bool result = false;

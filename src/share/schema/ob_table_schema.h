@@ -1282,6 +1282,7 @@ public:
   int get_column_ids_without_rowkey(common::ObIArray<share::schema::ObColDesc> &column_ids, const bool no_virtual = false) const;
   int get_generated_column_ids(common::ObIArray<uint64_t> &column_ids) const;
   inline bool has_generated_column() const { return generated_columns_.num_members() > 0; }
+  int has_not_null_unique_key(ObSchemaGetterGuard &schema_guard, bool &bool_result) const;
   // The table has a generated column that is a partition key.
   bool has_generated_and_partkey_column() const;
   int check_is_stored_generated_column_base_column(uint64_t column_id, bool &is_stored_base_col) const;
@@ -1555,6 +1556,9 @@ public:
   int sort_column_array_by_column_id();
   int check_column_array_sorted_by_column_id(const bool skip_rowkey) const;
   int check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const;
+  int is_real_unique_index_column(ObSchemaGetterGuard &schema_guard,
+                                  uint64_t column_id,
+                                  bool &is_uni) const;
   int is_unique_key_column(ObSchemaGetterGuard &schema_guard,
                            uint64_t column_id,
                            bool &is_uni) const;

@@ -4584,25 +4584,15 @@ int ObLSTabletService::process_old_row(
     if (OB_FAIL(ret)) {
     } else if (data_tbl_rowkey_change) {
       ObStoreRow del_row(tbl_row);
-      del_row.flag_.set_flag(ObDmlFlag::DF_DELETE);
-      if (!is_delete_total_quantity_log) {
-        if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-            run_ctx.store_ctx_, col_descs, del_row, run_ctx.dml_param_.encrypt_meta_))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-            LOG_WARN("failed to write data tablet row", K(ret), K(del_row));
-          }
-        }
-      } else {
-        ObStoreRow new_tbl_row;
-        new_tbl_row.flag_.set_flag(ObDmlFlag::DF_DELETE);
-        new_tbl_row.row_val_ = tbl_row.row_val_;
-        del_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
-        ObSEArray<int64_t, 8> update_idx;
-        if (OB_FAIL(tablet_handle.get_obj()->update_row(relative_table,
-            run_ctx.store_ctx_, col_descs, update_idx, del_row, new_tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-            LOG_WARN("failed to write data tablet row", K(ret), K(del_row), K(new_tbl_row));
-          }
+      ObStoreRow new_tbl_row;
+      new_tbl_row.flag_.set_flag(ObDmlFlag::DF_DELETE);
+      new_tbl_row.row_val_ = tbl_row.row_val_;
+      del_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
+      ObSEArray<int64_t, 8> update_idx;
+      if (OB_FAIL(tablet_handle.get_obj()->update_row(relative_table,
+          run_ctx.store_ctx_, col_descs, update_idx, del_row, new_tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+          LOG_WARN("failed to write data tablet row", K(ret), K(del_row), K(new_tbl_row));
         }
       }
     } else if (lob_update) {
@@ -4665,7 +4655,7 @@ int ObLSTabletService::process_data_table_row(
   int ret = OB_SUCCESS;
   ObStoreCtx &ctx = run_ctx.store_ctx_;
   ObRelativeTable &relative_table = run_ctx.relative_table_;
-  bool is_update_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
+  const bool is_update_total_quantity_log = run_ctx.dml_param_.is_total_quantity_log_;
   const common::ObTimeZoneInfo *tz_info = run_ctx.dml_param_.tz_info_;
   if (OB_UNLIKELY(!ctx.is_valid()
       || !relative_table.is_valid()
@@ -4707,10 +4697,18 @@ int ObLSTabletService::process_data_table_row(
       ObStoreRow new_row;
       new_row.flag_.set_flag(rowkey_change ? ObDmlFlag::DF_INSERT : ObDmlFlag::DF_UPDATE);
       new_row.row_val_ = new_tbl_row.row_val_;
-      if (is_update_total_quantity_log && !rowkey_change) {
+      if (!rowkey_change) {
         ObStoreRow old_row;
         old_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
         old_row.row_val_ = old_tbl_row.row_val_;
+        if (!is_update_total_quantity_log) {
+          // For minimal mode, set pk columns of old_row to nop value, because
+          // they are already stored in new_row.
+          const int64_t rowkey_col_cnt = relative_table.get_rowkey_column_num();
+          for (int64_t i = 0; i < rowkey_col_cnt; ++i) {
+            (old_row.row_val_.cells_[i]).set_nop_value();
+          }
+        }
         if (OB_FAIL(data_tablet.get_obj()->update_row(relative_table,
             ctx, col_descs, update_idx, old_row, new_row, run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
@@ -5161,7 +5159,8 @@ int ObLSTabletService::process_old_row_lob_col(
       const ObColDesc &column = run_ctx.col_descs_->at(i);
       if (is_lob_storage(column.col_type_.get_type())) {
         has_lob_col = true;
-        need_reread = need_reread || !(tbl_row.row_val_.cells_[i].has_lob_header());
+        ObObj &obj = tbl_row.row_val_.cells_[i];
+        need_reread = need_reread || (!obj.is_null() && !obj.is_nop_value() && !obj.has_lob_header());
         break;
       }
     }
@@ -5297,13 +5296,6 @@ int ObLSTabletService::delete_row_in_tablet(
     LOG_WARN("failed to process old row lob col", K(ret), K(tbl_row));
   } else if (OB_FAIL(delete_lob_tablet_rows(run_ctx, tablet_handle, tbl_row, row))) {
     LOG_WARN("failed to delete lob rows.", K(ret), K(tbl_row), K(row));
-  } else if (!dml_param.is_total_quantity_log_) {
-    if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-        ctx, *run_ctx.col_descs_, tbl_row, dml_param.encrypt_meta_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-        LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(tbl_row));
-      }
-    }
   } else {
     update_idx.reset(); // update_idx is a dummy param here
     new_tbl_row.reset();

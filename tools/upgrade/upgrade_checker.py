@@ -590,6 +590,26 @@ def check_not_supported_tenant_name(query_cur):
       break
   logging.info('check special tenant name success')
 
+# 17. 检查是否有租户在升到4.3.0版本之前已将binlog_row_image设为MINIMAL
+def check_variable_binlog_row_image(query_cur):
+# 4.3.0.0之前的版本,MINIMAL模式生成的日志CDC无法正常消费(DELETE日志).
+# 4.3.0版本开始,MINIMAL模式做了改进,支持CDC消费,需要在升级到4.3.0.0之后再打开.
+  min_cluster_version = 0
+  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    # check cluster version
+    if min_cluster_version < get_version("4.3.0.0"):
+      (desc, results) = query_cur.exec_query("""select count(*) from CDB_OB_SYS_VARIABLES where NAME='binlog_row_image' and VALUE = '0'""")
+      if results[0][0] > 0 :
+        fail_list.append('Sys Variable binlog_row_image is set to MINIMAL, please check'.format(results[0][0]))
+    logging.info('check variable binlog_row_image success')
+
 # last check of do_check, make sure no function execute after check_fail_list
 def check_fail_list():
   if len(fail_list) != 0 :
@@ -632,6 +652,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_schema_status(query_cur)
       check_server_version(query_cur)
       check_not_supported_tenant_name(query_cur)
+      check_variable_binlog_row_image(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)

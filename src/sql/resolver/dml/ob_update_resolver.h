@@ -58,6 +58,11 @@ private:
   int check_safe_update_mode(ObUpdateStmt *update_stmt);
   int resolve_update_constraints();
   int generate_batched_stmt_info();
+  int is_table_has_unique_key(const ObTableSchema *table_schema,
+                              bool &is_has_uk) const;
+  int check_unique_key_is_updated(const ObTableSchema *table_schema,
+                                  const common::ObIArray<ObAssignment> &assigns,
+                                  bool &is_updated) const;
 };
 
 } // namespace sql
