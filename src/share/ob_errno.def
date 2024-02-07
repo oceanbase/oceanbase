@@ -2392,6 +2392,14 @@ DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output p
 //error code for OBKV [-10500, -10700)
 ////////////////////////////////////////////////////////////////
 DEFINE_ERROR(OB_ERR_KV_GLOBAL_INDEX_ROUTE, -10500, -1, "HY000", "incorrect route for obkv global index, client router should refresh.");
+DEFINE_ERROR(OB_TTL_NOT_ENABLE, -10501, -1, "HY000", "TTL feature is not enabled");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_NOT_EXIST, -10502, -1, "HY000", "TTL column not exists", "TTL column '%.*s' not exists");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, -10503, -1, "HY000", "Column type is not supported in TTL definition", "Column type of '%.*s' is not supported for TTL definition");
+DEFINE_ERROR_EXT(OB_TTL_CMD_NOT_ALLOWED, -10504, -1, "HY000", "TTL command is not allowed", "TTL command is not allowed, current TTL status is '%s'");
+DEFINE_ERROR(OB_TTL_NO_TASK_RUNNING, -10505, -1, "HY000", "No TTL task is running, please try trigger a new TTL task");
+DEFINE_ERROR(OB_TTL_TENANT_IS_RESTORE, -10506, -1, "HY000", "Cannot execute TTL task during tenant is restore");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_TTL, -10507, -1, "HY000", "Time to live of hbase table must be greater than 0");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS, -10508, -1, "HY000", "MaxVersions of hbase table must be greater than 0");
 
 ////////////////////////////////////////////////////////////////
 //error code for SQL [-11000 ---- -12000)
@@ -2406,18 +2414,6 @@ DEFINE_ORACLE_ERROR(OB_ERR_REPLACE_TYPE_WITH_TABLE_DEPENDENT, -11006, -1, "HY000
 DEFINE_ERROR_EXT(OB_ERR_UNKNOWN_AUTHID, -11007, ER_UNKNOWN_AUTHID, "HY000", "Unknown authorization ID", "Unknown authorization ID `%.*s`@`%.*s`");
 DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT, "42000", "There is no such grant defined for user", "There is no such grant defined for user '%.*s' on host '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
-
-////////////////////////////////////////////////////////////////
-//error code for OBKV [-10500 ---- -10700)
-////////////////////////////////////////////////////////////////
-DEFINE_ERROR(OB_TTL_NOT_ENABLE, -10500, -1, "HY000", "TTL feature is not enabled");
-DEFINE_ERROR_EXT(OB_TTL_COLUMN_NOT_EXIST, -10501, -1, "HY000", "TTL column not exists", "TTL column '%.*s' not exists");
-DEFINE_ERROR_EXT(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, -10502, -1, "HY000", "Column type is not supported in TTL definition", "Column type of '%.*s' is not supported for TTL definition");
-DEFINE_ERROR_EXT(OB_TTL_CMD_NOT_ALLOWED, -10503, -1, "HY000", "TTL command is not allowed", "TTL command is not allowed, current TTL status is '%s'");
-DEFINE_ERROR(OB_TTL_NO_TASK_RUNNING, -10504, -1, "HY000", "No TTL task is running, please try trigger a new TTL task");
-DEFINE_ERROR(OB_TTL_TENANT_IS_RESTORE, -10505, -1, "HY000", "Cannot execute TTL task during tenant is restore");
-DEFINE_ERROR(OB_TTL_INVALID_HBASE_TTL, -10506, -1, "HY000", "Time to live of hbase table must be greater than 0");
-DEFINE_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS, -10507, -1, "HY000", "MaxVersions of hbase table must be greater than 0");
 
 ////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)
