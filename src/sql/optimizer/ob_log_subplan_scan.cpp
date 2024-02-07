@@ -134,7 +134,7 @@ int ObLogSubPlanScan::do_re_est_cost(EstimateCostInfo &param, double &card, doub
       ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
       op_cost = ObOptEstCost::cost_filter_rows(child_card / parallel,
                                                get_filter_exprs(),
-                                               opt_ctx.get_cost_model_type());
+                                               opt_ctx);
       cost = child_cost + op_cost;
       card = child_card * selectivity;
     }

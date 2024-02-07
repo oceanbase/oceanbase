@@ -116,6 +116,45 @@ struct AutoDOPParams {
   int64_t parallel_min_scan_time_threshold_; // auto dop threshold for table scan cost
 };
 
+struct OptSystemStat {
+  OptSystemStat()
+  :last_analyzed_(0),
+  cpu_speed_(0),
+  disk_seq_read_speed_(0),
+  disk_rnd_read_speed_(0),
+  network_speed_(0)
+  {
+  }
+
+  inline int64_t get_last_analyzed() const { return last_analyzed_; }
+  void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
+
+  inline int64_t get_cpu_speed() const { return cpu_speed_; }
+  void set_cpu_speed(int64_t cpu_speed) { cpu_speed_ = cpu_speed; }
+
+  inline int64_t get_disk_seq_read_speed() const { return disk_seq_read_speed_; }
+  void set_disk_seq_read_speed(int64_t disk_seq_read_speed) { disk_seq_read_speed_ = disk_seq_read_speed; }
+
+  inline int64_t get_disk_rnd_read_speed() const { return disk_rnd_read_speed_; }
+  void set_disk_rnd_read_speed(int64_t disk_rnd_read_speed) { disk_rnd_read_speed_ = disk_rnd_read_speed; }
+
+  inline int64_t get_network_speed() const { return network_speed_; }
+  void set_network_speed(int64_t network_speed) { network_speed_ = network_speed; }
+
+  TO_STRING_KV(K(last_analyzed_),
+               K(cpu_speed_),
+               K(disk_seq_read_speed_),
+               K(disk_rnd_read_speed_),
+               K(network_speed_));
+
+private:
+  int64_t last_analyzed_;
+  int64_t cpu_speed_;
+  int64_t disk_seq_read_speed_;
+  int64_t disk_rnd_read_speed_;
+  int64_t network_speed_;
+};
+
 class ObOptimizerContext
 {
 
@@ -192,7 +231,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     has_multiple_link_stmt_(false),
     hash_join_enabled_(true),
     optimizer_sortmerge_join_enabled_(true),
-    nested_loop_join_enabled_(true)
+    nested_loop_join_enabled_(true),
+    system_stat_()
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -558,6 +598,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_merge_join_enabled(bool enabled) { optimizer_sortmerge_join_enabled_ = enabled; }
   inline bool is_nested_join_enabled() const { return nested_loop_join_enabled_; }
   inline void set_nested_join_enabled(bool enabled) { nested_loop_join_enabled_ = enabled; }
+  inline OptSystemStat& get_system_stat() { return system_stat_; }
+  inline const OptSystemStat& get_system_stat() const { return system_stat_; }
+
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -640,6 +683,7 @@ private:
   bool hash_join_enabled_;
   bool optimizer_sortmerge_join_enabled_;
   bool nested_loop_join_enabled_;
+  OptSystemStat system_stat_;
 };
 }
 }

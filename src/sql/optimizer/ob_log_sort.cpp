@@ -400,7 +400,7 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
                              &get_plan()->get_selectivity_ctx(),
                              double_topn_count,
                              part_cnt_);
-    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx.get_cost_model_type()))) {
+    if (OB_FAIL(ObOptEstCost::cost_sort(cost_info, op_cost, opt_ctx))) {
       LOG_WARN("failed to calc cost", K(ret), K(child->get_type()));
     } else if (NULL != topn_expr_) {
       double_topn_count = std::min(double_topn_count * parallel, child_card);

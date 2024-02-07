@@ -8644,3 +8644,16 @@ comment	longtext	YES
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_import_table_task_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_aux_stat;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+last_analyzed	timestamp(6)	NO		NULL	
+cpu_speed	bigint(20)	YES		2500	
+disk_seq_read_speed	bigint(20)	YES		2000	
+disk_rnd_read_speed	bigint(20)	YES		150	
+network_speed	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_aux_stat;
+IF(count(*) >= 0, 1, 0)
+1

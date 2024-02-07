@@ -15,6 +15,7 @@
 
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
+#include "share/stat/ob_opt_system_stat.h"
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_stat_gather_stat.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
@@ -170,6 +171,14 @@ public:
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
 
+  int update_system_stats(const uint64_t tenant_id,
+                        const ObOptSystemStat *system_stat);
+
+  int fetch_system_stat(const uint64_t tenant_id,
+                       const ObOptSystemStat::Key &key,
+                       ObOptSystemStat &stat);
+
+  int delete_system_stats(const uint64_t tenant_id);
 private:
   int get_table_stat_sql(const uint64_t tenant_id,
                          const ObOptTableStat &stat,
@@ -272,6 +281,13 @@ private:
 
   int get_gather_stat_task_value(const ObOptStatTaskInfo &task_info,
                                  ObSqlString &values_str);
+
+  int get_system_stat_sql(const uint64_t tenant_id,
+                         const ObOptSystemStat &stat,
+                         const int64_t current_time,
+                         ObSqlString &sql_string);
+
+  int fill_system_stat(sqlclient::ObMySQLResult &result, ObOptSystemStat &stat);
 
   static const char *bitmap_compress_lib_name;
 

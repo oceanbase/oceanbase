@@ -264,6 +264,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 478	__all_import_table_job_history	0	201001	1
 479	__all_import_table_task	0	201001	1
 480	__all_import_table_task_history	0	201001	1
+494	__all_aux_stat	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -667,6 +668,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12425	__all_virtual_import_table_job_history	2	201001	1
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
+12447	__all_virtual_aux_stat	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1034,6 +1036,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21474	DBA_OB_IMPORT_TABLE_TASK_HISTORY	1	201001	1
 21477	GV$OB_TENANT_RUNTIME_INFO	1	201001	1
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
+21497	DBA_OB_AUX_STATISTICS	1	201001	1
+21498	CDB_OB_AUX_STATISTICS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

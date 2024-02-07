@@ -23,6 +23,7 @@
 #include "share/stat/ob_stat_define.h"
 #include "share/stat/ob_opt_ds_stat.h"
 #include "share/stat/ob_stat_item.h"
+#include "share/stat/ob_opt_system_stat.h"
 
 namespace oceanbase {
 namespace common {
@@ -49,6 +50,10 @@ public:
                               const uint64_t table_ref_id,
                               const ObIArray<int64_t> &part_ids,
                               bool &is_opt_stat_valid);
+
+  int check_system_stat_validity(sql::ObExecContext *ctx,
+                                 const uint64_t tenant_id,
+                                 bool &is_valid);
 
   int check_opt_stat_validity(sql::ObExecContext &ctx,
                               const uint64_t tenant_id,
@@ -173,6 +178,8 @@ public:
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
+  int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
+
   int get_table_rowcnt(const uint64_t tenant_id,
                        const uint64_t table_id,
                        const ObIArray<ObTabletID> &all_tablet_ids,
@@ -199,6 +206,11 @@ public:
                         ObOptDSStatHandle &ds_stat_handle);
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
+  int get_system_stat(const uint64_t tenant_id,
+                      ObOptSystemStat &stat);
+  int update_system_stats(const uint64_t tenant_id,
+                        const ObOptSystemStat *system_stats);
+  int delete_system_stats(const uint64_t tenant_id);
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

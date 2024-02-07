@@ -6370,7 +6370,26 @@ def_table_schema(
 # 491 : __all_routine_privilege_history
 # 492 : __wr_sqlstat
 # 493 : __all_ncomp_dll
-# 494 : __all_aux_stat
+
+def_table_schema(
+  owner = 'zhenling.zzg',
+  table_name = '__all_aux_stat',
+  table_id = '494',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'bigint'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+      ('last_analyzed', 'timestamp'),
+      ('cpu_speed', 'bigint', 'true', '2500'),
+      ('disk_seq_read_speed', 'bigint', 'true', '2000'),
+      ('disk_rnd_read_speed', 'bigint', 'true', '150'),
+      ('network_speed', 'bigint', '1000')
+  ],
+)
 # 495 : __all_index_usage_info
 # 496 : __all_detect_lock_info
 # 497 : __all_client_to_server_session_info
@@ -6386,9 +6405,6 @@ def_table_schema(
 #
 # 余留位置
 ################################################################################
-
-
-
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
 ################################################################################
@@ -13185,7 +13201,10 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12444: __all_virtual_routine_privilege_history
 # 12445: __all_virtual_sqlstat
 # 12446: __all_virtual_wr_sqlstat
-# 12447 : __all_virtual_aux_stat
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12447',
+  table_name = '__all_virtual_aux_stat',
+  keywords = all_def_keywords['__all_aux_stat']))
 # 12448: __all_virtual_detect_lock_info
 # 12449: __all_virtual_client_to_server_session_info
 # 12450: __all_virtual_sys_variable_default_value
@@ -13611,7 +13630,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15414', all_def_keyword
 # 15424: __all_virtual_sqlstat
 # 15425: __all_virtual_wr_sqlstat
 # def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15426', all_def_keywords['__tenant_virtual_statname'])))
-# 15427: __all_virtual_aux_stat
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_keywords['__all_aux_stat']))
 # 15428: __all_virtual_sys_variable
 # 15429: __all_virtual_sys_variable_default_value
 # 15430: __all_transfer_partition_task
@@ -30253,8 +30272,48 @@ def_table_schema(
 #21494 V$SYS_TIME_MODEL
 #21495 DBA_WR_SYS_TIME_MODEL
 #21496 CDB_WR_SYS_TIME_MODEL
-#21497 DBA_OB_AUX_STATISTICS
-#21498 CDB_OB_AUX_STATISTICS
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    table_id       = '21497',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	select
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    from oceanbase.__all_aux_stat;
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'CDB_OB_AUX_STATISTICS',
+    table_id       = '21498',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+    select
+      TENANT_ID,
+      LAST_ANALYZED,
+      CPU_SPEED AS `CPU_SPEED(MHZ)`,
+      DISK_SEQ_READ_SPEED AS `DISK_SEQ_READ_SPEED(MB/S)`,
+      DISK_RND_READ_SPEED AS `DISK_RND_READ_SPEED(MB/S)`,
+      NETWORK_SPEED AS `NETWORK_SPEED(MB/S)`
+    from oceanbase.__all_virtual_aux_stat;
+""".replace("\n", " ")
+)
+
 #21499 DBA_OB_INDEX_USAGE
 #21500 DBA_OB_SYS_VARIABLES
 #21501 DBA_OB_TRANSFER_PARTITION_TASKS
@@ -54932,7 +54991,29 @@ def_table_schema(
 # 28207: GV$SYS_TIME_MODEL
 # 28208: V$SYS_TIME_MODEL
 # 28209: V$STATNAME
-# 28210: DBA_OB_AUX_STATISTICS
+
+def_table_schema(
+    owner = 'zhenling.zzg',
+    table_name     = 'DBA_OB_AUX_STATISTICS',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28210',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """
+	SELECT
+      LAST_ANALYZED,
+      CPU_SPEED AS \"CPU_SPEED(MHZ)\",
+      DISK_SEQ_READ_SPEED AS \"DISK_SEQ_READ_SPEED(MB/S)\",
+      DISK_RND_READ_SPEED AS \"DISK_RND_READ_SPEED(MB/S)\",
+      NETWORK_SPEED AS \"NETWORK_SPEED(MB/S)\"
+    FROM SYS.ALL_VIRTUAL_AUX_STAT_REAL_AGENT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
+""".replace("\n", " ")
+)
 # 28211: DBA_OB_SYS_VARIABLES
 # 28212: GV$OB_ACTIVE_SESSION_HISTORY
 # 28213: V$OB_ACTIVE_SESSION_HISTORY
