@@ -636,6 +636,7 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
     LOG_WARN("fail to execute get_all_ls_status_and_change_access_mode_", KR(ret), K(tenant_info),
         K(target_access_mode), K(sys_ls_sync_scn));
   }
+  DEBUG_SYNC(AFTER_CHANGE_ACCESS_MODE);
   return ret;
 }
 
