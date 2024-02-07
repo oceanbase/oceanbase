@@ -14358,6 +14358,7 @@ def_table_schema(
                           ')'
                         )
                         WHEN rp.param_type IN (18, 20) THEN CONCAT(lower(v.data_type_str), '(', rp.param_scale, ')')
+                        WHEN rp.param_type IN (22, 23) and rp.param_length > 0 THEN CONCAT(lower(v.data_type_str), '(', rp.param_length, ')')
                         ELSE lower(v.data_type_str)
                         END
                           AS CHAR(4194304)
