@@ -13562,14 +13562,16 @@ int ObTransformUtils::get_column_node_from_table(ObTransformerCtx *ctx,
         if ((tmp_table_item->is_generated_table()
               || tmp_table_item->is_temp_table())
             && OB_NOT_NULL(tmp_table_item->ref_query_)) {
-          ret = OB_INVALID_ARGUMENT; // not adaptive generate table
-          LOG_WARN("invalid argument", K(ret));
+          if (OB_FAIL(stmt->get_column_items(tmp_table_item->table_id_, column_list))) {
+            LOG_WARN("fail to get column items from generate or temp table", K(ret));
+          }
         } else if (tmp_table_item->is_json_table()) {
           ret = OB_SUCCESS;
           if (OB_FAIL(ObTransformUtils::get_columnitem_from_json_table(stmt, tmp_table_item, column_list))) {
             LOG_WARN("fail to get column item from json table", K(ret));
           }
         } else {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("failed to get table schema", K(ret));
         }
       } else {
