@@ -2314,6 +2314,7 @@ typedef enum ObItemType
   T_KV_ATTRIBUTES,
   T_VALUES_TABLE_EXPRESSION,//used to values statement
   T_VALUES_ROW_LIST,//used to values statement
+  T_LOB_INROW_THRESHOLD,
 
   T_COL_SKIP_INDEX,
   T_COL_SKIP_INDEX_LIST,
