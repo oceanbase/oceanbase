@@ -259,6 +259,13 @@ class ObStmtTypeRetryPolicy : public ObRetryPolicy
 public:
   ObStmtTypeRetryPolicy() = default;
   ~ObStmtTypeRetryPolicy() = default;
+
+  bool is_direct_load(ObRetryParam &v) const
+  {
+    ObExecContext &exec_ctx = v.result_.get_exec_context();
+    return exec_ctx.get_table_direct_insert_ctx().get_is_direct();
+  }
+
   virtual void test(ObRetryParam &v) const override
   {
     int err = v.err_;
@@ -274,6 +281,14 @@ public:
       v.no_more_test_ = true;
     } else if (ObStmt::is_ddl_stmt(v.result_.get_stmt_type(), v.result_.has_global_variable())) {
       if (is_ddl_stmt_packet_retry_err(err)) {
+        try_packet_retry(v);
+      } else {
+        v.client_ret_ = err;
+        v.retry_type_ = RETRY_TYPE_NONE;
+      }
+      v.no_more_test_ = true;
+    } else if (is_direct_load(v)) {
+      if (is_direct_load_retry_err(err)) {
         try_packet_retry(v);
       } else {
         v.client_ret_ = err;
