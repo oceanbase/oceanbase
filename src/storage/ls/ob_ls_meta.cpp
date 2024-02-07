@@ -805,17 +805,30 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get restore status", K(ret), K(*this));
-  // before 4.3
-  } else if (restore_status_.is_required_to_switch_ls_state_for_restore()) {
-    create_type = ObLSCreateType::RESTORE;
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD == migration_status_) {
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_) {
     create_type = ObLSCreateType::MIGRATE;
-  } else if (restore_status_.is_required_to_switch_ls_state_for_clone()) {
+  } else if (restore_status_.is_in_clone()) {
     create_type = ObLSCreateType::CLONE;
-  // before 4.3 end
-  // after 4.3
+  } else if (restore_status_.is_in_restore()) {
+    create_type = ObLSCreateType::RESTORE;
   } else if (ls_persistent_state_.is_ha_state()) {
     create_type = ObLSCreateType::MIGRATE;
+  }
+  return ret;
+}
+
+int ObLSMeta::check_ls_need_online(bool &need_online) const
+{
+  int ret = OB_SUCCESS;
+  need_online = true;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream meta is not valid", K(ret), K(*this));
+  } else if (!ObMigrationStatusHelper::need_online(migration_status_)) {
+    need_online = false;
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status_ &&
+             !restore_status_.need_online()) {
+    need_online = false;
   }
   return ret;
 }

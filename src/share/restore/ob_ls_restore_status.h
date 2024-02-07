@@ -110,7 +110,9 @@ public:
   }
 
   // offline ls and enable sync and online ls restore handler in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
-  bool is_required_to_switch_ls_state_for_restore() const
+  bool need_online() const;
+  // enable sync and online ls restore handler in [RESTORE_START, RESTORE_SYS_TABLETS] or RESTORE_FAILED
+  bool is_restore_first_step() const
   {
     return ((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
              status_ == Status::RESTORE_FAILED);
@@ -122,7 +124,7 @@ public:
   {
     return status_ >= Status::CLONE_START && status_ <= Status::CLONE_COPY_ALL_TABLET_META;
   }
-  bool is_required_to_switch_ls_state_for_clone() const
+  bool is_clone_first_step() const
   {
     return ((status_ >= Status::CLONE_START && status_ <= Status::CLONE_COPY_LS_META) ||
              Status::CLONE_FAILED == status_);

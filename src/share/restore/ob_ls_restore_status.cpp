@@ -88,6 +88,13 @@ bool ObLSRestoreStatus::is_valid_(int32_t status) const
 }
 
 #undef LS_RESTORE_STATUS_CASE_TO_TYPE
+bool ObLSRestoreStatus::need_online() const
+{
+  return ((status_ >= WAIT_RESTORE_SYS_TABLETS
+           && status_ <= WAIT_RESTORE_MAJOR_DATA)
+          || status_ == NONE
+          || status_ == CLONE_CLOG_REPLAY);
+}
 
 int ObLSRestoreStatus::set_status(int32_t status)
 {

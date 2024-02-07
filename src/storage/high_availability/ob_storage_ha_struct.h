@@ -81,6 +81,7 @@ public:
       const ObMigrationStatus &cur_status,
       bool &allow_gc);
   // Check the migration status. The LS in the XXX_FAIL state is considered to be an abandoned LS, which can be judged to be directly GC when restarting
+  static bool need_online(const ObMigrationStatus &cur_status);
   static bool check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status);
   static bool check_can_migrate_out(const ObMigrationStatus &cur_status);
   static int check_can_change_status(
