@@ -217,12 +217,11 @@ int ObTenantTabletMetaIterator::init(
     sql_proxy_ = &sql_proxy;
     valid_tablet_ls_pairs_.reuse();
     valid_tablet_ls_pairs_idx_ = 0;
+    is_inited_ = true;
     if (OB_FAIL(prefetch())) { // need to prefetch a batch of tablet_info
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to prefetch", KR(ret), K_(tenant_id), K_(prefetch_tablet_idx));
       }
-    } else {
-      is_inited_ = true;
     }
   }
   return ret;
@@ -256,10 +255,7 @@ int ObTenantTabletMetaIterator::prefetch()
 int ObTenantTabletMetaIterator::prefetch_valid_tablet_ids()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTabletMetaIterator is not inited", KR(ret));
-  } else if (OB_UNLIKELY(prefetch_tablet_idx_ != prefetched_tablets_.count())) {
+  if (OB_UNLIKELY(prefetch_tablet_idx_ != prefetched_tablets_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("prefetched valid tablet ids have not been iterated to end",
              KR(ret), K_(valid_tablet_ls_pairs_idx), "tablet ls pair count",
@@ -285,10 +281,7 @@ int ObTenantTabletMetaIterator::prefetch_valid_tablet_ids()
 int ObTenantTabletMetaIterator::prefetch_tablets()
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTabletMetaIterator is not inited", KR(ret));
-  } else if (OB_UNLIKELY(prefetch_tablet_idx_ != prefetched_tablets_.count())) {
+  if (OB_UNLIKELY(prefetch_tablet_idx_ != prefetched_tablets_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("prefetched tablet infos have not been iterated to end",
              KR(ret), K_(prefetch_tablet_idx),
@@ -432,9 +425,9 @@ int ObTenantTabletTableIterator::next(ObTabletInfo &tablet_info)
 int ObTenantTabletTableIterator::prefetch_()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!inited_) || OB_ISNULL(tt_operator_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
+  if (OB_ISNULL(tt_operator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is unexpected null", KR(ret), KP_(tt_operator));
   } else {
     ObTabletID last_tablet_id; // start with INVALID_TABLET_ID = 0
     if (inner_tablet_infos_.count() > 0) {

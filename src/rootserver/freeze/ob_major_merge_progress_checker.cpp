@@ -54,7 +54,7 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker(
       ckm_validator_(tenant_id, stop_, tablet_ls_pair_cache_, tablet_status_map_,
                      table_compaction_map_, idx_ckm_validate_array_, validator_statistics_,
                      finish_tablet_ls_pair_array_, finish_tablet_ckm_array_),
-      uncompacted_tablets_(),
+      uncompacted_tablets_(), uncompacted_table_ids_(),
       diagnose_rw_lock_(ObLatchIds::MAJOR_FREEZE_DIAGNOSE_LOCK),
       ls_locality_cache_(), total_time_guard_(), validator_statistics_(), batch_size_mgr_() {}
 
@@ -161,15 +161,20 @@ int ObMajorMergeProgressChecker::clear_cached_info()
     finish_tablet_ckm_array_.reset();
     progress_.reset();
     ckm_validator_.clear_cached_info();
-    uncompacted_tablets_.reset();
     loop_cnt_ = 0;
     tablet_ls_pair_cache_.reuse();
+    {
+      SpinWLockGuard w_guard(diagnose_rw_lock_);
+      uncompacted_tablets_.reset();
+      uncompacted_table_ids_.reset();
+    }
   }
   return ret;
 }
 
 int ObMajorMergeProgressChecker::get_uncompacted_tablets(
-    ObArray<ObTabletReplica> &uncompacted_tablets) const
+    ObArray<ObTabletReplica> &input_tablets,
+    common::ObArray<uint64_t> &input_table_ids) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -177,8 +182,10 @@ int ObMajorMergeProgressChecker::get_uncompacted_tablets(
     LOG_WARN("not init", KR(ret), K_(tenant_id));
   } else {
     SpinRLockGuard r_guard(diagnose_rw_lock_);
-    if (OB_FAIL(uncompacted_tablets.assign(uncompacted_tablets_))) {
+    if (OB_FAIL(input_tablets.assign(uncompacted_tablets_))) {
       LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(tenant_id), K_(uncompacted_tablets));
+    } else if (OB_FAIL(input_table_ids.assign(uncompacted_table_ids_))) {
+      LOG_WARN("fail to assign uncompacted_tablets", KR(ret), K_(tenant_id), K_(uncompacted_table_ids));
     }
   }
   return ret;
@@ -224,6 +231,11 @@ int ObMajorMergeProgressChecker::check_verification(
       if (OB_TMP_FAIL(unfinish_table_id_array.push_back(table_id))) {
         LOG_WARN("failed to push table_id into finish_array", KR(tmp_ret), KPC(table_compaction_info_ptr));
       }
+    } else if (progress_.table_cnt_[INITIAL]++ < DEBUG_INFO_CNT) { // add into uncompacted tablets array to show in diagnose
+      SpinWLockGuard w_guard(diagnose_rw_lock_);
+      if (OB_TMP_FAIL(uncompacted_table_ids_.push_back(table_id))) {
+        LOG_WARN("fail to push_back", KR(tmp_ret), K_(tenant_id), K_(compaction_scn), K(table_id));
+      }
     }
     if (0 >= index_cnt // data & index should be in same batch
         && (++table_cnt >= table_batch_size)) {
@@ -243,6 +255,7 @@ void ObMajorMergeProgressChecker::reset_uncompacted_tablets()
 {
   SpinWLockGuard w_guard(diagnose_rw_lock_);
   uncompacted_tablets_.reuse();
+  uncompacted_table_ids_.reuse();
 }
 
 bool ObMajorMergeProgressChecker::should_ignore_cur_table(const ObSimpleTableSchemaV2 *simple_schema)
@@ -608,10 +621,13 @@ void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, DEBUG_INFO_CNT> tmp_table_id_array;
-  ObSEArray<ObTabletReplica, DEBUG_INFO_CNT> tmp_replica_array;
+  ObSEArray<ObTabletReplica, DEBUG_INFO_CNT> uncompacted_replica_array;
+  ObSEArray<uint64_t, DEBUG_INFO_CNT> uncompacted_table_array;
   {
     SpinRLockGuard r_guard(diagnose_rw_lock_);
-    if (OB_FAIL(tmp_replica_array.assign(uncompacted_tablets_))) {
+    if (OB_FAIL(uncompacted_replica_array.assign(uncompacted_tablets_))) {
+      LOG_WARN("failed to assgin array", KR(ret));
+    } else if (OB_FAIL(uncompacted_table_array.assign(uncompacted_table_ids_))) {
       LOG_WARN("failed to assgin array", KR(ret));
     }
   }
@@ -635,7 +651,8 @@ void ObMajorMergeProgressChecker::print_unfinish_info(const int64_t cost_us)
   LOG_INFO("succ to check merge progress", K_(tenant_id), K_(loop_cnt), K_(compaction_scn), K(cost_us),
     K_(progress), "remain_table_id_count", table_ids_.count(),
     "remain_table_ids", tmp_table_id_array,
-    "uncompacted_tablets", tmp_replica_array,
+    "uncompacted_tablets", uncompacted_replica_array,
+    "uncompacted_table_ids", uncompacted_table_array,
     K_(total_time_guard), K_(validator_statistics));
 }
 

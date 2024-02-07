@@ -70,7 +70,9 @@ public:
 
   int clear_merge_error();
 
-  int get_uncompacted_tablets(common::ObArray<share::ObTabletReplica> &uncompacted_tablets) const;
+  int get_uncompacted_tablets(
+    common::ObArray<share::ObTabletReplica> &uncompacted_tablets,
+    common::ObArray<uint64_t> &uncompacted_table_ids) const;
 
 private:
   // major merge one by one

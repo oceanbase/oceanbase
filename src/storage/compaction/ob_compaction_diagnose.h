@@ -29,6 +29,10 @@ namespace rootserver
 {
   class ObMajorFreezeService;
 }
+namespace share
+{
+  class ObTabletReplica;
+}
 using namespace storage;
 using namespace share;
 namespace compaction
@@ -536,6 +540,8 @@ private:
   int check_if_need_diagnose(rootserver::ObMajorFreezeService *&major_freeze_service,
                              bool &need_diagnose) const;
   int do_tenant_major_merge_diagnose(rootserver::ObMajorFreezeService *major_freeze_service);
+  int add_uncompacted_tablet_to_diagnose(const ObIArray<share::ObTabletReplica> &uncompacted_tablets);
+  int add_uncompacted_table_ids_to_diagnose(const ObIArray<uint64_t> &uncompacted_table_ids);
 
 public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
