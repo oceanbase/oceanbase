@@ -1120,9 +1120,6 @@ int ObBackupSetTaskMgr::do_backup_data_(
         set_task_attr_.stats_.cum_with(ls_attr.stats_);
       }
     }
-    if (OB_SUCC(ret) && OB_FAIL(ObBackupTaskOperator::update_stats(*sql_proxy_, set_task_attr_.task_id_, set_task_attr_.tenant_id_, set_task_attr_.stats_))) {
-      LOG_WARN("[DATA_BACKUP]failed update statistic infomation", K(ret), K(set_task_attr_));
-    }
   }
   return ret;
 }

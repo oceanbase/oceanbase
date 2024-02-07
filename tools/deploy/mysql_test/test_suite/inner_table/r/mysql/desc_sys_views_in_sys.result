@@ -2117,6 +2117,7 @@ COMMENT	varchar(4096)	YES
 PATH	varchar(4096)	YES			
 MINOR_TURN_ID	bigint(20)	NO			
 MAJOR_TURN_ID	bigint(20)	NO			
+DATA_PROGRESS	decimal(26,2)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BACKUP_TASKS limit 1);
 cnt
 1
