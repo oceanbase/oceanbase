@@ -2408,6 +2408,18 @@ DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT,
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
 
 ////////////////////////////////////////////////////////////////
+//error code for OBKV [-10500 ---- -10700)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR(OB_TTL_NOT_ENABLE, -10500, -1, "HY000", "TTL feature is not enabled");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_NOT_EXIST, -10501, -1, "HY000", "TTL column not exists", "TTL column '%.*s' not exists");
+DEFINE_ERROR_EXT(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, -10502, -1, "HY000", "Column type is not supported in TTL definition", "Column type of '%.*s' is not supported for TTL definition");
+DEFINE_ERROR_EXT(OB_TTL_CMD_NOT_ALLOWED, -10503, -1, "HY000", "TTL command is not allowed", "TTL command is not allowed, current TTL status is '%s'");
+DEFINE_ERROR(OB_TTL_NO_TASK_RUNNING, -10504, -1, "HY000", "No TTL task is running, please try trigger a new TTL task");
+DEFINE_ERROR(OB_TTL_TENANT_IS_RESTORE, -10505, -1, "HY000", "Cannot execute TTL task during tenant is restore");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_TTL, -10506, -1, "HY000", "Time to live of hbase table must be greater than 0");
+DEFINE_ERROR(OB_TTL_INVALID_HBASE_MAXVERSIONS, -10507, -1, "HY000", "MaxVersions of hbase table must be greater than 0");
+
+////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)
 ////////////////////////////////////////////////////////////////
 //DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -12000, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
