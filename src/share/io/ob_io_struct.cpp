@@ -3435,7 +3435,7 @@ ObIOTracer::~ObIOTracer()
 int ObIOTracer::init(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  auto attr = SET_USE_500("io_trace_map");
+  const ObMemAttr attr = SET_USE_500("io_trace_map");
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -3588,6 +3588,13 @@ void ObIOTracer::print_status()
     ObIArray<TraceItem> &trace_array_;
   };
 
+  struct {
+    bool operator()(const TraceItem &left, const TraceItem &right) const
+    {
+      return left.count_ < right.count_;
+    }
+  } sort_fn;
+
   int ret = OB_SUCCESS;
   CountFn counter;
   if (OB_FAIL(counter.init())) {
@@ -3602,9 +3609,7 @@ void ObIOTracer::print_status()
     } else if (OB_FAIL(counter.bt_count_.foreach_refactored(store_fn))) {
       LOG_WARN("get max backtrace count failed", K(ret));
     } else {
-      std::sort(trace_array.begin(), trace_array.end(), [](const TraceItem &left, const TraceItem &right) {
-          return left.count_ > right.count_;
-          });
+      std::sort(trace_array.begin(), trace_array.end(), sort_fn);
       LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), "trace_request_count", counter.req_count_, "distinct_backtrace_count", trace_array.count());
       const int64_t print_count = min(5, trace_array.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < print_count; ++i) {
