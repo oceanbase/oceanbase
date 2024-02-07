@@ -648,8 +648,8 @@ public:
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-    const uint64_t tv = ObTimeUtility::current_time();
-    ObCurTraceId::set(&tv);
+    ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1", 2023);
+    ObCurTraceId::init(ip_port);
     GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     omt::the_ctrl_of_enable_transaction_free_route = true;

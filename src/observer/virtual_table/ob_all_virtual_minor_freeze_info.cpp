@@ -282,8 +282,6 @@ int ObAllVirtualMinorFreezeInfo::generate_memtables_info()
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[3], to_cstring(memtables_info_[i].write_ref_cnt_), size);
       // unsubmitted_cnt
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[4], to_cstring(memtables_info_[i].unsubmitted_cnt_), size);
-      // unsynced_cnt
-      append_memtable_info_string(MEMTABLE_INFO_MEMBER[5], to_cstring(memtables_info_[i].unsynced_cnt_), size);
       // current_right_boundary
       append_memtable_info_string(MEMTABLE_INFO_MEMBER[6], to_cstring(memtables_info_[i].current_right_boundary_), size);
       // end of the memtable_info

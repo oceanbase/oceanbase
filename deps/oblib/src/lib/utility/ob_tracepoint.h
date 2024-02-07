@@ -775,6 +775,7 @@ class EventTable
       EN_TX_FREE_ROUTE_STATE_SIZE = 2003,
       // Transaction common
       EN_TX_RESULT_INCOMPLETE = 2011,
+      EN_CHECK_TX_CTX_LOCK = 2013,
       EN_THREAD_HANG = 2022,
 
       EN_ENABLE_SET_TRACE_CONTROL_INFO = 2100,

@@ -133,7 +133,7 @@ OB_DEF_SERIALIZE_SIZE(ObTxRollbackSPMsg)
 {
   int len = 0;
   len += ObTxMsg::get_serialize_size();
-  LST_DO_CODE(OB_UNIS_ADD_LEN, savepoint_, op_sn_, branch_id_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, savepoint_, op_sn_, tx_seq_base_);
   if (OB_NOT_NULL(tx_ptr_)) {
     OB_UNIS_ADD_LEN(true);
     OB_UNIS_ADD_LEN(*tx_ptr_);
@@ -149,7 +149,7 @@ OB_DEF_SERIALIZE(ObTxRollbackSPMsg)
 {
   int ret = ObTxMsg::serialize(buf, buf_len, pos);
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE, savepoint_, op_sn_, branch_id_);
+    LST_DO_CODE(OB_UNIS_ENCODE, savepoint_, op_sn_, tx_seq_base_);
     if (OB_NOT_NULL(tx_ptr_)) {
       OB_UNIS_ENCODE(true);
       OB_UNIS_ENCODE(*tx_ptr_);
@@ -166,7 +166,7 @@ OB_DEF_DESERIALIZE(ObTxRollbackSPMsg)
 {
   int ret = ObTxMsg::deserialize(buf, data_len, pos);
   if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_DECODE, savepoint_, op_sn_, branch_id_);
+    LST_DO_CODE(OB_UNIS_DECODE, savepoint_, op_sn_, tx_seq_base_);
     bool has_tx_ptr = false;
     OB_UNIS_DECODE(has_tx_ptr);
     if (has_tx_ptr) {

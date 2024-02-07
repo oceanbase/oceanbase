@@ -69,13 +69,13 @@ void ObStoreCtx::reset()
 {
   ls_id_.reset();
   ls_ = nullptr;
+  branch_ = 0;
   tablet_id_.reset();
   table_iter_ = nullptr;
   table_version_ = INT64_MAX;
   timeout_ = -1;
   mvcc_acc_ctx_.reset();
   tablet_stat_.reset();
-  replay_log_scn_.set_max();
   is_read_store_ctx_ = false;
 }
 

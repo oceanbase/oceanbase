@@ -248,6 +248,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   context.store_ctx_ = &store_ctx;
   context.allocator_ = &allocator;
   context.stmt_allocator_ = &allocator;
+  context.merge_scn_.convert_from_ts(996);
   context.is_inited_ = true;
 
   ObDatumRange key_range;
@@ -274,6 +275,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx1.is_inited_ = true;
   ctx1.ls_id_ = ls_id;
   ctx1.exec_info_.max_applying_log_ts_.convert_from_ts(1);
+  ctx1.replay_completeness_.set(true);
+  ctx1.rec_log_ts_.convert_from_ts(996);
   ObTxData data1;
   // ctx1.tx_data_ = &data1;
   ctx1.ctx_tx_data_.test_init(data1, &ls_tx_ctx_mgr_);
@@ -285,6 +288,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ctx2.is_inited_ = true;
   ctx2.ls_id_ = ls_id;
   ctx2.exec_info_.max_applying_log_ts_.convert_from_ts(2);
+  ctx2.replay_completeness_.set(true);
+  ctx2.rec_log_ts_.convert_from_ts(996);
   ObTxData data2;
   // ctx2.tx_data_ = &data2;
   ctx2.ctx_tx_data_.test_init(data2, &ls_tx_ctx_mgr_);

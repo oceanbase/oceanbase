@@ -246,8 +246,7 @@ namespace transaction
           ObTxMsg(ROLLBACK_SAVEPOINT),
           savepoint_(),
           op_sn_(-1),
-          //todo:后续branch_id使用方式确定后，需要相应修改
-          branch_id_(-1),
+          tx_seq_base_(0),
           tx_ptr_(NULL),
           flag_(USE_ASYNC_RESP),
           specified_from_scn_()
@@ -262,8 +261,7 @@ namespace transaction
       }
       ObTxSEQ savepoint_;
       int64_t op_sn_;
-      //todo:后期设计中操作编号是否等于branch_id
-      int64_t branch_id_;
+      int64_t tx_seq_base_;
       const ObTxDesc *tx_ptr_;
       uint8_t flag_;
       ObTxSEQ specified_from_scn_;
@@ -274,8 +272,8 @@ namespace transaction
       const static uint8_t ROLLBACK_FOR_TRANSFER = 0x02;
       bool is_valid() const;
       INHERIT_TO_STRING_KV("txMsg", ObTxMsg,
-                           K_(savepoint), K_(op_sn), K_(branch_id), K_(flag), K_(specified_from_scn),
-                           KP_(tx_ptr));
+                           K_(savepoint), K_(op_sn), K_(tx_seq_base), K_(flag),
+                           K_(specified_from_scn), KP_(tx_ptr));
       OB_UNIS_VERSION(1);
     };
 

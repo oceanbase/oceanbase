@@ -316,7 +316,30 @@ int create_implicit_savepoint(ObTxDesc &tx,
                               const ObTxParam &tx_param,
                               ObTxSEQ &savepoint,
                               const bool release = false);
-
+/**
+ * create_branch_savepoint - establish a _branch_level_ savepoint and which can be
+ *                           used to rolling back to
+ *
+ * _branch_ level savepoint can accomplish partially rollback when multiple writer
+ * run in parallel at the same time window
+ *
+ * this was designed for internal use
+ * the savepoint won't be saved, for efficiency
+ *
+ * before you use this interface, a transaction must have been prepared either
+ * implicitly by `create_implicit_savepoint` or explicitly by `start_tx`
+ *
+ * @tx:                        the target transaction's descriptor
+ *                             transaction state if need
+ * @branch:                    the branch of the savepoint to establish
+ * @savepoint:                 the identifier of the savepoint returned
+ *
+ * Return:
+ * OB_SUCCESS - OK
+ */
+int create_branch_savepoint(ObTxDesc &tx,
+                            const int16_t branch,
+                            ObTxSEQ &savepoint);
 /**
  * create_explicit_savepoint - establish a savepoint and associate name
  *

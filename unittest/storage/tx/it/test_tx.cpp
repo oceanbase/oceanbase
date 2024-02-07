@@ -76,7 +76,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
   return OB_SUCCESS;
 }
 }
-
 class ObTestTx : public ::testing::Test
 {
 public:
@@ -84,8 +83,8 @@ public:
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-    const uint64_t tv = ObTimeUtility::current_time();
-    ObCurTraceId::set(&tv);
+    ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1",2023);
+    ObCurTraceId::init(ip_port);
     GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     const testing::TestInfo* const test_info =
@@ -2414,6 +2413,51 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
   ROLLBACK_TX(n1, tx);
 }
 
+TEST_F(ObTestTx, rollback_with_branch_savepoint)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, global_sp1);
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 100, sp_b100_1);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 100, 111, 100));
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 200, sp_b200_1);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 200, 211, 200));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 101, 112, 100));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 500, 505)); // global write
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 201, 212, 200));
+  // rollback branch 200
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp_b200_1, 2000*1000));
+  // check branch 100 is readable
+  int64_t val = 0;
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 101, val));
+  ASSERT_EQ(val, 112);
+  // check global write is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 500, val));
+  ASSERT_EQ(val, 505);
+  // check branch 200 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 200, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 201, val));
+  // write with branch 200
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 206, 602, 200));
+  // rollback branch 100
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp_b100_1, 2000*1000));
+  // check global write is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 500, val));
+  ASSERT_EQ(val, 505);
+  // check branch 200 is readable
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 206, val));
+  ASSERT_EQ(val, 602);
+  // check branch 100 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 100, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 101, val));
+  // rollback global
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, global_sp1, 2000 * 1000));
+  // check global and branch 200 is un-readable
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 500, val));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 206, val));
+  ROLLBACK_TX(n1, tx);
+}
 ////
 /// APPEND NEW TEST HERE, USE PRE DEFINED MACRO IN FILE `test_tx.dsl`
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)
@@ -2423,6 +2467,10 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
 
 int main(int argc, char **argv)
 {
+  uint64_t checksum = 1100101;
+  uint64_t c = 0;
+  uint64_t checksum1 = ob_crc64(checksum, (void*)&c, sizeof(uint64_t));
+  uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
   system("rm -rf test_tx.log*");
@@ -2433,6 +2481,6 @@ int main(int argc, char **argv)
                        "test_tx.log"); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
-  TRANS_LOG(INFO, "mmhash:", K(h));
+  TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));
   return RUN_ALL_TESTS();
 }

@@ -430,23 +430,6 @@ int ObPartTransCtx::set_2pc_participants_(const ObTxCommitParts& participants)
   return ret;
 }
 
-int ObPartTransCtx::get_2pc_participants_copy(ObLSArray &copy_participants)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_FAIL(lock_.try_lock())) {
-    TRANS_LOG(INFO, "get participants copy fail", K_(trans_id));
-    // rewrite
-    ret = OB_SUCCESS;
-  } else {
-    if (OB_SUCCESS != (ret = copy_participants.assign(exec_info_.participants_))) {
-      TRANS_LOG(WARN, "ObPartTransCtx get participants copy error", K(ret), K(*this));
-    }
-    lock_.unlock();
-  }
-  return ret;
-}
-
 int ObPartTransCtx::set_2pc_request_id_(const int64_t request_id)
 {
   int ret = OB_SUCCESS;

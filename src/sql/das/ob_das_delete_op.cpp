@@ -98,6 +98,7 @@ int ObDASDeleteOp::open_op()
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator> del_adaptor;
   del_adaptor.tx_desc_ = trans_desc_;
   del_adaptor.snapshot_ = snapshot_;
+  del_adaptor.write_branch_id_ = write_branch_id_;
   del_adaptor.ctdef_ = del_ctdef_;
   del_adaptor.rtdef_ = del_rtdef_;
   del_adaptor.related_ctdefs_ = &related_ctdefs_;

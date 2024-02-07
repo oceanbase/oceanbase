@@ -15,12 +15,16 @@
 
 #include "lib/function/ob_function.h"
 #include "storage/memtable/mvcc/ob_mvcc.h"
-
 namespace oceanbase
 {
+namespace transaction
+{
+class ObCLogEncryptInfo;
+}
 namespace memtable
 {
-
+class ObMutatorWriter;
+class ObTxFillRedoCtx;
 class ObITxCallbackFunctor
 {
 public:
@@ -72,14 +76,12 @@ protected:
 class ObRemoveCallbacksForFastCommitFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObRemoveCallbacksForFastCommitFunctor(const ObITransCallback *generate_cursor,
-                                        const int64_t need_remove_count)
-    : generate_cursor_(generate_cursor),
-    need_remove_count_(need_remove_count),
+  ObRemoveCallbacksForFastCommitFunctor(const int64_t need_remove_count, const share::SCN &sync_scn)
+    : need_remove_count_(need_remove_count),
+    sync_scn_(sync_scn),
     last_scn_for_remove_(share::SCN::min_scn()),
     checksum_scn_(share::SCN::min_scn()),
-    checksumer_(NULL),
-    meet_generate_cursor_(false) {}
+    checksumer_(NULL) {}
 
   virtual bool is_iter_end(ObITransCallback *callback) const override
   {
@@ -88,21 +90,18 @@ public:
     if (NULL == callback) {
       // case1: the callback is nullptr
       is_iter_end = true;
-    } else if (callback->need_fill_redo() || callback->need_submit_log()) {
+    } else if (callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (share::SCN::max_scn() == callback->get_scn()) {
+    } else if (sync_scn_ < callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (share::SCN::min_scn() != last_scn_for_remove_
-               && callback->get_scn() != last_scn_for_remove_) {
+    } else if (callback->get_scn().is_min()) {
+      usleep(5000);
+      ob_abort();
+    } else if (0 >= need_remove_count_ && callback->get_scn() != last_scn_for_remove_) {
       // case4: the callback has exceeded the last log whose log ts need to be
       //         removed
-      is_iter_end = true;
-    } else if (share::SCN::min_scn() == last_scn_for_remove_
-               && 0 >= need_remove_count_) {
-      // case6: the callback has not reached the last log whose log ts need to
-      //         be removed while having no logs need to be removed
       is_iter_end = true;
     } else {
       is_iter_end = false;
@@ -112,7 +111,7 @@ public:
   }
 
   void set_checksumer(const share::SCN checksum_scn,
-                      ObBatchChecksum *checksumer)
+                      TxChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
@@ -126,89 +125,41 @@ public:
   int operator()(ObITransCallback *callback)
   {
     int ret = OB_SUCCESS;
-
-    if (NULL == checksumer_) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-    } else if (callback->get_scn() >= checksum_scn_
-               && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
+    if (checksumer_ && callback->get_scn() >= checksum_scn_
+        && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
       TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
     } else if (OB_FAIL(callback->checkpoint_callback())) {
       TRANS_LOG(ERROR, "row remove callback failed", K(ret), K(*callback));
     } else {
       need_remove_callback_ = true;
-      need_remove_count_--;
-
-      // If we are removing callback pointed by generate_cursor, we need reset
-      // the generate_cursor. Otherwise the dangling pointer may coredump.
-      if (generate_cursor_ == callback) {
-        meet_generate_cursor_ = true;
-      }
-
-      // if we satisfy the removing count of fast commit, we still need remember
-      // the last log ts we have already removed and then continue to remove the
-      // callbacks until all callbacks with the same log ts has been removed in
-      // order to satisfy the checksum calculation
-      ObITransCallback *next = callback->get_next();
-      if (share::SCN::min_scn() == last_scn_for_remove_) {
-        if (0 == need_remove_count_) {
-          last_scn_for_remove_ = callback->get_scn();
-        } else if (NULL == next
-                   || next->need_submit_log()
-                   || next->need_fill_redo()
-                   || share::SCN::max_scn() == next->get_scn()) {
-          last_scn_for_remove_ = callback->get_scn();
-        }
-      }
+      --need_remove_count_;
+      last_scn_for_remove_ = callback->get_scn();
     }
 
     return ret;
   }
 
-  // return whether we are removing callbacks that pointed by generate cursor
-  bool meet_generate_cursor() const
-  {
-    return meet_generate_cursor_;
-  }
-
-  VIRTUAL_TO_STRING_KV(KP_(generate_cursor),
-                       K_(need_remove_count),
+  VIRTUAL_TO_STRING_KV(K_(need_remove_count),
+                       KP_(checksumer),
+                       K_(sync_scn),
                        K_(checksum_scn),
-                       K_(last_scn_for_remove),
-                       K_(meet_generate_cursor));
+                       K_(last_scn_for_remove));
 
 private:
-  const ObITransCallback *generate_cursor_;
   int64_t need_remove_count_;
+  share::SCN sync_scn_;
   share::SCN last_scn_for_remove_;
   share::SCN checksum_scn_;
-  ObBatchChecksum *checksumer_;
-
-  bool meet_generate_cursor_;
-};
-
-class ObNeverStopForCallbackTraverseFunctor
-{
-public:
-  bool operator()(ObITransCallback *callback)
-  {
-    UNUSED(callback);
-    return false;
-  }
+  TxChecksum *checksumer_;
 };
 
 // TODO(handora.qc): Adapt to ObRemoveCallbacksWCondFunctor
 class ObRemoveSyncCallbacksWCondFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObRemoveSyncCallbacksWCondFunctor(
-    const ObFunction<bool(ObITransCallback*)> &remove_func,
-    const ObFunction<bool(ObITransCallback*)> &stop_func = ObNeverStopForCallbackTraverseFunctor(),
-    const bool need_remove_data = true,
-    const bool is_reverse = false)
-    : cond_for_remove_(remove_func),
-    cond_for_stop_(stop_func),
-    need_checksum_(false),
+  ObRemoveSyncCallbacksWCondFunctor(const bool need_remove_data = true,
+                                    const bool is_reverse = false)
+    : need_checksum_(false),
     need_remove_data_(need_remove_data),
     checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
@@ -216,7 +167,12 @@ public:
     {
       is_reverse_ = is_reverse;
     }
-
+  virtual bool cond_for_remove(ObITransCallback *callback) = 0;
+  virtual bool cond_for_stop(ObITransCallback *callback) const
+  {
+    UNUSED(callback);
+    return false;
+  };
   bool check_valid_()
   {
     bool is_valid = true;
@@ -230,7 +186,8 @@ public:
   }
 
   void set_checksumer(const share::SCN checksum_scn,
-                      ObBatchChecksum *checksumer)
+                      TxChecksum *checksumer
+                      )
   {
     need_checksum_ = true;
     checksum_scn_ = checksum_scn;
@@ -242,8 +199,7 @@ public:
     if (need_checksum_) {
       return checksum_last_scn_;
     } else {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "we donot go here if we donot checksum", KPC(this));
-      return share::SCN::min_scn();
+      return share::SCN::invalid_scn();
     }
   }
 
@@ -254,13 +210,13 @@ public:
     if (NULL == callback) {
       // case1: the callback is nullptr
       is_iter_end = true;
-    } else if (callback->need_fill_redo() || callback->need_submit_log()) {
+    } else if (callback->need_submit_log()) {
       // case2: the callback has not been sync successfully
       is_iter_end = true;
     } else if (share::SCN::max_scn() == callback->get_scn()) {
       // case3: the callback has not been sync successfully
       is_iter_end = true;
-    } else if (cond_for_stop_(callback)) {
+    } else if (cond_for_stop(callback)) {
       // case4: user want to stop here
       is_iter_end = true;
     } else {
@@ -273,19 +229,20 @@ public:
   int operator()(ObITransCallback *callback)
   {
     int ret = OB_SUCCESS;
-
     if (!check_valid_()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "we cannot calc checksum when reverse remove", K(ret), KPC(this));
-    } else if (callback->need_fill_redo() || callback->need_submit_log()) {
+    } else if (callback->need_submit_log()) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "remove synced will never go here", K(ret), KPC(callback));
-    } else if (need_checksum_
-               && callback->get_scn() >= checksum_scn_
-               && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
+    } else if (need_checksum_ && callback->get_scn() >= checksum_scn_ ) {
+      if (OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
       TRANS_LOG(WARN, "row remove callback failed", K(ret), K(*callback));
-    } else if (FALSE_IT(checksum_last_scn_ = callback->get_scn())) {
-    } else if (cond_for_remove_(callback)) {
+      } else if (FALSE_IT(checksum_last_scn_ = callback->get_scn())) {
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (cond_for_remove(callback)) {
       if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
         TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
       } else if (!need_remove_data_ && OB_FAIL(callback->checkpoint_callback())) {
@@ -300,32 +257,31 @@ public:
 
   VIRTUAL_TO_STRING_KV(K_(need_checksum),
                        K_(need_remove_data),
+                       K_(remove_cnt),
                        K_(checksum_scn),
                        K_(checksum_last_scn));
 
 private:
-  ObFunction<bool(ObITransCallback*)> cond_for_remove_;
-  ObFunction<bool(ObITransCallback*)> cond_for_stop_;
   bool need_checksum_;
   bool need_remove_data_;
   share::SCN checksum_scn_;
-  ObBatchChecksum *checksumer_;
+  TxChecksum *checksumer_;
   share::SCN checksum_last_scn_;
 };
 
 class ObRemoveCallbacksWCondFunctor : public ObITxCallbackFunctor
 {
 public:
-  ObRemoveCallbacksWCondFunctor(ObFunction<bool(ObITransCallback*)> func,
-                                const bool need_remove_data = true)
-    : cond_for_remove_(func),
-    need_remove_data_(need_remove_data),
+  ObRemoveCallbacksWCondFunctor(const share::SCN right_bound, const bool need_remove_data = true)
+    : need_remove_data_(need_remove_data),
+    right_bound_(right_bound),
     checksum_scn_(share::SCN::min_scn()),
     checksumer_(NULL),
     checksum_last_scn_(share::SCN::min_scn()) {}
-
+  virtual bool cond_for_remove(ObITransCallback* callback) = 0;
   void set_checksumer(const share::SCN checksum_scn,
-                      ObBatchChecksum *checksumer)
+                      TxChecksum *checksumer
+                      )
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
@@ -336,11 +292,12 @@ public:
     if (NULL != checksumer_) {
       return checksum_last_scn_;
     } else {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "we donot go here if we donot checksum", KPC(this));
-      return share::SCN::min_scn();
+      return share::SCN::invalid_scn();
     }
   }
-
+  bool is_iter_end(ObITransCallback *callback) const {
+    return callback->get_scn() > right_bound_;
+  }
   int operator()(ObITransCallback *callback)
   {
     int ret = OB_SUCCESS;
@@ -348,17 +305,9 @@ public:
     if (NULL == callback) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
-    } else if (!callback->need_fill_redo() && callback->need_submit_log()) {
-      // Case 1: callback synced before proposed to paxos
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "It will never on success before submit log", KPC(callback));
-    } else if (callback->need_fill_redo() && !callback->need_submit_log()) {
-      // Case 2: callback has been submitted but not be synced
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "callbacks cannot be removed before synced", KPC(callback));
-    } else if (callback->need_fill_redo() && callback->need_submit_log()) {
-      // Case 3: callback has not been proposed to paxos
-      if (cond_for_remove_(callback)) {
+    } else if (callback->need_submit_log()) {
+      // Case 1: callback has not been proposed to paxos
+      if (cond_for_remove(callback)) {
         if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
           TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
         } else if (!need_remove_data_ && OB_FAIL(callback->checkpoint_callback())) {
@@ -367,14 +316,12 @@ public:
           need_remove_callback_ = true;
         }
       }
-    } else if (!callback->need_fill_redo() && !callback->need_submit_log()) {
-      // Case 4: callback has synced successfully
-      if (cond_for_remove_(callback)) {
-        if (NULL == checksumer_) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-        } else if (callback->get_scn() >= checksum_scn_
-                   && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
+    } else if (!callback->need_submit_log()) {
+      // Case 2: callback has submitted to log-service may not persistented
+      // we check removable in cond_for_remove_ ensure it is synced
+      if (cond_for_remove(callback)) {
+        if (checksumer_ && callback->get_scn() >= checksum_scn_
+            && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
           TRANS_LOG(WARN, "calc checksum callback failed", K(ret), K(*callback));
         } else if (need_remove_data_ && OB_FAIL(callback->rollback_callback())) {
           TRANS_LOG(WARN, "rollback callback failed", K(ret), K(*callback));
@@ -382,17 +329,18 @@ public:
           TRANS_LOG(WARN, "checkpoint callback failed", K(ret), K(*callback));
         } else {
           need_remove_callback_ = true;
-          checksum_last_scn_ = callback->get_scn();
+          if (checksumer_) {
+            checksum_last_scn_ = callback->get_scn();
+          }
         }
       } else {
-        if (NULL == checksumer_) {
-          ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
-        } else if (callback->get_scn() >= checksum_scn_
-                   && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
-          TRANS_LOG(WARN, "row remove callback failed", K(ret), K(*callback));
-        } else {
-          checksum_last_scn_ = callback->get_scn();
+        if (checksumer_) {
+          if (callback->get_scn() >= checksum_scn_
+              && OB_FAIL(callback->calc_checksum(checksum_scn_, checksumer_))) {
+            TRANS_LOG(WARN, "row remove callback failed", K(ret), K(*callback));
+          } else {
+            checksum_last_scn_ = callback->get_scn();
+          }
         }
       }
     }
@@ -401,14 +349,16 @@ public:
   }
 
   VIRTUAL_TO_STRING_KV(K_(need_remove_data),
+                       K_(right_bound),
+                       KP_(checksumer),
                        K_(checksum_scn),
                        K_(checksum_last_scn));
 
 private:
-  ObFunction<bool(ObITransCallback*)> cond_for_remove_;
   bool need_remove_data_;
+  share::SCN right_bound_;
   share::SCN checksum_scn_;
-  ObBatchChecksum *checksumer_;
+  TxChecksum *checksumer_;
   share::SCN checksum_last_scn_;
 };
 
@@ -444,9 +394,11 @@ public:
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
     /* } else if (is_commit_ && */
     /*            (callback->need_submit_log() */
-    /*             || callback->need_fill_redo())) { */
     /*   ret = OB_ERR_UNEXPECTED; */
     /*   TRANS_LOG(ERROR, "unexpected callback", KP(callback)); */
+    } else if (is_commit_ && callback->get_scn().is_max()) {
+      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", KP(callback));
+      ob_abort();
     } else if (is_commit_
                && OB_FAIL(callback->trans_commit())) {
       TRANS_LOG(ERROR, "trans commit failed", KPC(callback));
@@ -473,7 +425,6 @@ private:
     if (!is_commit_ &&
         !need_print_ &&
         callback->need_submit_log() &&
-        callback->need_fill_redo() &&
         callback->is_logging_blocked()) {
       need_print_ = true;
     }
@@ -500,13 +451,7 @@ public:
     if (NULL == callback) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
-    } else if (callback->need_fill_redo() && !callback->need_submit_log()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "all callbacks must be invoked before leader switch", KPC(callback));
-    } else if (!callback->need_fill_redo() && callback->need_submit_log()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "It will never on success before submit log", KPC(callback));
-    } else if (callback->need_fill_redo() && callback->need_submit_log()) {
+    } else if (callback->need_submit_log()) {
       callback->rollback_callback();
       need_remove_callback_ = true;
     }
@@ -529,17 +474,8 @@ public:
     if (NULL == callback) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unexpected callback", KP(callback));
-    } else if (callback->need_fill_redo() && callback->need_submit_log()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "sync log fail will only touch submitted log", KPC(callback));
-    } else if (!callback->need_fill_redo() && !callback->need_submit_log()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "sync log fail will only touch unsynced log", KPC(callback));
-    } else if (!callback->need_fill_redo() && callback->need_submit_log()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "It will never on success before submit log", KPC(callback));
-    } else if (callback->need_fill_redo() && !callback->need_submit_log()) {
-      if (OB_FAIL(callback->log_sync_fail_cb())) {
+    } else if (!callback->need_submit_log()) { // log has been submitted out
+      if (OB_FAIL(callback->log_sync_fail_cb(max_committed_scn_))) {
         // log_sync_fail_cb will never report error
         TRANS_LOG(ERROR, "log sync fail cb report error", K(ret));
       } else {
@@ -549,8 +485,8 @@ public:
 
     return ret;
   }
-
-  VIRTUAL_TO_STRING_KV("ObSyncLogFailFunctor", "ObSyncLogFailFunctor");
+  share::SCN max_committed_scn_;
+  TO_STRING_KV(K_(max_committed_scn));
 };
 
 class ObSearchCallbackWCondFunctor : public ObITxCallbackFunctor
@@ -570,7 +506,7 @@ public:
     return NULL != search_res_;
   }
 
-  virtual int operator()(ObITransCallback *callback) override
+    virtual int operator()(ObITransCallback *callback) override
   {
     int ret = OB_SUCCESS;
 
@@ -603,7 +539,7 @@ public:
     return ObTimeUtility::current_time() - start_ts_ >= 300 * 1000L;
   }
 
-  virtual int operator()(ObITransCallback *callback) override
+    virtual int operator()(ObITransCallback *callback) override
   {
     int ret = OB_SUCCESS;
 
@@ -649,7 +585,7 @@ public:
 
 
   void set_checksumer(const share::SCN checksum_scn,
-                      ObBatchChecksum *checksumer)
+                      TxChecksum *checksumer)
   {
     checksum_scn_ = checksum_scn;
     checksumer_ = checksumer;
@@ -663,7 +599,6 @@ public:
   int operator()(ObITransCallback *callback)
   {
     int ret = OB_SUCCESS;
-
     if (NULL == checksumer_) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "checksumer is lost", K(ret), K(*callback));
@@ -686,10 +621,38 @@ public:
 private:
   share::SCN target_scn_;
   share::SCN checksum_scn_;
-  ObBatchChecksum *checksumer_;
+  TxChecksum *checksumer_;
   share::SCN checksum_last_scn_;
 };
 
+class ObITxFillRedoFunctor : public ObITxCallbackFunctor
+{
+public:
+  int operator()(ObITransCallback *iter) = 0;
+  int64_t get_data_size() const { return data_size_; }
+  transaction::ObTxSEQ get_max_seq_no() const { return max_seq_no_; }
+  void reset() {
+    data_size_ = 0;
+    max_seq_no_.reset();
+  }
+protected:
+  int64_t data_size_;
+  transaction::ObTxSEQ max_seq_no_;
+};
+
+class ObITxCallbackFinder : public ObITxCallbackFunctor {
+public:
+  ObITxCallbackFinder() : found_(false) {}
+  virtual bool match(ObITransCallback *callback) = 0;
+  int operator()(ObITransCallback *callback) {
+    found_ = match(callback);
+    return OB_SUCCESS;
+  }
+  bool is_iter_end(ObITransCallback *callback) const { return found_; }
+  bool is_found() const { return found_; }
+private:
+  bool found_;
+};
 } // memtable
 } // oceanbase
 

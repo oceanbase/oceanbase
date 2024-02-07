@@ -430,13 +430,17 @@ public:
       create_timestamp_(0),
       create_schema_version_(-1)
   {
+    // here, ensure lock-callback was dispatched to single callback-list
+    // forcedly set the seq_no's branch to zero
+    ObTxSEQ seq_no2 = seq_no;
+    seq_no2.set_branch(0);
     set(lock_id,
         lock_mode,
         owner_id,
         trans_id,
         op_type,
         lock_op_status,
-        seq_no,
+        seq_no2,
         create_timestamp,
         create_schema_version);
   }

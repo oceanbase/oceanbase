@@ -115,7 +115,8 @@ TXN_FREE_ROUTE_MEMBERS(static, , PRE_STATIC_DECODE, POST_STATIC_DECODE,
                        access_mode_,
                        sess_id_,
                        timeout_us_,
-                       expire_ts_);
+                       expire_ts_,
+                       seq_base_);
 TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECODE, POST_DYNAMIC_DECODE,
                        op_sn_,
                        state_,
@@ -136,7 +137,8 @@ TXN_FREE_ROUTE_MEMBERS(extra, , PRE_EXTRA_DECODE, POST_EXTRA_DECODE,
                        addr_,       // dup with static
                        isolation_,  // dup with static
                        snapshot_version_,
-                       snapshot_scn_);
+                       snapshot_scn_,
+                       seq_base_);
 
 #undef TXN_FREE_ROUTE_MEMBERS
 int64_t ObTxDesc::estimate_state_size()

@@ -367,10 +367,10 @@ int TestCompactionPolicy::mock_memtable(
     snapshot_scn.convert_for_tx(snapshot_version);
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
-    memtable->unsynced_cnt_ = 0;
+    memtable->unsubmitted_cnt_ = 0;
     memtable->is_tablet_freeze_ = true;
     memtable->state_ = ObMemtableState::MINOR_FROZEN;
-    memtable->set_resolve_active_memtable_left_boundary(true);
+    memtable->set_resolved_active_memtable_left_boundary(true);
     memtable->set_frozen();
     memtable->location_ = storage::checkpoint::ObFreezeCheckpointLocation::PREPARE;
   }

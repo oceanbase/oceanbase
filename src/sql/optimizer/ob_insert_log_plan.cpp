@@ -725,11 +725,6 @@ int ObInsertLogPlan::check_insert_location_need_multi_partition_dml(ObLogicalOpe
     } else {
       is_multi_part_dml = true;
     }
-  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
-    // #issue/44052024
-    // force insert_up & replace use distribute op to avoid 4.0 branch rollback bug.
-    // should remove this condition in 4.1
-    is_multi_part_dml = true;
   } else if (OB_FAIL(check_if_match_partition_wise_insert(*insert_sharding,
                                                           top,
                                                           is_partition_wise))) {
@@ -799,6 +794,7 @@ int ObInsertLogPlan::check_if_match_partition_wise_insert(ObShardingInfo &target
   } else {
     is_partition_wise = is_match && !top.is_exchange_allocated();
   }
+  LOG_TRACE("check partition wise", K(is_match), K(top.is_exchange_allocated()));
   return ret;
 }
 

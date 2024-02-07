@@ -78,12 +78,8 @@ public:
   // and always succeed.
   void mvcc_undo(ObMvccRow *value);
 
-  // mvcc_replay builds the ObMvccTransNode according to the arg and replay
-  // into the ascending ordering of the value based on the scn recorded in ctx.
-  int mvcc_replay(ObIMemtableCtx &ctx,
-                  const ObMemtableKey *stored_key,
-                  ObMvccRow &value,
-                  const ObTxNodeArg &arg,
+  // mvcc_replay builds the ObMvccTransNode according to the arg
+  int mvcc_replay(const ObTxNodeArg &arg,
                   ObMvccReplayResult &res);
 
   // ensure_kv is used to make sure b-tree is no longer broken by the deleted
@@ -120,8 +116,7 @@ private:
   int try_compact_row_when_mvcc_read_(const share::SCN &snapshot_version,
                                       ObMvccRow &row);
 
-  int build_tx_node_(ObIMemtableCtx &ctx,
-                     const ObTxNodeArg &arg,
+  int build_tx_node_(const ObTxNodeArg &arg,
                      ObMvccTransNode *&node);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMvccEngine);

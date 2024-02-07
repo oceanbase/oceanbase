@@ -180,7 +180,7 @@ int ObPDMLOpBatchRowCache::add_row(const ObExprPtrIArray &row, ObTabletID tablet
   // the 2MB config is tested optimal under PDML concurrency=4 and concurrency=8 cases
   // TODO: maybe we can introduce a dynamic control policy
   //       concidering the tenant overall access behavior to storage
-  constexpr int64_t max_pdml_cache_size_per_thread = 2 * 1024 * 1024;
+  const int64_t max_pdml_cache_size_per_thread = GCONF._pdml_thread_cache_size;
   if (!with_barrier_ && cached_rows_size_ > max_pdml_cache_size_per_thread) {
     ret = OB_EXCEED_MEM_LIMIT;
   } else if (OB_FAIL(process_dump())) {

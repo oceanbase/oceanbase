@@ -955,39 +955,50 @@ public:
         tx_ctx->print_trace_log();
       }
       if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
         share::ObLSArray participants_arr;
         ObTxData *tx_data = NULL;
+        int busy_cbs_cnt = -1;
         tx_ctx->ctx_tx_data_.get_tx_data_ptr(tx_data);
-        if (OB_FAIL(tx_ctx->get_2pc_participants_copy(participants_arr))) {
-          TRANS_LOG_RET(WARN, ret, "ObTxStat get participants copy error", K(ret));
-        } else if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
-                                            tx_id,
-                                            tx_ctx->tenant_id_,
-                                            has_decided,
-                                            tx_ctx->ls_id_,
-                                            participants_arr,
-                                            tx_ctx->ctx_create_time_,
-                                            tx_ctx->trans_expired_time_,
-                                            tx_ctx->ref_,
-                                            tx_ctx->last_op_sn_,
-                                            tx_ctx->pending_write_,
-                                            (int64_t)tx_ctx->exec_info_.state_,
-                                            tx_ctx->exec_info_.trans_type_,
-                                            tx_ctx->part_trans_action_,
-                                            tx_ctx,
-                                            tx_ctx->get_pending_log_size(),
-                                            tx_ctx->get_flushed_log_size(),
-                                            tx_ctx->role_state_,
-                                            tx_ctx->session_id_,
-                                            tx_ctx->exec_info_.scheduler_,
-                                            tx_ctx->is_exiting_,
-                                            tx_ctx->exec_info_.xid_,
-                                            tx_ctx->exec_info_.upstream_,
-                                            tx_ctx->last_request_ts_,
-                                            OB_NOT_NULL(tx_data) ? tx_data->start_scn_.atomic_load() : SCN::invalid_scn(),
-                                            OB_NOT_NULL(tx_data) ? tx_data->end_scn_.atomic_load() : SCN::invalid_scn(),
-                                            tx_ctx->get_rec_log_ts_(),
-                                            tx_ctx->sub_state_.is_transfer_blocking()))) {
+        if (OB_TMP_FAIL(tx_ctx->get_stat_for_virtual_table(participants_arr, busy_cbs_cnt))) {
+          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat get participants copy error", K(tmp_ret));
+          // push an invalid ls id to hint the failure
+          participants_arr.push_back(share::ObLSID());
+        }
+        if (OB_TMP_FAIL(tx_ctx->mt_ctx_.get_callback_list_stat(tx_stat.callback_list_stats_))) {
+          TRANS_LOG_RET(WARN, tmp_ret, "ObTxStat get callback lists stat error", K(tmp_ret));
+        }
+        if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
+                                 tx_id,
+                                 tx_ctx->tenant_id_,
+                                 has_decided,
+                                 tx_ctx->ls_id_,
+                                 participants_arr,
+                                 tx_ctx->ctx_create_time_,
+                                 tx_ctx->trans_expired_time_,
+                                 tx_ctx->ref_,
+                                 tx_ctx->last_op_sn_,
+                                 tx_ctx->pending_write_,
+                                 (int64_t)tx_ctx->exec_info_.state_,
+                                 tx_ctx->exec_info_.trans_type_,
+                                 tx_ctx->part_trans_action_,
+                                 tx_ctx,
+                                 tx_ctx->get_pending_log_size(),
+                                 tx_ctx->get_flushed_log_size(),
+                                 tx_ctx->role_state_,
+                                 tx_ctx->session_id_,
+                                 tx_ctx->exec_info_.scheduler_,
+                                 tx_ctx->is_exiting_,
+                                 tx_ctx->exec_info_.xid_,
+                                 tx_ctx->exec_info_.upstream_,
+                                 tx_ctx->last_request_ts_,
+                                 OB_NOT_NULL(tx_data) ? tx_data->start_scn_.atomic_load() : SCN::invalid_scn(),
+                                 OB_NOT_NULL(tx_data) ? tx_data->end_scn_.atomic_load() : SCN::invalid_scn(),
+                                 tx_ctx->get_rec_log_ts_(),
+                                 tx_ctx->sub_state_.is_transfer_blocking(),
+                                 busy_cbs_cnt,
+                                 (int)tx_ctx->replay_completeness_.complete_,
+                                 tx_ctx->exec_info_.serial_final_scn_))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStat init error", K(ret), KPC(tx_ctx));
         } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
@@ -1302,7 +1313,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else if (ObTxSubmitLogFunctor::SUBMIT_REDO_LOG == action_) {
-      if (OB_FAIL(tx_ctx->submit_redo_log(true))) {
+      if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze())) {
         TRANS_LOG(WARN, "failed to submit redo log", K(ret), K(tx_id));
       }
     } else if (ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG == action_) {

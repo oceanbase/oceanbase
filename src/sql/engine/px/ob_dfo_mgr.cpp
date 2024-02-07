@@ -502,6 +502,11 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
     parent_dfo->set_dml_op(true);
+    const ObPhyOperatorType op_type = phy_op->get_type();
+    LOG_TRACE("set DFO need_branch_id", K(op_type));
+    parent_dfo->set_need_branch_id_op(op_type == PHY_INSERT_ON_DUP
+                                      || op_type == PHY_REPLACE
+                                      || op_type == PHY_LOCK);
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);

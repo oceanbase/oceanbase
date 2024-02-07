@@ -774,7 +774,13 @@ DEF_INT(_tx_result_retention, OB_TENANT_PARAMETER, "300", "[0, 36000]",
         "The tx data can be recycled after at least _tx_result_retention seconds. "
         "Range: [0, 36000]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(_enable_parallel_redo_logging, OB_CLUSTER_PARAMETER, "True",
+         "enable parallel write redo log.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "16M", "[0B,)",
+        "size of single transaction's pending redo log to trigger parallel writes redo log. "
+        "Range: [0B,+∞)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ob_get_gts_ahead_interval, OB_CLUSTER_PARAMETER, "0s", "[0s, 1s]",
          "get gts ahead interval. Range: [0s, 1s]",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1610,6 +1616,10 @@ DEF_TIME(_balance_wait_killing_transaction_end_threshold, OB_TENANT_PARAMETER, "
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(_pdml_thread_cache_size, OB_CLUSTER_PARAMETER, "2M", "[1B,)",
+        "The cache size of per pdml thread."
+        "Range:[1B, )",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",

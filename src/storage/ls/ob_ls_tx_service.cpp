@@ -385,8 +385,8 @@ int ObLSTxService::replay(const void *buffer,
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(ObTxReplayExecutor::execute(parent_, this, log_buf, nbytes,
                                                  tmp_pos, lsn, scn,
-                                                 base_header.get_replay_hint(),
-                                                 ls_id_, parent_->get_tenant_id()))) {
+                                                 base_header,
+                                                 ls_id_))) {
     LOG_WARN("replay tx log error", K(ret), K(lsn), K(scn));
   }
   return ret;
@@ -518,7 +518,7 @@ int ObLSTxService::flush(SCN &recycle_scn)
     // only flush the common_checkpoint that whose clog need recycle
     if (OB_NOT_NULL(common_checkpoints_[i]) && recycle_scn >= common_checkpoints_[i]->get_rec_scn()) {
       if (OB_SUCCESS != (tmp_ret = common_checkpoints_[i]->flush(recycle_scn))) {
-        TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(common_checkpoints_[i]));
+        TRANS_LOG(WARN, "obCommonCheckpoint flush failed", K(tmp_ret), K(i), K(common_checkpoints_[i]));
       }
     }
   }

@@ -113,7 +113,6 @@ public:
                        const share::SCN &end_scn,
                        const int64_t write_ref_cnt,
                        const int64_t unsubmitted_cnt,
-                       const int64_t unsynced_cnt,
                        const int64_t current_right_boundary);
   ~ObFrozenMemtableInfo();
 
@@ -123,7 +122,6 @@ public:
            const share::SCN &end_scn,
            const int64_t write_ref_cnt,
            const int64_t unsubmitted_cnt,
-           const int64_t unsynced_cnt,
            const int64_t current_right_boundary);
   bool is_valid();
 
@@ -133,10 +131,9 @@ public:
   share::SCN end_scn_;
   int64_t write_ref_cnt_;
   int64_t unsubmitted_cnt_;
-  int64_t unsynced_cnt_;
   int64_t current_right_boundary_;
   TO_STRING_KV(K_(tablet_id), K_(start_scn), K_(end_scn), K_(write_ref_cnt),
-               K_(unsubmitted_cnt), K_(unsynced_cnt), K_(current_right_boundary));
+               K_(unsubmitted_cnt), K_(current_right_boundary));
 };
 
 class ObFreezerStat
@@ -157,7 +154,6 @@ public:
                         const share::SCN &end_scn,
                         const int64_t write_ref_cnt,
                         const int64_t unsubmitted_cnt,
-                        const int64_t unsynced_cnt,
                         const int64_t current_right_boundary);
   int remove_memtable_info(const ObTabletID &tablet_id);
   int get_memtables_info(common::ObSArray<ObFrozenMemtableInfo> &memtables_info);

@@ -318,6 +318,7 @@ int ObDASUpdateOp::open_op()
   ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator> upd_adaptor;
   upd_adaptor.tx_desc_ = trans_desc_;
   upd_adaptor.snapshot_ = snapshot_;
+  upd_adaptor.write_branch_id_ = write_branch_id_;
   upd_adaptor.ctdef_ = upd_ctdef_;
   upd_adaptor.rtdef_ = upd_rtdef_;
   upd_adaptor.related_ctdefs_ = &related_ctdefs_;

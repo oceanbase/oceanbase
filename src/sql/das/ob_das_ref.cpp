@@ -515,6 +515,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
   } else {
     task_op->set_trans_desc(session->get_tx_desc());
     task_op->set_snapshot(&get_exec_ctx().get_das_ctx().get_snapshot());
+    task_op->set_write_branch_id(get_exec_ctx().get_das_ctx().get_write_branch_id());
     task_op->set_tenant_id(session->get_effective_tenant_id());
     task_op->set_task_id(task_id);
     task_op->in_stmt_retry_ = session->get_is_in_retry();
