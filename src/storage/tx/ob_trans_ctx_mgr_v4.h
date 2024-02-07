@@ -548,6 +548,9 @@ public:
   // check is blocked
   bool is_tx_blocked() const { return is_tx_blocked_(); }
 
+  // check all blocked
+  bool is_all_blocked() const { return is_all_blocked_(); }
+
   // Switch the prev_aggre_log_ts and aggre_log_ts during dump starts
   int refresh_aggre_rec_scn();
 
@@ -1105,6 +1108,8 @@ public:
   int get_max_decided_scn(const share::ObLSID &ls_id, share::SCN & scn);
 
   int do_all_ls_standby_cleanup(ObTimeGuard &cleanup_timeguard);
+
+  int check_ls_status(const share::ObLSID &ls_id);
 private:
   int create_ls_(const int64_t tenant_id,
                  const share::ObLSID &ls_id,
