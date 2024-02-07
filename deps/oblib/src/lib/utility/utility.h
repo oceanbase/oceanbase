@@ -1057,15 +1057,23 @@ inline void set_member_allocator(T &dest, common::ObIAllocator *alloc)
 template <typename T>
 inline int construct_assign_wrap(T &dest, const T &src, TrueType)
 {
+  int ret = OB_SUCCESS;
   new(&dest) T();
-  return dest.assign(src);
+  if (OB_FAIL(dest.assign(src))) {
+    dest.~T();
+  }
+  return ret;
 }
 
 template <typename T>
 inline int construct_assign_wrap(T &dest, const T &src, FalseType)
 {
+  int ret = OB_SUCCESS;
   new(&dest) T(src);
-  return get_copy_assign_ret_wrap(dest, BoolType<HAS_MEMBER(T, get_copy_assign_ret)>());
+  if (OB_FAIL(get_copy_assign_ret_wrap(dest, BoolType<HAS_MEMBER(T, get_copy_assign_ret)>()))) {
+    dest.~T();
+  }
+  return ret;
 }
 
 // This function is used for copy assignment
