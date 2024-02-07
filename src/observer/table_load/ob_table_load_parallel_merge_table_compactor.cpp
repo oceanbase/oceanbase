@@ -132,7 +132,7 @@ void ObTableLoadParallelMergeTableCompactor::stop()
 int ObTableLoadParallelMergeTableCompactor::handle_parallel_merge_success()
 {
   int ret = OB_SUCCESS;
-  if (build_result()) {
+  if (OB_FAIL(build_result())) {
     LOG_WARN("fail to build result", KR(ret));
   } else if (OB_FAIL(compact_ctx_->handle_table_compact_success())) {
     LOG_WARN("fail to notify table compact success", KR(ret));

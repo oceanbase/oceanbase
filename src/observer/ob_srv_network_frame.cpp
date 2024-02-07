@@ -156,7 +156,7 @@ int ObSrvNetworkFrame::init()
     LOG_ERROR("net keepalive register fail", K(ret));
   } else if (hp_io_cnt > 0 && OB_FAIL(net_.high_prio_rpc_net_register(rpc_handler_, high_prio_rpc_transport_))) {
     LOG_ERROR("high prio rpc net register fail", K(ret));
-  } else if (ingress_service_.init(GCONF.cluster_id)) {
+  } else if (OB_FAIL(ingress_service_.init(GCONF.cluster_id))) {
     LOG_ERROR("endpoint ingress service init fail", K(ret));
   }
 #ifdef OB_USE_BABASSL

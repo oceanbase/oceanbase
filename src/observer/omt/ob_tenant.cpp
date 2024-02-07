@@ -1778,6 +1778,7 @@ void ObTenant::check_das()
   if (!is_virtual_tenant_id(id_)) {
     ObTenantSwitchGuard guard(this);
     if (OB_ISNULL(MTL(ObDataAccessService *))) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get das ptr", K(MTL_ID()));
     } else {
       double min_cpu = .0;
