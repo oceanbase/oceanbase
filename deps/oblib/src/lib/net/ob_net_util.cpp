@@ -95,10 +95,9 @@ int ObNetUtil::get_local_addr_ipv6(const char *dev_name, char *ipv6, int len,
   return ret;
 }
 
-uint32_t ObNetUtil::get_local_addr_ipv4(const char *dev_name)
+int ObNetUtil::get_local_addr_ipv4(const char *dev_name, uint32_t &addr)
 {
   int ret = OB_SUCCESS;
-  uint32_t ret_addr = 0;
   struct ifaddrs *ifa = nullptr, *ifa_tmp = nullptr;
 
   if (nullptr == dev_name) {
@@ -116,7 +115,7 @@ uint32_t ObNetUtil::get_local_addr_ipv4(const char *dev_name)
           0 == strcmp(ifa_tmp->ifa_name, dev_name)) {
         has_found = true;
         struct sockaddr_in *in = (struct sockaddr_in *) ifa_tmp->ifa_addr;
-        ret_addr = in->sin_addr.s_addr;
+        addr = in->sin_addr.s_addr;
       } // if end
       ifa_tmp = ifa_tmp->ifa_next;
     } // while end
@@ -132,7 +131,7 @@ uint32_t ObNetUtil::get_local_addr_ipv4(const char *dev_name)
     freeifaddrs(ifa);
   }
 
-  return ret_addr;
+  return ret;
 }
 
 std::string ObNetUtil::addr_to_string(uint64_t ipport)

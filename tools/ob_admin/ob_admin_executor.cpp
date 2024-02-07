@@ -183,10 +183,16 @@ int ObAdminExecutor::load_config()
       tmp_addr.set_ip_addr(ipv6, local_port);
       GCTX.self_addr_seq_.set_addr(tmp_addr);
     } else {
-      int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config.devname));
-      ObAddr tmp_addr = GCTX.self_addr();
-      tmp_addr.set_ipv4_addr(ipv4, local_port);
-      GCTX.self_addr_seq_.set_addr(tmp_addr);
+      uint32_t ipv4_net = 0;
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config.devname, ipv4_net))) {
+        LOG_ERROR("get ipv4 address by devname failed", "devname",
+            config.devname.get_value(), KR(ret));
+      } else {
+        int32_t ipv4 = ntohl(ipv4_net);
+        ObAddr tmp_addr = GCTX.self_addr();
+        tmp_addr.set_ipv4_addr(ipv4, local_port);
+        GCTX.self_addr_seq_.set_addr(tmp_addr);
+      }
     }
   }
 

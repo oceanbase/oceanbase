@@ -1859,21 +1859,23 @@ int ObServer::init_config()
   } else {
     if (config_.use_ipv6) {
       char ipv6[MAX_IP_ADDR_LENGTH] = { '\0' };
-      if (0 != obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6))) {
-        ret = OB_ERROR;
-        _LOG_ERROR("call get_local_addr_ipv6 failed, devname:%s, errno:%d.", config_.devname.get_value(), errno);
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6)))) {
+        LOG_ERROR("get ipv6 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
       } else {
         config_.local_ip.set_value(ipv6);
         config_.local_ip.set_version(start_time_);
         _LOG_INFO("set local_ip via devname, local_ip:%s, devname:%s.", ipv6, config_.devname.get_value());
       }
     } else {
-      uint32_t ipv4_binary = obsys::ObNetUtil::get_local_addr_ipv4(config_.devname);
+      uint32_t ipv4_net = 0;
       char ipv4[INET_ADDRSTRLEN] = { '\0' };
-      if (nullptr == inet_ntop(AF_INET, (void *)&ipv4_binary, ipv4, sizeof(ipv4))) {
-        ret = OB_ERROR;
-        _LOG_ERROR("call inet_ntop failed, devname:%s, ipv4_binary:0x%08x, errno:%d.",
-                   config_.devname.get_value(), ipv4_binary, errno);
+      if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
+        LOG_ERROR("get ipv4 address by devname failed", "devname",
+            config_.devname.get_value(), KR(ret));
+      } else if (nullptr == inet_ntop(AF_INET, (void *)&ipv4_net, ipv4, sizeof(ipv4))) {
+        ret = OB_ERR_SYS;
+        LOG_ERROR("call inet_ntop failed", K(ipv4_net), K(errno), KERRMSG, KR(ret));
       } else {
         config_.local_ip.set_value(ipv4);
         config_.local_ip.set_version(start_time_);
@@ -1900,8 +1902,14 @@ int ObServer::init_config()
       obsys::ObNetUtil::get_local_addr_ipv6(config_.devname, ipv6, sizeof(ipv6));
       self_addr_.set_ip_addr(ipv6, local_port);
       } else {
-        int32_t ipv4 = ntohl(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname));
-        self_addr_.set_ipv4_addr(ipv4, local_port);
+        uint32_t ipv4_net = 0;
+        if (OB_FAIL(obsys::ObNetUtil::get_local_addr_ipv4(config_.devname, ipv4_net))) {
+          LOG_ERROR("get ipv4 address by devname failed", "devname",
+              config_.devname.get_value(), KR(ret));
+        } else {
+          int32_t ipv4 = ntohl(ipv4_net);
+          self_addr_.set_ipv4_addr(ipv4, local_port);
+        }
       }
     }
 
