@@ -1276,7 +1276,8 @@ int64_t ObTransService::txn_free_route__get_##name##_state_size(ObTxDesc *tx) \
     l += encoded_length_bool(true);                                     \
     l += encoded_length_i64(1024);                                      \
     if (tx->tx_id_.is_valid()) {                                        \
-      l += tx->name##_state_encoded_length();                           \
+      ObSpinLockGuard guard(tx->lock_);                                 \
+      l += tx->name##_state_encoded_length_for_verify();                \
     }                                                                   \
   }                                                                     \
   return l;                                                             \
@@ -1288,7 +1289,9 @@ int ObTransService::txn_free_route__get_##name##_state(ObTxDesc *tx, const ObTxn
   } else if (OB_NOT_NULL(tx)) {                                         \
     if (OB_FAIL(encode_bool(buf, len, pos, tx->in_tx_for_free_route()))) { \
     } else if (OB_FAIL(encode_i64(buf, len, pos, ctx.global_version_))) { \
-    } else if (tx->tx_id_.is_valid() && OB_FAIL(tx->encode_##name##_state(buf, len, pos))) { \
+    } else if (tx->tx_id_.is_valid()) {                                 \
+      ObSpinLockGuard guard(tx->lock_);                                 \
+      ret = tx->encode_##name##_state_for_verify(buf, len, pos);        \
     }                                                                   \
   }                                                                     \
   return ret;                                                           \
@@ -1300,16 +1303,16 @@ int ObTransService::txn_free_route__cmp_##name##_state(const char* cur_buf, int6
   ObTransID cur_tx_id, last_tx_id;                                      \
   {                                                                     \
     int64_t tx_id = 0;                                                  \
-    if (OB_FAIL(decode_i64(cur_buf, cur_len, cur_pos, &tx_id))) {        \
+    if (OB_FAIL(decode_i64(cur_buf, cur_len, cur_pos, &tx_id))) {       \
     } else { cur_tx_id = ObTransID(tx_id);  }                           \
     if (OB_SUCC(ret) && OB_FAIL(decode_i64(last_buf, last_len, last_pos, &tx_id))) { \
     } else { last_tx_id = ObTransID(tx_id); }                           \
   }                                                                     \
-  if (OB_SUCC(ret) && cur_tx_id != last_tx_id) {                        \
+  if (OB_SUCC(ret) && cur_tx_id != last_tx_id && last_tx_id.is_valid()) { \
     ret = OB_ERR_UNEXPECTED;                                            \
     TRANS_LOG(WARN, "tx_id not equals", K(cur_tx_id), K(last_tx_id));   \
   }                                                                     \
-  if (OB_SUCC(ret) && cur_tx_id.is_valid()) {                           \
+  if (OB_SUCC(ret) && cur_tx_id == last_tx_id && cur_tx_id.is_valid()) { \
     if (cur_len != last_len) {                                          \
       ret = OB_ERR_UNEXPECTED;                                          \
       TRANS_LOG(WARN, "state len not equals", K(cur_len), K(last_len)); \
