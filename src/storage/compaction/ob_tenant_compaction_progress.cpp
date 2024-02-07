@@ -83,6 +83,7 @@ ObTenantCompactionProgress & ObTenantCompactionProgress::operator=(const ObTenan
   sum_time_guard_ = other.sum_time_guard_;
   start_cg_idx_ = other.start_cg_idx_;
   end_cg_idx_ = other.end_cg_idx_;
+  real_finish_cnt_ = other.real_finish_cnt_;
   return *this;
 }
 
@@ -381,6 +382,7 @@ int ObTenantCompactionProgressMgr::update_progress(
         } else {
           array_[pos].unfinished_tablet_cnt_--;
         }
+        array_[pos].real_finish_cnt_++;
       }
 
       array_[pos].data_size_ += total_data_size_delta;
@@ -445,6 +447,7 @@ int ObTenantCompactionProgressMgr::update_unfinish_tablet(const int64_t major_sn
       }
     } else {
       array_[pos].unfinished_tablet_cnt_--;
+      array_[pos].real_finish_cnt_++;
     }
   }
   return ret;

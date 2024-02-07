@@ -906,8 +906,10 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
             // source ls meta has been deleted, but source tablet meta has not been deleted yet.
             ret = OB_SUCCESS;  // ignore ret
             filter = true;
-            LOG_INFO("ignore this tablet replica, sicne it is not in ls_info", K_(tenant_id),
+            if (REACH_TIME_INTERVAL(10_s)) {
+              LOG_INFO("ignore this tablet replica, sicne it is not in ls_info", K_(tenant_id),
                     KPC(replica), K(ls_info));
+            }
           } else {
             LOG_WARN("fail to find ls replica", KR(ret), KPC(replica), K_(tenant_id));
           }

@@ -73,17 +73,19 @@ struct ObTenantCompactionProgress : public ObCompactionProgress
       is_inited_(false),
       total_tablet_cnt_(0),
       unfinished_tablet_cnt_(0),
+      real_finish_cnt_(0),
       sum_time_guard_()
   {
   }
   bool is_valid() const;
   ObTenantCompactionProgress & operator=(const ObTenantCompactionProgress &other);
   INHERIT_TO_STRING_KV("ObCompactionProgress", ObCompactionProgress, K_(is_inited), K_(total_tablet_cnt),
-      K_(unfinished_tablet_cnt), K_(sum_time_guard));
+      K_(unfinished_tablet_cnt), K_(real_finish_cnt), K_(sum_time_guard));
 
   bool is_inited_;
   int64_t total_tablet_cnt_;
   int64_t unfinished_tablet_cnt_;
+  int64_t real_finish_cnt_;
   ObStorageCompactionTimeGuard sum_time_guard_;
 };
 

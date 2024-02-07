@@ -247,6 +247,15 @@ void ObCompactionDagStatus::update_finish_cnt(
   }
 }
 
+int64_t ObCompactionDagStatus::get_cost_long_time(const int64_t prio)
+{
+  int64_t ret_time = INT64_MAX;
+  if (0 < prio && COMPACTION_PRIORITY_MAX > prio) {
+    ret_time = COST_LONG_TIME[prio];
+  }
+  return ret_time;
+}
+
 /*
  * ObCompactionSuggestionMgr implement
  * */
@@ -498,7 +507,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
     int64_t *scan_row_array = nullptr;
     bool need_suggestion = false;
     const int64_t buf_len = OB_DIAGNOSE_INFO_LENGTH;
-    if (ObCompactionDagStatus::COMPACTION_DAG_MAX > type && ObCompactionDagStatus::COST_LONG_TIME[type] <= cost_time) {
+    if (ObCompactionDagStatus::get_cost_long_time(OB_DAG_TYPES[type].init_dag_prio_) <= cost_time) {
       ADD_COMPACTION_INFO_PARAM(buf, buf_len,
                 "reason", get_suggestion_reason(ObCompactionSuggestionReason::DAG_COST_LONGTIME));
       if (TOO_MANY_FAILED_COUNT <= merge_info.retry_cnt_) {
