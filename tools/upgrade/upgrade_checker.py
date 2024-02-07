@@ -589,6 +589,24 @@ def check_not_supported_tenant_name(query_cur):
       fail_list.append('a tenant named all/all_user/all_meta (case insensitive) cannot exist in the cluster, please rename the tenant')
       break
   logging.info('check special tenant name success')
+# 17  检查日志传输压缩是否有使用zlib压缩算法，在升级前需要保证所有observer未开启日志传输压缩或使用非zlib压缩算法
+def check_log_transport_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select count(1) as cnt from oceanbase.__all_virtual_tenant_parameter_info where (name like "log_transport_compress_func" and value like "zlib_1.0")""")
+  if results[0][0] > 0 :
+    fail_list.append('The zlib compression algorithm is no longer supported with log_transport_compress_func, please replace it with other compression algorithms')
+  logging.info('check log_transport_compress_func success')
+# 18 检查升级过程中是否有表使用zlib压缩，在升级前需要保证所有表都不使用zlib压缩
+def check_table_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_table where (compress_func_name like '%zlib%')""")
+  if results[0][0] > 0 :
+    fail_list.append('There are tables use zlib compression, please replace it with other compression algorithms or do not use compression during the upgrade')
+  logging.info('check table compression method success')
+# 19 检查升级过程中 table_api/obkv 连接传输是否使用了zlib压缩，在升级前需要保证所有 obkv/table_api 连接未开启zlib压缩传输或者使用非zlib压缩算法
+def check_table_api_transport_compress_func(query_cur):
+  (desc, results) = query_cur.exec_query("""select count(1) as cnt from GV$OB_PARAMETERS where (name like "tableapi_transport_compress_func" and value like "zlib%");""")
+  if results[0][0] > 0 :
+    fail_list.append('Table api connection is not allowed to use zlib as compression algorithm during the upgrade, please use other compression algorithms by setting table_api_transport_compress_func')
+  logging.info('check table_api_transport_compress_func success')
 
 # 17. 检查是否有租户在升到4.3.0版本之前已将binlog_row_image设为MINIMAL
 def check_variable_binlog_row_image(query_cur):
@@ -652,6 +670,9 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_schema_status(query_cur)
       check_server_version(query_cur)
       check_not_supported_tenant_name(query_cur)
+      check_log_transport_compress_func(query_cur)
+      check_table_compress_func(query_cur)
+      check_table_api_transport_compress_func(query_cur)
       check_variable_binlog_row_image(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
