@@ -31,6 +31,9 @@ namespace oceanbase
 {
 namespace common
 {
+
+int64_t FASTSTACK_MIN_INTERVAL = 30 * 60 * 1000 * 1000; // 30min
+
 static const int SIG_SET[] = {SIGABRT, SIGBUS, SIGFPE, SIGSEGV, SIGURG};
 static constexpr char MINICORE_SHELL_PATH[] = "tools/minicore.sh";
 static constexpr char FASTSTACK_SHELL_PATH[] = "tools/callstack.sh";
@@ -261,12 +264,11 @@ int minicoredump(int sig, int64_t tid, pid_t& pid)
 
 int faststack()
 {
-  static constexpr int64_t MIN_INTERVAL = 30 * 60 * 1000 * 1000; // 30min
   static int64_t last_ts = 0;
   int64_t now = ObTimeUtility::fast_current_time();
   int64_t last = ATOMIC_LOAD(&last_ts);
   int ret = OB_SUCCESS;
-  if (now - last < MIN_INTERVAL) {
+  if (now - last < FASTSTACK_MIN_INTERVAL) {
     ret = OB_EAGAIN;
   } else if (!ATOMIC_BCAS(&last_ts, last, now)) {
     ret = OB_EAGAIN;
