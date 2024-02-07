@@ -226,6 +226,7 @@ public:
       ObBlockInfoSet &block_info_set);
   static int transform_empty_shell(const ObTablet &old_tablet, ObTabletHandle &new_handle);
 private:
+  static int inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter);
   static int do_copy_ids(
       blocksstable::ObMacroIdIterator &iter,
       ObBlockInfoSet::TabletMacroSet &id_set);

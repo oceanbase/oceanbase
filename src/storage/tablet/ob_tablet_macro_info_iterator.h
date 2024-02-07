@@ -31,6 +31,7 @@ public:
       const int64_t occupy_size);
   ~ObTabletBlockInfo();
   void reset();
+  TO_STRING_KV(K_(macro_id), K_(block_type), K_(occupy_size));
 public:
   blocksstable::MacroBlockId macro_id_;
   ObTabletMacroType block_type_;
@@ -45,26 +46,27 @@ public:
   ObMacroInfoIterator(const ObMacroInfoIterator &) = delete;
   ObMacroInfoIterator &operator=(const ObMacroInfoIterator &) = delete;
   void destroy();
-  // max means iterate all kinds of ids
-  int init(const ObTabletMacroType target_type, const ObTablet &tablet);
+  int reuse();
+  // ObTabletMacroType::MAX means iterate all kinds of ids
+  int init(const ObTabletMacroType target_type, const ObTabletMacroInfo &macro_info);
   int get_next(ObTabletBlockInfo &block_info);
+  TO_STRING_KV(KPC_(macro_info), K_(cur_type), K_(target_type), K_(is_linked));
 private:
   int read_from_disk();
   int read_from_memory();
   int reuse_info_arr(const int64_t cnt);
-  int convert_to_block_info(const ObBlockInfoArray<ObSharedBlockInfo> &tmp_arr);
-  int convert_to_block_info(const ObBlockInfoArray<blocksstable::MacroBlockId> &tmp_arr);
+  int convert_to_block_info(const ObTabletMacroInfo::ObBlockInfoArray<ObSharedBlockInfo> &tmp_arr);
+  int convert_to_block_info(const ObTabletMacroInfo::ObBlockInfoArray<blocksstable::MacroBlockId> &tmp_arr);
 private:
-  ObTabletMacroInfo *macro_info_;
+  const ObTabletMacroInfo *macro_info_;
   ObLinkedMacroBlockItemReader block_reader_;
   int64_t cur_pos_;
   int64_t cur_size_;
   ObTabletMacroType cur_type_;
   ObTabletMacroType target_type_;
-  ObBlockInfoArray<ObTabletBlockInfo> block_info_arr_;
+  ObTabletMacroInfo::ObBlockInfoArray<ObTabletBlockInfo> block_info_arr_;
   common::ObArenaAllocator allocator_;
   bool is_linked_;
-  bool is_loaded_;
   bool is_inited_;
 };
 }

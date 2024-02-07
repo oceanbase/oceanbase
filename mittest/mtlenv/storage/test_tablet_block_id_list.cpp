@@ -76,6 +76,10 @@ TEST_F(TestBlockIdList, test_id_list)
   // empty set
   ASSERT_EQ(OB_SUCCESS, info_set.init());
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.shared_data_block_info_arr_.cnt_);
 
   // normal set
   macro_info.reset();
@@ -90,31 +94,6 @@ TEST_F(TestBlockIdList, test_id_list)
   ASSERT_EQ(1, macro_info.shared_meta_block_info_arr_.cnt_);
   ASSERT_EQ(1, macro_info.data_block_info_arr_.cnt_);
   ASSERT_EQ(1, macro_info.meta_block_info_arr_.cnt_);
-  ObSArray<MacroBlockId> meta_block_arr;
-  ObSArray<MacroBlockId> data_block_arr;
-  ObSArray<MacroBlockId> shared_meta_block_arr;
-  ObSArray<MacroBlockId> shared_data_block_arr;
-  ASSERT_EQ(OB_SUCCESS, macro_info.get_all_macro_ids(meta_block_arr, data_block_arr, shared_meta_block_arr, shared_data_block_arr));
-  ASSERT_EQ(macro_id, meta_block_arr.at(0));
-  ASSERT_EQ(macro_id, data_block_arr.at(0));
-  ASSERT_EQ(macro_id, shared_meta_block_arr.at(0));
-  ASSERT_EQ(macro_id, shared_data_block_arr.at(0));
-
-  inc_success = false;
-  ASSERT_EQ(OB_SUCCESS, macro_info.inc_macro_ref(inc_success));
-  ASSERT_EQ(true, inc_success);
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
-  }
-  ASSERT_EQ(4, block_info.ref_cnt_); // four arrars all have this macro id
-
-  macro_info.dec_macro_ref();
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
-  }
-  ASSERT_EQ(0, block_info.ref_cnt_);
 
   info_set.data_block_info_set_.reuse();
   info_set.meta_block_info_set_.reuse();
@@ -128,51 +107,10 @@ TEST_F(TestBlockIdList, test_id_list)
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
   ASSERT_EQ(false, IS_EMPTY_BLOCK_LIST(macro_info.entry_block_));
-  meta_block_arr.reset();
-  data_block_arr.reset();
-  shared_meta_block_arr.reset();
-  shared_data_block_arr.reset();
-  ASSERT_EQ(OB_SUCCESS, macro_info.get_all_macro_ids(meta_block_arr, data_block_arr, shared_meta_block_arr, shared_data_block_arr));
-  ASSERT_EQ(TEST_LINKED_NUM, meta_block_arr.count());
-
-  ObIArray<MacroBlockId> &linked_ids = linked_writer.get_meta_block_list();
-  MacroBlockId &linked_id = linked_ids.at(0);
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, linked_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(linked_id, block_info));
-  }
-  linked_ref_cnt = block_info.ref_cnt_;
-
-  inc_success = false;
-  int64_t linked_macro_ref = 0;
-  ASSERT_EQ(OB_SUCCESS, macro_info.inc_macro_ref(inc_success));
-  ASSERT_EQ(true, inc_success);
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
-  }
-  ASSERT_EQ(4, block_info.ref_cnt_); // four arrars all have this macro id
-
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, linked_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(linked_id, block_info));
-  }
-  ASSERT_EQ(linked_ref_cnt + 1, block_info.ref_cnt_);
-
-  inc_success = false;
-  ASSERT_EQ(OB_SUCCESS, macro_info.inc_macro_ref(inc_success));
-  ASSERT_EQ(true, inc_success);
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, macro_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(macro_id, block_info));
-  }
-  ASSERT_EQ(8, block_info.ref_cnt_);
-
-  {
-    ObBucketHashWLockGuard lock_guard(OB_SERVER_BLOCK_MGR.bucket_lock_, linked_id.hash());
-    ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(linked_id, block_info));
-  }
-  ASSERT_EQ(linked_ref_cnt + 2, block_info.ref_cnt_);
+  ASSERT_EQ(0, macro_info.shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
 }
 
 TEST_F(TestBlockIdList, test_serialize_deep_copy)
@@ -311,38 +249,37 @@ TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
 
 TEST_F(TestBlockIdList, test_info_iterator)
 {
+  int64_t linked_block_num = 0;
   ObMacroInfoIterator macro_iter;
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator allocator;
   ObTabletBlockInfo block_info;
-  ObTabletID tablet_id(TestIndexBlockDataPrepare::tablet_id_);
-  ObLSID ls_id(ls_id_);
-  ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
-  ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
-  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
-  ObTablet *tablet = tablet_handle.get_obj();
-  tablet->macro_info_addr_.addr_.set_mem_addr(0, sizeof(ObTabletMacroInfo));
 
   // linked macro info
   ObBlockInfoSet info_set;
   ObTabletMacroInfo macro_info;
-  tablet->macro_info_addr_.ptr_ = &macro_info;
   ASSERT_EQ(OB_SUCCESS, info_set.init());
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info));
   for (int64_t i = 0; i < TEST_LINKED_NUM * 4; i++) {
+    block_info.reset();
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set.data_block_info_set_.exist_refactored(block_info.macro_id_));
+  }
+  linked_block_num = macro_iter.block_reader_.get_meta_block_list().count();
+  for (int64_t i = 0; i < linked_block_num; i++) {
+    block_info.reset();
+    ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
+    ASSERT_EQ(OB_HASH_NOT_EXIST, info_set.data_block_info_set_.exist_refactored(block_info.macro_id_));
   }
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
 
   macro_iter.destroy(); // iterate targeted ids
-  ASSERT_NE(OB_SUCCESS, macro_iter.init(ObTabletMacroType::INVALID_TYPE, *tablet));
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::SHARED_DATA_BLOCK, *tablet));
+  ASSERT_NE(OB_SUCCESS, macro_iter.init(ObTabletMacroType::INVALID_TYPE, macro_info));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::SHARED_DATA_BLOCK, macro_info));
   for (int64_t i = 0; i < TEST_LINKED_NUM; i++) {
+    block_info.reset();
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set.data_block_info_set_.exist_refactored(block_info.macro_id_));
     ASSERT_EQ(ObTabletMacroType::SHARED_DATA_BLOCK, block_info.block_type_);
@@ -354,20 +291,20 @@ TEST_F(TestBlockIdList, test_info_iterator)
   linked_writer.reset();
   ObBlockInfoSet info_set_2;
   ObTabletMacroInfo macro_info_2;
-  tablet->macro_info_addr_.ptr_ = &macro_info_2;
   ASSERT_EQ(OB_SUCCESS, info_set_2.init());
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, 15, info_set_2));
   ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, linked_writer));
   macro_iter.destroy();
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_2));
   for (int64_t i = 0; i < 60; i++) {
+    block_info.reset();
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set_2.data_block_info_set_.exist_refactored(block_info.macro_id_));
   }
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
 
   macro_iter.destroy(); // iterate targeted ids
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::META_BLOCK, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::META_BLOCK, macro_info_2));
   for (int64_t i = 0; i < 15; i++) {
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set.data_block_info_set_.exist_refactored(block_info.macro_id_));
@@ -380,18 +317,16 @@ TEST_F(TestBlockIdList, test_info_iterator)
   linked_writer.reset();
   ObBlockInfoSet info_set_3;
   ObTabletMacroInfo macro_info_3;
-  tablet->macro_info_addr_.ptr_ = &macro_info_3;
   ASSERT_EQ(OB_SUCCESS, info_set_3.init());
   ASSERT_EQ(OB_SUCCESS, macro_info_3.init(allocator, info_set_3, linked_writer));
   macro_iter.destroy();
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_3));
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
 
   // linked macro info without meta_block_id and shared_meta_block_id
   linked_writer.reset();
   ObBlockInfoSet info_set_4;
   ObTabletMacroInfo macro_info_4;
-  tablet->macro_info_addr_.ptr_ = &macro_info_4;
   ASSERT_EQ(OB_SUCCESS, info_set_4.init());
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
     MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
@@ -400,10 +335,17 @@ TEST_F(TestBlockIdList, test_info_iterator)
   }
   ASSERT_EQ(OB_SUCCESS, macro_info_4.init(allocator, info_set_4, linked_writer));
   macro_iter.destroy();
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_4));
   for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD * 2; i++) {
+    block_info.reset();
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set_4.data_block_info_set_.exist_refactored(block_info.macro_id_));
+  }
+  linked_block_num = macro_iter.block_reader_.get_meta_block_list().count();
+  for (int64_t i = 0; i < linked_block_num; i++) {
+    block_info.reset();
+    ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
+    ASSERT_EQ(OB_HASH_NOT_EXIST, info_set_4.data_block_info_set_.exist_refactored(block_info.macro_id_));
   }
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
 
@@ -411,7 +353,6 @@ TEST_F(TestBlockIdList, test_info_iterator)
   linked_writer.reset();
   ObBlockInfoSet info_set_5;
   ObTabletMacroInfo macro_info_5;
-  tablet->macro_info_addr_.ptr_ = &macro_info_5;
   static const int64_t memory_id_cnt = 100;
   ASSERT_EQ(OB_SUCCESS, info_set_5.init());
   for (int64_t i = 0; i < memory_id_cnt; i++) {
@@ -421,13 +362,13 @@ TEST_F(TestBlockIdList, test_info_iterator)
   }
   ASSERT_EQ(OB_SUCCESS, macro_info_5.init(allocator, info_set_5, linked_writer));
   macro_iter.destroy();
-  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, *tablet));
+  ASSERT_EQ(OB_SUCCESS, macro_iter.init(ObTabletMacroType::MAX, macro_info_5));
   for (int64_t i = 0; i < memory_id_cnt * 2; i++) {
+    block_info.reset();
     ASSERT_EQ(OB_SUCCESS, macro_iter.get_next(block_info));
     ASSERT_EQ(OB_HASH_EXIST, info_set_5.data_block_info_set_.exist_refactored(block_info.macro_id_));
   }
   ASSERT_EQ(OB_ITER_END, macro_iter.get_next(block_info));
-  tablet->macro_info_addr_.ptr_ = nullptr;
 }
 
 TEST_F(TestBlockIdList, test_empty_shell_macro_ref_cnt)
