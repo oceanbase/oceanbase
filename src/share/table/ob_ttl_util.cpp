@@ -956,7 +956,7 @@ int ObTableTTLChecker::check_row_expired(const common::ObNewRow &row, bool &is_e
       int64_t cur_ts = ObTimeUtility::current_time();
       if (ttl_expr.nsecond_ > 0 && OB_FAIL(ObTimeConverter::date_add_nsecond(column_ts, ttl_expr.nsecond_, 0, expire_ts))) {
         LOG_WARN("fail to add nsecond", K(ret), K(column_ts), K(ttl_expr.nsecond_));
-      } else if (ttl_expr.nsecond_ > 0 && OB_FAIL(ObTimeConverter::date_add_nmonth(column_ts, ttl_expr.nmonth_, expire_ts, true))) {
+      } else if (ttl_expr.nmonth_ > 0 && OB_FAIL(ObTimeConverter::date_add_nmonth(column_ts, ttl_expr.nmonth_, expire_ts, true))) {
         LOG_WARN("fail to add month", K(ret), K(column_ts), K(ttl_expr.nmonth_));
       } else if (expire_ts <= cur_ts) {
         is_expired = true;
