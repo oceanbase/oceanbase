@@ -50,11 +50,13 @@ int datum_accuracy_check(const ObExpr &expr,
                          ObDatum &res_datum,
                          int &warning);
 
-// 根据in_type,force_use_standard_format信息，从session中获取fromat_str
+// 根据in_type,force_use_standard_format信息，获取fromat_str,优先从rt_expr保存的本地session变量列表获取，不存在则从session获取
 int common_get_nls_format(const ObBasicSessionInfo *session,
-                                 const ObObjType in_type,
-                                 const bool force_use_standard_format,
-                                 ObString &format_str);
+                          ObEvalCtx &ctx,
+                          const ObExpr *rt_expr,
+                          const ObObjType in_type,
+                          const bool force_use_standard_format,
+                          ObString &format_str);
 
 // 检查str以check_cs_type作为字符集是否合法
 // strict_mode下，如果上述检查失败，返回错误码
@@ -81,7 +83,8 @@ int ob_datum_to_ob_time_without_date(const common::ObDatum &datum,
                                     const bool has_lob_header);
 // 进行datetime到string的转换，除了ob_datum_cast.cpp需要使用，有的表达式也需要将结果
 // 从datetime转为string, 例如ObExprTimeStampAdd
-int common_datetime_string(const common::ObObjType in_type,
+int common_datetime_string(const ObExpr &expr,
+                           const common::ObObjType in_type,
                            const common::ObObjType out_type,
                            const common::ObScale in_scale,
                            bool force_use_std_nls_format,

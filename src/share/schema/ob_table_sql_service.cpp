@@ -3990,11 +3990,32 @@ int ObTableSqlService::gen_column_dml(
       extended_type_info_buf = static_cast<char *>(allocator.alloc(OB_MAX_VARBINARY_LENGTH));
       if (OB_ISNULL(extended_type_info_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate memory for default value buffer failed");
+        LOG_WARN("allocate memory for default value buffer failed", K(ret));
       } else if (OB_FAIL(column.serialize_extended_type_info(extended_type_info_buf, OB_MAX_VARBINARY_LENGTH, pos))) {
         LOG_WARN("fail to serialize_extended_type_info", K(ret));
       } else {
         bin_extended_type_info.assign_ptr(extended_type_info_buf, static_cast<int32_t>(pos));
+      }
+    }
+    ObString local_session_var;
+    if (OB_SUCC(ret) && column.is_generated_column() && tenant_data_version >= DATA_VERSION_4_2_2_0) {
+      int64_t pos = 0;
+      int64_t buf_len = column.get_local_session_var().get_serialize_size();
+      char *binary_str = NULL;;
+      char *hex_str = NULL;
+      int64_t hex_pos = 0;
+      ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+      if (OB_ISNULL(binary_str = static_cast<char *>(tmp_allocator.alloc(buf_len)))
+          || OB_ISNULL(hex_str = static_cast<char *>(allocator.alloc(buf_len * 2)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for local_session_var failed", K(ret), KP(binary_str), KP(hex_str));
+      } else if (OB_FAIL(column.get_local_session_var().serialize_(binary_str, buf_len, pos))) {
+        LOG_WARN("fail to serialize local_session_var", K(ret));
+      } else if (OB_FAIL(common::hex_print(binary_str, pos, hex_str, buf_len * 2, hex_pos))) {
+        LOG_WARN("print hex string failed", K(ret));
+      } else {
+        local_session_var.assign(hex_str, hex_pos);
+        tmp_allocator.free(binary_str);
       }
     }
     if (OB_SUCC(ret) && (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
@@ -4031,6 +4052,7 @@ int ObTableSqlService::gen_column_dml(
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 &&OB_FAIL(dml.add_column("sub_data_type", column.get_sub_data_type())))
                          || (tenant_data_version >= DATA_VERSION_4_3_0_0
                             && OB_FAIL(dml.add_column("skip_index_attr", column.get_skip_index_attr().get_packed_value())))
+                         || (tenant_data_version >= DATA_VERSION_4_2_2_0 &&OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {
       LOG_WARN("dml add column failed", K(ret));

@@ -809,6 +809,13 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprSubstr, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 int ObExprSubstr::ora_get_integer(const ObDatum &int_datum, const ObExpr &expr, int64_t &v)
 {
   int ret = OB_SUCCESS;

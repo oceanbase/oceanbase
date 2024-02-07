@@ -95,6 +95,13 @@ int ObExprCompress::eval_compress(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &e
   return ret;
 }
 
+DEF_SET_LOCAL_SESSION_VARS(ObExprCompress, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
 ObExprUncompress::ObExprUncompress(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_UNCOMPRESS, N_UNCOMPRESS, 1, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {

@@ -353,6 +353,9 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
         }
       }
     }
+    if (OB_SUCC(ret) && raw_expr->get_local_session_var().get_var_count() > 0) {
+      rt_expr->local_session_var_id_ = raw_expr->get_local_session_var_id();
+    }
   } // for end
 
   return ret;

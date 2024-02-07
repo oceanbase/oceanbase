@@ -288,10 +288,14 @@ public:
                               ObIJsonBase *j_base,
                               common::ObIAllocator *allocator,
                               const ObBasicSessionInfo *session,
+                              ObEvalCtx *ctx,
+                              const ObExpr *expr,
                               common::ObAccuracy &accuracy,
                               int64_t &val);
   static int cast_to_otimstamp(ObIJsonBase *j_base,
                                const ObBasicSessionInfo *session,
+                               ObEvalCtx *ctx,
+                               const ObExpr *expr,
                                common::ObAccuracy &accuracy,
                                ObObjType dst_type,
                                ObOTimestampData &out_val);

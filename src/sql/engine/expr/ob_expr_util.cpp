@@ -18,6 +18,8 @@
 #include "common/ob_smart_call.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/charset/ob_charset.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -741,6 +743,199 @@ int ObExprUtil::convert_utf8_charset(ObIAllocator& allocator,
     LOG_WARN("charset convert failed", K(ret), K(from_collation), K(CS_TYPE_UTF8MB4_BIN));
   } else {
     to_string.assign(buf, static_cast<int32_t>(result_len));
+  }
+  return ret;
+}
+
+ObSolidifiedVarsGetter::ObSolidifiedVarsGetter(const ObExpr &expr, const ObEvalCtx &ctx, const ObBasicSessionInfo *session)
+  :local_session_var_(NULL),
+  session_(session),
+  local_tz_wrap_()
+{
+  ObPhysicalPlanCtx * phy_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
+  if (OB_NOT_NULL(phy_ctx)) {
+    const ObLocalSessionVar * local_var = NULL;
+    if (OB_SUCCESS == (phy_ctx->get_local_session_vars(expr.local_session_var_id_, local_var))) {
+      local_session_var_ = local_var;
+    }
+  }
+}
+
+int ObSolidifiedVarsGetter::get_dtc_params(ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  const common::ObTimeZoneInfo *tz_info = NULL;
+  dtc_params = ObBasicSessionInfo::create_dtc_params(session_);
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(get_time_zone_info(tz_info))) {
+    LOG_WARN("get time zone info failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_dtc_params(local_session_var_,
+                                                                  tz_info,
+                                                                  dtc_params))) {
+    LOG_WARN("fail to create local dtc params", K(ret));
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_time_zone_info(const common::ObTimeZoneInfo *&tz_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  ObSessionSysVar *local_var = NULL;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (NULL == local_session_var_) {
+    tz_info = session_->get_timezone_info();
+  } else if (OB_FAIL(get_local_var(SYS_VAR_TIME_ZONE, local_var))) {
+    LOG_WARN("get local var failed", K(ret));
+  } else if (NULL == local_var) {
+    tz_info = session_->get_timezone_info();
+  } else {
+    const ObTZInfoMap * tz_info_map = NULL;
+    if (OB_ISNULL(tz_info_map = session_->get_timezone_info()->get_tz_info_map())) {
+      ObTZMapWrap tz_map_wrap;
+      if (OB_SUCC(OTTZ_MGR.get_tenant_tz(session_->get_effective_tenant_id(), tz_map_wrap))) {
+        tz_info_map = tz_map_wrap.get_tz_map();
+      } else {
+        LOG_WARN("get tz info map failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(local_tz_wrap_.init_time_zone(local_var->val_.get_string(),
+                                        OB_INVALID_VERSION,
+                                        *(const_cast<ObTZInfoMap *>(tz_info_map))))) {
+        LOG_WARN("tz_wrap init_time_zone failed", K(ret), K(local_var->val_.get_string()));
+      } else {
+        tz_info = local_tz_wrap_.get_time_zone_info();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_sql_mode(ObSQLMode &sql_mode)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(sql_mode = session_->get_sql_mode())) {
+  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_sql_mode(local_session_var_,
+                                                                    sql_mode))) {
+    LOG_WARN("try get local sql mode failed", K(ret));
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_local_nls_date_format(ObString &format)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *sys_var = NULL;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(get_local_var(SYS_VAR_NLS_DATE_FORMAT, sys_var))) {
+    LOG_WARN("fail to get local var", K(ret));
+  } else if (NULL != sys_var) {
+    if (OB_FAIL(sys_var->val_.get_string(format))) {
+      LOG_WARN("fail to get nls_timestamp_tz_format str value", K(ret), KPC(sys_var));
+    }
+  } else {
+    format = session_->get_local_nls_date_format();
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_local_nls_timestamp_format(ObString &format)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *sys_var = NULL;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(get_local_var(SYS_VAR_NLS_TIMESTAMP_FORMAT, sys_var))) {
+    LOG_WARN("fail to get local var", K(ret));
+  } else if (NULL != sys_var) {
+    if (OB_FAIL(sys_var->val_.get_string(format))) {
+      LOG_WARN("fail to get nls_timestamp_tz_format str value", K(ret), KPC(sys_var));
+    }
+  } else {
+    format = session_->get_local_nls_timestamp_format();
+  }
+  return ret;
+}
+int ObSolidifiedVarsGetter::get_local_nls_timestamp_tz_format(ObString &format)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *sys_var = NULL;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(get_local_var(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT, sys_var))) {
+    LOG_WARN("fail to get local var", K(ret));
+  } else if (NULL != sys_var) {
+    if (OB_FAIL(sys_var->val_.get_string(format))) {
+      LOG_WARN("fail to get nls_timestamp_tz_format str value", K(ret), KPC(sys_var));
+    }
+  } else {
+    format = session_->get_local_nls_timestamp_tz_format();
+  }
+  return ret;
+}
+int ObSolidifiedVarsGetter::get_local_var(ObSysVarClassType var_type, ObSessionSysVar *&sys_var)
+{
+  int ret = OB_SUCCESS;
+  sys_var = NULL;
+  if (NULL != local_session_var_
+      && OB_FAIL(local_session_var_->get_local_var(var_type, sys_var))) {
+    LOG_WARN("fail to get local var", K(ret));
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_local_nls_format_by_type(const ObObjType type, ObString &format_str)
+{
+  int ret = OB_SUCCESS;
+  switch (type) {
+    case ObDateTimeType:
+      if (OB_FAIL(get_local_nls_date_format(format_str))) {
+        LOG_WARN("failed to get local nls date format", K(ret));
+      }
+      break;
+    case ObTimestampNanoType:
+    case ObTimestampLTZType:
+      if (OB_FAIL(get_local_nls_timestamp_format(format_str))) {
+        LOG_WARN("failed to get local nls timestamp format", K(ret));
+      }
+      break;
+    case ObTimestampTZType:
+      if (OB_FAIL(get_local_nls_timestamp_tz_format(format_str))) {
+        LOG_WARN("failed to get local nls timestamp_tz format", K(ret));
+      }
+      break;
+    default:
+      ret = OB_INVALID_DATE_VALUE;
+      SQL_SESSION_LOG(WARN, "invalid argument. wrong type for source.", K(ret), K(type));
+      break;
+  }
+  return ret;
+}
+
+int ObSolidifiedVarsGetter::get_max_allowed_packet(int64_t &max_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(session_->get_max_allowed_packet(max_size))) {
+  } else if (OB_FAIL(ObSQLUtils::merge_solidified_var_into_max_allowed_packet(local_session_var_,
+                                                                              max_size))) {
+    LOG_WARN("try get local max allowed packet failed", K(ret));
   }
   return ret;
 }

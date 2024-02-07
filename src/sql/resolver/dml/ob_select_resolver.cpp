@@ -3651,8 +3651,7 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
                                                                         types.count(),
                                                                         coll_type,
                                                                         true,
-                                                                        default_ls,
-                                                                        session_info_))) {
+                                                                        default_ls))) {
               LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
             }
           }

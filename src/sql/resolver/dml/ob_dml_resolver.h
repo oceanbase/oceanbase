@@ -458,7 +458,7 @@ protected:
                                   bool &is_generated);
   virtual int expand_view(TableItem &view_item);
   int do_expand_view(TableItem &view_item, ObChildStmtResolver &view_resolver);
-  int check_pad_generated_column(const ObSQLSessionInfo &session_info,
+  int check_pad_generated_column(const ObSQLMode sql_mode,
                                  const share::schema::ObTableSchema &table_schema,
                                  const share::schema::ObColumnSchemaV2 &column_schema,
                                  bool is_link = false);
@@ -469,6 +469,12 @@ protected:
   int build_padding_expr(const ObSQLSessionInfo *session,
                          const share::schema::ObColumnSchemaV2 *column_schema,
                          ObRawExpr *&expr);
+
+  int build_padding_expr(const ObSQLMode sql_mode,
+                        const share::schema::ObColumnSchemaV2 *column_schema,
+                        ObRawExpr *&expr,
+                        const ObLocalSessionVar *local_vars = NULL,
+                        int64_t local_var_id = OB_INVALID_INDEX_INT64);
 
   virtual int check_need_use_sys_tenant(bool &use_sys_tenant) const;
   // check in sys view or show statement

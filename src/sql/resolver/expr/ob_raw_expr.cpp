@@ -256,9 +256,12 @@ int ObRawExpr::assign(const ObRawExpr &other)
       is_calculated_ = other.is_calculated_;
       is_deterministic_ = other.is_deterministic_;
       partition_id_calc_type_ = other.partition_id_calc_type_;
+      local_session_var_id_ = other.local_session_var_id_;
       if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
         LOG_WARN("failed to assign enum set values", K(ret));
-      } else { /*do nothing*/ }
+      } else if (OB_FAIL(local_session_var_.assign(other.local_session_var_))) {
+        LOG_WARN("fail to assign local session vars", K(ret));
+      }
     }
   }
   return ret;
@@ -294,6 +297,8 @@ int ObRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
       LOG_WARN("fail to write string", K(expr_name_), K(ret));
     } else if (OB_FAIL(deep_copy_obj(*inner_alloc_, result_type_.get_param(), param))) {
       LOG_WARN("failed to deep copy object", K(ret), K(param));
+    } else if (OB_FAIL(local_session_var_.deep_copy_self())) {
+        LOG_WARN("fail to deep opy local session vars", K(ret));
     } else {
       result_type_.set_param(param);
       for (int64_t i = 0; OB_SUCC(ret) && i < enum_set_values_.count(); i++) {
@@ -383,11 +388,14 @@ int ObRawExpr::extract_info()
   return ret;
 }
 
-int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
+int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info,
+                           bool solidify_session_vars,
+                           const ObLocalSessionVar *local_vars,
+                           int64_t local_var_id)
 {
   //LOG_DEBUG("deduce_type", "usec", ObSQLUtils::get_usec());
   int ret = OB_SUCCESS;
-  ObRawExprDeduceType expr_deducer(session_info);
+  ObRawExprDeduceType expr_deducer(session_info, solidify_session_vars, local_vars, local_var_id);
   expr_deducer.set_expr_factory(expr_factory_);
   if (OB_FAIL(expr_deducer.deduce(*this))) {
     if (session_info->is_varparams_sql_prepare()) {
@@ -401,7 +409,31 @@ int ObRawExpr::deduce_type(const ObSQLSessionInfo *session_info)
   return ret;
 }
 
-int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
+int ObRawExpr::formalize_with_local_vars(const ObSQLSessionInfo *session_info,
+                                         const ObLocalSessionVar *local_vars,
+                                         int64_t local_var_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(formalize(session_info, false, local_vars, local_var_id))) {
+    LOG_WARN("formalize with local vars failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExpr::formalize(const ObSQLSessionInfo *session_info,
+                         bool solidify_session_vars)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(formalize(session_info, solidify_session_vars, NULL, OB_INVALID_INDEX_INT64))) {
+    LOG_WARN("formalize with local vars failed", K(ret));
+  }
+  return ret;
+}
+
+int ObRawExpr::formalize(const ObSQLSessionInfo *session_info,
+                         bool solidify_session_vars,
+                         const ObLocalSessionVar *local_vars,
+                         int64_t local_var_id)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -412,7 +444,7 @@ int ObRawExpr::formalize(const ObSQLSessionInfo *session_info)
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (OB_FAIL(extract_info())) {
     LOG_WARN("failed to extract info", K(*this));
-  } else if (OB_FAIL(deduce_type(session_info))) {
+  } else if (OB_FAIL(deduce_type(session_info, solidify_session_vars, local_vars, local_var_id))) {
     LOG_WARN("failed to deduce type", K(*this));
   } else {}
   return ret;
@@ -642,6 +674,11 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
     if (NULL != check_context) {
       check_context->recursion_level_ -= 1;
     }
+
+    if (bret) {
+      //check if local vars are the same
+      bret = (l->get_local_session_var() == r->get_local_session_var());
+    }
   }
   return bret;
 }
@@ -867,6 +904,29 @@ bool ObRawExpr::is_specified_pseudocolumn_expr() const
   return false;
 }
 
+int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const share::schema::ObSessionSysVar *> &var_array)
+{
+  int ret = OB_SUCCESS;
+  if (get_local_session_var().get_var_count() > 0) {
+    ObSEArray<const share::schema::ObSessionSysVar *, 4> local_vars;
+    if (OB_FAIL(get_local_session_var().get_local_vars(local_vars))) {
+      LOG_WARN("fail to append session var array", K(ret));
+    } else if (OB_FAIL(append(var_array, local_vars))) {
+      LOG_WARN("append local vars failed.", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
+      if (OB_ISNULL(get_param_expr(i))){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->extract_local_session_vars_recursively(var_array)))) {
+        LOG_WARN("fail to extract sysvar from params", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////////
 int ObConstRawExpr::assign(const ObRawExpr &other)
@@ -1035,6 +1095,27 @@ bool ObConstRawExpr::inner_same_as(
     }
   }
   return bool_ret;
+}
+
+int ObConstRawExpr::set_local_session_vars(const share::schema::ObLocalSessionVar *local_sys_vars,
+                                            const ObBasicSessionInfo *session,
+                                            int64_t ctx_array_idx)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_string_type(get_result_type().get_type())) {
+    //solidify vars for parser
+    local_session_var_id_ = ctx_array_idx;
+    local_session_var_.reset();
+    local_session_var_.set_local_var_capacity(2);
+    if (OB_FAIL(ObExprOperator::add_local_var_to_expr(SYS_VAR_SQL_MODE, local_sys_vars,
+                                                      session, local_session_var_))) {
+      LOG_WARN("fail to add sql mode", K(ret));
+    } else if (OB_FAIL(ObExprOperator::add_local_var_to_expr(SYS_VAR_COLLATION_CONNECTION, local_sys_vars,
+                                                             session, local_session_var_))) {
+      LOG_WARN("fail to add collation connection", K(ret));
+    }
+  }
+  return ret;
 }
 
 int ObConstRawExpr::set_dynamic_eval_questionmark(const ObExprResType &dst_type)
@@ -4201,6 +4282,22 @@ int ObSysFunRawExpr::get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_
     if (OB_FAIL(BUF_PRINTF("%s.", autoinc_qualified_name.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObSysFunRawExpr::set_local_session_vars(const share::schema::ObLocalSessionVar *local_var_info,
+                                            const ObBasicSessionInfo *session,
+                                            int64_t ctx_array_idx) {
+  int ret = OB_SUCCESS;
+  ObExprOperator * op = get_op();
+  local_session_var_id_ = ctx_array_idx;
+  local_session_var_.reset();
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(op));
+  } else if (OB_FAIL(op->set_local_session_vars(this, local_var_info, session, local_session_var_))) {
+    LOG_WARN("fail to set local session info for expr operators", K(ret));
   }
   return ret;
 }

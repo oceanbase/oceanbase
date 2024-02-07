@@ -1614,30 +1614,40 @@ int ObSQLUtils::get_default_cast_mode(const stmt::StmtType &stmt_type,
                                       ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
-  cast_mode = CM_NONE;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(session), K(ret));
-  } else if (is_oracle_mode() && stmt::T_EXPLAIN != stmt_type) {
+  } else {
+    get_default_cast_mode(stmt_type, session->is_ignore_stmt(), session->get_sql_mode(), cast_mode);
+  }
+  return ret;
+}
+
+void ObSQLUtils::get_default_cast_mode(const stmt::StmtType &stmt_type,
+                                      bool is_ignore_stmt,
+                                      ObSQLMode sql_mode,
+                                      ObCastMode &cast_mode)
+{
+  cast_mode = CM_NONE;
+  if (is_oracle_mode() && stmt::T_EXPLAIN != stmt_type) {
     cast_mode = CM_ORACLE_MODE;
   } else if (stmt::T_SELECT == stmt_type
              || stmt::T_EXPLAIN == stmt_type
-             || (!is_strict_mode(session->get_sql_mode()))
-             || session->is_ignore_stmt()) {
+             || (!is_strict_mode(sql_mode))
+             || is_ignore_stmt) {
     cast_mode = CM_WARN_ON_FAIL;
   }
-  if (OB_SUCC(ret) && is_mysql_mode()) {
-    if (is_allow_invalid_dates(session->get_sql_mode())) {
+  if (is_mysql_mode()) {
+    if (is_allow_invalid_dates(sql_mode)) {
       cast_mode |= CM_ALLOW_INVALID_DATES;
     }
-    if (is_no_zero_date(session->get_sql_mode())) {
+    if (is_no_zero_date(sql_mode)) {
       cast_mode |= CM_NO_ZERO_DATE;
     }
-    if (is_time_truncate_fractional(session->get_sql_mode())) {
+    if (is_time_truncate_fractional(sql_mode)) {
       cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
     }
   }
-  return ret;
 }
 
 void ObSQLUtils::set_insert_update_scope(ObCastMode &cast_mode)
@@ -1667,72 +1677,90 @@ int ObSQLUtils::get_default_cast_mode(const ObPhysicalPlan *plan,
 int ObSQLUtils::get_default_cast_mode(const ObSQLSessionInfo *session, ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
-  cast_mode = CM_NONE;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("plan or session is NULL", K(ret));
-  } else if (is_oracle_mode()) {
-    cast_mode = CM_ORACLE_MODE;
-  } else if (!is_strict_mode(session->get_sql_mode())) {
-    cast_mode = CM_WARN_ON_FAIL;
-  }
-  if (OB_SUCC(ret) && is_mysql_mode()) {
-    if (is_allow_invalid_dates(session->get_sql_mode())) {
-      cast_mode |= CM_ALLOW_INVALID_DATES;
-    }
-    if (is_no_zero_date(session->get_sql_mode())) {
-      cast_mode |= CM_NO_ZERO_DATE;
-    }
-    if (is_time_truncate_fractional(session->get_sql_mode())) {
-      cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
-    }
+  } else {
+    get_default_cast_mode(session->get_sql_mode(), cast_mode);
   }
   return ret;
 }
 
+void ObSQLUtils::get_default_cast_mode(const ObSQLMode sql_mode, ObCastMode &cast_mode)
+{
+  cast_mode = CM_NONE;
+  if (is_oracle_mode()) {
+    cast_mode = CM_ORACLE_MODE;
+  } else if (!is_strict_mode(sql_mode)) {
+    cast_mode = CM_WARN_ON_FAIL;
+  }
+  if (is_mysql_mode()) {
+    if (is_allow_invalid_dates(sql_mode)) {
+      cast_mode |= CM_ALLOW_INVALID_DATES;
+    }
+    if (is_no_zero_date(sql_mode)) {
+      cast_mode |= CM_NO_ZERO_DATE;
+    }
+    if (is_time_truncate_fractional(sql_mode)) {
+      cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
+    }
+  }
+}
+
 int ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
-                                           const uint32_t result_flag,
-                                           const ObSQLSessionInfo *session,
-                                           ObCastMode &cast_mode)
+                                      const uint32_t result_flag,
+                                      const ObSQLSessionInfo *session,
+                                      ObCastMode &cast_mode)
 {
   int ret = OB_SUCCESS;
-  cast_mode = CM_NONE;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("session is NULL", K(ret), KP(session));
-  } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session->get_stmt_type(),
-                                                       session,
-                                                       cast_mode))) {
-    LOG_WARN("ObSqlUtils::get_default_cast_mode failed", K(ret));
   } else {
-    if (is_explicit_cast) {
-      cast_mode |= CM_EXPLICIT_CAST;
-    } else {
-      cast_mode &= ~CM_EXPLICIT_CAST;
-    }
-    if (result_flag & ZEROFILL_FLAG) {
-      cast_mode |= CM_ZERO_FILL;
-    }
-    if (!is_oracle_mode() && is_strict_mode(session->get_sql_mode())) {
-      cast_mode |= CM_NONE;
-      cast_mode |= CM_STRICT_MODE;
-    }
-    if (OB_SUCC(ret) && is_mysql_mode()) {
-      if (is_allow_invalid_dates(session->get_sql_mode())) {
-        cast_mode |= CM_ALLOW_INVALID_DATES;
-      }
-      if (is_no_zero_date(session->get_sql_mode())) {
-        cast_mode |= CM_NO_ZERO_DATE;
-      }
-      if (is_time_truncate_fractional(session->get_sql_mode())) {
-        cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
-      }
-    }
-    cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
-    LOG_DEBUG("in get_default_cast_mode", K(ret), K(is_explicit_cast),
-        K(result_flag), K(session->get_stmt_type()), K(cast_mode));
+    ObSQLUtils::get_default_cast_mode(is_explicit_cast, result_flag,
+                                      session->get_stmt_type(),
+                                      session->is_ignore_stmt(),
+                                      session->get_sql_mode(),
+                                      cast_mode);
   }
   return ret;
+}
+
+void ObSQLUtils::get_default_cast_mode(const bool is_explicit_cast,
+                                      const uint32_t result_flag,
+                                      const stmt::StmtType &stmt_type,
+                                      bool is_ignore_stmt,
+                                      ObSQLMode sql_mode,
+                                      ObCastMode &cast_mode)
+{
+  cast_mode = CM_NONE;
+  ObSQLUtils::get_default_cast_mode(stmt_type, is_ignore_stmt, sql_mode, cast_mode);
+  if (is_explicit_cast) {
+    cast_mode |= CM_EXPLICIT_CAST;
+  } else {
+    cast_mode &= ~CM_EXPLICIT_CAST;
+  }
+  if (result_flag & ZEROFILL_FLAG) {
+    cast_mode |= CM_ZERO_FILL;
+  }
+  if (!is_oracle_mode() && is_strict_mode(sql_mode)) {
+    cast_mode |= CM_NONE;
+    cast_mode |= CM_STRICT_MODE;
+  }
+  if (is_mysql_mode()) {
+    if (is_allow_invalid_dates(sql_mode)) {
+      cast_mode |= CM_ALLOW_INVALID_DATES;
+    }
+    if (is_no_zero_date(sql_mode)) {
+      cast_mode |= CM_NO_ZERO_DATE;
+    }
+    if (is_time_truncate_fractional(sql_mode)) {
+      cast_mode |= CM_TIME_TRUNCATE_FRACTIONAL;
+    }
+  }
+  cast_mode |= CM_FORMAT_NUMBER_WITH_LIMIT;
+  LOG_DEBUG("in get_default_cast_mode", K(is_explicit_cast),
+      K(result_flag), K(stmt_type), K(cast_mode), K(sql_mode));
 }
 
 int ObSQLUtils::get_cast_mode_for_replace(const ObRawExpr *expr,
@@ -2971,6 +2999,157 @@ int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &co
   return ret;
 }
 
+int ObSQLUtils::merge_solidified_var_into_collation(const share::schema::ObLocalSessionVar &session_vars_snapshot,
+                                                     ObCollationType &cs_type) {
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    ObSessionSysVar *local_var = NULL;
+    if (OB_FAIL(session_vars_snapshot.get_local_var(SYS_VAR_COLLATION_CONNECTION, local_var))) {
+      LOG_WARN("get local session var failed", K(ret));
+    } else if (NULL != local_var) {
+      cs_type = static_cast<ObCollationType>(local_var->val_.get_int());
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
+                                                    const ObLocalSessionVar &session_vars_snapshot)
+{
+  int ret = OB_SUCCESS;
+
+  //coll_type_ for mysql mode
+  ObCollationType cs_type = type_ctx.get_coll_type();
+  if (OB_FAIL(merge_solidified_var_into_collation(session_vars_snapshot, cs_type))) {
+    LOG_WARN("get collation failed", K(ret));
+  } else {
+    type_ctx.set_coll_type(cs_type);
+  }
+  //merge dtc param
+  if (OB_SUCC(ret)) {
+    bool dummy = false;
+    const ObTimeZoneInfo *local_timezone = NULL;
+    ObSessionSysVar *local_var = NULL;
+    const ObTZInfoMap * tz_info_map = type_ctx.get_tz_info_map();
+    if (OB_ISNULL(tz_info_map)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), KP(tz_info_map));
+    } else if (OB_FAIL(session_vars_snapshot.get_local_var(SYS_VAR_TIME_ZONE, local_var))) {
+      LOG_WARN("get local var failed", K(ret));
+    } else if (NULL != local_var) {
+      if (OB_FAIL(type_ctx.get_local_tz_wrap().init_time_zone(local_var->val_.get_string(),
+                                                              OB_INVALID_VERSION,
+                                                              *(const_cast<ObTZInfoMap *>(tz_info_map))))) {
+        LOG_WARN("get init_time_zone failed", K(ret), K(local_var->val_.get_string()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(merge_solidified_var_into_dtc_params(&session_vars_snapshot,
+                                                        type_ctx.get_local_tz_wrap().get_time_zone_info(),
+                                                        type_ctx.get_dtc_params()))) {
+        LOG_WARN("get dtc params failed", K(ret));
+      }
+    }
+  }
+  //merge sql mode
+  if (OB_SUCC(ret)) {
+    ObSQLMode sql_mode = type_ctx.get_sql_mode();
+    if (OB_FAIL(merge_solidified_var_into_sql_mode(&session_vars_snapshot, sql_mode))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else {
+      type_ctx.set_sql_mode(sql_mode);
+    }
+  }
+
+  //merge max allowed packet
+  if (OB_SUCC(ret)) {
+    int64_t max_allowed_packet = type_ctx.get_max_allowed_packet();
+    if (OB_FAIL(merge_solidified_var_into_max_allowed_packet(&session_vars_snapshot, max_allowed_packet))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else {
+      type_ctx.set_max_allowed_packet(max_allowed_packet);
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::merge_solidified_var_into_dtc_params(const share::schema::ObLocalSessionVar *local_vars,
+                                                const ObTimeZoneInfo *local_timezone,
+                                                ObDataTypeCastParams &dtc_param)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *local_var = NULL;
+  //dtc_param = ObBasicSessionInfo::create_dtc_params(session);
+  //time zone
+  if (NULL != local_timezone) {
+    dtc_param.tz_info_ = local_timezone;
+  }
+  //nls format
+  if (NULL != local_vars) {
+    if (OB_FAIL(local_vars->get_local_var(SYS_VAR_NLS_DATE_FORMAT, local_var))) {
+      LOG_WARN("get local session var failed", K(ret));
+    } else if (NULL != local_var) {
+      dtc_param.session_nls_formats_[0] = local_var->val_.get_string();
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(local_vars->get_local_var(SYS_VAR_NLS_TIMESTAMP_FORMAT, local_var))) {
+        LOG_WARN("get local session var failed", K(ret));
+      } else if (NULL != local_var) {
+        dtc_param.session_nls_formats_[1] = local_var->val_.get_string();
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(local_vars->get_local_var(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT, local_var))) {
+        LOG_WARN("get local session var failed", K(ret));
+      } else if (NULL != local_var) {
+        dtc_param.session_nls_formats_[2] = local_var->val_.get_string();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::merge_solidified_var_into_sql_mode(const share::schema::ObLocalSessionVar *local_vars,
+                                                    ObSQLMode &sql_mode) {
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *local_var = NULL;
+  if (NULL == local_vars) {
+    //do nothing
+  } else if (OB_FAIL(local_vars->get_local_var(SYS_VAR_SQL_MODE, local_var))) {
+    LOG_WARN("get local session var failed", K(ret));
+  } else if (NULL != local_var) {
+    if (ObUInt64Type == local_var->val_.get_type()) {
+      sql_mode = local_var->val_.get_uint64();
+    } else if (ObIntType == local_var->val_.get_type()) {
+      sql_mode = static_cast<uint64_t>(local_var->val_.get_int());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid sql mode val type", K(ret), K(local_var->val_));
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
+                                                             int64_t &max_allowed_packet)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *local_var = NULL;
+  if (NULL == local_vars) {
+    //do nothing
+  } else if (OB_FAIL(local_vars->get_local_var(SYS_VAR_MAX_ALLOWED_PACKET, local_var))) {
+    LOG_WARN("get local session var failed", K(ret));
+  } else if (NULL != local_var) {
+    if (ObIntType == local_var->val_.get_type()) {
+      max_allowed_packet = local_var->val_.get_int();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid max allowed packet val type", K(ret), K(local_var->val_));
+    }
+  }
+  return ret;
+}
+
 void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx)
 {
   if (NULL != session) {
@@ -2993,6 +3172,13 @@ void ObSQLUtils::init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &t
     }
     if (OB_SUCCESS == (session->get_max_allowed_packet(ob_max_allowed_packet))) {
       type_ctx.set_max_allowed_packet(ob_max_allowed_packet);
+    }
+    type_ctx.set_sql_mode(session->get_sql_mode());
+    ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+    type_ctx.set_dtc_params(dtc_params);
+    ObTZMapWrap tz_map_wrap;
+    if (OB_SUCCESS == (OTTZ_MGR.get_tenant_tz(session->get_effective_tenant_id(), tz_map_wrap))) {
+      type_ctx.set_tz_info_map(tz_map_wrap.get_tz_map());;
     }
     CHECK_COMPATIBILITY_MODE(session);
   } else {

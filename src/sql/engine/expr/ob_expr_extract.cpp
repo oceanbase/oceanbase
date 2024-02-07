@@ -20,6 +20,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 #define STR_LEN 20
 
@@ -228,6 +229,8 @@ int ObExprExtract::calc_oracle(T &result,
                                const T &date,
                                ObObjType type,
                                const ObSQLSessionInfo *session,
+                               const ObEvalCtx &ctx,
+                               const ObExpr &expr,
                                ObIAllocator *calc_buf)
 {
   int ret = OB_SUCCESS;
@@ -282,9 +285,10 @@ int ObExprExtract::calc_oracle(T &result,
 
     ObTime ob_time;
     ObIntervalParts interval_part;
-
     //2. convert to time struct
     if (OB_SUCC(ret)) {
+      const common::ObTimeZoneInfo *tz_info = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
       switch (ob_obj_type_class(type)) {
       case ObDateTimeTC:
         if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(date.get_datetime(),
@@ -294,9 +298,11 @@ int ObExprExtract::calc_oracle(T &result,
         }
         break;
       case ObOTimestampTC:
-        if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type,
+        if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+          LOG_WARN("get time zone failed", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type,
                                                            get_otimestamp_value(date, type),
-                                                           get_timezone_info(session),
+                                                           tz_info,
                                                            ob_time,
                                                            ObTimestampLTZType != type))) {
           LOG_WARN("fail to convert otimestamp to ob time", K(ret), K(date));
@@ -455,7 +461,7 @@ int ObExprExtract::calc_extract_oracle(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObDatum *result = static_cast<ObDatum *>(&expr_datum);
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     ret = calc_oracle(*result, param_datum1->get_int(), *param_datum2,
-                      expr.args_[1]->datum_meta_.type_, session, &alloc_guard.get_allocator());
+                      expr.args_[1]->datum_meta_.type_, session, ctx, expr, &alloc_guard.get_allocator());
   }
   return ret;
 }
@@ -466,6 +472,9 @@ int ObExprExtract::calc_extract_mysql(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   ObDatum *param_datum1 = NULL;
   ObDatum *param_datum2 = NULL;
   const ObSQLSessionInfo *session = NULL;
+  const common::ObTimeZoneInfo *tz_info = NULL;
+  ObSQLMode sql_mode = 0;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
   if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -473,16 +482,20 @@ int ObExprExtract::calc_extract_mysql(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
     LOG_WARN("eval param1 value failed");
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, param_datum2))) {
     LOG_WARN("eval param2 value failed");
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get time zone failed", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
   } else {
     ObDatum *result = static_cast<ObDatum *>(&expr_datum);
     uint64_t cast_mode = 0;
-    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+    ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session->is_ignore_stmt(), sql_mode, cast_mode);
     ObDateSqlMode date_sql_mode;
-    date_sql_mode.init(session->get_sql_mode());
+    date_sql_mode.init(sql_mode);
     ret = ObExprExtract::calc(*result, param_datum1->get_int(), *param_datum2,
                               expr.args_[1]->datum_meta_.type_,
                               expr.args_[1]->datum_meta_.scale_,
-                              cast_mode, get_timezone_info(session),
+                              cast_mode, tz_info,
                               get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()),
                               date_sql_mode, expr.args_[1]->obj_meta_.has_lob_header());
   }
@@ -495,30 +508,35 @@ int ObExprExtract::calc_extract_mysql_batch(
   LOG_DEBUG("eval mysql extract in batch mode", K(batch_size));
   int ret = OB_SUCCESS;
   ObDatum *results = expr.locate_batch_datums(ctx);
-
+  const ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(results)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr results frame is not init", K(ret));
+  } else if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
   } else {
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     ObDatum *date_unit_datum = NULL;
-    const ObSQLSessionInfo *session = NULL;
-    if (OB_ISNULL(session = ctx.exec_ctx_.get_my_session())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("session is null", K(ret));
-    } else if (OB_FAIL(expr.args_[0]->eval(ctx, date_unit_datum))) {
+    ObSQLMode sql_mode = 0;
+    const common::ObTimeZoneInfo *tz_info = NULL;
+    ObSolidifiedVarsGetter helper(expr, ctx, session);
+    if (OB_FAIL(expr.args_[0]->eval(ctx, date_unit_datum))) {
       LOG_WARN("eval date_unit_datum failed", K(ret));
     } else if (OB_FAIL(expr.args_[1]->eval_batch(ctx, skip, batch_size))) {
       LOG_WARN("failed to eval batch result args0", K(ret));
+    } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+      LOG_WARN("get sql mode failed", K(ret));
+    } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+      LOG_WARN("get timezone info failed", K(ret));
     } else {
       uint64_t cast_mode = 0;
-      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session, cast_mode);
+      ObSQLUtils::get_default_cast_mode(session->get_stmt_type(), session->is_ignore_stmt(), sql_mode, cast_mode);
       ObDateUnitType unit_val = static_cast<ObDateUnitType>(date_unit_datum->get_int());
       bool is_with_date = false;
       int warning = OB_SUCCESS;
       int &cast_ret = CM_IS_ERROR_ON_FAIL(cast_mode) ? ret : warning;
       ObDatum *datum_array = expr.args_[1]->locate_batch_datums(ctx);
-      const ObTimeZoneInfo *tz_info = get_timezone_info(session);
       const int64_t cur_ts_value = get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx());
       class ObTime ob_time;
       switch (unit_val) {
@@ -545,7 +563,7 @@ int ObExprExtract::calc_extract_mysql_batch(
           eval_flags.set(j);
         } else {
           ObDateSqlMode date_sql_mode;
-          date_sql_mode.init(session->get_sql_mode());
+          date_sql_mode.init(sql_mode);
           memset(&ob_time, 0, sizeof(ob_time));
           if (is_with_date) {
             cast_ret = obj_to_time<ObDatum, true>(datum_array[j], expr.args_[1]->datum_meta_.type_,
@@ -615,6 +633,8 @@ int ObExprExtract::calc_extract_oracle_batch(
           (DATE_UNIT_YEAR == unit_val)
           || (DATE_UNIT_MONTH == unit_val);
       bool valid_expr = false;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      const common::ObTimeZoneInfo *tz_info = NULL;
       switch (type) {
       // see oracle doc EXTRACT (datetime) :
       // https://docs.oracle.com/cd/B28359_01/server.111/b28286/functions052.htm#SQLRF00639
@@ -643,6 +663,11 @@ int ObExprExtract::calc_extract_oracle_batch(
                  "requested field", ob_date_unit_type_str(unit_val),
                  "expr type", type);
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+          LOG_WARN("get timezone info failed", K(ret));
+        }
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
         if (skip.at(j) || eval_flags.at(j)) {
           continue;
@@ -665,7 +690,7 @@ int ObExprExtract::calc_extract_oracle_batch(
             case ObOTimestampTC:
               if (OB_FAIL(ObTimeConverter::otimestamp_to_ob_time(type,
                                                                  get_otimestamp_value(datum_array[j], expr.args_[1]->datum_meta_.type_),
-                                                                 get_timezone_info(session),
+                                                                 tz_info,
                                                                  ob_time,
                                                                  ObTimestampLTZType != expr.args_[1]->datum_meta_.type_))) {
                 LOG_WARN("fail to convert otimestamp to ob time", K(ret), K(datum_array[j]));
@@ -772,6 +797,17 @@ int ObExprExtract::calc_extract_oracle_batch(
     }
   }
 
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprExtract, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(3);
+  if (is_mysql_mode()) {
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_SQL_MODE);
+  }
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
   return ret;
 }
 

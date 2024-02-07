@@ -308,6 +308,7 @@ public:
       const share::schema::AlterTableSchema &alter_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
       const common::ObString &nls_formats,
+      share::schema::ObLocalSessionVar &local_session_var,
       obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       common::ObIAllocator &allocator,
       share::schema::ObTableSchema &new_table_schema,
@@ -1715,7 +1716,10 @@ private:
       const share::schema::ObColumnSchemaV2 &orig_column_schema,
       const share::schema::ObTableSchema &origin_table_schema,
       const common::ObTimeZoneInfoWrap &tz_info_wrap,
+      const share::schema::ObLocalSessionVar *local_session_var,
       share::schema::ObTableSchema &new_table_schema,
+      const bool need_update_default_value,
+      const bool need_update_session_var,
       ObDDLOperator *ddl_operator = NULL,
       common::ObMySQLTransaction *trans = NULL);
   int modify_generated_column_default_value(share::schema::ObColumnSchemaV2 &generated_column,
@@ -1723,6 +1727,17 @@ private:
                                             const common::ObString &new_column_name,
                                             const share::schema::ObTableSchema &table_schema,
                                             const common::ObTimeZoneInfo &tz_info);
+  int modify_generated_column_local_vars(ObColumnSchemaV2 &generated_column,
+                                        const common::ObString &column_name,
+                                        const ObObjType origin_type,
+                                        const AlterColumnSchema &new_column_schema,
+                                        const ObTableSchema &table_schema,
+                                        const share::schema::ObLocalSessionVar *local_session_var);
+  int modify_depend_column_type(sql::ObRawExpr *expr,
+                                const ObString &column_name,
+                                const AlterColumnSchema &alter_column_schema,
+                                lib::Worker::CompatMode compat_mode);
+
   int validate_update_column_for_materialized_view(
       const share::schema::ObTableSchema &origin_table_schema,
       const share::schema::ObColumnSchemaV2 &orig_column_schema);

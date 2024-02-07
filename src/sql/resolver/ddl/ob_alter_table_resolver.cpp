@@ -78,6 +78,8 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         session_info_->get_local_nls_timestamp_format(),
         session_info_->get_local_nls_timestamp_tz_format()))) {
       SQL_RESV_LOG(WARN, "failed to set_nls_formats", K(ret));
+    } else if (OB_FAIL(alter_table_stmt->fill_session_vars(*session_info_))) {
+      SQL_RESV_LOG(WARN, "failed to init local session vars with session", K(ret));
     } else {
       stmt_ = alter_table_stmt;
     }
@@ -1540,7 +1542,15 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               }
             }
             if (OB_SUCC(ret)) {
+              uint64_t tenant_data_version = 0;
               create_index_arg->sql_mode_ = session_info_->get_sql_mode();
+              if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+                LOG_WARN("get tenant data version failed", K(ret));
+              } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+                //do nothing
+              } else if (OB_FAIL(create_index_arg->local_session_var_.load_session_vars(session_info_))) {
+                LOG_WARN("fail to fill session info into local_session_var", K(ret));
+              }
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(generate_index_arg(*create_index_arg, is_unique_key))) {
@@ -4842,7 +4852,10 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
   tmp_str[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = session_info_->get_local_nls_timestamp_tz_format();
   AlterColumnSchema dummy_column(column.get_allocator());
   ObTableSchema tmp_table_schema; // check_default_value will change table_schema
-  if (OB_FAIL(tmp_table_schema.assign(*table_schema_))) {
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(node));
+  } else if (OB_FAIL(tmp_table_schema.assign(*table_schema_))) {
     LOG_WARN("failed to assign a table schema", K(ret));
   } else if (OB_FAIL(resolve_column_definition(column, node, stat,
               is_modify_column_visibility, pk_name,
@@ -4869,7 +4882,8 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                               session_info_->get_sql_mode(),
                               session_info_,
                               false, /* allow_sequence*/
-                              schema_checker_))) {
+                              schema_checker_,
+                              NULL == node->children_[1]))) {
     SQL_RESV_LOG(WARN, "failed to check default value", K(column), K(ret));
   } else if (OB_FAIL(column.set_cur_default_value(dummy_column.get_cur_default_value()))) {
     LOG_WARN("failed to set default value", K(ret));

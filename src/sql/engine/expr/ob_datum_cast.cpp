@@ -773,41 +773,54 @@ int ObDatumHexUtils::unhex(const ObExpr &expr,
 
 // 根据in_type,force_use_standard_format信息，从session中获取fromat_str
 int common_get_nls_format(const ObBasicSessionInfo *session,
-                                 const ObObjType in_type,
-                                 const bool force_use_standard_format,
-                                 ObString &format_str)
+                          ObEvalCtx &ctx,
+                          const ObExpr *rt_expr,
+                          const ObObjType in_type,
+                          const bool force_use_standard_format,
+                          ObString &format_str)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(rt_expr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("session is NULL", K(ret));
+    LOG_WARN("session or rt_expr is NULL", K(ret), K(session), KP(rt_expr));
   } else {
     ObString nls_format;
+    ObSessionSysVar *local_var = NULL;
+    ObSolidifiedVarsGetter helper(*rt_expr, ctx, session);
     switch (in_type) {
       case ObDateTimeType:
-        nls_format = session->get_local_nls_date_format();
-        format_str = (force_use_standard_format
-            ? ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT
-            : (nls_format.empty()
-              ? ObTimeConverter::DEFAULT_NLS_DATE_FORMAT
-              : nls_format));
+        if (OB_FAIL(helper.get_local_nls_date_format(nls_format))) {
+          LOG_WARN("get nls timestamp tz format failed", K(ret));
+        } else {
+          format_str = (force_use_standard_format
+              ? ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT
+              : (nls_format.empty()
+                ? ObTimeConverter::DEFAULT_NLS_DATE_FORMAT
+                : nls_format));
+        }
         break;
       case ObTimestampNanoType:
       case ObTimestampLTZType:
-        nls_format = session->get_local_nls_timestamp_format();
-        format_str = (force_use_standard_format
-            ? ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT
-            : (nls_format.empty()
-              ? ObTimeConverter::DEFAULT_NLS_TIMESTAMP_FORMAT
-              : nls_format));
+        if (OB_FAIL(helper.get_local_nls_timestamp_format(nls_format))) {
+          LOG_WARN("get nls timestamp tz format failed", K(ret));
+        } else {
+          format_str = (force_use_standard_format
+              ? ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT
+              : (nls_format.empty()
+                ? ObTimeConverter::DEFAULT_NLS_TIMESTAMP_FORMAT
+                : nls_format));
+        }
         break;
       case ObTimestampTZType:
-        nls_format = session->get_local_nls_timestamp_tz_format();
-        format_str = (force_use_standard_format
-            ? ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT
-            : (nls_format.empty()
-              ? ObTimeConverter::DEFAULT_NLS_TIMESTAMP_TZ_FORMAT
-              : nls_format));
+        if (OB_FAIL(helper.get_local_nls_timestamp_tz_format(nls_format))) {
+          LOG_WARN("get nls timestamp tz format failed", K(ret));
+        } else {
+          format_str = (force_use_standard_format
+              ? ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT
+              : (nls_format.empty()
+                ? ObTimeConverter::DEFAULT_NLS_TIMESTAMP_TZ_FORMAT
+                : nls_format));
+        }
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -836,9 +849,15 @@ static int common_int_datetime(const ObExpr &expr,
                                            ? false : CM_IS_ALLOW_INVALID_DATES(expr.extra_);
       date_sql_mode.no_zero_date_ = CM_IS_EXPLICIT_CAST(expr.extra_)
                                     ? false : CM_IS_NO_ZERO_DATE(expr.extra_);
-      ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(),
-                                ObTimestampType == expr.datum_meta_.type_);
-      ret = ObTimeConverter::int_to_datetime(in_val, 0, cvrt_ctx, out_val, date_sql_mode);
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
+      } else {
+        ObTimeConvertCtx cvrt_ctx(tz_info_local,
+                                  ObTimestampType == expr.datum_meta_.type_);
+        ret = ObTimeConverter::int_to_datetime(in_val, 0, cvrt_ctx, out_val, date_sql_mode);
+      }
     }
     if (CAST_FAIL(ret)) {
       LOG_WARN("int_datetime failed", K(ret));
@@ -1352,34 +1371,40 @@ static OB_INLINE int common_string_datetime(const ObExpr &expr,
   {
     const ObCastMode cast_mode = expr.extra_;
     bool need_truncate = CM_IS_COLUMN_CONVERT(cast_mode) ? CM_IS_TIME_TRUNCATE_FRACTIONAL(cast_mode) : false;
-    ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(),
-                              ObTimestampType == expr.datum_meta_.type_,
-                              need_truncate);
-    if (lib::is_oracle_mode()) {
-      if (OB_FAIL(common_get_nls_format(session, expr.datum_meta_.type_,
-                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
-                                        cvrt_ctx.oracle_nls_format_))) {
-        LOG_WARN("common_get_nls_format failed", K(ret));
-      } else if (CAST_FAIL(ObTimeConverter::str_to_date_oracle(in_str,
-                                                               cvrt_ctx,
-                                                               out_val))) {
-        LOG_WARN("str_to_date_oracle failed", K(ret));
-      }
+    const common::ObTimeZoneInfo *tz_info_local = NULL;
+    ObSolidifiedVarsGetter helper(expr, ctx, session);
+    if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+      LOG_WARN("get time zone info failed", K(ret));
     } else {
-      ObScale res_scale; // useless
-      ObDateSqlMode date_sql_mode;
-      date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(expr.extra_);
-      date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(expr.extra_);
-      if (CAST_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale,
-                    date_sql_mode))) {
-        LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+      ObTimeConvertCtx cvrt_ctx(tz_info_local,
+                                ObTimestampType == expr.datum_meta_.type_,
+                                need_truncate);
+      if (lib::is_oracle_mode()) {
+        if (OB_FAIL(common_get_nls_format(session, ctx, &expr, expr.datum_meta_.type_,
+                                          CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
+                                          cvrt_ctx.oracle_nls_format_))) {
+          LOG_WARN("common_get_nls_format failed", K(ret));
+        } else if (CAST_FAIL(ObTimeConverter::str_to_date_oracle(in_str,
+                                                                cvrt_ctx,
+                                                                out_val))) {
+          LOG_WARN("str_to_date_oracle failed", K(ret));
+        }
       } else {
-       // check zero date for scale over mode
-        if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) &&
-           (out_val == ObTimeConverter::ZERO_DATE ||
-           out_val == ObTimeConverter::ZERO_DATETIME)) {
-          ret = OB_INVALID_DATE_VALUE;
-          LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_str.length(), in_str.ptr(), "");
+        ObScale res_scale; // useless
+        ObDateSqlMode date_sql_mode;
+        date_sql_mode.allow_invalid_dates_ = CM_IS_ALLOW_INVALID_DATES(expr.extra_);
+        date_sql_mode.no_zero_date_ = CM_IS_NO_ZERO_DATE(expr.extra_);
+        if (CAST_FAIL(ObTimeConverter::str_to_datetime(in_str, cvrt_ctx, out_val, &res_scale,
+                      date_sql_mode))) {
+          LOG_WARN("str_to_datetime failed", K(ret), K(in_str));
+        } else {
+        // check zero date for scale over mode
+          if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) &&
+            (out_val == ObTimeConverter::ZERO_DATE ||
+            out_val == ObTimeConverter::ZERO_DATETIME)) {
+            ret = OB_INVALID_DATE_VALUE;
+            LOG_USER_ERROR(OB_INVALID_DATE_VALUE, in_str.length(), in_str.ptr(), "");
+          }
         }
       }
     }
@@ -1593,22 +1618,30 @@ static int common_string_otimestamp(const ObExpr &expr,
   {
     int warning = OB_SUCCESS;
     ObOTimestampData out_val;
-    ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), true);
     ObScale res_scale = 0; // useless
-    if (OB_FAIL(common_get_nls_format(session,
-            expr.datum_meta_.type_,
-            CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
-            cvrt_ctx.oracle_nls_format_))) {
-      LOG_WARN("common_get_nls_format failed", K(ret));
-    } else if (CAST_FAIL(ObTimeConverter::str_to_otimestamp(in_str, cvrt_ctx,
-            expr.datum_meta_.type_,
-            out_val, res_scale))) {
-      LOG_WARN("str_to_otimestamp failed", K(ret), K(in_str));
+    const common::ObTimeZoneInfo *tz_info_local = NULL;
+    ObSolidifiedVarsGetter helper(expr, ctx, session);
+    if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+      LOG_WARN("get time zone info failed", K(ret));
     } else {
-      if (ObTimestampTZType == expr.datum_meta_.type_) {
-        SET_RES_OTIMESTAMP(out_val);
+      ObTimeConvertCtx cvrt_ctx(tz_info_local, true);
+      if (OB_FAIL(common_get_nls_format(session,
+              ctx,
+              &expr,
+              expr.datum_meta_.type_,
+              CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
+              cvrt_ctx.oracle_nls_format_))) {
+        LOG_WARN("common_get_nls_format failed", K(ret));
+      } else if (CAST_FAIL(ObTimeConverter::str_to_otimestamp(in_str, cvrt_ctx,
+              expr.datum_meta_.type_,
+              out_val, res_scale))) {
+        LOG_WARN("str_to_otimestamp failed", K(ret), K(in_str));
       } else {
-        SET_RES_OTIMESTAMP_10BYTE(out_val);
+        if (ObTimestampTZType == expr.datum_meta_.type_) {
+          SET_RES_OTIMESTAMP(out_val);
+        } else {
+          SET_RES_OTIMESTAMP_10BYTE(out_val);
+        }
       }
     }
   }
@@ -2429,27 +2462,33 @@ static OB_INLINE int common_double_datetime(const ObExpr &expr,
   } else {
     int64_t out_val = 0;
     ObObjType out_type = expr.datum_meta_.type_;
-    ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
     ObNumStackOnceAlloc tmp_alloc;
     number::ObNumber number;
-    if (OB_FAIL(common_floating_number(val_double, OB_GCVT_ARG_DOUBLE, tmp_alloc, number))) {
-      LOG_WARN("cast float to number failed", K(ret), K(expr.extra_));
-      if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
-        ret = OB_SUCCESS;
-        if (CM_IS_ZERO_ON_WARN(expr.extra_)) {
-          res_datum.set_datetime(ObTimeConverter::ZERO_DATETIME);
+    const common::ObTimeZoneInfo *tz_info_local = NULL;
+    ObSolidifiedVarsGetter helper(expr, ctx, session);
+    if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+      LOG_WARN("get time zone info failed", K(ret));
+    } else {
+      if (OB_FAIL(common_floating_number(val_double, OB_GCVT_ARG_DOUBLE, tmp_alloc, number))) {
+        LOG_WARN("cast float to number failed", K(ret), K(expr.extra_));
+        if (CM_IS_WARN_ON_FAIL(expr.extra_)) {
+          ret = OB_SUCCESS;
+          if (CM_IS_ZERO_ON_WARN(expr.extra_)) {
+            res_datum.set_datetime(ObTimeConverter::ZERO_DATETIME);
+          } else {
+            res_datum.set_null();
+          }
         } else {
-          res_datum.set_null();
+          ret = OB_INVALID_DATE_VALUE;
         }
       } else {
-        ret = OB_INVALID_DATE_VALUE;
-      }
-    } else {
-      ret = common_number_datetime(number, cvrt_ctx, out_val, expr.extra_);
-      if (CAST_FAIL(ret)) {
-        LOG_WARN("str_to_datetime failed", K(ret));
-      } else {
-        SET_RES_DATETIME(out_val);
+        ObTimeConvertCtx cvrt_ctx(tz_info_local, ObTimestampType == out_type);
+        ret = common_number_datetime(number, cvrt_ctx, out_val, expr.extra_);
+        if (CAST_FAIL(ret)) {
+          LOG_WARN("str_to_datetime failed", K(ret));
+        } else {
+          SET_RES_DATETIME(out_val);
+        }
       }
     }
   }
@@ -2476,7 +2515,7 @@ static int common_double_time(const ObExpr &expr,
   return ret;
 }
 
-int common_datetime_string(const ObObjType in_type, const ObObjType out_type,
+int common_datetime_string(const ObExpr &expr, const ObObjType in_type, const ObObjType out_type,
                            const ObScale in_scale, bool force_use_std_nls_format,
                            const int64_t in_val, ObEvalCtx &ctx, char *buf,
                            int64_t buf_len, int64_t &out_len)
@@ -2488,20 +2527,26 @@ int common_datetime_string(const ObObjType in_type, const ObObjType out_type,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else {
-    const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                      session->get_timezone_info() : NULL;
-    ObString nls_format;
-    if (lib::is_oracle_mode() && !force_use_std_nls_format) {
-      if (OB_FAIL(common_get_nls_format(session, in_type,
-                force_use_std_nls_format,
-                nls_format))) {
-        LOG_WARN("common_get_nls_format failed", K(ret));
+    const common::ObTimeZoneInfo *tz_info_local = NULL;
+    ObSolidifiedVarsGetter helper(expr, ctx, session);
+    if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+      LOG_WARN("get time zone info failed", K(ret));
+    } else {
+      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                        tz_info_local : NULL;
+      ObString nls_format;
+      if (lib::is_oracle_mode() && !force_use_std_nls_format) {
+        if (OB_FAIL(common_get_nls_format(session, ctx, &expr, in_type,
+                  force_use_std_nls_format,
+                  nls_format))) {
+          LOG_WARN("common_get_nls_format failed", K(ret));
+        }
       }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info,
-            nls_format, in_scale, buf, buf_len, out_len))) {
-      LOG_WARN("failed to convert datetime to string", K(ret), K(in_val), KP(tz_info),
-                K(nls_format), K(in_scale), K(buf), K(out_len));
+      if (OB_SUCC(ret) && OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info,
+              nls_format, in_scale, buf, buf_len, out_len))) {
+        LOG_WARN("failed to convert datetime to string", K(ret), K(in_val), KP(tz_info),
+                  K(nls_format), K(in_scale), K(buf), K(out_len));
+      }
     }
   }
   return ret;
@@ -4217,14 +4262,20 @@ CAST_FUNC_NAME(number, datetime)
     {
       const number::ObNumber nmb(child_res->get_number());
       ObObjType out_type = expr.datum_meta_.type_;
-      ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(),
-          ObTimestampType == out_type);
-      int64_t out_val = 0;
-      ret = common_number_datetime(nmb, cvrt_ctx, out_val, expr.extra_);
-      int warning = OB_SUCCESS;
-      if (CAST_FAIL(ret)) {
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        SET_RES_DATETIME(out_val);
+        ObTimeConvertCtx cvrt_ctx(tz_info_local,
+            ObTimestampType == out_type);
+        int64_t out_val = 0;
+        ret = common_number_datetime(nmb, cvrt_ctx, out_val, expr.extra_);
+        int warning = OB_SUCCESS;
+        if (CAST_FAIL(ret)) {
+        } else {
+          SET_RES_DATETIME(out_val);
+        }
       }
     }
   }
@@ -5022,17 +5073,23 @@ CAST_FUNC_NAME(datetime, int)
     GET_SESSION()
     {
       DEF_IN_OUT_TYPE();
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      int64_t in_val = child_res->get_int();
-      int64_t out_val = 0;
-      if (OB_FAIL(ObTimeConverter::datetime_to_int(in_val, tz_info, out_val))) {
-        LOG_WARN("datetime_to_int failed", K(ret), K(in_val));
-      } else if (out_type < ObIntType && CAST_FAIL(int_range_check(out_type,
-                                                   out_val, out_val))) {
-        LOG_WARN("int_range_check failed", K(ret));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_int(out_val);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        int64_t in_val = child_res->get_int();
+        int64_t out_val = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_int(in_val, tz_info, out_val))) {
+          LOG_WARN("datetime_to_int failed", K(ret), K(in_val));
+        } else if (out_type < ObIntType && CAST_FAIL(int_range_check(out_type,
+                                                    out_val, out_val))) {
+          LOG_WARN("int_range_check failed", K(ret));
+        } else {
+          res_datum.set_int(out_val);
+        }
       }
     }
   }
@@ -5046,20 +5103,26 @@ CAST_FUNC_NAME(datetime, uint)
     GET_SESSION()
     {
       DEF_IN_OUT_TYPE();
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      int64_t in_val = child_res->get_int();
-      int64_t val_int = 0;
-      uint64_t out_val = 0;
-      if (OB_FAIL(ObTimeConverter::datetime_to_int(in_val, tz_info, val_int))) {
-        LOG_WARN("datetime_to_int failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        out_val = static_cast<uint64_t>(val_int);
-        if (out_type < ObUInt64Type &&
-            CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
-          LOG_WARN("int_range_check failed", K(ret));
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        int64_t in_val = child_res->get_int();
+        int64_t val_int = 0;
+        uint64_t out_val = 0;
+        if (OB_FAIL(ObTimeConverter::datetime_to_int(in_val, tz_info, val_int))) {
+          LOG_WARN("datetime_to_int failed", K(ret), K(in_val));
         } else {
-          res_datum.set_uint(out_val);
+          out_val = static_cast<uint64_t>(val_int);
+          if (out_type < ObUInt64Type &&
+              CAST_FAIL(uint_range_check(out_type, val_int, out_val))) {
+            LOG_WARN("int_range_check failed", K(ret));
+          } else {
+            res_datum.set_uint(out_val);
+          }
         }
       }
     }
@@ -5076,12 +5139,18 @@ CAST_FUNC_NAME(datetime, double)
       int64_t in_val = child_res->get_int();
       double out_val = 0.0;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_double(in_val, tz_info, out_val))) {
-        LOG_WARN("datetime_to_double failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_double(out_val);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_double(in_val, tz_info, out_val))) {
+          LOG_WARN("datetime_to_double failed", K(ret), K(in_val));
+        } else {
+          res_datum.set_double(out_val);
+        }
       }
     }
   }
@@ -5097,12 +5166,18 @@ CAST_FUNC_NAME(datetime, float)
       int64_t in_val = child_res->get_int();
       double out_val = 0.0;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_double(in_val, tz_info, out_val))) {
-        LOG_WARN("datetime_to_double failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_float(static_cast<float>(out_val));
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_double(in_val, tz_info, out_val))) {
+          LOG_WARN("datetime_to_double failed", K(ret), K(in_val));
+        } else {
+          res_datum.set_float(static_cast<float>(out_val));
+        }
       }
     }
   }
@@ -5126,15 +5201,21 @@ CAST_FUNC_NAME(datetime, number)
       ObPrecision res_precision; // useless
       ObScale res_scale; // useless
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-        session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info, nls_format,
-                    in_scale, buf, sizeof(buf), len, false))) {
-        LOG_WARN("failed to convert datetime to string", K(ret));
-      } else if (CAST_FAIL(number.from(buf, len, tmp_alloc, &res_precision, &res_scale))) {
-        LOG_WARN("failed to convert string to number", K(ret));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_number(number);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+          tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info, nls_format,
+                      in_scale, buf, sizeof(buf), len, false))) {
+          LOG_WARN("failed to convert datetime to string", K(ret));
+        } else if (CAST_FAIL(number.from(buf, len, tmp_alloc, &res_precision, &res_scale))) {
+          LOG_WARN("failed to convert string to number", K(ret));
+        } else {
+          res_datum.set_number(number);
+        }
       }
     }
   }
@@ -5151,19 +5232,25 @@ CAST_FUNC_NAME(datetime, datetime)
       int64_t out_val = in_val;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
       ObObjType out_type = expr.datum_meta_.type_;
-      if (ObDateTimeType == in_type && ObTimestampType == out_type) {
-        ret = ObTimeConverter::datetime_to_timestamp(in_val,
-                                                     session->get_timezone_info(),
-                                                     out_val);
-        ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
-      } else if (ObTimestampType == in_type && ObDateTimeType == out_type) {
-        ret = ObTimeConverter::timestamp_to_datetime(out_val,
-                                                     session->get_timezone_info(),
-                                                     out_val);
-      }
-      if (OB_FAIL(ret)) {
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_datetime(out_val);
+        if (ObDateTimeType == in_type && ObTimestampType == out_type) {
+          ret = ObTimeConverter::datetime_to_timestamp(in_val,
+                                                      tz_info_local,
+                                                      out_val);
+          ret = OB_ERR_UNEXPECTED_TZ_TRANSITION == ret ? OB_INVALID_DATE_VALUE : ret;
+        } else if (ObTimestampType == in_type && ObDateTimeType == out_type) {
+          ret = ObTimeConverter::timestamp_to_datetime(out_val,
+                                                      tz_info_local,
+                                                      out_val);
+        }
+        if (OB_FAIL(ret)) {
+        } else {
+          res_datum.set_datetime(out_val);
+        }
       }
     }
   }
@@ -5179,14 +5266,20 @@ CAST_FUNC_NAME(datetime, date)
       int64_t in_val = child_res->get_int();
       int32_t out_val = 0;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_date(in_val, tz_info, out_val))) {
-        LOG_WARN("datetime_to_date failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_date(out_val);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_date(in_val, tz_info, out_val))) {
+          LOG_WARN("datetime_to_date failed", K(ret), K(in_val));
+        } else {
+          res_datum.set_date(out_val);
+        }
+        LOG_DEBUG("in datetime date cast", K(ret), K(out_val), K(in_val));
       }
-      LOG_DEBUG("in datetime date cast", K(ret), K(out_val), K(in_val));
     }
   }
   return ret;
@@ -5201,11 +5294,17 @@ CAST_FUNC_NAME(datetime, time)
       int64_t in_val = child_res->get_int();
       int64_t out_val = 0;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_time(in_val, tz_info, out_val))) {
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_time(out_val);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_time(in_val, tz_info, out_val))) {
+        } else {
+          res_datum.set_time(out_val);
+        }
       }
     }
   }
@@ -5220,11 +5319,17 @@ CAST_FUNC_NAME(datetime, year)
     {
       DEF_IN_OUT_VAL(int64_t, uint8_t, 0);
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                        session->get_timezone_info() : NULL;
-      if (CAST_FAIL(ObTimeConverter::datetime_to_year(in_val, tz_info, out_val))) {
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_year(out_val);
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                          tz_info_local : NULL;
+        if (CAST_FAIL(ObTimeConverter::datetime_to_year(in_val, tz_info, out_val))) {
+        } else {
+          res_datum.set_year(out_val);
+        }
       }
     }
   }
@@ -5238,7 +5343,8 @@ CAST_FUNC_NAME(datetime, string)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        expr.datum_meta_.type_,
                                        expr.args_[0]->datum_meta_.scale_,
                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -5261,7 +5367,8 @@ CAST_FUNC_NAME(datetime, text)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        expr.datum_meta_.type_,
                                        expr.args_[0]->datum_meta_.scale_,
                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -5284,7 +5391,8 @@ CAST_FUNC_NAME(datetime, bit)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        expr.datum_meta_.type_,
                                        expr.args_[0]->datum_meta_.scale_,
                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -5304,18 +5412,23 @@ CAST_FUNC_NAME(datetime, otimestamp)
     GET_SESSION()
     {
       DEF_IN_OUT_TYPE();
-      const ObTimeZoneInfo *tz_info = session->get_timezone_info();
-      int64_t in_val = child_res->get_int();
-      ObOTimestampData out_val;
-      if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(in_val, tz_info,
-                                                       out_type, out_val))) {
-        LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(in_val),
-                                                      K(in_type), K(out_type));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        if (ObTimestampTZType == out_type) {
-          SET_RES_OTIMESTAMP(out_val);
+        int64_t in_val = child_res->get_int();
+        ObOTimestampData out_val;
+        if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(in_val, tz_info_local,
+                                                        out_type, out_val))) {
+          LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(in_val),
+                                                        K(in_type), K(out_type));
         } else {
-          SET_RES_OTIMESTAMP_10BYTE(out_val);
+          if (ObTimestampTZType == out_type) {
+            SET_RES_OTIMESTAMP(out_val);
+          } else {
+            SET_RES_OTIMESTAMP_10BYTE(out_val);
+          }
         }
       }
     }
@@ -5330,7 +5443,8 @@ CAST_FUNC_NAME(datetime, lob)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        ObLongTextType,
                                        expr.args_[0]->datum_meta_.scale_,
                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -5360,24 +5474,30 @@ CAST_FUNC_NAME(datetime, json)
       int64_t in_val = child_res->get_datetime();
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
       ObTime ob_time(DT_TYPE_DATETIME);
-      const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
-                                      session->get_timezone_info() : NULL;
-      if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(in_val, tz_info, ob_time))) {
-        LOG_WARN("fail to create datetime from int failed", K(ret), K(in_type), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        ObJsonNodeType node_type = (ObTimestampType == in_type)
-                                    ? ObJsonNodeType::J_TIMESTAMP
-                                    : ObJsonNodeType::J_DATETIME;
-        ObJsonDatetime j_datetime(node_type, ob_time);
-        ObIJsonBase *j_base = &j_datetime;
-        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-        common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-        ObString raw_bin;
+        const ObTimeZoneInfo *tz_info = (ObTimestampType == in_type) ?
+                                        tz_info_local : NULL;
+        if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(in_val, tz_info, ob_time))) {
+          LOG_WARN("fail to create datetime from int failed", K(ret), K(in_type), K(in_val));
+        } else {
+          ObJsonNodeType node_type = (ObTimestampType == in_type)
+                                      ? ObJsonNodeType::J_TIMESTAMP
+                                      : ObJsonNodeType::J_DATETIME;
+          ObJsonDatetime j_datetime(node_type, ob_time);
+          ObIJsonBase *j_base = &j_datetime;
+          ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+          common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+          ObString raw_bin;
 
-        if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
-          LOG_WARN("fail to get datetime json binary", K(ret), K(in_type), K(in_val));
-        } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
-          LOG_WARN("fail to fill json bin lob locator", K(ret));
+          if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+            LOG_WARN("fail to get datetime json binary", K(ret), K(in_type), K(in_val));
+          } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
+            LOG_WARN("fail to fill json bin lob locator", K(ret));
+          }
         }
       }
     }
@@ -5402,10 +5522,15 @@ CAST_FUNC_NAME(datetime, decimalint)
       ObScale out_scale = expr.datum_meta_.scale_;
       ObPrecision out_prec = expr.datum_meta_.precision_;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
-      const ObTimeZoneInfo *tz_info =
-        (ObTimestampType == in_type) ? session->get_timezone_info() : NULL;
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (ObTimestampType == in_type) {
+        if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+          LOG_WARN("get time zone info failed", K(ret));
+        }
+      }
       ObString nls_format;
-      if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info, nls_format, in_scale, buf,
+      if (OB_FAIL(ObTimeConverter::datetime_to_str(in_val, tz_info_local, nls_format, in_scale, buf,
                                                    sizeof(buf), length, false))) {
         LOG_WARN("datetime_to_str failed", K(ret), K(in_val), K(in_scale));
       } else if (OB_FAIL(wide::from_string(buf, length, tmp_alloc, scale, in_precision, int_bytes,
@@ -5434,7 +5559,8 @@ CAST_FUNC_NAME(datetime, geometry)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        expr.datum_meta_.type_,
                                        expr.args_[0]->datum_meta_.scale_,
                                        CM_IS_FORCE_USE_STANDARD_NLS_FORMAT(expr.extra_),
@@ -5565,13 +5691,19 @@ CAST_FUNC_NAME(date, datetime)
     GET_SESSION()
     {
       ObObjType out_type = expr.datum_meta_.type_;
-      ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
-      int32_t in_val = child_res->get_date();
-      int64_t out_val = 0;
-      if (OB_FAIL(ObTimeConverter::date_to_datetime(in_val, cvrt_ctx, out_val))) {
-        LOG_WARN("date_to_datetime failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_datetime(out_val);
+        ObTimeConvertCtx cvrt_ctx(tz_info_local, ObTimestampType == out_type);
+        int32_t in_val = child_res->get_date();
+        int64_t out_val = 0;
+        if (OB_FAIL(ObTimeConverter::date_to_datetime(in_val, cvrt_ctx, out_val))) {
+          LOG_WARN("date_to_datetime failed", K(ret), K(in_val));
+        } else {
+          res_datum.set_datetime(out_val);
+        }
       }
     }
   }
@@ -6143,11 +6275,17 @@ CAST_FUNC_NAME(bit, datetime)
           ret = OB_INVALID_DATE_FORMAT;
           LOG_WARN("invalid date", K(ret), K(int64));
         } else {
-          ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(),
-                                    ObTimestampType == expr.datum_meta_.type_);
-          if (CAST_FAIL(ObTimeConverter::int_to_datetime(int64, 0, cvrt_ctx, out_val,
-                        date_sql_mode))) {
-            LOG_WARN("int_datetime failed", K(ret), K(int64));
+          const common::ObTimeZoneInfo *tz_info_local = NULL;
+          ObSolidifiedVarsGetter helper(expr, ctx, session);
+          if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+            LOG_WARN("get time zone info failed", K(ret));
+          } else {
+            ObTimeConvertCtx cvrt_ctx(tz_info_local,
+                                      ObTimestampType == expr.datum_meta_.type_);
+            if (CAST_FAIL(ObTimeConverter::int_to_datetime(int64, 0, cvrt_ctx, out_val,
+                          date_sql_mode))) {
+              LOG_WARN("int_datetime failed", K(ret), K(int64));
+            }
           }
         }
       } else {
@@ -6161,11 +6299,17 @@ CAST_FUNC_NAME(bit, datetime)
         } else {
           ObObjType out_type = expr.datum_meta_.type_;
           ObString str(pos, buf);
-          ObTimeConvertCtx cvrt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
-          ObScale res_scale;
-          if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, out_val, &res_scale,
-                        date_sql_mode))) {
-            LOG_WARN("str_to_datetime failed", K(ret));
+          const common::ObTimeZoneInfo *tz_info_local = NULL;
+          ObSolidifiedVarsGetter helper(expr, ctx, session);
+          if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+            LOG_WARN("get time zone info failed", K(ret));
+          } else {
+            ObTimeConvertCtx cvrt_ctx(tz_info_local, ObTimestampType == out_type);
+            ObScale res_scale;
+            if (CAST_FAIL(ObTimeConverter::str_to_datetime(str, cvrt_ctx, out_val, &res_scale,
+                          date_sql_mode))) {
+              LOG_WARN("str_to_datetime failed", K(ret));
+            }
           }
         }
       }
@@ -6848,11 +6992,17 @@ CAST_FUNC_NAME(time, datetime)
       ObObjType out_type = expr.datum_meta_.type_;
       ObPhysicalPlanCtx *phy_plan_ctx = ctx.exec_ctx_.get_physical_plan_ctx();
       int64_t cur_time = phy_plan_ctx ? phy_plan_ctx->get_cur_time().get_datetime() : 0;
-      if (OB_FAIL(ObTimeConverter::time_to_datetime(in_val, cur_time, session->get_timezone_info(),
-                                                    out_val, out_type))) {
-        LOG_WARN("time_to_datetime failed", K(ret), K(in_val));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        res_datum.set_datetime(out_val);
+        if (OB_FAIL(ObTimeConverter::time_to_datetime(in_val, cur_time, tz_info_local,
+                                                      out_val, out_type))) {
+          LOG_WARN("time_to_datetime failed", K(ret), K(in_val));
+        } else {
+          res_datum.set_datetime(out_val);
+        }
       }
     }
   }
@@ -7080,14 +7230,20 @@ CAST_FUNC_NAME(otimestamp, datetime)
       int64_t usec = 0;
       ObObjType in_type = expr.args_[0]->datum_meta_.type_;
       ObOTimestampData in_val;
-      if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
-        LOG_WARN("common_construct_otimestamp failed", K(ret));
-      } else if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in_type, in_val,
-                                                       session->get_timezone_info(), usec))) {
-        LOG_WARN("fail to timestamp_tz_to_timestamp", K(ret));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        ObTimeConverter::trunc_datetime(OB_MAX_DATE_PRECISION, usec);
-        res_datum.set_datetime(usec);
+        if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
+          LOG_WARN("common_construct_otimestamp failed", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in_type, in_val,
+                                                        tz_info_local, usec))) {
+          LOG_WARN("fail to timestamp_tz_to_timestamp", K(ret));
+        } else {
+          ObTimeConverter::trunc_datetime(OB_MAX_DATE_PRECISION, usec);
+          res_datum.set_datetime(usec);
+        }
       }
     }
   }
@@ -7105,8 +7261,14 @@ CAST_FUNC_NAME(otimestamp, string)
       char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
       int64_t len = 0;
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-      const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
-      if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
+      ObTimeZoneInfoWrap tz_wrap;
+      bool is_valid = false;
+      ObDataTypeCastParams dtc_params;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      const ObLocalSessionVar *local_vars = NULL;
+      if (OB_FAIL(helper.get_dtc_params(dtc_params))) {
+        LOG_WARN("fail to get dtc params", K(ret));
+      } else if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
         LOG_WARN("common_construct_otimestamp failed", K(ret));
       } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val,
                                                      dtc_params,
@@ -7135,33 +7297,39 @@ CAST_FUNC_NAME(otimestamp, otimestamp)
       DEF_IN_OUT_TYPE();
       ObOTimestampData in_val;
       ObOTimestampData out_val;
-      if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
-        LOG_WARN("common_construct_otimestamp failed", K(ret));
-      } else if (ObTimestampNanoType == in_type) {
-        if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(in_val.time_us_,
-                session->get_timezone_info(), out_type, out_val))) {
-          LOG_WARN("fail to odate_to_otimestamp", K(ret), K(out_type));
-        } else {
-          out_val.time_ctx_.tail_nsec_ = in_val.time_ctx_.tail_nsec_;
-        }
-      } else if (ObTimestampNanoType == out_type) {
-        if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in_type, in_val,
-                session->get_timezone_info(), *(int64_t *)&out_val.time_us_))) {
-          LOG_WARN("fail to otimestamp_to_odate", K(ret), K(out_type));
-        } else {
-          out_val.time_ctx_.tail_nsec_ = in_val.time_ctx_.tail_nsec_;
-        }
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        if (OB_FAIL(ObTimeConverter::otimestamp_to_otimestamp(in_type, in_val,
-                session->get_timezone_info(), out_type, out_val))) {
-          LOG_WARN("fail to otimestamp_to_otimestamp", K(ret), K(out_type));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (ObTimestampTZType == out_type) {
-          SET_RES_OTIMESTAMP(out_val);
+        if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
+          LOG_WARN("common_construct_otimestamp failed", K(ret));
+        } else if (ObTimestampNanoType == in_type) {
+          if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(in_val.time_us_,
+                  tz_info_local, out_type, out_val))) {
+            LOG_WARN("fail to odate_to_otimestamp", K(ret), K(out_type));
+          } else {
+            out_val.time_ctx_.tail_nsec_ = in_val.time_ctx_.tail_nsec_;
+          }
+        } else if (ObTimestampNanoType == out_type) {
+          if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in_type, in_val,
+                  tz_info_local, *(int64_t *)&out_val.time_us_))) {
+            LOG_WARN("fail to otimestamp_to_odate", K(ret), K(out_type));
+          } else {
+            out_val.time_ctx_.tail_nsec_ = in_val.time_ctx_.tail_nsec_;
+          }
         } else {
-          SET_RES_OTIMESTAMP_10BYTE(out_val);
+          if (OB_FAIL(ObTimeConverter::otimestamp_to_otimestamp(in_type, in_val,
+                  tz_info_local, out_type, out_val))) {
+            LOG_WARN("fail to otimestamp_to_otimestamp", K(ret), K(out_type));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (ObTimestampTZType == out_type) {
+            SET_RES_OTIMESTAMP(out_val);
+          } else {
+            SET_RES_OTIMESTAMP_10BYTE(out_val);
+          }
         }
       }
     }
@@ -7180,24 +7348,30 @@ CAST_FUNC_NAME(otimestamp, lob)
       char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
       int64_t len = 0;
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-      if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
-        LOG_WARN("common_construct_otimestamp failed", K(ret));
-      } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val,
-                                                     session->get_timezone_info(),
-                                                     in_scale, in_type, buf,
-                                                     OB_CAST_TO_VARCHAR_MAX_LENGTH,
-                                                     len))) {
-        LOG_WARN("failed to convert otimestamp to string", K(ret));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        ObString in_str(sizeof(buf), static_cast<int32_t>(len), buf);
-        ObString res_str;
-        bool has_set_res = false;
-        if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
-          LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
-        } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
-          LOG_WARN("copy datum string with tmp allocator failed", K(ret));
-        } else if (OB_FAIL(common_string_lob(expr, res_str, ctx, NULL, res_datum))) {
-          LOG_WARN("cast string to lob failed", K(ret));
+        if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
+          LOG_WARN("common_construct_otimestamp failed", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val,
+                                                      tz_info_local,
+                                                      in_scale, in_type, buf,
+                                                      OB_CAST_TO_VARCHAR_MAX_LENGTH,
+                                                      len))) {
+          LOG_WARN("failed to convert otimestamp to string", K(ret));
+        } else {
+          ObString in_str(sizeof(buf), static_cast<int32_t>(len), buf);
+          ObString res_str;
+          bool has_set_res = false;
+          if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
+            LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
+          } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
+            LOG_WARN("copy datum string with tmp allocator failed", K(ret));
+          } else if (OB_FAIL(common_string_lob(expr, res_str, ctx, NULL, res_datum))) {
+            LOG_WARN("cast string to lob failed", K(ret));
+          }
         }
       }
     }
@@ -7216,24 +7390,30 @@ CAST_FUNC_NAME(otimestamp, text)
       char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
       int64_t len = 0;
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
-      if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
-        LOG_WARN("common_construct_otimestamp failed", K(ret));
-      } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val,
-                                                     session->get_timezone_info(),
-                                                     in_scale, in_type, buf,
-                                                     OB_CAST_TO_VARCHAR_MAX_LENGTH,
-                                                     len))) {
-        LOG_WARN("failed to convert otimestamp to string", K(ret));
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        ObString in_str(sizeof(buf), static_cast<int32_t>(len), buf);
-        ObString res_str;
-        bool has_set_res = false;
-        if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
-          LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
-        } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
-          LOG_WARN("copy datum string with tmp allocator failed", K(ret));
-        } else if (OB_FAIL(common_string_text(expr, res_str, ctx, NULL, res_datum))) {
-          LOG_WARN("cast string to lob failed", K(ret));
+        if (OB_FAIL(common_construct_otimestamp(in_type, *child_res, in_val))) {
+          LOG_WARN("common_construct_otimestamp failed", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::otimestamp_to_str(in_val,
+                                                      tz_info_local,
+                                                      in_scale, in_type, buf,
+                                                      OB_CAST_TO_VARCHAR_MAX_LENGTH,
+                                                      len))) {
+          LOG_WARN("failed to convert otimestamp to string", K(ret));
+        } else {
+          ObString in_str(sizeof(buf), static_cast<int32_t>(len), buf);
+          ObString res_str;
+          bool has_set_res = false;
+          if (OB_FAIL(common_check_convert_string(expr, ctx, in_str, res_datum, has_set_res))) {
+            LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
+          } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
+            LOG_WARN("copy datum string with tmp allocator failed", K(ret));
+          } else if (OB_FAIL(common_string_text(expr, res_str, ctx, NULL, res_datum))) {
+            LOG_WARN("cast string to lob failed", K(ret));
+          }
         }
       }
     }
@@ -8172,15 +8352,20 @@ CAST_FUNC_NAME(json, otimestamp)
       } else {
         GET_SESSION()
         {
-          const ObTimeZoneInfo *tz_info = session->get_timezone_info();
-          ObOTimestampData out_val;
-          if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(datetime_val, tz_info, out_type, out_val))) {
-            LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(datetime_val), K(out_type));
+          const common::ObTimeZoneInfo *tz_info_local = NULL;
+          ObSolidifiedVarsGetter helper(expr, ctx, session);
+          if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+            LOG_WARN("get time zone info failed", K(ret));
           } else {
-            if (ObTimestampTZType == out_type) {
-              SET_RES_OTIMESTAMP(out_val);
+            ObOTimestampData out_val;
+            if (OB_FAIL(ObTimeConverter::odate_to_otimestamp(datetime_val, tz_info_local, out_type, out_val))) {
+              LOG_WARN("fail to timestamp_to_timestamp_tz", K(ret), K(datetime_val), K(out_type));
             } else {
-              SET_RES_OTIMESTAMP_10BYTE(out_val);
+              if (ObTimestampTZType == out_type) {
+                SET_RES_OTIMESTAMP(out_val);
+              } else {
+                SET_RES_OTIMESTAMP_10BYTE(out_val);
+              }
             }
           }
         }
@@ -9639,7 +9824,8 @@ CAST_ENUMSET_FUNC_NAME(datetime, enum)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        ObVarcharType,
                                        expr.args_[0]->datum_meta_.scale_,
                                        false,
@@ -9669,7 +9855,8 @@ CAST_ENUMSET_FUNC_NAME(datetime, set)
     char buf[OB_CAST_TO_VARCHAR_MAX_LENGTH] = {0};
     int64_t len = 0;
     int64_t in_val = child_res->get_int();
-    if (OB_FAIL(common_datetime_string(expr.args_[0]->datum_meta_.type_,
+    if (OB_FAIL(common_datetime_string(expr,
+                                       expr.args_[0]->datum_meta_.type_,
                                        ObVarcharType,
                                        expr.args_[0]->datum_meta_.scale_,
                                        false,
@@ -10083,19 +10270,25 @@ CAST_FUNC_NAME(decimalint, datetime)
       number::ObNumber nmb;
       ObScale in_scale = expr.args_[0]->datum_meta_.scale_;
       ObObjType out_type = expr.datum_meta_.type_;
-      ObTimeConvertCtx cvt_ctx(session->get_timezone_info(), ObTimestampType == out_type);
-      int64_t out_val;
-      if (OB_FAIL(wide::to_number(child_res->get_decimal_int(), child_res->get_int_bytes(),
-                                  in_scale, tmp_alloc, nmb))) {
-        LOG_WARN("cast decimaliny to number failed", K(ret));
+      ObSolidifiedVarsGetter helper(expr, ctx, session);
+      const common::ObTimeZoneInfo *tz_info_local = NULL;
+      if (OB_FAIL(helper.get_time_zone_info(tz_info_local))) {
+        LOG_WARN("get time zone info failed", K(ret));
       } else {
-        ret = common_number_datetime(nmb, cvt_ctx, out_val, expr.extra_);
-        int warning = OB_SUCCESS;
-        if (CAST_FAIL(ret)) {
-          // do nothing
+        ObTimeConvertCtx cvt_ctx(tz_info_local, ObTimestampType == out_type);
+        int64_t out_val;
+        if (OB_FAIL(wide::to_number(child_res->get_decimal_int(), child_res->get_int_bytes(),
+                                    in_scale, tmp_alloc, nmb))) {
+          LOG_WARN("cast decimaliny to number failed", K(ret));
         } else {
-          SET_RES_DATETIME(out_val);
-          if (warning != OB_SUCCESS) { LOG_DEBUG("cast decimalint to datetime", K(warning)); }
+          ret = common_number_datetime(nmb, cvt_ctx, out_val, expr.extra_);
+          int warning = OB_SUCCESS;
+          if (CAST_FAIL(ret)) {
+            // do nothing
+          } else {
+            SET_RES_DATETIME(out_val);
+            if (warning != OB_SUCCESS) { LOG_DEBUG("cast decimalint to datetime", K(warning)); }
+          }
         }
       }
     }

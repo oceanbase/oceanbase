@@ -4404,7 +4404,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   const ParseNode *expr_node = NULL;
@@ -4422,7 +4423,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    resolved_cols,
                                                    generated_column,
                                                    expr,
-                                                   check_status))) {
+                                                   check_status,
+                                                   coltype_not_defined))) {
     LOG_WARN("resolve generated column expr failed", K(ret), K(expr_str));
   }
   return ret;
@@ -4562,7 +4564,8 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
                                                    ObIArray<ObColumnSchemaV2 *> &resolved_cols,
                                                    ObColumnSchemaV2 &generated_column,
                                                    ObRawExpr *&expr,
-                                                   const PureFunctionCheckStatus check_status)
+                                                   const PureFunctionCheckStatus check_status,
+                                                   bool coltype_not_defined)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *col_schema = NULL;
@@ -4688,19 +4691,6 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
         LOG_WARN("transform udt col expr for generated column failed", K(ret));
       }
     }
-    if (OB_SUCC(ret) &&
-        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
-         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
-      if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr, expr_factory->get_allocator()))) {
-        if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
-                 && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
-          ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
-          LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
-        } else {
-          LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
-        }
-      }
-    }
     const ObObjType expr_datatype = expr->get_result_type().get_type();
     const ObCollationType expr_cs_type = expr->get_result_type().get_collation_type();
     const ObObjType dst_datatype = generated_column.get_data_type();
@@ -4807,6 +4797,57 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(expr->get_result_type().get_type()));
+      }
+    }
+    if (OB_SUCC(ret) && generated_column.is_generated_column()) {
+      //set local session info for generate columns
+      ObExprResType cast_dst_type;
+      cast_dst_type.set_meta(generated_column.get_meta_type());
+      cast_dst_type.set_accuracy(generated_column.get_accuracy());
+      ObRawExpr *expr_with_implicit_cast = NULL;
+      //only formalize once
+      if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
+        LOG_WARN("fail to remove implicit cast", K(ret));
+      } else if (coltype_not_defined) {
+        expr_with_implicit_cast = expr;
+        if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+          LOG_WARN("fail to formalize with local session info", K(ret));
+        }
+      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(expr_factory, session_info,
+                          *expr, cast_dst_type, expr_with_implicit_cast))) {
+        LOG_WARN("try add cast above failed", K(ret));
+      } else if (OB_FAIL(expr_with_implicit_cast->formalize(session_info, true))) {
+        LOG_WARN("fail to formalize with local session info", K(ret));
+      }
+      if (OB_SUCC(ret) &&
+        (ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status ||
+         ObResolverUtils::CHECK_FOR_GENERATED_COLUMN == check_status)) {
+        if (OB_FAIL(ObRawExprUtils::check_is_valid_generated_col(expr_with_implicit_cast, expr_factory->get_allocator()))) {
+          if (OB_ERR_ONLY_PURE_FUNC_CANBE_VIRTUAL_COLUMN_EXPRESSION == ret
+                  && ObResolverUtils::CHECK_FOR_FUNCTION_INDEX == check_status) {
+            ret = OB_ERR_ONLY_PURE_FUNC_CANBE_INDEXED;
+            LOG_WARN("sysfunc in expr is not valid for generated column", K(ret), K(*expr));
+          } else {
+            LOG_WARN("fail to check if the sysfunc exprs are valid in generated columns", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), tenant_data_version))) {
+          LOG_WARN("get tenant data version failed", K(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_2_2_0) {
+          //do nothing
+        } else if (OB_ISNULL(expr_with_implicit_cast)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), KP(expr_with_implicit_cast));
+        } else {
+          if (OB_FAIL(ObRawExprUtils::extract_local_vars_for_gencol(expr_with_implicit_cast,
+                                                                    session_info->get_sql_mode(),
+                                                                    generated_column))) {
+            LOG_WARN("fail to set local sysvars", K(ret));
+          }
+        }
       }
     }
     if (OB_FAIL(ret)) {

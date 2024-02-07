@@ -63,6 +63,7 @@ public:
       const ObDatumMeta &in_meta, const ObDatumMeta &out_meta, const int64_t round_scale,
       const ObDatum &in_datum, ObDatum &res_datum);
 
+  DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   // engine 3.0
   int se_deduce_type(ObExprResType &type,

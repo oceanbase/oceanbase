@@ -136,6 +136,7 @@ OB_DEF_SERIALIZE(ObExpr)
       OB_UNIS_ENCODE(*extra_info_);
     }
     OB_UNIS_ENCODE(dyn_buf_header_offset_)
+    OB_UNIS_ENCODE(local_session_var_id_);
   }
 
   return ret;
@@ -195,6 +196,7 @@ OB_DEF_DESERIALIZE(ObExpr)
     batch_idx_mask_ = UINT64_MAX;
   }
   OB_UNIS_DECODE(dyn_buf_header_offset_);
+  OB_UNIS_DECODE(local_session_var_id_);
   return ret;
 }
 
@@ -234,6 +236,7 @@ OB_DEF_SERIALIZE_SIZE(ObExpr)
     OB_UNIS_ADD_LEN(*extra_info_);
   }
   OB_UNIS_ADD_LEN(dyn_buf_header_offset_);
+  OB_UNIS_ADD_LEN(local_session_var_id_);
   return len;
 }
 
@@ -265,7 +268,8 @@ ObExpr::ObExpr()
     extra_(0),
     basic_funcs_(NULL),
     batch_idx_mask_(0),
-    extra_info_(NULL)
+    extra_info_(NULL),
+    local_session_var_id_(OB_INVALID_INDEX_INT64)
 {
   is_called_in_sql_ = 1;
 }

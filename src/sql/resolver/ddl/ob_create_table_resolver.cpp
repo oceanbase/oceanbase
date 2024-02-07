@@ -257,6 +257,7 @@ int ObCreateTableResolver::add_generated_hidden_column_for_udt(ObTableSchema &ta
     } else if (OB_FAIL(check_default_value(udt_column.get_cur_default_value(),
                                            session_info_->get_tz_info_wrap(),
                                            &tmp_str,    // useless
+                                           NULL,
                                            *allocator_,
                                            table_schema,
                                            resolved_cols,
@@ -1315,6 +1316,7 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                      OB_FAIL(check_default_value(column.get_cur_default_value(),
                                           session_info_->get_tz_info_wrap(),
                                           tmp_str,
+                                          NULL,
                                           *allocator_,
                                           table_schema,
                                           resolved_cols,
@@ -1323,7 +1325,8 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                           session_info_->get_sql_mode(),
                                           session_info_,
                                           true, /* allow_sequence */
-                                          schema_checker_))) {
+                                          schema_checker_,
+                                          NULL == element->children_[1]))) {
             SQL_RESV_LOG(WARN, "failed to cast default value!", K(ret));
           } else if (column.is_string_type()) {
             int64_t length = 0;

@@ -1620,6 +1620,37 @@ int ObSchemaRetrieveUtils::fill_column_schema(
       } else {}
     }
 
+    if (OB_SUCC(ret) && column.is_generated_column()) {
+      bool skip_null_error = true;
+      bool skip_column_error = true;
+      ObString local_session_var;
+      ObString default_session_var(""); //default value is empty string
+      int64_t pos = 0;
+      EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(result,
+                                                 "local_session_vars",
+                                                 local_session_var,
+                                                 skip_null_error,
+                                                 skip_column_error,
+                                                 default_session_var);
+      if (OB_SUCC(ret) && !local_session_var.empty()) {
+        ObArenaAllocator tmp_allocator(ObModIds::OB_TEMP_VARIABLES);
+        char *value_buf = NULL;
+        if (OB_ISNULL(value_buf = static_cast<char*>(tmp_allocator.alloc(local_session_var.length())))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          SHARE_SCHEMA_LOG(WARN, "fail to alloc memory", K(ret));
+        } else {
+          ObLength len = common::str_to_hex(local_session_var.ptr(),
+                                            local_session_var.length(),
+                                            value_buf,
+                                            local_session_var.length());
+          if (OB_FAIL(column.get_local_session_var().deserialize_(value_buf, static_cast<int64_t>(len), pos))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to deserialize local_session_var", K(ret));
+          } else {
+            tmp_allocator.free(value_buf);
+          }
+        }
+      }
+    }
   }
 
   return ret;

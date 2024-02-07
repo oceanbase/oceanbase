@@ -44,6 +44,8 @@ public:
                      const common::ObString &from,
                      const common::ObString &to,
                      common::ObExprStringBuf &string_buf);
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprReplace);

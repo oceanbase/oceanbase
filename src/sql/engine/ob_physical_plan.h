@@ -484,6 +484,8 @@ public:
 
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
+  int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
+  ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -661,6 +663,8 @@ public:
   // for detector manager
   bool is_enable_px_fast_reclaim_;
   ObSubSchemaCtx subschema_ctx_;
+private:
+  common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
