@@ -17,7 +17,7 @@
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
 #include "rootserver/ob_index_builder.h"
 #include "observer/ob_srv_deliver.h"
-#include "observer/ob_server_startup_task_handler.h"
+#include "observer/ob_startup_accel_task_handler.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/ob_arb_srv_deliver.h"
 #endif
@@ -26,6 +26,7 @@
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/fetch_log_engine.h"
 #include "logservice/rcservice/ob_role_change_service.h"
+#include "observer/ob_startup_accel_task_handler.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::lib;

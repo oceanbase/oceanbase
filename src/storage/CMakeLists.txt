@@ -162,6 +162,7 @@ ob_set_subtarget(ob_storage ckpt
   slog_ckpt/ob_tenant_checkpoint_slog_handler.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_reader.cpp
   slog_ckpt/ob_tenant_storage_checkpoint_writer.cpp
+  slog_ckpt/ob_tenant_meta_snapshot_handler.cpp
   slog_ckpt/ob_tablet_replay_create_handler.cpp
 )
 
@@ -762,6 +763,17 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_locator.cpp
   lob/ob_lob_util.cpp
   lob/ob_lob_rpc_struct.cpp
+)
+
+ob_set_subtarget(ob_storage tenant_snapshot
+  tenant_snapshot/ob_tenant_snapshot_service.cpp
+  tenant_snapshot/ob_tenant_clone_service.cpp
+  tenant_snapshot/ob_tenant_snapshot_task.cpp
+  tenant_snapshot/ob_tenant_snapshot_mgr.cpp
+  tenant_snapshot/ob_tenant_snapshot_defs.cpp
+  tenant_snapshot/ob_ls_snapshot_mgr.cpp
+  tenant_snapshot/ob_ls_snapshot_defs.cpp
+  tenant_snapshot/ob_tenant_snapshot_meta_table.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

@@ -855,7 +855,7 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
         int64_t pos = 0;
         ARRAY_FOREACH_X(ls_restore_progress_infos, i, cnt, OB_SUCC(ret)) {
           const ObLSRestoreProgressPersistInfo &ls_restore_info = ls_restore_progress_infos.at(i);
-          if (ls_restore_info.status_.is_restore_failed()) {
+          if (ls_restore_info.status_.is_failed()) {
             if (OB_FAIL(databuff_printf(history_info.comment_.ptr(), history_info.comment_.capacity(), pos,
                                         "%s;", ls_restore_info.comment_.ptr()))) {
               if (OB_SIZE_OVERFLOW == ret) {

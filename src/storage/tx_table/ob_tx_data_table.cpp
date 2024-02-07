@@ -749,7 +749,7 @@ int ObTxDataTable::get_recycle_scn(SCN &recycle_scn)
     STORAGE_LOG(INFO, "logstream is in migration state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (OB_FAIL(ls_->get_restore_status(restore_status))) {
     STORAGE_LOG(WARN, "get restore status failed", KR(ret), "ls_id", ls_->get_ls_id());
-  } else if (ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+  } else if (ObLSRestoreStatus::NONE != restore_status) {
     recycle_scn.set_min();
     STORAGE_LOG(INFO, "logstream is in restore state. skip recycle tx data", "ls_id", ls_->get_ls_id());
   } else if (FALSE_IT(tg.click("iterate tablets start"))) {

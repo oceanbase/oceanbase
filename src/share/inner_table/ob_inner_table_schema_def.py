@@ -5927,9 +5927,79 @@ def_table_schema(
     ('ls_group_id', 'int', 'false'),
   ],
 )
-# 460 : __all_tenant_snapshot
-# 461 : __all_tenant_snapshot_ls
-# 462 : __all_virtual_tenant_snapshot_ls_replica
+
+def_table_schema(
+  owner = 'chensen.cs',
+  table_name    = '__all_tenant_snapshot',
+  table_id      = '460',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('snapshot_name', 'varchar:OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE', 'false'),
+    ('status', 'varchar:32', 'false'),
+    ('snapshot_scn', 'uint', 'false'),
+    ('clog_start_scn', 'uint', 'false'),
+    ('type', 'varchar:16', 'false'),
+    ('create_time', 'timestamp', 'false'),
+    ('data_version', 'uint', 'false'),
+    ('owner_job_id', 'int', 'false')
+  ],
+)
+
+def_table_schema(
+  owner = 'chensen.cs',
+  table_name    = '__all_tenant_snapshot_ls',
+  table_id      = '461',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int', 'false'),
+    ('ls_id', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('ls_group_id', 'int', 'false'),
+    ('status', 'varchar:100', 'false'),
+    ('flag', 'varchar:OB_MAX_LS_FLAG_LENGTH', 'false'),
+    ('create_scn', 'uint', 'false'),
+  ],
+)
+
+def_table_schema(
+  owner = 'chensen.cs',
+  table_name    = '__all_tenant_snapshot_ls_replica',
+  table_id      = '462',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int', 'false'),
+    ('ls_id', 'int', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH', 'false'),
+    ('unit_id', 'int', 'false'),
+    ('begin_interval_scn', 'uint', 'false'),
+    ('end_interval_scn', 'uint', 'false'),
+    ('ls_meta_package', 'longtext', 'true')
+  ],
+)
 
 # 463 : __all_mlogs
 # 464 : __all_mviews
@@ -6361,8 +6431,75 @@ def_table_schema(
 # 483 : __all_storage_ha_error_diagnose
 # 484 : __all_storage_ha_perf_diagnose
 
-# 485 : __all_clone_job
-# 486 : __all_clone_job_history
+def_table_schema(
+  owner = 'chensen.cs',
+  table_name    = '__all_clone_job',
+  table_id      = '485',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('source_tenant_id', 'int', 'false'),
+    ('source_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false'),
+    ('clone_tenant_id', 'int', 'false', 'OB_INVALID_TENANT_ID'),
+    ('clone_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false'),
+    ('tenant_snapshot_id', 'int', 'false'),
+    ('tenant_snapshot_name', 'varchar:OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE', 'false'),
+    ('resource_pool_id', 'int', 'false'),
+    ('resource_pool_name', 'varchar:MAX_RESOURCE_POOL_LENGTH', 'false'),
+    ('unit_config_name', 'varchar:MAX_UNIT_CONFIG_LENGTH', 'false'),
+    ('restore_scn', 'uint', 'false', '0'),
+    ('status', 'varchar:64', 'false'),
+    ('job_type', 'varchar:16', 'false'),
+    ('clone_start_time', 'timestamp', 'false'),
+    ('clone_finished_time', 'timestamp', 'true'),
+    ('ret_code', 'int', 'true'),
+    ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+  ],
+)
+
+all_clone_job_history_def = dict(
+  owner = 'chensen.cs',
+  table_name    = '__all_clone_job_history',
+  table_id      = '486',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('source_tenant_id', 'int', 'false'),
+    ('source_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false'),
+    ('clone_tenant_id', 'int', 'false', 'OB_INVALID_TENANT_ID'),
+    ('clone_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'false'),
+    ('tenant_snapshot_id', 'int', 'false'),
+    ('tenant_snapshot_name', 'varchar:OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE', 'false'),
+    ('resource_pool_id', 'int', 'false'),
+    ('resource_pool_name', 'varchar:MAX_RESOURCE_POOL_LENGTH', 'false'),
+    ('unit_config_name', 'varchar:MAX_UNIT_CONFIG_LENGTH', 'false'),
+    ('restore_scn', 'uint', 'false', '0'),
+    ('status', 'varchar:64', 'false'),
+    ('job_type', 'varchar:16', 'false'),
+    ('clone_start_time', 'timestamp', 'false'),
+    ('clone_finished_time', 'timestamp', 'false'),
+    ('ret_code', 'int', 'true'),
+    ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+  ],
+)
+def_table_schema(**all_clone_job_history_def)
+
 # 487 : __wr_system_event
 # 488 : __wr_event_name
 # 489 : __all_tenant_scheduler_running_job
@@ -6427,7 +6564,28 @@ def_table_schema(
 # 497 : __all_client_to_server_session_info
 # 498 :__all_transfer_partition_task
 # 499 :__all_transfer_partition_task_history
-# 500 : __all_tenant_snapshot_create_job
+
+def_table_schema(
+  owner = 'chensen.cs',
+  table_name    = '__all_tenant_snapshot_job',
+  table_id      = '500',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int', 'false'),
+    ('operation', 'varchar:32', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('job_start_time', 'timestamp', 'false'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('majority_succ_time', 'timestamp', 'false'),
+  ],
+)
+
 # 501 : __wr_sqltext
 
 def_table_schema(
@@ -6449,7 +6607,32 @@ def_table_schema(
 # 504 : __all_audit_log_user
 # 505 : __all_column_privilege
 # 506 : __all_column_privilege_history
-# 507 : __all_tenant_snapshot_ls_replica_history
+all_tenant_snapshot_ls_replica_history_def = dict(
+  owner = 'chensen.cs',
+  table_name    = '__all_tenant_snapshot_ls_replica_history',
+  table_id      = '507',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int', 'false'),
+    ('ls_id', 'int', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
+    ('svr_port', 'int', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH', 'false'),
+    ('unit_id', 'int', 'false'),
+    ('begin_interval_scn', 'uint', 'false'),
+    ('end_interval_scn', 'uint', 'false'),
+    ('ls_meta_package', 'longtext', 'true')
+  ],
+)
+def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 #
 # 余留位置
 ################################################################################
@@ -13111,10 +13294,21 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_tenant_parameter',
   in_tenant_space = True,
   keywords = all_def_keywords['__tenant_parameter']))
-
-# 12402: __all_virtual_tenant_snapshots
-# 12403: __all_virtual_tenant_snapshot_ls
-# 12404: __all_virtual_tenant_snapshot_ls_meta_table
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12402',
+  table_name = '__all_virtual_tenant_snapshot',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_snapshot']))
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12403',
+  table_name = '__all_virtual_tenant_snapshot_ls',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_snapshot_ls']))
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12404',
+  table_name = '__all_virtual_tenant_snapshot_ls_replica',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_snapshot_ls_replica']))
 
 def_table_schema(
   owner = 'zhouxinlan.zxl',
@@ -13241,8 +13435,18 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
 
-# 12435: __all_virtual_clone_job
-# 12436: __all_virtual_clone_job_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12435',
+  table_name = '__all_virtual_clone_job',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_clone_job']))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12436',
+  table_name = '__all_virtual_clone_job_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_clone_job_history']))
+
 # 12437: __all_virtual_checkpoint_diagnose_memtable_info
 # 12438: __all_virtual_checkpoint_diagnose_checkpoint_unit_info
 # 12439: __all_virtual_checkpoint_diagnose_info
@@ -13262,7 +13466,48 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12450: __all_virtual_sys_variable_default_value
 # 12451: __all_virtual_transfer_partition_task
 # 12452: __all_virtual_transfer_partition_task_history
-# 12453: __all_virtual_tenant_snapshot_create_job
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12453',
+  table_name = '__all_virtual_tenant_snapshot_job',
+  keywords = all_def_keywords['__all_tenant_snapshot_job'],
+  in_tenant_space = True))
+
+# 12454: __all_virtual_wr_sqltext
+# 12455: __all_virtual_trusted_root_certificate_info
+# 12456: __all_virtual_dbms_lock_allocated
+# 12457: __all_virtual_sharing_storage_compaction_info
+
+def_table_schema(
+  owner = 'wendongbodongbo.wd',
+  table_name     = '__all_virtual_ls_snapshot',
+  table_id       = '12458',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('snapshot_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('meta_existed', 'bool'),
+    ('build_status', 'varchar:32', 'true'),
+    ('rebuild_seq_start', 'int', 'true'),
+    ('rebuild_seq_end', 'int', 'true'),
+    ('end_interval_scn', 'int', 'true'),
+    ('ls_meta_package', 'longtext', 'true'),
+    ('tsnap_is_running', 'bool', 'true'),
+    ('tsnap_has_unfinished_create_dag', 'bool', 'true'),
+    ('tsnap_has_unfinished_gc_dag', 'bool', 'true'),
+    ('tsnap_clone_ref', 'int', 'true'),
+    ('tsnap_meta_existed', 'bool', 'true'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed'
+)
+
 # 12454: __all_virtual_wr_sqltext
 # 12456: __all_virtual_dbms_lock_allocated
 # 12457: __all_virtual_sharing_storage_compaction_info
@@ -13277,7 +13522,11 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12461: __all_virtual_audit_log_user
 # 12462: __all_virtual_column_privilege
 # 12463: __all_virtual_column_privilege_history
-# 12464: __all_virtual_tenant_snapshot_ls_replica_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12464',
+  table_name = '__all_virtual_tenant_snapshot_ls_replica_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
 # 12465: __all_virtual_share_storage_quota_assignment
 # 余留位置
 #
@@ -13701,7 +13950,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15427', all_def_ke
 # 15436: __all_virtual_clone_job
 # 15437: __all_virtual_clone_job_history
 # 15438: __all_virtual_tenant_snapshot_create_job
-# 15439: __all_virtual_ls_snapshot_in_storage_node
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
+# 15440: __all_virtual_index_usage_info
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
@@ -30424,7 +30674,6 @@ def_table_schema(
 #21506 CDB_WR_SQLTEXT
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
-
 def_table_schema(
   owner          = 'tony.wzh',
   table_name     = 'DBA_OB_TRUSTED_ROOT_CERTIFICATE',
@@ -30444,7 +30693,38 @@ def_table_schema(
   """.replace("\n", " "),
 )
 
-#21510 DBA_OB_CLONE_PROGRESS
+#### sys tenant only view
+def_table_schema(
+    owner = 'chensen.cs',
+    table_name     = 'DBA_OB_CLONE_PROGRESS',
+    table_id       = '21510',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+SELECT job_id AS CLONE_JOB_ID,
+       trace_id AS TRACE_ID,
+       source_tenant_id AS SOURCE_TENANT_ID,
+       source_tenant_name AS SOURCE_TENANT_NAME,
+       clone_tenant_id AS CLONE_TENANT_ID,
+       clone_tenant_name AS CLONE_TENANT_NAME,
+       tenant_snapshot_id AS TENANT_SNAPSHOT_ID,
+       tenant_snapshot_name AS TENANT_SNAPSHOT_NAME,
+       resource_pool_id AS RESOURCE_POOL_ID,
+       resource_pool_name AS RESOURCE_POOL_NAME,
+       unit_config_name AS UNIT_CONFIG_NAME,
+       restore_scn AS RESTORE_SCN,
+       status AS STATUS,
+       job_type AS CLONE_JOB_TYPE,
+       clone_start_time AS CLONE_START_TIME,
+       clone_finished_time AS CLONE_FINISHED_TIME,
+       ret_code AS RET_CODE,
+       error_msg AS ERROR_MESSAGE
+FROM oceanbase.__all_clone_job ORDER BY CLONE_START_TIME
+""".replace("\n", " ")
+)
 #21511 mysql.role_edges
 #21512 mysql.default_roles
 
@@ -30489,9 +30769,103 @@ def_table_schema(
 #21514 mysql.audit_log_filter
 #21515 mysql.audit_log_user
 #21516 mysql.columns_priv
-#21517 GV$OB_LS_SNAPSHOTS
-#21518 V$OB_LS_SNAPSHOTS
-#21519 DBA_OB_CLONE_HISTORY
+def_table_schema(
+  owner = 'wendongbodongbo.wd',
+  table_name      = 'GV$OB_LS_SNAPSHOTS',
+  table_id        = '21517',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      tenant_id AS TENANT_ID,
+      snapshot_id AS SNAPSHOT_ID,
+      ls_id AS LS_ID,
+      svr_ip AS SVR_IP,
+      svr_port AS SVR_PORT,
+      (CASE
+        WHEN meta_existed = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS META_EXISTED,
+      (CASE
+        WHEN build_status = 0 THEN 'BUILDING'
+        WHEN build_status = 1 THEN 'FAILED'
+        WHEN build_status = 2 THEN 'SUCCESSFUL'
+        ELSE 'UNKNOWN'
+        END) AS BUILD_STATUS,
+      rebuild_seq_start AS REBUILD_SEQ_START,
+      rebuild_seq_end AS REBUILD_SEQ_END,
+      end_interval_scn AS END_INTERVAL_SCN,
+      ls_meta_package AS LS_META_PACKAGE,
+      (CASE
+        WHEN tsnap_is_running = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_IS_RUNNING,
+      (CASE
+        WHEN tsnap_has_unfinished_create_dag = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_HAS_UNFINISHED_CREATE_DAG,
+      (CASE
+        WHEN tsnap_has_unfinished_gc_dag = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_HAS_UNFINISHED_GC_DAG,
+      tsnap_clone_ref AS TSNAP_CLONE_REF,
+      (CASE
+        WHEN tsnap_meta_existed = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_META_EXISTED
+    FROM oceanbase.__all_virtual_ls_snapshot
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wendongbodongbo.wd',
+  table_name      = 'V$OB_LS_SNAPSHOTS',
+  table_id        = '21518',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT *
+    FROM oceanbase.GV$OB_LS_SNAPSHOTS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
+
+#### sys tenant only view
+def_table_schema(
+    owner = 'chensen.cs',
+    table_name     = 'DBA_OB_CLONE_HISTORY',
+    table_id       = '21519',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = False,
+    view_definition = """
+SELECT job_id AS CLONE_JOB_ID,
+       trace_id AS TRACE_ID,
+       source_tenant_id AS SOURCE_TENANT_ID,
+       source_tenant_name AS SOURCE_TENANT_NAME,
+       clone_tenant_id AS CLONE_TENANT_ID,
+       clone_tenant_name AS CLONE_TENANT_NAME,
+       tenant_snapshot_id AS TENANT_SNAPSHOT_ID,
+       tenant_snapshot_name AS TENANT_SNAPSHOT_NAME,
+       resource_pool_id AS RESOURCE_POOL_ID,
+       resource_pool_name AS RESOURCE_POOL_NAME,
+       unit_config_name AS UNIT_CONFIG_NAME,
+       restore_scn AS RESTORE_SCN,
+       status AS STATUS,
+       job_type AS CLONE_JOB_TYPE,
+       clone_start_time AS CLONE_START_TIME,
+       clone_finished_time AS CLONE_FINISHED_TIME,
+       ret_code AS RET_CODE,
+       error_msg AS ERROR_MESSAGE
+FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
+""".replace("\n", " ")
+)
 #21520 GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 #21521 V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 余留位置
@@ -55224,6 +55598,75 @@ def_table_schema(
 # 28217: GV$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 # 28218: V$OB_SHARE_STORAGE_QUOTA_ASSIGNMENT
 
+def_table_schema(
+  owner = 'wendongbodongbo.wd',
+  table_name      = 'GV$OB_LS_SNAPSHOTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28215',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      tenant_id AS TENANT_ID,
+      snapshot_id AS SNAPSHOT_ID,
+      ls_id AS LS_ID,
+      svr_ip AS SVR_IP,
+      svr_port AS SVR_PORT,
+      (CASE
+        WHEN meta_existed = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS META_EXISTED,
+      (CASE
+        WHEN build_status = 0 THEN 'BUILDING'
+        WHEN build_status = 1 THEN 'FAILED'
+        WHEN build_status = 2 THEN 'SUCCESSFUL'
+        ELSE 'UNKNOWN'
+        END) AS BUILD_STATUS,
+      rebuild_seq_start AS REBUILD_SEQ_START,
+      rebuild_seq_end AS REBUILD_SEQ_END,
+      end_interval_scn AS END_INTERVAL_SCN,
+      ls_meta_package AS LS_META_PACKAGE,
+      (CASE
+        WHEN tsnap_is_running = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_IS_RUNNING,
+      (CASE
+        WHEN tsnap_has_unfinished_create_dag = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_HAS_UNFINISHED_CREATE_DAG,
+      (CASE
+        WHEN tsnap_has_unfinished_gc_dag = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_HAS_UNFINISHED_GC_DAG,
+      tsnap_clone_ref AS TSNAP_CLONE_REF,
+      (CASE
+        WHEN tsnap_meta_existed = 1 THEN 'YES'
+        ELSE 'NO'
+        END) AS TSNAP_META_EXISTED
+    FROM SYS.ALL_VIRTUAL_LS_SNAPSHOT
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wendongbodongbo.wd',
+  table_name      = 'V$OB_LS_SNAPSHOTS',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28216',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT *
+    FROM SYS.GV$OB_LS_SNAPSHOTS
+    WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+)
+
 ################################################################################
 # Lob Table (50000, 70000)
 ################################################################################
@@ -55989,7 +56432,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_rls_context_history'])
 
-# 101089 : placeholder for unique index of __all_tenant_snapshots
+def_sys_index_table(
+  index_name = 'idx_tenant_snapshot_name',
+  index_table_id = 101089,
+  index_columns = ['snapshot_name'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
+  keywords = all_def_keywords['__all_tenant_snapshot'])
 
 def_sys_index_table(
   index_name = 'idx_dbms_lock_allocated_lockhandle',

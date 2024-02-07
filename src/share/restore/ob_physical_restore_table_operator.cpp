@@ -1099,14 +1099,14 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
             LOG_WARN("failed to set status", KR(ret), K(restore_status));
-          } else if (ls_restore_status.is_restore_failed()) {
+          } else if (!ls_restore_status.is_in_restore_or_none() || ls_restore_status.is_failed()) {
             //restore failed
             is_finished = true;
             is_success = false;
           } else {
             const ObLSRestoreStatus target_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN);
             if (ls_restore_status.get_status() < target_status.get_status()
-                && !ls_restore_status.is_restore_none()
+                && !ls_restore_status.is_none()
                 && is_finished && is_success) {
               is_finished = false;
             }

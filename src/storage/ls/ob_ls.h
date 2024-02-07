@@ -310,7 +310,6 @@ public:
   bool is_create_committed() const;
   bool is_need_gc() const;
   bool is_in_gc();
-  bool is_enable_for_restore() const;
   // for rebuild
   // remove inner tablet, the memtable and minor sstable of data tablet, disable replay
   // int prepare_rebuild();
@@ -406,6 +405,8 @@ private:
       ObTabletHandle &handle);
   int offline_advance_epoch_();
   int online_advance_epoch_();
+  bool is_required_to_switch_state_for_restore_() const;
+  bool is_required_to_switch_state_for_clone_() const;
 public:
   // ObLSMeta interface:
   int update_ls_meta(const bool update_restore_status,

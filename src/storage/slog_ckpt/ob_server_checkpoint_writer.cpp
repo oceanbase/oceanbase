@@ -41,7 +41,7 @@ int ObServerCheckpointWriter::init()
   } else if (OB_FAIL(allocator_.init(
                common::OB_MALLOC_NORMAL_BLOCK_SIZE, MEM_LABEL, OB_SERVER_TENANT_ID, MEM_LIMIT))) {
     LOG_WARN("fail to init fifo allocator", K(ret));
-  } else if (OB_FAIL(tenant_meta_item_writer_.init(false))) {
+  } else if (OB_FAIL(tenant_meta_item_writer_.init(false /*whether need addr*/))) {
     LOG_WARN("fail to init tenant meta item writer", K(ret));
   } else {
     is_inited_ = true;

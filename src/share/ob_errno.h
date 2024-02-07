@@ -2406,7 +2406,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__USER_ERROR_MSG "log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__USER_ERROR_MSG "ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__USER_ERROR_MSG "%s"
-#define OB_CONFLICT_WITH_CLONE__USER_ERROR_MSG "Tenant (%ld) is in %.*s procedure, %.*s not allowed now"
+#define OB_CONFLICT_WITH_CLONE__USER_ERROR_MSG "Tenant (%ld) is in %s procedure, %s not allowed now"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4028,6 +4028,13 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_GRANT_DEFINED_FOR_USER__USER_ERROR_MSG "There is no such grant defined for user '%.*s' on host '%.*s'"
 #define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
+#define OB_TENANT_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' does not exist"
+#define OB_TENANT_SNAPSHOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' already exist"
+#define OB_TENANT_SNAPSHOT_TIMEOUT__USER_ERROR_MSG "Tenant snapshot task timeout. %.*s"
+#define OB_CLONE_TENANT_TIMEOUT__USER_ERROR_MSG "Clone tenant timeout. %.*s"
+#define OB_ERR_CLONE_TENANT__USER_ERROR_MSG "%.*s"
+#define OB_ERR_TENANT_SNAPSHOT__USER_ERROR_MSG "%.*s"
+#define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__USER_ERROR_MSG "%s"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4603,7 +4610,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4767, log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4768, ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4769, %s"
-#define OB_CONFLICT_WITH_CLONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4770, Tenant (%ld) is in %.*s procedure, %.*s not allowed now"
+#define OB_CONFLICT_WITH_CLONE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4770, Tenant (%ld) is in %s procedure, %s not allowed now"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -6225,6 +6232,13 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_NO_GRANT_DEFINED_FOR_USER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11008, There is no such grant defined for user '%.*s' on host '%.*s'"
 #define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
+#define OB_TENANT_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, Tenant snapshot \'%.*s\' does not exist"
+#define OB_TENANT_SNAPSHOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, Tenant snapshot \'%.*s\' already exist"
+#define OB_TENANT_SNAPSHOT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12002, Tenant snapshot task timeout. %.*s"
+#define OB_CLONE_TENANT_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12003, Clone tenant timeout. %.*s"
+#define OB_ERR_CLONE_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12004, %.*s"
+#define OB_ERR_TENANT_SNAPSHOT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12005, %.*s"
+#define OB_TENANT_SNAPSHOT_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12006, %s"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6235,7 +6249,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2193];
+extern int g_all_ob_errnos[2200];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

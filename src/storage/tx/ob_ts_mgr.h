@@ -89,6 +89,7 @@ public:
   virtual int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn) = 0;
   virtual int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
       share::SCN &scn, bool &is_external_consistent) = 0;
+  virtual int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts, share::SCN &scn) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
                               bool &need_wait) = 0;
   virtual int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn) = 0;
@@ -318,8 +319,9 @@ public:
   //1. 如果task == NULL，说明调用者不需要异步回调，直接返回报错，由调用者处理
   //2. 如果task != NULL，需要注册异步回调任务
   int get_gts(const uint64_t tenant_id, ObTsCbTask *task, share::SCN &scn);
-  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_ts,
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us,
       share::SCN &scn, bool &is_external_consistent);
+  int get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us, share::SCN &scn);
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn, ObTsCbTask *task,
       bool &need_wait);
   int wait_gts_elapse(const uint64_t tenant_id, const share::SCN &scn);

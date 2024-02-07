@@ -89,6 +89,7 @@ class ObTenantMdsService;
   class ObTransferService;
   class ObRebuildService;
   class ObTableScanIterator;
+  class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
   class ObEmptyReadBucket;
   class ObTabletMemtableMgrPool;
@@ -170,12 +171,15 @@ namespace rootserver
   class ObArbitrationService;
   class ObHeartbeatService;
   class ObStandbySchemaRefreshTrigger;
+  class ObTenantSnapshotScheduler;
+  class ObCloneScheduler;
 }
 namespace observer
 {
   class ObTenantMetaChecker;
   class QueueThread;
   class ObTableLoadService;
+  class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
 }
 
@@ -340,6 +344,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
+      rootserver::ObTenantSnapshotScheduler*,       \
+      storage::ObTenantSnapshotService*,            \
+      rootserver::ObCloneScheduler*,                \
       share::ObIndexUsageInfoMgr*,                  \
       storage::ObTabletMemtableMgrPool*             \
   )
@@ -355,6 +362,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_TENANT_ROLE_CACHE_IS_INVALID() share::ObTenantEnv::get_tenant()->is_invalid_tenant()
 // 租户是否处于恢复中
 #define MTL_TENANT_ROLE_CACHE_IS_RESTORE() share::ObTenantEnv::get_tenant()->is_restore_tenant()
+// 租户是否处于克隆中
+#define MTL_TENANT_ROLE_CACHE_IS_CLONE() share::ObTenantEnv::get_tenant()->is_clone_tenant()
 // 更新租户role
 #define MTL_SET_TENANT_ROLE_CACHE(tenant_role) share::ObTenantEnv::get_tenant()->set_tenant_role(tenant_role)
 // 获取租户role
@@ -555,6 +564,11 @@ public:
   bool is_restore_tenant()
   {
     return share::is_restore_tenant(ATOMIC_LOAD(&tenant_role_value_));
+  }
+
+  bool is_clone_tenant()
+  {
+    return share::is_clone_tenant(ATOMIC_LOAD(&tenant_role_value_));
   }
 
   bool is_invalid_tenant()

@@ -679,6 +679,12 @@ int ObTsMgr::get_gts(const uint64_t tenant_id,
   return ret;
 }
 
+int ObTsMgr::get_ts_sync(const uint64_t tenant_id, const int64_t timeout_us, share::SCN &scn)
+{
+  bool unused_is_external_consistent = false;
+  return get_ts_sync(tenant_id, timeout_us, scn, unused_is_external_consistent);
+}
+
 int ObTsMgr::get_ts_sync(const uint64_t tenant_id,
                          const int64_t timeout_us,
                          SCN &scn,

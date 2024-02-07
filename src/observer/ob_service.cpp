@@ -2755,11 +2755,11 @@ int ObService::get_leader_locations(
               // skip
             /*
              * This function may be blocked when dick is hang,
-             * we consider leader's status is always RESTORE_NONE
+             * we consider leader's restore status is always NONE
              * } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
              *   LOG_WARN("get restore status failed", KR(ret));
              */
-            } else if (FALSE_IT(restore_status = ObLSRestoreStatus::RESTORE_NONE)) {
+            } else if (FALSE_IT(restore_status = ObLSRestoreStatus::NONE)) {
             } else if (OB_FAIL(leader_location.init(
                   GCTX.config_->cluster_id,  /*cluster_id*/
                   tenant_id,                 /*tenant_id*/

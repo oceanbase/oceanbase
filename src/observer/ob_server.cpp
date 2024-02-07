@@ -106,7 +106,7 @@
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
-#include "observer/ob_server_startup_task_handler.h"
+#include "observer/ob_startup_accel_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
 #ifdef OB_BUILD_ARBITRATION
@@ -412,7 +412,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
-    } else if (OB_FAIL(SERVER_STARTUP_TASK_HANDLER.init())) {
+    } else if (OB_FAIL(startup_accel_handler_.init(SERVER_ACCEL))) {
       LOG_ERROR("init server startup task handler failed", KR(ret));
     } else if (OB_FAIL(ObServerCheckpointSlogHandler::get_instance().init())) {
       LOG_ERROR("init server checkpoint slog handler failed", KR(ret));
@@ -742,7 +742,7 @@ void ObServer::destroy()
     FLOG_INFO("ob server block mgr destroyed");
 
     FLOG_INFO("begin to destroy server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.destroy();
+    startup_accel_handler_.destroy();
     FLOG_INFO("server startup task handler destroyed");
 
     FLOG_INFO("begin to destroy backup index cache");
@@ -834,7 +834,7 @@ int ObServer::start()
       LOG_ERROR("fail to start signal worker", KR(ret));
     }
 
-    if (FAILEDx(SERVER_STARTUP_TASK_HANDLER.start())) {
+    if (FAILEDx(startup_accel_handler_.start())) {
       LOG_ERROR("fail to start server startup task handler", KR(ret));
     } else {
       FLOG_INFO("success to start server startup task handler");
@@ -998,7 +998,7 @@ int ObServer::start()
       has_stopped_ = false;
     }
     // this handler is only used to process tasks during startup. so it can be destroied here.
-    SERVER_STARTUP_TASK_HANDLER.destroy();
+    startup_accel_handler_.destroy();
 
     // refresh server configure
     //
@@ -1359,7 +1359,7 @@ int ObServer::stop()
     FLOG_INFO("server checkpoint slog handler stopped");
 
     FLOG_INFO("begin to stop server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.stop();
+    startup_accel_handler_.stop();
     FLOG_INFO("server startup task handler stopped");
 
     // It will wait for all requests done.
@@ -1684,7 +1684,7 @@ int ObServer::wait()
     FLOG_INFO("wait server checkpoint slog handler success");
 
     FLOG_INFO("begin to wait server startup task handler");
-    SERVER_STARTUP_TASK_HANDLER.wait();
+    startup_accel_handler_.wait();
     FLOG_INFO("wait server startup task handler success");
 
     FLOG_INFO("begin to wait global election report timer");
@@ -2552,6 +2552,7 @@ int ObServer::init_global_context()
 #endif
   (void)gctx_.set_upgrade_stage(obrpc::OB_UPGRADE_STAGE_INVALID);
   gctx_.wr_service_ = &wr_service_;
+  gctx_.startup_accel_handler_ = &startup_accel_handler_;
 
   gctx_.flashback_scn_ = opts_.flashback_scn_;
   gctx_.server_id_ = config_.observer_id;

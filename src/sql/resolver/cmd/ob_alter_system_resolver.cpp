@@ -6011,5 +6011,64 @@ int ObAlterSystemResetResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObCancelCloneResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *node = const_cast<ParseNode*>(&parse_tree);
+  ObCancelCloneStmt *mystmt = NULL;
+  ObString tenant_name;
+
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid node", KR(ret));
+  } else if (OB_UNLIKELY(T_CANCEL_CLONE != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid node", KR(ret));
+  } else if (OB_UNLIKELY(1 != node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid node", KR(ret));
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", KR(ret));
+  } else {
+    bool is_compatible = false;
+    const uint64_t tenant_id = session_info_->get_login_tenant_id();
+    if (OB_FAIL(share::ObShareUtil::check_compat_version_for_clone_tenant(tenant_id, is_compatible))) {
+      LOG_WARN("fail to check compat version", KR(ret), K(tenant_id));
+    } else if (!is_compatible) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is below 4.3", KR(ret), K(tenant_id), K(is_compatible));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel tenant cloning below 4.3");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(mystmt = create_stmt<ObCancelCloneStmt>())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to create stmt", KR(ret));
+    } else {
+      stmt_ = mystmt;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(node->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid node", KR(ret));
+    } else if (OB_UNLIKELY(T_IDENT != node->children_[0]->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid node", KR(ret));
+    } else {
+      tenant_name.assign_ptr((char *)(node->children_[0]->str_value_),
+                                  static_cast<int32_t>(node->children_[0]->str_len_));
+      if (OB_FAIL(mystmt->set_clone_tenant_name(tenant_name))) {
+        LOG_WARN("set clone tenant name failed", KR(ret), K(tenant_name));
+      }
+    }
+  }
+
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

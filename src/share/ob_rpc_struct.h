@@ -72,6 +72,7 @@
 #include "share/scn.h"//SCN
 #include "share/ob_server_table_operator.h"
 #include "share/restore/ob_import_arg.h"
+#include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 #include "share/location_cache/ob_location_update_task.h"
 
 namespace oceanbase
@@ -512,9 +513,14 @@ public:
     : ObDDLArg(), tenant_schema_(), pool_list_(), if_not_exist_(false),
       sys_var_list_(), name_case_mode_(common::OB_NAME_CASE_INVALID), is_restore_(false),
       palf_base_info_(), compatible_version_(0), recovery_until_scn_(share::SCN::min_scn()),
-      is_creating_standby_(false), log_restore_source_(), is_tmp_tenant_for_recover_(false) {}
+      is_creating_standby_(false), log_restore_source_(), is_tmp_tenant_for_recover_(false),
+      source_tenant_id_(OB_INVALID_TENANT_ID)  {}
   virtual ~ObCreateTenantArg() {};
   bool is_valid() const;
+  bool is_clone_tenant() const { return OB_INVALID_TENANT_ID != source_tenant_id_; }
+  bool is_restore_tenant() const { return is_restore_; }
+  bool is_standby_tenant() const { return is_creating_standby_; }
+  uint64_t get_source_tenant_id() const { return source_tenant_id_; }
   int check_valid() const;
   void reset();
   int assign(const ObCreateTenantArg &other);
@@ -541,6 +547,7 @@ public:
   bool is_creating_standby_;
   common::ObString log_restore_source_; // for create standby tenant
   bool is_tmp_tenant_for_recover_; //tmp tenant for recover table
+  uint64_t source_tenant_id_;           // for create clone tenant
 };
 
 struct ObCreateTenantEndArg : public ObDDLArg
@@ -6503,6 +6510,151 @@ public:
   bool is_alter_compile_;
 };
 
+struct ObNotifyTenantSnapshotSchedulerArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyTenantSnapshotSchedulerArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID)
+  {}
+  ~ObNotifyTenantSnapshotSchedulerArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyTenantSnapshotSchedulerArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyTenantSnapshotSchedulerArg);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObNotifyTenantSnapshotSchedulerResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyTenantSnapshotSchedulerResult(): ret_(common::OB_SUCCESS) {}
+  ~ObNotifyTenantSnapshotSchedulerResult() {}
+  bool is_valid() const;
+  int assign(const ObNotifyTenantSnapshotSchedulerResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyTenantSnapshotSchedulerResult);
+private:
+  int ret_;
+};
+
+struct ObFlushLSArchiveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObFlushLSArchiveArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID)
+  {}
+  virtual ~ObFlushLSArchiveArg() {}
+  bool is_valid() const;
+  int assign(const ObFlushLSArchiveArg &other);
+  TO_STRING_KV(K_(tenant_id));
+public:
+  uint64_t tenant_id_;
+};
+
+struct ObInnerCreateTenantSnapshotArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInnerCreateTenantSnapshotArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      tenant_snapshot_id_()
+  {}
+  ~ObInnerCreateTenantSnapshotArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    tenant_snapshot_id_.reset();
+  }
+  bool is_valid() const;
+  int assign(const ObInnerCreateTenantSnapshotArg &other);
+  const share::ObTenantSnapshotID &get_tenant_snapshot_id() const { return tenant_snapshot_id_; }
+  void set_tenant_snapshot_id(const share::ObTenantSnapshotID &tenant_snapshot_id)
+  {
+    tenant_snapshot_id_ = tenant_snapshot_id;
+  }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K(tenant_id_), K(tenant_snapshot_id_));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObInnerCreateTenantSnapshotArg);
+private:
+  uint64_t tenant_id_;
+  share::ObTenantSnapshotID tenant_snapshot_id_;
+};
+
+struct ObInnerCreateTenantSnapshotResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInnerCreateTenantSnapshotResult(): ret_(common::OB_SUCCESS) {}
+  ~ObInnerCreateTenantSnapshotResult() {}
+  bool is_valid() const;
+  int assign(const ObInnerCreateTenantSnapshotResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObInnerCreateTenantSnapshotResult);
+private:
+  int ret_;
+};
+
+struct ObInnerDropTenantSnapshotArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInnerDropTenantSnapshotArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      tenant_snapshot_id_()
+  {}
+  ~ObInnerDropTenantSnapshotArg()
+  {
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    tenant_snapshot_id_.reset();
+  }
+  bool is_valid() const;
+  int assign(const ObInnerDropTenantSnapshotArg &other);
+  const share::ObTenantSnapshotID &get_tenant_snapshot_id() const { return tenant_snapshot_id_; }
+  void set_tenant_snapshot_id(const share::ObTenantSnapshotID &tenant_snapshot_id)
+  {
+    tenant_snapshot_id_ = tenant_snapshot_id;
+  }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K(tenant_id_), K(tenant_snapshot_id_));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObInnerDropTenantSnapshotArg);
+private:
+  uint64_t tenant_id_;
+  share::ObTenantSnapshotID tenant_snapshot_id_;
+};
+
+struct ObInnerDropTenantSnapshotResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObInnerDropTenantSnapshotResult(): ret_(common::OB_SUCCESS) {}
+  ~ObInnerDropTenantSnapshotResult() {}
+  bool is_valid() const;
+  int assign(const ObInnerDropTenantSnapshotResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObInnerDropTenantSnapshotResult);
+private:
+  int ret_;
+};
+
 struct ObCreateUDTArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -10404,6 +10556,203 @@ public:
   TO_STRING_KV(K_(client_sess_create_time), K_(have_kill_auth));
   int64_t client_sess_create_time_;
   bool have_kill_auth_;
+};
+
+struct ObCloneResourcePoolArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCloneResourcePoolArg():
+    ObDDLArg(),
+    source_tenant_id_(OB_INVALID_TENANT_ID),
+    resource_pool_id_(OB_INVALID_ID) {}
+
+  virtual ~ObCloneResourcePoolArg() {}
+  bool is_valid() const { return !pool_name_.is_empty() && !unit_config_name_.is_empty() &&
+                                 OB_INVALID_TENANT_ID != source_tenant_id_ &&
+                                 OB_INVALID_ID != resource_pool_id_; }
+  virtual int assign(const ObCloneResourcePoolArg &other);
+  int init(const ObString &pool_name,
+           const ObString &unit_config_name,
+           const uint64_t source_tenant_id,
+           const uint64_t resource_pool_id);
+
+  const ObString get_pool_name() const { return pool_name_.str(); }
+  const ObString get_unit_config_name() const { return unit_config_name_.str(); }
+  uint64_t get_source_tenant_id() const { return source_tenant_id_; }
+  uint64_t get_resource_pool_id() const { return resource_pool_id_; }
+  DECLARE_TO_STRING;
+
+private:
+  common::ObFixedLengthString<common::MAX_RESOURCE_POOL_LENGTH + 1> pool_name_;
+  common::ObFixedLengthString<common::MAX_UNIT_CONFIG_LENGTH + 1> unit_config_name_;
+  uint64_t source_tenant_id_;
+  uint64_t resource_pool_id_;
+};
+
+struct ObCloneTenantArg : public ObCmdArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObCloneTenantArg()
+    : new_tenant_name_(),
+      source_tenant_name_(),
+      tenant_snapshot_name_(),
+      resource_pool_name_(),
+      unit_config_name_()
+  {}
+  virtual ~ObCloneTenantArg() {}
+  bool is_valid() const;
+  int assign(const ObCloneTenantArg &other);
+  int init(const ObString &new_tenant_name,
+           const ObString &source_tenant_name,
+           const ObString &tenant_snapshot_name,
+           const ObString &resource_pool_name,
+           const ObString &unit_config_name);
+  const ObString get_new_tenant_name() const { return new_tenant_name_.str(); }
+  const ObString get_source_tenant_name() const { return source_tenant_name_.str(); }
+  const ObString get_tenant_snapshot_name() const { return tenant_snapshot_name_.str(); }
+  const ObString get_resource_pool_name() const { return resource_pool_name_.str(); }
+  const ObString get_unit_config_name() const { return unit_config_name_.str(); }
+  TO_STRING_KV(K_(new_tenant_name), K_(source_tenant_name),
+               K_(tenant_snapshot_name), K_(resource_pool_name),
+               K_(unit_config_name));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCloneTenantArg);
+private:
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> new_tenant_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_NAME_LENGTH + 1> source_tenant_name_;
+  common::ObFixedLengthString<common::OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH + 1> tenant_snapshot_name_;
+  common::ObFixedLengthString<common::MAX_RESOURCE_POOL_LENGTH + 1> resource_pool_name_;
+  common::ObFixedLengthString<common::MAX_UNIT_CONFIG_LENGTH + 1> unit_config_name_;
+};
+
+struct ObCloneTenantRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCloneTenantRes():
+    job_id_(OB_INVALID_ID) {}
+  ~ObCloneTenantRes() {}
+  bool is_valid() const { return 0 < job_id_; }
+  void reset();
+  int assign(const ObCloneTenantRes &other);
+  int64_t get_job_id() const { return job_id_; }
+  void set_job_id(const int64_t job_id) { job_id_ = job_id; }
+  TO_STRING_KV(K_(job_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObCloneTenantRes);
+private:
+  int64_t job_id_;
+};
+
+struct ObNotifyCloneSchedulerArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyCloneSchedulerArg()
+    : tenant_id_(common::OB_INVALID_TENANT_ID)
+  {}
+  ~ObNotifyCloneSchedulerArg() {}
+  bool is_valid() const;
+  int assign(const ObNotifyCloneSchedulerArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyCloneSchedulerArg);
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObNotifyCloneSchedulerResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyCloneSchedulerResult(): ret_(common::OB_SUCCESS) {}
+  ~ObNotifyCloneSchedulerResult() {}
+  bool is_valid() const;
+  int assign(const ObNotifyCloneSchedulerResult &other);
+  void init(const int ret) { ret_ = ret; }
+  TO_STRING_KV(K_(ret));
+  int get_result() const { return ret_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObNotifyCloneSchedulerResult);
+private:
+  int ret_;
+};
+
+struct ObCloneKeyArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCloneKeyArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      source_tenant_id_(OB_INVALID_TENANT_ID)
+  {}
+  ~ObCloneKeyArg() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_source_tenant_id() const { return source_tenant_id_; }
+  void set_source_tenant_id(const uint64_t source_tenant_id) { source_tenant_id_ = source_tenant_id; }
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_
+                                 && OB_INVALID_TENANT_ID != source_tenant_id_; }
+  int assign(const ObCloneKeyArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(source_tenant_id));
+private:
+  uint64_t tenant_id_;
+  uint64_t source_tenant_id_;
+};
+
+struct ObCloneKeyResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCloneKeyResult() : ret_(common::OB_ERROR) {}
+  ~ObCloneKeyResult() {}
+  int assign(const ObCloneKeyResult &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
+struct ObTrimKeyListArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTrimKeyListArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      latest_master_key_id_(0)
+  {}
+  ~ObTrimKeyListArg() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  uint64_t get_latest_master_key_id() const { return latest_master_key_id_; }
+  void set_latest_master_key_id(const uint64_t latest_master_key_id) { latest_master_key_id_ = latest_master_key_id; }
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_
+                                 && OB_INVALID_ID != latest_master_key_id_; }
+  int assign(const ObTrimKeyListArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(latest_master_key_id));
+private:
+  uint64_t tenant_id_;
+  uint64_t latest_master_key_id_;
+};
+
+struct ObTrimKeyListResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTrimKeyListResult() : ret_(common::OB_ERROR) {}
+  ~ObTrimKeyListResult() {}
+  int assign(const ObTrimKeyListResult &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
 };
 
 struct ObTabletLocationSendArg final

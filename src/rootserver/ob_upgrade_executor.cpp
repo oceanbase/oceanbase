@@ -14,6 +14,7 @@
 
 #include "rootserver/ob_upgrade_executor.h"
 #include "rootserver/ob_ls_service_helper.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "observer/ob_server_struct.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
@@ -597,6 +598,7 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   share::SCN sys_ls_target_scn = SCN::invalid_scn();
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::UPGRADE);
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_stop())) {
@@ -631,6 +633,11 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
       } else {
         LOG_WARN("fail to get target data version", KR(ret), K(tenant_id));
       }
+    }
+    // check tenant not in cloning procedure in trans
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id, case_to_check))) {
+      LOG_WARN("fail to check whether tenant is in cloning produre", KR(ret), K(tenant_id));
     }
     // try update target_data_version
     if (OB_FAIL(ret)) {

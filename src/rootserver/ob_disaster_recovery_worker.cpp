@@ -1969,6 +1969,38 @@ int ObDRWorker::try_disaster_recovery()
   return ret;
 }
 
+int ObDRWorker::check_whether_the_tenant_role_can_exec_dr_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+      ret = OB_SUCCESS;
+    } else {
+      ObAllTenantInfo tenant_info;
+      if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id,
+                                             GCTX.sql_proxy_,
+                                             false,
+                                             tenant_info))) {
+        LOG_WARN("fail to load tenant info", KR(ret), K(tenant_id));
+      } else if (tenant_info.is_clone()) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_INFO("the tenant is currently in the clone processing and disaster recovery will"
+                 " not be executed for the time being", KR(ret), K(tenant_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDRWorker::try_tenant_disaster_recovery(
     const uint64_t tenant_id,
     const bool only_for_display,
@@ -1986,6 +2018,8 @@ int ObDRWorker::try_tenant_disaster_recovery(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lst operator ptr or sql proxy is null", KR(ret),
         KP(lst_operator_), KP(sql_proxy_));
+  } else if (OB_FAIL(check_whether_the_tenant_role_can_exec_dr_(tenant_id))) {
+    LOG_INFO("fail to check_whether_the_tenant_role_can_exec_dr_", KR(ret), K(tenant_id));
   } else {
     LOG_INFO("start try tenant disaster recovery", K(tenant_id), K(only_for_display));
     share::ObLSStatusOperator ls_status_operator;
@@ -3939,7 +3973,7 @@ int ObDRWorker::find_valid_readonly_replica_(
       } else if (replica->is_in_service()
                  && server_stat_info->is_alive()
                  && !server_stat_info->is_stopped()
-                 && !replica->get_restore_status().is_restore_failed()
+                 && !replica->get_restore_status().is_failed()
                  && unit_stat_info->get_server_stat()->is_alive()
                  && !unit_stat_info->get_server_stat()->is_block()) {
         if (OB_FAIL(target_replica.assign(*replica))) {
@@ -4844,7 +4878,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
           && !server_stat_info->is_stopped()
           && type_checker.is_candidate(ls_replica->get_replica_type())
           && ls_replica->get_server() == src_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
+          && !ls_replica->get_restore_status().is_failed()) {
         src_replica = ls_replica;
         break;
       }
@@ -4876,7 +4910,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
           && type_checker.is_candidate(ls_replica->get_replica_type())
           && ls_replica->get_zone() == dst_zone
           && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
+          && !ls_replica->get_restore_status().is_failed()) {
         src_replica = ls_replica;
         break;
       }
@@ -4912,7 +4946,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
           && type_checker.is_candidate(ls_replica->get_replica_type())
           && ls_region == dst_region
           && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
+          && !ls_replica->get_restore_status().is_failed()) {
         src_replica = ls_replica;
         break;
       }
@@ -4943,7 +4977,7 @@ int ObDRWorker::choose_disaster_recovery_data_source(
           && !server_stat_info->is_stopped()
           && type_checker.is_candidate(ls_replica->get_replica_type())
           && ls_replica->get_server() != dst_member.get_server()
-          && !ls_replica->get_restore_status().is_restore_failed()) {
+          && !ls_replica->get_restore_status().is_failed()) {
         src_replica = ls_replica;
         break;
       }

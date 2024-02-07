@@ -677,6 +677,8 @@ int ObTabletPersister::transform_empty_shell(const ObTablet &old_tablet, ObTable
   } else if (OB_FAIL(persister.persist_and_fill_tablet(old_tablet, linked_writer,
       total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr))) {
     LOG_WARN("fail to persist old empty shell", K(ret), K(old_tablet));
+  } else {
+    new_handle.get_obj()->tablet_meta_.space_usage_ = space_usage;
   }
 
   return ret;

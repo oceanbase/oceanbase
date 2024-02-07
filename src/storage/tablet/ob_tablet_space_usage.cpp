@@ -13,8 +13,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/tablet/ob_tablet_space_usage.h"
-#include "storage/tablet/ob_tablet_block_aggregated_info.h"
-
 
 namespace oceanbase
 {

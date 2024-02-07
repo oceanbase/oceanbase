@@ -2178,7 +2178,46 @@
 #    fail_list.append('Table api connection is not allowed to use zlib as compression algorithm during the upgrade, please use other compression algorithms by setting table_api_transport_compress_func')
 #  logging.info('check table_api_transport_compress_func success')
 #
-## 17. 检查是否有租户在升到4.3.0版本之前已将binlog_row_image设为MINIMAL
+## 17. 检查无租户克隆任务
+#def check_tenant_clone_job_exist(query_cur):
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version >= get_version("4.3.0.0"):
+#      (desc, results) = query_cur.exec_query("""select count(1) from __all_virtual_clone_job""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        fail_list.append('failed to tenant clone job cnt')
+#      elif results[0][0] != 0:
+#        fail_list.append("""still has tenant clone job, upgrade is not allowed temporarily""")
+#      else:
+#        logging.info('check tenant clone job success')
+#
+## 18. 检查无租户快照任务
+#def check_tenant_snapshot_task_exist(query_cur):
+#  min_cluster_version = 0
+#  sql = """select distinct value from GV$OB_PARAMETERS  where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version >= get_version("4.3.0.0"):
+#      (desc, results) = query_cur.exec_query("""select count(1) from __all_virtual_tenant_snapshot where status!='NORMAL'""")
+#      if len(results) != 1 or len(results[0]) != 1:
+#        fail_list.append('failed to tenant snapshot task')
+#      elif results[0][0] != 0:
+#        fail_list.append("""still has tenant snapshot task, upgrade is not allowed temporarily""")
+#      else:
+#        logging.info('check tenant snapshot task success')
+## 19. 检查是否有租户在升到4.3.0版本之前已将binlog_row_image设为MINIMAL
 #def check_variable_binlog_row_image(query_cur):
 ## 4.3.0.0之前的版本,MINIMAL模式生成的日志CDC无法正常消费(DELETE日志).
 ## 4.3.0版本开始,MINIMAL模式做了改进,支持CDC消费,需要在升级到4.3.0.0之后再打开.
@@ -2240,6 +2279,8 @@
 #      check_schema_status(query_cur)
 #      check_server_version(query_cur)
 #      check_not_supported_tenant_name(query_cur)
+#      check_tenant_clone_job_exist(query_cur)
+#      check_tenant_snapshot_task_exist(query_cur)
 #      check_log_transport_compress_func(query_cur)
 #      check_table_compress_func(query_cur)
 #      check_table_api_transport_compress_func(query_cur)

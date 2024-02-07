@@ -1523,7 +1523,7 @@ int ObBootstrap::create_sys_resource_pool()
   } else if (OB_FAIL(unit_mgr_.grant_pools(
           trans, new_ug_id_array,
           lib::Worker::CompatMode::MYSQL, pool_names,
-          OB_SYS_TENANT_ID, is_bootstrap))) {
+          OB_SYS_TENANT_ID, is_bootstrap, OB_INVALID_TENANT_ID/*source_tenant_id*/))) {
     LOG_WARN("grant_pools_to_tenant failed", K(pool_names),
         "tenant_id", static_cast<uint64_t>(OB_SYS_TENANT_ID), K(ret));
   } else {

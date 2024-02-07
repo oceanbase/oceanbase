@@ -276,6 +276,8 @@ const int64_t OB_MAX_RESERVED_POINT_TYPE_LENGTH = 32;
 const int64_t OB_MAX_RESERVED_POINT_NAME_LENGTH = 128;
 const int64_t OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER = 2; //storage extra rowkey column number, it contains trans version column and sql sequence column
 const int64_t OB_INNER_MAX_ROWKEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER + OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
+const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH = 64;
+const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE = 128;
 
 
 //for recybin

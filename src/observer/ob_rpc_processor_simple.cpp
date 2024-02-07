@@ -53,6 +53,7 @@
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
+#include "logservice/archiveservice/ob_archive_service.h"
 #include "share/scn.h"
 #include "storage/ob_common_id_utils.h"
 #include "storage/high_availability/ob_storage_ha_service.h"
@@ -65,14 +66,18 @@
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_scheduler.h"
+#include "rootserver/restore/ob_clone_scheduler.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "rootserver/ob_primary_ls_service.h" // for ObPrimaryLSService
+#include "rootserver/ob_root_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 
 namespace oceanbase
@@ -1567,6 +1572,46 @@ int ObRpcCheckLSCanOfflineP::process()
   return ret;
 }
 
+int ObRpcInnerCreateTenantSnapshotP::process()
+{
+  int ret = OB_SUCCESS;
+  if (MTL_ID() != arg_.get_tenant_id()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcInnerCreateTenantSnapshotP::process tenant not match", KR(ret), K(arg_));
+  }
+  if (OB_SUCC(ret)) {
+    ObTenantSnapshotService *service = nullptr;
+    service = MTL(ObTenantSnapshotService*);
+    if (OB_ISNULL(service)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObTenantSnapshotService should not be nullptr", KR(ret), K(arg_));
+    } else if (OB_FAIL(service->create_tenant_snapshot(arg_))) {
+      COMMON_LOG(WARN, "fail to create tenant snapshot", KR(ret), K(arg_));
+    }
+  }
+  return ret;
+}
+
+int ObRpcInnerDropTenantSnapshotP::process()
+{
+  int ret = OB_SUCCESS;
+  if (MTL_ID() != arg_.get_tenant_id()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcInnerDropTenantSnapshotP::process tenant not match", KR(ret), K(arg_));
+  }
+  if (OB_SUCC(ret)) {
+    ObTenantSnapshotService *service = nullptr;
+    service = MTL(ObTenantSnapshotService*);
+    if (OB_ISNULL(service)) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(ERROR, "mtl ObTenantSnapshotService should not be nullptr", KR(ret), K(arg_));
+    } else if (OB_FAIL(service->drop_tenant_snapshot(arg_))) {
+      COMMON_LOG(WARN, "fail to drop tenant snapshot", KR(ret), K(arg_));
+    }
+  }
+  return ret;
+}
+
 int ObRpcGetLSAccessModeP::process()
 {
   int ret = OB_SUCCESS;
@@ -1659,7 +1704,7 @@ int ObRpcChangeLSAccessModeP::process()
       if (OB_UNLIKELY(!arg_.get_sys_ls_end_scn().is_valid_and_not_min())) {
         FLOG_WARN("invalid sys_ls_end_scn, no need to let user ls wait, "
             "the version might be smaller than V4.2.0", KR(ret), K(arg_.get_sys_ls_end_scn()));
-      } else if (OB_FAIL(ObRootUtils::wait_user_ls_sync_scn_locally(
+      } else if (OB_FAIL(rootserver::ObRootUtils::wait_user_ls_sync_scn_locally(
             arg_.get_sys_ls_end_scn(),
             log_ls_svr,
             *ls))) {
@@ -2141,6 +2186,43 @@ int ObSetRootKeyP::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMasterKeyGetter::instance().set_root_key(arg_, result_))) {
     LOG_WARN("failed to set root key", K(ret));
+  }
+  return ret;
+}
+
+int ObCloneKeyP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t source_tenant_id = arg_.get_source_tenant_id();
+  ObCipherOpMode mode;
+  common::ObSEArray<std::pair<uint64_t, ObMasterKey>, 2> master_key_list;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  //get master key info from source tenant
+  } else if (OB_FAIL(ObMasterKeyGetter::get_table_key_algorithm(source_tenant_id, mode))) {
+    LOG_WARN("failed to get table key algorithm", KR(ret), K(source_tenant_id));
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().dump_tenant_keys(source_tenant_id,
+                                                                    master_key_list))) {
+    LOG_WARN("failed to dump tenant key", KR(ret), K(source_tenant_id));
+  //set master key info for clone tenant
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().load_tenant_keys(arg_.get_tenant_id(),
+                                                                    mode,
+                                                                    master_key_list))) {
+    LOG_WARN("failed to load tenant keys", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+int ObTrimKeyListP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else if (OB_FAIL(ObMasterKeyGetter::instance().trim_master_key_map(arg_.get_tenant_id(),
+                                                  arg_.get_latest_master_key_id()))) {
+    LOG_WARN("fail to trim master key map", KR(ret), K(arg_));
   }
   return ret;
 }
@@ -2858,6 +2940,67 @@ int ObAdminUnlockMemberListP::process()
   } else if (OB_FAIL(gctx_.ob_service_->ob_admin_unlock_member_list(arg_))) {
     COMMON_LOG(WARN, "failed to unlock member list", KR(ret), K(arg_));
   }
+  return ret;
+}
+
+int ObRpcNotifyTenantSnapshotSchedulerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else {
+    MTL_SWITCH(gen_meta_tenant_id(arg_.get_tenant_id())) {
+      rootserver::ObTenantSnapshotScheduler* tenant_snapshot_scheduler = MTL(rootserver::ObTenantSnapshotScheduler*);
+      if (OB_ISNULL(tenant_snapshot_scheduler)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant snapshot scheduler is null", KR(ret), K(arg_));
+      } else {
+        tenant_snapshot_scheduler->wakeup();
+      }
+    }
+  }
+  (void)result_.init(ret);
+  return ret;
+}
+
+int ObRpcFlushLSArchiveP::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  archive::ObArchiveService* archive_svr = MTL(archive::ObArchiveService*);
+
+  if (!arg_.is_valid() || tenant_id != arg_.tenant_id_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_), K(tenant_id));
+  } else if (OB_ISNULL(archive_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("archive service is null", KR(ret), K(arg_));
+  } else {
+    archive_svr->flush_all();
+  }
+  result_ = ret;
+  return ret;
+}
+
+int ObRpcNotifyCloneSchedulerP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg_));
+  } else {
+    MTL_SWITCH(arg_.get_tenant_id()) {
+      rootserver::ObCloneScheduler* clone_scheduler = MTL(rootserver::ObCloneScheduler*);
+      if (OB_ISNULL(clone_scheduler)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("clone scheduler is null", KR(ret), K(arg_));
+      } else {
+        clone_scheduler->wakeup();
+      }
+    }
+  }
+  (void)result_.init(ret);
   return ret;
 }
 

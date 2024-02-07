@@ -25,6 +25,8 @@
 #include "observer/ob_srv_network_frame.h"
 #include "observer/report/ob_i_meta_report.h"
 #include "rootserver/freeze/ob_major_freeze_service.h"
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_scheduler.h"
+#include "rootserver/restore/ob_clone_scheduler.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "rootserver/ob_arbitration_service.h"
 #endif
@@ -288,6 +290,15 @@ int ObLS::init(const share::ObLSID &ls_id,
       if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
         //sys and meta tenant
         REGISTER_TO_LOGSERVICE(logservice::RESTORE_SERVICE_LOG_BASE_TYPE, MTL(rootserver::ObRestoreService *));
+      }
+
+      if (OB_SUCC(ret) && is_meta_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        REGISTER_TO_LOGSERVICE(logservice::SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObTenantSnapshotScheduler *));
+      }
+
+      if (OB_SUCC(ret) && !is_user_tenant(tenant_id) && ls_id.is_sys_ls()) {
+        //sys and meta tenant
+        REGISTER_TO_LOGSERVICE(logservice::CLONE_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObCloneScheduler *));
       }
 
 #ifdef OB_BUILD_ARBITRATION
@@ -565,7 +576,7 @@ bool ObLS::is_need_gc() const
   return bool_ret;
 }
 
-bool ObLS::is_enable_for_restore() const
+bool ObLS::is_required_to_switch_state_for_restore_() const
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -573,7 +584,20 @@ bool ObLS::is_enable_for_restore() const
   if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("fail to get restore status", K(ret), K(ls_meta_.ls_id_));
   } else {
-    bool_ret = restore_status.is_enable_for_restore();
+    bool_ret = restore_status.is_required_to_switch_ls_state_for_restore();
+  }
+  return bool_ret;
+}
+
+bool ObLS::is_required_to_switch_state_for_clone_() const
+{
+  int ret = OB_SUCCESS;
+  bool bool_ret = false;
+  ObLSRestoreStatus restore_status;
+  if (OB_FAIL(ls_meta_.get_restore_status(restore_status))) {
+    LOG_WARN("fail to get restore status", K(ret), K(ls_meta_.ls_id_));
+  } else {
+    bool_ret = restore_status.is_required_to_switch_ls_state_for_clone();
   }
   return bool_ret;
 }
@@ -876,6 +900,14 @@ void ObLS::destroy()
   if (is_sys_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
     rootserver::ObHeartbeatService * heartbeat_service = MTL(rootserver::ObHeartbeatService*);
     UNREGISTER_FROM_LOGSERVICE(logservice::HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
+  }
+  if (is_meta_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObTenantSnapshotScheduler * snapshot_scheduler = MTL(rootserver::ObTenantSnapshotScheduler*);
+    UNREGISTER_FROM_LOGSERVICE(logservice::SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, snapshot_scheduler);
+  }
+  if (!is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
+    rootserver::ObCloneScheduler * clone_scheduler = MTL(rootserver::ObCloneScheduler*);
+    UNREGISTER_FROM_LOGSERVICE(logservice::CLONE_SCHEDULER_LOG_BASE_TYPE, clone_scheduler);
   }
 #ifdef OB_BUILD_ARBITRATION
   if (!is_user_tenant(MTL_ID()) && ls_meta_.ls_id_.is_sys_ls()) {
@@ -2375,7 +2407,7 @@ int ObLS::set_migration_status(
   } else if (OB_FAIL(ls_meta_.set_migration_status(migration_status, write_slog))) {
     LOG_WARN("failed to set migration status", K(ret), K(migration_status));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-      && restore_status.is_restore_none()) {
+      && restore_status.is_none()) {
     ls_tablet_svr_.enable_to_read();
   } else {
     ls_tablet_svr_.disable_to_read();
@@ -2411,7 +2443,7 @@ int ObLS::set_restore_status(
   } else if (OB_FAIL(ls_meta_.set_restore_status(restore_status))) {
     LOG_WARN("failed to set restore status", K(ret), K(restore_status));
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-      && restore_status.is_restore_none()) {
+      && restore_status.is_none()) {
     ls_tablet_svr_.enable_to_read();
   } else {
     ls_tablet_svr_.disable_to_read();

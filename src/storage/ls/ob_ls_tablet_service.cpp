@@ -6077,7 +6077,7 @@ int ObLSTabletService::set_allow_to_read_(ObLS *ls)
       LOG_WARN("failed to get ls migration and restore status", K(ret), KPC(ls));
     } else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
           && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != migration_status)
-        || ObLSRestoreStatus::RESTORE_NONE != restore_status) {
+        || ObLSRestoreStatus::NONE != restore_status) {
       allow_to_read_mgr_.disable_to_read();
       FLOG_INFO("set ls do not allow to read", KPC(ls), K(migration_status), K(restore_status));
     } else {

@@ -25,6 +25,7 @@
 #include "rootserver/ob_balance_ls_primary_zone.h"//ObBalanceLSPrimaryZone
 #include "observer/ob_server_struct.h"//GCTX
 #include "rootserver/ob_partition_balance.h" // partition balance
+#include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" //ObTenantSnapshotUtil
 #include "storage/tablelock/ob_lock_utils.h" // ObInnerTableLockUtil
 #include "share/ob_cluster_version.h"
 #include "share/ob_share_util.h" // ObShareUtil
@@ -635,6 +636,7 @@ int ObTenantBalanceService::persist_job_and_task_(const share::ObBalanceJob &job
                                                   ObArray<share::ObBalanceTask> &tasks)
 {
   int ret = OB_SUCCESS;
+  ObConflictCaseWithClone case_to_check(ObConflictCaseWithClone::TRANSFER);
   if (OB_UNLIKELY(!inited_ || ! ATOMIC_LOAD(&loaded_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
@@ -654,6 +656,8 @@ int ObTenantBalanceService::persist_job_and_task_(const share::ObBalanceJob &job
       LOG_WARN("lock and check balance job failed", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(ObBalanceJobTableOperator::insert_new_job(job, trans))) {
       LOG_WARN("failed to insert new job", KR(ret), K(job));
+    } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(tenant_id_, case_to_check))) {
+      LOG_WARN("fail to check whether tenant is cloning", KR(ret), K_(tenant_id), K(case_to_check));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
       if (OB_FAIL(ObBalanceTaskTableOperator::insert_new_task(tasks.at(i),

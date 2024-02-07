@@ -671,7 +671,7 @@ DEFINE_ERROR_EXT_DEP(OB_LS_WAITING_SAFE_DESTROY, -4766, -1, "HY000", "ls waiting
 DEFINE_ERROR(OB_LS_NOT_LEADER, -4767, -1, "HY000", "log stream is not leader log stream");
 DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict", "ls lock conflict, %s");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ROOT_KEY, -4769, -1, "HY000", "invalid root key", "%s");
-DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %.*s procedure, %.*s not allowed now");
+DEFINE_ERROR_EXT(OB_CONFLICT_WITH_CLONE, -4770, -1, "HY000", "conflict case with clone operation", "Tenant (%ld) is in %s procedure, %s not allowed now");
 
 ////////////////////////////////////////////////////////////////
 // SQL & Schema specific error code, -5000 ~ -6000
@@ -2423,13 +2423,13 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "
 ////////////////////////////////////////////////////////////////
 // tenant snapshot and tenant clone error codes [-12000 ~ -12100)
 ////////////////////////////////////////////////////////////////
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -12000, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_EXIST, -12001, -1, "HY000", "Tenant snapshot already exist", "Tenant snapshot \'%.*s\' already exist");
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_TIMEOUT, -12002, -1, "HY000", "Tenant snapshot task timeout", "Tenant snapshot task timeout. %.*s");
-//DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -12003, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
-//DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -12004, -1, "HY000", "Tenant clone job failed", "Tenant clone job failed during the %.*s stage");
-//DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -12005, -1, "HY000", "Tenant snapshot task failed", "%.*s");
-//DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -12006, -1, "HY000", "Tenant snapshot lock conflict", "%s");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_NOT_EXIST, -12000, -1, "HY000", "Tenant snapshot does not exist", "Tenant snapshot \'%.*s\' does not exist");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_EXIST, -12001, -1, "HY000", "Tenant snapshot already exist", "Tenant snapshot \'%.*s\' already exist");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_TIMEOUT, -12002, -1, "HY000", "Tenant snapshot task timeout", "Tenant snapshot task timeout. %.*s");
+DEFINE_ERROR_EXT_DEP(OB_CLONE_TENANT_TIMEOUT, -12003, -1, "HY000", "Clone tenant timeout", "Clone tenant timeout. %.*s");
+DEFINE_ERROR_EXT_DEP(OB_ERR_CLONE_TENANT, -12004, -1, "HY000", "Tenant clone job failed", "%.*s");
+DEFINE_ERROR_EXT_DEP(OB_ERR_TENANT_SNAPSHOT, -12005, -1, "HY000", "Tenant snapshot task failed", "%.*s");
+DEFINE_ERROR_EXT_DEP(OB_TENANT_SNAPSHOT_LOCK_CONFLICT, -12006, -1, "HY000", "Tenant snapshot lock conflict", "%s");
 
 ////////////////////////////////////////////////////////////////
 // !!! text/blob || clob/blob erro code

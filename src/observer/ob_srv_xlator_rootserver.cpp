@@ -76,6 +76,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcCreateResourceUnitP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourceUnitP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropResourceUnitP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCloneResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterResourcePoolP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropResoucePoolP, *gctx_.root_service_);
@@ -251,6 +252,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObBackupCleanP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObDeletePolicyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRecoverTableP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCloneTenantP, *gctx_.root_service_);
 
     // auto part ddl
 
