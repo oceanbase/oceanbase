@@ -306,6 +306,8 @@ public:
   static int adjust_string_column_length_within_max(
       share::schema::ObColumnSchemaV2 &column,
       const bool is_oracle_mode);
+  static int adjust_number_decimal_column_accuracy_within_max(share::schema::ObColumnSchemaV2 &column,
+                                                              const bool is_oracle_mode);
   // { used for enum and set
   int fill_extended_type_info(
       const ParseNode &str_list_node,
@@ -887,6 +889,10 @@ protected:
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
+  int get_mv_container_table(uint64_t tenant_id,
+                             const uint64_t mv_container_table_id,
+                             const share::schema::ObTableSchema *&mv_container_table_schema,
+                             common::ObString &mv_container_table_name);
   int64_t block_size_;
   int64_t consistency_level_;
   INDEX_TYPE index_scope_;

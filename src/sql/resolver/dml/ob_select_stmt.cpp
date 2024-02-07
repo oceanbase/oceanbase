@@ -994,7 +994,7 @@ int ObSelectStmt::get_set_stmt_size(int64_t &size) const
   return ret;
 }
 
-bool ObSelectStmt::check_is_select_item_expr(const ObRawExpr *expr)
+bool ObSelectStmt::check_is_select_item_expr(const ObRawExpr *expr) const
 {
   bool bret = false;
   for(int64_t i = 0; !bret && i < select_items_.count(); ++i) {

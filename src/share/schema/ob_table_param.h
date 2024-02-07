@@ -148,7 +148,7 @@ class ColumnMap
       SHADOW_COLUMN_ID_OFFSET + MAX_ARRAY_SIZE - 1;
 
   typedef common::ObFixedArray<int32_t, common::ObIAllocator> ColumnArray;
-  #define IS_SHADOW_COLUMN(column_id) (column_id >= OB_MIN_SHADOW_COLUMN_ID)
+  #define IS_SHADOW_COLUMN(column_id) ((column_id >= OB_MIN_SHADOW_COLUMN_ID) && !common::is_mlog_special_column(column_id))
 
 public:
   ColumnMap(common::ObIAllocator &allocator)

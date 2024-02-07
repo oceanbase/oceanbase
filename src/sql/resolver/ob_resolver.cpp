@@ -33,9 +33,11 @@
 #include "sql/resolver/ddl/ob_alter_table_resolver.h"
 #include "sql/resolver/ddl/ob_drop_table_resolver.h"
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
+#include "sql/resolver/ddl/ob_create_mlog_resolver.h"
 #include "sql/resolver/ddl/ob_create_synonym_resolver.h"
 #include "sql/resolver/ddl/ob_drop_synonym_resolver.h"
 #include "sql/resolver/ddl/ob_drop_index_resolver.h"
+#include "sql/resolver/ddl/ob_drop_mlog_resolver.h"
 #include "sql/resolver/ddl/ob_create_database_resolver.h"
 #include "sql/resolver/ddl/ob_alter_database_resolver.h"
 #include "sql/resolver/ddl/ob_use_database_resolver.h"
@@ -318,6 +320,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CREATE_INDEX: {
         REGISTER_STMT_RESOLVER(CreateIndex);
+        break;
+      }
+      case T_CREATE_MLOG: {
+        REGISTER_STMT_RESOLVER(CreateMLog);
+        break;
+      }
+      case T_DROP_MLOG: {
+        REGISTER_STMT_RESOLVER(DropMLog);
         break;
       }
       case T_CREATE_VIEW: {
@@ -1186,6 +1196,11 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
 
     if (OB_SUCC(ret) && stmt->is_dml_stmt()) {
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
+    }
+
+    if (OB_SUCC(ret) && stmt->is_dml_stmt()
+        && !params_.session_info_->is_inner()) {
+      OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_materialized_view()) );
     }
 
     if (OB_SUCC(ret)) {

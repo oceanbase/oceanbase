@@ -53,6 +53,7 @@ class ObMySQLTransaction;
 namespace obrpc
 {
 class ObAccountArg;
+class ObCreateMLogArg;
 }
 
 namespace share
@@ -136,6 +137,21 @@ public:
                                  share::schema::ObTableSchema &table_schema,
                                  ObMySQLTransaction &sql_trans);
 
+  virtual int create_mlog_table(ObMySQLTransaction &sql_trans,
+                                const obrpc::ObCreateMLogArg &arg,
+                                share::schema::ObSchemaGetterGuard &schema_guard,
+                                share::schema::ObTableSchema &table_schema);
+
+  virtual int create_mlog_tablet(ObMySQLTransaction &trans,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const share::schema::ObTableSchema &mlog_schema,
+                                 const bool need_check_tablet_cnt);
+
+  virtual int add_mlog(ObMySQLTransaction &trans,
+                       const obrpc::ObCreateMLogArg &arg,
+                       ObSchemaGetterGuard &schema_guard,
+                       const share::schema::ObTableSchema &mlog_schema);
+
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg,
                     obrpc::ObAlterTableRes &res);
 
@@ -209,7 +225,8 @@ public:
       const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
       const uint64_t last_replay_log_id,
       const common::ObIArray<share::schema::ObDependencyInfo> *dependency_infos,
-      ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
+      ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array,
+      int64_t &ddl_task_id);
 
   virtual int create_table_like(const obrpc::ObCreateTableLikeArg &arg);
 
@@ -223,6 +240,15 @@ public:
                          const share::schema::ObTableSchema **table_schema);
   int create_hidden_table(const obrpc::ObCreateHiddenTableArg &create_hidden_table_arg,
                                       obrpc::ObCreateHiddenTableRes &res);
+  int mview_complete_refresh(const obrpc::ObMViewCompleteRefreshArg &arg,
+                             obrpc::ObMViewCompleteRefreshRes &res,
+                             share::schema::ObSchemaGetterGuard &schema_guard);
+  int mview_complete_refresh_in_trans(const obrpc::ObMViewCompleteRefreshArg &arg,
+                                      obrpc::ObMViewCompleteRefreshRes &res,
+                                      ObDDLSQLTransaction &trans,
+                                      common::ObIAllocator &allocator,
+                                      share::schema::ObSchemaGetterGuard &schema_guard,
+                                      ObDDLTaskRecord &task_record);
   /**
    * For recover restore table ddl task, it is a cross-tenant task, including,
    * 1. Create a hidden table under different tenant but associated with the source table;
@@ -235,6 +261,7 @@ public:
                                 const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos,
                                 bool &have_index);
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
+  virtual int update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg);
 
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
   virtual int add_table_schema(share::schema::ObTableSchema &table_schema,
@@ -692,11 +719,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int check_database_exist(const uint64_t tenant_id, const common::ObString &database_name, uint64_t &database_id);
   int check_create_with_db_id(share::schema::ObDatabaseSchema &schema);
   int replace_table_schema_type(share::schema::ObTableSchema &schema);
-  // drop/truncate limitation for depend table
-  int check_table_has_materialized_view(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const share::schema::ObTableSchema &table_schema,
-    bool &has_mv);
 
   int flashback_table_to_time_point(const obrpc::ObFlashBackTableToScnArg &arg);
   //----Functions for recyclebin ----
@@ -1261,11 +1283,20 @@ private:
   int set_tablegroup_id(share::schema::ObTableSchema &table_schema);
   template<typename SCHEMA>
   int set_default_tablegroup_id(SCHEMA &schema);
-  int create_table_in_trans(share::schema::ObTableSchema &table_schema,
+  int create_index_or_mlog_table_in_trans(share::schema::ObTableSchema &table_schema,
                             const common::ObString *ddl_stmt_str,
                             ObMySQLTransaction *sql_trans,
                             share::schema::ObSchemaGetterGuard &schema_guard,
                             const bool need_check_tablet_cnt);
+  int create_tablets_in_trans_(common::ObIArray<share::schema::ObTableSchema> &table_schemas,
+                              ObDDLOperator &ddl_operator,
+                              ObMySQLTransaction &trans,
+                              share::schema::ObSchemaGetterGuard &schema_guard);
+  int create_tablets_in_trans_for_mv_(common::ObIArray<share::schema::ObTableSchema> &table_schemas,
+                              ObDDLOperator &ddl_operator,
+                              ObMySQLTransaction &trans,
+                              share::schema::ObSchemaGetterGuard &schema_guard);
+
   /*
    * Check and set various options of modify tenant, among which the modifications of zone_list,
    *  locality and resource_pool are related to each other.
@@ -1364,7 +1395,8 @@ private:
               const obrpc::ObSequenceDDLArg &sequence_ddl_arg,
               const uint64_t last_replay_log_id,
               const common::ObIArray<share::schema::ObDependencyInfo> *dep_infos,
-              ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array);
+              ObIArray<ObMockFKParentTableSchema> &mock_fk_parent_table_schema_array,
+              int64_t &ddl_task_id);
   int print_view_expanded_definition(
       const share::schema::ObTableSchema &table_schema,
       ObString &ddl_stmt_str,
@@ -1738,9 +1770,6 @@ private:
                                 const AlterColumnSchema &alter_column_schema,
                                 lib::Worker::CompatMode compat_mode);
 
-  int validate_update_column_for_materialized_view(
-      const share::schema::ObTableSchema &origin_table_schema,
-      const share::schema::ObColumnSchemaV2 &orig_column_schema);
   int modify_part_func_expr(const ObString &orig_column_name,
                             const ObString &alter_column_name,
                             share::schema::ObTableSchema &table_schema,
@@ -2621,6 +2650,13 @@ private:
     ObColumnNameHashWrapper new_key(alter_column_schema.get_column_name_str());
     return !(orig_key == (new_key));
   }
+  int start_mview_complete_refresh_task(ObMySQLTransaction &trans,
+                                        ObSchemaGetterGuard &schema_guard,
+                                        const ObTableSchema &mview_schema,
+                                        const ObTableSchema &container_table_schema,
+                                        const ObIArray<ObDependencyInfo> *dep_infos,
+                                        common::ObIAllocator &allocator,
+                                        ObDDLTaskRecord &task_record);
 
   bool need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alter_table_arg) const;
 

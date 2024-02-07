@@ -1149,6 +1149,7 @@ public:
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
 
   int disable_writing_external_table(bool basic_stmt_is_dml = false);
+  int disable_writing_materialized_view();
   int formalize_query_ref_exprs();
 
   int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,

@@ -2113,7 +2113,7 @@ int ObRemoteScan::generate_build_select_sql(ObSqlString &sql_string)
           if (OB_ISNULL(orig_column_schema)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column not exist", K(ret), K(dest_column_name), KPC(dest_table_schema));
-          } else if (OB_FAIL(column_names_.push_back(ObColumnNameInfo(dest_column_name, dest_column_id >= OB_MIN_SHADOW_COLUMN_ID,
+          } else if (OB_FAIL(column_names_.push_back(ObColumnNameInfo(dest_column_name, is_shadow_column(dest_column_id),
               orig_column_schema->is_enum_or_set())))) {
             LOG_WARN("fail to push back column name failed", K(ret));
           }

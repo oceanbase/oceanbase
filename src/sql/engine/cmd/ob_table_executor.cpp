@@ -56,6 +56,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_utils.h"
+#include "storage/mview/cmd/ob_mview_executor_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -595,6 +596,24 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
                    "table_name", create_table_arg.schema_.get_table_name());
         }
       }
+      if (OB_SUCC(ret)) {
+        if (create_table_arg.schema_.is_materialized_view()) {
+          ObSQLSessionInfo *session_info = ctx.get_my_session();
+          if (session_info == nullptr) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session_info should not be nullptr", KR(ret));
+          } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(
+                       tenant_id, res.task_id_, session_info, common_rpc_proxy, true))) {
+            if (storage::ObMViewExecutorUtil::is_mview_refresh_retry_ret_code(ret)) {
+              LOG_WARN("retry create mview", KR(ret), K(tenant_id), "task_id", res.task_id_);
+              ret = OB_EAGAIN;
+            } else {
+              LOG_WARN("fail to create mview", KR(ret), K(tenant_id), "task_id", res.task_id_);
+            }
+          }
+        }
+      }
+
       if (OB_SUCC(ret) && table_schema.is_external_table()) {
         //auto refresh after create external table
         ObExprRegexpSessionVariables regexp_vars;

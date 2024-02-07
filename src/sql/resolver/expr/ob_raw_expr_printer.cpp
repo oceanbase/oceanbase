@@ -1121,9 +1121,9 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       if (OB_SUCC(ret)) {
         if (0 == expr->get_param_count()) {
           if (T_FUN_COUNT == type) {
-            // count(*) -> count(0)
+            // count(*)
             // but do not transform group_id() to group_id(0);
-            DATA_PRINTF("0");
+            DATA_PRINTF("*");
           } else if (T_FUN_GROUP_ID == type) {
             // do nothing.
           } else {

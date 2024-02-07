@@ -269,6 +269,20 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
         LOG_WARN("insert rows to access service failed", K(ret));
       }
     }
+  } else if (ctdef.table_param_.get_data_table().is_mlog_table()
+      && !ctdef.is_access_mlog_as_master_table_) {
+    ObDASMLogDMLIterator mlog_iter(tablet_id, dml_param_, &iter, DAS_OP_TABLE_UPDATE);
+    if (OB_FAIL(as->insert_rows(ls_id,
+                                tablet_id,
+                                *tx_desc_,
+                                dml_param_,
+                                ctdef.column_ids_,
+                                &mlog_iter,
+                                affected_rows))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("delete rows to access service failed", K(ret));
+      }
+    }
   } else if (OB_FAIL(as->update_rows(ls_id,
                                      tablet_id,
                                      *tx_desc_,

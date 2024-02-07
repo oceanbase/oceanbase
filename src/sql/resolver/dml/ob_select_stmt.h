@@ -602,7 +602,7 @@ public:
   int deep_copy_stmt_struct(ObIAllocator &allocator,
                             ObRawExprCopier &expr_copier,
                             const ObDMLStmt &other) override;
-  bool check_is_select_item_expr(const ObRawExpr *expr);
+  bool check_is_select_item_expr(const ObRawExpr *expr) const;
   bool contain_nested_aggr() const;
 
   int get_set_stmt_size(int64_t &size) const;

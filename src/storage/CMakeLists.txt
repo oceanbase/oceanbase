@@ -765,6 +765,22 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_rpc_struct.cpp
 )
 
+ob_set_subtarget(ob_storage mview
+  mview/cmd/ob_mview_executor_util.cpp
+  mview/cmd/ob_mview_purge_log_executor.cpp
+  mview/cmd/ob_mview_refresh_executor.cpp
+  mview/cmd/ob_mview_stats_purge_refresh_stats_executor.cpp
+  mview/cmd/ob_mview_stats_set_mvref_stats_params_executor.cpp
+  mview/cmd/ob_mview_stats_set_system_default_executor.cpp
+  mview/ob_mlog_purge.cpp
+  mview/ob_mview_refresh_helper.cpp
+  mview/ob_mview_refresh_stats_collect.cpp
+  mview/ob_mview_refresh_stats_purge.cpp
+  mview/ob_mview_refresh.cpp
+  mview/ob_mview_transaction.cpp
+  mview/ob_mview_sched_job_utils.cpp
+)
+
 ob_set_subtarget(ob_storage tenant_snapshot
   tenant_snapshot/ob_tenant_snapshot_service.cpp
   tenant_snapshot/ob_tenant_clone_service.cpp

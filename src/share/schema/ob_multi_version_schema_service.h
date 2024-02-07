@@ -115,7 +115,6 @@ class ObMultiVersionSchemaService : public ObServerSchemaService
 typedef common::ObSortedVector<ObSchemaMgr *> SchemaMgrInfos;
 typedef SchemaMgrInfos::iterator SchemaMgrIterator;
 public:
-  static bool g_skip_resolve_materialized_view_definition_;
 
   enum RefreshSchemaMode
   {
@@ -454,10 +453,6 @@ private:
   virtual int add_aux_schema_from_mgr(const ObSchemaMgr &mgr,
       ObTableSchema &table_schema,
       const ObTableType table_type) override;
-  int build_full_materalized_view_schema(
-      ObSchemaGetterGuard &schema_guard,
-      common::ObIAllocator &allocator,
-      ObTableSchema *&view_schema);
 
   //for liboblog
   int fallback_schema_mgr_for_liboblog(const ObRefreshSchemaStatus &schema_status,

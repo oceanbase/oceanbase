@@ -454,7 +454,6 @@ int ObLogSchemaGetter::init(common::ObMySQLProxy &mysql_proxy,
     // refresh Schema
     ObSchemaService::g_ignore_column_retrieve_error_ = true;
     ObSchemaService::g_liboblog_mode_ = true;
-    ObMultiVersionSchemaService::g_skip_resolve_materialized_view_definition_ = true;
     const uint64_t tenant_id = OB_INVALID_TENANT_ID; // to refresh schema of all tenants
     const int64_t timeout = GET_SCHEMA_TIMEOUT_ON_START_UP;
     bool is_init_succ = false;

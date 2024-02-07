@@ -122,7 +122,7 @@ int ObDDLLock::lock_for_add_drop_index(
       LOG_WARN("failed to lock data table tablet", K(ret));
     } else if (OB_FAIL(do_table_lock(tenant_id, data_table_id, data_tablet_ids, ROW_SHARE, lock_owner, timeout_us, true/*is_lock*/, trans))) {
       LOG_WARN("failed to lock data tablet", K(ret));
-    } else if (index_schema.is_storage_local_index_table()) {
+    } else if (index_schema.is_storage_local_index_table() || index_schema.is_mlog_table()) {
       if (OB_FAIL(check_tablet_in_same_ls(data_table_schema, index_schema, trans))) {
         LOG_WARN("failed to check tablet in same ls", K(ret));
       }

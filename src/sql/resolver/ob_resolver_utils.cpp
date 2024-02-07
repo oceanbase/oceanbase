@@ -8454,6 +8454,108 @@ int ObResolverUtils::is_negative_ora_nmb(const ObObjParam &obj_param, bool &is_n
   return ret;
 }
 
+int ObResolverUtils::check_allowed_alter_operations_for_mlog(
+    const uint64_t tenant_id,
+    const obrpc::ObAlterTableArg &arg,
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    SQL_RESV_LOG(WARN, "failed to get data version", K(ret));
+  } else if (tenant_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview before 4.3 is");
+  } else if (table_schema.is_mlog_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter materialized view log is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter materialized view log is");
+  } else if (table_schema.has_mlog_table()) {
+    bool is_alter_pk = false;
+    ObIndexArg::IndexActionType pk_action_type;
+    for (int64_t i = 0; OB_SUCC(ret) && (i < arg.index_arg_list_.count()); ++i) {
+      const ObIndexArg *index_arg = arg.index_arg_list_.at(i);
+      if (OB_ISNULL(index_arg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index arg is null", KR(ret));
+      } else if ((ObIndexArg::ADD_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::DROP_PRIMARY_KEY == index_arg->index_action_type_)
+          || (ObIndexArg::ALTER_PRIMARY_KEY == index_arg->index_action_type_)) {
+        is_alter_pk = true;
+        pk_action_type = index_arg->index_action_type_;
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if ((arg.is_alter_indexs_ && !is_alter_pk)
+        || (arg.is_update_global_indexes_ && !arg.is_alter_partitions_)
+        || (arg.is_alter_options_ // the following allowed options change does not affect mlog
+            && (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_DOP)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::CHARSET_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COLLATION_TYPE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::COMMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::EXPIRE_INFO)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::PRIMARY_ZONE)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::REPLICA_NUM)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SEQUENCE_COLUMN_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::USE_BLOOM_FILTER)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::SESSION_ACTIVE_TIME)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENABLE_ROW_MOVEMENT)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::FORCE_LOCALITY)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))) {
+      // supported operations
+    } else {
+      // unsupported operations
+      ret = OB_NOT_SUPPORTED;
+
+      // generate more specific error messages
+      if (is_alter_pk) {
+        if (ObIndexArg::ADD_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("add primary key to table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "add primary key to table with materialized view log is");
+        } else if (ObIndexArg::DROP_PRIMARY_KEY == pk_action_type) {
+          LOG_WARN("drop the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop the primary key of table with materialized view log is");
+        } else {
+          LOG_WARN("alter the primary key of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter the primary key of table with materialized view log is");
+        }
+      } else if (arg.is_alter_columns_) {
+        LOG_WARN("alter column of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter column of table with materialized view log is");
+      } else if (arg.is_alter_partitions_) {
+        LOG_WARN("alter partition of table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of table with materialized view log is");
+      } else if (arg.is_alter_options_) {
+        if (arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)) {
+          LOG_WARN("alter name of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter name of table with materialized view log is");
+        } else {
+          LOG_WARN("alter option of table with materialized view log is not supported",
+              KR(ret), K(table_schema.get_table_name()), K(arg));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter option of table with materialized view log is");
+        }
+      } else {
+        LOG_WARN("alter table with materialized view log is not supported",
+            KR(ret), K(table_schema.get_table_name()), K(arg));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table with materialized view log is");
+      }
+    }
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

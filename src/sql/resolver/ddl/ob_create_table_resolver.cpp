@@ -50,7 +50,7 @@ using namespace omt;
 namespace sql
 {
 ObCreateTableResolver::ObCreateTableResolver(ObResolverParams &params)
-    : ObDDLResolver(params),
+    : ObCreateTableResolverBase(params),
       cur_column_id_(OB_APP_MIN_COLUMN_ID - 1),
       cur_column_group_id_(COLUMN_GROUP_START_ID),
       primary_keys_(),
@@ -930,65 +930,19 @@ int ObCreateTableResolver::resolve_partition_option(
     ParseNode *node, ObTableSchema &table_schema, const bool is_partition_option_node_with_opt)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt_) || OB_ISNULL(allocator_) || OB_ISNULL(session_info_)) {
-    ret = OB_NOT_INIT;
-    SQL_RESV_LOG(WARN, "failed to build partition key info!", K(ret), KP(session_info_));
-  } else {
-    if (NULL != node) {
-      ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
-      if (!is_partition_option_node_with_opt) {
-        if (OB_FAIL(resolve_partition_node(create_table_stmt, node, table_schema))) {
-          LOG_WARN("failed to resolve partition option", K(ret));
-        }
-      } else if (T_PARTITION_OPTION == node->type_) {
-        if (node->num_child_ < 1 || node->num_child_ > 2) {
-          ret = OB_INVALID_ARGUMENT;
-          SQL_RESV_LOG(WARN, "node number is invalid.", K(ret), K(node->num_child_));
-        } else if (NULL == node->children_[0]) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_RESV_LOG(WARN, "partition node is null.", K(ret));
-        } else {
-          ParseNode *partition_node = node->children_[0]; // 普通分区partition node
-          ParseNode *column_partition_node = node->children_[1]; // 垂直分区column partition node
-          if (OB_FAIL(resolve_partition_node(create_table_stmt, partition_node, table_schema))) {
-            LOG_WARN("failed to resolve partition option", K(ret));
-          } else {
-            // 处理垂直分区
-            if (NULL != column_partition_node) {
-              if (T_VERTICAL_COLUMNS_PARTITION != column_partition_node->type_) {
-                ret = OB_INVALID_ARGUMENT;
-                SQL_RESV_LOG(WARN, "node type is invalid.", K(ret), K(partition_node->type_));
-              } else {
-                table_schema.set_table_mode_flag(TABLE_MODE_PRIMARY_AUX_VP);
-                ret = resolve_vertical_partition(column_partition_node);
-              }
-            }
-          }
-        }
-      } else if (T_VERTICAL_COLUMNS_PARTITION == node->type_) {
-        // 场景：仅仅只有垂直分区
-        table_schema.set_table_mode_flag(TABLE_MODE_PRIMARY_AUX_VP);
-        ret = resolve_vertical_partition(node);
-      } else if (T_AUTO_PARTITION == node->type_) {
-        if (OB_FAIL(resolve_auto_partition(node))) {
-          SQL_RESV_LOG(WARN, "failed to resolve auto partition", KR(ret));
-        }
-      } else {
-        ret = OB_INVALID_ARGUMENT;
-        SQL_RESV_LOG(WARN, "node type is invalid.", K(ret), K(node->type_));
-      }
-    } else if (is_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
-      SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", K(ret));
-    }
-    if (OB_SUCC(ret) && (OB_NOT_NULL(node) || is_oracle_temp_table_)) {
-      if (OB_FAIL(check_generated_partition_column(table_schema))) {
-        LOG_WARN("Failed to check generate partition column", K(ret));
-      } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
-        SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", K(ret));
-      } else if (OB_FAIL(table_schema.check_auto_partition_valid())) {
-        LOG_WARN("failed to check auto partition valid", KR(ret));
-      } else { }//do nothing
-    }
+  if (OB_FAIL(ObCreateTableResolverBase::resolve_partition_option(node, table_schema, is_partition_option_node_with_opt))) {
+    LOG_WARN("fail to resolve partition option", KR(ret));
+  } else if (is_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
+    SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", KR(ret));
+  }
+  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || is_oracle_temp_table_)) {
+    if (OB_FAIL(check_generated_partition_column(table_schema))) {
+      LOG_WARN("Failed to check generate partiton column", KR(ret));
+    } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
+      SQL_RESV_LOG(WARN, "fail to check primary key cover partition column", KR(ret));
+    } else if (OB_FAIL(table_schema.check_auto_partition_valid())) {
+      LOG_WARN("failed to check auto partition valid", KR(ret));
+    } else { }//do nothing
   }
   return ret;
 }
@@ -1927,12 +1881,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             column.set_collation_type(expr->get_collation_type());
             column.set_accuracy(expr->get_accuracy());
             column.set_zero_fill(expr->get_result_flag() & ZEROFILL_FLAG);
-            if (lib::is_mysql_mode() && ob_is_number_or_decimal_int_tc(expr->get_result_type().get_type())) {
-              int16_t ori_scale = expr->get_accuracy().get_scale();
-              column.set_data_scale(MIN(OB_MAX_DECIMAL_SCALE, expr->get_accuracy().get_scale()));
-              int16_t data_precision = expr->get_accuracy().get_precision() - (ori_scale - column.get_data_scale());
-              column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, data_precision));
-            }
+            OZ (adjust_number_decimal_column_accuracy_within_max(column, lib::is_oracle_mode()));
             OZ (adjust_string_column_length_within_max(column, lib::is_oracle_mode()));
             LOG_DEBUG("column expr debug", K(*expr));
           }
@@ -2283,175 +2232,6 @@ int ObCreateTableResolver::set_storing_column()
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < hidden_store_column_names_.count(); ++i) {
     ret = index_arg_.hidden_store_columns_.push_back(hidden_store_column_names_.at(i));
-  }
-  return ret;
-}
-
-int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(session_info_)) {
-    ret = OB_NOT_INIT;
-    SQL_RESV_LOG(WARN, "session_info is null.", K(ret));
-  } else {
-    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
-    bool is_oracle_mode = lib::is_oracle_mode();
-    table_schema.set_block_size(block_size_);
-    int64_t progressive_merge_round = 0;
-    int64_t tablet_size = tablet_size_;
-    if (-1 == tablet_size) {
-      tablet_size = common::ObServerConfig::get_instance().tablet_size;
-    }
-    table_schema.set_tablet_size(tablet_size);
-    table_schema.set_pctfree(pctfree_);
-    table_schema.set_collation_type(collation_type_);
-    table_schema.set_charset_type(charset_type_);
-    table_schema.set_is_use_bloomfilter(use_bloom_filter_);
-    table_schema.set_auto_increment(auto_increment_);
-    table_schema.set_tenant_id(tenant_id);
-    table_schema.set_tablegroup_id(OB_SYS_TABLEGROUP_ID);
-    table_schema.set_table_id(table_id_);
-    table_schema.set_read_only(read_only_);
-    table_schema.set_duplicate_scope(duplicate_scope_);
-    table_schema.set_enable_row_movement(enable_row_movement_);
-    table_schema.set_table_mode_struct(table_mode_);
-    table_schema.set_encryption_str(encryption_);
-    table_schema.set_tablespace_id(tablespace_id_);
-    table_schema.set_dop(table_dop_);
-    if (0 == progressive_merge_num_) {
-      ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      table_schema.set_progressive_merge_num(tenant_config.is_valid() ? tenant_config->default_progressive_merge_num : 0);
-    } else {
-      table_schema.set_progressive_merge_num(progressive_merge_num_);
-    }
-    // set store format
-    if (store_format_ == OB_STORE_FORMAT_INVALID) {
-      ObString default_format;
-      if (is_oracle_mode) {
-        if (OB_ISNULL(GCONF.default_compress.get_value())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default oracle compress option is not set in server config", K(ret));
-        } else {
-          default_format = ObString::make_string(GCONF.default_compress.str());
-        }
-      } else {
-        if (NULL == GCONF.default_row_format.get_value()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default row format is not set in server config", K(ret));
-        } else {
-          default_format = ObString::make_string(GCONF.default_row_format.str());
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL((ObStoreFormat::find_store_format_type(default_format, store_format_)))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default compress not found!", K(ret), K_(store_format), K(default_format));
-        } else if (!ObStoreFormat::is_store_format_valid(store_format_, is_oracle_mode)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected store format type", K_(store_format), K(is_oracle_mode), K(ret));
-        } else if (OB_FAIL(ObDDLResolver::get_row_store_type(tenant_id, store_format_, row_store_type_))) {
-          LOG_WARN("fail to get_row_store_type", K(ret), K(tenant_id), K(store_format_));
-        }
-      }
-    } else if (OB_FAIL(ObDDLResolver::get_row_store_type(tenant_id, store_format_, row_store_type_))) {
-      LOG_WARN("fail to get_row_store_type", K(ret),  K(tenant_id), K(store_format_), K(is_oracle_mode));
-    }
-
-    if (OB_SUCC(ret)) {
-      if (0 == progressive_merge_round) {
-        progressive_merge_round = 1;
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_STORAGE_FORMAT_VERSION_INVALID == storage_format_version_) {
-        storage_format_version_ = OB_STORAGE_FORMAT_VERSION_V4;
-      }
-    }
-
-    // set compress method
-    if (OB_SUCC(ret)) {
-      if (is_oracle_mode) {
-        const char* compress_name = NULL;
-        if (OB_ISNULL(compress_name = ObStoreFormat::get_store_format_compress_name(store_format_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected null compress name", K_(store_format), K(ret));
-        } else {
-          compress_method_ = ObString::make_string(compress_name);
-        }
-      } else if (compress_method_.empty()) {
-        char compress_func_str[OB_MAX_HEADER_COMPRESSOR_NAME_LENGTH] = "";
-        if (NULL == GCONF.default_compress_func.get_value()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("default compress func name is not set in server config", K(ret));
-        } else if (OB_FAIL(GCONF.default_compress_func.copy(compress_func_str, sizeof(compress_func_str)))) {
-          LOG_WARN("Failed to copy default compress func", K(ret));
-        } else {
-          bool found = false;
-          for (int i = 0; i < ARRAYSIZEOF(common::compress_funcs) && !found; ++i) {
-            //find again in case of case sensitive in server init parameters
-            //all change to
-            if (0 == ObString::make_string(common::compress_funcs[i]).case_compare(compress_func_str)) {
-              found = true;
-              compress_method_ = ObString::make_string(common::compress_funcs[i]);
-            }
-          }
-          if (!found) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("compress method not found!", K(ret), K_(compress_method),
-                "default_compress_func", compress_func_str);
-          }
-        }
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (compress_method_ == all_compressor_name[ZLIB_COMPRESSOR]) {
-        ret = OB_NOT_SUPPORTED;
-        SQL_RESV_LOG(WARN, "Not allowed to use zlib compressor!", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "zlib compressor");
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      table_schema.set_row_store_type(row_store_type_);
-      table_schema.set_store_format(store_format_);
-      table_schema.set_progressive_merge_round(progressive_merge_round);
-      table_schema.set_storage_format_version(storage_format_version_);
-      if (OB_FAIL(table_schema.set_expire_info(expire_info_)) ||
-          OB_FAIL(table_schema.set_compress_func_name(compress_method_)) ||
-          OB_FAIL(table_schema.set_comment(comment_)) ||
-          OB_FAIL(table_schema.set_tablegroup_name(tablegroup_name_)) ||
-          OB_FAIL(table_schema.set_ttl_definition(ttl_definition_)) ||
-          OB_FAIL(table_schema.set_kv_attributes(kv_attributes_))) {
-        SQL_RESV_LOG(WARN, "set table_options failed", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      // if lob_inrow_threshold not set, used config default_lob_inrow_threshold
-      if (is_set_lob_inrow_threshold_) {
-        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
-      } else if (OB_ISNULL(session_info_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session if NULL", K(ret));
-      } else if (OB_FALSE_IT((lob_inrow_threshold_ = session_info_->get_default_lob_inrow_threshold()))) {
-      } else if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
-        ret = OB_INVALID_ARGUMENT;
-        SQL_RESV_LOG(ERROR, "invalid inrow threshold", K(ret), K(lob_inrow_threshold_));
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid inrow threshold");
-      } else {
-        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
-      }
-    }
-
-    if (OB_SUCC(ret) && table_schema.is_external_table()) {
-      if (table_schema.get_external_file_format().empty()
-          || table_schema.get_external_file_location().empty()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
-      }
-    }
   }
   return ret;
 }
@@ -2837,7 +2617,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
       }
       if (OB_SUCC(ret) && lib::is_mysql_mode()) {
         if (ObItemType::T_INDEX == node->type_ && NULL != node->children_[4]) {
-          if (2 != node->children_[4]->num_child_ || T_PARTITION_OPTION != node->children_[4]->type_) {
+          if (1 != node->children_[4]->num_child_ || T_PARTITION_OPTION != node->children_[4]->type_) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index");
           } else if (OB_ISNULL(node->children_[4]->children_[0])) {
@@ -3034,199 +2814,6 @@ int ObCreateTableResolver::resolve_table_charset_info(const ParseNode *node) {
   }
 
   return ret;
-}
-
-// 目前只会用在create table中指定垂直分区
-int ObCreateTableResolver::resolve_vertical_partition(const ParseNode *node)
-{
-  int ret = OB_SUCCESS;
-
-  if (NULL == node || 2 != node->num_child_) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "node is null", K(ret));
-  } else if (table_mode_.mode_flag_ == TABLE_MODE_QUEUING) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Vertical partition table cannot set queuing table mode");
-    SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
-  } else {
-    SMART_VAR(VPColumnIdHashSet, vp_column_id_set) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-        // 0: 主垂直分区 1: 副垂直分区
-        const ParseNode *list_column_name_list = node->children_[i];
-        if (0 == i) {
-          if (NULL == list_column_name_list) {
-            // 有且只有一个主垂直分区
-            ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "node is null", K(ret));
-          } else if (OB_FAIL(resolve_vertical_column(list_column_name_list, vp_column_id_set, false))) {
-            SQL_RESV_LOG(WARN, "failed to resolve_vertical_column", K(ret));
-          }
-        } else if (NULL != list_column_name_list) {
-          for (int64_t j = 0; OB_SUCC(ret) && j < list_column_name_list->num_child_; ++j) {
-            const ParseNode *vp_column_name_list = list_column_name_list->children_[j];
-            if (NULL == vp_column_name_list) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "node is null", K(ret));
-            } else if (OB_FAIL(resolve_vertical_column(vp_column_name_list, vp_column_id_set, true))) {
-              SQL_RESV_LOG(WARN, "failed to resolve_vertical_column", K(ret));
-            }
-          }
-        }
-      }
-
-      // 剩余未显示指定的垂直分区列，放在最后一个垂直分区上
-      ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-      ObCreateVertialPartitionArg extra_vp_arg;
-      if (OB_SUCC(ret) && vp_column_id_set.count() < table_schema.get_column_count()) {
-        ObSEArray<uint64_t, 8> column_ids;
-        if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
-          LOG_WARN("failed to get column ids", K(ret));
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
-          ObColumnSchemaV2 *column_schema = NULL;
-          const uint64_t column_id = column_ids.at(i);
-          if (NULL == (column_schema = table_schema.get_column_schema(column_id))) {
-            ret = OB_ERR_BAD_FIELD_ERROR;
-            LOG_WARN("get_column_schema failed", K(column_id), K(ret));
-          } else if (column_schema->is_generated_column()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("can't create vertical partition table using generated column", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vertical partition table using generated column");
-          } else {
-            ObString column_name(column_schema->get_column_name());
-            if (OB_FAIL(vp_column_id_set.exist_refactored(column_id))) {
-              if (OB_HASH_EXIST == ret) {
-                ret = OB_SUCCESS;
-              } else if (OB_HASH_NOT_EXIST == ret) {
-                ret = OB_SUCCESS;
-                if (column_schema->is_primary_vp_column()
-                    || column_schema->is_aux_vp_column()
-                    || column_schema->is_hidden()
-                    || column_schema->is_shadow_column()) {
-                  // skip
-                  // 这些列不需要放入最后的默认垂直分区上
-                } else if (OB_FAIL(extra_vp_arg.vertical_partition_columns_.push_back(column_name))) {
-                  LOG_WARN("failed to push column name", K(ret), K(column_name));
-                }
-              } else {
-                LOG_WARN("failed to check exist element", K(column_name), K(ret));
-              }
-            }
-          }
-        }
-
-        if (OB_SUCC(ret) && extra_vp_arg.vertical_partition_columns_.count() > 0) {
-          if (OB_FAIL(create_table_stmt->get_vertical_partition_arg_list().push_back(extra_vp_arg))) {
-            SQL_RESV_LOG(WARN, "failed to push back arg", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return  ret;
-}
-
-int ObCreateTableResolver::resolve_vertical_column(
-    const ParseNode *aux_vertical_column_node,
-    VPColumnIdHashSet &vp_column_id_set,
-    const bool is_auxiliary_part)
-{
-  int ret = OB_SUCCESS;
-
-  if (NULL == aux_vertical_column_node) {
-    ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "node is null", K(ret));
-  } else {
-    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-    ObCreateVertialPartitionArg vp_arg;
-    const bool is_single_column = 1 == aux_vertical_column_node->value_;
-    if (is_single_column) {
-      // 垂直分区为单列
-      vp_arg.reset();
-      ObString column_name(aux_vertical_column_node->str_len_, aux_vertical_column_node->str_value_);
-      const ObColumnSchemaV2 *column_schema = table_schema.get_column_schema(column_name);
-      if (NULL == column_schema) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                       table_schema.get_table_name_str().length(),
-                       table_schema.get_table_name_str().ptr());
-        SQL_RESV_LOG(WARN, "column is not in table", K(ret));
-      } else if (column_schema->is_generated_column()
-              || column_schema->is_hidden()
-              || column_schema->is_shadow_column()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can't create vertical partition table using generated col",
-                 K(ret), K(*column_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vertical partition table using generated column");
-      } else if (is_auxiliary_part && column_schema->is_original_rowkey_column()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can't create auxiliary vertical partition table using pk col",
-                 K(ret), K(*column_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create auxiliary vertical partition table using pk col");
-      } else if (OB_FAIL(vp_arg.vertical_partition_columns_.push_back(column_name))) {
-        SQL_RESV_LOG(WARN, "failed to push back column name", K(ret), K(column_name));
-      } else if (OB_FAIL(vp_column_id_set.exist_refactored(column_schema->get_column_id()))) {
-        if (OB_HASH_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("failed to check exist element", K(column_name), K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(vp_column_id_set.set_refactored(column_schema->get_column_id()))) {
-          LOG_WARN("set hash set failed", K(column_name), K(ret));
-        }
-      }
-    } else {
-      // 多列 eg: (c1, c2, c3)
-      vp_arg.reset();
-      for (int64_t i = 0; OB_SUCC(ret) && i < aux_vertical_column_node->num_child_; ++i) {
-        const ParseNode *name_node = aux_vertical_column_node->children_[i];
-        ObString column_name(name_node->str_len_, name_node->str_value_);
-        const ObColumnSchemaV2 *column_schema = table_schema.get_column_schema(column_name);
-        if (NULL == column_schema) {
-          ret = OB_ERR_BAD_FIELD_ERROR;
-          LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, column_name.length(), column_name.ptr(),
-                         table_schema.get_table_name_str().length(),
-                         table_schema.get_table_name_str().ptr());
-          SQL_RESV_LOG(WARN, "column is not in table", K(ret));
-        } else if (column_schema->is_generated_column()
-                || column_schema->is_hidden()
-                || column_schema->is_shadow_column()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("can't create vertical partition table using generated col",
-                   K(ret), K(*column_schema));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vertical partition table using generated col");
-        } else if (is_auxiliary_part && column_schema->is_original_rowkey_column()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("can't create auxiliary vertical partition table using pk col",
-                   K(ret), K(*column_schema));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create auxiliary vertical partition table using pk col");
-        } else if (OB_FAIL(vp_arg.vertical_partition_columns_.push_back(column_name))) {
-          SQL_RESV_LOG(WARN, "failed to push back column name", K(ret), K(column_name));
-        } else if (OB_FAIL(vp_column_id_set.exist_refactored(column_schema->get_column_id()))) {
-          if (OB_HASH_NOT_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("failed to check exist element", K(column_name), K(ret));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(vp_column_id_set.set_refactored(column_schema->get_column_id()))) {
-            LOG_WARN("set hash set failed", K(column_name), K(ret));
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(create_table_stmt->get_vertical_partition_arg_list().push_back(vp_arg))) {
-        SQL_RESV_LOG(WARN, "failed to push back arg", K(ret));
-      }
-    }
-  }
-  return  ret;
 }
 
 int ObCreateTableResolver::resolve_auto_partition(const ParseNode *partition_node)

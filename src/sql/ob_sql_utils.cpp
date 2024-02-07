@@ -1416,6 +1416,8 @@ bool ObSQLUtils::cause_implicit_commit(ParseResult &result)
         || T_CREATE_DATABASE == type
         || T_MODIFY_TENANT == type
         || T_CREATE_INDEX == type
+        || T_CREATE_MLOG == type
+        || T_DROP_MLOG == type
         || T_DROP_TENANT == type
         /* pl item type*/
         || T_SP_CREATE_TYPE == type

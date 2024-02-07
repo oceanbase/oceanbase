@@ -1116,7 +1116,9 @@ int ObDelUpdLogPlan::candi_allocate_one_pdml_insert(bool is_index_maintenance,
                           target_sharding->get_part_level() == share::schema::PARTITION_LEVEL_TWO;
       for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
         if (get_optimizer_context().is_online_ddl()) {
-          exch_info.sample_type_ = OBJECT_SAMPLE;
+          if (!get_optimizer_context().is_heap_table_ddl()) {
+            exch_info.sample_type_ = OBJECT_SAMPLE;
+          }
           if (OB_FAIL(create_online_ddl_plan(best_plans.at(i).plan_tree_,
                                              exch_info,
                                              target_table_partition,
@@ -1753,7 +1755,8 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
                                                              primary_dml_info.ref_table_id_,
                                                              index_tid_array,
                                                              index_tid_array_size,
-                                                             false /*only global*/))) {
+                                                             false /*only global*/,
+                                                             true /*with mlog*/))) {
     LOG_WARN("get can write index array failed", K(ret), K(primary_dml_info.ref_table_id_));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < primary_dml_info.assignments_.count(); ++i) {
@@ -1773,7 +1776,7 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
   for (int64_t i = 0; OB_SUCC(ret) && i < index_tid_array_size; ++i) {
     if (OB_FAIL(schema_guard->get_table_schema(tenant_id, index_tid_array[i], index_schema))) {
       LOG_WARN("get index schema failed", K(ret), K(index_tid_array[i]), K(i));
-    } else if (index_schema->is_index_local_storage()) {
+    } else if (index_schema->is_index_local_storage() || index_schema->is_mlog_table()) {
       //only need to attach local index and primary index in the same DAS Task
       if (primary_dml_info.assignments_.empty()) {
         //is insert or delete, need to add to the related index ids
@@ -1784,7 +1787,12 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         bool found_col = false;
         //in update clause, need to check this local index whether been updated
         for (int64_t j = 0; OB_SUCC(ret) && !found_col && j < base_column_ids.count(); ++j) {
-          found_col = (index_schema->get_column_schema(base_column_ids.at(j)) != nullptr);
+          uint64_t base_column_id = base_column_ids.at(j);
+          if (index_schema->is_mlog_table()) {
+            uint64_t mlog_column_id = ObTableSchema::gen_mlog_col_id_from_ref_col_id(base_column_id);
+            base_column_id = mlog_column_id;
+          }
+          found_col = (index_schema->get_column_schema(base_column_id) != nullptr);
         }
         if (OB_SUCC(ret) && found_col) {
           //update clause will modify this local index, need to add it to related_index_ids_

@@ -472,7 +472,7 @@ int ObTransformUtils::is_columns_unique(const ObIArray<ObRawExpr *> &exprs,
     } else if (!is_unique) {
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
       if (OB_FAIL(table_schema->get_simple_index_infos(
-                  simple_index_infos, false))) {
+                  simple_index_infos))) {
         LOG_WARN("get simple_index_infos failed", K(ret));
       }
       for (int64_t i = 0;
@@ -3234,7 +3234,7 @@ int ObTransformUtils::get_vaild_index_id(ObSqlSchemaGuard *schema_guard,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is NULL", K(ret), K(table_schema));
-  } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos, false))) {
+  } else if (OB_FAIL(table_schema->get_simple_index_infos(simple_index_infos))) {
     LOG_WARN("get simple_index_infos failed", K(ret));
   } else if (OB_FAIL(index_ids.push_back(table_item->ref_id_))) {
     LOG_WARN("failed to push back index id", K(ret), K(table_item->ref_id_));

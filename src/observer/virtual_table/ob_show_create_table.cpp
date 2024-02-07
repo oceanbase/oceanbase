@@ -63,6 +63,10 @@ int ObShowCreateTable::inner_get_next_row(common::ObNewRow *&row)
         && is_restrict_access_virtual_table(table_schema->get_table_id())) {
       ret = OB_TABLE_NOT_EXIST;
       SERVER_LOG(WARN, "fail to get table schema", K(ret), K(show_table_id));
+    } else if (table_schema->is_mlog_table()) {
+      ret = OB_NOT_SUPPORTED;
+      SERVER_LOG(WARN, "show create table on materialized view log is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "show create table on materialized view log is");
     } else {
       if (OB_FAIL(fill_row_cells_with_retry(show_table_id, *table_schema))) {
         SERVER_LOG(WARN, "fail to fill row cells", K(ret),

@@ -144,6 +144,39 @@ int ObDDLResolver::get_part_str_with_type(
   return ret;
 }
 
+int ObDDLResolver::get_mv_container_table(
+    uint64_t tenant_id,
+    const uint64_t mv_container_table_id,
+    const share::schema::ObTableSchema *&mv_container_table_schema,
+    common::ObString &mv_container_table_name)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_version = 0;
+  mv_container_table_schema = nullptr;
+  mv_container_table_name.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == mv_container_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(mv_container_table_id));
+  } else if (OB_UNLIKELY(nullptr == schema_checker_ || nullptr == allocator_)) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("schema checker or allocator can not be NULL", KR(ret), KP(schema_checker_), KP(allocator_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else if (tenant_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview before 4.3 is");
+    LOG_WARN("mview not supported before 4.3", KR(ret), K(tenant_id), K(tenant_version));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, mv_container_table_id, mv_container_table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mv_container_table_id));
+  } else if (OB_ISNULL(mv_container_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is NULL", KR(ret), K(tenant_id), K(mv_container_table_id));
+  } else if (OB_FAIL(ob_write_string(*allocator_, mv_container_table_schema->get_table_name(), mv_container_table_name))) {
+    LOG_WARN("fail to deep copy table name", KR(ret));
+  }
+  return ret;
+}
+
 // check whether the column is allowed to be selected as part of primary key.
 int ObDDLResolver::check_add_column_as_pk_allowed(const ObColumnSchemaV2 &column_schema) {
   int ret = OB_SUCCESS;
@@ -700,7 +733,7 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
     int32_t num = 0;
     if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
+      SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
     } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
@@ -6105,6 +6138,23 @@ int ObDDLResolver::adjust_string_column_length_within_max(share::schema::ObColum
         column.set_data_length(max_varchar_length);
       }
     }
+  }
+  return ret;
+}
+
+// number and decimal column accuracy is determined by the expr result length in CTAS and GC, if the result is
+// more accurate than the max accuracy of decimal, need to adjust it.
+int ObDDLResolver::adjust_number_decimal_column_accuracy_within_max(share::schema::ObColumnSchemaV2 &column,
+                                                                    const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode || !ob_is_number_or_decimal_int_tc(column.get_data_type())) {
+    // do nothing
+  } else {
+    int16_t ori_scale = column.get_data_scale();
+    column.set_data_scale(MIN(OB_MAX_DECIMAL_SCALE, ori_scale));
+    int16_t data_precision = column.get_data_precision() - (ori_scale - column.get_data_scale());
+    column.set_data_precision(MIN(OB_MAX_DECIMAL_PRECISION, data_precision));
   }
   return ret;
 }

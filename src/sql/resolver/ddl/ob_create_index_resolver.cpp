@@ -508,6 +508,31 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else if (tbl_schema->is_external_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation on external table");
+  } else if (tbl_schema->is_mlog_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create index on materialized view log is not supported",
+        KR(ret), K(tbl_schema->get_table_name()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index on materialized view log is");
+  } else if (tbl_schema->is_materialized_view()) {
+    const uint64_t tenant_id = session_info_->get_effective_tenant_id();
+    const uint64_t mv_container_table_id = tbl_schema->get_data_table_id();
+    const ObTableSchema *mv_container_table_schema = nullptr;
+    ObString mv_container_table_name;
+    if (OB_FAIL(get_mv_container_table(tenant_id,
+                                       mv_container_table_id,
+                                       mv_container_table_schema,
+                                       mv_container_table_name))) {
+      LOG_WARN("fail to get mv container table", KR(ret), K(tenant_id), K(mv_container_table_id));
+      if (OB_TABLE_NOT_EXIST == ret) {
+        ret = OB_ERR_UNEXPECTED; // rewrite errno
+      }
+    } else {
+      is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
+      ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+      index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
+      crt_idx_stmt->set_table_id(mv_container_table_schema->get_table_id());
+      crt_idx_stmt->set_table_name(mv_container_table_name);
+    }
   } else {
     is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
@@ -550,7 +575,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   } else {
     if (NULL != parse_node.children_[5]) {
       // 0: 普通分区node // 1: 垂直分区node, 不支持建全局索引时指定垂直分区
-      if (2 != parse_node.children_[5]->num_child_
+      if (1 != parse_node.children_[5]->num_child_
           || T_PARTITION_OPTION != parse_node.children_[5]->type_) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index table");

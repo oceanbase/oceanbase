@@ -426,9 +426,6 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
       //view schema
       view_schema_ = src_schema.view_schema_;
 
-      mv_cnt_ = src_schema.mv_cnt_;
-      MEMCPY(mv_tid_array_, src_schema.mv_tid_array_, sizeof(uint64_t) * src_schema.mv_cnt_);
-
       aux_vp_tid_array_ = src_schema.aux_vp_tid_array_;
 
       base_table_ids_ = src_schema.base_table_ids_;

@@ -8343,6 +8343,151 @@ last_access_time	timestamp(6)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablet_buffer_info;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_mlog;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+mlog_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+purge_mode	bigint(20)	NO		NULL	
+purge_start	timestamp(6)	YES		NULL	
+purge_next	varchar(128)	YES		NULL	
+purge_job	varchar(128)	YES		NULL	
+last_purge_scn	bigint(20) unsigned	YES		NULL	
+last_purge_date	timestamp(6)	YES		NULL	
+last_purge_time	bigint(20)	YES		NULL	
+last_purge_rows	bigint(20)	YES		NULL	
+last_purge_trace_id	varchar(64)	YES		NULL	
+schema_version	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mlog;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+build_mode	bigint(20)	NO		NULL	
+refresh_mode	bigint(20)	NO		NULL	
+refresh_method	bigint(20)	NO		NULL	
+refresh_start	timestamp(6)	YES		NULL	
+refresh_next	varchar(128)	YES		NULL	
+refresh_job	varchar(128)	YES		NULL	
+last_refresh_scn	bigint(20) unsigned	YES		NULL	
+last_refresh_type	bigint(20)	YES		NULL	
+last_refresh_date	timestamp(6)	YES		NULL	
+last_refresh_time	bigint(20)	YES		NULL	
+last_refresh_trace_id	varchar(64)	YES		NULL	
+schema_version	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_stats_sys_defaults;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+collection_level	bigint(20)	NO		NULL	
+retention_period	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stats_sys_defaults;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_stats_params;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+collection_level	bigint(20)	NO		NULL	
+retention_period	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stats_params;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_run_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+refresh_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+run_user_id	bigint(20)	NO		NULL	
+num_mvs_total	bigint(20)	NO		NULL	
+num_mvs_current	bigint(20)	NO		NULL	
+mviews	varchar(4000)	NO		NULL	
+base_tables	varchar(4000)	YES		NULL	
+method	varchar(4000)	YES		NULL	
+rollback_seg	varchar(4000)	YES		NULL	
+push_deferred_rpc	tinyint(4)	NO		NULL	
+refresh_after_errors	tinyint(4)	NO		NULL	
+purge_option	bigint(20)	NO		NULL	
+parallelism	bigint(20)	NO		NULL	
+heap_size	bigint(20)	NO		NULL	
+atomic_refresh	tinyint(4)	NO		NULL	
+nested	tinyint(4)	NO		NULL	
+out_of_place	tinyint(4)	NO		NULL	
+number_of_failures	bigint(20)	NO		NULL	
+start_time	timestamp(6)	NO		NULL	
+end_time	timestamp(6)	NO		NULL	
+elapsed_time	bigint(20)	NO		NULL	
+log_purge_time	bigint(20)	NO		NULL	
+complete_stats_avaliable	tinyint(4)	NO		NULL	
+trace_id	varchar(64)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_run_stats;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+refresh_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+retry_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+refresh_type	bigint(20)	NO		NULL	
+start_time	timestamp(6)	NO		NULL	
+end_time	timestamp(6)	NO		NULL	
+elapsed_time	bigint(20)	NO		NULL	
+log_purge_time	bigint(20)	NO		NULL	
+initial_num_rows	bigint(20)	NO		NULL	
+final_num_rows	bigint(20)	NO		NULL	
+num_steps	bigint(20)	NO		NULL	
+result	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stats;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_change_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+refresh_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+retry_id	bigint(20)	NO	PRI	NULL	
+detail_table_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+num_rows_ins	bigint(20)	YES		NULL	
+num_rows_upd	bigint(20)	YES		NULL	
+num_rows_del	bigint(20)	YES		NULL	
+num_rows	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_change_stats;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_mview_refresh_stmt_stats;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+refresh_id	bigint(20)	NO	PRI	NULL	
+mview_id	bigint(20)	NO	PRI	NULL	
+retry_id	bigint(20)	NO	PRI	NULL	
+step	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+sqlid	varchar(32)	YES		NULL	
+stmt	longtext	NO		NULL	
+execution_time	bigint(20)	NO		NULL	
+execution_plan	longtext	YES		NULL	
+result	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stmt_stats;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_wr_control;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

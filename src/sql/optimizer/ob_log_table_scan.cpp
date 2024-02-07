@@ -738,7 +738,8 @@ int ObLogTableScan::generate_ddl_output_column_ids()
   } else {
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     if (opt_ctx.is_online_ddl() &&
-        stmt::T_INSERT == opt_ctx.get_session_info()->get_stmt_type()) {
+        stmt::T_INSERT == opt_ctx.get_session_info()->get_stmt_type() &&
+        !opt_ctx.get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < get_output_exprs().count(); ++i) {
         const ObRawExpr *output_expr = get_output_exprs().at(i);
         if (OB_ISNULL(output_expr)) {

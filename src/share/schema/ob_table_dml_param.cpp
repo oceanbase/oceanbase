@@ -128,6 +128,17 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     }
   }
 
+  if (OB_SUCC(ret) && schema->is_mlog_table()) {
+    index_type_ = schema->get_index_type();
+    index_status_ = schema->get_index_status();
+    ObString tmp_name;
+    if (OB_FAIL(schema->get_mlog_name(tmp_name))) {
+      LOG_WARN("fail to get materialized view log name", KR(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
+      LOG_WARN("fail to copy materialized view log name", KR(ret), K(tmp_name));
+    }
+  }
+
   if (OB_SUCC(ret) && OB_FAIL(schema->get_column_ids(all_column_ids, false))) {
     LOG_WARN("fail to get column ids", K(ret));
   }

@@ -281,6 +281,7 @@ bool is_index_table(const ObTableType table_type);
 bool is_aux_lob_meta_table(const ObTableType table_type);
 bool is_aux_lob_piece_table(const ObTableType table_type);
 bool is_aux_lob_table(const ObTableType table_type);
+bool is_mlog_table(const ObTableType table_type);
 
 enum ObIndexType
 {
@@ -601,7 +602,8 @@ inline bool is_related_table(
     const ObIndexType &index_type)
 {
   return is_index_local_storage(index_type)
-      || is_aux_lob_table(table_type);
+      || is_aux_lob_table(table_type)
+      || is_mlog_table(table_type);
 }
 
 inline bool index_has_tablet(const ObIndexType &index_type)
@@ -3262,6 +3264,97 @@ int ObPartitionUtils::get_end_(
   return ret;
 }
 
+enum class ObMLogPurgeMode : int64_t
+{
+  IMMEDIATE_SYNC = 0,
+  IMMEDIATE_ASYNC = 1,
+  DEFERRED = 2,
+  MAX
+};
+
+enum class ObMViewBuildMode : int64_t
+{
+  IMMEDIATE = 0,
+  DEFERRED = 1,
+  PERBUILT = 2,
+  MAX
+};
+
+
+enum struct ObMVRefreshMethod : int64_t
+{
+  NEVER = 0,
+  COMPLETE = 1,
+  FAST = 2,
+  FORCE = 3,
+  MAX
+};
+
+enum struct ObMVRefreshMode : int64_t
+{
+  NEVER = 0,
+  DEMAND = 1,
+  COMMIT = 2,
+  STATEMENT = 3,
+  MAX
+};
+
+enum struct ObMVRefreshType : int64_t
+{
+  COMPLETE = 0,
+  FAST = 1,
+  MAX
+};
+
+enum class ObMVRefreshStatsCollectionLevel : int64_t
+{
+  NONE = 0,
+  TYPICAL = 1,
+  ADVANCED = 2,
+  MAX
+};
+
+struct ObMVRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObMVRefreshMethod refresh_method_;
+  ObMVRefreshMode refresh_mode_;
+  common::ObObj start_time_;
+  ObString next_time_expr_;
+  ObString exec_env_;
+
+  ObMVRefreshInfo() :
+  refresh_method_(ObMVRefreshMethod::NEVER),
+  refresh_mode_(ObMVRefreshMode::DEMAND),
+  start_time_(),
+  next_time_expr_(),
+  exec_env_() {}
+
+  void reset() {
+    refresh_method_ = ObMVRefreshMethod::NEVER;
+    refresh_mode_ = ObMVRefreshMode::DEMAND;
+    start_time_.reset();
+    next_time_expr_.reset();
+    exec_env_.reset();
+  }
+
+  bool operator == (const ObMVRefreshInfo &other) const {
+    return refresh_method_ == other.refresh_method_
+      && refresh_mode_ == other.refresh_mode_
+      && start_time_ == other.start_time_
+      && next_time_expr_ == other.next_time_expr_
+      && exec_env_ == other.exec_env_;
+  }
+
+
+  TO_STRING_KV(K_(refresh_mode),
+      K_(refresh_method),
+      K_(start_time),
+      K_(next_time_expr),
+      K_(exec_env));
+};
+
 class ObViewSchema : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -3296,6 +3389,10 @@ public:
   inline bool get_materialized() const { return materialized_; }
   inline common::ObCharsetType get_character_set_client() const { return character_set_client_; }
   inline common::ObCollationType get_collation_connection() const { return collation_connection_; }
+  inline const ObMVRefreshInfo *get_mv_refresh_info() const { return mv_refresh_info_; }
+  inline void set_mv_refresh_info(const ObMVRefreshInfo *mv_refresh_info) { mv_refresh_info_ = mv_refresh_info; }
+  inline void set_container_table_id(uint64_t container_table_id) { container_table_id_ = container_table_id; }
+  inline uint64_t get_container_table_id() const { return container_table_id_; }
 
   int64_t get_convert_size() const;
   virtual bool is_valid() const;
@@ -3313,6 +3410,8 @@ private:
   bool materialized_;
   common::ObCharsetType character_set_client_;
   common::ObCollationType collation_connection_;
+  uint64_t container_table_id_;
+  const ObMVRefreshInfo *mv_refresh_info_; //only for pass write param, don't need serialize and memory is hold by caller
 };
 
 class ObColumnSchemaHashWrapper

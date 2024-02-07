@@ -1593,7 +1593,7 @@ int ObLogMetaManager::build_unique_keys_with_index_column_(
     const auto *column_schema = table_schema->get_column_schema(index_column_id);
 
     if (OB_ISNULL(column_schema)) {
-      if (index_column_id > OB_MIN_SHADOW_COLUMN_ID) {
+      if (is_shadow_column(index_column_id)) {
         LOG_DEBUG("ignore shadow column", K(index_column_id),
             "table_name", table_schema->get_table_name(),
             "table_id", table_schema->get_table_id(),

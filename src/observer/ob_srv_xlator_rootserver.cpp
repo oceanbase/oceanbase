@@ -112,6 +112,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcTruncateTableV2P, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateIndexP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropIndexP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateMLogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTableLikeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcExecuteBootstrapP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRefreshConfigP, *gctx_.root_service_);
@@ -154,6 +155,8 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDoContextDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRecompileAllViewsBatchP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcTryAddDepInfosForSynonymBatchP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcMViewCompleteRefreshP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcUpdateMViewTableStatusP, *gctx_.root_service_);
     //ob_admin
     RPC_PROCESSOR(rootserver::ObForceCreateSysTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObForceSetLocalityP, *gctx_.root_service_);

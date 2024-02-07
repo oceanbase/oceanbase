@@ -4638,7 +4638,8 @@ int ObSchemaRetrieveUtils::retrieve_aux_tables(
     if (USER_INDEX == table_type
         || AUX_VERTIAL_PARTITION_TABLE == table_type
         || AUX_LOB_META == table_type
-        || AUX_LOB_PIECE == table_type) {
+        || AUX_LOB_PIECE == table_type
+        || MATERIALIZED_VIEW_LOG == table_type) {
 
       EXTRACT_INT_FIELD_MYSQL_WITH_TENANT_ID(result, "table_id", table_id, tenant_id);
       EXTRACT_INT_FIELD_MYSQL(result, "index_type", index_type, ObIndexType);

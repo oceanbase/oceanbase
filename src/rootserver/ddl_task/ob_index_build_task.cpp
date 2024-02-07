@@ -345,6 +345,7 @@ void ObIndexBuildTask::flt_set_status_span_tag() const
 int ObIndexBuildTask::init(
     const uint64_t tenant_id,
     const int64_t task_id,
+    const share::ObDDLType &ddl_type,
     const ObTableSchema *data_table_schema,
     const ObTableSchema *index_schema,
     const int64_t schema_version,
@@ -384,6 +385,11 @@ int ObIndexBuildTask::init(
     LOG_WARN("fail to get table schema", K(ret));
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(*GCTX.sql_proxy_, tenant_id, tenant_data_format_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY((ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_)
+      && (!index_schema->is_mlog_table()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index action is add_mlog but index schema is not mlog",
+        KR(ret), K(create_index_arg_.index_action_type_), K(index_schema->get_table_type()));
   } else {
     set_gmt_create(ObTimeUtility::current_time());
     is_global_index_ = index_schema->is_global_index_table();
@@ -403,6 +409,7 @@ int ObIndexBuildTask::init(
     consumer_group_id_ = consumer_group_id;
     sub_task_trace_id_ = sub_task_trace_id;
     task_id_ = task_id;
+    task_type_ = ddl_type;
     parent_task_id_ = parent_task_id;
     task_version_ = OB_INDEX_BUILD_TASK_VERSION;
     start_time_ = ObTimeUtility::current_time();
@@ -463,6 +470,11 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
   } else if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail to get table schema", K(ret), K(data_schema), K(index_schema));
+  } else if (OB_UNLIKELY((ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_)
+      && (!index_schema->is_mlog_table()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index action is add_mlog but index schema is not mlog",
+        KR(ret), K(create_index_arg_.index_action_type_), K(index_schema->get_table_type()));
   } else {
     is_global_index_ = index_schema->is_global_index_table();
     is_unique_index_ = index_schema->is_unique_index();
@@ -473,6 +485,7 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     snapshot_version_ = task_record.snapshot_version_;
     execution_id_ = task_record.execution_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
+    task_type_ = task_record.ddl_type_; // could be create index / mlog
 
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status_) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
@@ -659,7 +672,10 @@ int ObIndexBuildTask::wait_trans_end()
   }
 
   if (state_finished || OB_FAIL(ret)) {
-    (void)switch_status(ObDDLTaskStatus::REDEFINITION, true, ret);
+    // a newly-created mlog is empty
+    ObDDLTaskStatus next_status = (ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_) ?
+                                      ObDDLTaskStatus::TAKE_EFFECT : ObDDLTaskStatus::REDEFINITION;
+    (void)switch_status(next_status, true, ret);
     LOG_INFO("wait_trans_end finished", K(ret), K(*this));
   }
   return ret;

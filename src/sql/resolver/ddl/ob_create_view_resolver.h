@@ -15,6 +15,7 @@
 
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/dml/ob_view_table_resolver.h" // resolve select clause
+#include "sql/resolver/ddl/ob_create_table_resolver_base.h"
 #include "share/schema/ob_table_schema.h"
 #include "lib/hash/ob_hashset.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h" // share CREATE TABLE stmt
@@ -30,7 +31,7 @@ class ObColumnSchemaV2;
 }
 namespace sql
 {
-class ObCreateViewResolver : public ObDDLResolver
+class ObCreateViewResolver : public ObCreateTableResolverBase
 {
   static const int64_t MATERIALIZED_NODE = 0;
   static const int64_t VIEW_NODE = 1;
@@ -40,7 +41,10 @@ class ObCreateViewResolver : public ObDDLResolver
   static const int64_t IF_NOT_EXISTS_NODE = 5;
   static const int64_t WITH_OPT_NODE = 6;
   static const int64_t FORCE_VIEW_NODE = 7;
-  static const int64_t ROOT_NUM_CHILD = 8;
+  static const int64_t MVIEW_NODE = 8;
+  static const int64_t PARTITION_NODE = 9;
+  static const int64_t TABLE_OPTION_NODE = 10;
+  static const int64_t ROOT_NUM_CHILD = 11;
 
 public:
   explicit ObCreateViewResolver(ObResolverParams &params);
@@ -53,6 +57,10 @@ public:
                               common::ObIAllocator &alloc,
                               sql::ObSQLSessionInfo &session_info,
                               const common::ObIArray<ObString> &column_list);
+  static int fill_column_meta_infos(const ObRawExpr &expr,
+                                    const ObCharsetType charset_type,
+                                    const uint64_t table_id,
+                                    ObColumnSchemaV2 &column);
   static int resolve_column_default_value(const sql::ObSelectStmt *select_stmt,
                                         const sql::SelectItem &select_item,
                                         schema::ObColumnSchemaV2 &column_schema,
@@ -62,8 +70,11 @@ private:
   int check_privilege(ObCreateTableStmt *stmt,
                       ObSelectStmt *select_stmt);
   int resolve_column_list(ParseNode *view_columns_node,
-                          common::ObIArray<common::ObString> &column_list,
-                          ObTableSchema &table_schema);
+                          common::ObIArray<common::ObString> &column_list);
+  int resolve_const_expr_and_calc_value(ParseNode &node, ObObj &obj);
+  int resolve_mv_refresh_info(ParseNode *refresh_info_node,
+                              ObMVRefreshInfo &refresh_info);
+
   int check_view_stmt_col_name(ObSelectStmt &select_stmt,
                                ObArray<int64_t> &index_array,
                                common::hash::ObHashSet<ObString> &view_col_names);
@@ -94,6 +105,7 @@ private:
   int get_need_priv_tables(ObSelectStmt &select_stmt,
                            hash::ObHashMap<int64_t, const TableItem *> &select_tables,
                            hash::ObHashMap<int64_t, const TableItem *> &any_tables);
+  int add_hidden_tablet_seq_col(ObTableSchema &table_schema);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);

@@ -297,6 +297,10 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
     strncpy(str, "DBMS_LOCK", str_len);
     break;
   }
+  case ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW: {
+    strncpy(str, "MATERIALIZED_VIEW", str_len);
+    break;
+  }
   default: {
     strncpy(str, "UNKNOWN", str_len);
   }

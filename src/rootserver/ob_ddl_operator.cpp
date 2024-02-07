@@ -76,6 +76,9 @@
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/scn.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/schema/ob_mview_info.h"
+#include "share/schema/ob_mview_refresh_stats_params.h"
+#include "storage/mview/ob_mview_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -85,6 +88,7 @@ using namespace share;
 using namespace share::schema;
 using namespace obrpc;
 using namespace sql;
+using namespace storage;
 
 namespace rootserver
 {
@@ -720,14 +724,17 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
           if (OB_ISNULL(table)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table is NULL", K(ret));
-          } else if (table->is_materialized_view() || table->is_in_recyclebin()) {
+          } else if (table->is_in_recyclebin()) {
             // already been dropped before
-          } else if ((0 == cycle ? table->is_aux_table() : !table->is_aux_table())) {
-            // drop triggers before drop table
-            if (OB_FAIL(drop_trigger_cascade(*table, trans))) {
-              LOG_WARN("drop trigger failed", K(ret), K(table->get_table_id()));
-            } else if (OB_FAIL(drop_table(*table, trans, NULL, false, NULL, true))) {
-              LOG_WARN("drop table failed", K(ret), K(table->get_table_id()));
+          } else {
+            bool is_delete_first = table->is_aux_table() || table->is_mlog_table();
+            if ((0 == cycle ? is_delete_first : !is_delete_first)) {
+              // drop triggers before drop table
+              if (OB_FAIL(drop_trigger_cascade(*table, trans))) {
+                LOG_WARN("drop trigger failed", K(ret), K(table->get_table_id()));
+              } else if (OB_FAIL(drop_table(*table, trans, NULL, false, NULL, true))) {
+                LOG_WARN("drop table failed", K(ret), K(table->get_table_id()));
+              }
             }
           }
         }
@@ -1042,7 +1049,7 @@ int ObDDLOperator::update_table_version_of_db(const ObDatabaseSchema &database_s
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema should not be null", K(ret));
-    } else if (table->is_index_table() || table->is_materialized_view()) {
+    } else if (table->is_index_table()) {
       continue;
     } else {
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
@@ -1058,8 +1065,6 @@ int ObDDLOperator::update_table_version_of_db(const ObDatabaseSchema &database_s
         } else if (OB_ISNULL(index_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema should not be null", K(ret));
-        } else if (index_table_schema->is_materialized_view()) {
-          continue;
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else {
@@ -3782,9 +3787,6 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
     ret = OB_ERR_SYS;
     RS_LOG(WARN, "schema sql service must not be null",
            K(schema_service), K(ret));
-  } else if (table_schema.has_materialized_view()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not allow rename for depend table", K(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     RS_LOG(WARN, "get schema guard failed", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -4236,8 +4238,10 @@ int ObDDLOperator::drop_table(
     LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id),
     K(table_schema.get_table_id()));
   }
+
   if (OB_FAIL(ret)) {
-  } else if (table_schema.is_aux_table() && !is_inner_table(table_schema.get_table_id())) {
+  } else if ((table_schema.is_aux_table() || table_schema.is_mlog_table())
+      && !is_inner_table(table_schema.get_table_id())) {
     ObSnapshotInfoManager snapshot_mgr;
     ObArray<ObTabletID> tablet_ids;
     SCN invalid_scn;
@@ -4263,6 +4267,23 @@ int ObDDLOperator::drop_table(
   } else {
     if (OB_FAIL(drop_tablet_of_table(table_schema, trans))) {
       LOG_WARN("fail to drop tablet", K(table_schema), KR(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const uint64_t table_id = table_schema.get_table_id();
+    if (table_schema.is_materialized_view()) {
+      if (OB_FAIL(ObMViewSchedJobUtils::disable_mview_refresh_job(
+          trans, tenant_id, table_id))) {
+        LOG_WARN("failed to disable mview refresh job",
+            KR(ret), K(tenant_id), K(table_id));
+      }
+    } else if (table_schema.is_mlog_table()) {
+      if (OB_FAIL(ObMViewSchedJobUtils::disable_mlog_purge_job(
+          trans, tenant_id, table_id))) {
+        LOG_WARN("failed to disable mlog purge job",
+            KR(ret), K(tenant_id), K(table_id));
+      }
     }
   }
 
@@ -4445,6 +4466,12 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   // materialized view will not be dropped into recyclebin
   if (table_schema.get_table_type() == MATERIALIZED_VIEW) {
     LOG_WARN("bypass recyclebin for materialized view");
+  } else if (OB_UNLIKELY(table_schema.has_mlog_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table with materialized view log should not come to recyclebin", KR(ret));
+  } else if (OB_UNLIKELY(table_schema.get_table_type() == MATERIALIZED_VIEW_LOG)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("materialized view log should not come to recyclebin", KR(ret));
   } else if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("schema_service_impl must not null", K(ret));
