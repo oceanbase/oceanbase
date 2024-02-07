@@ -134,6 +134,10 @@ enum ObLogBaseType
 
   //for tenant clone
   CLONE_SCHEDULER_LOG_BASE_TYPE = 42,
+
+  // for mview maintenance service
+  MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE = 43,
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
@@ -230,6 +234,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str ,"TTL_SERVICE", str_len);
   } else if (log_type == TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE) {
     strncpy(str ,"TABLE_LOAD_RESOURCE_SERVICE", str_len);
+  } else if (log_type == MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str, "MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }
