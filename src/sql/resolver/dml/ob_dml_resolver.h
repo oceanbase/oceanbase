@@ -238,7 +238,7 @@ public:
                                           common::ObIAllocator &allocator,
                                           int& pos);
   int process_json_agg_node(ParseNode*& node, common::ObIAllocator &allocator);
-  int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str);
+  int pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str, bool &is_scalar);
   int check_is_json_constraint(common::ObIAllocator &allocator,
                                ParseNode *col_node,
                                bool& is_json_cst,
@@ -916,7 +916,7 @@ private:
   int check_cast_multiset(const ObRawExpr *expr, const ObRawExpr *parent_expr = NULL);
 
   int replace_col_udt_qname(ObQualifiedName& q_name);
-  int check_column_udt_type(ParseNode *root_node);
+  int check_column_scalar_type(ParseNode *root_node, bool &is_scalar);
 
   int replace_pl_relative_expr_to_question_mark(ObRawExpr *&real_ref_expr);
   bool check_expr_has_colref(ObRawExpr *expr);

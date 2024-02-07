@@ -387,12 +387,13 @@ int ObDMLResolver::process_dot_notation_in_json_object(ParseNode*& expr_node,
   ObJsonBuffer sql_str(&allocator);
   bool is_dot_notation = false;
   ParseNode* key_node = NULL;
+  bool is_scalar = false;
 
   if (OB_ISNULL(cur_node)
       || cur_node->type_ != T_OBJ_ACCESS_REF
       || OB_ISNULL(cur_node->children_[0])
       || OB_ISNULL(cur_node->children_[0]->str_value_)) { // do not check
-  } else if (OB_FAIL(pre_check_dot_notation(*cur_node, depth, exist_fun, sql_str))) {
+  } else if (OB_FAIL(pre_check_dot_notation(*cur_node, depth, exist_fun, sql_str, is_scalar))) {
     LOG_WARN("get depth of obj access ref failed");
   } else if (!exist_fun && depth >= 3) {
     is_dot_notation = true;
@@ -1138,7 +1139,7 @@ int ObDMLResolver::check_column_json_type(ParseNode *tab_col, bool &is_json_cst,
 }
 
 // pre check whether dot notation
-int ObDMLResolver::pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str)
+int ObDMLResolver::pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& exist_fun, ObJsonBuffer& sql_str, bool &is_scalar)
 {
   INIT_SUCC(ret);
   bool check_res = true;
@@ -1149,7 +1150,7 @@ int ObDMLResolver::pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& 
     // normal query do nothing
   } else if (OB_FAIL(check_depth_obj_access_ref(&node, depth, exist_fun, sql_str))) {
     LOG_WARN("get depth of obj access ref failed");
-  } else if (depth == 3 && exist_fun && OB_FAIL(check_column_udt_type(&node))) {
+  } else if (depth == 3 && exist_fun && OB_FAIL(check_column_scalar_type(&node, is_scalar))) {
     // cases like: a.b.fun(), a must be table alias, b must be col name, and b must be udt type
     LOG_WARN("not an object or REF", K(ret));
   }
@@ -1161,10 +1162,11 @@ int ObDMLResolver::pre_process_json_expr(ParseNode &node)
 {
   INIT_SUCC(ret);
   int8_t depth = 0;
+  bool is_scalar = false;
   bool exist_fun = false;
   ObJsonBuffer sql_str(allocator_);
   if (node.type_ == T_OBJ_ACCESS_REF) { // check dot notation node
-    if (OB_FAIL(pre_check_dot_notation(node, depth, exist_fun, sql_str))) {
+    if (OB_FAIL(pre_check_dot_notation(node, depth, exist_fun, sql_str, is_scalar))) {
       LOG_WARN("get fail to check dot notation node", K(ret));
     } else if (!exist_fun) {
       if (depth < 3) {
@@ -1174,7 +1176,7 @@ int ObDMLResolver::pre_process_json_expr(ParseNode &node)
           LOG_WARN("transform to json query failed", K(depth), K(sql_str.string()));
         }
       }
-    } else if (exist_fun && depth >= 4) {
+    } else if (exist_fun && (depth >= 4 || (depth == 3 && is_scalar))) {
       if (OB_FAIL(transform_dot_notation2_json_value(node, sql_str.string()))) { // transform to json value
         LOG_WARN("transform to json value failed", K(depth), K(sql_str.string()));
       }
@@ -1249,7 +1251,7 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
   return ret;
 }
 
-int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
+int ObDMLResolver::check_column_scalar_type(ParseNode *root_node, bool &is_scalar)
 {
   INIT_SUCC(ret);
   ObSEArray<ColumnItem, 4> columns_list;
@@ -1299,7 +1301,14 @@ int ObDMLResolver::check_column_udt_type(ParseNode *root_node)
           ret = OB_ERR_BAD_FIELD_ERROR;
           LOG_WARN("get invalid identifier name", K(ret), K(tab_str), K(col_str), K(tab_has_alias));
         } else if (!col_expr->get_result_type().is_user_defined_sql_type() && !col_expr->get_result_type().is_ext()) {
-          ret = OB_ERR_NOT_OBJ_REF;
+          if (!(col_expr->get_result_type().is_json()
+                || col_expr->get_result_type().is_clob()
+                || col_expr->get_result_type().is_blob())) {
+            // scalar type can pass
+            is_scalar = true;
+          } else {
+            ret = OB_ERR_NOT_OBJ_REF;
+          }
         }
       }
     }
