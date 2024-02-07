@@ -302,8 +302,8 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
                      SCN::min_scn()))) {
     LOG_WARN("failed to do_recover_tenant", KR(ret), K_(tenant_id));
     // reset error code and USER_ERROR to avoid print recover error log
-    ret = OB_ERR_UNEXPECTED;
-    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "can not do recover cancel for tenant, failed to failover to primary");
+    ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover cancel failed, failover to primary");
   } else if (OB_FAIL(wait_ls_balance_task_finish_())) {
     LOG_WARN("failed to wait ls balance task finish", KR(ret));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_switchover_status(
