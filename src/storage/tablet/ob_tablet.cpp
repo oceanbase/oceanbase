@@ -2360,6 +2360,8 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
   int inc_other_ref_cnt = 0;
   ObTabletBlockInfo block_info;
   inc_success = false;
+  ObSArray<MacroBlockId> print_arr;
+  print_arr.set_attr(ObMemAttr(MTL_ID(), "PrintId", ObCtxIds::DEFAULT_CTX_ID));
   while (OB_SUCC(ret)) {
     block_info.reset();
     if (OB_FAIL(macro_iter.get_next(block_info))) {
@@ -2373,7 +2375,24 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
         && OB_FAIL(MTL(ObSharedMacroBlockMgr*)->add_block(block_info.macro_id_, block_info.occupy_size_))) {
       LOG_WARN("fail to add block", K(ret), K(block_info));
     }
+#ifndef OB_BUILD_RPM
+    int tmp_ret = OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
+      LOG_WARN("fail to push macro id into print array", K(tmp_ret));
+    } else if (MAX_PRINT_COUNT == print_arr.size()) {
+      FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+      print_arr.reuse();
+    }
+#endif
   }
+#ifndef OB_BUILD_RPM
+  if (0 != print_arr.count()) {
+    FLOG_INFO("increase tablet's macro ref", K(ret), K(print_arr));
+    print_arr.reuse();
+  }
+#endif
 
   if (OB_LIKELY(OB_ITER_END == ret) || OB_SUCC(ret)) {
     inc_success = true;
@@ -2393,7 +2412,23 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
             && OB_TMP_FAIL(MTL(ObSharedMacroBlockMgr*)->free_block(block_info.macro_id_, block_info.occupy_size_))) {
           LOG_WARN("fail to free block", K(ret), K(block_info));
         }
+#ifndef OB_BUILD_RPM
+        if (OB_FAIL(tmp_ret)) {
+          // do nothing
+        } else if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
+          LOG_WARN("fail to push macro id into print array", K(tmp_ret));
+        } else if (MAX_PRINT_COUNT == print_arr.size()) {
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          print_arr.reuse();
+        }
+#endif
       }
+#ifndef OB_BUILD_RPM
+      if (0 != print_arr.count()) {
+        FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+        print_arr.reuse();
+      }
+#endif
     }
   }
 
@@ -2572,6 +2607,8 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
 {
   int ret = OB_SUCCESS;
   ObTabletBlockInfo block_info;
+  ObSArray<MacroBlockId> print_arr;
+  print_arr.set_attr(ObMemAttr(MTL_ID(), "PrintId", ObCtxIds::DEFAULT_CTX_ID));
   while (OB_SUCC(ret)) {
     block_info.reset();
     if (OB_FAIL(macro_iter.get_next(block_info))) {
@@ -2585,12 +2622,28 @@ void ObTablet::dec_ref_with_macro_iter(ObMacroInfoIterator &macro_iter) const
           && OB_FAIL(MTL(ObSharedMacroBlockMgr*)->free_block(block_info.macro_id_, block_info.occupy_size_))) {
         LOG_WARN("fail to add block", K(ret), K(block_info));
       }
+      int tmp_ret = OB_SUCCESS;
       if (OB_FAIL(ret)) {
         ret = OB_SUCCESS;
         // ignore ret, continue
+      } else {
+#ifndef OB_BUILD_RPM
+        if (OB_TMP_FAIL(print_arr.push_back(block_info.macro_id_))) {
+          LOG_WARN("fail to push macro id into print array", K(tmp_ret));
+        } else if (MAX_PRINT_COUNT == print_arr.size()) {
+          FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+          print_arr.reuse();
+        }
+#endif
       }
     }
   }
+#ifndef OB_BUILD_RPM
+  if (0 != print_arr.size()) {
+    FLOG_INFO("decrease tablet's macro ref", K(ret), K(print_arr));
+    print_arr.reuse();
+  }
+#endif
 }
 
 int ObTablet::inc_table_store_ref_cnt(bool &inc_success)
