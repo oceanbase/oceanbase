@@ -548,6 +548,7 @@ STAT_EVENT_SET_DEF(MEMORY_LIMIT, "effective observer memory limit", ObStatClassI
 STAT_EVENT_SET_DEF(SYSTEM_MEMORY, "effective system memory", ObStatClassIds::RESOURCE, 140015, false, true, true)
 STAT_EVENT_SET_DEF(HIDDEN_SYS_MEMORY, "effective hidden sys memory", ObStatClassIds::RESOURCE, 140016, false, true, true)
 STAT_EVENT_SET_DEF(MAX_SESSION_NUM, "max session num", ObStatClassIds::RESOURCE, 140017, false, true, true)
+STAT_EVENT_SET_DEF(KV_CACHE_HOLD, "kvcache hold", ObStatClassIds::RESOURCE, 140018, false, true, true)
 
 //CLOG
 
