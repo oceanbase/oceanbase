@@ -22,6 +22,7 @@
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_query_range.h"
+#include "share/backup/ob_backup_io_adapter.h"
 
 namespace oceanbase
 {
@@ -319,48 +320,44 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
   return ret;
 }
 
-int ObExternalTableUtils::filter_external_table_files(const ObString &pattern,
-                                                      ObExecContext &exec_ctx,
-                                                      ObIArray<ObString> &file_urls)
+bool ObExternalPathFilter::is_inited() {
+  return regex_ctx_.is_inited();
+}
+
+int ObExternalPathFilter::is_filtered(const ObString &path, bool &is_filtered)
 {
   int ret = OB_SUCCESS;
-  if (!pattern.empty()) {
-    const common::ObCollationType cs_type_pattern = CS_TYPE_UTF8MB4_BIN;
-    const common::ObCollationType cs_type_file = CS_TYPE_UTF8MB4_BIN;
-    const common::ObCollationType cs_type_match = CS_TYPE_UTF16_BIN;
-    ObExprRegexContext regex_ctx;
-    ObArenaAllocator allocator;
+  bool match = false;
+  ObString out_text;
+  if (OB_FAIL(ObExprUtil::convert_string_collation(path,
+                                                   CS_TYPE_UTF8MB4_BIN,
+                                                   out_text,
+                                                   CS_TYPE_UTF16_BIN,
+                                                   temp_allocator_))) {
+    LOG_WARN("convert charset failed", K(ret));
+  } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, 0, match))) {
+    LOG_WARN("regex match failed", K(ret));
+  }
+  is_filtered = !match;
+  temp_allocator_.reuse();
+  return ret;
+}
+
+int ObExternalPathFilter::init(const ObString &pattern,
+                               const ObExprRegexpSessionVariables &regexp_vars)
+{
+  int ret = OB_SUCCESS;
+  if (regex_ctx_.is_inited()) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("fail to init", K(ret));
+  } else {
     uint32_t flags = 0;
     ObString match_string;
-    ObSEArray<ObString, 8> tmp_file_urls;
     if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, true, flags))) {
       LOG_WARN("failed to get regexp flags", K(ret));
-    } else if (OB_FAIL(regex_ctx.init(exec_ctx.get_allocator(),
-                                      exec_ctx.get_my_session(),
-                                      pattern,
-                                      flags,
-                                      true,
-                                      cs_type_pattern))) {
+    } else if (OB_FAIL(regex_ctx_.init(allocator_, regexp_vars,
+                                       pattern, flags, true, CS_TYPE_UTF8MB4_BIN))) {
       LOG_WARN("init regex context failed", K(ret), K(pattern));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
-        bool match = false;
-        ObString out_text;
-        if (OB_FAIL(ObExprUtil::convert_string_collation(file_urls.at(i),
-                                                         cs_type_file,
-                                                         out_text,
-                                                         cs_type_match,
-                                                         allocator))) {
-          LOG_WARN("convert charset failed", K(ret));
-        } else if (OB_FAIL(regex_ctx.match(allocator, out_text, 0, match))) {
-          LOG_WARN("regex match failed", K(ret));
-        } else if (match && OB_FAIL(tmp_file_urls.push_back(file_urls.at(i)))) {
-          LOG_WARN("failed to push back into tmp_file_urls", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && OB_FAIL(file_urls.assign(tmp_file_urls))) {
-        LOG_WARN("failed to assign file_urls", K(ret));
-      }
     }
   }
   return ret;

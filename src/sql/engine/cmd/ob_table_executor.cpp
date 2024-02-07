@@ -597,12 +597,14 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
       }
       if (OB_SUCC(ret) && table_schema.is_external_table()) {
         //auto refresh after create external table
+        ObExprRegexpSessionVariables regexp_vars;
+        OZ (my_session->get_regexp_session_vars(regexp_vars));
         OZ (ObAlterTableExecutor::update_external_file_list(
               table_schema.get_tenant_id(), res.table_id_,
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
               table_schema.get_external_file_pattern(),
-              ctx));
+              regexp_vars));
       }
     } else {
       if (table_schema.is_external_table()) {
@@ -878,35 +880,8 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   return ret;
 }
 
-int ObAlterTableExecutor::get_external_file_list(const ObString &location,
-                                                 ObIArray<ObString> &file_urls,
-                                                 ObIArray<int64_t> &file_sizes,
-                                                 const ObString &access_info,
-                                                 ObIAllocator &allocator,
-                                                 common::ObStorageType &storage_type)
-{
-  int ret = OB_SUCCESS;
-  ObExternalDataAccessDriver driver;
-  if (OB_FAIL(driver.init(location, access_info))) {
-    LOG_WARN("init external data access driver failed", K(ret));
-  } else if (OB_FAIL(driver.get_file_list(location, file_urls, allocator))) {
-    LOG_WARN("get file urls failed", K(ret));
-  } else if (OB_FAIL(driver.get_file_sizes(location, file_urls, file_sizes))) {
-    LOG_WARN("get file sizes failed", K(ret));
-  }
-  if (driver.is_opened()) {
-    storage_type = driver.get_storage_type();
-    driver.close();
-  }
-
-  LOG_DEBUG("show external table files", K(file_urls), K(storage_type), K(access_info));
-  return ret;
-}
-
-int ObAlterTableExecutor::filter_and_sort_external_files(const ObString &pattern,
-                                                         ObExecContext &exec_ctx,
-                                                         ObIArray<ObString> &file_urls,
-                                                         ObIArray<int64_t> &file_sizes) {
+int ObAlterTableExecutor::sort_external_files(ObIArray<ObString> &file_urls,
+                                              ObIArray<int64_t> &file_sizes) {
   int ret = OB_SUCCESS;
   const int64_t count = file_urls.count();
   ObSEArray<int64_t, 8> tmp_file_sizes;
@@ -922,11 +897,6 @@ int ObAlterTableExecutor::filter_and_sort_external_files(const ObString &pattern
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_FAIL(file_map.set_refactored(file_urls.at(i), file_sizes.at(i)))) {
         LOG_WARN("failed to set refactored to file_map", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObExternalTableUtils::filter_external_table_files(pattern, exec_ctx, file_urls))) {
-        LOG_WARN("failed to filter external table files");
       }
     }
     if (OB_SUCC(ret)) {
@@ -1019,6 +989,8 @@ int ObAlterTableExecutor::flush_external_file_cache(
 int ObAlterTableExecutor::collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
+    const ObString &pattern,
+    const ObExprRegexpSessionVariables &regexp_vars,
     ObIArray<ObAddr> &all_servers,
     ObIArray<ObString> &file_urls,
     ObIArray<int64_t> &file_sizes,
@@ -1074,6 +1046,8 @@ int ObAlterTableExecutor::collect_local_files_on_servers(
       ObRpcAsyncLoadExternalTableFileCallBack* async_cb = nullptr;
       ObLoadExternalFileListReq req;
       req.location_ = location;
+      req.pattern_ = pattern;
+      req.regexp_vars_ = regexp_vars;
 
       if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncLoadExternalTableFileCallBack, (&allocator), (&context)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1134,23 +1108,25 @@ int ObAlterTableExecutor::update_external_file_list(
     const ObString &location,
     const ObString &access_info,
     const ObString &pattern,
-    ObExecContext &exec_ctx)
+    const ObExprRegexpSessionVariables &regexp_vars)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 8> file_urls;
   ObSEArray<int64_t, 8> file_sizes;
   ObArenaAllocator allocator;
   ObSEArray<ObAddr, 8> all_servers;
+
   OZ (GCTX.location_service_->external_table_get(tenant_id, table_id, all_servers));
 
   if (ObSQLUtils::is_external_files_on_local_disk(location)) {
-    OZ (collect_local_files_on_servers(tenant_id, location, all_servers, file_urls, file_sizes, allocator));
+    OZ (collect_local_files_on_servers(tenant_id, location, pattern, regexp_vars,
+                                       all_servers, file_urls, file_sizes, allocator));
   } else {
     OZ (ObExternalTableFileManager::get_instance().get_external_file_list_on_device(
-          location, file_urls, file_sizes, access_info, allocator));
+          location, pattern, regexp_vars, file_urls, file_sizes, access_info, allocator));
   }
 
-  OZ (filter_and_sort_external_files(pattern, exec_ctx, file_urls, file_sizes));
+  OZ (sort_external_files(file_urls, file_sizes));
 
   //TODO [External Table] opt performance
   OZ (ObExternalTableFileManager::get_instance().update_inner_table_file_list(tenant_id, table_id, file_urls, file_sizes));
@@ -1166,12 +1142,15 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
   int64_t option = stmt.get_alter_external_table_type();
   switch (option) {
     case T_ALTER_REFRESH_EXTERNAL_TABLE: {
+      ObExprRegexpSessionVariables regexp_vars;
+      CK (ctx.get_my_session());
+      OZ (ctx.get_my_session()->get_regexp_session_vars(regexp_vars));
       OZ (update_external_file_list(stmt.get_tenant_id(),
                                   arg.alter_table_schema_.get_table_id(),
                                   arg.alter_table_schema_.get_external_file_location(),
                                   arg.alter_table_schema_.get_external_file_location_access_info(),
                                   arg.alter_table_schema_.get_external_file_pattern(),
-                                  ctx));
+                                  regexp_vars));
       break;
     }
     default: {
