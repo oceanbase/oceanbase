@@ -372,7 +372,6 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
-  bool has_memtable() const;
   int get_all_memtables(ObTableHdlArray &handle) const;
   int get_boundary_memtable(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;

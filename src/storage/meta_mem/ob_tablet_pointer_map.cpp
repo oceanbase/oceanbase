@@ -360,8 +360,6 @@ int ObTabletPointerMap::load_and_hook_meta_obj(
         } else {
           if (OB_FAIL(meta_pointer->hook_obj(t, guard))) {
             STORAGE_LOG(WARN, "fail to hook object", K(ret), KP(meta_pointer));
-          } else if (OB_FAIL(guard.get_obj()->assign_pointer_handle(ptr_hdl))) {
-            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret));
           }
         }
       } // write lock end
@@ -411,6 +409,8 @@ int ObTabletPointerMap::load_meta_obj(
         }
       } else if (OB_FAIL(meta_pointer->read_from_disk(true/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+      } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
+        STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
         t->tablet_addr_ = load_addr;
         if (OB_FAIL(meta_pointer->deserialize(allocator, buf, buf_len, t))) {
@@ -456,6 +456,8 @@ int ObTabletPointerMap::load_meta_obj(
         }
       } else if (OB_FAIL(meta_pointer->read_from_disk(false/*is_full_load*/, arena_allocator, buf, buf_len, load_addr))) {
         STORAGE_LOG(WARN, "fail to read from disk", K(ret), KPC(meta_pointer));
+      } else if (OB_FAIL(t->assign_pointer_handle(tmp_ptr_hdl))) {
+        STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), K(tmp_ptr_hdl));
       } else {
         t->tablet_addr_ = load_addr;
         if (OB_FAIL(meta_pointer->deserialize(buf, buf_len, t))) {
@@ -551,8 +553,6 @@ int ObTabletPointerMap::get_meta_obj_with_external_memory(
             }
           } else if (OB_FAIL(t->deserialize_post_work(allocator))) {
             STORAGE_LOG(WARN, "fail to deserialize post work", K(ret), KP(t));
-          } else if (OB_FAIL(t->assign_pointer_handle(ptr_hdl))) {
-            STORAGE_LOG(WARN, "fail to assign pointer handle", K(ret), KP(t));
           } else {
             ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
             guard.set_obj(t, &allocator, t3m);

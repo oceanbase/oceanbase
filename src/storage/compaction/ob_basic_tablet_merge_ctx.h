@@ -204,7 +204,7 @@ public:
   int update_storage_schema_by_memtable(
     const ObStorageSchema &schema_on_tablet,
     const ObTablesHandleArray &merge_tables_handle);
-  static bool need_swap_tablet(const ObTablet &tablet, const int64_t row_count, const int64_t macro_count);
+  static bool need_swap_tablet(ObProtectedMemtableMgrHandle &memtable_mgr_handle, const int64_t row_count, const int64_t macro_count);
   VIRTUAL_TO_STRING_KV(K_(static_param), K_(static_desc), K_(parallel_merge_ctx), K_(tablet_handle),
     K_(info_collector), KP_(merge_dag));
 protected:

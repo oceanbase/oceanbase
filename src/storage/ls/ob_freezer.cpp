@@ -794,7 +794,10 @@ int ObFreezer::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id)
     } else if (OB_FAIL(protected_handle->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle))) {
       if (ret == OB_ENTRY_NOT_EXIST) {
         ret = OB_SUCCESS;
-        if (!tablet->has_memtable()) {
+        ObProtectedMemtableMgrHandle *protected_handle = NULL;
+        if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
+          LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
+        } else if (!protected_handle->has_memtable()) {
           // We need trigger a dag to rewrite the snapshot version of tablet
           // meta for the major merge and medium merge. While the implementation
           // need pay much attentio.
