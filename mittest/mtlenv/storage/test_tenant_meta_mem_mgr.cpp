@@ -367,6 +367,8 @@ void TestConcurrentT3M::run1()
     addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
     handle.get_obj()->set_tablet_addr(addr);
 
+    handle.get_obj()->is_inited_ = true; // to pass test
+    handle.get_obj()->table_store_addr_.addr_.set_none_addr();
     ret = t3m_.compare_and_swap_tablet(key, handle, handle);
     ASSERT_EQ(common::OB_SUCCESS, ret);
 
@@ -591,6 +593,8 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   addr.size_ = 4096;
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
   handle.get_obj()->set_tablet_addr(addr);
+  handle.get_obj()->is_inited_ = true; // to pass test
+  handle.get_obj()->table_store_addr_.addr_.set_none_addr();
 
   ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -1199,6 +1203,9 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ASSERT_EQ(common::OB_ITEM_NOT_SETTED, ret);
   ASSERT_TRUE(!tmp_handle.is_valid());
 
+  handle.get_obj()->is_inited_ = true; // to pass test
+  handle.get_obj()->table_store_addr_.addr_.set_none_addr();
+
   ret = t3m_.compare_and_swap_tablet(key, handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
@@ -1270,6 +1277,9 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   addr.type_ = ObMetaDiskAddr::DiskType::BLOCK;
 
   tablet->set_tablet_addr(addr);
+  tablet->is_inited_ = true; // to pass test
+  tablet->table_store_addr_.addr_.set_none_addr();
+
   ret = t3m_.compare_and_swap_tablet(key, old_handle, handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());

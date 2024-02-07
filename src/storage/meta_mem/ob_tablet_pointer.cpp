@@ -47,10 +47,11 @@ ObTabletPointer::ObTabletPointer()
     initial_state_(true),
     ddl_kv_mgr_lock_(),
     mds_table_handler_(),
-    old_version_chain_(nullptr)
+    old_version_chain_(nullptr),
+    attr_()
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 280, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 296, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -175,6 +176,9 @@ int ObTabletPointer::hook_obj(ObTablet *&t,  ObMetaObjGuard<ObTablet> &guard)
     obj_.ptr_ = t;
     guard.set_obj(obj_);
     ObMetaObjBufferHelper::set_in_map(reinterpret_cast<char *>(t), true/*in_map*/);
+    if (!is_attr_valid() && OB_FAIL(set_tablet_attr(*t))) { // only set tablet attr when first hook obj
+      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(guard));
+    }
   }
 
   if (OB_FAIL(ret) && OB_NOT_NULL(t)) {
@@ -648,6 +652,59 @@ int ObTabletPointer::release_obj(ObTablet *&t)
   }
   return ret;
 }
+
+int ObTabletPointer::set_tablet_attr(ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  attr_.reset();
+  if (OB_FAIL(tablet.calc_tablet_attr(attr_))) {
+    if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+      ret = OB_SUCCESS; // the invalid attr is allowed
+    } else {
+      STORAGE_LOG(WARN, "failed to update tablet attr", K(ret), K(tablet));
+    }
+  }
+  return ret;
+}
+
+ObTabletResidentInfo::ObTabletResidentInfo(const ObTabletMapKey &key, ObTabletPointer &tablet_ptr)
+  : attr_(tablet_ptr.attr_), tablet_addr_(tablet_ptr.phy_addr_)
+{
+  tablet_id_ = key.tablet_id_;
+  ls_id_ = key.ls_id_;
+}
+
+int64_t ObITabletFilterOp::total_skip_cnt_ = 0;
+int64_t ObITabletFilterOp::total_tablet_cnt_ = 0;
+int64_t ObITabletFilterOp::not_in_mem_tablet_cnt_ = 0;
+int64_t ObITabletFilterOp::invalid_attr_tablet_cnt_ = 0;
+ObITabletFilterOp::~ObITabletFilterOp()
+{
+  total_skip_cnt_ += skip_cnt_;
+  total_tablet_cnt_ += total_cnt_;
+  not_in_mem_tablet_cnt_ += not_in_mem_cnt_;
+  invalid_attr_tablet_cnt_ += invalid_attr_cnt_;
+  LOG_INFO("zhuixin debug filter destructed",
+      K_(total_cnt), K_(skip_cnt), K_(not_in_mem_cnt), K_(invalid_attr_cnt),
+      K_(total_tablet_cnt), K_(total_skip_cnt), K_(not_in_mem_tablet_cnt), K_(invalid_attr_tablet_cnt));
+}
+
+int ObITabletFilterOp::operator()(const ObTabletResidentInfo &info, bool &is_skipped)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try to skip tablet with invalid resident info", K(ret), K(info));
+  } else if (OB_FAIL((do_filter(info, is_skipped)))) {
+    LOG_WARN("fail to do filter", K(ret), K(info), K_(skip_cnt), K_(total_cnt));
+  } else if (is_skipped) {
+    ++skip_cnt_;
+  }
+  ++total_cnt_;
+  return ret;
+}
+
+
 
 } // namespace storage
 } // namespace oceanbase

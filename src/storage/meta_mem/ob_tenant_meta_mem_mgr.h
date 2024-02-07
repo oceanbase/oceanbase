@@ -243,6 +243,12 @@ public:
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
       ObTabletHandle &handle);
+  int get_tablet_with_filter(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    ObITabletFilterOp &op,
+    ObTabletHandle &handle);
+
   // NOTE: This interface return tablet handle, which couldn't be used by compare_and_swap_tablet.
   int get_tablet_with_allocator(
       const WashTabletPriority &priority,
@@ -540,7 +546,7 @@ protected:
   typedef common::hash::HashMapPair<ObTabletMapKey, TabletValueStore *> TabletPair;
 
   int fetch_tablet_item();
-  static bool ignore_err_code(const int ret) { return OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret; }
+  static bool ignore_err_code(const int ret) { return OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret || OB_NOT_THE_OBJECT == ret; }
 private:
   class FetchTabletItemOp final
   {
@@ -569,12 +575,14 @@ class ObTenantTabletIterator : public ObT3mTabletMapIterator,
 public:
   ObTenantTabletIterator(
       ObTenantMetaMemMgr &t3m,
-      common::ObArenaAllocator &allocator);
+      common::ObArenaAllocator &allocator,
+      ObITabletFilterOp *op);
   virtual ~ObTenantTabletIterator() = default;
   virtual int get_next_tablet(ObTabletHandle &handle) override;
 
 private:
   common::ObArenaAllocator *allocator_;
+  storage::ObITabletFilterOp *op_;
 };
 
 class ObTenantInMemoryTabletIterator : public ObT3mTabletMapIterator,

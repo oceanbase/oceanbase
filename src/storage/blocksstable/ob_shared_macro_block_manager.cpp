@@ -435,7 +435,8 @@ int ObSharedMacroBlockMgr::defragment()
   ObArenaAllocator task_allocator("SSTDefragTask", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObArenaAllocator iter_allocator("SSTDefragIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObFixedArray<MacroBlockId, ObIAllocator> macro_ids(task_allocator);
-  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), iter_allocator);
+  ObHasNestedTableFilterOp op;
+  ObTenantTabletIterator tablet_iter(*(MTL(ObTenantMetaMemMgr*)), iter_allocator, &op);
   ObSSTableIndexBuilder *sstable_index_builder = nullptr;
   ObIndexBlockRebuilder *index_block_rebuilder = nullptr;
   int64_t rewrite_cnt = 0;

@@ -1783,9 +1783,8 @@ int ObFetchLSMetaInfoP::process()
       LOG_WARN("failed to get ls meta package", K(ret), K(arg_));
     } else if (OB_FAIL(ObStorageHAUtils::get_server_version(result_.version_))) {
       LOG_WARN("failed to get server version", K(ret), K_(arg));
-    } else {
-      // TODO(yangyi.yyy): do not check transfer table for now, fix in 4.3
-      result_.has_transfer_table_ = false;
+    } else if (OB_FAIL(check_has_transfer_logical_table_(ls))) {
+      LOG_WARN("failed to check has tranfer logical table", K(ret));
     }
   }
   return ret;
@@ -1794,11 +1793,12 @@ int ObFetchLSMetaInfoP::process()
 int ObFetchLSMetaInfoP::check_has_transfer_logical_table_(storage::ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  storage::ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ObHasTransferTableFilterOp op;
+  ObLSTabletFastIter tablet_iter(op, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   if (OB_ISNULL(ls)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls not should be null", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->build_tablet_iter(tablet_iter))) {
+  } else if (OB_FAIL(ls->build_tablet_iter(tablet_iter, true/*except_inner*/))) {
     LOG_WARN("failed to build ls tablet iter", K(ret));
   } else {
     bool has_logical_table = true;
@@ -1817,10 +1817,7 @@ int ObFetchLSMetaInfoP::check_has_transfer_logical_table_(storage::ObLS *ls)
       } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
-      } else if (tablet->get_tablet_meta().tablet_id_.is_ls_inner_tablet()) {
-        //do nothing
-      } else if (tablet->get_tablet_meta().has_transfer_table()) {
-        bool has_dependent_ls = false;
+      } else {
         result_.has_transfer_table_ = true;
         LOG_INFO("tablet still has logical table", K(tablet_handle));
         break;

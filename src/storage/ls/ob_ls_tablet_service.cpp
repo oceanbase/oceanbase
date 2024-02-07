@@ -6007,6 +6007,28 @@ int ObLSTabletService::build_tablet_iter(ObHALSTabletIterator &iter)
   return ret;
 }
 
+int ObLSTabletService::build_tablet_iter(ObLSTabletFastIter &iter, const bool except_ls_inner_tablet)
+{
+  int ret = common::OB_SUCCESS;
+  GetAllTabletIDOperator op(iter.tablet_ids_, except_ls_inner_tablet);
+  iter.ls_tablet_service_ = this;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not inited", K(ret), K_(is_inited));
+   } else if (OB_FAIL(tablet_id_set_.foreach(op))) {
+    STORAGE_LOG(WARN, "fail to get all tablet ids from set", K(ret));
+  } else if (OB_UNLIKELY(!iter.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iter is invalid", K(ret), K(iter));
+  }
+
+  if (OB_FAIL(ret)) {
+    iter.reset();
+  }
+  return ret;
+}
+
+
 int ObLSTabletService::set_allow_to_read_(ObLS *ls)
 {
   int ret = OB_SUCCESS;

@@ -78,6 +78,7 @@ class ObSingleRowGetter;
 class ObLSTabletIterator;
 class ObHALSTabletIDIterator;
 class ObHALSTabletIterator;
+class ObLSTabletFastIter;
 class ObTabletMapKey;
 struct ObStorageLogParam;
 struct ObTabletCreateSSTableParam;
@@ -411,6 +412,7 @@ public:
   int build_tablet_iter(ObLSTabletIterator &iter, const bool except_ls_inner_tablet = false);
   int build_tablet_iter(ObHALSTabletIDIterator &iter);
   int build_tablet_iter(ObHALSTabletIterator &iter);
+  int build_tablet_iter(ObLSTabletFastIter &iter, const bool except_ls_inner_tablet = false);
 
   // migration section
   typedef common::ObFunction<int(const obrpc::ObCopyTabletInfo &tablet_info)> HandleTabletMetaFunc;
@@ -783,6 +785,7 @@ private:
 private:
   friend class ObLSTabletIterator;
   friend class ObTabletCreateMdsHelper;
+  friend class ObLSTabletFastIter;
 
   ObLS *ls_;
   ObTxDataMemtableMgr tx_data_memtable_mgr_;

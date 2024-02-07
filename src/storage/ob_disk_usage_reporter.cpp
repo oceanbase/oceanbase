@@ -190,7 +190,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
   } else {
     ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
     ObArenaAllocator iter_allocator("DiskReport", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
-    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator);
+    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator, nullptr/*no op*/);
     ObTabletHandle tablet_handle;
     while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
       if (OB_UNLIKELY(!tablet_handle.is_valid())) {

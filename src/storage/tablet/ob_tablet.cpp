@@ -5566,6 +5566,51 @@ int ObTablet::get_storage_schema_for_transfer_in(
   return ret;
 }
 
+int ObTablet::calc_tablet_attr(ObTabletAttr &attr)
+{
+  int ret = OB_SUCCESS;
+  attr.reset();
+  attr.has_transfer_table_ = tablet_meta_.has_transfer_table();
+  attr.is_empty_shell_ = table_store_addr_.addr_.is_none();
+  attr.has_next_tablet_ = tablet_meta_.has_next_tablet_;
+  attr.ha_status_ = tablet_meta_.ha_status_.get_ha_status();
+
+  attr.has_nested_table_ = false;
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  const ObTabletTableStore *table_store = nullptr;
+  ObTableStoreIterator table_iter;
+  if (attr.is_empty_shell_) { // skip empty shell
+  } else if (OB_FAIL(fetch_table_store(wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_FAIL(wrapper.get_member(table_store))) {
+    LOG_WARN("fail to get table store from wrapper", K(ret), K(wrapper));
+  } else if (OB_FAIL(table_store->get_all_sstable(table_iter))) {
+    LOG_WARN("fail to get all sstable iterator", K(ret), KPC(table_store));
+  } else {
+    ObITable *table = nullptr;
+    while (OB_SUCC(ret) && OB_SUCC(table_iter.get_next(table))) {
+      if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (static_cast<ObSSTable *>(table)->is_small_sstable()) {
+        attr.has_nested_table_ = true;
+        break;
+      }
+    }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    attr.valid_ = true;
+  } else {
+    attr.reset();
+  }
+
+  return ret;
+}
+
 int ObTablet::check_and_set_initial_state()
 {
   int ret = OB_SUCCESS;
