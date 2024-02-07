@@ -854,6 +854,8 @@ typedef enum ObItemType
   T_FUN_SYS_RANDSTR = 1807,
   T_FUNC_SYS_INNER_IS_TRUE = 1808,
   T_FUN_SYS_INNER_DECODE_LIKE = 1809,
+  T_FUN_SYS_DOC_ID = 1810,
+  T_FUN_SYS_WORD_COUNT = 1811,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
 
@@ -2327,6 +2329,12 @@ typedef enum ObItemType
   T_CANCEL_CLONE,
 
   T_XML_TABLE_EXPRESSION,
+
+  // fulltext index
+  T_FUN_MATCH_AGAINST,
+  T_ROW_ITER_EXPR,
+  T_FULLTEXT_COLUMN_LIST,
+  T_MATCH_COLUMN_LIST,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
