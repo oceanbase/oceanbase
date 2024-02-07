@@ -33,6 +33,12 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
 {
 }
 
+/*
+ * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
+ * Destructor will be called when finish dag net.
+ * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
+ * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
+ */
 ObCOTabletMergeCtx::~ObCOTabletMergeCtx()
 {
   if (OB_NOT_NULL(cg_merge_info_array_)) {

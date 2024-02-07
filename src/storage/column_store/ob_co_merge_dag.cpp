@@ -725,6 +725,12 @@ int ObCOMergeBatchExeTask::process()
   }
 
   void *buf = nullptr;
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST PROCESS FAILED", K(ret));
+  }
+#endif
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCOMerger)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -997,6 +1003,12 @@ ObCOMergeDagNet::ObCOMergeDagNet()
 {
 }
 
+/*
+ * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
+ * Destructor will be called when finish dag net.
+ * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
+ * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
+ */
 ObCOMergeDagNet::~ObCOMergeDagNet()
 {
   finish_dag_ = nullptr;
@@ -1052,7 +1064,7 @@ int ObCOMergeDagNet::start_running()
   return ret;
 }
 
-// schedule_rest_dag is called in loop_running_dag_net_map(Timer)
+// schedule_rest_dag is called in loop_running_dag_net_list(Timer)
 // schedule dag may not finish yet, need wait merge_status >= PREPARE_FINISHED
 int ObCOMergeDagNet::schedule_rest_dag()
 {
@@ -1067,11 +1079,28 @@ int ObCOMergeDagNet::schedule_rest_dag()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge ctx is null or schema invalid", K(ret), KPC(co_merge_ctx_));
   } else if (!is_cancel() && COMergeStatus::PREPARE_FINISHED <= ATOMIC_LOAD(&merge_status_)) {
-    if (OB_FAIL(inner_create_and_schedule_dags())) {
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_CO_MREGE_DAG_SCHEDULE_REST) ret;
+    if (OB_FAIL(ret)) {
+      LOG_INFO("ERRSIM EN_CO_MREGE_DAG_SCHEDULE_REST SCHEDULE FAILED", K(ret));
+    }
+#endif
+    if (FAILEDx(inner_create_and_schedule_dags())) {
       LOG_WARN("failed to create and schedule rest dags", K(ret));
     }
   }
   return ret;
+}
+
+/*
+ * ATTENTION: NEVER USE ANY LOG STREEM VARIABLES IN THIS FUNCTION.
+ * clear_dag_net_ctx() will be called when finish dag net.
+ * ObCOMergeDagNet is special, it will be check canceled when ls offine in ObDagNetScheduler::check_ls_compaction_dag_exist_with_cancel.
+ * But dag_net is only moved into finished dag net list and delaying freed. So if log streem variables used in this function after ls offine, it will be dangerous
+ */
+int ObCOMergeDagNet::clear_dag_net_ctx()
+{
+  return ObIDagNet::clear_dag_net_ctx();
 }
 
 #define MARK_CG_SCHEDULE_STATUS(start_cg_idx, end_cg_idx, target_status) \
