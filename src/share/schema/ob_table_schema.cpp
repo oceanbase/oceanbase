@@ -1893,7 +1893,7 @@ bool ObTableSchema::is_valid() const
                 valid_ret = false;
               } else if (!column->is_shadow_column()) {
                 // TODO @hanhui need seperate inline memtable length from store length
-                varchar_col_total_length += min(column->get_data_length(), OB_MAX_LOB_HANDLE_LENGTH);
+                varchar_col_total_length += min(column->get_data_length(), get_lob_inrow_threshold());
               }
             }
           }
@@ -1931,7 +1931,7 @@ bool ObTableSchema::is_valid() const
                    K(varchar_col_total_length), K(max_row_length));
           const ObString &col_name = column->get_column_name_str();
           LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
-                         static_cast<int>(varchar_col_total_length), max_rowkey_length, col_name.ptr());
+                         static_cast<int>(varchar_col_total_length), max_row_length, col_name.ptr());
           valid_ret = false;
         } else if (max_rowkey_length < rowkey_varchar_col_length) {
           LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar primary key columns is larger than the max allowed length",
