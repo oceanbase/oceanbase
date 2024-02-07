@@ -4491,6 +4491,11 @@ int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropInd
   return ret;
 }
 
+int ObRootService::drop_lob(const ObDropLobArg &arg)
+{
+  return ddl_service_.drop_lob(arg);
+}
+
 int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;

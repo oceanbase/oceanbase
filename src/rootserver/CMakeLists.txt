@@ -124,6 +124,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_modify_autoinc_task.cpp
   ddl_task/ob_table_redefinition_task.cpp
   ddl_task/ob_recover_restore_table_task.cpp
+  ddl_task/ob_drop_lob_task.cpp
 )
 
 ob_set_subtarget(ob_rootserver parallel_ddl

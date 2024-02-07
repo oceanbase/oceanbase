@@ -1275,7 +1275,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
 
     if (OB_SUCC(ret)) {
       const bool need_wait_ddl_finish = is_double_table_long_running_ddl(res.ddl_type_)
-                                     || is_simple_table_long_running_ddl(res.ddl_type_);
+                                     || is_simple_table_long_running_ddl(res.ddl_type_)
+                                     || (ObDDLType::DDL_DROP_COLUMN_INSTANT == res.ddl_type_ && res.task_id_ > 0 /* with drop lob*/);
       if (OB_SUCC(ret) && need_wait_ddl_finish) {
         int64_t affected_rows = 0;
         if (OB_FAIL(refresh_schema_for_table(alter_table_arg.exec_tenant_id_))) {

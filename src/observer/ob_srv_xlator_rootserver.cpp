@@ -116,6 +116,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcRefreshConfigP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRootMinorFreezeP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObUpdateIndexTableStatusP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObDropLobP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropOutlineP, *gctx_.root_service_);

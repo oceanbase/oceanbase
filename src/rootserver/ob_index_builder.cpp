@@ -196,9 +196,7 @@ int ObIndexBuilder::drop_index(const ObDropIndexArg &arg, obrpc::ObDropIndexRes 
           LOG_WARN("not support to drop a building or dropping index", K(ret), K(arg.is_inner_), KPC(index_table_schema));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "dropping a building or dropping index is");
         } else if (OB_FAIL(ddl_service_.rename_dropping_index_name(
-                                                      table_schema->get_table_id(),
-                                                      table_schema->get_database_id(),
-                                                      arg,
+                                                      *index_table_schema,
                                                       schema_guard,
                                                       ddl_operator,
                                                       trans,

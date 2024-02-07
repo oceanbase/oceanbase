@@ -994,7 +994,8 @@ int ObTableSqlService::update_single_column(
     const ObTableSchema &origin_table_schema,
     const ObTableSchema &new_table_schema,
     const ObColumnSchemaV2 &new_column_schema,
-    const bool record_ddl_operation)
+    const bool record_ddl_operation,
+    const bool need_del_stats)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
@@ -1047,6 +1048,12 @@ int ObTableSqlService::update_single_column(
           RS_LOG(WARN, "only one auto-increment column permitted", K(ret));
         }
       }
+    }
+  }
+  // for drop column online, delete column stat.
+  if (OB_SUCC(ret) && need_del_stats) {
+    if (OB_FAIL(delete_column_stat(sql_client, tenant_id, table_id, new_column_schema.get_column_id()))) {
+      LOG_WARN("fail to delete column stat", K(ret));
     }
   }
 
@@ -2259,7 +2266,8 @@ int ObTableSqlService::delete_single_column(
     const int64_t new_schema_version,
     common::ObISQLClient &sql_client,
     const ObTableSchema &new_table_schema,
-    const ObColumnSchemaV2 &orig_column_schema)
+    const ObColumnSchemaV2 &orig_column_schema,
+    const bool record_ddl_operation)
 {
   int ret = OB_SUCCESS;
 
@@ -2289,19 +2297,8 @@ int ObTableSqlService::delete_single_column(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(dml.add_pk_column("tenant_id", tenant_id))
-        || OB_FAIL(dml.add_pk_column("table_id", table_id))
-        || OB_FAIL(dml.add_pk_column("column_id", column_id))) {
-      LOG_WARN("add column failed", K(ret));
-    } else {
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_COLUMN_STAT_TNAME,
-                              dml, affected_rows))) {
-        LOG_WARN("exec delete column stat failed", K(ret));
-      } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_HISTOGRAM_STAT_TNAME,
-                                     dml, affected_rows))) {
-        LOG_WARN("exec delete histogram stat failed", K(ret));
-      }
+    if (OB_FAIL(delete_column_stat(sql_client, tenant_id, table_id, column_id))) {
+      LOG_WARN("fail to delete column stat", K(ret));
     }
   }
 
@@ -2330,7 +2327,7 @@ int ObTableSqlService::delete_single_column(
   }
 
   // log delete column
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && record_ddl_operation) {
     ObSchemaOperation opt;
     opt.tenant_id_ = new_table_schema.get_tenant_id();
     opt.database_id_ = new_table_schema.get_database_id();
@@ -3472,6 +3469,32 @@ int ObTableSqlService::delete_from_all_column_stat(ObISQLClient &sql_client,
     }
   }
 
+  return ret;
+}
+
+int ObTableSqlService::delete_column_stat(ObISQLClient &sql_client,
+                                          const uint64_t tenant_id,
+                                          const uint64_t table_id,
+                                          const uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer del_stat_dml;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  if (OB_FAIL(del_stat_dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                            exec_tenant_id, tenant_id)))
+      || OB_FAIL(del_stat_dml.add_pk_column("table_id", table_id))
+      || OB_FAIL(del_stat_dml.add_pk_column("column_id", column_id))) {
+    LOG_WARN("add column failed", K(ret));
+  } else {
+    int64_t affected_rows = 0;
+    if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_COLUMN_STAT_TNAME,
+                            del_stat_dml, affected_rows))) {
+      LOG_WARN("exec delete column stat failed", K(ret));
+    } else if (OB_FAIL(exec_delete(sql_client, tenant_id, table_id, OB_ALL_HISTOGRAM_STAT_TNAME,
+                                    del_stat_dml, affected_rows))) {
+      LOG_WARN("exec delete histogram stat failed", K(ret));
+    }
+  }
   return ret;
 }
 

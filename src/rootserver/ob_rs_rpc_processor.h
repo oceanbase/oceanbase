@@ -363,6 +363,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_DB, ObRpcRevokeDBP, revoke_database
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_TABLE, ObRpcRevokeTableP, revoke_table(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REVOKE_SYSPRIV, ObRpcRevokeSysPrivP, revoke_syspriv(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_UPDATE_INDEX_TABLE_STATUS, ObUpdateIndexTableStatusP, update_index_status(arg_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_LOB, ObDropLobP, drop_lob(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_TABLE_FROM_RECYCLEBIN, ObRpcFlashBackTableFromRecyclebinP, flashback_table_from_recyclebin(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FLASHBACK_INDEX, ObRpcFlashBackIndexP, flashback_index(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_PURGE_TABLE, ObRpcPurgeTableP, purge_table(arg_));

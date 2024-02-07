@@ -291,8 +291,13 @@ public:
   inline bool is_shadow_column() const { return column_id_ > common::OB_MIN_SHADOW_COLUMN_ID; }
   inline bool is_on_update_current_timestamp() const { return on_update_current_timestamp_; }
   inline bool is_enum_or_set() const { return meta_type_.is_enum_or_set(); }
-
   inline static bool is_hidden_pk_column_id(const uint64_t column_id);
+  inline bool is_unused() const { return column_flags_ & UNUSED_COLUMN_FLAG; }
+  inline void set_unused()
+  {
+    set_is_hidden(true);
+    add_column_flag(UNUSED_COLUMN_FLAG);
+  }
 
   //other methods
   int64_t get_convert_size(void) const;

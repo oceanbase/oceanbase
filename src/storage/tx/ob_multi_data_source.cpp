@@ -532,6 +532,18 @@ ObMulSourceTxDataDump::dump_buf(ObTxDataSourceType source_type, const char *buf,
       }
       break;
     }
+    case ObTxDataSourceType::UNBIND_LOB_TABLET: {
+      ObBatchUnbindLobTabletArg modify_arg;
+      if (OB_FAIL(modify_arg.deserialize(buf, len, pos))) {
+        TRANS_LOG(WARN, "failed to deserialize arg", K(ret));
+      } else if (pos > len) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "deserialize error", KR(ret), K(pos), K(len));
+      } else {
+        dump_str = to_cstring(modify_arg);
+      }
+      break;
+    }
     default: {
       // TRANS_LOG(ERROR, "Unkown Multi Data Source", K(source_type), KP(buf), K(len));
     }

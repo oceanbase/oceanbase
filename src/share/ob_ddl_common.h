@@ -56,6 +56,7 @@ enum ObDDLType
   DDL_MODIFY_AUTO_INCREMENT = 4,
   DDL_CREATE_INDEX = 5,
   DDL_DROP_INDEX = 6,
+  DDL_DROP_LOB = 11,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -87,6 +88,7 @@ enum ObDDLType
   DDL_NORMAL_TYPE = 10001,
   DDL_ADD_COLUMN_ONLINE = 10002, // only add trailing columns
   DDL_CHANGE_COLUMN_NAME = 10003,
+  DDL_DROP_COLUMN_INSTANT = 10004,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };

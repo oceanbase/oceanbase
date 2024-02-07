@@ -295,6 +295,7 @@ public:
                            const share::schema::ObTableSchema &new_table_schema,
                            share::schema::ObColumnSchemaV2 &new_column);
   int delete_single_column(common::ObMySQLTransaction &trans,
+                           const int64_t new_schema_version,
                            share::schema::ObTableSchema &new_table_schema,
                            const common::ObString &column_name);
   int batch_update_system_table_columns(
@@ -347,11 +348,8 @@ public:
                                        const common::ObString &table_name,
                                        share::schema::ObTableSchema &new_index_table_schema,
                                        common::ObMySQLTransaction &trans);
-  virtual int alter_table_rename_index(const uint64_t tenant_id,
-                                       const uint64_t data_table_id,
-                                       const uint64_t database_id,
+  virtual int alter_table_rename_index(const share::schema::ObTableSchema &orig_index_table_schema,
                                        const obrpc::ObRenameIndexArg &rename_index_arg,
-                                       const ObIndexStatus *new_index_status,
                                        common::ObMySQLTransaction &trans,
                                        share::schema::ObTableSchema &new_index_table_schema);
   virtual int alter_index_table_parallel(const uint64_t tenant_id,
@@ -968,7 +966,8 @@ public:
   int update_single_column(common::ObMySQLTransaction &trans,
                            const share::schema::ObTableSchema &origin_table_schema,
                            const share::schema::ObTableSchema &new_table_schema,
-                           share::schema::ObColumnSchemaV2 &column_schema);
+                           share::schema::ObColumnSchemaV2 &column_schema,
+                           const bool need_del_stats /*for online drop column, need delete column stat*/);
   int update_partition_option(common::ObMySQLTransaction &trans,
                               share::schema::ObTableSchema &table_schema);
   int update_check_constraint_state(common::ObMySQLTransaction &trans,

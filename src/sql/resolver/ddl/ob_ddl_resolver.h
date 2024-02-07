@@ -34,6 +34,7 @@ struct ObObjCastParams;
 }
 namespace sql
 {
+typedef common::hash::ObPlacementHashSet<share::schema::ObColumnNameHashWrapper, common::OB_MAX_COLUMN_NUMBER> ObReducedVisibleColSet;
 struct ObExternalFileFormat;
 struct PartitionInfo
 {
@@ -388,7 +389,7 @@ public:
 
   int check_column_in_check_constraint(
       const share::schema::ObTableSchema &table_schema,
-      const ObString &column_name,
+      const ObReducedVisibleColSet &drop_column_names_set,
       ObAlterTableStmt *alter_table_stmt);
 
   int check_index_columns_equal_foreign_key(const share::schema::ObTableSchema &table_schema,

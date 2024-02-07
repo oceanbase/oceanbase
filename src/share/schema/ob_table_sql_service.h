@@ -110,12 +110,14 @@ public:
                            const ObTableSchema &origin_table_schema,
                            const ObTableSchema &new_table_schema,
                            const ObColumnSchemaV2 &column_schema,
-                           const bool record_ddl_operation);
+                           const bool record_ddl_operation,
+                           const bool need_del_stats);
   //alter table drop column
   int delete_single_column(const int64_t new_schema_version,
                            common::ObISQLClient &sql_client,
                            const ObTableSchema &table_schema,
-                           const ObColumnSchemaV2 &column_schema);
+                           const ObColumnSchemaV2 &column_schema,
+                           const bool record_ddl_operation);
   //alter table drop constraint
   int delete_single_constraint(const int64_t new_schema_version,
                                common::ObISQLClient &sql_client,
@@ -268,6 +270,10 @@ private:
                                   const uint64_t tenant_id,
                                   const uint64_t table_id,
                                   ObSqlString *extra_condition = NULL);
+  int delete_column_stat(ObISQLClient &sql_client,
+                         const uint64_t tenant_id,
+                         const uint64_t table_id,
+                         const uint64_t column_id);
   int delete_from_all_histogram_stat(common::ObISQLClient &sql_client,
                                      const uint64_t tenant_id,
                                      const uint64_t table_id,

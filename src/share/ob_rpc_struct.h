@@ -1302,6 +1302,54 @@ public:
   DECLARE_VIRTUAL_TO_STRING;
 };
 
+struct ObDropLobArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDropLobArg():
+      ObDDLArg(),
+      tenant_id_(common::OB_INVALID_ID),
+      session_id_(common::OB_INVALID_ID),
+      data_table_id_(common::OB_INVALID_ID),
+      aux_lob_meta_table_id_(common::OB_INVALID_ID)
+  {}
+  virtual ~ObDropLobArg() {}
+  void reset()
+  {
+    ObDDLArg::reset();
+    tenant_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    data_table_id_ = common::OB_INVALID_ID;
+    aux_lob_meta_table_id_ = common::OB_INVALID_ID;
+  }
+  bool is_valid() const
+  {
+    return common::OB_INVALID_ID != tenant_id_
+      && common::OB_INVALID_ID != data_table_id_
+      && common::OB_INVALID_ID != aux_lob_meta_table_id_;
+  }
+  int assign(const ObDropLobArg &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      session_id_ = other.session_id_;
+      data_table_id_ = other.data_table_id_;
+      aux_lob_meta_table_id_ = other.aux_lob_meta_table_id_;
+    }
+    return ret;
+  }
+public:
+  uint64_t tenant_id_;
+  uint64_t session_id_;
+  uint64_t data_table_id_;
+  uint64_t aux_lob_meta_table_id_;
+
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg, K_(tenant_id), K_(session_id), K_(data_table_id), K_(aux_lob_meta_table_id));
+};
+
 struct ObDropIndexArg: public ObIndexArg
 {
   OB_UNIS_VERSION(1);
@@ -1890,6 +1938,32 @@ public:
   share::ObTaskId trace_id_;
 };
 
+struct ObMViewRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObMViewRefreshInfo()
+    : mview_table_id_(OB_INVALID_ID),
+      last_refresh_scn_(),
+      refresh_scn_(),
+      start_time_(OB_INVALID_TIMESTAMP),
+      is_mview_complete_refresh_(false)
+  {
+  }
+  ~ObMViewRefreshInfo() = default;
+  TO_STRING_KV(K_(mview_table_id),
+               K_(last_refresh_scn),
+               K_(refresh_scn),
+               K_(start_time),
+               K_(is_mview_complete_refresh));
+public:
+  uint64_t mview_table_id_;
+  share::SCN last_refresh_scn_;
+  share::SCN refresh_scn_;
+  int64_t start_time_;
+  bool is_mview_complete_refresh_;
+};
+
 struct ObAlterTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -1961,6 +2035,13 @@ public:
     ALTER_CONSTRAINT_STATE,
     CONSTRAINT_NO_OPERATION = 1000
   };
+  enum AlterAlgorithm
+  {
+    DEFAULT = 0, // empty
+    INSTANT = 1,
+    INPLACE = 2,
+  };
+
   ObAlterTableArg():
       ObDDLArg(),
       session_id_(common::OB_INVALID_ID),
@@ -1989,7 +2070,10 @@ public:
       need_rebuild_trigger_(false),
       foreign_key_checks_(true),
       is_add_to_scheduler_(false),
-      inner_sql_exec_addr_()
+      inner_sql_exec_addr_(),
+      local_session_var_(&allocator_),
+      mview_refresh_info_(),
+      alter_algorithm_(INPLACE)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2033,7 +2117,8 @@ public:
                                                   nls_timestamp_tz_format};
     return set_nls_formats(tmp_str);
   }
-  TO_STRING_KV(K_(session_id),
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
+               K_(session_id),
                K_(index_arg_list),
                K_(foreign_key_arg_list),
                K_(alter_table_schema),
@@ -2054,7 +2139,10 @@ public:
                K_(is_add_to_scheduler),
                K_(table_id),
                K_(hidden_table_id),
-               K_(inner_sql_exec_addr));
+               K_(inner_sql_exec_addr),
+               K_(local_session_var),
+               K_(mview_refresh_info),
+               K_(alter_algorithm));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2086,6 +2174,9 @@ public:
   bool foreign_key_checks_;
   bool is_add_to_scheduler_;
   common::ObAddr inner_sql_exec_addr_;
+  ObLocalSessionVar local_session_var_;
+  ObMViewRefreshInfo mview_refresh_info_;
+  AlterAlgorithm alter_algorithm_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;

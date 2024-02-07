@@ -414,6 +414,12 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
   
+  int create_drop_lob_task(
+      common::ObISQLClient &proxy,
+      const ObCreateDDLTaskParam &param,
+      const uint64_t aux_lob_meta_table_id,
+      ObDDLTaskRecord &task_record);
+
   int create_ddl_retry_task(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -445,6 +451,7 @@ private:
   int schedule_column_redefinition_task(const ObDDLTaskRecord &task_record);
   int schedule_modify_autoinc_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_index_task(const ObDDLTaskRecord &task_record);
+  int schedule_drop_lob_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);

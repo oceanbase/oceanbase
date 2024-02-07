@@ -1167,16 +1167,10 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
     bool has_lob_table = false;
     uint64_t object_id = OB_INVALID_ID;
     if (!data_table->is_external_table()) {
-      for (int64_t i = 0; OB_SUCC(ret) && !has_lob_table && i < data_table->get_column_count(); i++) {
-        const ObColumnSchemaV2 *column = data_table->get_column_schema_by_idx(i);
-        if (OB_ISNULL(column)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column is null", KR(ret), K(i), KPC(data_table));
-        } else if (is_lob_storage(column->get_data_type())) {
-          has_lob_table = true;
-          object_cnt += 2;
-        }
-      } // end for
+      has_lob_table = data_table->has_lob_column();
+      if (has_lob_table) {
+        object_cnt += 2;
+      }
     }
     if (FAILEDx(gen_object_ids_(object_cnt, id_generator))) {
       LOG_WARN("fail to gen object ids", KR(ret), K_(tenant_id), K(object_cnt));

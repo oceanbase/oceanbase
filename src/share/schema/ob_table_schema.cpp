@@ -1945,6 +1945,9 @@ int ObTableSchema::add_column_update_prev_id(ObColumnSchemaV2 *local_column)
   if (OB_ISNULL(local_column)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The column is NULL");
+  } else if (local_column->is_unused()) {
+    local_column->set_prev_column_id(local_column->get_column_id());
+    local_column->set_next_column_id(local_column->get_column_id());
   } else {
     if (UINT64_MAX == local_column->get_prev_column_id()) {
       // Add to the end by default, the current column is the last column, then next is directly set to BORDER_COLUMN_ID
@@ -5232,6 +5235,29 @@ int ObTableSchema::has_lob_column(bool &has_lob, const bool check_large /*= fals
   return ret;
 }
 
+int ObTableSchema::get_unused_column_ids(common::ObIArray<uint64_t> &column_ids) const
+{
+  int ret = OB_SUCCESS;
+  column_ids.reset();
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  for (ObTableSchema::const_column_iterator iter = column_begin();
+      OB_SUCC(ret) && iter != column_end(); iter++) {
+    if (OB_ISNULL(column_schema = *iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Column schema is NULL", K(ret));
+    } else if (column_schema->is_unused()) {
+      if (OB_UNLIKELY(!column_schema->is_hidden())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unused column must be null", K(ret), KPC(column_schema));
+      } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    } else { /* do nothing. */ }
+  }
+
+  return ret;
+}
+
 // For the main VP table, it returns the primary key column and the VP column, get_column_ids() is different,
 // it will return all columns including other VP columns
 // For the secondary VP table, it returns the same as get_column_ids(), that is, the primary key column and the VP column
@@ -6327,11 +6353,11 @@ int ObTableSchema::deserialize_constraints(const char *buf, const int64_t data_l
 bool ObTableSchema::has_lob_column() const
 {
   bool bool_ret = false;
-
-  bool_ret = has_lob_aux_table();
   for (int64_t i = 0; !bool_ret && i < column_cnt_; ++i) {
     ObColumnSchemaV2& col = *column_array_[i];
-    if (is_lob_storage(col.get_data_type())) {
+    if (col.is_unused()) {
+      // already been deleted logically, ignore it.
+    } else if (is_lob_storage(col.get_data_type())) {
       bool_ret = true;
     }
   }

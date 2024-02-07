@@ -1660,7 +1660,7 @@ int ObLocalScan::table_scan(
 int ObLocalScan::construct_column_schema(const ObTableSchema &data_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObColDesc> &extended_col_ids = extended_gc_.extended_col_ids_;
+  const ObArray<ObColDesc> &extended_col_ids = extended_gc_.extended_col_ids_;
   for (int64_t i = 0; OB_SUCC(ret) && i < extended_col_ids.count(); i++) {
     const ObColumnSchemaV2 *col = data_table_schema.get_column_schema(extended_col_ids.at(i).col_id_);
     if (OB_ISNULL(col)) {

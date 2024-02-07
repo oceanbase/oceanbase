@@ -537,8 +537,9 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
         // do nothing, notice that the destination column schema of hidden pk is null while adding primary key for no primary key table;
       } else if (nullptr == dest_column_schema) {
         if (DDL_DROP_COLUMN == task_type_ || DDL_COLUMN_REDEFINITION == task_type_
-            || DDL_TABLE_REDEFINITION == task_type_ || DDL_ALTER_PARTITION_BY == task_type_) {
-          // column does not exist due to drop column op.
+            || DDL_TABLE_REDEFINITION == task_type_ || DDL_ALTER_PARTITION_BY == task_type_
+            || cur_column_schema->is_unused()) {
+          // column does not exist due to drop column op, set unsed.
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("dest column schema is null", K(ret), K(task_type_), "dest_table_id", target_object_id_, "dest_column_id", cur_column_id);
@@ -2008,8 +2009,8 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
         LOG_WARN("col is NULL", K(ret));
       } else if (col->get_column_id() < OB_APP_MIN_COLUMN_ID) {
         // bypass hidden column
-      } else if (col->is_udt_hidden_column()) {
-        // bypass udt hidden column
+      } else if (col->is_udt_hidden_column() || col->is_unused()) {
+        // bypass udt hidden column, unsed column.
       } else if (OB_FAIL(col_name_map.get(col->get_column_name_str(), new_col_name))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // the column is not in column name map, meaning it is dropped in this ddl

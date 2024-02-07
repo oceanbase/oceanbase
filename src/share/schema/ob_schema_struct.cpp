@@ -13404,10 +13404,11 @@ int ObRlsPolicySchema::rebuild_with_table_schema(const ObRlsPolicySchema &src_sc
   OX (tmp_column_cnt = column_cnt_);
   OX (column_cnt_ = 0);
   for (int64_t i = 0; OB_SUCC(ret) && i < tmp_column_cnt; ++i) {
+    const ObColumnSchemaV2 *column_schema = nullptr;
     if (OB_ISNULL(sec_column_array_[i])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("rls sec column is null", KR(ret));
-    } else if (NULL == table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) {
+    } else if (NULL == (column_schema = table_schema.get_column_schema(sec_column_array_[i]->get_column_id())) || column_schema->is_unused()) {
       // do nothing
     } else {
       sec_column_array_[column_cnt_++] = sec_column_array_[i];
@@ -13866,6 +13867,171 @@ int ObIndexNameInfo::init(
     }
   }
   return ret;
+}
+
+bool ObSessionSysVar::is_equal(const ObObj &other) const
+{
+  bool bool_ret = false;
+  if (val_.get_meta() != other.get_meta()) {
+    bool_ret = false;
+    if (ob_is_string_type(val_.get_type())
+        && val_.get_type() == other.get_type()
+        && val_.get_collation_type() != other.get_collation_type()) {
+      //the collation type of string system variables will be set to the current connection collation type after updating values.
+      //return true if the string values are equal.
+      bool_ret = common::ObCharset::case_sensitive_equal(val_.get_string(), other.get_string());
+    }
+  } else if (val_.is_equal(other, CS_TYPE_BINARY)) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+OB_DEF_SERIALIZE(ObSessionSysVar)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, type_, val_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObSessionSysVar)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, type_, val_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObSessionSysVar)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, type_, val_);
+  return ret;
+}
+
+void ObLocalSessionVar::reset()
+{
+  local_session_vars_.reset();
+}
+
+int ObLocalSessionVar::add_local_var(const ObSessionSysVar *var)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(var)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(var));
+  } else if (OB_FAIL(add_local_var(var->type_, var->val_))) {
+    LOG_WARN("fail to add local session var", K(ret));
+  }
+  return ret;
+}
+
+int ObLocalSessionVar::add_local_var(ObSysVarClassType var_type, const ObObj &value)
+{
+  int ret = OB_SUCCESS;
+  ObSessionSysVar *cur_var = NULL;
+  if (OB_ISNULL(alloc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(alloc_));
+  } else if (OB_FAIL(get_local_var(var_type, cur_var))) {
+    LOG_WARN("get local var failed", K(ret));
+  } else if (NULL == cur_var) {
+    ObSessionSysVar *new_var = OB_NEWx(ObSessionSysVar, alloc_);
+    if (OB_ISNULL(new_var)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc new var failed.", K(ret));
+    } else if (OB_FAIL(local_session_vars_.push_back(new_var))) {
+      LOG_WARN("push back new var failed", K(ret));
+    } else if (OB_FAIL(deep_copy_obj(*alloc_, value, new_var->val_))) {
+      LOG_WARN("fail to deep copy obj", K(ret));
+    } else {
+      new_var->type_ = var_type;
+    }
+  } else if (!cur_var->is_equal(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("local session var added before is not equal to the new var", K(ret), KPC(cur_var), K(value));
+  }
+  return ret;
+}
+
+int ObLocalSessionVar::get_local_var(ObSysVarClassType var_type, ObSessionSysVar *&sys_var) const
+{
+  int ret = OB_SUCCESS;
+  sys_var = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == sys_var && i < local_session_vars_.count(); ++i) {
+    if (OB_ISNULL(local_session_vars_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(local_session_vars_));
+    } else if (local_session_vars_.at(i)->type_ == var_type) {
+      sys_var = local_session_vars_.at(i);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObLocalSessionVar)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, local_session_vars_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < local_session_vars_.count(); ++i) {
+    if (OB_ISNULL(local_session_vars_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      LST_DO_CODE(OB_UNIS_ENCODE, *local_session_vars_.at(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObLocalSessionVar)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, local_session_vars_.count());
+  for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
+    if (OB_NOT_NULL(local_session_vars_.at(i))) {
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *local_session_vars_.at(i));
+    }
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObLocalSessionVar)
+{
+  int ret = OB_SUCCESS;
+  int64_t cnt = 0;
+  OB_UNIS_DECODE(cnt);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(local_session_vars_.reserve(cnt))) {
+      LOG_WARN("reserve failed", K(ret));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
+    ObSessionSysVar var;
+    LST_DO_CODE(OB_UNIS_DECODE, var);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(add_local_var(&var))) {
+        LOG_WARN("fail to add local session var", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+DEF_TO_STRING(ObLocalSessionVar)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
+    if (i > 0) {
+      J_COMMA();
+    }
+    if (OB_NOT_NULL(local_session_vars_.at(i))) {
+      J_KV("type", local_session_vars_.at(i)->type_,
+            "val", local_session_vars_.at(i)->val_);
+    }
+  }
+  J_OBJ_END();
+  return pos;
 }
 
 //

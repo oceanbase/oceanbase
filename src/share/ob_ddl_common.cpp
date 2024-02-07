@@ -52,6 +52,8 @@ int ObColumnNameMap::init(const ObTableSchema &orig_table_schema,
       if (OB_ISNULL(column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column", K(ret));
+      } else if (column->is_unused()) {
+        // unused column, extra column compared to the hidden table.
       } else if (OB_FAIL(set(column->get_column_name_str(), column->get_column_name_str()))) {
         LOG_WARN("failed to set colum name map", K(ret));
       }

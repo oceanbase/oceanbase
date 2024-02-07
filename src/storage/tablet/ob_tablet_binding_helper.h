@@ -18,6 +18,7 @@
 #include "lib/container/ob_array_serialization.h"
 #include "lib/ob_define.h"
 #include "share/ob_ls_id.h"
+#include "ob_tablet_binding_mds_user_data.h"
 
 namespace oceanbase
 {
@@ -77,6 +78,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchUnbindTabletArg);
 };
 
+class ObBatchUnbindLobTabletArg final
+{
+public:
+  ObBatchUnbindLobTabletArg();
+  ~ObBatchUnbindLobTabletArg() {}
+  int assign(const ObBatchUnbindLobTabletArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(data_tablet_ids));
+  bool is_valid() { return true; }
+  OB_UNIS_VERSION_V(1);
+
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  ObSArray<ObTabletID> data_tablet_ids_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBatchUnbindLobTabletArg);
+};
+
 class ObTabletBindingHelper final
 {
 public:
@@ -115,6 +134,30 @@ private:
   static int unbind_hidden_tablets_from_orig_tablets(ObLS &ls, const ObBatchUnbindTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);
   static int set_redefined_versions_for_hidden_tablets(ObLS &ls, const ObBatchUnbindTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);
   static int modify_tablet_binding_for_unbind(const ObBatchUnbindTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);
+};
+
+class ObTabletUnbindLobMdsHelper
+{
+public:
+  static int on_register(const char* buf, const int64_t len, mds::BufferCtx &ctx);
+  static int register_process(ObBatchUnbindTabletArg &arg, mds::BufferCtx &ctx);
+  static int on_replay(const char* buf, const int64_t len, const share::SCN &scn, mds::BufferCtx &ctx);
+private:
+  static int modify_tablet_binding_for_unbind_lob_(const ObBatchUnbindLobTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx);
+};
+
+struct ClearLobTabletId
+{
+public:
+  ClearLobTabletId() {}
+  ClearLobTabletId& operator=(const ClearLobTabletId&) = delete;
+  int operator()(ObTabletBindingMdsUserData &data) const
+  {
+    // lob_meta_tablet and lob_piece_tablet_id need to be cleaned up at the same time
+    data.lob_meta_tablet_id_.reset();
+    data.lob_piece_tablet_id_.reset();
+    return OB_SUCCESS;
+  }
 };
 
 } // namespace storage

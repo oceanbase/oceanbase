@@ -507,6 +507,7 @@ public:
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);
   int drop_tablegroup(const obrpc::ObDropTablegroupArg &arg);
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
+  int drop_lob(const obrpc::ObDropLobArg &arg);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);

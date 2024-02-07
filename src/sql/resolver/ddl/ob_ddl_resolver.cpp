@@ -6544,49 +6544,70 @@ int ObDDLResolver::check_column_in_foreign_key(const ObTableSchema &table_schema
 
 int ObDDLResolver::check_column_in_check_constraint(
     const share::schema::ObTableSchema &table_schema,
-    const ObString &column_name,
+    const ObReducedVisibleColSet &drop_column_names_set,
     ObAlterTableStmt *alter_table_stmt)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *alter_column = table_schema.get_column_schema(column_name);
   int64_t cst_cnt = table_schema.get_constraint_count();
-  if (OB_ISNULL(alter_column)) {
-    // do nothing
-    // 根据列名查不到列是因为表中不存在该列，后面会在 RS 端再检查一遍表中是否存在该列，并在 RS 端根据操作的不同报不同的错误
-  } else {
-    AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-    for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
-         OB_SUCC(ret) && (iter != table_schema.constraint_end());
-         ++iter) {
-      if (CONSTRAINT_TYPE_CHECK == (*iter)->get_constraint_type()
-          || CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
-        for (ObConstraint::const_cst_col_iterator cst_col_iter = (*iter)->cst_col_begin();
-             OB_SUCC(ret) && (cst_col_iter != (*iter)->cst_col_end());
-             ++cst_col_iter) {
-          if (*cst_col_iter == alter_column->get_column_id()) {
-            if (0 == (*iter)->get_column_cnt()) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "check/not null cst don't have column info", K(ret), K(**iter));
-            } else {
-              // drop check constraint cascaded
-              bool is_dropped = false;
-              // check if constraints have been dropped
-              ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
-              for (int64_t i = 0; i < cst_cnt && (iter_dropped != alter_table_schema.constraint_end()); ++i) {
-                if ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) {
-                  is_dropped = true;
-                  break;
-                }
+  AlterTableSchema& alter_table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+  for (ObTableSchema::const_constraint_iterator iter = table_schema.constraint_begin();
+        OB_SUCC(ret) && (iter != table_schema.constraint_end());
+        ++iter) {
+    if (CONSTRAINT_TYPE_CHECK == (*iter)->get_constraint_type()
+        || CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
+      ObArray<common::ObString> cst_columns_name;
+      for (ObConstraint::const_cst_col_iterator cst_col_iter = (*iter)->cst_col_begin();
+            OB_SUCC(ret) && (cst_col_iter != (*iter)->cst_col_end());
+            ++cst_col_iter) {
+        const ObColumnSchemaV2 *cst_column_schema = nullptr;
+        if (0 == (*iter)->get_column_cnt()) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "check/not null cst don't have column info", K(ret), K(**iter));
+        } else if (OB_ISNULL(cst_column_schema = table_schema.get_column_schema(*cst_col_iter))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("can not find column", K(ret), "col_id", *cst_col_iter, K(table_schema));
+        } else if (OB_FAIL(cst_columns_name.push_back(cst_column_schema->get_column_name_str()))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        // drop check constraint cascaded
+        bool is_dropped = false;
+        // check if constraints have been dropped
+        ObTableSchema::const_constraint_iterator iter_dropped = alter_table_schema.constraint_begin();
+        for (; OB_SUCC(ret) && !is_dropped && iter_dropped != alter_table_schema.constraint_end(); ++iter_dropped) {
+          is_dropped = ((*iter)->get_constraint_id() == (*iter_dropped)->get_constraint_id()) ? true : is_dropped;
+        }
+        if (OB_SUCC(ret) && !is_dropped) {
+          // check whether the constraint should be dropped caused by drop column.
+          // 1. If not null constraint and check constraint rely on one column only,
+          // drop the constraint internally when dropping the related column.
+          // 2. If check constraint rely on more than one column,
+          // drop the constraint internally when dropping all related columns under oracle mode.
+          // can not drop the constraint even all related columns are dropped under mysql mode.
+          bool need_drop_cst = true;
+          if ((*iter)->get_column_cnt() >= 2 && lib::is_mysql_mode()) {
+            need_drop_cst = false;
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && need_drop_cst && i < cst_columns_name.count(); i++) {
+            ObColumnSchemaHashWrapper col_key(cst_columns_name.at(i));
+            if (OB_FAIL(drop_column_names_set.exist_refactored(col_key))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                need_drop_cst = false;
+                ret = OB_SUCCESS;
+              } else if (OB_HASH_EXIST == ret) {
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("exist refactored failed", K(ret), K(cst_columns_name.at(i)));
               }
-              if (is_dropped) {
-                // skip this constraint
-              } else if (1 == (*iter)->get_column_cnt()) {
-                if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
-                  SQL_RESV_LOG(WARN, "add constraint failed!", K(ret), K(**iter));
-                } else {
-                  alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
-                }
-              } else {/* do nothing. */}
+            }
+          }
+          if (OB_SUCC(ret) && need_drop_cst) {
+            if (OB_FAIL(alter_table_schema.add_constraint(**iter))) {
+              SQL_RESV_LOG(WARN, "add constraint failed!", K(ret), K(**iter));
+            } else {
+              alter_table_stmt->get_alter_table_arg().alter_constraint_type_ = ObAlterTableArg::DROP_CONSTRAINT;
             }
           }
         }

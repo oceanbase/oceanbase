@@ -554,6 +554,8 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
   if (OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     SHARE_SCHEMA_LOG(WARN, "index is not exist", K(ret));
+  } else if (index_schema->is_in_deleting()) {
+    // the index is in deleting, do not show to user.
   } else {
     ObString index_name;
     ObString new_index_name;

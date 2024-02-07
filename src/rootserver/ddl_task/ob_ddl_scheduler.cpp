@@ -22,6 +22,7 @@
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ddl_task/ob_ddl_task.h"
 #include "rootserver/ddl_task/ob_drop_index_task.h"
+#include "rootserver/ddl_task/ob_drop_lob_task.h"
 #include "rootserver/ddl_task/ob_drop_primary_key_task.h"
 #include "rootserver/ddl_task/ob_index_build_task.h"
 #include "rootserver/ddl_task/ob_modify_autoinc_task.h"
@@ -970,6 +971,17 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
           LOG_WARN("fail to create drop index task failed", K(ret));
         }
         break;
+      case DDL_DROP_LOB:
+        if (OB_ISNULL(param.dest_table_schema_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("param.dest_table_schema is NULL", K(ret), K(param));
+        } else if (OB_FAIL(create_drop_lob_task(proxy,
+                                         param,
+                                         param.dest_table_schema_->get_aux_lob_meta_tid(),
+                                         task_record))) {
+          LOG_WARN("fail to create drop index task failed", K(ret));
+        }
+        break;
       case DDL_MODIFY_COLUMN:
       case DDL_ADD_PRIMARY_KEY:
       case DDL_ALTER_PRIMARY_KEY:
@@ -1501,6 +1513,36 @@ int ObDDLScheduler::create_drop_index_task(
   LOG_INFO("ddl_scheduler create drop index task finished", K(ret), K(index_task));
   return ret;
 }
+int ObDDLScheduler::create_drop_lob_task(
+    common::ObISQLClient &proxy,
+    const ObCreateDDLTaskParam &param,
+    const uint64_t aux_lob_meta_table_id,
+    ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObDropLobTask task;
+  int64_t task_id = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(param.ddl_arg_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service_->get_sql_proxy(), param.tenant_id_, task_id))) {
+    LOG_WARN("fetch new task id failed", K(ret));
+  } else {
+    if (OB_FAIL(task.init(param.tenant_id_, task_id, aux_lob_meta_table_id, param.object_id_, param.schema_version_,
+            param.parent_task_id_, param.consumer_group_id_, *param.ddl_arg_))) {
+      LOG_WARN("init drop lob task failed", K(ret), K(param.object_id_));
+    } else if (OB_FAIL(task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
+      LOG_WARN("set trace id failed", K(ret));
+    } else if (OB_FAIL(insert_task_record(proxy, task, *param.allocator_, task_record))) {
+      LOG_WARN("fail to insert task record", K(ret));
+    }
+  }
+  LOG_INFO("ddl_scheduler create drop lob task finished", K(ret), K(task));
+  return ret;
+}
 int ObDDLScheduler::create_constraint_task(
     common::ObISQLClient &proxy,
     const share::schema::ObTableSchema *table_schema,
@@ -1918,6 +1960,9 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case ObDDLType::DDL_DROP_INDEX:
         ret = schedule_drop_index_task(record);
         break;
+      case ObDDLType::DDL_DROP_LOB:
+        ret = schedule_drop_lob_task(record);
+        break;
       case DDL_DROP_PRIMARY_KEY:
         ret = schedule_drop_primary_key_task(record);
         break;
@@ -2182,6 +2227,32 @@ int ObDDLScheduler::schedule_drop_index_task(const ObDDLTaskRecord &task_record)
     drop_index_task->~ObDropIndexTask();
     allocator_.free(drop_index_task);
     drop_index_task = nullptr;
+  }
+  return ret;
+}
+
+int ObDDLScheduler::schedule_drop_lob_task(const ObDDLTaskRecord &task_record)
+{
+  int ret = OB_SUCCESS;
+  ObDropLobTask *drop_lob_task = nullptr;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLScheduler has not been inited", K(ret));
+  } else if (OB_FAIL(alloc_ddl_task(drop_lob_task))) {
+    LOG_WARN("alloc ddl task failed", K(ret));
+  } else if (OB_FAIL(drop_lob_task->init(task_record))) {
+    LOG_WARN("init drop index task failed", K(ret));
+  } else if (OB_FAIL(drop_lob_task->set_trace_id(task_record.trace_id_))) {
+    LOG_WARN("set trace id failed", K(ret));
+  } else if (OB_FAIL(inner_schedule_ddl_task(drop_lob_task, task_record))) {
+    if (OB_ENTRY_EXIST != ret) {
+      LOG_WARN("inner schedule task failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) && nullptr != drop_lob_task) {
+    drop_lob_task->~ObDropLobTask();
+    allocator_.free(drop_lob_task);
+    drop_lob_task = nullptr;
   }
   return ret;
 }
