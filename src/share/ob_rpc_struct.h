@@ -5750,19 +5750,21 @@ public:
     status_(share::schema::INDEX_STATUS_MAX),
     convert_status_(true),
     in_offline_ddl_white_list_(false),
-    data_table_id_(common::OB_INVALID_ID)
+    data_table_id_(common::OB_INVALID_ID),
+    database_name_()
   {}
   bool is_valid() const;
   virtual bool is_allow_when_disable_ddl() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   virtual bool is_in_offline_ddl_white_list() const { return in_offline_ddl_white_list_; }
-  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id));
+  TO_STRING_KV(K_(index_table_id), K_(status), K_(convert_status), K_(in_offline_ddl_white_list), K_(data_table_id), K_(database_name));
 
   uint64_t index_table_id_;
   share::schema::ObIndexStatus status_;
   bool convert_status_;
   bool in_offline_ddl_white_list_;
   uint64_t data_table_id_;
+  ObString database_name_;
 };
 
 struct ObMergeFinishArg
