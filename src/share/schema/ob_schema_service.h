@@ -336,6 +336,10 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_GRANT_REVOKE_ROUTINE_PRIV, = 2062)                  \
   ACT(OB_DDL_DEL_ROUTINE_PRIV, = 2063)                           \
   ACT(OB_DDL_ROUTINE_PRIV_OPERATION_END, = 2070)                 \
+  ACT(OB_DDL_COLUMN_PRIV_OPERATION_BEGIN, = 2071)               \
+  ACT(OB_DDL_GRANT_COLUMN_PRIV, = 2072)                         \
+  ACT(OB_DDL_DEL_COLUMN_PRIV, = 2073)                           \
+  ACT(OB_DDL_COLUMN_PRIV_OPERATION_END, = 2080)                 \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);
