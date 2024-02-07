@@ -41,49 +41,67 @@ namespace oceanbase
 namespace storage
 {
 
-ObCGTableWrapper::ObCGTableWrapper()
+ObSSTableWrapper::ObSSTableWrapper()
   : meta_handle_(),
-    cg_sstable_(nullptr),
-    need_meta_(true)
+    sstable_(nullptr)
 {
 }
 
-void ObCGTableWrapper::reset()
+void ObSSTableWrapper::reset()
 {
   meta_handle_.reset();
-  cg_sstable_ = nullptr;
-  need_meta_ = true;
+  sstable_ = nullptr;
 }
 
-bool ObCGTableWrapper::is_valid() const
-{
-  bool bret = false;
-
-  if (OB_ISNULL(cg_sstable_)) {
-  } else if (!need_meta_) {
-    bret = true;
-  } else if (cg_sstable_->is_loaded() || meta_handle_.is_valid()) {
-    bret = true;
-  }
-  return bret;
-}
-
-int ObCGTableWrapper::get_sstable(ObSSTable *&table)
+int ObSSTableWrapper::set_sstable(
+    ObSSTable *sstable,
+    ObStorageMetaHandle *meta_handle)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == sstable)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KPC(sstable), KPC(meta_handle));
+  } else if (FALSE_IT(sstable_ = sstable)) {
+  } else if (nullptr != meta_handle) {
+    meta_handle_ = *meta_handle;
+  }
+  return ret;
+}
+
+int ObSSTableWrapper::get_sstable(ObSSTable *&table)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *meta_sstable = nullptr;
+  ObSSTableMetaHandle co_meta_handle;
 
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("wrapper not valid", K(ret), KPC(this));
-  } else if (cg_sstable_->is_loaded()) {
-    table = cg_sstable_;
-  } else if (OB_FAIL(meta_handle_.get_sstable(table))) {
+  } else if (sstable_->is_loaded()) {
+    table = sstable_;
+  } else if (OB_FAIL(meta_handle_.get_sstable(meta_sstable))) {
     LOG_WARN("failed to get sstable", K(ret), KPC(this));
+  } else if (sstable_->get_key() == meta_sstable->get_key()) {
+    table = meta_sstable;
+  } else if (OB_UNLIKELY(!sstable_->is_cg_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected not cg sstable", K(ret), KPC(sstable_), KPC(meta_sstable));
+  } else if (OB_FAIL(meta_sstable->get_meta(co_meta_handle))) {
+    LOG_WARN("failed to get co meta handle", K(ret), KPC(meta_sstable), KPC(sstable_));
+  } else {
+    const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cg_sstables.count(); ++idx) {
+      if (sstable_->get_key() == cg_sstables[idx]->get_key()) {
+        table = cg_sstables[idx];
+        break;
+      }
+    }
   }
   return ret;
 }
 
 
+/************************************* ObCOSSTableMeta *************************************/
 int64_t ObCOSSTableMeta::get_serialize_size() const
 {
   int64_t len = 0;
@@ -455,26 +473,24 @@ int ObCOSSTableV2::deep_copy(
 
 int ObCOSSTableV2::fetch_cg_sstable(
     const uint32_t cg_idx,
-    ObCGTableWrapper &cg_wrapper,
-    const bool need_meta)
+    ObSSTableWrapper &cg_wrapper)
 {
   int ret = OB_SUCCESS;
   cg_wrapper.reset();
-  cg_wrapper.need_meta_ = need_meta;
 
   uint32_t real_cg_idx = cg_idx < cs_meta_.column_group_cnt_ ? cg_idx : key_.column_group_idx_;
   if (OB_UNLIKELY(is_empty_co_ && real_cg_idx != key_.get_column_group_id())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("co sstable is empty, cannot fetch cg sstable", K(ret), K(cg_idx), K(real_cg_idx), KPC(this));
-  } else if (OB_FAIL(get_cg_sstable(real_cg_idx, cg_wrapper.cg_sstable_))) {
+  } else if (OB_FAIL(get_cg_sstable(real_cg_idx, cg_wrapper))) {
     LOG_WARN("failed to get cg sstable", K(ret));
-  } else if (OB_ISNULL(cg_wrapper.cg_sstable_)) {
+  } else if (OB_ISNULL(cg_wrapper.sstable_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null cg table", K(ret), K(cg_wrapper));
-  } else if (!need_meta || cg_wrapper.cg_sstable_->is_loaded()) {
+  } else if (cg_wrapper.sstable_->is_cg_sstable() || cg_wrapper.sstable_->is_loaded()) {
     // do nothing
-  } else if (OB_FAIL(ObTabletTableStore::load_sstable(cg_wrapper.cg_sstable_->get_addr(),
-                                                      false, /*load_co_sstable*/
+  } else if (OB_FAIL(ObTabletTableStore::load_sstable(cg_wrapper.sstable_->get_addr(),
+                                                      true/*load_co_sstable*/,
                                                       cg_wrapper.meta_handle_))) {
     LOG_WARN("failed to load sstable", K(ret), K(cg_wrapper));
   }
@@ -483,11 +499,11 @@ int ObCOSSTableV2::fetch_cg_sstable(
 
 int ObCOSSTableV2::get_cg_sstable(
     const uint32_t cg_idx,
-    ObSSTable *&cg_sstable) const
+    ObSSTableWrapper &cg_wrapper) const
 {
   int ret = OB_SUCCESS;
-  cg_sstable = nullptr;
-  ObSSTableMetaHandle meta_handle;
+  cg_wrapper.reset();
+  ObSSTableMetaHandle co_meta_handle;
 
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_NOT_INIT;
@@ -495,29 +511,50 @@ int ObCOSSTableV2::get_cg_sstable(
   } else if (cg_idx >= cs_meta_.column_group_cnt_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid arguments", K(ret), K(cg_idx), K(cs_meta_));
+  } else if (OB_FAIL(get_meta(co_meta_handle))) {
+    LOG_WARN("failed to get co meta handle", K(ret), KPC(this));
   } else if (cg_idx == key_.get_column_group_id()) {
-    cg_sstable = const_cast<ObCOSSTableV2 *>(this);
+    cg_wrapper.sstable_ = const_cast<ObCOSSTableV2 *>(this);
   } else if (OB_UNLIKELY(is_empty_co_)) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("co sstable is empty, cannot fetch normal cg sstable", K(ret), K(cg_idx), KPC(this));
-  } else if (OB_FAIL(get_meta(meta_handle))) {
-    LOG_WARN("failed to get meta handle", K(ret), KPC(this));
   } else {
-    const ObSSTableArray &cg_sstables = meta_handle.get_sstable_meta().get_cg_sstables();
-    cg_sstable = cg_idx < key_.column_group_idx_
-               ? cg_sstables[cg_idx]
-               : cg_sstables[cg_idx - 1];
+    const ObSSTableArray &cg_sstables = co_meta_handle.get_sstable_meta().get_cg_sstables();
+    cg_wrapper.sstable_ = cg_idx < key_.column_group_idx_
+                        ? cg_sstables[cg_idx]
+                        : cg_sstables[cg_idx - 1];
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (cg_wrapper.sstable_->is_co_sstable()) {
+    // do nothing
+  } else if (cg_wrapper.sstable_->is_loaded()) {
+    if (co_meta_handle.get_storage_handle().is_valid()) {
+      // cg sstable lifetime guranteed by co meta handle
+      cg_wrapper.meta_handle_ = co_meta_handle.get_storage_handle();
+    } else {
+      // co sstable and cg sstable is all loaded, no need to store meta handle
+    }
+  } else if (OB_FAIL(ObTabletTableStore::load_sstable(cg_wrapper.sstable_->get_addr(),
+                                                      false/*load_co_sstable*/,
+                                                      cg_wrapper.meta_handle_))) {
+    LOG_WARN("failed to load sstable", K(ret), K(cg_wrapper));
   }
   return ret;
 }
 
-int ObCOSSTableV2::get_all_tables(common::ObIArray<ObITable *> &tables) const
+/*
+ * Returning ObITable* is no longer safe due to the load demand of CG sstable.
+ */
+int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
 
   if (is_empty_co_) {
-    if (OB_FAIL(tables.push_back(const_cast<ObCOSSTableV2 *>(this)))) {
+    ObSSTableWrapper co_wrapper;
+    co_wrapper.sstable_ = const_cast<ObCOSSTableV2 *>(this);
+    if (OB_FAIL(table_wrappers.push_back(co_wrapper))) {
       LOG_WARN("failed to push back", K(ret), K(is_empty_co_));
     }
   } else if (OB_FAIL(get_meta(meta_handle))) {
@@ -525,10 +562,10 @@ int ObCOSSTableV2::get_all_tables(common::ObIArray<ObITable *> &tables) const
   } else {
     const ObSSTableArray &cg_sstables = meta_handle.get_sstable_meta().get_cg_sstables();
     for (int64_t cg_idx = 0; OB_SUCC(ret) && cg_idx <= cg_sstables.count(); ++cg_idx) {
-      ObSSTable *cg_sstable = nullptr;
-      if (OB_FAIL(get_cg_sstable(cg_idx, cg_sstable))) {
+      ObSSTableWrapper cg_wrapper;
+      if (OB_FAIL(get_cg_sstable(cg_idx, cg_wrapper))) {
         LOG_WARN("failed to get cg sstable", K(ret), K(cg_idx));
-      } else if (OB_FAIL(tables.push_back(cg_sstable))) {
+      } else if (OB_FAIL(table_wrappers.push_back(cg_wrapper))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }
@@ -629,7 +666,7 @@ int ObCOSSTableV2::cg_scan(
   int ret = OB_SUCCESS;
   cg_iter = nullptr;
   ObICGIterator *cg_scanner = nullptr;
-  ObCGTableWrapper table_wrapper;
+  ObSSTableWrapper table_wrapper;
 
   if (OB_UNLIKELY(!is_cs_valid())) {
     ret = OB_ERR_UNEXPECTED;

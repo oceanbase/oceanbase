@@ -109,7 +109,8 @@ public:
       const ObStorageMetaHandle &table_store_handle,
       const ObITable::TableKey &table_key,
       ObTableHandleV2 &handle) const;
-  int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
+  int get_sstable(const ObITable::TableKey &table_key, ObSSTableWrapper &wrapper) const;
+  int get_memtable(const ObITable::TableKey &table_key, ObITable *&table) const;
   int get_read_tables(
       const int64_t snapshot_version,
       const ObTablet &tablet,

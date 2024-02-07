@@ -46,13 +46,13 @@ void ObCGAggregatedScanner::reuse()
 int ObCGAggregatedScanner::init(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
-    ObCGTableWrapper &wrapper)
+    ObSSTableWrapper &wrapper)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("The ObCGAggregatedScanner has been inited", K(ret));
-  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.cg_sstable_->is_major_sstable() ||
+  } else if (OB_UNLIKELY(!wrapper.is_valid() || !wrapper.get_sstable()->is_major_sstable() ||
                          !iter_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(wrapper), K(iter_param));

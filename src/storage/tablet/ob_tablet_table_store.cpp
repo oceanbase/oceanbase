@@ -369,13 +369,13 @@ int ObTabletTableStore::inner_replace_sstables(
 {
   int ret = OB_SUCCESS;
   // check table key first
-  ObITable *tmp_table = nullptr;
+  ObSSTableWrapper tmp_wrapper;
   for (int64_t i = 0; OB_SUCC(ret) && i < replace_sstable_array.count(); ++i) {
     const ObITable *table = replace_sstable_array.at(i);
     if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table must be sstable", K(ret), KPC(table));
-    } else if (OB_FAIL(old_store.get_table(table->get_key(), tmp_table))) {
+    } else if (OB_FAIL(old_store.get_sstable(table->get_key(), tmp_wrapper))) {
       LOG_WARN("failed to get the same key sstable in old store", K(ret), KPC(table), K(old_store));
     }
   }
@@ -823,11 +823,22 @@ int ObTabletTableStore::get_table(
   int ret = OB_SUCCESS;
   handle.reset();
   ObITable *table = nullptr;
+  ObSSTableWrapper sstable_wrapper;
+
   if (OB_UNLIKELY(!is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table store is unexpected invalid", K(ret), KPC(this));
-  } else if (OB_FAIL(get_table(table_key, table))) {
-    LOG_WARN("fail to get table pointer", K(ret));
+  } else if (!table_key.is_memtable()) {
+    if (OB_FAIL(get_sstable(table_key, sstable_wrapper))) {
+      LOG_WARN("fail to get sstable wrapper", K(ret), K(table_key));
+    } else {
+      table = sstable_wrapper.get_sstable();
+    }
+  } else if (OB_FAIL(get_memtable(table_key, table))) {
+    LOG_WARN("fail to get memtable pointer", K(ret), K(table_key));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("found null table pointer", K(ret), K(table_key));
@@ -837,7 +848,11 @@ int ObTabletTableStore::get_table(
       LOG_WARN("Failed to set memtable to handle", K(ret), K(handle), K(table_key), KPC(table));
     }
   } else if (static_cast<ObSSTable *>(table)->is_loaded()) {
-    if (!table_store_handle.is_valid()) {
+    if (table->is_cg_sstable() && sstable_wrapper.get_meta_handle().is_valid()) {
+      if ( OB_FAIL(handle.set_sstable(sstable_wrapper.get_sstable(), sstable_wrapper.get_meta_handle()))) {
+        LOG_WARN("fail to set cg sstable to handle", K(ret), K(sstable_wrapper));
+      }
+    } else if (!table_store_handle.is_valid()) {
       // table store object on tablet meta memory
       if (OB_FAIL(handle.set_sstable_with_tablet(table))) {
         LOG_WARN("failed to set sstable to handle", K(ret));
@@ -862,14 +877,14 @@ int ObTabletTableStore::get_table(
   return ret;
 }
 
-int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable *&table) const
+int ObTabletTableStore::get_sstable(const ObITable::TableKey &table_key, ObSSTableWrapper &wrapper) const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!table_key.is_valid())) {
+  if (OB_UNLIKELY(!table_key.is_valid() || table_key.is_memtable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key));
   } else {
-    table = nullptr;
+    wrapper.reset();
     const ObSSTableArray *sst_array = nullptr;
     if (table_key.is_major_sstable()) {
       sst_array = table_key.is_meta_major_sstable()
@@ -881,18 +896,37 @@ int ObTabletTableStore::get_table(const ObITable::TableKey &table_key, ObITable 
       sst_array = &ddl_sstables_;
     }
 
+    if (OB_ISNULL(sst_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable array", K(ret), K(table_key));
+    } else if (sst_array->empty()) {
+      // not found
+    } else if (OB_FAIL(sst_array->get_table(table_key, wrapper))) {
+      LOG_WARN("fail to get table from sstable array", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(wrapper.get_sstable())) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("table not found", K(ret), K(table_key));
+    }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::get_memtable(const ObITable::TableKey &table_key, ObITable *&table) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!table_key.is_valid() && !table_key.is_memtable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(table_key));
+  } else {
+    table = nullptr;
     if (table_key.is_memtable()) {
       common::SpinRLockGuard guard(memtables_lock_);
       if (OB_FAIL(memtables_.find(table_key, table))) {
         LOG_WARN("fail to get memtable", K(ret), K(table_key), K_(memtables));
       }
-    } else if (OB_ISNULL(sst_array)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null sstable array", K(ret), K(table_key));
-    } else if (sst_array->empty()) {
-      // not found
-    } else if (OB_FAIL(sst_array->get_table(table_key, table))) {
-      LOG_WARN("fail to get table from sstable array", K(ret));
     }
 
     if (OB_FAIL(ret)) {

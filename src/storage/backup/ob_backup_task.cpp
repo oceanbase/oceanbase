@@ -3432,7 +3432,7 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
-  ObArray<ObITable *> sstable_array;
+  ObArray<ObSSTableWrapper> sstable_array;
 
   if (OB_ISNULL(ls_backup_ctx_) || OB_ISNULL(tablet_stat)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3454,12 +3454,12 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable array count not 1", K(ret), K(sstable_array));
   } else if (1 == sstable_array.count()) {
-    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0), tablet_handle, tablet_stat))) {
+    if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(0).get_sstable(), tablet_handle, tablet_stat))) {
       LOG_WARN("failed to check and mark item reused", K(ret));
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i), tablet_handle, tablet_stat))) {
+      if (OB_FAIL(check_and_mark_item_reused_(sstable_array.at(i).get_sstable(), tablet_handle, tablet_stat))) {
         LOG_WARN("failed to check and mark item reused", K(ret));
       }
     }

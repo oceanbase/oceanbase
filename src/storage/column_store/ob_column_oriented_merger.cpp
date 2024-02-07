@@ -221,7 +221,7 @@ int ObCOMerger::alloc_writers(
   } else {
     ObCOSSTableV2 &co_sstable = static_cast<ObCOSSTableV2 &>(sstable);
     for (uint32_t idx = start_cg_idx_; OB_SUCC(ret) && idx < end_cg_idx_; idx++) {
-      ObCGTableWrapper cg_wrapper;
+      ObSSTableWrapper cg_wrapper;
       ObITable *table = nullptr;
       ObSSTable *cg_sstable = nullptr;
       const ObStorageColumnGroupSchema &cg_schema = cg_array.at(idx);
@@ -244,7 +244,7 @@ int ObCOMerger::alloc_writers(
           add_column = true;
           STORAGE_LOG(INFO, "add column for cg", K(ret), K(idx), K(co_sstable.get_cs_meta().column_group_cnt_), K(cg_schema), K(sstable));
         }
-      } else if (OB_FAIL(co_sstable.fetch_cg_sstable(idx, cg_wrapper, true/*fetch_meta*/))) {
+      } else if (OB_FAIL(co_sstable.fetch_cg_sstable(idx, cg_wrapper))) {
         STORAGE_LOG(WARN, "failed to get cg sstable", K(ret), K(sstable));
       } else if (OB_FAIL(cg_wrapper.get_sstable(cg_sstable))) {
         STORAGE_LOG(WARN, "failed to get sstable from wrapper", K(ret), K(cg_wrapper));

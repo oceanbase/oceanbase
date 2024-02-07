@@ -31,11 +31,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override final;
+      ObSSTableWrapper &wrapper) override final;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override final;
+      ObSSTableWrapper &wrapper) override final;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override final;
@@ -81,11 +81,11 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override;
+      ObSSTableWrapper &wrapper) override;
   virtual int switch_context(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override;
+      ObSSTableWrapper &wrapper) override;
   virtual int locate(
       const ObCSRange &range,
       const ObCGBitmap *bitmap = nullptr) override;
@@ -133,7 +133,7 @@ public:
   virtual int init(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
-      ObCGTableWrapper &wrapper) override;
+      ObSSTableWrapper &wrapper) override;
   virtual int init_group_by_info() override;
   virtual ObCGIterType get_type() override
   { return OB_CG_GROUP_BY_SCANNER; }
