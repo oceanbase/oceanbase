@@ -515,7 +515,7 @@ bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
 int ObSQLSessionInfo::is_enable_range_extraction_for_not_in(bool &enabled) const
 {
   int ret = OB_SUCCESS;
-  enabled = false;
+  enabled = true;
   int64_t tenant_id = get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   if (tenant_config.is_valid()) {
