@@ -152,7 +152,7 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
                                                       false,/*force_renew*/
                                                       leader_addr))) {
         LOG_WARN("get leader failed", K(ret), K(arg.ls_id_));
-      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).fetch_tablet_autoinc_seq_cache(arg, res))) {
+      } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(THIS_WORKER.get_timeout_remain()).fetch_tablet_autoinc_seq_cache(arg, res))) {
         LOG_WARN("fail to fetch autoinc cache for tablets", K(ret), K(retry_times), K(arg));
       } else {
         finish = true;
