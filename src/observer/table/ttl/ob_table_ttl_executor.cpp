@@ -210,6 +210,9 @@ int ObTableApiTTLExecutor::update_row_to_conflict_checker()
     if (OB_ISNULL(upd_old_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("upd_old_row is NULL", K(ret));
+    } else if (OB_FAIL(check_rowkey_change(*upd_old_row,
+                                           *upd_new_row))) {
+      LOG_WARN("can not update rowkey column", K(ret));
     } else if (OB_FAIL(check_whether_row_change(*upd_old_row,
                                                 *upd_new_row,
                                                 ttl_spec_.get_ctdef().upd_ctdef_,
