@@ -156,12 +156,12 @@ void StackMgr::insert(ObStackHeader *header)
 {
   if (header != nullptr) {
     abort_unless(header->check_magic());
-    mutex_.lock();
+    rwlock_.wrlock(common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
     header->prev_ = &dummy_;
     header->next_ = dummy_.next_;
     dummy_.next_->prev_ = header;
     dummy_.next_ = header;
-    mutex_.unlock();
+    rwlock_.unlock();
   }
 }
 
@@ -169,11 +169,11 @@ void StackMgr::erase(ObStackHeader *header)
 {
   if (header != nullptr) {
     abort_unless(header->check_magic());
-    mutex_.lock();
+    rwlock_.wrlock(common::ObLatchIds::DEFAULT_SPIN_RWLOCK);
     header->prev_->next_ = header->next_;
     header->next_->prev_ = header->prev_;
     header->prev_ = header->next_ = header;
-    mutex_.unlock();
+    rwlock_.unlock();
   }
 }
 
