@@ -128,10 +128,6 @@ TEST_F(TestBlockIdList, test_id_list)
   ASSERT_EQ(OB_SUCCESS, init_info_set(allocator, TEST_LINKED_NUM, info_set));
   ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
   ASSERT_EQ(false, IS_EMPTY_BLOCK_LIST(macro_info.entry_block_));
-  ASSERT_EQ(TEST_LINKED_NUM, macro_info.shared_data_block_info_arr_.cnt_);
-  ASSERT_EQ(TEST_LINKED_NUM, macro_info.shared_meta_block_info_arr_.cnt_);
-  ASSERT_EQ(TEST_LINKED_NUM, macro_info.data_block_info_arr_.cnt_);
-  ASSERT_EQ(TEST_LINKED_NUM, macro_info.meta_block_info_arr_.cnt_);
   meta_block_arr.reset();
   data_block_arr.reset();
   shared_meta_block_arr.reset();
@@ -177,6 +173,92 @@ TEST_F(TestBlockIdList, test_id_list)
     ASSERT_EQ(OB_SUCCESS, OB_SERVER_BLOCK_MGR.block_map_.get(linked_id, block_info));
   }
   ASSERT_EQ(linked_ref_cnt + 2, block_info.ref_cnt_);
+}
+
+TEST_F(TestBlockIdList, test_serialize_deep_copy)
+{
+  ObArenaAllocator allocator;
+  ObLinkedMacroBlockItemWriter linked_writer;
+
+  // linked macro info without meta_block_id and shared_meta_block_id
+  linked_writer.reset();
+  ObBlockInfoSet info_set;
+  ObTabletMacroInfo macro_info;
+  ASSERT_EQ(OB_SUCCESS, info_set.init());
+  for (int64_t i = 0; i < ObTabletMacroInfo::ID_COUNT_THRESHOLD; i++) {
+    MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
+    ASSERT_EQ(OB_SUCCESS, info_set.data_block_info_set_.set_refactored(tmp_macro_id));
+    ASSERT_EQ(OB_SUCCESS, info_set.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+  }
+  ASSERT_EQ(OB_SUCCESS, macro_info.init(allocator, info_set, linked_writer));
+  ASSERT_EQ(0, macro_info.data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info.meta_block_info_arr_.cnt_);
+
+  int64_t serialize_size = macro_info.get_serialize_size();
+  char *buf = (char *)allocator.alloc(serialize_size);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, macro_info.serialize(buf, serialize_size, pos));
+  ObTabletMacroInfo deserialize_info;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, deserialize_info.deserialize(allocator, buf, serialize_size, pos));
+  ASSERT_EQ(deserialize_info.entry_block_, macro_info.entry_block_);
+  ASSERT_EQ(0, deserialize_info.data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deserialize_info.shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deserialize_info.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deserialize_info.meta_block_info_arr_.cnt_);
+
+  int64_t deep_copy_size = macro_info.get_deep_copy_size();
+  buf = (char *)allocator.alloc(deep_copy_size);
+  ObTabletMacroInfo *deep_copy_info = nullptr;
+  ASSERT_EQ(OB_SUCCESS, macro_info.deep_copy(buf, deep_copy_size, deep_copy_info));
+  ASSERT_EQ(deep_copy_info->entry_block_, macro_info.entry_block_);
+  ASSERT_EQ(0, deep_copy_info->data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deep_copy_info->shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deep_copy_info->shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deep_copy_info->meta_block_info_arr_.cnt_);
+
+  // memory macro info without meta_block_id and shared_meta_block_id
+  linked_writer.reset();
+  ObBlockInfoSet info_set_2;
+  ObTabletMacroInfo macro_info_2;
+  static const int64_t MEMORY_ID_CNT = 100;
+  ASSERT_EQ(OB_SUCCESS, info_set_2.init());
+  for (int64_t i = 0; i < MEMORY_ID_CNT; i++) {
+    MacroBlockId tmp_macro_id(i + 1, i + 1, 0);
+    ASSERT_EQ(OB_SUCCESS, info_set_2.data_block_info_set_.set_refactored(tmp_macro_id));
+    ASSERT_EQ(OB_SUCCESS, info_set_2.shared_data_block_info_map_.set_refactored(tmp_macro_id, i + 5));
+  }
+  ASSERT_EQ(OB_SUCCESS, macro_info_2.init(allocator, info_set_2, linked_writer));
+  ASSERT_EQ(true, IS_EMPTY_BLOCK_LIST(macro_info_2.entry_block_));
+  ASSERT_EQ(MEMORY_ID_CNT, macro_info_2.data_block_info_arr_.cnt_);
+  ASSERT_EQ(MEMORY_ID_CNT, macro_info_2.shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info_2.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, macro_info_2.meta_block_info_arr_.cnt_);
+
+  serialize_size = macro_info_2.get_serialize_size();
+  buf = (char *)allocator.alloc(serialize_size);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, macro_info_2.serialize(buf, serialize_size, pos));
+  deserialize_info.reset();
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, deserialize_info.deserialize(allocator, buf, serialize_size, pos));
+  ASSERT_EQ(true, IS_EMPTY_BLOCK_LIST(deserialize_info.entry_block_));
+  ASSERT_EQ(MEMORY_ID_CNT, deserialize_info.data_block_info_arr_.cnt_);
+  ASSERT_EQ(MEMORY_ID_CNT, deserialize_info.shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deserialize_info.shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deserialize_info.meta_block_info_arr_.cnt_);
+
+  deep_copy_size = macro_info_2.get_deep_copy_size();
+  buf = (char *)allocator.alloc(deep_copy_size);
+  deep_copy_info = nullptr;
+  ASSERT_EQ(OB_SUCCESS, macro_info_2.deep_copy(buf, deep_copy_size, deep_copy_info));
+  ASSERT_EQ(deep_copy_info->entry_block_, macro_info_2.entry_block_);
+  ASSERT_EQ(MEMORY_ID_CNT, deep_copy_info->data_block_info_arr_.cnt_);
+  ASSERT_EQ(MEMORY_ID_CNT, deep_copy_info->shared_data_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deep_copy_info->shared_meta_block_info_arr_.cnt_);
+  ASSERT_EQ(0, deep_copy_info->meta_block_info_arr_.cnt_);
 }
 
 TEST_F(TestBlockIdList, test_meta_macro_ref_cnt)
