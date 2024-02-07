@@ -71,6 +71,24 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   acquire_from_follower = false;
   return ret;
 }
+
+bool NOTIFY_MDS_ERRSIM = false;
+
+OB_NOINLINE int ObPartTransCtx::errsim_notify_mds_()
+{
+  int ret = OB_SUCCESS;
+
+  if (NOTIFY_MDS_ERRSIM) {
+    ret = OB_ERR_UNEXPECTED;
+  }
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim notify mds", K(ret), K(NOTIFY_MDS_ERRSIM));
+  }
+
+  return ret;
+}
+
 class ObTestRegisterMDS : public ::testing::Test
 {
 public:
@@ -162,6 +180,33 @@ TEST_F(ObTestRegisterMDS, basic_big_mds)
 #endif
 }
 
+TEST_F(ObTestRegisterMDS, notify_mds_error)
+{
+  START_TWO_TX_NODE_WITH_LSID(n1, n2, 2005);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  const char *mds_str = "register mds basic";
+
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+
+  NOTIFY_MDS_ERRSIM = true;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, n1->txs_.register_mds_into_tx(tx, n1->ls_id_, ObTxDataSourceType::DDL_TRANS,
+                                                      mds_str, strlen(mds_str)));
+  NOTIFY_MDS_ERRSIM = false;
+
+  n2->wait_all_redolog_applied();
+  ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(500)));
+
+  n2->set_as_follower_replica(*n1);
+  ReplayLogEntryFunctor functor(n2);
+  ASSERT_EQ(OB_SUCCESS, n2->fake_tx_log_adapter_->replay_all(functor));
+
+  GC_MDS_RETAIN_CTX(n1)
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+
+  GC_MDS_RETAIN_CTX(n2)
+  ASSERT_EQ(OB_SUCCESS, n2->wait_all_tx_ctx_is_destoryed());
+}
 } // namespace oceanbase
 
 int main(int argc, char **argv)

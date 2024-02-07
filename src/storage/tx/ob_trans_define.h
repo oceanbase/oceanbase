@@ -1638,6 +1638,8 @@ enum class RetainCause : int16_t
   MAX = 1
 };
 
+class ObTxMDSCache;
+
 static const int64_t MAX_TABLET_MODIFY_RECORD_COUNT = 16;
 // exec info need to be persisted by "trans context table"
 struct ObTxExecInfo
@@ -1656,7 +1658,7 @@ public:
   void clear_buffer_ctx_in_multi_data_source();
   void reset();
   // can not destroy in tx_ctx_table
-  void destroy();
+  void destroy(ObTxMDSCache &mds_cache);
   int assign(const ObTxExecInfo &exec_info);
 
 private:

@@ -118,7 +118,9 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
     } else if (OB_FAIL(init_log_cbs_(ls_id, trans_id))) {
       TRANS_LOG(WARN, "init log cbs failed", KR(ret), K(trans_id), K(ls_id));
     } else if (OB_FAIL(ctx_tx_data_.init(ls_ctx_mgr, trans_id))) {
-      TRANS_LOG(WARN, "init ctx tx data failed",K(ret));
+      TRANS_LOG(WARN, "init ctx tx data failed",K(ret), K(trans_id), K(ls_id));
+    } else if (OB_FAIL(mds_cache_.init(tenant_id))) {
+      TRANS_LOG(WARN, "init mds cache failed", K(ret), K(trans_id), K(ls_id));
     }
   }
 
@@ -255,18 +257,27 @@ void ObPartTransCtx::destroy()
     }
     (void)try_gc_retain_ctx_func_();
 
-    if (NULL != tlog_) {
-      print_trace_log_if_necessary_();
-      tlog_ = NULL;
+    exec_info_.destroy(mds_cache_);
+
+    mds_cache_.destroy();
+
+    if (mds_cache_.is_mem_leak()) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "mds memory leak!", K(trans_id_), K(ls_id_),
+                    K(mds_cache_), K(exec_info_), K(ctx_tx_data_), K(start_replay_ts_),
+                    K(start_recover_ts_), K(ctx_create_time_));
+      FORCE_PRINT_TRACE(tlog_, "[check mds mem leak] ");
     }
 
     ctx_tx_data_.destroy();
-    mds_cache_.destroy();
-    exec_info_.destroy();
 
     big_segment_info_.reset();
 
     reset_log_cbs_();
+
+    if (NULL != tlog_) {
+      print_trace_log_if_necessary_();
+      tlog_ = NULL;
+    }
 
     timeout_task_.destroy();
     trace_info_.reset();
@@ -5357,8 +5368,7 @@ int ObPartTransCtx::replay_multi_data_source(const ObTxMultiDataSourceLog &log,
 
       ObTxBufferNode &node = exec_info_.multi_data_source_.at(i);
       if (nullptr != node.data_.ptr()) {
-        MultiTxDataFactory::free(node.data_.ptr());
-        node.data_.assign_ptr(nullptr, 0);
+        mds_cache_.free_mds_node(node.data_, node.get_register_no());
         node.get_buffer_ctx_node().destroy_ctx();
       }
     }
@@ -6076,11 +6086,11 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
       ret = OB_ERR_UNDEFINED;
       TRANS_LOG(ERROR, "unexpected mds type", KR(ret), K(*this));
     } else if (old_node.get_data_source_type() <= ObTxDataSourceType::BEFORE_VERSION_4_1
-               && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
-               && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
-               && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
-      TRANS_LOG(INFO, "old mds type, no need process with buffer ctx",
-                K(old_node.get_data_source_type()), K(*this));
+                && ObTxDataSourceType::CREATE_TABLET_NEW_MDS != old_node.get_data_source_type()
+                && ObTxDataSourceType::DELETE_TABLET_NEW_MDS != old_node.get_data_source_type()
+                && ObTxDataSourceType::UNBIND_TABLET_NEW_MDS != old_node.get_data_source_type()) {
+      TRANS_LOG(DEBUG, "old mds type, no need process with buffer ctx",
+                      K(old_node.get_data_source_type()), K(*this));
     } else {
       if (OB_ISNULL(old_node.get_buffer_ctx_node().get_ctx())) { // this is replay path, create ctx
         if (OB_FAIL(mds::MdsFactory::create_buffer_ctx(old_node.get_data_source_type(), trans_id_,
@@ -6105,11 +6115,13 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
   ObTxBufferNodeArray tmp_buf_arr;
 
-  void *ptr = nullptr;
+  // void *ptr = nullptr;
   int64_t len = 0;
 
   if (OB_FAIL(tmp_buf_arr.reserve(additional_count))) {
     TRANS_LOG(WARN, "reserve array space failed", K(ret));
+  } else if(OB_FAIL(incremental_array.reserve(additional_count))) {
+    TRANS_LOG(WARN, "reserve incremental_array space failed", K(ret));
   } else if (need_replace) {
     ret = exec_info_.multi_data_source_.reserve(additional_count);
   } else {
@@ -6123,20 +6135,30 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
     for (int64_t i = 0; OB_SUCC(ret) && i < mds_array.count(); ++i) {
       const ObTxBufferNode &node = mds_array.at(i);
       len = node.data_.length();
-      if (OB_ISNULL(ptr = MultiTxDataFactory::alloc(len, trans_id_, (uint64_t)this))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(*this), K(len));
+      ObString tmp_data;
+      if (OB_FAIL(mds_cache_.alloc_mds_node(this, node.data_.ptr(), len, tmp_data, node.get_register_no()))) {
+        TRANS_LOG(WARN, "alloc mds node from the mds_cache_ failed", K(ret), K(mds_cache_), KPC(this));
       } else {
-        MEMCPY(ptr, node.data_.ptr(), len);
+      // if (OB_ISNULL(ptr = mtl_malloc(len, ""))) {
+      //   ret = OB_ALLOCATE_MEMORY_FAILED;
+      //   TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(*this), K(len));
+      // } else {
+        // MEMCPY(ptr, node.data_.ptr(), len);
         ObTxBufferNode new_node;
-        ObString data;
-        data.assign_ptr(reinterpret_cast<char *>(ptr), len);
+        // ObString data;
+        // data.assign_ptr(reinterpret_cast<char *>(ptr), len);
         mds::BufferCtx *new_ctx = nullptr;
         if (OB_FAIL(process_with_buffer_ctx(node, new_ctx))) {
+          mds_cache_.free_mds_node(tmp_data, node.get_register_no());
+          // mtl_free(tmp_data.ptr());
+          if (OB_NOT_NULL(new_ctx)) {
+            MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(new_ctx);
+            new_ctx = nullptr;
+          }
           TRANS_LOG(WARN, "process_with_buffer_ctx failed", KR(ret), K(*this));
-        } else if (OB_FAIL(new_node.init(node.get_data_source_type(), data, node.mds_base_scn_,
+        } else if (OB_FAIL(new_node.init(node.get_data_source_type(), tmp_data, node.mds_base_scn_,
                                          new_ctx))) {
-          MultiTxDataFactory::free(data.ptr());
+          mds_cache_.free_mds_node(tmp_data, node.get_register_no());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
@@ -6144,14 +6166,15 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
           TRANS_LOG(WARN, "init new node failed", KR(ret), K(*this));
         } else if (ObTxBufferNode::is_valid_register_no(node.get_register_no())
                    && OB_FAIL(new_node.set_mds_register_no(node.get_register_no()))) {
-          mtl_free(data.ptr());
+          mds_cache_.free_mds_node(tmp_data, node.get_register_no());
+          // mtl_free(tmp_data.ptr());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
           }
           TRANS_LOG(WARN, "set mds register_no failed", KR(ret), K(*this));
         } else if (OB_FAIL(tmp_buf_arr.push_back(new_node))) {
-          MultiTxDataFactory::free(data.ptr());
+          mds_cache_.free_mds_node(tmp_data, node.get_register_no());
           if (OB_NOT_NULL(new_ctx)) {
             MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(new_ctx);
             new_ctx = nullptr;
@@ -6163,7 +6186,7 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
     if (OB_FAIL(ret)) {
       for (int64_t i = 0; i < tmp_buf_arr.count(); ++i) {
-        MultiTxDataFactory::free(tmp_buf_arr[i].data_.ptr());
+        mds_cache_.free_mds_node(tmp_buf_arr[i].data_, tmp_buf_arr[i].get_register_no());
         tmp_buf_arr[i].buffer_ctx_node_.destroy_ctx();
       }
       tmp_buf_arr.reset();
@@ -6176,7 +6199,8 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
 
     for (int64_t i = 0; i < exec_info_.multi_data_source_.count(); ++i) {
       if (nullptr != exec_info_.multi_data_source_[i].data_.ptr()) {
-        MultiTxDataFactory::free(exec_info_.multi_data_source_[i].data_.ptr());
+        mds_cache_.free_mds_node(exec_info_.multi_data_source_[i].data_,
+                                 exec_info_.multi_data_source_[i].get_register_no());
       }
       exec_info_.multi_data_source_[i].buffer_ctx_node_.destroy_ctx();
     }
@@ -6213,8 +6237,8 @@ int ObPartTransCtx::deep_copy_mds_array_(const ObTxBufferNodeArray &mds_array,
         }
         if (tmp_buf_arr[i].get_register_no()
             == exec_info_.multi_data_source_[ctx_array_start_index].get_register_no()) {
-
-          mtl_free(tmp_buf_arr[i].data_.ptr());
+          mds_cache_.free_mds_node(tmp_buf_arr[i].data_, tmp_buf_arr[i].get_register_no());
+          // mtl_free(tmp_buf_arr[i].data_.ptr());
           tmp_buf_arr[i].buffer_ctx_node_.destroy_ctx();
           if (OB_FAIL(incremental_array.push_back(
                   exec_info_.multi_data_source_[ctx_array_start_index]))) {
@@ -6440,6 +6464,7 @@ int ObPartTransCtx::prepare_mul_data_source_tx_end_(bool is_commit)
 #ifdef ERRSIM
 ERRSIM_POINT_DEF(EN_DUP_TABLE_REDO_SYNC)
 ERRSIM_POINT_DEF(EN_SUBMIT_TX_PREPARE_LOG)
+ERRSIM_POINT_DEF(EN_NOTIFY_MDS)
 #endif
 
 int ObPartTransCtx::errism_dup_table_redo_sync_()
@@ -6467,6 +6492,21 @@ OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
 #ifdef ERRSIM
   ret = EN_SUBMIT_TX_PREPARE_LOG;
 #endif
+
+  return ret;
+}
+
+OB_NOINLINE int ObPartTransCtx::errsim_notify_mds_()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_NOTIFY_MDS;
+#endif
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim notify mds in test", K(ret));
+  }
 
   return ret;
 }
@@ -6512,7 +6552,15 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
                                         const bool is_force_kill)
 {
   int ret = OB_SUCCESS;
-  if (is_exiting_ && sub_state_.is_force_abort()) {
+
+  if (OB_FAIL(errsim_notify_mds_())) {
+    TRANS_LOG(WARN, "notify mds errsim", K(ret), K(ls_id_), K(trans_id_), K(notify_type), K(log_ts),
+              K(for_replay), K(notify_array), K(is_force_kill));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (is_exiting_ && sub_state_.is_force_abort()) {
     // do nothing
   } else {
     ObMulSourceDataNotifyArg arg;
@@ -6530,8 +6578,8 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
       TRANS_LOG(WARN, "notify data source failed", K(ret), K(arg));
     }
     if (notify_array.count() > 0) {
-      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts), K(notify_array.count()),
-                K(notify_array), K(total_time));
+      TRANS_LOG(INFO, "notify MDS", K(ret), K(trans_id_), K(ls_id_), K(notify_type), K(log_ts),
+                K(notify_array.count()), K(notify_array), K(total_time));
     }
   }
   return ret;
@@ -6547,7 +6595,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
   int tmp_ret = OB_SUCCESS;
   ObTxBufferNode node;
   ObString data;
-  void *ptr = nullptr;
+  // void *ptr = nullptr;
   ObTxBufferNodeArray tmp_array;
 
   bool need_lock = true;
@@ -6589,11 +6637,10 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
     } else if (is_committing_()) {
       ret = OB_TRANS_HAS_DECIDED;
       TRANS_LOG(WARN, "can not register mds in committing part_ctx", K(ret), KPC(this));
-    } else if (OB_ISNULL(ptr = MultiTxDataFactory::alloc(len, trans_id_, (uint64_t)this))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      TRANS_LOG(WARN, "allocate memory failed", KR(ret), K(data_source_type), K(len));
-    } else if (FALSE_IT(MEMCPY(ptr, buf, len))) {
-    } else if (FALSE_IT(data.assign_ptr(reinterpret_cast<char *>(ptr), len))) {
+    } else if (OB_FAIL(mds_cache_.try_recover_max_register_no(exec_info_.multi_data_source_))) {
+      TRANS_LOG(WARN, "recover max register no failed", K(ret), K(mds_cache_), KPC(this));
+    } else if (OB_FAIL(mds_cache_.alloc_mds_node(this, buf, len, data))) {
+      TRANS_LOG(WARN, "alloc mds node from the mds_cache_ failed", K(ret), K(mds_cache_), KPC(this));
     } else {
       mds::BufferCtx *buffer_ctx = nullptr;
       if (data_source_type > ObTxDataSourceType::BEFORE_VERSION_4_1
@@ -6616,15 +6663,13 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
         ret = OB_LOG_TOO_LARGE;
         TRANS_LOG(WARN, "too large mds buf node", K(ret), K(tmp_array.get_serialize_size()));
 //#endif
-      } else if (OB_FAIL(mds_cache_.try_recover_max_register_no(exec_info_.multi_data_source_))) {
-        TRANS_LOG(WARN, "recover max register no failed", K(ret), K(mds_cache_), KPC(this));
       } else if (OB_FAIL(mds_cache_.insert_mds_node(node))) {
         TRANS_LOG(WARN, "register multi source data failed", KR(ret), K(data_source_type),
                   K(*this));
       }
 
       if (OB_FAIL(ret)) {
-        MultiTxDataFactory::free(ptr);
+        mds_cache_.free_mds_node(data, node.get_register_no());
         if (OB_NOT_NULL(buffer_ctx)) {
           MTL(mds::ObTenantMdsService *)->get_buffer_ctx_allocator().free(buffer_ctx);
         }

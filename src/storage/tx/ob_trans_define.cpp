@@ -733,7 +733,7 @@ void ObTxExecInfo::reset()
   is_sub2pc_ = false;
 }
 
-void ObTxExecInfo::destroy()
+void ObTxExecInfo::destroy(ObTxMDSCache &mds_cache)
 {
   if (!mds_buffer_ctx_array_.empty()) {
     TRANS_LOG_RET(WARN, OB_ERR_UNEXPECTED, "mds_buffer_ctx_array_ is valid when exec_info destroy",
@@ -745,7 +745,8 @@ void ObTxExecInfo::destroy()
   for (int64_t i = 0; i < multi_data_source_.count(); ++i) {
     ObTxBufferNode &node = multi_data_source_.at(i);
     if (nullptr != node.data_.ptr()) {
-      MultiTxDataFactory::free(node.data_.ptr());
+      mds_cache.free_mds_node(node.data_, node.get_register_no());
+      // share::mtl_free(node.data_.ptr());
       node.buffer_ctx_node_.destroy_ctx();
     }
   }
