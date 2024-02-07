@@ -3855,7 +3855,16 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
       //inner sql不能丢入大查询队列, 因为有可能上层查询已有数据返回客户端
     } else {
       get_plan_err = ret;
-      ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      int tmp_ret = OB_SUCCESS;
+      tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
+      if (OB_SUCCESS != tmp_ret) {
+         // do nothing
+        if (OB_SQL_PC_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        ret = OB_SUCCESS; //get plan出错, 覆盖错误码, 确保因plan cache的错误不影响正常执行路径
+      }
     }
   } else { //get plan 成功
     plan_cache->inc_hit_and_access_cnt();
@@ -4340,6 +4349,8 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_REACH_MAX_CONCURRENT_NUM;
     }
 
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = OB_E(EventTable::EN_PC_NOT_SWALLOW_ERROR) OB_SUCCESS;
     if (is_batch_exec) {
       // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
       if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
@@ -4367,9 +4378,13 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = OB_SUCCESS;
       LOG_DEBUG("plan cache don't support add this kind of plan now",  K(phy_plan));
     } else if (OB_FAIL(ret)) {
-      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
-        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
-        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+      if (OB_SUCCESS != tmp_ret) {
+
+      } else {
+        if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+          ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
+          LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+        }
       }
     } else {
       pc_ctx.sql_ctx_.self_add_plan_ = true;
