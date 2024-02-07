@@ -648,6 +648,15 @@ public:
   // @param[out] ls_recovery_stat
   // int get_ls_replica_readable_scn(share::SCN &readable_scn)
   DELEGATE_WITH_RET(ls_recovery_stat_handler_, get_ls_level_recovery_stat, int);
+  //gather all replicas of ls's readable scn
+  // If follower LS replica call this function, it will return OB_NOT_MASTER.
+  //int gather_replica_readable_scn();
+  DELEGATE_WITH_RET(ls_recovery_stat_handler_, gather_replica_readable_scn, int);
+
+  // get all ls readable_scn: it will be failed while has replica is offline
+  // @param[out] readable_scn ls readable_scn
+  // int get_all_replica_min_readable_scn(share::SCN &readable_scn)
+  DELEGATE_WITH_RET(ls_recovery_stat_handler_, get_all_replica_min_readable_scn, int);
 
   // disable clog sync.
   // with ls read lock and log write lock.

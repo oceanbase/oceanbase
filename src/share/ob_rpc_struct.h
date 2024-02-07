@@ -7015,12 +7015,12 @@ struct ObGetLSReplayedScnArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObGetLSReplayedScnArg(): tenant_id_(OB_INVALID_TENANT_ID), ls_id_() {}
+  ObGetLSReplayedScnArg(): tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), all_replica_(false) {}
   ~ObGetLSReplayedScnArg() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const bool all_replica);
   int assign(const ObGetLSReplayedScnArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(all_replica));
 
   uint64_t get_tenant_id() const
   {
@@ -7030,11 +7030,16 @@ public:
   {
     return ls_id_;
   }
+  bool is_all_replica() const
+  {
+    return all_replica_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetLSReplayedScnArg);
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
+  bool all_replica_;//add in 4.3.0, for get all ls replica readable_scn
 };
 
 struct ObGetLSReplayedScnRes
@@ -7043,10 +7048,12 @@ struct ObGetLSReplayedScnRes
 public:
   ObGetLSReplayedScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                            ls_id_(),
-                           cur_readable_scn_(share::SCN::min_scn()) {}
+                           cur_readable_scn_(share::SCN::min_scn()),
+                           self_addr_() {}
   ~ObGetLSReplayedScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_readable_scn);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_readable_scn,
+           const common::ObAddr &server);
   int assign(const ObGetLSReplayedScnRes &other);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_readable_scn));
   uint64_t get_tenant_id() const
@@ -7061,12 +7068,17 @@ public:
   {
     return cur_readable_scn_;
   }
+  common::ObAddr get_server() const
+  {
+    return self_addr_;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetLSReplayedScnRes);
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   share::SCN cur_readable_scn_;
+  common::ObAddr self_addr_;//add in 4.3.0
 };
 
 struct ObSwitchTenantArg

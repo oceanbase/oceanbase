@@ -263,6 +263,14 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
           } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(replayable_scn))) {
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
           }
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
+          } else if (OB_TMP_FAIL(ls->gather_replica_readable_scn())) {
+            if (OB_NOT_MASTER == tmp_ret) {
+              tmp_ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to gather replica readable scn", KR(tmp_ret));
+            }
+          }
 
           if (ls->is_sys_ls() && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
             // nothing todo

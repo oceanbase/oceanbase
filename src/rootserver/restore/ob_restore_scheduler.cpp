@@ -1032,18 +1032,14 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
       LOG_WARN("failed to read ls info", KR(ret));
     } else {
       const SCN &sync_scn = backup_ls_attr.backup_scn_;
-      const SCN readable_scn = SCN::base_scn();
       ObLSRecoveryStatOperator ls_recovery;
-      ObLSRecoveryStat ls_recovery_stat;
-      LOG_INFO("start to create ls and set sync scn", K(sync_scn), K(backup_ls_attr));
-      if (OB_FAIL(ls_recovery_stat.init_only_recovery_stat(
-              tenant_id_, SYS_LS, sync_scn, readable_scn))) {
-        LOG_WARN("failed to init ls recovery stat", KR(ret), K(backup_ls_attr.backup_scn_),
-                 K(sync_scn), K(readable_scn));
-      } else if (OB_FAIL(ls_recovery.update_ls_recovery_stat(ls_recovery_stat, false, *sql_proxy_))) {
-        LOG_WARN("failed to update ls recovery stat", KR(ret),
-                 K(ls_recovery_stat));
+      const uint64_t exec_tenant_id = get_private_table_exec_tenant_id(tenant_id_);
+      START_TRANSACTION(sql_proxy_, exec_tenant_id)
+      LOG_INFO("start to create ls and set sync scn", K(sync_scn), K(backup_ls_attr), KR(ret));
+      if (FAILEDx(ls_recovery.update_sys_ls_sync_scn(tenant_id_, trans, sync_scn))) {
+        LOG_WARN("failed to update sync ls sync scn", KR(ret), K(sync_scn));
       }
+       END_TRANSACTION(trans)
     }
     if (FAILEDx(create_all_ls_(*tenant_schema, backup_ls_attr.ls_attr_array_))) {
       LOG_WARN("failed to create all ls", KR(ret), K(backup_ls_attr), KPC(tenant_schema));

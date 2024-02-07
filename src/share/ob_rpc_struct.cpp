@@ -5937,7 +5937,7 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSReplayedScnArg, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(ObGetLSReplayedScnArg, tenant_id_, ls_id_, all_replica_);
 
 bool ObGetLSReplayedScnArg::is_valid() const
 {
@@ -5945,7 +5945,7 @@ bool ObGetLSReplayedScnArg::is_valid() const
          && ls_id_.is_valid();
 }
 int ObGetLSReplayedScnArg::init(
-    const uint64_t tenant_id, const ObLSID &ls_id)
+    const uint64_t tenant_id, const ObLSID &ls_id, const bool all_replica)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
@@ -5955,6 +5955,7 @@ int ObGetLSReplayedScnArg::init(
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
+    all_replica_ = all_replica;
   }
   return ret;
 }
@@ -5964,33 +5965,38 @@ int ObGetLSReplayedScnArg::assign(const ObGetLSReplayedScnArg &other)
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
+    all_replica_ = other.all_replica_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObGetLSReplayedScnRes, tenant_id_, ls_id_, cur_readable_scn_);
+OB_SERIALIZE_MEMBER(ObGetLSReplayedScnRes, tenant_id_, ls_id_, cur_readable_scn_, self_addr_);
 
 bool ObGetLSReplayedScnRes::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && ls_id_.is_valid()
          && cur_readable_scn_.is_valid_and_not_min();
+  //no need check server valid
 }
 int ObGetLSReplayedScnRes::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const share::SCN &cur_readable_scn)
+    const share::SCN &cur_readable_scn,
+    const common::ObAddr &server)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   || !ls_id.is_valid()
-                  || !cur_readable_scn.is_valid_and_not_min())) {
+                  || !cur_readable_scn.is_valid_and_not_min()
+                  || !server.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_readable_scn));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(cur_readable_scn), K(server));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     cur_readable_scn_ = cur_readable_scn;
+    self_addr_ = server;
   }
   return ret;
 }
@@ -6002,6 +6008,7 @@ int ObGetLSReplayedScnRes::assign(const ObGetLSReplayedScnRes &other)
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
     cur_readable_scn_ = other.cur_readable_scn_;
+    self_addr_ = other.self_addr_;
   }
   return ret;
 }
