@@ -587,7 +587,7 @@ int ObTabletTableStore::try_cache_local_sstable_meta(
       if (array_sstable->is_loaded()) {
         // sstable is already loaded to memory
       } else if (array_sstable->is_remote_logical_minor_sstable()) {
-        // no need to cache remote logical minor sstable.
+        // no need to cache remote logical minor sstable, here only for compatible.
       } else if (OB_FAIL(load_sstable(
           array_sstable->get_addr(), array_sstable->is_co_sstable(), sstable_handle))) {
         LOG_WARN("fail to load sstable", K(ret), KPC(array_sstable));
@@ -2300,9 +2300,6 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
     common::ObIArray<ObITable *> &new_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  //TODO(muwei.ym) remove logical sstable in 4.2 RC3
-  //1.ha now will not reuse minor sstable so it need add minor sstable which is from src and end_scn <= clog_checkpoint_scn
-  //2.old store minor sstables contains remote logical sstable and after clog_checkpoint_scn sstables.
   SCN max_copy_end_scn;
   max_copy_end_scn.set_min();
   ObArray<ObITable *> tmp_minor_sstables;
@@ -2320,11 +2317,8 @@ int ObTabletTableStore::combine_ha_minor_sstables_(
   for (int64_t i = 0; OB_SUCC(ret) && i < old_store_minor_sstables.count(); ++i) {
     ObITable *table = old_store_minor_sstables.at(i);
     if (table->is_remote_logical_minor_sstable()) {
-      if (max_copy_end_scn < table->get_end_scn() && !max_copy_end_scn.is_min()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("remote logical minor sstable end scn is bigger than max copy end scn, unexpected",
-            K(ret), K(max_copy_end_scn), KPC(table));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old store minor sstable contains logical sstable, unexpected", K(ret), K(old_store_minor_sstables));
     } else if (table->get_end_scn() <= max_copy_end_scn) {
       //do nothing
     } else if (OB_FAIL(tmp_minor_sstables.push_back(table))) {
@@ -2407,7 +2401,6 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
     common::ObIArray<ObITable *> &old_store_minor_sstables)
 {
   int ret = OB_SUCCESS;
-  int64_t remote_logical_minor_sstable_count = 0;
 
   if (OB_FAIL(check_minor_tables_continue_(old_store_minor_sstables))) {
     LOG_WARN("failed to check minor tables continue", K(ret), K(old_store_minor_sstables));
@@ -2416,16 +2409,10 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
   //check old store remote logical minor sstable count should be less than 1
   for (int64_t i = 0; OB_SUCC(ret) && i < old_store_minor_sstables.count(); ++i) {
     ObITable *table = old_store_minor_sstables.at(i);
-    if (OB_ISNULL(table) || !table->is_multi_version_minor_sstable()) {
+    if (OB_ISNULL(table) || !table->is_multi_version_minor_sstable() || table->is_remote_logical_minor_sstable()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null or table type is unexpected", K(ret), KPC(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      remote_logical_minor_sstable_count++;
     }
-  }
-  if (OB_SUCC(ret) && remote_logical_minor_sstable_count > 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("old table store remote logical minor sstable count more than 1", K(ret), K(old_store_minor_sstables));
   }
   return ret;
 }
@@ -2433,89 +2420,13 @@ int ObTabletTableStore::check_old_store_minor_sstables_(
 int ObTabletTableStore::get_ha_mini_minor_sstables_(ObTableStoreIterator &iter) const
 {
   int ret = OB_SUCCESS;
-  int64_t index = 0;
-
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
     ObSSTable *table = minor_tables_[i];
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      index = i + 1;
-      break;
-    }
-  }
-
-  for (int64_t i = index; OB_SUCC(ret) && i < minor_tables_.count(); ++i) {
-    ObSSTable *table = minor_tables_[i];
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table should not be NULL", K(ret), K(minor_tables_), KP(table));
-    } else if (table->is_remote_logical_minor_sstable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet table store has multi remote logical minor sstable, unexpected !!!", K(ret), K(minor_tables_));
     } else if (OB_FAIL(iter.add_table(table))) {
       LOG_WARN("failed to push table into minor sstables array", K(ret), KPC(table), K(minor_tables_));
-    }
-  }
-  return ret;
-}
-
-int ObTabletTableStore::update_ha_minor_sstables_(
-    common::ObArenaAllocator &allocator,
-    const ObTablet &tablet,
-    const ObBatchUpdateTableStoreParam &param,
-    const ObTabletTableStore &old_store)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObITable *> new_minor_tables;
-  const ObSSTableArray &old_minor_tables = old_store.minor_tables_;
-
-  if (param.start_scn_ >= tablet.get_clog_checkpoint_scn()) {
-    //no need keep local minor sstable
-    LOG_INFO("start scn is bigger than clog checkpoint ts, no need keep local minor sstable", K(old_store));
-  } else {
-    int64_t index = 0;
-    bool has_remote_logical_sstable = false;
-    for (int64_t i = 0; i < old_minor_tables.count(); ++i) {
-      const ObITable *table = old_minor_tables[i];
-      if (table->is_remote_logical_minor_sstable()) {
-        has_remote_logical_sstable = true;
-        index = i;
-        break;
-      }
-    }
-
-    if (has_remote_logical_sstable) {
-      ObITable *table = old_minor_tables[index];
-      if (!table->is_remote_logical_minor_sstable()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table type is unexpected", K(ret), KPC(table), K(old_store), K(param));
-      } else if (param.start_scn_ >= table->get_end_scn()) {
-        //no need remote logical sstable
-        index = index + 1;
-      } else {
-        ObSSTable *sstable = static_cast<ObSSTable *>(table);
-        share::ObScnRange new_scn_range;
-        share::ObScnRange original_scn_range = sstable->get_scn_range();
-        new_scn_range.start_scn_ = param.start_scn_;
-        new_scn_range.end_scn_ = table->get_end_scn();
-        sstable->set_scn_range(new_scn_range);
-        LOG_INFO("cut ha remote logical sstable log ts range", KPC(sstable), K(new_scn_range), K(original_scn_range));
-      }
-    } else {
-      //local minor sstable contain param.start_scn, reuse local sstable
-      //index = 0
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(old_minor_tables.get_all_tables(new_minor_tables))) {
-        LOG_WARN("failed to get all minor tables", K(ret), K(old_minor_tables));
-      } else if (index >= new_minor_tables.count()) {
-        //reuse nothing, copy from src
-      } else if (OB_FAIL(minor_tables_.init(allocator, new_minor_tables, index))) {
-        LOG_WARN("failed to init minor_tables", K(ret), K(new_minor_tables));
-      }
     }
   }
   return ret;
@@ -2529,11 +2440,7 @@ int ObTabletTableStore::build_ha_minor_tables_(
     const int64_t inc_base_snapshot_version)
 {
   int ret = OB_SUCCESS;
-  if (param.update_logical_minor_sstable_) {
-    if (OB_FAIL(update_ha_minor_sstables_(allocator, tablet, param, old_store))) {
-      LOG_WARN("failed to update ha minor sstables", K(ret), K(param), K(old_store));
-    }
-  } else if (param.is_transfer_replace_) {
+  if (param.is_transfer_replace_) {
     if (OB_FAIL(replace_transfer_minor_sstables_(allocator, tablet, param, old_store))) {
       LOG_WARN("failed to replace transfer minor tables", K(ret), K(param), K(old_store));
     }
