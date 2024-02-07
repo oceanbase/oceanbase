@@ -138,7 +138,27 @@ int ObIndexBuilderUtil::add_column(
   }
   return ret;
 }
-
+int ObIndexBuilderUtil::set_shadow_column_info(
+    const ObString &src_column_name,
+    const uint64_t src_column_id,
+    ObColumnSchemaV2 &shadow_column_schema) {
+  int ret = OB_SUCCESS;
+  shadow_column_schema.set_nullable(true);
+  //the shadow pk is an independent column
+  //so it should not inherit the column flags of the original pk
+  shadow_column_schema.set_column_flags(0);
+  ObObj default_obj;
+  default_obj.set_null();
+  shadow_column_schema.set_cur_default_value(default_obj);
+  shadow_column_schema.set_orig_default_value(default_obj);
+  shadow_column_schema.set_tbl_part_key_pos(0);
+  shadow_column_schema.set_column_id(src_column_id);
+  shadow_column_schema.set_is_hidden(true);
+  if (OB_FAIL(shadow_column_schema.set_column_name(src_column_name))) {
+    LOG_WARN("set_column_name failed", K(src_column_name), K(ret));
+  }
+  return ret;
+}
 int ObIndexBuilderUtil::add_shadow_pks(
     const ObTableSchema &data_schema,
     ObRowDesc &row_desc,
@@ -187,19 +207,8 @@ int ObIndexBuilderUtil::add_shadow_pks(
               K(column_id), K(ret));
         } else {
           data_column = *const_data_column;
-          data_column.set_nullable(true);
-          //the shadow pk is an independent column
-          //so it should not inherit the column flags of the original pk
-          data_column.set_column_flags(0);
-          ObObj default_obj;
-          default_obj.set_null();
-          data_column.set_cur_default_value(default_obj);
-          data_column.set_orig_default_value(default_obj);
-          data_column.set_tbl_part_key_pos(0);
-          data_column.set_column_id(OB_MIN_SHADOW_COLUMN_ID + const_data_column->get_column_id());
-          data_column.set_is_hidden(true);
-          if (OB_FAIL(data_column.set_column_name(shadow_pk_name))) {
-            LOG_WARN("set_column_name failed", KCSTRING(shadow_pk_name), K(ret));
+          if (OB_FAIL(set_shadow_column_info(shadow_pk_name, common::OB_MIN_SHADOW_COLUMN_ID + const_data_column->get_column_id(), data_column))) {
+            LOG_WARN("fail to set shadow_column_info", K(ret), K(data_column), K(shadow_pk_name));
           } else {
             // primary key(uk2, uk1)
             if (data_column.get_column_id() > schema.get_max_used_column_id()) {

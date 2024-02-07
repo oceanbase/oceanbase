@@ -7714,19 +7714,43 @@ int ObDDLService::rebuild_constraint_check_expr(
 int ObDDLService::check_can_alter_column_type(
     const share::schema::ObColumnSchemaV2 &src_column,
     const share::schema::ObColumnSchemaV2 &dst_column,
-    const share::schema::ObTableSchema &table_schema)
+    const share::schema::ObTableSchema &table_schema,
+    const bool is_oracle_mode)
 {
   int ret = OB_SUCCESS;
   bool is_change_column_type = false;
   bool is_in_index = false;
+  bool has_generated_depend = src_column.has_generated_column_deps();
   if (OB_FAIL(check_is_change_column_type(src_column, dst_column, is_change_column_type))) {
     LOG_WARN("fail to check is change column type", K(ret), K(src_column), K(dst_column));
   } else if (is_change_column_type) {
     if (OB_FAIL(check_column_in_index(src_column.get_column_id(), table_schema, is_in_index))) {
       LOG_WARN("fail to check column is in index table", K(ret));
-    } else if (is_in_index) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("cannot modify column in index table", K(ret));
+    } else if (is_in_index || has_generated_depend) {
+      // is_in_index==true means : src_column is 'the index column' or 'index create by user'.
+      const common::ObObjMeta &src_meta = src_column.get_meta_type();
+      const common::ObObjMeta &dst_meta = dst_column.get_meta_type();
+      if (is_oracle_mode) {
+        // in oracle mode
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("cannot modify column in index table", K(ret), K(src_column), K(dst_column), K(table_schema));
+      } else {
+        // in mysql mode
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+          LOG_WARN("fail to get data version", KR(ret), K(table_schema.get_tenant_id()));
+        } else if (((has_generated_depend && !is_in_index) || data_version >= DATA_VERSION_4_2_2_0)
+            && common::is_match_alter_integer_column_online_ddl_rules(src_meta, dst_meta)) {
+            // support online ddl with index, generated column depended:
+            // smaller integer -> big integer in mysql mode in version 4.2.2
+        } else if (((has_generated_depend && !is_in_index) || data_version >= DATA_VERSION_4_3_0_0)
+            && common::is_match_alter_string_column_online_ddl_rules(src_meta, dst_meta, src_column.get_data_length(), dst_column.get_data_length())) {
+          // generated column type change of: varchar <-> tinytext; varbinary <-> tinyblob; smaller lob -> larger lob; (4.3.0.0)
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("cannot modify column in index table", K(ret), K(src_column), K(dst_column), K(table_schema), K(data_version));
+        }
+      }
     }
   }
   return ret;
@@ -7785,29 +7809,25 @@ int ObDDLService::check_column_in_index(
             LOG_WARN("fail to get column ids", K(ret));
           }
           for (int64_t j = 0; OB_SUCC(ret) && !is_in_index && j < column_ids.count(); ++j) {
+            const ObColumnSchemaV2 *column_schema = NULL;
             if (column_id == column_ids.at(j).col_id_) {
               is_in_index = true;
-            }
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret) && !is_in_index) {
-      column_ids.reuse();
-      if (OB_FAIL(table_schema.get_column_ids(column_ids))) {
-        LOG_WARN("fail to get column ids", K(ret));
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && !is_in_index && j < column_ids.count(); ++j) {
-          const ObColumnSchemaV2 *column_schema = NULL;
-          if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_ids.at(j).col_id_))) {
-            ret = OB_SCHEMA_ERROR;
-            LOG_WARN("column schema must not be NULL", K(ret), K(column_ids.at(j)));
-          } else if (column_schema->is_generated_column()) {
-            ObArray<uint64_t> ref_column_ids;
-            if (OB_FAIL(column_schema->get_cascaded_column_ids(ref_column_ids))) {
-              LOG_WARN("fail to get cascade column ids", K(ret));
-            } else {
-              is_in_index = has_exist_in_array(ref_column_ids, column_id);
+            } else if (column_ids.at(j).col_id_ > common::OB_MIN_SHADOW_COLUMN_ID) {
+              // table schema get column_schema by shadow_column_id, the result is nullptr;
+            } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_ids.at(j).col_id_))) {
+              ret = OB_SCHEMA_ERROR;
+              LOG_WARN("column schema must not be NULL", K(ret), K(column_ids.at(j)));
+            } else if (column_schema->is_generated_column()) {
+              ObArray<uint64_t> ref_column_ids;
+              if (OB_FAIL(column_schema->get_cascaded_column_ids(ref_column_ids))) {
+                LOG_WARN("fail to get cascade column ids", K(ret));
+              } else {
+                /*
+                  If the column (namely A) is depended by a generated column, and users build an index on the generated column.
+                  We consider the column (A) is in index.
+                */
+                is_in_index = has_exist_in_array(ref_column_ids, column_id);
+              }
             }
           }
         }
@@ -7883,6 +7903,58 @@ int ObDDLService::check_modify_column_when_upgrade(
   }
   return ret;
 }
+int ObDDLService::alter_shadow_column_for_index(
+    const ObArray<ObTableSchema> &idx_schema_array,
+    const AlterColumnSchema *alter_column_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(alter_column_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(alter_column_schema));
+  } else if (!new_column_schema.is_rowkey_column()) {
+    // column is not rowkey column, need not update
+  } else {
+    const ObColumnSchemaV2 *origin_shadow_column_schema = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < idx_schema_array.count(); ++i) {
+      const ObTableSchema& idx_table_schema = idx_schema_array.at(i);
+      if (idx_table_schema.get_shadow_rowkey_column_num() > 0) {
+        const ObColumnSchemaV2 *origin_shadow_column_schema = nullptr;
+        if (OB_ISNULL(origin_shadow_column_schema = idx_table_schema.get_column_schema(alter_column_schema->get_column_id() + common::OB_MIN_SHADOW_COLUMN_ID))) {
+          ret = OB_ENTRY_NOT_EXIST;
+          LOG_WARN("origin_shadow_column not exist", K(ret), KPC(alter_column_schema), K(idx_table_schema));
+        } else if (!origin_shadow_column_schema->is_rowkey_column()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("origin_shadow_column_schema is not rowkey column", K(ret), K(idx_table_schema), KPC(origin_shadow_column_schema));
+        } else {
+          SMART_VAR(ObColumnSchemaV2, new_aux_column_schema) {
+            new_aux_column_schema.reset();
+            if (OB_FAIL(new_aux_column_schema.assign(*origin_shadow_column_schema))){
+              LOG_WARN("fail to assgin new_aux_column_schema", K(ret), KPC(origin_shadow_column_schema));
+            } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema, new_aux_column_schema))) {
+              LOG_WARN("failed to fill new column attributes", K(ret), KPC(alter_column_schema), K(new_aux_column_schema));
+            } else if (OB_FAIL(ObIndexBuilderUtil::set_shadow_column_info(origin_shadow_column_schema->get_column_name(), origin_shadow_column_schema->get_column_id(), new_aux_column_schema))) {
+              LOG_WARN("fail to set shadow_column_info", K(ret), K(new_aux_column_schema), K(origin_shadow_column_schema->get_column_name()));
+            } else if (OB_FAIL(ddl_operator.update_single_column(trans,
+                      idx_table_schema,
+                      idx_table_schema,
+                      new_aux_column_schema))) {
+              LOG_WARN("schema service update aux column failed", K(ret), K(idx_table_schema), K(new_aux_column_schema));
+            } else if (OB_FAIL(ddl_operator.sync_aux_schema_version_for_history(
+                    trans,
+                    idx_table_schema))) {
+              LOG_WARN("fail to update aux schema version for update column", K(ret), K(idx_table_schema));
+            }
+          } // end SMART_VAR
+        }
+      }
+    } // end for
+  }
+  return ret;
+}
+
 
 int ObDDLService::check_new_column_for_index(
     ObIArray<ObTableSchema> &idx_schemas,
@@ -9090,6 +9162,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             } else if (OB_FAIL(ddl_operator.update_single_column(
                          trans, origin_table_schema, new_table_schema, new_column_schema))) {
               RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+            } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
+              RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
                                  new_column_schema,
@@ -9182,7 +9256,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             }
 
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(check_can_alter_column_type(*orig_column_schema, *alter_column_schema, origin_table_schema))) {
+              if (OB_FAIL(check_can_alter_column_type(*orig_column_schema, *alter_column_schema, origin_table_schema, is_oracle_mode))) {
                 LOG_WARN("fail to check can alter column type", K(ret));
               }
             }
@@ -9220,6 +9294,8 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                  new_table_schema,
                                  new_column_schema))) {
                 RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
+              } else if (OB_FAIL(alter_shadow_column_for_index(idx_schema_array, alter_column_schema, new_column_schema, ddl_operator, trans))) {
+                RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                           new_column_schema,
                                                                           ddl_operator,
@@ -35552,7 +35628,7 @@ int ObDDLService::prepare_change_modify_column_online(AlterColumnSchema &alter_c
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(check_can_alter_column_type(*orig_column_schema, alter_column_schema,
-                                            origin_table_schema))) {
+                                            origin_table_schema, is_oracle_mode))) {
       LOG_WARN("fail to check can alter column type", K(ret));
     }
   }

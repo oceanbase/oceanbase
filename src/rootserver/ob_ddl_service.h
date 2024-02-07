@@ -1802,7 +1802,8 @@ private:
   int check_can_alter_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,
-      const share::schema::ObTableSchema &table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const bool is_oracle_mode);
   int check_is_change_column_type(
       const share::schema::ObColumnSchemaV2 &src_column,
       const share::schema::ObColumnSchemaV2 &dst_column,
@@ -1817,6 +1818,13 @@ private:
   int check_modify_column_when_upgrade(
       const share::schema::ObColumnSchemaV2 &new_column,
       const share::schema::ObColumnSchemaV2 &orig_column);
+  int alter_shadow_column_for_index(
+    const ObArray<ObTableSchema> &idx_schema_array,
+    const AlterColumnSchema *alter_column_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans);
+
   int check_new_column_for_index(
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
       const share::schema::ObColumnSchemaV2 &new_column_schema);

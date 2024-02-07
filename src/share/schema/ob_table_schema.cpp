@@ -4475,10 +4475,8 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
       } else {
         // in mysql mode
         if (!is_type_reduction &&
-           ((src_meta.is_integer_type() && dst_meta.is_integer_type())
-           || (src_meta.is_varbinary() && dst_meta.is_blob())
-           || (src_meta.is_text() && (dst_meta.is_text() || dst_meta.is_varchar()))
-           || (src_meta.is_blob() && (dst_meta.is_blob() || dst_meta.is_varbinary())))) {
+           (common::is_match_alter_integer_column_online_ddl_rules(src_meta, dst_meta) // smaller integer -> larger integer
+            || common::is_match_alter_string_column_online_ddl_rules(src_meta, dst_meta, src_col_byte_len, dst_col_byte_len))) { // varchar, tinytext; varbinary, tinyblob; lob;
           // online, do nothing
         } else {
           is_offline = true;
@@ -4574,7 +4572,8 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   } else if (OB_FAIL(check_alter_column_in_foreign_key(src_schema, dst_schema, is_oracle_mode))) {
     LOG_WARN("failed to check alter column in foreign key", K(ret));
   } else if (!is_oracle_mode
-            && is_column_in_check_constraint(src_schema.get_column_id())) {
+            && (is_column_in_check_constraint(src_schema.get_column_id())
+              && !common::is_match_alter_integer_column_online_ddl_rules(src_schema.get_meta_type(), dst_schema.get_meta_type()))) {
   // The column contains the check constraint to prohibit modification of the type in mysql mode
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column with check constraint");
@@ -4616,6 +4615,7 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   bool is_rowkey = false;
   bool is_index = false;
   bool is_same = false;
+  uint64_t data_version = 0;
   const ColumnType src_col_type = src_column.get_data_type();
   const ColumnType dst_col_type = dst_column.get_data_type();
   const ObObjMeta &src_meta = src_column.get_meta_type();
@@ -4628,8 +4628,10 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
   } else if (is_same) {
     // do nothing
   } else if (!is_offline) {
-    if (is_oracle_mode) {
-      if (!ob_is_number_tc(src_col_type) &&
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+        LOG_WARN("failed to get min data version", K(ret), K(tenant_id_), K(data_version));
+    } else if (is_oracle_mode) {
+      if (!(ob_is_number_tc(src_col_type)) &&
         ((!src_meta.is_varying_len_char_type() &&
         !src_meta.is_timestamp_tz() &&
         !src_meta.is_timestamp_ltz() &&
@@ -4651,8 +4653,8 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
         is_offline = true;
       }
     } else {
-      // MYSQL mode
       if (!ob_is_number_tc(src_col_type) &&
+          !ob_is_decimal_int_tc(src_col_type) &&
           ((!ob_is_text_tc(src_col_type) &&
           !src_meta.is_bit() &&
           !src_meta.is_varchar() &&
@@ -4661,18 +4663,31 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           !src_meta.is_datetime()) ||
           src_col_type != dst_col_type) &&
           (!src_meta.is_timestamp() &&
-          (!dst_meta.is_datetime() ||
-          !dst_meta.is_datetime()))) {
+            !dst_meta.is_datetime()) &&
+          !((src_meta.is_char() && dst_meta.is_char()) && // char(x) -> char(y) (y>=x) && src_column has no generated column depended on (rowkey or index)
+            !src_column.has_generated_column_deps()) &&
+          !(src_meta.is_integer_type() && dst_meta.is_integer_type() && data_version >= DATA_VERSION_4_2_2_0)) {
+        /*
+          Note of the judge of data_version:
+            Determine data_version to avoid mixed deployment problems during the upgrade process.
+            During the upgrade process, the memtable_key.h of the old version of the observer will not have different types of defense rules (common::is_match_alter_integer_column_online_ddl_rules).
+            And, the type dismatch may cause 4016 problems;
+              1. This issue only needs to consider the primary key, index and part_key columns, so put the check here.
+              2. In the online ddl conversion released in 4.2.2 and 4.3, only the column type conversion of integer will involve this issue.
+            Therefore, we make a special case where the integer column is used as the primary key or index column.
+        */
         if (is_rowkey || src_column.is_tbl_part_key_column()) {
           is_offline = true;
         }
-        if (is_index && (!src_meta.is_char() || !dst_meta.is_char())) {
+        if (is_index) {
           is_offline = true;
         }
       }
-      if (is_column_in_foreign_key(src_column.get_column_id()) ||
-         src_column.has_generated_column_deps() ||
-         src_column.is_stored_generated_column()) {
+
+      if (!is_offline &&
+          src_meta.is_char() &&
+          dst_meta.is_char() && // char(x) -> char(y) (y>=x) && src_column has no generated column depended on (common column)
+          src_column.has_generated_column_deps()) {
         is_offline = true;
       }
       if (src_column.is_string_type() || src_column.is_enum_or_set()) {
@@ -4680,8 +4695,6 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
             src_column.get_charset_type() != dst_column.get_charset_type()) {
           is_offline = true;
         }
-      } else if (src_meta.is_unsigned() != dst_meta.is_unsigned()) {
-        is_offline = true;
       }
     }
   }
@@ -4945,6 +4958,7 @@ int ObTableSchema::check_column_can_be_altered_offline(
   return ret;
 }
 
+
 int ObTableSchema::check_column_can_be_altered_online(
     const ObColumnSchemaV2 *src_schema,
     ObColumnSchemaV2 *dst_schema) const
@@ -4991,8 +5005,7 @@ int ObTableSchema::check_column_can_be_altered_online(
       // support number to float in oracle mode
     } else if ((src_schema->get_data_type() == dst_schema->get_data_type()
       && src_schema->get_collation_type() == dst_schema->get_collation_type())
-      || (ob_is_integer_type(src_schema->get_data_type()) &&  // can change int to large scale
-          src_schema->get_data_type_class() == dst_schema->get_data_type_class())
+      || common::is_match_alter_integer_column_online_ddl_rules(src_schema->get_meta_type(), dst_schema->get_meta_type()) // has to check the changing is valid
       || (src_schema->is_string_type() && dst_schema->is_string_type()
         && src_schema->get_charset_type() == dst_schema->get_charset_type()
         && src_schema->get_collation_type() == dst_schema->get_collation_type())) {
@@ -5034,8 +5047,8 @@ int ObTableSchema::check_column_can_be_altered_online(
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "modify column to binary type");
         LOG_WARN("can not modify data to binary type", K(ret), KPC(src_schema), KPC(dst_schema));
-      } else if (ob_is_integer_type(src_schema->get_data_type())
-          && src_schema->get_data_type() > dst_schema->get_data_type()) {
+      } else if (ob_is_integer_type(src_schema->get_data_type()) && ob_is_integer_type(dst_schema->get_data_type())
+          && !common::is_match_alter_integer_column_online_ddl_rules(src_schema->get_meta_type(), dst_schema->get_meta_type())) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Change int data type to small scale");
         LOG_WARN("can't not change int data type to small scale",
