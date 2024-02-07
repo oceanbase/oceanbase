@@ -232,6 +232,8 @@ int ObMergeResolver::resolve_target_relation(const ParseNode *target_node)
     LOG_WARN("failed to resolve foreign key constraint", K(ret), K(table_item->ref_id_));
   } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
     LOG_WARN("add reference table to column namespace checker failed", K(ret));
+  } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
+    LOG_WARN("check has need fired trigger failed");
   } else if (table_item->is_generated_table()) {
     ObSelectStmt *ref_stmt = NULL;
     if (OB_ISNULL(ref_stmt = table_item->ref_query_)) {
