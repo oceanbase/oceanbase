@@ -840,9 +840,12 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
   int64_t cur_row_version = 0;
   int64_t cur_sql_sequence = 0;
   if (!row.is_valid() || row.get_column_count() != data_store_desc_->get_row_column_count()) {
-    ret = OB_INVALID_ARGUMENT;
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "invalid macro block writer input argument.",
         K(row), "row_column_count", data_store_desc_->get_row_column_count(), K(ret));
+  } else if (OB_UNLIKELY(!row.mvcc_row_flag_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "invalid mvcc_row_flag", K(ret), K(row.mvcc_row_flag_));
   } else {
     ObMacroBlock &curr_block = macro_blocks_[current_index_];
     cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
