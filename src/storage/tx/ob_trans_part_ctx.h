@@ -837,6 +837,7 @@ public:
   bool is_logging_blocked();
   bool is_xa_trans() const { return !exec_info_.xid_.empty(); }
   bool is_transfer_deleted() const { return transfer_deleted_; }
+  int handle_tx_keepalive_response(const int64_t status);
 private:
   int check_status_();
   int tx_keepalive_response_(const int64_t status);

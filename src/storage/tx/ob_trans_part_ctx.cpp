@@ -7730,17 +7730,28 @@ int ObPartTransCtx::abort(const int reason)
   return ret;
 }
 
+int ObPartTransCtx::handle_tx_keepalive_response(const int64_t status)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_SUCCESS == lock_.try_lock()) {
+    CtxLockGuard guard(lock_, false);
+    ret = tx_keepalive_response_(status);
+  }
+
+  return ret;
+}
 
 int ObPartTransCtx::tx_keepalive_response_(const int64_t status)
 {
   int ret = OB_SUCCESS;
-  CtxLockGuard guard(lock_);
 
   if (OB_SWITCHING_TO_FOLLOWER_GRACEFULLY == ERRSIM_DELAY_TX_SUBMIT_LOG) {
     return ret;
   }
 
-  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status || OB_TRANS_KILLED == status) && can_be_recycled_()) {
+  if ((OB_TRANS_CTX_NOT_EXIST == status || OB_TRANS_ROLLBACKED == status ||
+       OB_TRANS_KILLED == status || common::OB_TENANT_NOT_IN_SERVER == status) && can_be_recycled_()) {
     if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       TRANS_LOG(WARN, "[TRANS GC] tx has quit, local tx will be aborted",
                 K(status), KPC(this));
@@ -7916,6 +7927,8 @@ int ObPartTransCtx::do_local_commit_tx_()
 int ObPartTransCtx::do_local_abort_tx_()
 {
   int ret = OB_SUCCESS;
+
+  TRANS_LOG(WARN, "do_local_abort_tx_", KR(ret), K(*this));
 
   if (has_persisted_log_() || is_logging_()) {
     // part_trans_action_ = ObPartTransAction::ABORT;

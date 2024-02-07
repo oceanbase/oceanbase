@@ -944,7 +944,7 @@ int ObTransService::handle_trans_keepalive_response(const ObTxKeepaliveRespMsg &
   if (OB_FAIL(get_tx_ctx_(ls_id, tx_id, ctx))) {
     TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(ls_id));
   } else {
-    (void)ctx->tx_keepalive_response_(msg.status_);
+    (void)ctx->handle_tx_keepalive_response(msg.status_);
   }
   if (OB_NOT_NULL(ctx)) {
     revert_tx_ctx_(ctx);
@@ -2377,6 +2377,16 @@ int ObTransService::handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id),
               K(msg_type), K(status), K(receiver_addr), K(request_id));
+  } else if (KEEPALIVE == msg_type && common::OB_TENANT_NOT_IN_SERVER == status) {
+    ObPartTransCtx *ctx = NULL;
+    if (OB_FAIL(get_tx_ctx_(sender_ls_id, tx_id, ctx))) {
+      TRANS_LOG(WARN, "get tx ctx fail", K(tx_id), K(sender_ls_id));
+    } else {
+      (void)ctx->handle_tx_keepalive_response(status);
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx_(ctx);
+    }
   } else if (common::OB_TENANT_NOT_IN_SERVER == status
              || common::OB_TRANS_RPC_TIMEOUT == status) {
     // upper layer do retry
