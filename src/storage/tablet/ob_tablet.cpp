@@ -4876,9 +4876,8 @@ int ObTablet::get_kept_snapshot_info(
   int tmp_ret = OB_SUCCESS;
   snapshot_info.reset();
   int64_t max_merged_snapshot = 0;
-  int64_t min_reserved_snapshot = 0;
   int64_t min_medium_snapshot = INT64_MAX;
-  int64_t ls_min_reserved_snapshot = INT64_MAX;
+  int64_t old_min_reserved_snapshot = 0;
   const ObTabletID &tablet_id = get_tablet_meta().tablet_id_;
 
   if (0 < get_major_table_count()) {
@@ -4901,9 +4900,9 @@ int ObTablet::get_kept_snapshot_info(
 
   if (OB_SUCC(ret)) {
     bool use_multi_version_start_on_tablet = false;
-    const int64_t old_min_reserved_snapshot = min_reserved_snapshot;
+    old_min_reserved_snapshot = snapshot_info.snapshot_;
     if (min_reserved_snapshot_on_ls > 0) {
-      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, ls_min_reserved_snapshot);
+      snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_LS_RESERVED, min_reserved_snapshot_on_ls);
       snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_MIN_MEDIUM, min_medium_snapshot);
       if (snapshot_info.snapshot_ < get_multi_version_start()) {
         use_multi_version_start_on_tablet = true;
@@ -4925,7 +4924,7 @@ int ObTablet::get_kept_snapshot_info(
         LOG_INFO("tablet multi version start not advance for a long time", K(ret),
           "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
           K(snapshot_info), K(old_min_reserved_snapshot), K(min_medium_snapshot),
-          "ls_min_reserved_snapshot", min_reserved_snapshot_on_ls);
+          K(min_reserved_snapshot_on_ls));
       }
     }
   }
@@ -4934,7 +4933,7 @@ int ObTablet::get_kept_snapshot_info(
     LOG_WARN("snapshot info is invalid", KR(ret), K(snapshot_info));
   }
   LOG_TRACE("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-      K(snapshot_info), K(min_reserved_snapshot), K(get_tablet_meta()),
+      K(snapshot_info), K(old_min_reserved_snapshot), K(get_tablet_meta()),
       K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
   return ret;
 }

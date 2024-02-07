@@ -72,6 +72,7 @@ public:
 
   int legacy_deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int legacy_serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t legacy_serialize_len() const;
 
   TO_STRING_KV(K_(meta_type), K_(is_column_stored_in_sstable), K_(is_rowkey_column),
       K_(is_generated_column), K_(orig_default_value));
@@ -291,10 +292,11 @@ private:
   int deserialize_rowkey_column_array(const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int deserialize_column_group_array(ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int64_t get_column_array_serialize_length(const common::ObIArray<ObStorageColumnSchema> &array) const;
   int deserialize_skip_idx_attr_array(const char *buf, const int64_t data_len, int64_t &pos);
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type);
   template <typename T>
-  int64_t get_column_array_serialize_length(const common::ObIArray<T> &array) const;
+  int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
 
@@ -427,7 +429,7 @@ int ObStorageSchema::serialize_schema_array(
 }
 
 template <typename T>
-int64_t ObStorageSchema::get_column_array_serialize_length(const common::ObIArray<T> &array) const
+int64_t ObStorageSchema::get_array_serialize_length(const common::ObIArray<T> &array) const
 {
   int64_t len = 0;
   len += serialization::encoded_length_vi64(array.count());

@@ -157,6 +157,7 @@ int ObChecksumValidator::get_table_compaction_info(
       ret = OB_SUCCESS;
       table_compaction_info.reset();
       table_compaction_info.table_id_ = table_id;
+      LOG_TRACE("return init table compaction info", KR(ret));
     } else {
       LOG_WARN("fail to get val from hashmap", KR(ret), K(table_id));
     }
@@ -267,10 +268,6 @@ int ObChecksumValidator::validate_checksum(
       LOG_WARN("failed to validate index checksum", K(ret));
     } else if (OB_FAIL(validate_cross_cluster_checksum())) {
       LOG_WARN("failed to validate cross cluster checksum", K(ret));
-    } else if (OB_FAIL(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
-      LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
-    } else {
-      LOG_TRACE("success to validate table", KR(ret), K_(table_id), K_(table_compaction_info));
     }
     if (OB_FAIL(ret)) {
     } else if (table_compaction_info_.unfinish_index_cnt_ <= 0
@@ -290,6 +287,11 @@ int ObChecksumValidator::validate_checksum(
       last_table_ckm_items_.clear();
     }
     cur_tablet_ls_pair_array_.reuse();
+  }
+  if (FAILEDx(table_compaction_map_.set_refactored(table_id_, table_compaction_info_, true /*overwrite*/))) {
+    LOG_WARN("fail to set refactored", KR(ret), K_(table_id), K_(table_compaction_info));
+  } else {
+    LOG_TRACE("success to validate table", KR(ret), K_(table_id), K_(table_compaction_info));
   }
   // do no clear table_compaction_info_ until validate next table
   replica_ckm_items_.reuse();
@@ -798,7 +800,7 @@ int ObChecksumValidator::handle_index_table(
       LOG_WARN("failed to set", K(ret), K(data_compaction_info));
     }
   }
-  LOG_TRACE("handle index table", KR(ret), K_(table_id), K_(table_compaction_info));
+  LOG_TRACE("handle index table", KR(ret), K_(table_id), K_(table_compaction_info), K(data_compaction_info));
   return ret;
 }
 

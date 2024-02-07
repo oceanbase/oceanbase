@@ -670,8 +670,10 @@ int ObProhibitScheduleMediumMap::add_flag(const ObTabletID &tablet_id, const Pro
   } else {
     obsys::ObWLockGuard lock_guard(lock_);
     if (OB_FAIL(tablet_id_map_.get_refactored(tablet_id, tmp_flag))) {
-      if (OB_HASH_NOT_EXIST == ret && OB_FAIL(tablet_id_map_.set_refactored(tablet_id, input_flag))) {
-        LOG_WARN("failed to stop tablet schedule medium", K(ret), K(tablet_id), K(input_flag));
+      if (OB_HASH_NOT_EXIST == ret) {
+        if (OB_FAIL(tablet_id_map_.set_refactored(tablet_id, input_flag))) {
+          LOG_WARN("failed to stop tablet schedule medium", K(ret), K(tablet_id), K(input_flag));
+        }
       } else {
         LOG_WARN("failed to get map", K(ret), K(tablet_id), K(tmp_flag));
       }
