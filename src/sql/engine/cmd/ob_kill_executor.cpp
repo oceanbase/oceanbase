@@ -188,7 +188,8 @@ int ObKillExecutor::kill_client_session(const ObKillSessionArg &arg, ObSQLSessio
         } else {
           for (int64_t i = 0; i < proxy.get_results().count(); i++) {
             if (OB_FAIL(return_code_array.at(i))) {
-              if (return_code_array.at(i) == OB_TENANT_NOT_IN_SERVER) {
+              if (return_code_array.at(i) == OB_TENANT_NOT_IN_SERVER ||
+                return_code_array.at(i) == OB_TIMEOUT) {
                 ret = OB_SUCCESS;  // ignore error
               } else {
                 LOG_WARN("rpc execute failed", KR(ret));
