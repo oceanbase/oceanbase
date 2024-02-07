@@ -1996,6 +1996,8 @@ int ObTransformJoinElimination::eliminate_semi_right_child_table(ObDMLStmt *stmt
       LOG_WARN("failed to push back table item", K(ret));
     } else if (OB_FAIL(child_stmt->get_select_exprs(select_exprs))) {
       LOG_WARN("failed to get child stmt select exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::remove_const_exprs(select_exprs, select_exprs))) {
+      LOG_WARN("failed to remove const exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt,
                                                               semi_right_table, &select_exprs))) {
       LOG_WARN("failed to generate select list for shared exprs", K(ret));
@@ -2259,9 +2261,8 @@ int ObTransformJoinElimination::try_remove_semi_info(ObDMLStmt *stmt,
   } else if (OB_FAIL(ObTransformUtils::convert_column_expr_to_select_expr(column_exprs, *child_stmt,
                                                                           child_select_exprs))) {
     LOG_WARN("failed to convert column expr to select expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::replace_exprs(column_exprs, child_select_exprs,
-                                                     semi_info->semi_conditions_))) {
-    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(stmt->replace_relation_exprs(column_exprs, child_select_exprs))) {
+    LOG_WARN("failed to replace relation expr", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_semi_infos(), semi_info))) {
     LOG_WARN("failed to remove item", K(ret));
   } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(child_stmt->get_condition_exprs(),
