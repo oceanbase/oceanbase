@@ -137,6 +137,21 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     break;
                   }
                   case (PARAM_LIST): {
+                    const ObColumnSchemaV2 *tmp_column_schema = NULL;
+                    bool type_is_lob = true;
+                    if (OB_ISNULL(table_schema_) ||
+                          OB_ISNULL(
+                              tmp_column_schema =
+                                  table_schema_->get_column_schema(col_id))) {
+                      ret = OB_ERR_UNEXPECTED;
+                      SERVER_LOG(WARN, "table or column schema is null",
+                                 KR(ret),
+                                 KP(table_schema_),
+                                 KP(tmp_column_schema));
+                    } else {
+                      type_is_lob = tmp_column_schema->get_meta_type().is_lob();
+                    }
+
                     if (nullptr != create_node) {
                       if (T_SP_CREATE != create_node->type_ && T_SF_CREATE != create_node->type_ && OB_ISNULL(create_node->children_[2])) {
                         ret = OB_ERR_UNEXPECTED;
@@ -157,8 +172,20 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                                        K(value_str));
                           }
                         }
-                        OX (cells[col_idx].set_varchar(value_str));
-                        OX (cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset())));
+                        if (OB_FAIL(ret)) {
+                          // do nothing
+                        } else if (type_is_lob) {
+                          cells[col_idx].set_lob_value(ObLongTextType,
+                                                       value_str.ptr(),
+                                                       value_str.length());
+                          ObCollationType cs_type = tmp_column_schema->get_collation_type() == CS_TYPE_BINARY
+                                                     ? CS_TYPE_BINARY  // when this column is longblob
+                                                     : ObCharset::get_default_collation(ObCharset::get_default_charset()); // when this column is longtext
+                          cells[col_idx].set_collation_type(cs_type);
+                        } else {
+                          cells[col_idx].set_varchar(value_str);
+                          cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                        }
                       }
                     } else {
                       char *param_list_buf = NULL;
@@ -179,8 +206,19 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                           SERVER_LOG(WARN, "Generate table definition failed");
                         } else {
                           ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), param_list_buf);
-                          cells[col_idx].set_varchar(value_str);
-                          cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+                          if (type_is_lob) {
+                            cells[col_idx].set_lob_value(ObLongTextType,
+                                                         value_str.ptr(),
+                                                         value_str.length());
+                            ObCollationType cs_type = tmp_column_schema->get_collation_type() == CS_TYPE_BINARY
+                                                     ? CS_TYPE_BINARY  // when this column is longblob
+                                                     : ObCharset::get_default_collation(ObCharset::get_default_charset()); // when this column is longtext
+                            cells[col_idx].set_collation_type(cs_type);
+                          } else {
+                            cells[col_idx].set_varchar(value_str);
+                            cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                          }
                         }
                       }
                     }
@@ -190,6 +228,21 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                     char *returns_buf = NULL;
                     int64_t returns_buf_size = OB_MAX_VARCHAR_LENGTH;
                     int64_t pos = 0;
+                    const ObColumnSchemaV2 *tmp_column_schema = NULL;
+                    bool type_is_lob = true;
+                    if (OB_ISNULL(table_schema_) ||
+                          OB_ISNULL(
+                              tmp_column_schema =
+                                  table_schema_->get_column_schema(col_id))) {
+                      ret = OB_ERR_UNEXPECTED;
+                      SERVER_LOG(WARN, "table or column schema is null",
+                                 KR(ret),
+                                 KP(table_schema_),
+                                 KP(tmp_column_schema));
+                    } else {
+                      type_is_lob = tmp_column_schema->get_meta_type().is_lob();
+                    }
+
                     if (OB_UNLIKELY(NULL == (returns_buf = static_cast<char *>(allocator_->alloc(returns_buf_size))))) {
                       ret = OB_ALLOCATE_MEMORY_FAILED;
                       SERVER_LOG(WARN, "fail to alloc returns_buf", K(ret));
@@ -210,8 +263,19 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                       }
                       if (OB_SUCC(ret)) {
                         ObString value_str(static_cast<int32_t>(pos), static_cast<int32_t>(pos), returns_buf);
-                        cells[col_idx].set_varchar(value_str);
-                        cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+                        if (type_is_lob) {
+                          cells[col_idx].set_lob_value(ObLongTextType,
+                                                        value_str.ptr(),
+                                                        value_str.length());
+                          ObCollationType cs_type = tmp_column_schema->get_collation_type() == CS_TYPE_BINARY
+                                                    ? CS_TYPE_BINARY  // when this column is longblob
+                                                    : ObCharset::get_default_collation(ObCharset::get_default_charset()); // when this column is longtext
+                          cells[col_idx].set_collation_type(cs_type);
+                        } else {
+                          cells[col_idx].set_varchar(value_str);
+                          cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+                        }
                       }
                     }
                     break;
