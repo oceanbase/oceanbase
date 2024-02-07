@@ -450,6 +450,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   ParseNode &parse_node = const_cast<ParseNode &>(parse_tree);
   ParseNode *if_not_exist_node = NULL;
   const ObTableSchema *tbl_schema = NULL;
+  const ObTableSchema *data_tbl_schema = NULL;
   bool has_synonym = false;
   ObString new_db_name;
   ObString new_tbl_name;
@@ -532,12 +533,14 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
       crt_idx_stmt->set_table_id(mv_container_table_schema->get_table_id());
       crt_idx_stmt->set_table_name(mv_container_table_name);
+      data_tbl_schema = mv_container_table_schema;
     }
   } else {
     is_oracle_temp_table_ = (tbl_schema->is_oracle_tmp_table());
     ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
     index_schema.set_tenant_id(session_info_->get_effective_tenant_id());
     crt_idx_stmt->set_table_id(tbl_schema->get_table_id());
+    data_tbl_schema = tbl_schema;
   }
   if (OB_SUCC(ret) && has_synonym) {
     ObString tmp_new_db_name;
@@ -560,14 +563,14 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
                                                parse_tree.children_[0]->value_,
                                                parse_tree.children_[3],
                                                crt_idx_stmt,
-                                               tbl_schema))) {
+                                               data_tbl_schema))) {
     LOG_WARN("fail to resolve index column node", K(ret));
   } else if (NULL != parse_node.children_[4]
       && OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index method node", K(ret));
   } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3],
                                                crt_idx_stmt,
-                                               tbl_schema,
+                                               data_tbl_schema,
                                                NULL != parse_node.children_[5]))) {
     LOG_WARN("fail to resolve index option node", K(ret));
   } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
