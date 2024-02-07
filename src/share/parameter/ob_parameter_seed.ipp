@@ -1504,7 +1504,9 @@ DEF_INT(_transfer_task_tablet_count_threshold, OB_TENANT_PARAMETER, "100", "(0,1
         "Threshold for the count of tablets that can be processed by a transfer task"
         "Range: (0, 100]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(_enable_transfer_active_tx, OB_TENANT_PARAMETER, "True",
+        "Specifies whether support transfer active tx",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // end of transfer
 
 DEF_TIME(dump_data_dictionary_to_log_interval, OB_TENANT_PARAMETER, "24h", "(0s,]",
