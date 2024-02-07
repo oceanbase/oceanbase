@@ -414,6 +414,7 @@ ObCOMergeBatchExeDag::ObCOMergeBatchExeDag()
    end_cg_idx_(0),
    retry_create_task_(false),
    progress_inited_(false),
+   time_guard_(),
    merge_progress_(nullptr)
 {
 }
@@ -767,6 +768,7 @@ void ObCOMergeBatchExeTask::merge_start()
     // execute time click init only once
     if (execute_dag->get_time_guard().is_empty()) {
       ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info().update_start_time();
+      execute_dag->get_time_guard().set_last_click_ts(execute_dag->get_add_time());
       execute_dag->dag_time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE);
     }
   }
@@ -843,7 +845,10 @@ int ObCOMergeBatchFinishTask::process()
   } else if (OB_FAIL(execute_dag->create_sstable_after_merge())) {
     LOG_WARN("failed to create sstable after merge", K(ret), KPC(execute_dag));
   } else {
-    FLOG_INFO("co batch sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(),
+    FLOG_INFO("co batch sstable merge finish", K(ret),
+              "start_cg sstable_merge_info", ctx_->cg_merge_info_array_[execute_dag->get_start_cg_idx()]->get_sstable_merge_info(),
+              "time_guard", execute_dag->get_time_guard(),
+              KPC(dag_), "param", ctx_->get_dag_param(),
               "mem_peak", ctx_->mem_ctx_.get_total_mem_peak());
   }
 
@@ -956,7 +961,7 @@ int ObCOMergeFinishTask::process()
     }
     // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
     FLOG_INFO("sstable merge finish", K(ret), KPC(dag_), "param", ctx_->get_dag_param(),
-              "mem_peak", ctx_->mem_ctx_.get_total_mem_peak(), K(ctx_->info_collector_.time_guard_));
+              "mem_peak", ctx_->mem_ctx_.get_total_mem_peak(), "time_guard", ctx_->info_collector_.time_guard_);
   }
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
@@ -1469,6 +1474,7 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(ls_id_), K(tablet_id_));
   } else if (FALSE_IT(co_merge_ctx_ = new (buf) ObCOTabletMergeCtx(*this, basic_param_, tmp_allocator_))) { // will set thread local mem ctx
+  } else if (FALSE_IT(co_merge_ctx_->init_time_guard(get_add_time()))) {
   } else if (FALSE_IT(co_merge_ctx_->time_guard_click(ObStorageCompactionTimeGuard::DAG_WAIT_TO_SCHEDULE))) {
   } else if (OB_FAIL(co_merge_ctx_->build_ctx(useless_finish_flag))) {
     LOG_WARN("failed to build ctx", KR(ret), "param", co_merge_ctx_->get_dag_param(), KP_(co_merge_ctx));

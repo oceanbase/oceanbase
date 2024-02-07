@@ -140,6 +140,7 @@ namespace compaction
   class ObTenantCompactionProgressMgr;
   class ObServerCompactionEventHistory;
   class ObScheduleSuspectInfoMgr;
+  class ObCompactionSuggestionMgr;
   class ObDiagnoseTabletMgr;
   class ObTenantMediumChecker;
   class ObTenantTabletScheduler;
@@ -276,6 +277,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObTenantSSTableMergeInfoMgr*,         \
       share::ObDagWarningHistoryManager*,            \
       compaction::ObScheduleSuspectInfoMgr*,         \
+      compaction::ObCompactionSuggestionMgr*,        \
       compaction::ObDiagnoseTabletMgr *,             \
       storage::ObLobManager*,                        \
       share::ObGlobalAutoIncService*,                \

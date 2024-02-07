@@ -463,8 +463,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init px blomm filter manager failed", KR(ret));
     } else if (OB_FAIL(PX_P2P_DH.init())) {
       LOG_ERROR("init px p2p datahub failed", KR(ret));
-    } else if (OB_FAIL(compaction::ObCompactionSuggestionMgr::get_instance().init())) {
-      LOG_ERROR("init ObCompactionSuggestionMgr failed", KR(ret));
     } else if (OB_FAIL(G_RES_MGR.init())) {
       LOG_ERROR("failed to init resource plan", KR(ret));
 #ifdef ENABLE_IMC

@@ -125,7 +125,8 @@ public:
                K_(new_micro_count_in_new_macro), K_(multiplexed_micro_count_in_new_macro),
                K_(total_row_count), K_(incremental_row_count), K_(new_flush_data_rate),
                K_(is_full_merge), K_(progressive_merge_round), K_(progressive_merge_num),
-               K_(concurrent_cnt), K_(start_cg_idx), K_(end_cg_idx), K_(add_time), K_(dag_ret), K_(retry_cnt), K_(task_id), K_(error_location),
+               K_(concurrent_cnt), K_(start_cg_idx), K_(end_cg_idx), K_(suspect_add_time),
+               K_(early_create_time), K_(dag_ret), K_(retry_cnt), K_(task_id), K_(error_location),
                K_(kept_snapshot_info), K_(merge_level), K_(parallel_merge_info), K_(filter_statistics), K_(participant_table_info),
                K_(macro_id_list), K_(comment));
 
@@ -137,6 +138,7 @@ public:
 public:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
+  bool is_fake_;
   int64_t compaction_scn_; // major_scn OR minor end_log_ts
   compaction::ObMergeType merge_type_;
   int64_t merge_start_time_;
@@ -161,8 +163,9 @@ public:
   int64_t start_cg_idx_;
   int64_t end_cg_idx_;
   // from suspect info
-  int64_t add_time_;
+  int64_t suspect_add_time_;
   // from dag warn info
+  int64_t early_create_time_;
   int64_t dag_ret_;
   int64_t retry_cnt_;
   common::ObCurTraceId::TraceId task_id_;

@@ -272,7 +272,6 @@ protected:
   lib::Worker::CompatMode compat_mode_;
   ObBasicTabletMergeCtx *ctx_;
   ObTabletMergeDagParam param_;
-  ObStorageCompactionTimeGuard time_guard_;
   common::ObArenaAllocator allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeDag);

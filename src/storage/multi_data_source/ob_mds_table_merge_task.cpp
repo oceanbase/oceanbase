@@ -124,6 +124,9 @@ int ObMdsTableMergeTask::process()
     ctx.add_sstable_merge_info(ctx.get_merge_info().get_sstable_merge_info(),
               mds_merge_dag_->get_dag_id(), mds_merge_dag_->hash(),
               ctx.info_collector_.time_guard_);
+    // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
+    FLOG_INFO("sstable merge finish", K(ret), "merge_info", ctx_ptr->get_merge_info(),
+        "time_guard", ctx_ptr->info_collector_.time_guard_);
   }
 
   return ret;

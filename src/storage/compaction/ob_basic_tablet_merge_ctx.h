@@ -136,6 +136,9 @@ public:
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0);
   int get_ls_and_tablet();
+  void init_time_guard(const int64_t time) {
+    info_collector_.time_guard_.set_last_click_ts(time);
+  }
   /* EXECUTE SECTION */
   void time_guard_click(const uint16_t event)
   {
