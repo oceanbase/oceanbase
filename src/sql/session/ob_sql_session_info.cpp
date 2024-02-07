@@ -2976,8 +2976,7 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
   int ret = common::OB_SUCCESS;
   if (OB_LIKELY(NULL == mem_context_)) {
     lib::ContextParam param;
-    param.set_properties(lib::USE_TL_PAGE_OPTIONAL)
-      .set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION);
+    param.set_mem_attr(tenant_id, ObModIds::OB_SQL_SESSION);
     if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(mem_context_, param))) {
       SQL_ENG_LOG(WARN, "create entity failed", K(ret));
     } else if (OB_ISNULL(mem_context_)) {
