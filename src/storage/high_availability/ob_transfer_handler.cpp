@@ -451,6 +451,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       DEBUG_SYNC(START_TRANSFER_TRANS);
     }
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    ObSEArray<ObTabletID, 100> tablet_ids; // (0, 100], default 32, see ObTenantTransferService::get_tablet_count_threshold_(),
+    tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
     if (tenant_config.is_valid()) {
       enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
     }
@@ -467,8 +469,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("transfer src is not leader", K(ret), K(task_info));
     } else if (OB_FAIL(precheck_ls_replay_scn_(task_info))) {
       LOG_WARN("failed to precheck ls replay scn", K(ret), K(task_info));
-    } else if (OB_FAIL(stop_ls_schedule_medium_(task_info.src_ls_id_, succ_stop_medium))) {
-      LOG_WARN("failed to stop ls schedule medium", K(ret), K(task_info));
+    } else if (OB_FAIL(task_info.fill_tablet_ids(tablet_ids))) {
+      LOG_WARN("failed to init tablet_ids", K(ret), K(task_info));
+    } else if (OB_FAIL(stop_tablets_schedule_medium_(tablet_ids, succ_stop_medium))) {
+      LOG_WARN("failed to stop tablets schedule medium", K(ret), K(task_info));
     } else if (OB_FAIL(check_start_status_transfer_tablets_(task_info))) {
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
@@ -504,7 +508,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       commit_succ = false;
     }
 
-    clear_prohibit_(task_info, succ_block_tx, succ_stop_medium);
+    clear_prohibit_(task_info, tablet_ids, succ_block_tx, succ_stop_medium);
   }
 
 
@@ -2188,29 +2192,30 @@ void ObTransferHandler::online()
   transfer_worker_mgr_.reset_task_id();
 }
 
-int ObTransferHandler::stop_ls_schedule_medium_(const share::ObLSID &ls_id, bool &succ_stop)
+int ObTransferHandler::stop_tablets_schedule_medium_(const ObIArray<ObTabletID> &tablet_ids, bool &succ_stop)
 {
   int ret = OB_SUCCESS;
   succ_stop = false;
-  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->stop_ls_schedule_medium(ls_id))) {
-    LOG_WARN("failed to stop ls schedule medium", K(ret), K(ls_id));
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->stop_tablets_schedule_medium(tablet_ids, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::TRANSFER))) {
+    LOG_WARN("failed to stop tablets schedule medium", K(ret));
   } else {
     succ_stop = true;
   }
   return ret;
 }
 
-int ObTransferHandler::clear_prohibit_medium_flag_(const share::ObLSID &ls_id)
+int ObTransferHandler::clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_prohibit_medium_flag(ls_id, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::TRANSFER))) {
-    LOG_WARN("failed to clear prohibit schedule medium flag", K(ret), K(ls_id));
+  if (OB_FAIL(MTL(ObTenantTabletScheduler*)->clear_tablets_prohibit_medium_flag(tablet_ids, compaction::ObProhibitScheduleMediumMap::ProhibitFlag::TRANSFER))) {
+    LOG_WARN("failed to clear prohibit schedule medium flag", K(ret));
   }
   return ret;
 }
 
 int ObTransferHandler::clear_prohibit_(
     const share::ObTransferTaskInfo &task_info,
+    const ObIArray<ObTabletID> &tablet_ids,
     const bool is_block_tx,
     const bool is_medium_stop)
 {
@@ -2228,7 +2233,7 @@ int ObTransferHandler::clear_prohibit_(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (is_medium_stop && OB_FAIL(clear_prohibit_medium_flag_(task_info.src_ls_id_))) {
+  } else if (is_medium_stop && OB_FAIL(clear_prohibit_medium_flag_(tablet_ids))) {
     LOG_WARN("failed to clear prohibit medium flag", K(ret), K(task_info));
     ob_abort();
   }
