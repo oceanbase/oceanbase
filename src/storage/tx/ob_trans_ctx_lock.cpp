@@ -58,7 +58,9 @@ void CtxLock::after_unlock(CtxLockArg &arg)
 
 int CtxLock::lock()
 {
+  ATOMIC_INC(&waiting_lock_cnt_);
   int ret = lock_.wrlock(common::ObLatchIds::TRANS_CTX_LOCK);
+  ATOMIC_DEC(&waiting_lock_cnt_);
   lock_start_ts_ = ObClockGenerator::getClock();
   return ret;
 }
