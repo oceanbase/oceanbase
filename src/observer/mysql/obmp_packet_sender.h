@@ -150,10 +150,11 @@ public:
   virtual bool need_send_extra_ok_packet() override
   { return OB_NOT_NULL(get_conn()) && get_conn()->need_send_extra_ok_packet(); }
   virtual int flush_buffer(const bool is_last);
-  int clone_from(ObMPPacketSender& that);
+  int clone_from(ObMPPacketSender& that, int64_t com_offset = 0/*for prexecute it will be 1*/);
   int init(rpc::ObRequest* req);
   int do_init(rpc::ObRequest *req,
            uint8_t packet_seq,
+           uint8_t comp_seq,
            bool conn_status,
            bool req_has_wokenup,
            int64_t query_receive_ts);
@@ -169,6 +170,7 @@ public:
   int clean_buffer();
   bool has_pl();
   int alloc_ezbuf();
+  int64_t get_comp_seq() { return comp_context_.seq_; }
 
 private:
   int init_read_handle();
