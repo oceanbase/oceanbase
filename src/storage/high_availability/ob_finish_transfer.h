@@ -112,18 +112,11 @@ private:
   // @param[in]: server addr
   // @param[in]: dest_ls_scn
   // @param[in]: current scn
-  // @param[bool]: check passed
+  // @param[in]: timeout_ctx
+  // @param[in/out]: finished_addr_list
   int check_all_ls_replica_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObArray<common::ObAddr> &member_addr_list, const share::SCN &finish_scn,
-      const int64_t quorum, bool &check_passed);
-
-  // param[in]: tenant_id,
-  // param[in]: ls_id
-  // param[in]: server addr
-  // param[in]: finish_scn
-  // param[out]: is the check passed
-  int inner_check_ls_replay_scn_(const share::ObTransferTaskID &task_id, const uint64_t tenant_id,
-      const share::ObLSID &ls_id, const common::ObAddr &addr, const share::SCN &finish_scn, bool &passed_scn);
+      const share::ObLSID &ls_id, const common::ObIArray<common::ObAddr> &total_addr_list, const share::SCN &finish_scn,
+      ObTimeoutCtx &timeout_ctx, common::ObIArray<common::ObAddr> &finished_addr_list);
 
 private:
   /* helper functions */
@@ -208,9 +201,6 @@ private:
   int report_result_(const share::ObTransferTaskID &task_id, const int64_t result, obrpc::ObSrvRpcProxy *rs_rpc_proxy);
 
 private:
-  /*rpc section*/
-  int fetch_ls_replay_scn_(const share::ObTransferTaskID &task_id, const int64_t cluster_id,
-      const common::ObAddr &server_addr, const uint64_t tenant_id, const share::ObLSID &ls_id, share::SCN &finish_scn);
 
   // check self is leader
   // @param[in]: ls_id

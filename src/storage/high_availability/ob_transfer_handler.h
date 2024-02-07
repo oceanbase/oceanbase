@@ -157,14 +157,12 @@ private:
       ObTimeoutCtx &timeout_ctx,
       share::SCN &start_scn);
   int wait_ls_replay_event_(
+      const share::ObLSID &ls_id,
       const share::ObTransferTaskInfo &task_info,
       const common::ObArray<ObAddr> &member_addr_list,
       const share::SCN &check_scn,
+      const int32_t group_id,
       ObTimeoutCtx &timeout_ctx);
-  int inner_get_scn_for_wait_event_(
-      const share::ObTransferTaskInfo &task_info,
-      const ObStorageHASrcInfo &src_info,
-      share::SCN &replica_scn);
   int precheck_ls_replay_scn_(
       const share::ObTransferTaskInfo &task_info);
   int get_max_decided_scn_(

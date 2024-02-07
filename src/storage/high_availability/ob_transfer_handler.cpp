@@ -1249,6 +1249,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   common::ObMemberList member_list;
   ObArray<ObAddr> member_addr_list;
   const int64_t start_ts = ObTimeUtil::current_time();
+  const int32_t group_id = share::OBCG_STORAGE_HA_LEVEL1;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1260,7 +1261,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
     LOG_WARN("failed to get src ls member list", K(ret), K(task_info));
   } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
-  } else if (OB_FAIL(wait_ls_replay_event_(task_info, member_addr_list, start_scn, timeout_ctx))) {
+  } else if (OB_FAIL(wait_ls_replay_event_(task_info.src_ls_id_, task_info, member_addr_list, start_scn, group_id, timeout_ctx))) {
     LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(start_scn));
   } else {
     LOG_INFO("[TRANSFER_BLOCK_TX] wait src ls repaly to start scn", "cost", ObTimeUtil::current_time() - start_ts);
@@ -1287,6 +1288,7 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
   share::SCN check_scn;
   ObTimeoutCtx timeout_ctx;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const int32_t group_id = share::OBCG_STORAGE_HA_LEVEL2;
   if (tenant_config.is_valid()) {
     const int64_t timeout = tenant_config->_transfer_start_trans_timeout * 0.5;
     if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
@@ -1307,7 +1309,7 @@ int ObTransferHandler::precheck_ls_replay_scn_(const share::ObTransferTaskInfo &
     LOG_WARN("failed to get addr array", K(ret), K(task_info), K(member_list));
   } else if (OB_FAIL(get_max_decided_scn_(task_info.tenant_id_, task_info.src_ls_id_, check_scn))) {
     LOG_WARN("failed to get max decided scn", K(ret), K(task_info));
-  } else if (OB_FAIL(wait_ls_replay_event_(task_info, member_addr_list, check_scn, timeout_ctx))) {
+  } else if (OB_FAIL(wait_ls_replay_event_(task_info.src_ls_id_, task_info, member_addr_list, check_scn, group_id, timeout_ctx))) {
     LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(check_scn));
     if (OB_TIMEOUT == ret) {
       ret = OB_TRANSFER_CANNOT_START;
@@ -1350,56 +1352,43 @@ int ObTransferHandler::get_max_decided_scn_(
 }
 
 int ObTransferHandler::wait_ls_replay_event_(
+    const share::ObLSID &ls_id,
     const share::ObTransferTaskInfo &task_info,
-    const common::ObArray<ObAddr> &member_addr_list,
+    const common::ObArray<ObAddr> &total_addr_list,
     const share::SCN &check_scn,
+    const int32_t group_id,
     ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t OB_CHECK_START_SCN_READY_INTERVAL = 5 * 1000; //5ms
   const int64_t start_ts = ObTimeUtil::current_time();
-  hash::ObHashSet<ObAddr> replica_addr_set;
-  if (OB_FAIL(replica_addr_set.create(OB_DEFAULT_REPLICA_NUM))) {
-    LOG_WARN("failed to create replica addr set", K(ret), K(task_info));
-  }
+  common::ObArray<ObAddr> member_addr_list;
+  common::ObArray<ObAddr> finished_member_addr_list;
+  bool is_leader = false;
+
   while (OB_SUCC(ret)) {
-    int64_t replica_count = 0;
     if (timeout_ctx.is_timeouted()) {
       ret = OB_TIMEOUT;
       LOG_WARN("already timeout", K(ret), K(task_info));
       break;
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < member_addr_list.count(); ++i) {
-        const ObAddr &replica_addr = member_addr_list.at(i);
-        const int32_t hash_ret = replica_addr_set.exist_refactored(replica_addr);
-        SCN replica_scn;
-        if (OB_HASH_EXIST == hash_ret) {
-          replica_count++;
-        } else if (OB_HASH_NOT_EXIST == hash_ret) {
-          ObStorageHASrcInfo src_info;
-          src_info.cluster_id_ = GCONF.cluster_id;
-          src_info.src_addr_ = replica_addr;
-          if (OB_TMP_FAIL(inner_get_scn_for_wait_event_(task_info, src_info, replica_scn))) {
-            LOG_WARN("failed to inner get scn for wait event", K(tmp_ret), K(src_info));
-          } else if (replica_scn >= check_scn) {
-            if (OB_FAIL(replica_addr_set.set_refactored(replica_addr))) {
-              LOG_WARN("failed to set replica into hash set", K(ret), K(replica_addr));
-            } else {
-              replica_count++;
-            }
-          }
-        } else {
-          ret = OB_SUCC(hash_ret) ? OB_ERR_UNEXPECTED : hash_ret;
-          LOG_WARN("failed to get replica server from hash set", K(ret), K(task_info));
-        }
-      }
+    } else if (OB_FAIL(check_self_is_leader_(is_leader))) {
+      LOG_WARN("failed to check self is leader", K(ret), KPC(ls_));
+    } else if (!is_leader) {
+      ret = OB_LS_NOT_LEADER;
+      LOG_WARN("ls leader has been changed", K(ret), K(task_info));
+      break;
+    } else if (OB_FAIL(ObTransferUtils::get_need_check_member(total_addr_list, finished_member_addr_list, member_addr_list))) {
+      LOG_WARN("failed to get need check member", K(ret), K(task_info), K(total_addr_list));
+    } else if (OB_FAIL(ObTransferUtils::check_ls_replay_scn(task_info.tenant_id_, ls_id, check_scn,
+        group_id, member_addr_list, timeout_ctx, finished_member_addr_list))) {
+      LOG_WARN("failed to check ls replay scn", K(ret), K(task_info), K(ls_id), K(check_scn));
     }
 
     if (OB_SUCC(ret)) {
-      if (replica_count == member_addr_list.count()) {
+      if (finished_member_addr_list.count() == total_addr_list.count()) {
         FLOG_INFO("[TRANSFER] src ls all replicas replay reach check_scn", "src_ls", task_info.src_ls_id_,
-            K(check_scn), K(member_addr_list), "cost", ObTimeUtil::current_time() - start_ts);
+            K(check_scn), K(total_addr_list), "cost", ObTimeUtil::current_time() - start_ts);
         break;
       }
     }
@@ -1408,24 +1397,6 @@ int ObTransferHandler::wait_ls_replay_event_(
       //TODO(muwei.ym) check need retry in 4.2 RC3
     }
     ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
-  }
-  return ret;
-}
-
-int ObTransferHandler::inner_get_scn_for_wait_event_(
-    const share::ObTransferTaskInfo &task_info,
-    const ObStorageHASrcInfo &src_info,
-    share::SCN &replica_scn)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = task_info.tenant_id_;
-  const share::ObLSID &src_ls_id = task_info.src_ls_id_;
-
-  if (OB_ISNULL(storage_rpc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("storage rpc should not be null", K(ret));
-  } else if (OB_FAIL(storage_rpc_->fetch_ls_replay_scn(tenant_id, src_info, src_ls_id, replica_scn))) {
-    LOG_WARN("failed to fetch ls replay scn", K(ret), K(tenant_id), K(src_info));
   }
   return ret;
 }

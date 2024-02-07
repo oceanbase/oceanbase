@@ -159,7 +159,7 @@ void oceanbase::observer::init_srv_xlator_for_migration(ObSrvRpcXlator *xlator)
   RPC_PROCESSOR(ObCheckStartTransferTabletsP);
   RPC_PROCESSOR(ObGetLSActiveTransCountP, gctx_.bandwidth_throttle_);
   RPC_PROCESSOR(ObGetTransferStartScnP, gctx_.bandwidth_throttle_);
-  RPC_PROCESSOR(ObFetchLSReplayScnP, gctx_.bandwidth_throttle_);
+  RPC_PROCESSOR(ObFetchLSReplayScnP);
   RPC_PROCESSOR(ObCheckTransferTabletsBackfillP);
   RPC_PROCESSOR(ObStorageGetConfigVersionAndTransferScnP);
   RPC_PROCESSOR(ObStorageLockConfigChangeP, gctx_.bandwidth_throttle_);

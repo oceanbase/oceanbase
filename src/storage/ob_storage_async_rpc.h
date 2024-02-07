@@ -32,6 +32,7 @@ namespace storage
 RPC_HA(obrpc::OB_HA_CHECK_TRANSFER_TABLET_BACKFILL, obrpc::ObCheckTransferTabletBackfillArg, obrpc::ObCheckTransferTabletBackfillRes, ObCheckTransferTabletBackfillProxy);
 RPC_HA(obrpc::OB_HA_CHANGE_MEMBER_SERVICE, obrpc::ObStorageChangeMemberArg, obrpc::ObStorageChangeMemberRes, ObHAChangeMemberProxy);
 RPC_HA(obrpc::OB_CHECK_START_TRANSFER_TABLETS, obrpc::ObTransferTabletInfoArg, obrpc::Int64, ObCheckStartTransferTabletsProxy);
+RPC_HA(obrpc::OB_HA_FETCH_LS_REPLAY_SCN, obrpc::ObFetchLSReplayScnArg, obrpc::ObFetchLSReplayScnRes, ObFetchLSReplayScnProxy);
 
 }//end namespace storage
 }//end namespace oceanbase
