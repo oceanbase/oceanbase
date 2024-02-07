@@ -188,23 +188,49 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
           if (OB_FAIL(assoc_array->is_elem_deleted(index, is_deleted))) {
             LOG_WARN("failed to test element deleted.", K(ret));
           } else if (is_deleted) {
-            if (OB_INVALID_INDEX != assoc_array->get_first()) {
-              const ObObj &cur_obj = assoc_array->get_key()[index];
-              const ObObj &first = assoc_array->get_key()[assoc_array->get_first() - 1];
-              if (cur_obj < first) {
+            if (!assoc_array->get_element_desc().is_composite_type()) {
+              // do nothing
+            } else {
+              pl::ObPLExecCtx *pl_exec_ctx = session->get_pl_context()->get_current_ctx();
+              const pl::ObUserDefinedType *type = NULL;
+              const pl::ObCollectionType *collection_type = NULL;
+              int64_t ptr = 0;
+              int64_t init_size = OB_INVALID_SIZE;
+              ObObj* row = assoc_array->get_data() + index;
+              CK (OB_NOT_NULL(pl_exec_ctx));
+              CK (OB_NOT_NULL(row));
+              OZ (pl_exec_ctx->get_user_type(assoc_array->get_id(), type));
+              CK (OB_NOT_NULL(type));
+              CK (type->is_collection_type());
+              CK (OB_NOT_NULL(collection_type = static_cast<const pl::ObCollectionType*>(type)));
+              OZ (collection_type->get_element_type().newx(*assoc_array->get_allocator(), pl_exec_ctx, ptr));
+              if (OB_SUCC(ret) && collection_type->get_element_type().is_collection_type()) {
+                pl::ObPLCollection *collection = NULL;
+                CK (OB_NOT_NULL(collection = reinterpret_cast<pl::ObPLCollection*>(ptr)));
+                OX (collection->set_count(0));
+              }
+              OZ (collection_type->get_element_type().get_size(*pl_exec_ctx, pl::PL_TYPE_INIT_SIZE, init_size));
+              OX (row->set_extend(ptr, collection_type->get_element_type().get_type(), init_size));
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_INVALID_INDEX != assoc_array->get_first()) {
+                const ObObj &cur_obj = assoc_array->get_key()[index];
+                const ObObj &first = assoc_array->get_key()[assoc_array->get_first() - 1];
+                if (cur_obj < first) {
+                  assoc_array->set_first(index + 1);
+                }
+              } else {
                 assoc_array->set_first(index + 1);
               }
-            } else {
-              assoc_array->set_first(index + 1);
-            }
-            if (OB_INVALID_INDEX != assoc_array->get_last()) {
-              const ObObj &cur_obj = assoc_array->get_key()[index];
-              const ObObj &last = assoc_array->get_key()[assoc_array->get_last() - 1];
-              if (cur_obj > last) {
+              if (OB_INVALID_INDEX != assoc_array->get_last()) {
+                const ObObj &cur_obj = assoc_array->get_key()[index];
+                const ObObj &last = assoc_array->get_key()[assoc_array->get_last() - 1];
+                if (cur_obj > last) {
+                  assoc_array->set_last(index + 1);
+                }
+              } else {
                 assoc_array->set_last(index + 1);
               }
-            } else {
-              assoc_array->set_last(index + 1);
             }
           }
         }
