@@ -1229,8 +1229,17 @@ int ObPLContext::set_default_database(ObPLFunction &routine,
   int ret = OB_SUCCESS;
   bool is_special_ir = false;
   const uint64_t tenant_id = routine.get_tenant_id();
+  bool need_set_db = true;
+
+  // in mysql mode, only system packages with invoker's right do not need set db
+  // in oracle mode, set db by if the routine is invoker's right
+  if (lib::is_oracle_mode()
+      || get_tenant_id_by_object_id(routine.get_package_id()) == OB_SYS_TENANT_ID) {
+    need_set_db = !routine.is_invoker_right();
+  }
+
   OZ (routine.is_special_pkg_invoke_right(guard, is_special_ir));
-  if (!routine.is_invoker_right()
+  if (need_set_db
       && !is_special_ir
       && routine.get_proc_type() != NESTED_FUNCTION
       && routine.get_proc_type() != NESTED_PROCEDURE
