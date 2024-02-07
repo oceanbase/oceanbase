@@ -2707,14 +2707,14 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS,
 DEFINE_SHOW_CLAUSE_SET(SHOW_TABLEGROUPS_V2,
                        NULL,
                        "SELECT t1.Tablegroup_name AS Tablegroup_name, t2.Table_name AS Table_name, t3.Database_name AS Database_name, t1.Sharding AS Sharding \
-                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu) \
+                        FROM %s.%s t1 LEFT JOIN %s.%s  t2 ON (t1.tablegroup_id = t2.tablegroup_id and t2.tenant_id = %lu AND t2.table_type in (0, 3, 6)) \
                         LEFT JOIN %s.%s  t3 ON (t2.database_id = t3.database_id and t3.tenant_id = %lu) \
-                        WHERE t1.tenant_id = %lu AND t2.table_type in (0, 3, 6) \
+                        WHERE t1.tenant_id = %lu \
                         ORDER BY t1.tablegroup_name, t2.table_name",
                         "SELECT T1.TABLEGROUP_NAME AS \"TABLEGROUP_NAME\", T2.TABLE_NAME AS \"TABLE_NAME\", T3.DATABASE_NAME AS \"DATABASE_NAME\", t1.SHARDING AS \"SHARDING\" \
-                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu) \
+                        FROM %s.%s T1 LEFT JOIN %s.%s  T2 ON (T1.TABLEGROUP_ID = T2.TABLEGROUP_ID AND T2.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6)) \
                         LEFT JOIN %s.%s  T3 ON (T2.DATABASE_ID = T3.DATABASE_ID AND T3.TENANT_ID = %lu) \
-                        WHERE T1.TENANT_ID = %lu AND T2.TABLE_TYPE in (0, 3, 6) \
+                        WHERE T1.TENANT_ID = %lu \
                         ORDER BY T1.TABLEGROUP_NAME, T2.TABLE_NAME",
                        "Tablegroup_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_VARIABLES,
