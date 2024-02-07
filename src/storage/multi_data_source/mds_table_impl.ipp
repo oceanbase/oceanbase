@@ -956,11 +956,15 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   } else if (MDS_FAIL(calculate_flush_scn_and_need_dumped_nodes_cnt_(do_flush_scn, undump_node_cnt))) {
     MDS_LOG_FLUSH(WARN, "fail to call calculate_flush_scn_and_need_dumped_nodes_cnt_");
   } else if (undump_node_cnt == 0) {// no need do flush actually
-    // mds_ckpt_scn on tablet won't be advanced,
-    // replay will cost more time after restart process, but saved cpu and io for dump dag
-    MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
-    flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
-    on_flush_(do_flush_scn, OB_SUCCESS);
+    if (flushing_scn_.is_valid()) {
+      MDS_LOG_FLUSH(INFO, "there is a merge dag running, can not advance rec_scn here");
+    } else {
+      // mds_ckpt_scn on tablet won't be advanced,
+      // replay will cost more time after restart process, but saved cpu and io for dump dag
+      MDS_LOG_FLUSH(INFO, "no undump nodes below do flush scn, directly advance rec_scn");
+      flushing_scn_ = do_flush_scn;// will be resetted in on_flush_()
+      on_flush_(do_flush_scn, OB_SUCCESS);
+    }
   } else {
 #ifndef UNITTEST_DEBUG
     if (MDS_FAIL(merge(construct_sequence_, do_flush_scn))) {
