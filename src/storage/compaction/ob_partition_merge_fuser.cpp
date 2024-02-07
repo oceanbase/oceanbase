@@ -121,7 +121,12 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
     STORAGE_LOG(WARN, "Invalid macro row iters to fuse row", K(ret), K(macro_row_iters));
   } else if (OB_FAIL(preprocess_fuse_row(*macro_row_iters.at(0)->get_curr_row(), is_need_fuse))) {
     STORAGE_LOG(WARN, "failed to preprocess_fuse_row", K(ret));
-  } else if (!is_need_fuse) {
+  } else if (!is_need_fuse && macro_row_iters.at(0)->get_curr_row()->row_flag_.is_delete()) {
+    result_row_.row_flag_.reset();
+    result_row_.row_flag_ = macro_row_iters.at(0)->get_curr_row()->row_flag_;
+    for (int64_t i = 1; i < macro_row_iters_cnt; ++i) {
+      result_row_.row_flag_.fuse_flag(macro_row_iters.at(i)->get_curr_row()->row_flag_);
+    }
   } else {
     bool final_result = false;
     for (int64_t i = 0; OB_SUCC(ret) && !final_result && i < macro_row_iters_cnt; ++i) {
