@@ -1219,12 +1219,11 @@ int ObMinAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
-        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
@@ -1376,12 +1375,11 @@ int ObMaxAggCell::eval_batch_in_group_by(
       std::sort(group_by_ref_array_, group_by_ref_array_ + updated_cnt);
       int64_t last_ref_cnt = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < updated_cnt; ++i) {
-        const uint32_t distinct_ref = refs[i];
         if (-1 == group_by_ref_array_[i]) {
         } else if (last_ref_cnt == group_by_ref_array_[i]) {
           group_by_ref_array_[i] = -1;
         } else {
-          common::ObDatum &result_datum = group_by_result_datum_buf_->at(distinct_ref);
+          common::ObDatum &result_datum = group_by_result_datum_buf_->at(group_by_ref_array_[i]);
           if (OB_FAIL(result_datum.deep_copy(result_datum, datum_allocator_))) {
             LOG_WARN("Failed to deep copy distinct datum", K(ret));
           } else {
