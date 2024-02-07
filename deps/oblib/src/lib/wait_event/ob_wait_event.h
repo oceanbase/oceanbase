@@ -115,6 +115,22 @@ WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_IO_TASK_WAIT, 20007, "latch: log external st
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_RW_WAIT, 20008, "latch: log external storage handler rw wait", "", "", "", CONCURRENCY, true, false)
 WAIT_EVENT_DEF(LOG_EXTERNAL_STORAGE_HANDLER_WAIT, 20009, "latch: log external storage handler spin wait", "", "", "", CONCURRENCY, true, false)
 
+// share storage
+WAIT_EVENT_DEF(ZONE_STORAGE_MANAGER_LOCK_WAIT, 21001, "latch: zone storage manager maintaince lock wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(ZONE_STORAGE_INFO_RW_LOCK_WAIT, 21002, "latch: zone storage infos rw lock wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(DEVICE_MANIFEST_RW_LOCK_WAIT, 21003, "latch: device_manifest rw lock wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(MANIFEST_TASK_LOCK_WAIT, 21004, "latch: manifest task lock wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(OB_DEVICE_CREDENTIAL_MGR_WAIT, 21005, "latch: device credential mgr wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_MANAGER_LOCK_WAIT, 21006, "tiered block manager lock wait", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_SUPER_BLOCK_LOCK_WAIT, 21007, "latch: tiered super block wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TSLOG_PROCESSING_MUTEX_WAIT, 21008, "latch: tslog processing mutex wait", "address", "number", "tries", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TSLOG_CKPT_LOCK_WAIT, 21009, "tslog checkpoint lock wait", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_TENANT_BLOCK_LOCK_WAIT, 21010, "tiered tenant block lock wait", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_REMOTE, 21011, "tiered block write remote", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_WRITE_LOCAL, 21012, "tiered block write local", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_READ_REMOTE, 21013, "tiered block read remote", "address", "", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(TIERED_BLOCK_READ_LOCAL, 21014, "tiered block read local", "address", "", "", CONCURRENCY, true, false)
+
 // inner sql
 WAIT_EVENT_DEF(INNER_SQL_EXEC_WAIT, 30000, "exec inner sql wait", "wait inner sql class", "inner session id", "", OTHER, true, true)
 
