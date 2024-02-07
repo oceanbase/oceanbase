@@ -406,6 +406,10 @@ int ObAlterSystemResolverUtil::resolve_tenant(
           affect_all_meta = true;
         } else if (OB_FAIL(schema_guard.get_tenant_id(tenant_name, tmp_tenant_id))) {
           LOG_WARN("tenant not exist", K(tenant_name), KR(ret));
+          if (OB_ERR_INVALID_TENANT_NAME == ret && OB_SYS_TENANT_ID != tenant_id) {
+            ret = OB_ERR_NO_PRIVILEGE;
+            LOG_WARN("change error code, existence of tenant is only accessible to sys tenant", KR(ret));
+          }
         } else {
           int hash_ret = tenant_id_set.exist_refactored(tmp_tenant_id);
           if (OB_HASH_EXIST == hash_ret) {
@@ -514,28 +518,35 @@ int ObFreezeResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
-int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_v2, const ParseNode *opt_rebuild_column_group)
+int ObFreezeResolver::resolve_major_freeze_(ObFreezeStmt *freeze_stmt, ParseNode *opt_tenant_list_or_tablet_id, const ParseNode *opt_rebuild_column_group)
 {
   int ret = OB_SUCCESS;
   const uint64_t cur_tenant_id = session_info_->get_effective_tenant_id();
 
-  if (NULL == opt_tenant_list_v2) {
-    // if opt_tenant_list_v2 == NULL, add owned tenant_id
+  if (NULL == opt_tenant_list_or_tablet_id) {
+    // if opt_tenant_list_or_tablet_id == NULL, add owned tenant_id
     if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) {
       LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
     }
-  } else if (OB_UNLIKELY(nullptr == opt_tenant_list_v2->children_ || 0 == opt_tenant_list_v2->num_child_)) {
+  } else if (OB_UNLIKELY(nullptr == opt_tenant_list_or_tablet_id->children_ || 0 == opt_tenant_list_or_tablet_id->num_child_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children of tenant should not be null", KR(ret), KP(opt_tenant_list_v2));
-  } else if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_v2))) {
+    LOG_WARN("children of tenant should not be null", KR(ret), KP(opt_tenant_list_or_tablet_id));
+  } else if (OB_FAIL(resolve_tenant_ls_tablet_(freeze_stmt, opt_tenant_list_or_tablet_id))) {
     LOG_WARN("fail to resolve tenant or tablet", KR(ret));
   } else if (OB_UNLIKELY(share::ObLSID::INVALID_LS_ID != freeze_stmt->get_ls_id())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to specify ls to major freeze", K(ret), "ls_id", freeze_stmt->get_ls_id());
   } else if (freeze_stmt->get_tablet_id().is_valid()) { // tablet major freeze
-    if (OB_SYS_TENANT_ID != cur_tenant_id) {
+    if (T_TABLET_ID == opt_tenant_list_or_tablet_id->type_) {
+      if (OB_UNLIKELY(0 != freeze_stmt->get_tenant_ids().count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant ids should be empty for type T_TABLET_ID", K(ret));
+      } else if (OB_FAIL(freeze_stmt->get_tenant_ids().push_back(cur_tenant_id))) { // if tenant is not explicitly specified, add owned tenant_id
+        LOG_WARN("fail to push owned tenant id ", KR(ret), "owned tenant_id", cur_tenant_id);
+      }
+    } else if (OB_SYS_TENANT_ID != cur_tenant_id) {
       ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("Only sys tenant can add suffix opt of tablet_id", KR(ret), K(cur_tenant_id));
+      LOG_WARN("Only sys tenant can add suffix opt of tablet_id after tenant name", KR(ret), K(cur_tenant_id));
     } else if (1 != freeze_stmt->get_tenant_ids().count()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not suppport to specify several tenant ids or no tenant_id for tablet major freeze", K(ret),
@@ -625,6 +636,18 @@ int ObFreezeResolver::resolve_tenant_ls_tablet_(ObFreezeStmt *freeze_stmt,
           if (OB_ISNULL(tenant_list_tuple) || OB_ISNULL(ls_id)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("tenant_list or ls_id is nullptr", KR(ret), KP(tenant_list_tuple), KP(ls_id), KP(opt_tablet_id));
+          }
+        }
+        break;
+      case T_TABLET_ID:
+        if (opt_tenant_list_or_ls_or_tablet_id->num_child_ != 1) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid child num", K(ret), K(opt_tenant_list_or_ls_or_tablet_id->num_child_));
+        } else {
+          opt_tablet_id = opt_tenant_list_or_ls_or_tablet_id->children_[0];
+          if (OB_ISNULL(opt_tablet_id)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("tenant_list or ls_id is nullptr", KR(ret), KP(opt_tablet_id));
           }
         }
         break;
