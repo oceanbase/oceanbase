@@ -354,7 +354,9 @@ int ObTableBatchExecuteP::htable_put()
       const ObTableOperation &table_operation = batch_operation.at(i);
       ObTableOperationResult single_op_result;
       tb_ctx_.set_entity(&table_operation.entity());
-      if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, single_op_result))) {
+      if (i > 0 && OB_FAIL(tb_ctx_.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        LOG_WARN("fail to adjust entity", K(ret));
+      } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx_, spec, single_op_result))) {
         LOG_WARN("fail to process op with spec", K(ret));
       }
       table::ObTableApiUtil::replace_ret_code(ret);
@@ -415,7 +417,9 @@ int ObTableBatchExecuteP::multi_get()
       ObTableOperationResult op_result;
       ObITableEntity *result_entity = result_.get_entity_factory()->alloc();
       ObNewRow *row = nullptr;
-      if (OB_FAIL(ObTableOpWrapper::process_get_with_spec(tb_ctx_, spec, row))) {
+      if (i > 0 && OB_FAIL(tb_ctx_.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        LOG_WARN("fail to adjust entity", K(ret));
+      } else if (OB_FAIL(ObTableOpWrapper::process_get_with_spec(tb_ctx_, spec, row))) {
         if (ret == OB_ITER_END) {
           ret = OB_SUCCESS;
         } else {
@@ -480,7 +484,9 @@ int ObTableBatchExecuteP::multi_delete()
       ObTableOperationResult op_result;
       ObTableApiExecutor *executor = nullptr;
       ObITableEntity *result_entity = result_.get_entity_factory()->alloc();
-      if (OB_ISNULL(result_entity)) {
+      if (i > 0 && OB_FAIL(tb_ctx_.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        LOG_WARN("fail to adjust entity", K(ret));
+      } else if (OB_ISNULL(result_entity)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc memroy for result_entity", K(ret));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
@@ -614,7 +620,9 @@ int ObTableBatchExecuteP::multi_insert()
       tb_ctx_.set_entity(&table_operation.entity());
       ObTableOperationResult op_result;
       ObITableEntity *result_entity = result_.get_entity_factory()->alloc();
-      if (OB_ISNULL(result_entity)) {
+      if (i > 0 && OB_FAIL(tb_ctx_.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        LOG_WARN("fail to adjust entity", K(ret));
+      } else if (OB_ISNULL(result_entity)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc entity", K(ret), K(i));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
@@ -670,7 +678,9 @@ int ObTableBatchExecuteP::multi_replace()
       tb_ctx_.set_entity(&table_operation.entity());
       ObTableOperationResult op_result;
       ObITableEntity *result_entity = result_.get_entity_factory()->alloc();
-      if (OB_ISNULL(result_entity)) {
+      if (i > 0 && OB_FAIL(tb_ctx_.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+        LOG_WARN("fail to adjust entity", K(ret));
+      } else if (OB_ISNULL(result_entity)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc entity", K(ret), K(i));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
