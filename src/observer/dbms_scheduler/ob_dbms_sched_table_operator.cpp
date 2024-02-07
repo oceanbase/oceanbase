@@ -143,7 +143,9 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_pk_column("job", job_info.job_));
   OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_column("state", job_info.state_));
-  OZ (dml.add_column("enabled", job_info.enabled_));
+  if (0 == job_info.state_.case_compare("COMPLETED")) {
+    OZ (dml.add_column("enabled", "false"));
+  }
   OZ (dml.add_column(true, "this_date"));
   OZ (dml.add_time_column("last_date", job_info.this_date_));
   OZ (dml.add_time_column("next_date", job_info.next_date_));
@@ -319,15 +321,15 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
   } else if ((now >= job_info.end_date_ || job_info.get_interval_ts() == 0) && (true == job_info.auto_drop_)) {
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
-    OX (job_info.failures_ = errmsg.empty() ? 0 : (job_info.failures_ + 1));
+    OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
     OX (job_info.flag_ = job_info.failures_ > 15 ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
+    OX (job_info.total_ += (errmsg.empty() ? now - job_info.this_date_ : 0));
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.
       job_info.next_date_ = 64060560000000000; // 4000-01-01
       job_info.state_ = ObString("BROKEN");
     } else if (now >= job_info.end_date_) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
-      job_info.enabled_ = false;
       job_info.state_ = ObString("COMPLETED");
     }
     OZ (_build_job_finished_dml(now, job_info, sql1));
@@ -443,6 +445,10 @@ do {                                                                  \
 } while (false)
 
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "gmt_modified", job_info_local.last_modify_);
+  //lowner not used
+  //powner not used
+  //cowner not used
+  //last_modify not used
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "last_date", job_info_local.last_date_);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "this_date", job_info_local.this_date_);
   EXTRACT_TIMESTAMP_FIELD_MYSQL_SKIP_RET(result, "next_date", job_info_local.next_date_);
@@ -463,12 +469,24 @@ do {                                                                  \
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "scheduler_flags", job_info_local.scheduler_flags_, uint64_t);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "exec_env", job_info_local.exec_env_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "job_name", job_info_local.job_name_);
+  //job_style not used
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "job_class", job_info_local.job_class_);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "program_name", job_info_local.program_name_);
+  //job_type not used
+  //job_action not used
+  //number_of_argument not used
+  //repeat_interval not used
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "enabled", job_info_local.enabled_);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(result, "auto_drop", job_info_local.auto_drop_);
+  EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "state", job_info_local.state_);
+  //run_count not used
+  //retry_count not used
+  //last_run_duration not used
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "interval_ts", job_info_local.interval_ts_, uint64_t);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "max_run_duration", job_info_local.max_run_duration_, uint64_t);
+  //comments not used
+  //credential_name not used
+  //destination_name not used
 
   OZ (job_info.deep_copy(allocator, job_info_local));
 
