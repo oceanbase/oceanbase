@@ -4329,6 +4329,9 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       ret = plan_cache->add_plan(phy_plan, pc_ctx);
     }
     plan_added = (OB_SUCCESS == ret);
+    if (pc_ctx.is_max_curr_limit_) {
+      ret = OB_REACH_MAX_CONCURRENT_NUM;
+    }
 
     if (is_batch_exec) {
       // Batch optimization cannot continue for errors other than OB_SQL_PC_PLAN_DUPLICATE.
