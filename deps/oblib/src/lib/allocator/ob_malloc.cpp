@@ -53,36 +53,17 @@ int oceanbase::common::ObMemBuf::ensure_space(const int64_t size, const lib::ObL
 void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t nbyte,
                                          const lib::ObLabel &label)
 {
-  char *ptr = static_cast<char *>(oceanbase::common::ob_malloc(nbyte + alignment, label));
-  char *align_ptr = NULL;
-  if (NULL != ptr) {
-    align_ptr = reinterpret_cast<char *>(oceanbase::common::upper_align(reinterpret_cast<int64_t>(ptr),
-                                                                        alignment));
-    if (align_ptr == ptr) {
-      align_ptr = ptr + alignment;
-    }
-    int64_t padding = align_ptr - ptr;
-    if (!(padding <= alignment && padding > 0)) {
-      _OB_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid padding(padding=%ld, alignment=%ld", padding, alignment);
-    }
-    uint8_t *sign_ptr = reinterpret_cast<uint8_t *>(align_ptr - 1);
-    int64_t *header_ptr = reinterpret_cast<int64_t *>(align_ptr - 1 - sizeof(int64_t));
-    if (padding < (int64_t)sizeof(int64_t) + 1) {
-      *sign_ptr = static_cast<uint8_t>(padding) & 0x7f;
-    } else {
-      *sign_ptr = 0x80;
-      *header_ptr = padding;
-    }
-  } else {
-    _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "ob_tc_malloc allocate memory failed, alignment[%ld], nbyte[%ld], label[%s].",
-            alignment, nbyte, (const char *)label);
-  }
-  return align_ptr;
+  ObMemAttr attr;
+  attr.label_ = label;
+  return ob_malloc_align(alignment, nbyte, attr);
 }
 
-void *oceanbase::common::ob_malloc_align(const int64_t alignment, const int64_t nbyte,
+void *oceanbase::common::ob_malloc_align(const int64_t align, const int64_t nbyte,
                                          const ObMemAttr &attr)
 {
+  const int min_align = 16;
+  const int64_t alignment =
+    align <= min_align ? min_align : align_up2(align, 16);
   char *ptr = static_cast<char *>(oceanbase::common::ob_malloc(nbyte + alignment, attr));
   char *align_ptr = NULL;
   if (NULL != ptr) {

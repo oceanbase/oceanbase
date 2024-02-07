@@ -351,6 +351,11 @@ public:
   virtual int exist(const char *pathname, bool &is_exist) = 0;
   virtual int stat(const char *pathname, ObIODFileStat &statbuf) = 0;
   virtual int fstat(const ObIOFd &fd, ObIODFileStat &statbuf) = 0;
+  virtual int del_unmerged_parts(const char *pathname) = 0;
+  virtual int adaptive_exist(const char *pathname, bool &is_exist) = 0;
+  virtual int adaptive_stat(const char *pathname, ObIODFileStat &statbuf) = 0;
+  virtual int adaptive_unlink(const char *pathname) = 0;
+  virtual int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op) = 0;
 
   //block interfaces
   virtual int mark_blocks(ObIBlockIterator &block_iter) = 0;

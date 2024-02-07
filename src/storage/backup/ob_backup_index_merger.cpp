@@ -572,7 +572,7 @@ int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path, con
 {
   int ret = OB_SUCCESS;
   common::ObBackupIoAdapter util;
-  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   if (OB_FAIL(util.mk_parent_dir(path.get_obstr(), storage_info))) {
     LOG_WARN("failed to make parent dir", K(path), K(path), KP(storage_info));
   } else if (OB_FAIL(util.open_with_access_type(dev_handle_, io_fd_, storage_info, path.get_obstr(), access_type))) {

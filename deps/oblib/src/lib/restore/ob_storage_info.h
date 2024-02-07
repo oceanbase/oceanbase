@@ -38,6 +38,7 @@ const char *const ACCESS_KEY = "access_key=";
 const char *const HOST = "host=";
 const char *const APPID = "appid=";
 const char *const DELETE_MODE = "delete_mode=";
+const char *const REGION = "s3_region=";
 
 class ObObjectStorageInfo
 {

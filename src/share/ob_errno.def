@@ -2111,6 +2111,7 @@ DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory 
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, -9102, -1, "HY000", "file or directory permission denied");
 DEFINE_ERROR(OB_TOO_MANY_OPEN_FILES, -9103, -1, "HY000", "too many open files");
 DEFINE_ERROR(OB_DIRECT_LOAD_COMMIT_ERROR, -9104, -1, "HY000", "fail to commit direct load");
+DEFINE_ERROR_DEP(OB_S3_ERROR, -9105, -1, "HY000", "S3 error");
 
 ////////////////////////////////////////////////////////////////
 //error code for storage auto extend file

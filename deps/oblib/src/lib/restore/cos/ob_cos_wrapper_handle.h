@@ -61,6 +61,9 @@ public:
   int set_delete_mode(const char *parameter);
   int64_t get_delete_mode() const { return delete_mode_; }
 
+  void *alloc_mem(size_t size);
+  void free_mem(void *addr);
+
 private:
   bool is_inited_;
   qcloud_cos::ObCosWrapper::Handle *handle_;

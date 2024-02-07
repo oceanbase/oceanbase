@@ -371,7 +371,7 @@ int ObExternTabletMetaWriter::prepare_backup_file_(const int64_t file_id)
   int ret = OB_SUCCESS;
   share::ObBackupPath backup_path;
   common::ObBackupIoAdapter util;
-  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_RANDOMWRITER;
+  const ObStorageAccessType access_type = OB_STORAGE_ACCESS_MULTIPART_WRITER;
   const int64_t data_file_size = get_data_file_size();
   if (OB_FAIL(ObBackupPathUtil::get_ls_data_tablet_info_path(
       backup_set_dest_, ls_id_, turn_id_, retry_id_, file_id, backup_path))) {

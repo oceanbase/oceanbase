@@ -231,5 +231,15 @@ int ObCosWrapperHandle::set_delete_mode(const char *parameter)
   return ret;
 }
 
+void* ObCosWrapperHandle::alloc_mem(size_t size)
+{
+  return allocator_.alloc(size);
+}
+
+void ObCosWrapperHandle::free_mem(void *addr)
+{
+  allocator_.free(addr);
+}
+
 } // common
 } // oceanbase

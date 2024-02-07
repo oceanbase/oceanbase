@@ -88,6 +88,13 @@ public:
   virtual int stat(const char *pathname, common::ObIODFileStat &statbuf) override;
   virtual int fstat(const common::ObIOFd &fd, common::ObIODFileStat &statbuf) override;
 
+  //for object device, local device should not use these
+  int del_unmerged_parts(const char *pathname);
+  int adaptive_exist(const char *pathname, bool &is_exist);
+  int adaptive_stat(const char *pathname, ObIODFileStat &statbuf);
+  int adaptive_unlink(const char *pathname);
+  int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op);
+
   //block interfaces
   virtual int mark_blocks(common::ObIBlockIterator &block_iter) override;
   virtual int alloc_block(const common::ObIODOpts *opts, common::ObIOFd &block_id) override;

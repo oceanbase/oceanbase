@@ -32,6 +32,7 @@ devdeps-boost-1.74.0-22022110914.el8.aarch64.rpm
 devdeps-s2geometry-0.9.0-12023092021.el8.aarch64.rpm
 devdeps-icu-69.1-72022112416.el8.aarch64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
+devdeps-s3-cpp-sdk-1.11.156-62023101011.el9.aarch64.rpm
 
 [deps-apr-el9]
 devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=apr-el9
