@@ -2,6 +2,7 @@
 CWD=$(cd `dirname $0`;pwd)
 cd "${CWD}"
 source _env
+export HOST_IP_MODE=1
 
 STAMP="$(date +%s)"
 STEP=1
@@ -142,6 +143,11 @@ else # nothing here, bootstrap
     cat obagent.yaml >> $TMPFILE
   fi
 
+  if [ "x${MODE}" != "xMINI" ] && [ "x${MODE}" != "xSTANDALONE" ]; then
+    cat ob-configserver.yaml >> $TMPFILE
+  fi
+
+  sed -i "s|@OB_SERVER_IP@|${OB_SERVER_IP}|g" $TMPFILE
   sed -i "s|@OB_HOME_PATH@|${OB_HOME_PATH}|g" $TMPFILE
   sed -i "s|@OB_MYSQL_PORT@|${OB_MYSQL_PORT}|g" $TMPFILE
   sed -i "s|@OB_RPC_PORT@|${OB_RPC_PORT}|g" $TMPFILE
@@ -225,6 +231,8 @@ fi
 
 if [ $? -eq 0 ]; then
   echo "boot success!"
+  # close the enable_rich_error_msg
+  obclient -h127.1 -uroot@sys -A -P${OB_MYSQL_PORT} -e "alter system set enable_rich_error_msg = false;"
 else
   echo "boot failed!"
   if exit_while_error

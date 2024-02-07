@@ -88,7 +88,7 @@ obd demo
 
     ```shell
     # 部署一个mini模式实例
-    docker run -p 2881:2881 --name oceanbase-ce -e MINI_MODE=1 -d oceanbase/oceanbase-ce
+    docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
     ```
 
 2. 连接 OceanBase

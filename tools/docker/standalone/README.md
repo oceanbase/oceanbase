@@ -119,3 +119,12 @@ After the modification is completed, execute the image build script:
 - `./fast_boot_docker_build.sh <oceanbase_rpm_version>`. For example `./fast_boot_docker_build.sh 4.2.1.0-100000102023092807`
 
 After waiting for the build to be completed, you can start and test the instance in the same way as mentioned above.
+
+## Fault Diagnosis
+A series of diagnostic methods are provided to diagnose errors in Docker.
+### Support for 'enable_rich_error_msg' parameter
+- Initially, the 'enable_rich_error_msg' parameter is enabled by default during the Docker startup process. If an error occurs during the startup process, more error information can be obtained using the trace command. After a successful startup, Docker sets this parameter to the false state.
+- Users can open this parameter to obtain more error information about SQL statements during the runtime phase. The method to open it is to connect to Docker's oceanbase using the system tenant, and then execute the following command:
+```bash
+alter system set enable_rich_error_msg = true;
+```
