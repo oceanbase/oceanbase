@@ -32,6 +32,7 @@
 #include "lib/container/ob_se_array.h"
 #include "share/rc/ob_tenant_base.h"
 #include "lib/alloc/malloc_hook.h"
+#include "pl/ob_pl_allocator.h"
 
 using namespace llvm;
 
@@ -587,7 +588,7 @@ int ObLLVMHelper::init_llvm() {
 void ObLLVMHelper::compile_module(bool optimization)
 {
   if (optimization) {
-    OB_LLVM_MALLOC_GUARD("PlCodeGen");
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
     jc_->optimize();
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
@@ -598,7 +599,7 @@ void ObLLVMHelper::compile_module(bool optimization)
 
 void ObLLVMHelper::dump_module()
 {
-  OB_LLVM_MALLOC_GUARD("PlCodeGen");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
   if (OB_ISNULL(jc_)) {
     //do nothing
   } else {
@@ -611,7 +612,7 @@ void ObLLVMHelper::dump_module()
 
 void ObLLVMHelper::dump_debuginfo()
 {
-  OB_LLVM_MALLOC_GUARD("PlCodeGen");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
   if (OB_ISNULL(jit_) || jit_->get_debug_info_size() <= 0) {
     // do nothing ...
   } else {
@@ -621,7 +622,7 @@ void ObLLVMHelper::dump_debuginfo()
 
 int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 {
-  OB_LLVM_MALLOC_GUARD("PlCodeGen");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
   int ret = OB_SUCCESS;
   if (OB_ISNULL(jc_)) {
     ret = OB_NOT_INIT;
@@ -638,7 +639,7 @@ int ObLLVMHelper::verify_function(ObLLVMFunction &function)
 
 int ObLLVMHelper::verify_module()
 {
-  OB_LLVM_MALLOC_GUARD("PlCodeGen");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
   int ret = OB_SUCCESS;
   std::string verify_error;
   llvm::raw_string_ostream verify_raw_os(verify_error);
