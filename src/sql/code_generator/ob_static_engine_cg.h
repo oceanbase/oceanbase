@@ -184,6 +184,7 @@ public:
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                          bool &found);
+  inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
   // detect physical operator type from logic operator.
   static int get_phy_op_type(ObLogicalOperator &op, ObPhyOperatorType &type,
@@ -507,7 +508,6 @@ private:
                                                                  || T_FUN_SUM == expr_type
                                                                  || T_FUN_MAX == expr_type
                                                                  || T_FUN_MIN == expr_type; }
-  uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
   int check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
