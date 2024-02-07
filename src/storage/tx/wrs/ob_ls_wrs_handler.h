@@ -19,6 +19,8 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/scn.h"
 #include "share/ob_ls_id.h"
+#include "storage/tx/ob_trans_define.h"
+
 namespace oceanbase
 {
 namespace clog
@@ -30,6 +32,8 @@ class ObISubmitLogCb;
 namespace storage
 {
 class ObLS;
+
+
 class ObLSWRSHandler
 {
 public:

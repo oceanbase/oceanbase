@@ -732,6 +732,27 @@ int ObLockTable::switch_to_leader()
   return ret;
 }
 
+int ObLockTable::enable_check_tablet_status(const bool need_check)
+{
+  int ret = OB_SUCCESS;
+  ObTableHandleV2 handle;
+  ObLockMemtable *lock_memtable = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLockTable is not inited", K(ret));
+  } else if (OB_FAIL(get_lock_memtable(handle))) {
+    LOG_WARN("get lock memtable failed", K(ret));
+    // to disable check just skip when no active memtable
+    if (!need_check && OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(handle.get_lock_memtable(lock_memtable))) {
+    LOG_WARN("get lock memtable from lock handle failed", K(ret));
+  } else if (FALSE_IT(lock_memtable->enable_check_tablet_status(need_check))) {
+  }
+  return ret;
+}
+
 } // tablelock
 } // transaction
 } // oceanbase

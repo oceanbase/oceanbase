@@ -2261,8 +2261,18 @@ int ObLSTabletService::create_memtable(
       LOG_INFO("old tablet is empty shell tablet, should skip this operation", K(ret), "old_tablet", old_tablet_handle.get_obj());
     } else {
       time_guard.click("get tablet");
+      ObTabletCreateDeleteMdsUserData user_data;
+      bool is_committed = false;
       ObTablet &old_tablet = *(old_tablet_handle.get_obj());
-      if (OB_FAIL(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
+      // forbid create new memtable when transfer
+      if (for_replay) {
+      } else if (OB_FAIL(old_tablet.ObITabletMdsInterface::get_latest_tablet_status(user_data, is_committed))) {
+      } else if (!is_committed || (user_data.tablet_status_ != ObTabletStatus::NORMAL
+            && user_data.tablet_status_ != ObTabletStatus::TRANSFER_IN)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("tablet status not allow create new memtable", K(ret), K(is_committed), K(user_data));
+      }
+      if (FAILEDx(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
           LOG_WARN("fail to create memtable", K(ret), K(new_tablet_handle), K(schema_version), K(tablet_id));
         }
@@ -6450,6 +6460,39 @@ int ObLSTabletService::offline_destroy_memtable_and_mds_table_()
   return ret;
 }
 
+int ObLSTabletService::check_tablet_no_active_memtable(const ObIArray<ObTabletID> &tablet_list, bool &has)
+{
+  int ret = OB_SUCCESS;
+  has = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    for (int64_t idx = 0; !has && OB_SUCC(ret) && idx < tablet_list.count(); idx++) {
+      ObTabletID tablet_id = tablet_list.at(idx);
+      ObTabletHandle handle;
+      ObTablet *tablet = NULL;
+      ObTableHandleV2 table_handle;
+      if (OB_FAIL(direct_get_tablet(tablet_id, handle))) {
+        LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
+      } else if (FALSE_IT(tablet = handle.get_obj())) {
+      } else if (OB_FAIL(tablet->get_active_memtable(table_handle))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get active memtable", K(ret), K(tablet_id));
+        }
+      } else if (OB_ISNULL(table_handle.get_table())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null table", K(ret), K(tablet_id));
+      } else if (table_handle.get_table()->is_active_memtable()) {
+        LOG_WARN("tablet has active memtable", K(tablet_id), K(table_handle));
+        has = true;
+      }
+    }
+  }
+  return ret;
+}
 
 
 } // namespace storage

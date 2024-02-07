@@ -151,6 +151,8 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
 
   ObLSArray TEST_LS_ARRAY;
   TEST_LS_ARRAY.push_back(LSKey());
+  ObTxCommitParts TEST_COMMIT_PARTS;
+  TEST_COMMIT_PARTS.push_back(ObTxExecPart(TEST_LS_KEY, 0, 0));
   ObRedoLSNArray TEST_LOG_OFFSET_ARRY;
   TEST_LOG_OFFSET_ARRY.push_back(TEST_LOG_OFFSET);
   ObLSLogInfoArray TEST_INFO_ARRAY;
@@ -173,7 +175,9 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
                                        TEST_LOG_OFFSET_ARRY,
                                        TEST_LS_ARRAY,
                                        TEST_CLUSTER_VERSION,
-                                       TEST_XID);
+                                       TEST_XID,
+                                       TEST_COMMIT_PARTS,
+                                       TEST_EPOCH);
   // ASSERT_EQ(OB_SUCCESS, fill_commit_state.before_serialize());
   ObTxActiveInfoLog fill_active_state(TEST_ADDR,
                                        TEST_TRANS_TYPE,
@@ -289,6 +293,8 @@ TEST_F(TestObTxLog, tx_log_body_redo)
 
   ObLSArray TEST_LS_ARRAY;
   TEST_LS_ARRAY.push_back(LSKey());
+  ObTxCommitParts TEST_COMMIT_PARTS;
+  TEST_COMMIT_PARTS.push_back(ObTxExecPart(TEST_LS_KEY, 0, 0));
   ObRedoLSNArray TEST_LOG_OFFSET_ARRY;
   TEST_LOG_OFFSET_ARRY.push_back(TEST_LOG_OFFSET);
   ObLSLogInfoArray TEST_INFO_ARRAY;
@@ -311,7 +317,9 @@ TEST_F(TestObTxLog, tx_log_body_redo)
                                        TEST_LOG_OFFSET_ARRY,
                                        TEST_LS_ARRAY,
                                        TEST_CLUSTER_VERSION,
-                                       TEST_XID);
+                                       TEST_XID,
+                                       TEST_COMMIT_PARTS,
+                                       TEST_EPOCH);
   ObTxCommitLog fill_commit(share::SCN::base_scn(),
                             TEST_CHECKSUM,
                             TEST_LS_ARRAY,
@@ -407,6 +415,8 @@ TEST_F(TestObTxLog, test_compat_bytes)
 {
   ObLSArray TEST_LS_ARRAY;
   TEST_LS_ARRAY.push_back(LSKey());
+  ObTxCommitParts TEST_COMMIT_PARTS;
+  TEST_COMMIT_PARTS.push_back(ObTxExecPart(TEST_LS_KEY, 0, 0));
   ObRedoLSNArray TEST_LOG_OFFSET_ARRY;
   TEST_LOG_OFFSET_ARRY.push_back(TEST_LOG_OFFSET);
   ObLSLogInfoArray TEST_INFO_ARRAY;
@@ -429,7 +439,9 @@ TEST_F(TestObTxLog, test_compat_bytes)
                                      TEST_LOG_OFFSET_ARRY,
                                      TEST_LS_ARRAY,
                                      TEST_CLUSTER_VERSION,
-                                     TEST_XID);
+                                     TEST_XID,
+                                     TEST_COMMIT_PARTS,
+                                     TEST_EPOCH);
   ObTxCommitInfoLogTempRef commit_info_temp_ref;
   ObTxCommitInfoLog replay_commit_info(commit_info_temp_ref);
 
@@ -589,6 +601,10 @@ TEST_F(TestObTxLog, test_default_log_deserialize)
   replay_member_cnt++;
   EXPECT_EQ(fill_commit_state.get_xid(), replay_commit_state.get_xid());
   replay_member_cnt++;
+  EXPECT_EQ(fill_commit_state.get_commit_parts().count(), replay_commit_state.get_commit_parts().count());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_commit_state.get_epoch(), replay_commit_state.get_epoch());
+  replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 
   ObTxPrepareLogTempRef prepare_temp_ref;
@@ -676,6 +692,8 @@ void test_big_commit_info_log(int64_t log_size)
 
   ObLSArray TEST_LS_ARRAY;
   TEST_LS_ARRAY.push_back(LSKey());
+  ObTxCommitParts TEST_COMMIT_PARTS;
+  TEST_COMMIT_PARTS.push_back(ObTxExecPart(TEST_LS_KEY, 0, 0));
   ObRedoLSNArray TEST_BIG_REDO_LSN_ARRAY;
   for (int i = 0; i < log_size / sizeof(palf::LSN); i++) {
     TEST_BIG_REDO_LSN_ARRAY.push_back(palf::LSN(i));
@@ -685,7 +703,7 @@ void test_big_commit_info_log(int64_t log_size)
   ObTxCommitInfoLog fill_commit_state(TEST_ADDR, TEST_LS_ARRAY, TEST_LS_KEY, TEST_IS_SUB2PC,
                                       TEST_IS_DUP, TEST_CAN_ELR, TEST_TRACE_ID_STR, TEST_TRCE_INFO,
                                       TEST_LOG_OFFSET, TEST_BIG_REDO_LSN_ARRAY, TEST_LS_ARRAY,
-                                      TEST_CLUSTER_VERSION, TEST_XID);
+                                      TEST_CLUSTER_VERSION, TEST_XID, TEST_COMMIT_PARTS, TEST_EPOCH);
   ObTxLogBlockHeader
       fill_block_header(TEST_ORG_CLUSTER_ID, TEST_LOG_ENTRY_NO, ObTransID(TEST_TX_ID), TEST_ADDR);
   ASSERT_EQ(OB_SUCCESS, fill_block.init(TEST_TX_ID, fill_block_header));
@@ -785,6 +803,10 @@ void test_big_commit_info_log(int64_t log_size)
   EXPECT_EQ(fill_commit_state.get_redo_lsns().count(), replay_commit_state.get_redo_lsns().count());
   replay_member_cnt++;
   EXPECT_EQ(fill_commit_state.get_xid(), replay_commit_state.get_xid());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_commit_state.get_commit_parts().count(), replay_commit_state.get_commit_parts().count());
+  replay_member_cnt++;
+  EXPECT_EQ(fill_commit_state.get_epoch(), replay_commit_state.get_epoch());
   replay_member_cnt++;
   EXPECT_EQ(replay_member_cnt, fill_member_cnt);
 }

@@ -177,6 +177,18 @@ public:
                                        logservice::ObReplayBarrierType &final_barrier_type);
 };
 
+inline bool is_contain_stat_log(const ObTxCbArgArray &array)
+{
+  bool bool_ret = false;
+  for (int64_t i = 0; i < array.count(); i++) {
+    if ((ObTxLogTypeChecker::is_state_log(array.at(i).get_log_type()))) {
+      bool_ret = true;
+      break;
+    }
+  }
+  return bool_ret;
+}
+
 // ============================== Tx Log Header ==============================
 class ObTxLogHeader
 {
@@ -482,7 +494,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_)
+        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
   {
     before_serialize();
   }
@@ -498,12 +510,14 @@ public:
                     ObRedoLSNArray &redo_lsns,
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
-                    const ObXATransID &xid)
+                    const ObXATransID &xid,
+                    const ObTxCommitParts &commit_parts,
+                    int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
         incremental_participants_(incremental_participants), cluster_version_(cluster_version),
         app_trace_id_str_(app_trace_id), app_trace_info_(app_trace_info),
-        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid)
+        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid), commit_parts_(commit_parts), epoch_(epoch)
   {
     before_serialize();
   };
@@ -521,6 +535,8 @@ public:
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
+  int64_t get_epoch() const { return epoch_; }
+  const ObTxCommitParts &get_commit_parts() const { return commit_parts_; }
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
@@ -537,7 +553,9 @@ public:
                K(app_trace_info_),
                K(prev_record_lsn_),
                K(redo_lsns_),
-               K(xid_))
+               K(xid_),
+               K(commit_parts_),
+               K(epoch_))
 public:
   int before_serialize();
 
@@ -559,6 +577,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
+  ObTxCommitParts commit_parts_;
+  int64_t epoch_;
 };
 
 class ObTxPrepareLogTempRef
@@ -1116,6 +1136,7 @@ public:
                K(len_),
                K(pos_),
                K(cur_log_type_),
+               K(cur_block_barrier_type_),
                K(cb_arg_array_),
                KPC(big_segment_buf_));
 
@@ -1145,6 +1166,7 @@ private:
   int64_t len_;
   int64_t pos_;
   ObTxLogType cur_log_type_;
+  logservice::ObReplayBarrierType cur_block_barrier_type_;
   ObTxCbArgArray cb_arg_array_;
 
   ObTxBigSegmentBuf *big_segment_buf_;

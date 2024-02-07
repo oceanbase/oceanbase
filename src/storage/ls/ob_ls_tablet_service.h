@@ -434,6 +434,9 @@ public:
   int get_all_tablet_ids(const bool except_ls_inner_tablet, common::ObIArray<ObTabletID> &tablet_id_array);
 
   int flush_mds_table(int64_t recycle_scn);
+
+  // for transfer check tablet write stop
+  int check_tablet_no_active_memtable(const ObIArray<ObTabletID> &tablet_list, bool &has);
 protected:
   virtual int prepare_dml_running_ctx(
       const common::ObIArray<uint64_t> *column_ids,

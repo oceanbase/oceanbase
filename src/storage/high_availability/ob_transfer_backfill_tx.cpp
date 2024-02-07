@@ -24,6 +24,7 @@
 #include "share/ob_debug_sync_point.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_transfer_handler.h"
 
 namespace oceanbase
 {
@@ -1588,10 +1589,14 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
       } else {
         sstable = static_cast<ObSSTable *>(table);
         if (sstable->contain_uncommitted_row()) {
-          if (table->get_end_scn() >= ctx_->backfill_scn_) {
+          if (sstable->get_filled_tx_scn() > ctx_->backfill_scn_) {
             ret = OB_TRANSFER_SYS_ERROR;
-            LOG_ERROR("src minor still has uncommitted row, unexpected", K(ret), KPC(sstable), KPC(ctx_));
+            LOG_ERROR("src sstable filled_tx_scn bigger than transfer_scn, unexpected", K(ret), KPC(sstable), KPC(ctx_),
+                      K(sstable->get_filled_tx_scn()), K(ctx_->backfill_scn_));
+          } else if (sstable->get_filled_tx_scn() == ctx_->backfill_scn_) {
+            LOG_INFO("src minor has backfill to transfer_scn, when new transfer active tx has move to dest_ls", KPC(sstable), KPC(ctx_));
           } else {
+            // filled_tx_scn < transfer_scn
             ret = OB_EAGAIN;
             LOG_WARN("sstable has not yet backfilled transactions", K(ret), KPC(sstable), KPC(ctx_));
           }

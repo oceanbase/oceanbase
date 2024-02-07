@@ -813,6 +813,73 @@ int ObLSTxService::check_tx_blocked(bool &tx_blocked) const
   }
   return ret;
 }
-} // transaction
 
+int ObLSTxService::transfer_out_tx_op(int64_t except_tx_id,
+                                      const share::SCN data_end_scn,
+                                      const share::SCN op_scn,
+                                      transaction::NotifyType op_type,
+                                      bool is_replay,
+                                      share::ObLSID dest_ls_id,
+                                      int64_t transfer_epoch,
+                                      int64_t &active_tx_count,
+                                      int64_t &op_tx_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->transfer_out_tx_op(except_tx_id, data_end_scn, op_scn, op_type, is_replay,
+          dest_ls_id, transfer_epoch, active_tx_count, op_tx_count))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("transfer_out_tx_op", KR(ret), K(op_type), "cost", end_time - start_time, K(active_tx_count), K(op_tx_count));
+  return ret;
+}
+
+int ObLSTxService::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->wait_tx_write_end(timeout_ctx))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("wait_tx_write_end", KR(ret), "cost", end_time - start_time);
+  return ret;
+}
+
+int ObLSTxService::collect_tx_ctx(const ObLSID dest_ls_id,
+                                  const SCN log_scn,
+                                  const ObIArray<ObTabletID> &tablet_list,
+                                  int64_t &tx_count,
+                                  int64_t &collect_count,
+                                  ObIArray<ObTxCtxMoveArg> &res)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->collect_tx_ctx(dest_ls_id, log_scn, tablet_list, tx_count, collect_count, res))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("collect_tx_ctx", KR(ret), K(ls_id_), "cost_us", end_time - start_time,
+      K(tx_count), K(collect_count));
+  return ret;
+}
+
+int ObLSTxService::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                              const ObIArray<ObTxCtxMoveArg> &args)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->move_tx_op(move_tx_param, args))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("move_tx_ctx", KR(ret), K(ls_id_),"cost_us", end_time - start_time,
+      "count", args.count());
+  return ret;
+
+}
+
+
+} // transaction
 } // oceanbase

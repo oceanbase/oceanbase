@@ -218,12 +218,9 @@ struct ObQueryFlag
   inline void set_use_fast_agg() { use_fast_agg_ = UseFastAgg; }
   inline void set_iter_uncommitted_row() { iter_uncommitted_row_ = true; }
   inline void set_not_iter_uncommitted_row() { iter_uncommitted_row_ = false; }
-  inline void set_for_foreign_key_check() { for_foreign_key_check_ = true; }
-  inline void set_ignore_trans_stat() { ignore_trans_stat_ = true; }
-  inline void set_not_ignore_trans_stat() { ignore_trans_stat_ = false; }
   inline bool iter_uncommitted_row() const { return iter_uncommitted_row_; }
+  inline void set_for_foreign_key_check() { for_foreign_key_check_ = true; }
   inline bool is_for_foreign_key_check() const { return for_foreign_key_check_; }
-  inline bool is_ignore_trans_stat() const { return ignore_trans_stat_; }
   inline bool is_sstable_cut() const { return is_sstable_cut_; }
   inline bool is_skip_read_lob() const { return skip_read_lob_; }
   inline void disable_cache()

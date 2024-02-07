@@ -29,7 +29,8 @@ using namespace storage;
 ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
   : src_ls_id_(),
     dest_ls_id_(),
-    tablet_list_()
+    tablet_list_(),
+    data_end_scn_()
 {
 }
 
@@ -38,13 +39,17 @@ void ObTXStartTransferOutInfo::reset()
   src_ls_id_.reset();
   dest_ls_id_.reset();
   tablet_list_.reset();
+  data_end_scn_.reset();
+  transfer_epoch_ = 0;
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
 {
   return src_ls_id_.is_valid()
       && dest_ls_id_.is_valid()
-      && !tablet_list_.empty();
+      && !tablet_list_.empty()
+      && data_end_scn_.is_valid()
+      && transfer_epoch_ > 0;
 }
 
 int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_transfer_out_info)
@@ -58,12 +63,13 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
+    data_end_scn_ = start_transfer_out_info.data_end_scn_;
+    transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_);
-
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, data_end_scn_, transfer_epoch_);
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),

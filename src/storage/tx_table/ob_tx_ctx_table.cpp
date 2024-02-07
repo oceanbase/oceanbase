@@ -110,7 +110,7 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
                                  ctx_info.tx_id_,
                                  ctx_info.ls_id_,
                                  ctx_info.cluster_id_,     /* cluster_id */
-                                 GET_MIN_CLUSTER_VERSION(),
+                                 ctx_info.cluster_version_,
                                  0, /*session_id*/
                                  scheduler,
                                  INT64_MAX,

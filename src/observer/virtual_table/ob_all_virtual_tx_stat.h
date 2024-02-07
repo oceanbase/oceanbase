@@ -85,6 +85,10 @@ private:
     GTRID,
     BQUAL,
     FORMAT_ID,
+    START_SCN,
+    END_SCN,
+    REC_SCN,
+    TRANSFER_BLOCKING,
   };
 
   static const int64_t OB_MAX_BUFFER_SIZE = 1024;

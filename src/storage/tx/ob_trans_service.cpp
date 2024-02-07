@@ -161,6 +161,8 @@ int ObTransService::init(const ObAddr &self,
                                                 &dup_table_scan_timer_,
                                                 &dup_table_loop_worker_))) {
     TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
+  } else if (OB_FAIL(rollback_sp_msg_mgr_.init(lib::ObMemAttr(tenant_id, "RollbackSPMgr")))) {
+    TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -172,6 +174,7 @@ int ObTransService::init(const ObAddr &self,
     schema_service_ = schema_service;
     ts_mgr_ = ts_mgr;
     server_tracer_ = server_tracer;
+    rollback_sp_msg_sequence_ = ObTimeUtil::current_time();
     is_inited_ = true;
     TRANS_LOG(INFO, "transaction service inited success", KP(this), K(tenant_memory_limit));
   }

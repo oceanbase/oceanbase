@@ -127,6 +127,14 @@ public:
 
   // =============== Interface for sstable to get txn information =====================
 
+  /**
+   * @brief do some checking with tx data user has to implement the check functor derived from ObITxDataCheckFunctor
+   *
+   * @param[in] tx_id tx_id, the tx id of the transaction to be checked
+   * @param[in] fn the functor implemented by user
+   * @param[in] read_epoch to make sure the version of tx data is what the callers want to be
+   */
+  int check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
 
   /**
    * @brief check whether the row key is locked by tx id
@@ -182,18 +190,17 @@ public:
   /**
    * @brief the txn READ_TRANS_ID use SNAPSHOT_VERSION to read the data, and check whether the data is locked, readable or unreadable by txn DATA_TRANS_ID. READ_LATEST is used to check whether read the data belong to the same txn
    *
+   * @param[in] read_tx_data_arg
    * @param[in] lock_for_read_arg
-   * @param[in] read_epoch
    * @param[out] can_read
    * @param[out] trans_version
-   * @param[out] is_determined_state
-   * @param[in] op
+   * @param[in] cleanout_op
+   * @param[in] recheck_op
    */
   int lock_for_read(ObReadTxDataArg &read_tx_data_arg,
                     const transaction::ObLockForReadArg &lock_for_read_arg,
                     bool &can_read,
                     share::SCN &trans_version,
-                    bool &is_determined_state,
                     ObCleanoutOp &cleanout_op,
                     ObReCheckOp &recheck_op);
 
@@ -274,6 +281,7 @@ public: // getter & setter
   int get_tx_table_guard(ObTxTableGuard &guard);
   int64_t get_epoch() const { return ATOMIC_LOAD(&epoch_); }
   TxTableState get_state() const { return ATOMIC_LOAD(&state_); }
+  share::ObLSID get_ls_id() const { return ls_id_; }
 
   static int64_t get_filter_col_idx();
 
@@ -300,14 +308,6 @@ private:
   int offline_tx_ctx_table_();
   int offline_tx_data_table_();
 
-  /**
-   * @brief do some checking with tx data user has to implement the check functor derived from ObITxDataCheckFunctor
-   *
-   * @param[in] tx_id tx_id, the tx id of the transaction to be checked
-   * @param[in] fn the functor implemented by user
-   * @param[in] read_epoch to make sure the version of tx data is what the callers want to be
-   */
-  int check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_mini_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);
   int check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITxDataCheckFunctor &fn);

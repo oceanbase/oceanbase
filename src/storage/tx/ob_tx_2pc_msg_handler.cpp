@@ -51,6 +51,7 @@ int ObPartTransCtx::post_msg_(const ObTwoPhaseCommitMsgType& msg_type,
       // for xa trans, if prepare request, convert it to prepare version request
       Ob2pcPrepareVersionReqMsg prepare_version_req;
       build_tx_common_msg_(receiver, prepare_version_req);
+      prepare_version_req.upstream_ = ls_id_;
       if (OB_FAIL(post_msg_(receiver, prepare_version_req))) {
         TRANS_LOG(WARN, "rpc post msg failed", K(ret), K(*this), K(receiver), K(msg_type));
       }
@@ -225,6 +226,13 @@ void ObPartTransCtx::build_tx_common_msg_(const ObLSID &receiver,
                        ls_id_,
                        cluster_id_,
                        msg);
+  // fill exec_epoch && transfer_epoch
+  for (int64_t idx = 0; idx < exec_info_.commit_parts_.count(); idx++) {
+    if (exec_info_.commit_parts_.at(idx).ls_id_ == receiver) {
+      msg.epoch_ = exec_info_.commit_parts_.at(idx).exec_epoch_;
+      msg.transfer_epoch_ = exec_info_.commit_parts_.at(idx).transfer_epoch_;
+    }
+  }
 }
 
 void ObPartTransCtx::build_tx_common_msg_(const ObTxMsg &recv_msg,
@@ -344,20 +352,39 @@ int ObPartTransCtx::post_msg(const ObTwoPhaseCommitMsgType& msg_type,
                              const int64_t participant_id)
 {
   int ret = OB_SUCCESS;
+  bool need_post = true;
   ObLSID receiver;
 
   if (participant_id >= exec_info_.participants_.count()
-      && OB_C2PC_UPSTREAM_ID != participant_id) {
+      && OB_C2PC_UPSTREAM_ID != participant_id
+      && OB_C2PC_SENDER_ID != participant_id) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(participant_id), K(*this));
   } else if (OB_C2PC_UPSTREAM_ID == participant_id) {
+    // We should send to real upstream
     receiver = exec_info_.upstream_;
+    need_post = true;
+  } else if (OB_C2PC_SENDER_ID == participant_id) {
+    if (msg_2pc_cache_ != NULL) {
+      // We should send to the sender(just the sender of the msg)
+      receiver = msg_2pc_cache_->sender_;
+      need_post = true;
+    } else if (exec_info_.upstream_.is_valid()) {
+      // We should retransmit the msg to the real upstream
+      receiver = exec_info_.upstream_;
+      need_post = true;
+    } else {
+      // there may be intermediate participant retransmits to the upstream which
+      // disturbs the participants in this turn.
+      need_post = false;
+    }
   } else {
     receiver = exec_info_.participants_[participant_id];
+    need_post = true;
   }
 
-
   if (OB_SUCC(ret)
+      && need_post
       && OB_FAIL(post_msg_(msg_type, receiver))) {
     TRANS_LOG(WARN, "post msg failed", KR(ret), K(*this));
   }
@@ -369,7 +396,11 @@ int ObPartTransCtx::set_2pc_upstream_(const ObLSID &upstream)
 {
   int ret = OB_SUCCESS;
 
-  exec_info_.upstream_ = upstream;
+  if (!exec_info_.upstream_.is_valid()) {
+    // upstream should be fixed during each state in 2pc in order to prevent
+    // the deadlock in the cycle based tree phase commit.
+    exec_info_.upstream_ = upstream;
+  }
 
   return ret;
 }
@@ -384,14 +415,18 @@ int ObPartTransCtx::set_2pc_incremental_participants_(
   return ret;
 }
 
-int ObPartTransCtx::set_2pc_participants_(const ObLSArray &participants)
+int ObPartTransCtx::set_2pc_participants_(const ObTxCommitParts& participants)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(exec_info_.participants_.assign(participants))) {
-    TRANS_LOG(WARN, "set participants error", K(ret), K(participants), KPC(this));
+  if (exec_info_.participants_.count() > 0) {
+    TRANS_LOG(WARN, "participants has set before", KPC(this));
+  } else {
+    CONVERT_COMMIT_PARTS_TO_PARTS(participants, exec_info_.participants_);
+    if (FAILEDx(assign_commit_parts(exec_info_.participants_,
+                                    participants))) {
+      TRANS_LOG(WARN, "set participants error", K(ret), K(participants), KPC(this));
+    }
   }
-
   return ret;
 }
 
@@ -524,7 +559,11 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
         TRANS_LOG(WARN, "unexpect tx flag", KR(ret), KPC(this));
       } else if (is_sub2pc()) {
         // prepare version for xa trans
-        // these actions has been done in entrance function handle_tx_2pc_prepare_version_req
+        const Ob2pcPrepareVersionReqMsg &msg = *(static_cast<const Ob2pcPrepareVersionReqMsg *>(msg_2pc_cache_));
+        if (OB_FAIL(set_2pc_upstream_(msg.upstream_))) {
+          TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
+        }
+        // other actions has been done in entrance function handle_tx_2pc_prepare_version_req
       } else {
         const Ob2pcPrepareReqMsg &msg = *(static_cast<const Ob2pcPrepareReqMsg *>(msg_2pc_cache_));
 
@@ -561,7 +600,9 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
       const Ob2pcPreCommitReqMsg &msg =
           *(static_cast<const Ob2pcPreCommitReqMsg *>(msg_2pc_cache_));
 
-      if (OB_FAIL(set_2pc_commit_version_(msg.commit_version_))) {
+      if (OB_FAIL(set_2pc_upstream_(msg.sender_))) {
+        TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
+      } else if (OB_FAIL(set_2pc_commit_version_(msg.commit_version_))) {
         TRANS_LOG(WARN, "set commit version failed", KR(ret), K(msg), KPC(this));
       }
 
@@ -583,7 +624,9 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
 
       const Ob2pcCommitReqMsg &msg = *(static_cast<const Ob2pcCommitReqMsg *>(msg_2pc_cache_));
 
-      if (OB_FAIL(set_2pc_commit_version_(msg.commit_version_))) {
+      if (OB_FAIL(set_2pc_upstream_(msg.sender_))) {
+        TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
+      } else if (OB_FAIL(set_2pc_commit_version_(msg.commit_version_))) {
         TRANS_LOG(WARN, "set commit version failed", KR(ret), K(msg), K(*this));
       } else if (OB_FAIL(coord_prepare_info_arr_.assign(msg.prepare_info_array_))) {
         TRANS_LOG(WARN, "assign prepare_log_info_arr_ failed", K(ret));
@@ -621,6 +664,8 @@ int ObPartTransCtx::apply_2pc_msg_(const ObTwoPhaseCommitMsgType msg_type)
               || msg.max_commit_log_scn_ < ctx_tx_data_.get_end_log_ts())) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "unexpected max commit log scn in clear request", K(ret), KPC(this));
+      } else if (OB_FAIL(set_2pc_upstream_(msg.sender_))) {
+        TRANS_LOG(WARN, "set coordinator failed", KR(ret), K(msg), K(*this));
       } else {
         max_2pc_commit_scn_ = share::SCN::max(msg.max_commit_log_scn_, max_2pc_commit_scn_);
       }

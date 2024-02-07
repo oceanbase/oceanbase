@@ -103,6 +103,57 @@ TEST_F(ObTestTx, basic)
   COMMIT_TX(n1, tx, 500 * 1000);
 }
 
+TEST_F(ObTestTx, tx_2pc_blocking_and_get_gts_callback_concurrent_problem)
+{
+  GCONF._ob_trans_rpc_timeout = 50;
+  ObTxNode::reset_localtion_adapter();
+
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  GET_READ_SNAPSHOT(n1, tx, tx_param, snapshot);
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 112));
+
+  ObPartTransCtx *part_ctx = NULL;
+  ObLSID ls_id(1);
+  ASSERT_EQ(OB_SUCCESS, n1->get_tx_ctx(ls_id, tx.tx_id_, part_ctx));
+
+  // mock gts waiting
+  part_ctx->sub_state_.set_gts_waiting();
+
+  // mock transfer
+  part_ctx->sub_state_.set_transfer_blocking();
+
+  ObMonotonicTs stc(99);
+  ObMonotonicTs srr(100);
+  ObMonotonicTs rgt(100);
+  share::SCN scn;
+  scn.convert_for_gts(100);
+  part_ctx->stc_ = stc;
+  part_ctx->part_trans_action_ = ObPartTransAction::COMMIT;
+  EXPECT_EQ(OB_SUCCESS, part_ctx->get_gts_callback(srr, scn, rgt));
+  EXPECT_EQ(true, part_ctx->ctx_tx_data_.get_commit_version() >= scn);
+  ObLSID dst_ls_id(2);
+  share::SCN start_scn;
+  share::SCN end_scn;
+  start_scn.convert_for_gts(888);
+  end_scn.convert_for_gts(1000);
+  part_ctx->ctx_tx_data_.set_start_log_ts(start_scn);
+  ObSEArray<ObTabletID, 8> array;
+  ObTxCtxMoveArg arg;
+  bool is_collected;
+  TRANS_LOG(INFO, "qc debug");
+  ASSERT_EQ(OB_SUCCESS, part_ctx->collect_tx_ctx(dst_ls_id,
+                                                 end_scn,
+                                                 array,
+                                                 arg,
+                                                 is_collected));
+  ASSERT_EQ(true, is_collected);
+
+  n1->get_ts_mgr_().repair_get_gts_error();
+}
+
 TEST_F(ObTestTx, start_trans_expired)
 {
   GCONF._ob_trans_rpc_timeout = 50;

@@ -356,6 +356,7 @@ public:
   virtual void inc_ref();
   virtual void dec_ref();
   void wait_pending_write();
+  void wait_write_end();
   virtual int write_auth(const bool exclusive);
   virtual int write_done();
   virtual int trans_begin();
@@ -488,6 +489,7 @@ public:
                   const share::SCN &scn);
   int recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
+  int get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<common::ObTabletID> &tablet_list);
   // for deadlock detect.
   void set_table_lock_killed() { lock_mem_ctx_.set_killed(); }
   bool is_table_lock_killed() const { return lock_mem_ctx_.is_killed(); }

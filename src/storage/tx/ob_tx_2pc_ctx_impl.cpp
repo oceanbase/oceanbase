@@ -21,6 +21,8 @@ using namespace share;
 namespace transaction
 {
 
+// get_2pc_role is engaged with the current state, so it may become from a leaf
+// to a internal at later. So we can only decide its state under lock at one time.
 Ob2PCRole ObPartTransCtx::get_2pc_role() const
 {
   Ob2PCRole role = Ob2PCRole::UNKNOWN;
@@ -28,7 +30,7 @@ Ob2PCRole ObPartTransCtx::get_2pc_role() const
   if (exec_info_.upstream_.is_valid()) {
     if (exec_info_.upstream_ == ls_id_) {
       role = Ob2PCRole::ROOT;
-    } else if (exec_info_.incremental_participants_.empty()) {
+    } else if (exec_info_.participants_.empty()) {
       // not root & downstream is empty
       // root must not be leaf, because the distributed txn must be composed by
       // more than one participants.
@@ -41,12 +43,21 @@ Ob2PCRole ObPartTransCtx::get_2pc_role() const
   return role;
 }
 
+int64_t ObPartTransCtx::get_downstream_size() const
+{
+  return exec_info_.participants_.count();
+}
+
 int64_t ObPartTransCtx::get_self_id()
 {
   int ret = OB_SUCCESS;
   if (self_id_ == -1) {
     if (OB_FAIL(find_participant_id_(ls_id_, self_id_))) {
-      TRANS_LOG(ERROR, "find participant id failed", K(ret), K(*this));
+      if (is_root()) {
+        TRANS_LOG(ERROR, "find participant id failed", K(ret), K(*this));
+      } else {
+        self_id_ = -1;
+      }
     }
   }
   return self_id_;
@@ -397,6 +408,131 @@ int ObPartTransCtx::reply_to_scheduler_for_sub2pc(int64_t msg_type)
         ret = OB_SUCCESS;
       }
       TRANS_LOG(INFO, "reply to scheduler for sub rollback", KR(ret), K(*this));
+    }
+  }
+
+  return ret;
+}
+
+// When to merge the intermediate_participants into the participants in a two
+// phase commit needs careful consideration. One of the most critical factors is
+// how to deal with concurrency with the transfer out logs.
+//
+// The primary rule we need to follow is that "the two phase commit state before
+// the transfer out log will be relocated to the dest, and the two phase commit
+// state after this log will participant into the src participants, progressing
+// through a tree-style two phase commit." Therefore, before committing the
+// transfer out log, we will first block the advancement of the two phase commit
+// protocol for all txns which is required by the transfer (by blocking the
+// advancement of the in-memory state through "drive_self_2pc_phase" and the
+// advancement of the persistent state machine through "submit_log_if_allow"),
+// ensuring the integrity of the two phase commit state. Simultaneously, we will
+// add intermediate_participants for these blocked txns.
+//
+// The second rule is that we need to adhere to the principle that "when a
+// participant of a txn enters a certain two phase commit state with a log, all
+// transfer out logs before this log need to be included in the participants."
+// Therefore, we must ensure that the transfer out logs before the writing of
+// this two phase commit log will definitely be included in the temporary
+// participants(because the transfer out logs are barrier logs), while the
+// transfer out logs after that will not be included in the intermediate
+// participants(because the transfer out logs block the advancement of the txn's
+// state machine before being written to paxos, including both of the in-memory
+// state and the persistent state, as explained above).
+//
+// Hence, with the protection of the blocking capability of the state machine in
+// the in-memory state advancement("drive_self_2pc_phase") and the advancement
+// of the persistent state machine("submit_log_if_allow"), we can safely proceed
+// with the action of merging the intermediate_participant into the participants.
+int ObPartTransCtx::merge_intermediate_participants()
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+
+  const int64_t participants_size = exec_info_.participants_.count();
+  const int64_t increase_size = exec_info_.intermediate_participants_.count();
+
+  if (increase_size > 0) {
+    if (participants_size != exec_info_.commit_parts_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "part size not match", KR(ret), KPC(this));
+    } else if (OB_FAIL(exec_info_.participants_.reserve(participants_size + increase_size))) {
+      TRANS_LOG(WARN, "part reserve failed", KR(ret), KPC(this));
+    } else if (OB_FAIL(exec_info_.commit_parts_.reserve(participants_size + increase_size))) {
+      TRANS_LOG(WARN, "part reserve failed", KR(ret), KPC(this));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < increase_size; i++) {
+      exist = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !exist && j < participants_size; j++) {
+        if (exec_info_.participants_[j] == exec_info_.intermediate_participants_[i].ls_id_) {
+          if (exec_info_.commit_parts_.at(j).ls_id_ != exec_info_.participants_[j]) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(WARN, "commit part ls_id not match", KR(ret), KPC(this));
+          } else if (exec_info_.commit_parts_.at(j).transfer_epoch_ > 0) {
+            // do nothing
+            // use first transfer_epoch to drive
+          } else {
+            exec_info_.commit_parts_.at(j).transfer_epoch_ = exec_info_.intermediate_participants_[i].transfer_epoch_;
+          }
+          exist = true;
+        }
+      }
+
+      if (OB_SUCC(ret) && !exist) {
+        if (OB_FAIL(exec_info_.participants_.push_back(exec_info_.intermediate_participants_[i].ls_id_))) {
+          TRANS_LOG(WARN, "fail to push back incremental participants", KR(ret), KPC(this));
+        } else if (OB_FAIL(exec_info_.commit_parts_.push_back(exec_info_.intermediate_participants_[i]))) {
+          TRANS_LOG(WARN, "fail to push back incremental participants", KR(ret), KPC(this));
+        }
+      }
+    }
+
+    TRANS_LOG(INFO, "merge participant", KR(ret),
+                                         K(trans_id_),
+                                         K(ls_id_),
+                                         KP(this),
+                                         K(exec_info_.participants_),
+                                         K(exec_info_.intermediate_participants_));
+    if (OB_SUCC(ret)) {
+      (void)exec_info_.intermediate_participants_.reuse();
+    }
+  }
+
+  return ret;
+}
+
+bool ObPartTransCtx::is_real_upstream_(const ObLSID upstream)
+{
+  return upstream == exec_info_.upstream_;
+}
+
+bool ObPartTransCtx::is_real_upstream()
+{
+  bool bret = false;
+
+  if (OB_ISNULL(msg_2pc_cache_)) {
+    // If msg_2pc_cache is empty, it is called by handle_timeout, and we only
+    // need to send to real upstream during handle_timeout.
+    bret = true;
+  } else {
+    bret = is_real_upstream_(msg_2pc_cache_->sender_);
+  }
+
+  return bret;
+}
+
+int ObPartTransCtx::add_intermediate_participants(const share::ObLSID ls_id, int64_t transfer_epoch)
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !exist && i < exec_info_.intermediate_participants_.count(); i++) {
+    if (ls_id == exec_info_.intermediate_participants_[i].ls_id_) {
+      exist = true;
+    }
+  }
+  if (OB_SUCC(ret) && !exist) {
+    if (OB_FAIL(exec_info_.intermediate_participants_.push_back(ObTxExecPart(ls_id, -1, transfer_epoch)))) {
+      TRANS_LOG(WARN, "fail to push back participant into intermediate participants", KR(ret), KPC(this));
     }
   }
 

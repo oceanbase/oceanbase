@@ -750,9 +750,7 @@ int main(int argc, char **argv)
   // TEST_LOG("GCONF.syslog_io_bandwidth_limit %ld ", GCONF.syslog_io_bandwidth_limit.get_value());
   // LOG_INFO("GCONF.syslog_io_bandwidth_limit ", K(GCONF.syslog_io_bandwidth_limit.get_value()));
 
-  if (OB_SUCCESS != ObClockGenerator::init()) {
-    TRANS_LOG(WARN, "ObClockGenerator::init error!");
-  } else {
+  {
     if (argc > 1) {
       const_data_num = atoi(argv[1]);
     } else {

@@ -1674,6 +1674,25 @@ void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
     abort_cause_ = abort_cause;
   }
 }
+
+int64_t ObTxDesc::get_coord_epoch() const
+{
+  int64_t epoch = -1;
+
+  if (OB_UNLIKELY(!coord_id_.is_valid())) {
+    epoch = -1;
+  } else {
+    ARRAY_FOREACH_NORET(commit_parts_, i) {
+      const ObTxExecPart &part = commit_parts_[i];
+      if (coord_id_ == part.ls_id_) {
+        epoch = part.exec_epoch_;
+      }
+    }
+  }
+
+  return epoch;
+}
+
 } // transaction
 } // oceanbase
 #undef USING_LOG_PREFIX

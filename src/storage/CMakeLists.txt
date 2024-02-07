@@ -269,6 +269,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet.cpp
   tablet/ob_tablet_block_header.cpp
   tablet/ob_tablet_medium_info_reader.cpp
+  tablet/ob_tablet_transfer_tx_ctx.cpp
   tablet/ob_tablet_space_usage.cpp
   tablet/ob_tablet_block_aggregated_info.cpp
   tablet/ob_tablet_macro_info_iterator.cpp
@@ -429,6 +430,7 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_saved_info.cpp
   ls/ob_ls_reserved_snapshot_mgr.cpp
   ls/ob_ls_storage_clog_handler.cpp
+  ls/ob_ls_transfer_status.cpp
 )
 
 ob_set_subtarget(ob_storage column_store

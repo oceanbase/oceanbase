@@ -840,7 +840,6 @@ int ObTxTable::check_row_locked(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckRowLockedFunctor fn(read_tx_id, read_tx_data_arg.tx_id_, sql_sequence, lock_state);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check row locked", K(read_tx_data_arg), K(read_tx_id), K(sql_sequence), K(lock_state));
   return ret;
 }
@@ -851,7 +850,6 @@ int ObTxTable::check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckSqlSequenceCanReadFunctor fn(sql_sequence, can_read);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check sql sequence can read", K(read_tx_data_arg), K(sql_sequence), K(can_read));
   return ret;
 }
@@ -863,7 +861,6 @@ int ObTxTable::get_tx_state_with_scn(ObReadTxDataArg &read_tx_data_arg,
 {
   GetTxStateWithSCNFunctor fn(scn, state, trans_version);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish get tx state with scn", K(read_tx_data_arg), K(scn), K(state), K(trans_version));
   return ret;
 }
@@ -894,15 +891,17 @@ int ObTxTable::lock_for_read(ObReadTxDataArg &read_tx_data_arg,
                              const transaction::ObLockForReadArg &lock_for_read_arg,
                              bool &can_read,
                              SCN &trans_version,
-                             bool &is_determined_state,
                              ObCleanoutOp &cleanout_op,
                              ObReCheckOp &recheck_op)
 {
-  LockForReadFunctor fn(
-      lock_for_read_arg, can_read, trans_version, is_determined_state, ls_id_, cleanout_op, recheck_op);
+  LockForReadFunctor fn(lock_for_read_arg,
+                        can_read,
+                        trans_version,
+                        ls_id_,
+                        cleanout_op,
+                        recheck_op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
-  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version), K(is_determined_state));
+  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version));
   return ret;
 }
 
@@ -983,12 +982,18 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
                                 const bool need_row_latch)
 {
   ObCleanoutTxNodeOperation op(value, tnode, need_row_latch);
-  CleanoutTxStateFunctor fn(op);
+  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   if (OB_TRANS_CTX_NOT_EXIST == ret) {
     if (tnode.is_committed() || tnode.is_aborted()) {
       // may be the concurrent case between cleanout and commit/abort
       ret = OB_SUCCESS;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (op.need_cleanout()) {
+      op(fn.get_tx_data_check_data());
     }
   }
   return ret;

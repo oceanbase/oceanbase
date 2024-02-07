@@ -22,7 +22,7 @@ namespace oceanbase
 namespace storage
 {
 
-int build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table_id)
+int __attribute__((weak))  build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table_id)
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 column;
@@ -47,7 +47,7 @@ int build_test_schema(share::schema::ObTableSchema &table_schema, uint64_t table
   return ret;
 }
 
-int gen_create_ls_arg(const int64_t tenant_id,
+int __attribute__((weak)) gen_create_ls_arg(const int64_t tenant_id,
     const share::ObLSID &ls_id,
     obrpc::ObCreateLSArg &arg)
 {
@@ -67,7 +67,7 @@ int gen_create_ls_arg(const int64_t tenant_id,
   return ret;
 }
 
-int gen_create_tablet_arg(const int64_t tenant_id,
+int __attribute__((weak)) gen_create_tablet_arg(const int64_t tenant_id,
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
     obrpc::ObBatchCreateTabletArg &arg,
