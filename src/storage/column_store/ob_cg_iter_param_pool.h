@@ -28,18 +28,23 @@ public:
   ~ObCGIterParamPool() { reset(); }
   void reset();
   int get_iter_param(
-      const int32_t cg_idx,
-      const ObTableIterParam &row_param,
-      sql::ObExpr *expr,
-      ObTableIterParam *&iter_param,
-      const bool is_aggregate = false);
+    const int32_t cg_idx,
+    const ObTableIterParam &row_param,
+    sql::ObExpr *expr,
+    ObTableIterParam *&iter_param);
+  int get_iter_param(
+    const int32_t cg_idx,
+    const ObTableIterParam &row_param,
+    const common::ObIArray<sql::ObExpr*> &exprs,
+    ObTableIterParam *&iter_param,
+    const bool is_aggregate = false);
+private:
   int new_iter_param(
       const int32_t cg_idx,
       const ObTableIterParam &row_param,
       const common::ObIArray<sql::ObExpr*> &exprs,
       ObTableIterParam *&iter_param,
       const bool is_aggregate = false);
-private:
   int fill_cg_iter_param(
       const ObTableIterParam &row_param,
       const int32_t cg_idx,

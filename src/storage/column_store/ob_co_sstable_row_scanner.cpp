@@ -423,7 +423,7 @@ int ObCOSSTableRowScanner::construct_cg_iter_params(
     } else if (0 == row_param.output_exprs_->count()) {
       const uint32_t cg_idx = OB_CS_VIRTUAL_CG_IDX;
       if (project_single_row) {
-      } else if (OB_FAIL(cg_param_pool_->new_iter_param(cg_idx, row_param, *row_param.output_exprs_,
+      } else if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.output_exprs_,
                                                         cg_param, row_param.enable_pd_aggregate()))) {
         LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
       } else if (OB_FAIL(iter_params.push_back(cg_param))) {
@@ -475,7 +475,7 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
   } else if (0 == row_param.output_exprs_->count()) {
     // only COUNT(*) and without filter
     const uint32_t cg_idx = OB_CS_VIRTUAL_CG_IDX;
-    if (OB_FAIL(cg_param_pool_->new_iter_param(cg_idx, row_param, *row_param.aggregate_exprs_,
+    if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, *row_param.aggregate_exprs_,
         cg_param, row_param.enable_pd_aggregate()))) {
       LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
     } else if (OB_FAIL(iter_params.push_back(cg_param))) {
@@ -510,7 +510,7 @@ int ObCOSSTableRowScanner::construct_cg_agg_iter_params(
         }
       }
       if (OB_FAIL(ret) || 0 == exprs.count()) {
-      } else if (OB_FAIL(cg_param_pool_->new_iter_param(cg_idx, row_param, exprs, cg_param, row_param.enable_pd_aggregate()))) {
+      } else if (OB_FAIL(cg_param_pool_->get_iter_param(cg_idx, row_param, exprs, cg_param, row_param.enable_pd_aggregate()))) {
         LOG_WARN("Fail to get cg iter param", K(ret), K(cg_idx), K(row_param));
       } else if (OB_FAIL(iter_params.push_back(cg_param))) {
         LOG_WARN("Fail to push back cg iter param", K(ret), K(cg_param));
