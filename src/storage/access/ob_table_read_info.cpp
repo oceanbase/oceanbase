@@ -27,6 +27,44 @@ namespace storage
 /*
  * ------------------------------- ObColumnIndexArray -------------------------------
  */
+int64_t return_array_cnt(uint32_t schema_rowkey_cnt, const ObFixedMetaObjArray<int32_t> & array)
+{
+  return array.count();
+}
+int64_t return_schema_rowkey_cnt(uint32_t schema_rowkey_cnt, const ObFixedMetaObjArray<int32_t> & array)
+{
+  return schema_rowkey_cnt;
+}
+int32_t return_array_idx_for_memtable(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
+                         int64_t idx,
+                         const ObFixedMetaObjArray<int32_t> &array)
+{
+  int32_t ret_val = 0;
+  const int32_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  OB_ASSERT(idx >= 0 && idx < column_cnt);
+  if (idx < schema_rowkey_cnt) {
+    ret_val = idx;
+  } else if (idx < schema_rowkey_cnt + extra_rowkey_cnt) {
+    ret_val = OB_INVALID_INDEX;
+  } else {
+    ret_val = idx - extra_rowkey_cnt;
+  }
+  return ret_val;
+}
+int32_t return_idx(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
+                         int64_t idx,
+                         const ObFixedMetaObjArray<int32_t> &array)
+{
+  OB_ASSERT(idx >= 0 && idx < column_cnt);
+  return (int32_t)idx;
+}
+int32_t return_array_idx(uint32_t schema_rowkey_cnt, uint32_t column_cnt,
+                         int64_t idx,
+                         const ObFixedMetaObjArray<int32_t> &array)
+{
+  OB_ASSERT(idx >= 0 && idx < array.count());
+  return array[idx];
+}
 ObColumnIndexArray::ObColumnIndexArray(const bool rowkey_mode /* = false*/,
                                        const bool for_memtable /* = false*/)
     : version_(COLUMN_INDEX_ARRAY_VERSION),
@@ -39,32 +77,14 @@ ObColumnIndexArray::ObColumnIndexArray(const bool rowkey_mode /* = false*/,
 {
   if (rowkey_mode) {
     if (for_memtable) { // no multi_version rowkey in memtable
-      at_func_ =[](uint32_t schema_rowkey_cnt, uint32_t column_cnt, int64_t idx, const ObFixedMetaObjArray<int32_t> &array) -> int32_t {
-        int32_t ret_val = 0;
-        const int32_t extra_rowkey_cnt = storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
-        OB_ASSERT(idx >= 0 && idx < column_cnt);
-        if (idx < schema_rowkey_cnt) {
-          ret_val = idx;
-        } else if (idx < schema_rowkey_cnt + extra_rowkey_cnt) {
-          ret_val = OB_INVALID_INDEX;
-        } else {
-          ret_val = idx - extra_rowkey_cnt;
-        }
-        return ret_val;
-      };
+      at_func_ = return_array_idx_for_memtable;
     } else {
-      at_func_ =[](uint32_t schema_rowkey_cnt, uint32_t column_cnt, int64_t idx, const ObFixedMetaObjArray<int32_t> &) -> int32_t {
-        OB_ASSERT(idx >= 0 && idx < column_cnt);
-        return (int32_t)idx;
-      };
+      at_func_ = return_idx;
     }
-    count_func_ = [](uint32_t column_cnt, const ObFixedMetaObjArray<int32_t> &) -> int64_t { return column_cnt; };
+    count_func_ = return_schema_rowkey_cnt;
   } else {
-    at_func_ = [](uint32_t, uint32_t, int64_t idx, const ObFixedMetaObjArray<int32_t> &array) -> int32_t {
-      OB_ASSERT(idx >= 0 && idx < array.count());
-      return array[idx];
-    };
-    count_func_ = [](uint32_t, const ObFixedMetaObjArray<int32_t> &array) -> int64_t { return array.count(); };
+    at_func_ = return_array_idx;
+    count_func_ = return_array_cnt;
   }
 }
 

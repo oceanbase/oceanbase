@@ -1362,7 +1362,7 @@ int ObTenantTabletScheduler::schedule_next_medium_for_leader(
   if ((!tablet_merge_finish || get_enable_adaptive_compaction()) // schedule major or adaptive compaction
       && tablet_could_schedule_merge) {
     if (OB_FAIL(func.schedule_next_medium_for_leader(
-        tablet_merge_finish ? 0 : major_merge_version, false/*force_schedule*/))) { // schedule another round
+        tablet_merge_finish ? 0 : major_merge_version))) { // schedule another round
       LOG_WARN("failed to schedule next medium", K(ret), K(ls_id), K(tablet_id));
       if (OB_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(ls_id, tablet_id,
           share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE))) {
@@ -1636,15 +1636,15 @@ int ObTenantTabletScheduler::schedule_tablet_medium(
     && tablet_could_schedule_merge) {
     // schedule another round
     ObMediumCompactionScheduleFunc func(ls, tablet_handle, weak_read_ts, *medium_list, &schedule_stats_);
-    if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(
-            tablet_merge_finish ? 0 : merge_version, false /*force_schedule*/))) {
+    if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(tablet_merge_finish ? 0 : merge_version))) {
       if (OB_NOT_MASTER == tmp_ret) {
         is_leader = false;
       } else {
         LOG_WARN("failed to schedule next medium", K(tmp_ret), K(ls_id), K(tablet_id));
       }
       need_diagnose = true;
-    } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SCHEDULE_NEXT_MEDIUM))){
+    } else {
+      time_guard.click(ObCompactionScheduleTimeGuard::SCHEDULE_NEXT_MEDIUM);
     }
   }
 
@@ -1895,7 +1895,8 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
     } else {
       ObMediumCompactionScheduleFunc func(
           *ls_handle.get_ls(), tablet_handle, weak_read_ts, *medium_info_list,
-          nullptr /*schedule_stat*/, is_rebuild_column_group);
+          nullptr /*schedule_stat*/,
+          is_rebuild_column_group ? ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP : ObAdaptiveMergePolicy::USER_REQUEST);
       const int64_t merge_version = get_frozen_version();
       const int64_t last_major_snapshot_version = tablet_handle.get_obj()->get_last_major_snapshot_version();
 
@@ -1907,7 +1908,7 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tablet need check finish, can't schedule another medium", K(ret), K(ls_id), K(tablet_id),
           "wait_check_medium_scn", medium_info_list->get_wait_check_medium_scn());
-      } else if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(0/*major_snapshot*/, true/*force_schedule*/))) {
+      } else if (OB_TMP_FAIL(func.schedule_next_medium_for_leader(0/*major_snapshot*/))) {
         if (OB_EAGAIN != tmp_ret) {
           LOG_WARN("failed to schedule medium", K(tmp_ret), K(ls_id), K(tablet_id));
         }
