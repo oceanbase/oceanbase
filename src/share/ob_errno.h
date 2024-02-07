@@ -266,6 +266,7 @@ constexpr int OB_ENCODING_EST_SIZE_OVERFLOW = -4397;
 constexpr int OB_INVALID_SUB_PARTITION_TYPE = -4398;
 constexpr int OB_ERR_UNEXPECTED_UNIT_STATUS = -4399;
 constexpr int OB_AUTOINC_CACHE_NOT_EQUAL = -4400;
+constexpr int OB_IMPROPER_OS_PARAM = -4403;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2187,6 +2188,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_SUB_PARTITION_TYPE__USER_ERROR_MSG "It is only possible to mix RANGE/LIST partitioning with HASH/KEY partitioning for subpartitioning"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__USER_ERROR_MSG "Unit status is not expected"
 #define OB_AUTOINC_CACHE_NOT_EQUAL__USER_ERROR_MSG "Autoinc cache's autoinc version is not equal to request's autoinc version"
+#define OB_IMPROPER_OS_PARAM__USER_ERROR_MSG "OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -4367,6 +4369,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_SUB_PARTITION_TYPE__ORA_USER_ERROR_MSG "ORA-14020: this physical attribute may not be specified for a table partition"
 #define OB_ERR_UNEXPECTED_UNIT_STATUS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4399, Unit status is not expected"
 #define OB_AUTOINC_CACHE_NOT_EQUAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4400, Autoinc cache's autoinc version is not equal to request's autoinc version"
+#define OB_IMPROPER_OS_PARAM__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4403, OS params check failed, because the operating system has improper parameter configurations"
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
 #define OB_BYPASS_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4510, Bypass timeout"
@@ -6185,7 +6188,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2176];
+extern int g_all_ob_errnos[2177];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
