@@ -157,6 +157,22 @@ private:
       CREATE_STATE_PALF_ENABLED = 4, // enable_palf succ
       CREATE_STATE_FINISH
   };
+  struct ObCreateLSCommonArg {
+    share::ObLSID ls_id_;
+    share::SCN create_scn_;
+    palf::PalfBaseInfo palf_base_info_;
+    ObTenantRole tenant_role_;
+    ObReplicaType replica_type_;
+    lib::Worker::CompatMode compat_mode_;
+    int64_t create_type_;
+    ObMigrationStatus migration_status_;
+    ObLSRestoreStatus restore_status_;
+    share::ObTaskId task_id_;
+    bool need_create_inner_tablet_;
+  };
+
+  int create_ls_(const ObCreateLSCommonArg &arg,
+                 const ObMigrationOpArg &mig_arg);
   // the tenant smaller than 5G can only create 8 ls.
   // other tenant can create 100 ls.
   int check_tenant_ls_num_();

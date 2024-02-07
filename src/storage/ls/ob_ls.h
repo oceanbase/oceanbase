@@ -322,7 +322,7 @@ public:
   int create_ls(const share::ObTenantRole tenant_role,
                 const palf::PalfBaseInfo &palf_base_info,
                 const common::ObReplicaType &replica_type,
-                const bool allow_log_sync);
+                const bool allow_log_sync = false);
   // load ls info from disk
   // @param[in] tenant_role, role of tenant, which determains palf access mode
   // @param[in] palf_base_info, all the info that palf needed

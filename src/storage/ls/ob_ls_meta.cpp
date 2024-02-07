@@ -96,32 +96,14 @@ int ObLSMeta::set_start_work_state()
 
 int ObLSMeta::set_start_ha_state()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   ObReentrantWLockGuard guard(lock_);
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(MTL_ID()));
-  } else if (tenant_data_version > DATA_VERSION_4_2_1_0) {
-    ret = ls_persistent_state_.start_ha(ls_id_);
-  } else {
-    ret = ls_persistent_state_.start_work(ls_id_);
-  }
-  return ret;
+  return ls_persistent_state_.start_ha(ls_id_);
 }
 
 int ObLSMeta::set_finish_ha_state()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   ObReentrantWLockGuard guard(lock_);
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(MTL_ID()));
-  } else if (tenant_data_version > DATA_VERSION_4_2_1_0) {
-    ret = ls_persistent_state_.finish_ha(ls_id_);
-  } else {
-    ret = ls_persistent_state_.start_work(ls_id_);
-  }
-  return ret;
+  return ls_persistent_state_.finish_ha(ls_id_);
 }
 
 int ObLSMeta::set_remove_state()
@@ -298,7 +280,6 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
 {
   int ret = OB_SUCCESS;
   bool can_change = false;
-  uint64_t tenant_data_version = 0;
   ObReentrantWLockGuard guard(lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
@@ -316,16 +297,12 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("ls can not change to migrate status", K(ret), K(migration_status_),
              K(migration_status));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(MTL_ID()));
   } else {
     ObLSMeta tmp(*this);
     tmp.migration_status_ = migration_status;
     tmp.ls_persistent_state_ = (OB_MIGRATION_STATUS_NONE == migration_status &&
-                          ObLSRestoreStatus::RESTORE_NONE == restore_status_ ?
-                          ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
-    tmp.ls_persistent_state_ = (tenant_data_version > DATA_VERSION_4_2_1_0 ?
-                          tmp.ls_persistent_state_ : ObLSPersistentState::State::LS_NORMAL);
+                                ObLSRestoreStatus::RESTORE_NONE == restore_status_ ?
+                                ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
 
     if (write_slog && OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("migration_status write slog failed", K(ret));
@@ -406,7 +383,6 @@ int ObLSMeta::get_offline_scn(SCN &offline_scn)
 int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   ObReentrantWLockGuard guard(lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
@@ -415,16 +391,12 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
     LOG_WARN("invalid restore status", K(ret), K(restore_status_), K(restore_status));
   } else if (restore_status_ == restore_status) {
     //do nothing
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    LOG_WARN("get min data version failed", K(ret), K(MTL_ID()));
   } else {
     ObLSMeta tmp(*this);
     tmp.restore_status_ = restore_status;
     tmp.ls_persistent_state_ = (ObLSRestoreStatus::RESTORE_NONE == restore_status &&
-                          OB_MIGRATION_STATUS_NONE == migration_status_ ?
-                          ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
-    tmp.ls_persistent_state_ = (tenant_data_version > DATA_VERSION_4_2_1_0 ?
-                          tmp.ls_persistent_state_ : ObLSPersistentState::State::LS_NORMAL);
+                                OB_MIGRATION_STATUS_NONE == migration_status_ ?
+                                ObLSPersistentState::State::LS_NORMAL : ls_persistent_state_);
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("restore_status write slog failed", K(ret));
     } else if ((ObLSRestoreStatus::RESTORE_NONE == restore_status && OB_MIGRATION_STATUS_NONE == migration_status_)
@@ -551,7 +523,6 @@ int ObLSMeta::set_ls_rebuild()
   const ObMigrationStatus change_status = ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD;
   const ObLSPersistentState persistent_state = ObLSPersistentState::State::LS_HA;
   bool can_change = false;
-  uint64_t tenant_data_version = 0;
 
   ObReentrantWLockGuard guard(lock_);
   if (OB_FAIL(check_can_update_())) {
@@ -565,14 +536,10 @@ int ObLSMeta::set_ls_rebuild()
     } else if (!can_change) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("ls can not change to rebuild status", K(ret), K(tmp), K(change_status));
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-      LOG_WARN("get min data version failed", K(ret), K(MTL_ID()));
     } else {
       tmp.migration_status_ = change_status;
       tmp.rebuild_seq_++;
       tmp.ls_persistent_state_ = persistent_state;
-      tmp.ls_persistent_state_ = (tenant_data_version > DATA_VERSION_4_2_1_0 ?
-                                  tmp.ls_persistent_state_ : ObLSPersistentState::State::LS_NORMAL);
       if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("clog_checkpoint write slog failed", K(ret));
       } else if (OB_FAIL(set_start_ha_state())) {
