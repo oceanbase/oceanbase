@@ -51,6 +51,7 @@ public:
 private:
   int check_compatible_() const;
   int process_(share::ObImportTableJob &job);
+  int wait_src_tenant_schema_refreshed_(const uint64_t tenant_id);
   int gen_import_table_task_(share::ObImportTableJob &job);
   int deal_with_import_table_task_(share::ObImportTableJob &job);
   int process_import_table_task_(share::ObImportTableTask &task);
