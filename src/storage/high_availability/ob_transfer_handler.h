@@ -257,6 +257,7 @@ private:
       bool &task_exist) const;
   int get_src_ls_member_list_(
       common::ObMemberList &member_list);
+  int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s

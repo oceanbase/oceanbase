@@ -72,6 +72,7 @@
 #include "share/scn.h"//SCN
 #include "share/ob_server_table_operator.h"
 #include "share/restore/ob_import_arg.h"
+#include "share/location_cache/ob_location_update_task.h"
 
 namespace oceanbase
 {
@@ -10235,6 +10236,36 @@ public:
   int64_t lock_id_;
 };
 
+struct ObTabletLocationSendArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletLocationSendArg();
+  ~ObTabletLocationSendArg();
+  int assign(const ObTabletLocationSendArg &other);
+  int set(const ObIArray<share::ObTabletLocationBroadcastTask> &tasks);
+  const ObSArray<share::ObTabletLocationBroadcastTask> &get_tasks() const { return tasks_; }
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tasks));
+public:
+  ObSArray<share::ObTabletLocationBroadcastTask> tasks_;
+};
+
+struct ObTabletLocationSendResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTabletLocationSendResult();
+  ~ObTabletLocationSendResult();
+  int assign(const ObTabletLocationSendResult &other);
+  void reset();
+  void set_ret(int ret);
+  int get_ret() const;
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

@@ -814,6 +814,13 @@ DEF_TIME(location_cache_refresh_rpc_timeout, OB_CLUSTER_PARAMETER, "500ms", "[1m
 DEF_TIME(location_cache_refresh_sql_timeout, OB_CLUSTER_PARAMETER, "1s", "[1ms,)",
         "The timeout used for refreshing location cache by SQL. Range: [1ms, +∞)",
         ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_auto_refresh_tablet_location_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,)",
+        "Polling period of auto refresh tablet location service. "
+        "When the value is 0, it means shutting down related service. Range: [0s, +∞)",
+        ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_auto_broadcast_tablet_location_rate_limit, OB_CLUSTER_PARAMETER, "10000", "[0, 100000]",
+        "Maximum number of tablets broadcasted per second by a single observer. When the value is 0, it means shutting down related logic.",
+        ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// cache config
 DEF_INT(tablet_ls_cache_priority, OB_CLUSTER_PARAMETER, "1000", "[1,)", "tablet ls cache priority. Range:[1, )",

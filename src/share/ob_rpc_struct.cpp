@@ -9833,5 +9833,83 @@ int ObAdminUnlockMemberListOpArg::set(
 
 OB_SERIALIZE_MEMBER(ObAdminUnlockMemberListOpArg, tenant_id_, ls_id_, lock_id_);
 
+ObTabletLocationSendArg::ObTabletLocationSendArg()
+  : tasks_()
+{
+}
+
+ObTabletLocationSendArg::~ObTabletLocationSendArg()
+{
+}
+
+int ObTabletLocationSendArg::assign(const ObTabletLocationSendArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(tasks_.assign(other.tasks_))) {
+      LOG_WARN("fail to assign tasks_", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTabletLocationSendArg::set(
+    const ObIArray<share::ObTabletLocationBroadcastTask> &tasks)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tasks.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tasks array is empty", KR(ret));
+  } else if (OB_FAIL(tasks_.assign(tasks))) {
+    LOG_WARN("fail to assign tasks", KR(ret));
+  }
+  return ret;
+}
+
+bool ObTabletLocationSendArg::is_valid() const
+{
+  return !tasks_.empty();
+}
+
+void ObTabletLocationSendArg::reset()
+{
+  tasks_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObTabletLocationSendArg, tasks_);
+
+ObTabletLocationSendResult::ObTabletLocationSendResult()
+  : ret_(common::OB_ERROR)
+{}
+
+ObTabletLocationSendResult::~ObTabletLocationSendResult()
+{}
+
+int ObTabletLocationSendResult::assign(const ObTabletLocationSendResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    ret_ = other.ret_;
+  }
+  return ret;
+}
+
+void ObTabletLocationSendResult::reset()
+{
+  ret_ = common::OB_ERROR;
+}
+
+void ObTabletLocationSendResult::set_ret(int ret)
+{
+  ret_ = ret;
+}
+
+int ObTabletLocationSendResult::get_ret() const
+{
+  return ret_;
+}
+
+OB_SERIALIZE_MEMBER(ObTabletLocationSendResult, ret_);
+
 }//end namespace obrpc
 }//end namepsace oceanbase

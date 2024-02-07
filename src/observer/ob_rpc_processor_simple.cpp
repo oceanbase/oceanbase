@@ -2856,6 +2856,22 @@ int ObAdminUnlockMemberListP::process()
   return ret;
 }
 
+int ObTabletLocationReceiveP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.location_service_ is nullptr", KR(ret), KP(GCTX.location_service_));
+  } else {
+    FOREACH_CNT_X(it, arg_.get_tasks(), OB_SUCC(ret)) {
+      if (OB_FAIL(GCTX.location_service_->submit_tablet_update_task(*it))) {
+        LOG_WARN("failed to submit_tablet_update_tasks", KR(ret));
+      }
+    }
+  }
+  result_.set_ret(ret);
+  return OB_SUCCESS;
+}
 
 } // end of namespace observer
 } // end of namespace oceanbase

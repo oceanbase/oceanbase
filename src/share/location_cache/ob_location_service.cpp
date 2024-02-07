@@ -297,7 +297,7 @@ int ObLocationService::init(
     LOG_WARN("location service init twice", KR(ret));
   } else if (OB_FAIL(ls_location_service_.init(ls_pt, schema_service, rs_mgr, srv_rpc_proxy))) {
     LOG_WARN("ls_location_service init failed", KR(ret));
-  } else if (OB_FAIL(tablet_ls_service_.init(sql_proxy))) {
+  } else if (OB_FAIL(tablet_ls_service_.init(schema_service, sql_proxy, srv_rpc_proxy))) {
     LOG_WARN("tablet_ls_service init failed", KR(ret));
   } else if (OB_FAIL(vtable_location_service_.init(server_tracer, rs_mgr, rpc_proxy))) {
     LOG_WARN("vtable_location_service init failed", KR(ret));
@@ -315,8 +315,9 @@ int ObLocationService::start()
     LOG_WARN("location service not init", KR(ret));
   } else if (OB_FAIL(ls_location_service_.start())) {
     LOG_WARN("ls_location_service start failed", KR(ret));
+  } else if (OB_FAIL(tablet_ls_service_.start())) {
+    LOG_WARN("tablet_ls_service start failed", KR(ret));
   }
-  // tablet_ls_service_ and vtable_location_service_ have no threads need to be started
   return ret;
 }
 
@@ -486,6 +487,30 @@ int ObLocationService::renew_tablet_location(
   } else if (OB_FAIL(batch_renew_tablet_locations(tenant_id, tablet_list, error_code, is_nonblock))) {
     LOG_WARN("renew tablet locations failed", KR(ret),
         K(tenant_id), K(tablet_list), K(error_code), K(is_nonblock));
+  }
+  return ret;
+}
+
+int ObLocationService::submit_tablet_broadcast_task(const ObTabletLocationBroadcastTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(tablet_ls_service_.submit_broadcast_task(task))) {
+    LOG_WARN("failed to submit_broadcast_task by tablet_ls_service_", KR(ret));
+  }
+  return ret;
+}
+
+int ObLocationService::submit_tablet_update_task(const ObTabletLocationBroadcastTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(tablet_ls_service_.submit_update_task(task))) {
+    LOG_WARN("failed to submit_broadcast_task by tablet_ls_service_", KR(ret));
   }
   return ret;
 }

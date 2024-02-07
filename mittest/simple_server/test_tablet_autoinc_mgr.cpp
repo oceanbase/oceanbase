@@ -192,8 +192,9 @@ TEST_F(TestTabletAutoincMgr, test_lob_tablet_autoinc_location_cache)
   ASSERT_EQ(OB_SUCCESS, task.result_);
 
   // restore old tablet ls cache
+  const bool update_only = false;
   for (int64_t i = 0; i < old_tablet_ls_cache.count(); i++) {
-    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->update_cache_(old_tablet_ls_cache.at(i)));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->update_cache(old_tablet_ls_cache.at(i), update_only));
   }
 
   // remove source ls and clear src ls cache

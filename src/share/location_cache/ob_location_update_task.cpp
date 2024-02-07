@@ -339,5 +339,106 @@ void ObClearTabletLSCacheTimerTask::runTimerTask()
   }
 }
 
+ObTabletLocationBroadcastTask::ObTabletLocationBroadcastTask()
+  : tenant_id_(OB_INVALID_TENANT_ID), task_id_() ,
+    ls_id_(), tablet_list_()
+{
+  tablet_list_.set_attr(SET_USE_500("BroTabletList"));
+}
+
+int ObTabletLocationBroadcastTask::init(
+    const uint64_t tenant_id,
+    const ObTransferTaskID &task_id,
+    const ObLSID &ls_id,
+    const ObIArray<ObTransferTabletInfo> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tablet_list_.assign(tablet_list))) {
+    LOG_WARN("fail to assign tablet_list_", KR(ret));
+  } else {
+    tenant_id_ = tenant_id;
+    task_id_ = task_id;
+    ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+int ObTabletLocationBroadcastTask::assign(const ObTabletLocationBroadcastTask &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(tablet_list_.assign(other.tablet_list_))) {
+      LOG_WARN("failed to assign tablet_list_", KR(ret));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      task_id_ = other.task_id_;
+      ls_id_ = other.ls_id_;
+    }
+  }
+  return ret;
+}
+
+void ObTabletLocationBroadcastTask::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  task_id_.reset();
+  ls_id_.reset();
+  tablet_list_.reset();
+}
+
+bool ObTabletLocationBroadcastTask::is_valid() const
+{
+  return OB_INVALID_TENANT_ID != tenant_id_
+         && task_id_.is_valid()
+         && ls_id_.is_valid()
+         && !tablet_list_.empty();
+}
+
+int64_t ObTabletLocationBroadcastTask::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
+  hash_val = murmurhash(&task_id_, sizeof(task_id_), hash_val);
+  return hash_val;
+}
+
+bool ObTabletLocationBroadcastTask::operator ==(const ObTabletLocationBroadcastTask &other) const
+{
+  bool equal = false;
+  if (!is_valid() || !other.is_valid()) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "self", *this, K(other));
+  } else if (this == &other) { // same pointer
+    equal = true;
+  } else {
+    equal = tenant_id_ == other.tenant_id_
+            && task_id_ == other.task_id_;
+  }
+  return equal;
+}
+
+bool ObTabletLocationBroadcastTask::operator!=(const ObTabletLocationBroadcastTask &other) const
+{
+  return !(*this == other);
+}
+
+bool ObTabletLocationBroadcastTask::compare_without_version
+    (const ObTabletLocationBroadcastTask &other) const
+{
+  return (*this == other);
+}
+
+int ObTabletLocationBroadcastTask::assign_when_equal(
+    const ObTabletLocationBroadcastTask &other)
+{
+  UNUSED(other);
+  return OB_NOT_SUPPORTED;
+}
+
+OB_SERIALIZE_MEMBER(ObTabletLocationBroadcastTask,
+                    tenant_id_,
+                    task_id_,
+                    ls_id_,
+                    tablet_list_)
+
 } // end namespace share
 } // end namespace oceanbase

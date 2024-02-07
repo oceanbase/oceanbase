@@ -685,6 +685,11 @@ public:
       const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
   static int check_tenant_ls_balance(uint64_t tenant_id, int &check_ret);
 
+  template<typename T>
+  static int copy_array(const common::ObIArray<T> &src_array,
+                        const int64_t start_pos,
+                        const int64_t end_pos,
+                        common::ObIArray<T> &dst_array);
 };
 
 template<class T>
@@ -700,6 +705,33 @@ bool ObRootUtils::is_subset(const common::ObIArray<T> &superset_array,
     }
   }
   return bret;
+}
+
+template<typename T>
+int ObRootUtils::copy_array(
+    const common::ObIArray<T> &src_array,
+    const int64_t start_pos,
+    const int64_t end_pos,
+    common::ObIArray<T> &dst_array)
+{
+  int ret = common::OB_SUCCESS;
+  dst_array.reset();
+  if (OB_UNLIKELY(start_pos < 0 || start_pos > end_pos || end_pos > src_array.count())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid start_pos/end_pos", KR(ret),
+               K(start_pos), K(end_pos), "src_array_cnt", src_array.count());
+  } else if (start_pos == end_pos) {
+    // do nothing
+  } else if (OB_FAIL(dst_array.reserve(end_pos - start_pos))) {
+    COMMON_LOG(WARN, "fail to reserve array", KR(ret), "cnt", end_pos - start_pos);
+  } else {
+    for (int64_t i = start_pos; OB_SUCC(ret) && i < end_pos; i++) {
+      if (OB_FAIL(dst_array.push_back(src_array.at(i)))) {
+        COMMON_LOG(WARN, "fail to push back", KR(ret), K(i));
+      }
+    } // end for
+  }
+  return ret;
 }
 
 class ObClusterInfoGetter

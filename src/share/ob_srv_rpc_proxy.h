@@ -240,6 +240,7 @@ public:
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
   // RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);
   // RPC_S(PR5 client_session_create_time, OB_CLIENT_SESSION_CONNECT_TIME, (ObClientSessionCreateTimeArg), ObClientSessionCreateTimeRes);
+  RPC_AP(PR5 tablet_location_send, OB_TABLET_LOCATION_BROADCAST, (obrpc::ObTabletLocationSendArg), obrpc::ObTabletLocationSendResult);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc
