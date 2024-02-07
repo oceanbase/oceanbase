@@ -2386,6 +2386,13 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
         TRANS_LOG(WARN, "clear redo sync result failed", K(ret));
       }
     }
+    if (ObTxLogType::TX_COMMIT_LOG == log_type) {
+      // if local tx commit log callback on failure, reset trans_version to make standby read skip this
+      if (is_local_tx_() && !mt_ctx_.get_trans_version().is_max()) {
+        mt_ctx_.set_trans_version(SCN::max_scn());
+        TRANS_LOG(INFO, "clear local trans version when commit log on failure", K(ret), KPC(this));
+      }
+    }
     return_log_cb_(log_cb);
     log_cb = NULL;
     if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
@@ -5620,6 +5627,13 @@ int ObPartTransCtx::switch_to_follower_forcedly(ObIArray<ObTxCommitCallback> &cb
         TRANS_LOG(WARN, "clear unlog callbacks", KR(ret), K(*this));
       }
 
+      if (is_local_tx_() &&
+          !is_logging_() &&
+          !sub_state_.is_state_log_submitted()) {
+        mt_ctx_.set_trans_version(SCN::max_scn());
+        TRANS_LOG(INFO, "clear local tx trans version when switch to follower forcely", KP(this));
+      }
+
       if (OB_SUCC(ret) && exec_info_.is_dup_tx_ && get_downstream_state() == ObTxState::REDO_COMPLETE
           && !sub_state_.is_state_log_submitted()) {
         if (OB_FAIL(ret)) {
@@ -7887,10 +7901,55 @@ int ObPartTransCtx::check_for_standby(const SCN &snapshot,
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
   } else if (is_local_tx_()) {
-    can_read = false;
-    trans_version.set_min();
-    is_determined_state = false;
-    ret = OB_SUCCESS;
+    // check local trans prepare_version and commit_version
+    // TODO(siyu):: check standby_read in inner_lock_for_read
+    SCN prepare_version = mt_ctx_.get_trans_version();
+    int32_t tx_data_state = ctx_tx_data_.get_state();
+    SCN commit_version = ctx_tx_data_.get_commit_version();
+
+    switch (tx_data_state)
+    {
+      case ObTxData::RUNNING:
+      case ObTxData::ELR_COMMIT:
+        if (prepare_version.is_valid()) {
+          if (prepare_version > snapshot) {
+            can_read = false;
+            ret = OB_SUCCESS;
+          } else {
+            ret = OB_ERR_SHARED_LOCK_CONFLICT;
+          }
+        } else {
+          can_read = false;
+          ret = OB_SUCCESS;
+        }
+        trans_version.set_min();
+        is_determined_state = false;
+        break;
+      case ObTxData::COMMIT:
+        if (commit_version.is_valid()) {
+          if (commit_version > snapshot) {
+            can_read = false;
+          } else {
+            can_read = true;
+          }
+          trans_version = commit_version;
+          is_determined_state = true;
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "tx data commit state with invalid commit version", KPC(this));
+        }
+        break;
+      case ObTxData::ABORT:
+        can_read = false;
+        trans_version.set_min();
+        is_determined_state = true;
+        ret = OB_SUCCESS;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "invalid tx data state", KPC(this));
+    }
   } else {
     SCN min_snapshot = SCN::max_scn();
     ObStateInfo tmp_state_info;
