@@ -27,10 +27,14 @@ public:
   void reset();
   int init();
 
-  const ObCDCLobAuxTableSchemaInfo &get_lob_aux_table_schema_info() const { return lob_aux_table_schema_info_; }
+  OB_INLINE const ObCDCLobAuxTableSchemaInfo &get_lob_aux_table_schema_info() const { return lob_aux_table_schema_info_; }
+
+  OB_INLINE uint64_t get_min_cluster_version() const { return min_cluster_version_; }
+  OB_INLINE void update_min_cluster_version(const uint64_t min_cluster_version) { min_cluster_version_ = min_cluster_version; }
 
 private:
   ObCDCLobAuxTableSchemaInfo lob_aux_table_schema_info_;
+  uint64_t min_cluster_version_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCDCGlobalInfo);
 };
