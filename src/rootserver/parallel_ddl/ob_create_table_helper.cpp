@@ -935,6 +935,12 @@ int ObCreateTableHelper::check_and_set_parent_table_id_()
                        K(parent_database_id), K(parent_table_name));
             }
           }
+        } else {
+          if (foreign_key_arg.is_parent_table_mock_) {
+            ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+            LOG_WARN("parenet table already exist, should retry",
+                     KR(ret), K_(tenant_id), K(parent_table_id), K(foreign_key_arg));
+          }
         }
         // parent_table_id will be OB_INVALID_ID in the following cases:
         // 1. foreign key is self reference.
