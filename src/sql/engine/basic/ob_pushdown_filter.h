@@ -415,6 +415,7 @@ public:
                                          ObPushdownFilterNode *&pd_storage_filter);
   static int64_t get_serialize_pushdown_filter_size(ObPushdownFilterNode *pd_filter_node);
   // NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(KP(filter_tree_));
 private:
   common::ObIAllocator &alloc_;
   ObPushdownFilterNode *filter_tree_;
