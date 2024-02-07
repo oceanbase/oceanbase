@@ -84,7 +84,9 @@ void TestMetaPointerMap::SetUp()
   ObTenantMetaMemMgr *t3m = OB_NEW(ObTenantMetaMemMgr, ObModIds::TEST, TEST_TENANT_ID);
   ASSERT_EQ(OB_SUCCESS, t3m->init());
 
+  ObTabletMemtableMgrPool *pool = OB_NEW(ObTabletMemtableMgrPool, ObModIds::TEST);
   tenant_base_.set(t3m);
+  tenant_base_.set(pool);
   ObTenantEnv::set_tenant(&tenant_base_);
   ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
 }
@@ -147,11 +149,11 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_handle)
   int ret = tablet_svr->init(&fake_ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ObMemtableMgrHandle memtable_mgr_hdl;
   ObDDLKvMgrHandle ddl_kv_mgr_hdl;
 
-  ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_memtable_mgr(memtable_mgr_hdl);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
+  OB_ASSERT(NULL != ptr);
+  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -210,11 +212,11 @@ TEST_F(TestMetaPointerMap, test_meta_pointer_map)
   int ret = tablet_svr->init(&fake_ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ObMemtableMgrHandle memtable_mgr_hdl;
   ObDDLKvMgrHandle ddl_kv_mgr_hdl;
 
-  ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_memtable_mgr(memtable_mgr_hdl);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
+  OB_ASSERT(NULL != ptr);
+  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);
@@ -293,11 +295,11 @@ TEST_F(TestMetaPointerMap, test_erase_and_load_concurrency)
   int ret = tablet_svr->init(&fake_ls);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ObMemtableMgrHandle memtable_mgr_hdl;
   ObDDLKvMgrHandle ddl_kv_mgr_hdl;
 
-  ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_memtable_mgr(memtable_mgr_hdl);
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  ObTabletMemtableMgr *ptr = MTL(ObTabletMemtableMgrPool*)->acquire();
+  OB_ASSERT(NULL != ptr);
+  ObMemtableMgrHandle memtable_mgr_hdl(ptr, MTL(ObTabletMemtableMgrPool*));
 
   ret = MTL(ObTenantMetaMemMgr*)->acquire_tablet_ddl_kv_mgr(ddl_kv_mgr_hdl);
   ASSERT_EQ(common::OB_SUCCESS, ret);

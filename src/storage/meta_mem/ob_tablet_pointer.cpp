@@ -42,7 +42,7 @@ ObTabletPointer::ObTabletPointer()
     obj_(),
     ls_handle_(),
     ddl_kv_mgr_handle_(),
-    memtable_mgr_handle_(),
+    protected_memtable_mgr_handle_(),
     ddl_info_(),
     initial_state_(true),
     ddl_kv_mgr_lock_(),
@@ -50,7 +50,7 @@ ObTabletPointer::ObTabletPointer()
     old_version_chain_(nullptr)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  static_assert(sizeof(ObTabletPointer) == 264, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
+  static_assert(sizeof(ObTabletPointer) == 280, "The size of ObTabletPointer will affect the meta memory manager, and the necessity of adding new fields needs to be considered.");
 #endif
 }
 
@@ -60,7 +60,7 @@ ObTabletPointer::ObTabletPointer(
   : phy_addr_(),
     obj_(),
     ls_handle_(ls_handle),
-    memtable_mgr_handle_(memtable_mgr_handle),
+    protected_memtable_mgr_handle_(memtable_mgr_handle),
     ddl_info_(),
     initial_state_(true),
     ddl_kv_mgr_lock_(),
@@ -82,7 +82,7 @@ void ObTabletPointer::reset()
     ddl_kv_mgr_handle_.reset();
   }
   mds_table_handler_.reset();
-  memtable_mgr_handle_.reset();
+  protected_memtable_mgr_handle_.reset();
   ddl_info_.reset();
   initial_state_ = true;
   ATOMIC_STORE(&initial_state_, true);
@@ -296,7 +296,6 @@ int ObTabletPointer::get_attr_for_obj(ObTablet *tablet)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler is null", K(ret), KP(log_handler));
   } else {
-    tablet->memtable_mgr_ = memtable_mgr_handle_.get_memtable_mgr();
     tablet->log_handler_ = log_handler;
   }
 
@@ -389,7 +388,7 @@ int ObTabletPointer::deep_copy(char *buf, const int64_t buf_len, ObTabletPointer
     if (OB_SUCC(ret)) {
       pvalue->ls_handle_ = ls_handle_;
       pvalue->ddl_kv_mgr_handle_ = ddl_kv_mgr_handle_;
-      pvalue->memtable_mgr_handle_ = memtable_mgr_handle_;
+      pvalue->protected_memtable_mgr_handle_ = protected_memtable_mgr_handle_;
       pvalue->ddl_info_ = ddl_info_;
       pvalue->initial_state_ = initial_state_;
       pvalue->mds_table_handler_ = mds_table_handler_;// src ObTabletPointer will destroy soon
@@ -480,23 +479,19 @@ int ObTabletPointer::remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle
   return ret;
 }
 
-int ObTabletPointer::get_mds_table(mds::MdsTableHandle &handle, bool not_exist_create)
+int ObTabletPointer::get_mds_table(const ObTabletID &tablet_id,
+    mds::MdsTableHandle &handle,
+    bool not_exist_create)
 {
   int ret = OB_SUCCESS;
   if (!ls_handle_.is_valid()) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid ls_handle_, maybe not init yet", K(ret));
-  } else if (!memtable_mgr_handle_.is_valid()) {
-    ret = OB_NOT_INIT;
-    LOG_ERROR("invalid memtable_mgr_handle_, maybe not init yet", K(ret));
-  } else if (OB_ISNULL(ls_handle_.get_ls())) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_ERROR("ls in handle is nullptr", K(ret));
-  } else if (OB_ISNULL(memtable_mgr_handle_.get_memtable_mgr())) {
-    ret = OB_BAD_NULL_ERROR;
-    LOG_ERROR("memtable mgr in handle is nullptr", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tablet_id is invalid", K(ret));
   } else if (OB_FAIL(mds_table_handler_.get_mds_table_handle(handle,
-                                                             memtable_mgr_handle_.get_memtable_mgr()->get_tablet_id(),
+                                                             tablet_id,
                                                              ls_handle_.get_ls()->get_ls_id(),
                                                              not_exist_create,
                                                              this))) {
@@ -532,19 +527,13 @@ void ObTabletPointer::mark_mds_table_deleted()
   return mds_table_handler_.mark_removed_from_t3m(this);
 }
 
-int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline()
+int ObTabletPointer::release_memtable_and_mds_table_for_ls_offline(const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = memtable_mgr_handle_.get_memtable_mgr();
   mds::MdsTableHandle mds_table;
-  if (OB_ISNULL(memtable_mgr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("memtable mgr is null", K(ret));
-  } else if (OB_FAIL(memtable_mgr->release_memtables())) {
-    LOG_WARN("failed to release memtables", K(ret));
-  } else if (OB_FAIL(memtable_mgr->reset_storage_recorder())) {
-    LOG_WARN("failed to destroy storage recorder", K(ret), KPC(memtable_mgr));
-  } else if (OB_FAIL(get_mds_table(mds_table, false/*not_exist_create*/))) {
+  if (OB_FAIL(protected_memtable_mgr_handle_.reset())) {
+    LOG_WARN("failed to reset protected_memtable_mgr_handle", K(ret));
+  } else if (OB_FAIL(get_mds_table(tablet_id, mds_table, false/*not_exist_create*/))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     } else {

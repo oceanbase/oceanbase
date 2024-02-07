@@ -236,17 +236,14 @@ int ObPartitionMergePolicy::get_mini_merge_tables(
   if (OB_UNLIKELY(MINI_MERGE != merge_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), "merge_type", merge_type_to_str(merge_type));
-  } else if (OB_UNLIKELY(nullptr == tablet.get_memtable_mgr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null memtable mgr from tablet or invalid table store", K(ret), K(tablet));
   } else if (is_sstable_count_not_safe(tablet.get_minor_table_count())) {
     ret = OB_SIZE_OVERFLOW;
     LOG_ERROR("Too many sstables, delay mini merge until sstable count falls below MAX_SSTABLE_CNT",
               K(ret), K(tablet));
     // add compaction diagnose info
     ObPartitionMergePolicy::diagnose_table_count_unsafe(MINI_MERGE, ObDiagnoseTabletType::TYPE_MINI_MERGE, tablet);
-  } else if (OB_FAIL(tablet.get_memtable_mgr()->get_all_memtables(memtable_handles))) {
-    LOG_WARN("failed to get all memtables from memtable mgr", K(ret));
+  } else if (OB_FAIL(tablet.get_all_memtables(memtable_handles))) {
+    LOG_WARN("failed to get all memtable", K(ret), K(tablet));
   } else if (OB_FAIL(get_neighbour_freeze_info(merge_inc_base_version,
                                                tablet.get_last_major_snapshot_version(),
                                                freeze_info,
@@ -1001,6 +998,7 @@ int ObPartitionMergePolicy::check_need_medium_merge(
   const bool is_tablet_data_status_complete = tablet.get_tablet_meta().ha_status_.is_data_status_complete();
 
   bool ls_weak_read_ts_ready = ObTenantTabletScheduler::check_weak_read_ts_ready(medium_snapshot, ls);
+  ObProtectedMemtableMgrHandle *protected_handle = NULL;
 
   if (0 >= last_major_snapshot_version) {
     // no major, no medium
@@ -1011,18 +1009,16 @@ int ObPartitionMergePolicy::check_need_medium_merge(
         && ls_weak_read_ts_ready) {
       can_merge = tablet.get_snapshot_version() >= medium_snapshot;
       if (!can_merge) {
-        ObTabletMemtableMgr *memtable_mgr = nullptr;
         ObTableHandleV2 memtable_handle;
         memtable::ObMemtable *last_frozen_memtable = nullptr;
-        if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet.get_memtable_mgr()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("memtable mgr is unexpected null", K(ret), K(tablet));
-        } else if (OB_FAIL(memtable_mgr->get_last_frozen_memtable(memtable_handle))) {
+        if (OB_FAIL(tablet.get_protected_memtable_mgr_handle(protected_handle))) {
+          LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), K(tablet));
+        } else if (OB_FAIL(protected_handle->get_last_frozen_memtable(memtable_handle))) {
           if (OB_ENTRY_NOT_EXIST == ret) { // no frozen memtable, need force freeze
             need_force_freeze = true;
             ret = OB_SUCCESS;
           } else {
-            LOG_WARN("failed to get last frozen memtable", K(ret));
+            LOG_WARN("failed to get last frozen memtable", K(ret), K(tablet));
           }
         } else if (OB_FAIL(memtable_handle.get_data_memtable(last_frozen_memtable))) {
           LOG_WARN("failed to get last frozen memtable", K(ret));

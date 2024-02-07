@@ -535,7 +535,7 @@ bool ObBasicTabletMergeCtx::need_swap_tablet(const ObTablet &tablet,
                                              const int64_t row_count,
                                              const int64_t macro_count)
 {
-  bool bret = tablet.get_memtable_mgr()->has_memtable()
+  bool bret = tablet.has_memtable()
     && (row_count >= LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD
       || macro_count >= LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD);
 #ifdef ERRSIM

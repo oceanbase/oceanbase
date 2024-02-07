@@ -1245,8 +1245,6 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ASSERT_TRUE(nullptr != tablet);
   ASSERT_TRUE(tablet->pointer_hdl_.is_valid());
 
-  ObIMemtableMgr *memtable_mgr = tablet->get_memtable_mgr();
-
   handle.reset();
   ASSERT_EQ(1, t3m_.tablet_map_.map_.size());
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
@@ -1264,8 +1262,6 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
 
   tablet = handle.get_obj();
   ASSERT_TRUE(nullptr != tablet);
-  ASSERT_TRUE(nullptr != tablet->get_memtable_mgr());
-  ASSERT_TRUE(memtable_mgr == tablet->get_memtable_mgr());
 
   addr.first_id_ = 1;
   addr.second_id_ = 4;

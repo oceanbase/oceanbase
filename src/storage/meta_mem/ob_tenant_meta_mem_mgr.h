@@ -432,7 +432,6 @@ private:
   int acquire_tablet(const ObTabletPoolType type, ObTabletHandle &tablet_handle);
   int acquire_tablet(ObITenantMetaObjPool *pool, ObTablet *&tablet);
   int acquire_tablet_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
-  int acquire_tablet_memtable_mgr(ObMemtableMgrHandle &handle);
   int create_tablet(const ObTabletMapKey &key, ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
   int do_wash_candidate_tablet(
       const CandidateTabletInfo &info,
@@ -448,7 +447,6 @@ private:
   void release_tablet(ObTablet *tablet);
   void release_ddl_kv(ObDDLKV *ddl_kv);
   void release_tablet_ddl_kv_mgr(ObTabletDDLKvMgr *ddl_kv_mgr);
-  void release_tablet_memtable_mgr(ObTabletMemtableMgr *memtable_mgr);
   void release_tx_data_memtable_(ObTxDataMemtable *memtable);
   void release_tx_ctx_memtable_(ObTxCtxMemtable *memtable);
   void release_lock_memtable_(transaction::tablelock::ObLockMemtable *memtable);
@@ -494,7 +492,6 @@ private:
   ObTenantMetaObjPool<ObLargeTabletBuffer> large_tablet_buffer_pool_;
   ObTenantMetaObjPool<ObDDLKV> ddl_kv_pool_;
   ObTenantMetaObjPool<ObTabletDDLKvMgr> tablet_ddl_kv_mgr_pool_;
-  ObTenantMetaObjPool<ObTabletMemtableMgr> tablet_memtable_mgr_pool_;
   ObTenantMetaObjPool<ObTxDataMemtable> tx_data_memtable_pool_;
   ObTenantMetaObjPool<ObTxCtxMemtable> tx_ctx_memtable_pool_;
   ObTenantMetaObjPool<transaction::tablelock::ObLockMemtable> lock_memtable_pool_;

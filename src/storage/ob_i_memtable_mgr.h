@@ -192,7 +192,6 @@ private:
 
 class ObIMemtableMgr
 {
-
 public:
   ObIMemtableMgr(const LockType lock_type, void *lock)
     : is_inited_(false),
@@ -208,6 +207,11 @@ public:
     memset(tables_, 0, sizeof(tables_));
   }
   virtual ~ObIMemtableMgr() { reset_tables(); }
+
+  int init(
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const lib::Worker::CompatMode compat_mode);
 
   int init(
       const ObTabletID &tablet_id,
@@ -289,6 +293,8 @@ public:
   }
   virtual int reset_storage_recorder() { return common::OB_SUCCESS; }
   virtual int set_frozen_for_all_memtables() { return common::OB_SUCCESS; }
+  virtual int set_is_tablet_freeze_for_active_memtable(ObTableHandleV2 &handle) { return OB_NOT_SUPPORTED; }
+  virtual int get_last_frozen_memtable(ObTableHandleV2 &handle) const { return OB_NOT_SUPPORTED; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   static int64_t get_memtable_idx(const int64_t pos) { return pos & (MAX_MEMSTORE_CNT - 1); }
@@ -324,7 +330,7 @@ class ObMemtableMgrHandle final
 {
 public:
   ObMemtableMgrHandle();
-  ObMemtableMgrHandle(ObIMemtableMgr *memtable_mgr, ObITenantMetaObjPool *pool = nullptr);
+  ObMemtableMgrHandle(ObIMemtableMgr *memtable_mgr, ObTabletMemtableMgrPool *pool);
   ~ObMemtableMgrHandle();
 
   bool is_valid() const;
@@ -336,13 +342,13 @@ public:
   ObMemtableMgrHandle(const ObMemtableMgrHandle &other);
   ObMemtableMgrHandle &operator= (const ObMemtableMgrHandle &other);
 
-  int set_memtable_mgr(ObIMemtableMgr *memtable_mgr, ObITenantMetaObjPool *pool = nullptr);
+  int set_memtable_mgr(ObIMemtableMgr *memtable_mgr, ObTabletMemtableMgrPool *pool = nullptr);
 
   TO_STRING_KV(KPC_(memtable_mgr), KP_(pool));
 
 private:
   ObIMemtableMgr *memtable_mgr_;
-  ObITenantMetaObjPool *pool_;
+  ObTabletMemtableMgrPool *pool_;
 };
 
 }  // namespace storage

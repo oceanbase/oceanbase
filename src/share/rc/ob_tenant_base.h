@@ -91,6 +91,7 @@ class ObTenantMdsService;
   class ObTableScanIterator;
   class ObTenantCGReadInfoMgr;
   class ObEmptyReadBucket;
+  class ObTabletMemtableMgrPool;
 } // namespace storage
 namespace transaction {
   class ObTenantWeakReadService; // 租户弱一致性读服务
@@ -333,7 +334,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
-      table::ObTableApiSessPoolMgr*                \
+      table::ObTableApiSessPoolMgr*,                \
+      storage::ObTabletMemtableMgrPool*             \
   )
 
 

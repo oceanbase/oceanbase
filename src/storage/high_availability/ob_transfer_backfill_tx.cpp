@@ -1287,15 +1287,11 @@ int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObTableHandleV2> memtables;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   if (OB_ISNULL(tablet) || !transfer_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet should not be nullptr.", KR(ret), K(transfer_scn), KPC(this));
-  } else if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
-  } else if (OB_FAIL(memtable_mgr->get_all_memtables(memtables))) {
-    LOG_WARN("failed to get all memtables", K(ret), KPC(tablet));
+  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+    LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else if (!memtables.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       ObITable *table = memtables.at(i).get_table();

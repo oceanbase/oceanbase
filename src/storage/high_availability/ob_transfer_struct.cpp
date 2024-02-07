@@ -331,7 +331,6 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
 {
   MDS_TG(10_ms);
   int ret = OB_SUCCESS;
-  ObIMemtableMgr *memtable_mgr = nullptr;
   ObArray<ObTableHandleV2> memtables;
   ObTabletID tablet_id = tablet->get_tablet_meta().tablet_id_;
   SCN weak_read_scn;
@@ -348,11 +347,8 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
   } else if (ObScnRange::MIN_SCN == weak_read_scn) {
     ret = OB_EAGAIN;
     LOG_WARN("weak read service not inited, need to wait for weak read scn to advance", K(ret), K(ls_id), K(weak_read_scn));
-  } else if (OB_ISNULL(memtable_mgr = tablet->get_memtable_mgr())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("memtable mgr should not be NULL", K(ret), KP(memtable_mgr));
-  } else if (CLICK_FAIL(memtable_mgr->get_all_memtables(memtables))) {
-    LOG_WARN("failed to get all memtables", K(ret), K(tablet_id));
+  } else if (OB_FAIL(tablet->get_all_memtables(memtables))) {
+    LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else {
     CLICK();
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {

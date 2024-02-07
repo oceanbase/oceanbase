@@ -91,6 +91,7 @@ storage_dml_unittest(test_partition_range_splite)
 storage_dml_unittest(test_major_rows_merger)
 storage_dml_unittest(test_tablet tablet/test_tablet.cpp)
 storage_unittest(test_medium_list_checker compaction/test_medium_list_checker.cpp)
+storage_unittest(test_protected_memtable_mgr_handle test_protected_memtable_mgr_handle.cpp)
 
 if(OB_BUILD_CLOSE_MODULES)
 storage_dml_unittest(test_compaction_policy)
