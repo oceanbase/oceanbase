@@ -1,0 +1,19 @@
+#package_name: dbms_trusted_certificate_manager
+#author: tony.wzh
+--only support SYS tenant
+
+CREATE OR REPLACE PACKAGE dbms_trusted_certificate_manager AUTHID CURRENT_USER
+
+  PROCEDURE ADD_TRUSTED_CERTIFICATE(
+    COMMON_NAME VARCHAR(256),
+    DESCRIPTION VARCHAR(256),
+    CONTENT     LONGTEXT);
+
+  PROCEDURE DELETE_TRUSTED_CERTIFICATE(COMMON_NAME VARCHAR(256));
+
+  PROCEDURE UPDATE_TRUSTED_CERTIFICATE(
+    COMMON_NAME VARCHAR(256),
+    DESCRIPTION VARCHAR(256),
+    CONTENT     LONGTEXT);
+
+END dbms_trusted_certificate_manager;

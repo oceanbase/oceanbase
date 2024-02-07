@@ -8031,6 +8031,14 @@ LAST_USED	varchar(128)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_INDEX_USAGE limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_TRUSTED_ROOT_CERTIFICATE;
+Field	Type	Null	Key	Default	Extra
+COMMON_NAME	varchar(256)	NO		NULL	
+DESCRIPTION	varchar(256)	NO		NULL	
+CERT_EXPIRED_TIME	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRUSTED_ROOT_CERTIFICATE limit 1);
+cnt
+1
 desc oceanbase.CDB_INDEX_USAGE;
 Field	Type	Null	Key	Default	Extra
 CON_ID	bigint(20)	NO		NULL	

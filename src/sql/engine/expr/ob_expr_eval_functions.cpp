@@ -335,6 +335,7 @@
 #include "ob_expr_initcap.h"
 #include "ob_expr_temp_table_ssid.h"
 #include "ob_expr_align_date4cmp.h"
+#include "ob_expr_extract_cert_expired_time.h"
 
 namespace oceanbase
 {
@@ -1097,7 +1098,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   eval_questionmark_decint2nmb,                                       /* 658 */
   eval_questionmark_nmb2decint_eqcast,                                /* 659 */
   eval_questionmark_decint2decint_eqcast,                             /* 660 */
-  eval_questionmark_decint2decint_normalcast                          /* 661 */
+  eval_questionmark_decint2decint_normalcast,                         /* 661 */
+  ObExprExtractExpiredTime::eval_extract_cert_expired_time,           /* 662 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

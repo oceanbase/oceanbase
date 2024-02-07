@@ -6429,7 +6429,22 @@ def_table_schema(
 # 499 :__all_transfer_partition_task_history
 # 500 : __all_tenant_snapshot_create_job
 # 501 : __wr_sqltext
-# 502 : __all_trusted_root_certificate
+
+def_table_schema(
+  owner = 'tony.wzh',
+  table_name = '__all_trusted_root_certificate',
+  table_id = '502',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('common_name', 'varchar:256'),
+  ],
+  normal_columns = [
+    ('description', 'varchar:256'),
+    ('content', 'longtext', 'false'),
+  ],
+)
+
 # 503 : __all_audit_log_filter
 # 504 : __all_audit_log_user
 # 505 : __all_column_privilege
@@ -13249,7 +13264,6 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12452: __all_virtual_transfer_partition_task_history
 # 12453: __all_virtual_tenant_snapshot_create_job
 # 12454: __all_virtual_wr_sqltext
-# 12455: __all_virtual_trusted_root_certificate_info
 # 12456: __all_virtual_dbms_lock_allocated
 # 12457: __all_virtual_sharing_storage_compaction_info
 # 12458: __all_virtual_ls_snapshot_in_storage_node
@@ -30406,7 +30420,26 @@ def_table_schema(
 #21506 CDB_WR_SQLTEXT
 #21507 GV$OB_ACTIVE_SESSION_HISTORY
 #21508 V$OB_ACTIVE_SESSION_HISTORY
-#21509 GV$OB_TRUSTED_ROOT_CERTIFICATE
+
+def_table_schema(
+  owner          = 'tony.wzh',
+  table_name     = 'DBA_OB_TRUSTED_ROOT_CERTIFICATE',
+  table_id       = '21509',
+  table_type     = 'SYSTEM_VIEW',
+  gm_columns     = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = False,
+  view_definition = """
+  SELECT
+  common_name AS COMMON_NAME,
+  description AS DESCRIPTION,
+  EXTRACT_CERT_EXPIRED_TIME(content) AS CERT_EXPIRED_TIME
+  FROM
+    oceanbase.__all_trusted_root_certificate
+  """.replace("\n", " "),
+)
+
 #21510 DBA_OB_CLONE_PROGRESS
 #21511 mysql.role_edges
 #21512 mysql.default_roles

@@ -27,6 +27,7 @@
 extern "C" {
 #include "ussl-hook.h"
 #include "auth-methods.h"
+SSL_CTX* ussl_get_server_ctx(int ctx_id);
 }
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -373,6 +374,115 @@ static int create_ssl_ctx(int ctx_id, int is_from_file, int is_sm, const char *c
   return ret;
 }
 
+namespace oceanbase {
+static int ob_add_client_CA_list(SSL_CTX *ctx, const char *cert, int cert_length)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx) || OB_ISNULL(cert)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KP(ctx), KP(cert));
+  } else {
+    STACK_OF(X509_INFO) *chain = NULL;
+    X509_STORE *ca_store = NULL;
+    X509_INFO *x509_info = NULL;
+    BIO *cbio = NULL;
+    if (OB_ISNULL(cbio = BIO_new_mem_buf((void*)cert, cert_length))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("BIO_new_mem_buf failed", K(ret));
+    } else if (OB_ISNULL(chain = PEM_X509_INFO_read_bio(cbio, NULL, NULL, NULL))) {
+      ret = OB_ERR_UNEXPECTED;
+      int len = strlen(cert);
+      common::ObString err_reason = common::ObString::make_string(ERR_reason_error_string(ERR_get_error()));
+      LOG_ERROR("PEM_X509_INFO_read_bio failed", K(ret), K(cert), K(len), K(err_reason));
+    } else if (OB_ISNULL(ca_store = SSL_CTX_get_cert_store(ctx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("SSL_CTX_get_cert_store failed", K(ret));
+    } else {
+      for (int64_t i = 0; i < sk_X509_INFO_num(chain) && OB_SUCC(ret); i++) {
+        x509_info = sk_X509_INFO_value(chain, i);
+        if (OB_ISNULL(x509_info)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("x509_info is NULL", K(i), K(ret));
+        } else if (!SSL_CTX_add_client_CA(ctx, x509_info->x509)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("SSL_CTX_add_client_CA failed", K(ret), K(i));
+        } else if (!X509_STORE_add_cert(ca_store, x509_info->x509)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("X509_STORE_add_cert failed", K(ret), K(i));
+        }
+      }
+    }
+    if (NULL != cbio) {
+      BIO_free(cbio);
+    }
+    if (NULL != chain) {
+      sk_X509_INFO_pop_free(chain, X509_INFO_free);
+    }
+  }
+  return ret;
+}
+
+static int ob_add_client_CA_list_from_sys_table(SSL_CTX *ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("ctx is NULL", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("get min data_version with sys tenant id failed", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_0_0) {
+    LOG_WARN("tenant data version is too low, skip load", KR(ret), KR(data_version));
+  } else {
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
+      if (OB_ISNULL(mysql_proxy)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("mysql proxy is not inited", K(ret));
+      } else {
+        int sql_len = 0;
+        char sql[OB_SHORT_SQL_LENGTH];
+        const char *table_name = share::OB_ALL_TRUSTED_ROOT_CERTIFICATE_TNAME;
+        sql_len = snprintf(sql, OB_SHORT_SQL_LENGTH,
+                          "SELECT content FROM %s",
+                          table_name);
+        if (sql_len >= OB_SHORT_SQL_LENGTH || sql_len <= 0) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("failed to format sql, buffer size not enough", K(ret));
+        } else {
+          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+            common::sqlclient::ObMySQLResult *result = NULL;
+            if (OB_FAIL(mysql_proxy->read(res, OB_SYS_TENANT_ID, sql))) {
+              LOG_WARN("failed to read data", K(ret));
+            } else if (OB_ISNULL(result = res.get_result())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to get result", K(ret));
+            } else {
+              ObString cert_content;
+              while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+                if (OB_FAIL(result->get_varchar(0l, cert_content))) {
+                  LOG_WARN("failed to get content", K(ret));
+                } else if (OB_FAIL(ob_add_client_CA_list(ctx, cert_content.ptr(), cert_content.length()))) {
+                  LOG_WARN("failed to ob_add_client_CA_list", K(ret), K(cert_content.length()));
+                }
+              }
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_TENANT_NOT_IN_SERVER == ret && SS_SERVING != GCTX.status_) {
+    ret = OB_SUCCESS;
+    LOG_WARN("observice is not serving do not load CA from sys table");
+  }
+  return ret;
+}
+}
+
 int ObSrvNetworkFrame::reload_ssl_config()
 {
   int ret = common::OB_SUCCESS;
@@ -384,9 +494,13 @@ int ObSrvNetworkFrame::reload_ssl_config()
     const char *intl_file[3] = {OB_SSL_CA_FILE, OB_SSL_CERT_FILE, OB_SSL_KEY_FILE};
     const char *sm_file[5] = {OB_SSL_CA_FILE, OB_SSL_SM_SIGN_CERT_FILE, OB_SSL_SM_SIGN_KEY_FILE, OB_SSL_SM_ENC_CERT_FILE,
     OB_SSL_SM_ENC_KEY_FILE};
-    const uint64_t new_hash_value = ssl_config.empty()
+    const uint64_t file_or_kms_hash_value = ssl_config.empty()
         ? get_ssl_file_hash(intl_file, sm_file, file_exist)
         : ssl_config.hash();
+    const uint64_t sys_table_cerfificate_hash = get_root_certificate_table_hash();
+    uint64_t new_hash_value = common::murmurhash(&sys_table_cerfificate_hash,
+                                                sizeof(sys_table_cerfificate_hash),
+                                                file_or_kms_hash_value);
     if (ssl_config.empty() && !file_exist) {
       ret = OB_INVALID_CONFIG;
       LOG_WARN("ssl file not available", K(new_hash_value));
@@ -500,7 +614,9 @@ int ObSrvNetworkFrame::reload_ssl_config()
               const int OB_EASY_RPC_SSL_CTX_ID = 0;
               if (OB_FAIL(create_ssl_ctx(OB_EASY_RPC_SSL_CTX_ID, !use_bkmi, use_sm,
                                           ca_cert, public_cert, private_key, NULL, NULL))) {
-                LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID));
+                LOG_ERROR("create ssl ctx failed", K(OB_EASY_RPC_SSL_CTX_ID), K(ret));
+              } else if (OB_FAIL(ob_add_client_CA_list_from_sys_table(ussl_get_server_ctx(OB_EASY_RPC_SSL_CTX_ID)))) {
+                LOG_WARN("add client CA to SSL_CTX failed",  K(ret));
               }
             }
           }
@@ -646,6 +762,7 @@ int ObSrvNetworkFrame::reload_rpc_auth_method()
     }
   }
   set_server_auth_methods(server_auth_methods);
+  ussl_set_auth_bypass_flag(GCONF.enable_rpc_authentication_bypass);
   return ret;
 }
 
@@ -706,4 +823,64 @@ int ObSrvNetworkFrame::net_endpoint_set_ingress(const ObNetEndpointKey &endpoint
     }
   }
   return ret;
+}
+
+uint64_t ObSrvNetworkFrame::get_root_certificate_table_hash()
+{
+  int ret = OB_SUCCESS;
+  uint64_t hash_value = 0;
+  int64_t  row_count = 0;
+  int64_t  last_modify_time = 0;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+    LOG_WARN("get min data_version with sys tenant id failed", KR(ret));
+  } else if (data_version < DATA_VERSION_4_3_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is too low", KR(ret), K(data_version));
+  } else {
+    MTL_SWITCH(OB_SYS_TENANT_ID) {
+      ObMySQLProxy *mysql_proxy = GCTX.sql_proxy_;
+      if (OB_ISNULL(mysql_proxy)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("mysql proxy is not inited", K(ret));
+      } else {
+        int sql_len = 0;
+        char sql[OB_SHORT_SQL_LENGTH];
+        const char *table_name = share::OB_ALL_TRUSTED_ROOT_CERTIFICATE_TNAME;
+        sql_len = snprintf(sql, OB_SHORT_SQL_LENGTH,
+                            "SELECT count(*), max(gmt_modified) "
+                            "FROM %s",
+                            table_name);
+        if (sql_len >= OB_SHORT_SQL_LENGTH || sql_len <= 0) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("failed to format sql, buffer size not enough", K(ret));
+        } else {
+          SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+            common::sqlclient::ObMySQLResult *result = NULL;
+            if (OB_FAIL(mysql_proxy->read(res, OB_SYS_TENANT_ID, sql))) {
+              LOG_WARN("failed to read data", K(ret));
+            } else if (OB_ISNULL(result = res.get_result())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("failed to get result", K(ret));
+            } else {
+              while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+                if (OB_FAIL(result->get_int(0l, row_count))) {
+                  LOG_WARN("failed to get row_count", K(ret));
+                } else if (OB_FAIL(result->get_timestamp("max(gmt_modified)", NULL, last_modify_time))) {
+                  LOG_WARN("failed to get modify_time", K(ret));
+                }
+              }
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+        hash_value = common::murmurhash(&row_count, sizeof(row_count), last_modify_time);
+        }
+      }
+    }
+  }
+  return hash_value;
 }

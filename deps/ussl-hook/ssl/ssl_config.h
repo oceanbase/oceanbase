@@ -25,6 +25,7 @@ int fd_enable_ssl_for_server(int fd, int ctx_id, int type);
 int fd_enable_ssl_for_client(int fd, int ctx_id, int type);
 void fd_disable_ssl(int fd);
 int ssl_do_handshake(int fd);
+SSL_CTX* ussl_get_server_ctx(int ctx_id);
 ssize_t read_regard_ssl(int fd, char *buf, size_t nbytes);
 ssize_t write_regard_ssl(int fd, const void *buf, size_t nbytes);
 ssize_t writev_regard_ssl(int fildes, const struct iovec *iov, int iovcnt);

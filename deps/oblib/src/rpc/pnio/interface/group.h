@@ -78,6 +78,7 @@ PN_API uint64_t pn_get_rxbytes(int grp_id);
 PN_API int dispatch_accept_fd_to_certain_group(int fd, uint64_t gid);
 PN_API void pn_stop(uint64_t gid);
 PN_API void pn_wait(uint64_t gid);
+PN_API int pn_get_fd(uint64_t req_id);
 extern int64_t pnio_keepalive_timeout;
 pn_comm_t* get_current_pnio();
 void pn_release(pn_comm_t* pn_comm);

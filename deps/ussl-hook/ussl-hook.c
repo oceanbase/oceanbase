@@ -37,6 +37,7 @@ static __thread int ussl_server_ctx_id = -1;
 static uint64_t global_gid_arr[USSL_MAX_FD_NUM];
 static int global_client_ctx_id_arr[USSL_MAX_FD_NUM];
 static int global_send_negotiation_arr[USSL_MAX_FD_NUM];
+
 int is_ussl_bg_thread_started = 0;
 static int ussl_is_stopped = 0;
 
@@ -278,6 +279,7 @@ ssize_t ussl_write(int fd, const void *buf, size_t nbytes)
 
 int ussl_close(int fd)
 {
+  ussl_reset_rpc_connection_type(fd);
   fd_disable_ssl(fd);
   return libc_close(fd);
 }

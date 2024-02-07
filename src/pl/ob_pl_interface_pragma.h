@@ -65,6 +65,7 @@
 #endif
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
+#include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -681,6 +682,11 @@
   // end of dbms_workload_repository
   /****************************************************************************/
 
+  // start of dbms_trusted_certificate_manager
+  INTERFACE_DEF(INTERFACE_DBMS_ADD_TRUSTED_CERTIFICATE, "ADD_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::add_trusted_certificate))
+  INTERFACE_DEF(INTERFACE_DBMS_DELETE_TRUSTED_CERTIFICATE, "DELETE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::delete_trusted_certificate))
+  INTERFACE_DEF(INTERFACE_DBMS_UPDATE_TRUSTED_CERTIFICATE, "UPDATE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::update_trusted_certificate))
+  // end of end of dbms_workload_repository
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 
