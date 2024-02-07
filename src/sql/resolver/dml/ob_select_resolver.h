@@ -348,7 +348,8 @@ private:
 
   int resolve_shared_order_item(OrderItem &order_item, ObSelectStmt *select_stmt);
   int adjust_recursive_cte_table_columns(const ObSelectStmt* parent_stmt, ObSelectStmt *right_stmt);
-  int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt);
+  int recursive_check_auto_gen_column_names(ObSelectStmt *select_stmt, bool in_outer_stmt);
+  int recursive_update_column_name(ObSelectStmt *select_stmt, ObRawExpr *expr);
 protected:
   // data members
   /*these member is only for with clause*/
