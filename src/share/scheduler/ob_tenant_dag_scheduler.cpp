@@ -3510,13 +3510,6 @@ int ObDagNetScheduler::add_dag_net(ObIDagNet &dag_net)
 
 void ObDagNetScheduler::finish_dag_net_without_lock(ObIDagNet &dag_net)
 {
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(dag_net.add_dag_warning_info())) {
-    COMMON_LOG_RET(WARN, tmp_ret, "failed to add dag warning info in dag net into mgr", K(tmp_ret), K(dag_net));
-  }
-  if (OB_TMP_FAIL(dag_net.clear_dag_net_ctx())) {
-    COMMON_LOG_RET(WARN, tmp_ret, "failed to clear dag net ctx", K(tmp_ret), K(dag_net));
-  }
   (void) erase_dag_net_id_or_abort(dag_net);
   --dag_net_cnts_[dag_net.get_type()];
 }
@@ -4506,8 +4499,15 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask &task, ObTenantDagWorker
 
 void ObTenantDagScheduler::finish_dag_net(ObIDagNet *dag_net)
 {
+  int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(dag_net)) {
     COMMON_LOG(INFO, "start finish dag net", KPC(dag_net));
+    if (OB_TMP_FAIL(dag_net->add_dag_warning_info())) {
+      COMMON_LOG_RET(WARN, tmp_ret, "failed to add dag warning info in dag net into mgr", K(tmp_ret), KPC(dag_net));
+    }
+    if (OB_TMP_FAIL(dag_net->clear_dag_net_ctx())) {
+      COMMON_LOG_RET(WARN, tmp_ret, "failed to clear dag net ctx", K(tmp_ret), KPC(dag_net));
+    }
     (void) dag_net_sche_.finish_dag_net(*dag_net);
     (void) free_dag_net(dag_net);
   }
