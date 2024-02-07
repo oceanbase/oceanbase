@@ -152,7 +152,7 @@ void ObThrottleUnit<ALLOCATOR>::print_throttle_info_(const int64_t holding_size,
   const int64_t PRINT_THROTTLE_INFO_INTERVAL = 1L * 1000L * 1000L;  // one second
   int64_t last_print_ts = last_print_throttle_info_ts_;
 
-  int64_t current_ts = ObClockGenerator::getCurrentTime();
+  int64_t current_ts = ObClockGenerator::getClock();
   if (current_ts - last_print_ts > PRINT_THROTTLE_INFO_INTERVAL &&
       ATOMIC_BCAS(&last_print_throttle_info_ts_, last_print_ts, current_ts)) {
     // release_speed means the allocated resource size per second
@@ -190,14 +190,14 @@ int ObThrottleUnit<ALLOCATOR>::inner_get_throttle_info_(share::ObThrottleInfo *&
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         if (0 == abs_expire_time) {
-          abs_expire_time = DEFAULT_MAX_THROTTLE_TIME + ObClockGenerator::getCurrentTime();
+          abs_expire_time = DEFAULT_MAX_THROTTLE_TIME + ObClockGenerator::getClock();
         }
         if (OB_FAIL(throttle_info_map_.alloc_value(throttle_info))) {
           if (OB_ALLOCATE_MEMORY_FAILED == ret) {
             if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
               SHARE_LOG(WARN, "allocate throttle info failed", KR(ret), K(tid));
             }
-            if (ObClockGenerator::getCurrentTime() > abs_expire_time) {
+            if (ObClockGenerator::getClock() > abs_expire_time) {
               SHARE_LOG(WARN, "allocate throttle info failed", KR(ret), K(tid));
             } else {
               // sleep 10 ms and retry
@@ -267,7 +267,7 @@ void ObThrottleUnit<ALLOCATOR>::update_decay_factor_(const bool is_adaptive_upda
 template <typename ALLOCATOR>
 void ObThrottleUnit<ALLOCATOR>::advance_clock(const int64_t holding_size)
 {
-  int64_t cur_ts = ObClockGenerator::getCurrentTime();
+  int64_t cur_ts = ObClockGenerator::getClock();
   int64_t old_ts = last_advance_clock_ts_us_;
   const int64_t advance_us = cur_ts - old_ts;
   if ((advance_us > ADVANCE_CLOCK_INTERVAL) && ATOMIC_BCAS(&last_advance_clock_ts_us_, old_ts, cur_ts)) {

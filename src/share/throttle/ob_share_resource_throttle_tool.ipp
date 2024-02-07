@@ -218,7 +218,7 @@ void ObShareResourceThrottleTool<FakeAllocator, Args...>::do_throttle(const int6
 {
   int ret = OB_SUCCESS;
   int64_t left_interval = (0 == abs_expire_time ? ObThrottleUnit<ALLOCATOR>::DEFAULT_MAX_THROTTLE_TIME
-                                                : abs_expire_time - ObClockGenerator::getCurrentTime());
+                                                : abs_expire_time - ObClockGenerator::getClock());
   int64_t sleep_time = 0;
   ObThrottleInfoGuard share_ti_guard;
   ObThrottleInfoGuard module_ti_guard;
