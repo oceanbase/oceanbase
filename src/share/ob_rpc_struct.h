@@ -2102,6 +2102,12 @@ public:
     ALTER_CONSTRAINT_STATE,
     CONSTRAINT_NO_OPERATION = 1000
   };
+  enum AlterAlgorithm
+  {
+    DEFAULT = 0, // empty
+    INSTANT = 1,
+    INPLACE = 2,
+  };
   ObAlterTableArg():
       ObDDLArg(),
       session_id_(common::OB_INVALID_ID),
@@ -2132,7 +2138,8 @@ public:
       is_add_to_scheduler_(false),
       inner_sql_exec_addr_(),
       local_session_var_(&allocator_),
-      mview_refresh_info_()
+      mview_refresh_info_(),
+      alter_algorithm_(INPLACE)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2199,7 +2206,8 @@ public:
                K_(hidden_table_id),
                K_(inner_sql_exec_addr),
                K_(local_session_var),
-               K_(mview_refresh_info));
+               K_(mview_refresh_info),
+               K_(alter_algorithm));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2233,6 +2241,7 @@ public:
   common::ObAddr inner_sql_exec_addr_;
   ObLocalSessionVar local_session_var_;
   ObMViewRefreshInfo mview_refresh_info_;
+  AlterAlgorithm alter_algorithm_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
