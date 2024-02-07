@@ -586,6 +586,11 @@ STAT_EVENT_SET_DEF(OBSERVER_PARTITION_TABLE_UPATER_CORE_QUEUE_SIZE, "observer pa
 
 // rootservice
 STAT_EVENT_SET_DEF(RS_START_SERVICE_TIME, "rootservice start time", ObStatClassIds::RS, 180001, false, true, true)
+
+// das
+STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_MEMORY_USAGE, "the memory use of all DAS parallel task", ObStatClassIds::SQL, 230001, false, true, true)
+STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_TASK_CNT, "the count of DAS parallel task", ObStatClassIds::SQL, 230002, false, true, true)
+
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
 #endif
