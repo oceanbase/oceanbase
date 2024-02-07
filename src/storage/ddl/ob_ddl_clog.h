@@ -122,7 +122,6 @@ private:
   share::ObLSID ls_id_;
   blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
   blocksstable::MacroBlockId macro_block_id_;
-  ObArenaAllocator arena_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
   ObTabletHandle tablet_handle_;

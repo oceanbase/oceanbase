@@ -38,9 +38,9 @@ using namespace oceanbase::share::schema;
 
 
 ObBlockMetaTree::ObBlockMetaTree()
-  : is_inited_(false), arena_(), tree_allocator_(arena_), block_tree_(tree_allocator_)
+  : is_inited_(false), macro_blocks_(), arena_("DDL_Btree", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), tree_allocator_(arena_), block_tree_(tree_allocator_)
 {
-
+  macro_blocks_.set_attr(ObMemAttr(MTL_ID(), "DDL_Btree"));
 }
 
 ObBlockMetaTree::~ObBlockMetaTree()
@@ -89,7 +89,7 @@ int ObDDLKV::init_sstable_param(ObTablet &tablet,
 {
   int ret = OB_SUCCESS;
   ObStorageSchema *storage_schema_ptr = nullptr;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("DDLKV", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   if (OB_UNLIKELY(!table_key.is_valid() || !ddl_start_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(table_key), K(ddl_start_scn));
@@ -439,7 +439,7 @@ int ObBlockMetaTree::get_last_rowkey(const ObDatumRowkey *&last_rowkey)
 
 ObDDLKV::ObDDLKV()
   : is_inited_(false), ls_id_(), tablet_id_(), ddl_start_scn_(SCN::min_scn()), snapshot_version_(0),
-    lock_(), arena_allocator_("DDL_KV"), is_freezed_(false), is_closed_(false), last_freezed_scn_(SCN::min_scn()),
+    lock_(), arena_allocator_("DDL_KV", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), is_freezed_(false), is_closed_(false), last_freezed_scn_(SCN::min_scn()),
     min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), freeze_scn_(SCN::max_scn()), pending_cnt_(0), data_format_version_(0)
 {
 }
@@ -697,7 +697,7 @@ int ObDDLKV::close(ObTablet &tablet)
   } else if (OB_FAIL(block_meta_tree_.get_sorted_meta_array(meta_array))) {
     LOG_WARN("get sorted meta array failed", K(ret));
   } else {
-    ObArenaAllocator allocator("DDLUpTabStore");
+    ObArenaAllocator allocator("DDLUpTabStore", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObSSTable sstable;
     ObTabletDDLParam ddl_param;
     ddl_param.tenant_id_ = MTL_ID();

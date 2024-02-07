@@ -509,7 +509,7 @@ int ObSSTableInsertTabletContext::build_sstable_slice(
   const ObTabletID &tablet_id = build_param.tablet_id_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  ObArenaAllocator allocator(lib::ObLabel("PartInsSstTmp"));
+  ObArenaAllocator allocator(lib::ObLabel("PartInsSstTmp"), OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   ObSSTableInsertSliceWriter *sstable_slice_writer = nullptr;
   bool ddl_committed = false;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(

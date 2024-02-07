@@ -976,7 +976,7 @@ int ObComplementWriteTask::do_local_scan()
         false,
         false);
     ObStoreRange range;
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator("cmplt_write", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObDatumRange datum_range;
     const bool allow_not_ready = false;
     ObLSHandle ls_handle;
@@ -1155,7 +1155,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
     ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObStoreRow reshaped_row;
     reshaped_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
-    ObArenaAllocator allocator(lib::ObLabel("CompDataTaskTmp"));
+    ObArenaAllocator allocator(lib::ObLabel("CompDataTaskTmp"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObRowReshape *reshape_ptr = nullptr;
     ObSQLMode sql_mode_for_ddl_reshape = SMO_TRADITIONAL;
     ObDatumRow datum_row;
@@ -1497,8 +1497,9 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
 ObLocalScan::ObLocalScan() : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID),
     dest_table_id_(OB_INVALID_ID), schema_version_(0), extended_gc_(), snapshot_version_(common::OB_INVALID_VERSION),
     txs_(nullptr), default_row_(), tmp_row_(), row_iter_(nullptr), scan_merge_(nullptr), ctx_(), access_param_(),
-    access_ctx_(), get_table_param_(), allocator_("ObLocalScan"), calc_buf_(ObModIds::OB_SQL_EXPR_CALC),
-    col_params_(), read_info_(), exist_column_mapping_(allocator_), checksum_calculator_()
+    access_ctx_(), get_table_param_(), allocator_("ObLocalScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    calc_buf_(ObModIds::OB_SQL_EXPR_CALC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), col_params_(), read_info_(),
+    exist_column_mapping_(allocator_), checksum_calculator_()
 {}
 
 ObLocalScan::~ObLocalScan()
@@ -1956,7 +1957,7 @@ ObRemoteScan::ObRemoteScan()
     row_with_reshape_(),
     res_(),
     result_(nullptr),
-    allocator_("DDLRemoteScan"),
+    allocator_("DDLRemoteScan", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     org_col_ids_(),
     column_names_(),
     checksum_calculator_()
