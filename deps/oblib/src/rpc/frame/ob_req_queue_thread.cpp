@@ -103,7 +103,7 @@ int ObReqQueue::process_task(ObLink *task)
     LOG_ERROR("queue pop NULL task", K(task), K(ret), K(qhandler_));
   } else {
     lib::ContextParam param;
-    param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_ROOT_CONTEXT, ObCtxIds::WORK_AREA)
+    param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_ROOT_CONTEXT)
       .set_properties(USE_TL_PAGE_OPTIONAL);
     CREATE_WITH_TEMP_CONTEXT(param) {
       ObRequest *req = static_cast<ObRequest *>(task);

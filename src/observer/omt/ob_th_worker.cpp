@@ -339,8 +339,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       lib::ContextTLOptGuard guard(true);
       lib::ContextParam param;
       param.set_mem_attr(tenant_->id(), ObModIds::OB_SQL_EXECUTOR, ObCtxIds::DEFAULT_CTX_ID)
-        .set_page_size(!lib::is_mini_mode() ?
-            OB_MALLOC_BIG_BLOCK_SIZE : OB_MALLOC_MIDDLE_BLOCK_SIZE)
+        .set_page_size(OB_MALLOC_REQ_NORMAL_BLOCK_SIZE)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_ablock_size(lib::INTACT_MIDDLE_AOBJECT_SIZE);
       CREATE_WITH_TEMP_CONTEXT(param) {
