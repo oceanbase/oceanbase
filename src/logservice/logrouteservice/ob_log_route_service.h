@@ -273,6 +273,15 @@ public:
        const share::ObLSID &ls_id);
 
 private:
+  int get_ls_svr_list_(const ObLSRouterKey &router_key,
+      LSSvrList &svr_list);
+
+  int query_ls_log_info_and_update_(const ObLSRouterKey &router_key,
+      LSSvrList &svr_list);
+
+  int query_units_info_and_update_(const ObLSRouterKey &router_key,
+      LSSvrList &svr_list);
+
   int get_ls_router_value_(
       const ObLSRouterKey &router_key,
       ObLSRouterValue *&router_value);
@@ -331,11 +340,19 @@ private:
     ObIArray<ObLSRouterValue *> *router_values_;
   };
 
-  struct ObLSRouterKeyUpdater
+  struct ObAllLSRouterKeyGetter
   {
-    ObLSRouterKeyUpdater(ObLogRouteService &log_route_service) : log_route_service_(log_route_service) {}
+    ObAllLSRouterKeyGetter(): router_keys_() {}
     bool operator()(const ObLSRouterKey &key, ObLSRouterValue *value);
-    ObLogRouteService &log_route_service_;
+
+    ObSEArray<ObLSRouterKey, 4> router_keys_;
+  };
+
+  struct ObLSRouterValueUpdater
+  {
+    ObLSRouterValueUpdater(const LSSvrList &svr_list): svr_list_(svr_list) {}
+    bool operator()(const ObLSRouterKey &key, ObLSRouterValue *value);
+    const LSSvrList &svr_list_;
   };
 
   class ObLSRouteTimerTask : public common::ObTimerTask

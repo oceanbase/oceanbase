@@ -60,7 +60,8 @@ public:
 
   int get_server_array_for_locate_start_lsn(ObIArray<common::ObAddr> &svr_array);
 
-  common::ObByteLock &get_lock() { return lock_; }
+  void refresh_ls_svr_list(const LSSvrList &svr_list);
+
   LSSvrList &get_ls_svr_list() { return ls_svr_list_; }
 
   int64_t get_server_count() const { return ls_svr_list_.count(); }
