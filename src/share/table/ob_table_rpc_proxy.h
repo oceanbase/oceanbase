@@ -32,6 +32,7 @@ public:
   RPC_S(PR5 query_and_mutate, obrpc::OB_TABLE_API_QUERY_AND_MUTATE, (table::ObTableQueryAndMutateRequest), table::ObTableQueryAndMutateResult);
   RPC_S(PR5 execute_query_sync, obrpc::OB_TABLE_API_EXECUTE_QUERY_SYNC, (table::ObTableQuerySyncRequest), table::ObTableQuerySyncResult);
   RPC_S(PR5 direct_load, obrpc::OB_TABLE_API_DIRECT_LOAD, (table::ObTableDirectLoadRequest), table::ObTableDirectLoadResult);
+  RPC_S(PR5 ls_op_execute, obrpc::OB_TABLE_API_LS_EXECUTE, (table::ObTableLSOpRequest), table::ObTableLSOpResult);
 };
 
 }; // end namespace obrpc

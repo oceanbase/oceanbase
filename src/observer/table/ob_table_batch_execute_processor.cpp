@@ -61,32 +61,6 @@ int ObTableBatchExecuteP::deserialize()
   return ret;
 }
 
-// only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot
-int ObTableBatchExecuteP::check_table_has_global_index(uint64_t table_id, bool &exists)
-{
-  int ret = OB_SUCCESS;
-  exists = false;
-  schema::ObSchemaGetterGuard schema_guard;
-  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
-  if (OB_INVALID_ID == table_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table id", K(ret));
-  } else if (OB_ISNULL(gctx_.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid schema service", K(ret));
-  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
-  } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("get null table schema", K(ret), K(table_id));
-  } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
-    LOG_WARN("fail to check global index", K(ret), K(table_id));
-  }
-  return ret;
-}
-
 int ObTableBatchExecuteP::check_arg()
 {
   int ret = OB_SUCCESS;
@@ -281,10 +255,10 @@ int ObTableBatchExecuteP::try_process()
 
 #ifndef NDEBUG
   // debug mode
-  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count));
+  LOG_INFO("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count));
 #else
   // release mode
-  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(arg), K_(result), "timeout", rpc_pkt_->get_timeout(), K_(retry_count),
+  LOG_TRACE("[TABLE] execute batch operation", K(ret), K_(result), K_(retry_count),
             "receive_ts", get_receive_timestamp());
 #endif
   return ret;
@@ -467,7 +441,9 @@ int ObTableBatchExecuteP::multi_get()
       op_result.set_entity(*result_entity);
       op_result.set_err(ret);
       op_result.set_type(tb_ctx_.get_opertion_type());
-      if (OB_FAIL(result_.push_back(op_result))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(result_.push_back(op_result))) {
         LOG_WARN("fail to push back op result", K(ret), K(i));
       } else if (batch_ops_atomic_ && OB_FAIL(op_result.get_errno())) {
         LOG_WARN("fail to execute one operation when batch execute as atomic", K(ret), K(table_operation));

@@ -621,7 +621,8 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   if (OB_SUCC(ret)) {
     // add lob header when is lob storage
     if (is_lob_storage(obj.get_type()) && cur_cluster_version_ >= CLUSTER_VERSION_4_1_0_0) {
-      if (OB_FAIL(convert_lob(ctx_allocator_, obj))) {
+      // use the processor's allocator to ensure the lifecycle of lob object
+      if (OB_FAIL(convert_lob(allocator_, obj))) {
         LOG_WARN("fail to convert lob", K(ret), K(obj));
       }
     }
@@ -1909,7 +1910,7 @@ int ObTableCtx::init_dml_related_tid()
               found = true;
             }
           }
-          if (found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
+          if (OB_SUCC(ret) && found && OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {
             LOG_WARN("fail to add related index ids", K(ret), K(index_schema->get_table_id()));
           }
         } else if (OB_FAIL(related_index_ids_.push_back(index_schema->get_table_id()))) {

@@ -60,6 +60,40 @@ public:
     virtual int get_properties_values(ObIArray<ObObj> &values) const override;
     virtual int64_t get_properties_count() const override;
 
+    OB_INLINE virtual const ObObj &get_properties_value(int64_t idx) const
+    {
+      return value_;
+    }
+    OB_INLINE virtual void set_dictionary(
+        const ObIArray<ObString> *all_rowkey_names, const ObIArray<ObString> *all_properties_names)
+    {
+      return;
+    }
+    OB_INLINE virtual void set_is_same_properties_names(bool is_same_properties_names)
+    {
+      return;
+    }
+    OB_INLINE virtual int construct_names_bitmap(const ObITableEntity &req_entity)
+    {
+      return 0;
+    }
+    OB_INLINE virtual const ObTableBitMap *get_rowkey_names_bp() const
+    {
+      return nullptr;
+    }
+    OB_INLINE virtual const ObTableBitMap *get_properties_names_bp() const
+    {
+      return nullptr;
+    }
+    OB_INLINE virtual const ObIArray<ObString> *get_all_rowkey_names() const
+    {
+      return nullptr;
+    }
+    OB_INLINE virtual const ObIArray<ObString> *get_all_properties_names() const
+    {
+      return nullptr;
+    }
+
     const Key &key() const { return key_; }
     const Value &value() const { return value_; }
     void set_key(const Key &k) { key_ = k; rowkey_obj_count_ = 3; }

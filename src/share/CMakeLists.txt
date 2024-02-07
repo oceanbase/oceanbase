@@ -264,6 +264,7 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
   table/ob_table_util.cpp
+  table/ob_table_object.cpp
 )
 
 ob_set_subtarget(ob_share tablet

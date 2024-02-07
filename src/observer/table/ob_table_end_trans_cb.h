@@ -16,6 +16,7 @@
 #include "sql/ob_end_trans_callback.h"
 #include "share/table/ob_table.h"
 #include "ob_htable_lock_mgr.h"
+#include "share/table/ob_table_rpc_struct.h"
 namespace oceanbase
 {
 namespace table
@@ -45,7 +46,8 @@ class ObTableExecuteEndTransCb: public ObTableAPITransCb
 {
 public:
   ObTableExecuteEndTransCb(rpc::ObRequest *req, ObTableOperationType::Type table_operation_type)
-      :response_sender_(req, result_)
+    : allocator_(ObMemAttr(MTL_ID(), "TabelExeCbAlloc")),
+      response_sender_(req, result_)
   {
     result_.set_type(table_operation_type);
   }
@@ -70,7 +72,8 @@ class ObTableBatchExecuteEndTransCb: public ObTableAPITransCb
 {
 public:
   ObTableBatchExecuteEndTransCb(rpc::ObRequest *req, ObTableOperationType::Type table_operation_type)
-      : entity_factory_("TableBatchCbEntFac", MTL_ID()),
+    : allocator_(ObMemAttr(MTL_ID(), "TabelBatCbAlloc")),
+      entity_factory_("TableBatchCbEntFac", MTL_ID()),
       response_sender_(req, result_),
       table_operation_type_(table_operation_type)
   {
@@ -92,6 +95,33 @@ private:
   ObTableBatchOperationResult result_;
   obrpc::ObTableRpcResponseSender<ObTableBatchOperationResult> response_sender_;
   ObTableOperationType::Type table_operation_type_;
+};
+
+class ObTableLSExecuteEndTransCb: public ObTableAPITransCb
+{
+public:
+  ObTableLSExecuteEndTransCb(rpc::ObRequest *req)
+    : allocator_(ObMemAttr(MTL_ID(), "TabelLSCbAlloc")),
+      entity_factory_("TableLSCbEntFac", MTL_ID()),
+      response_sender_(req, result_)
+  {
+  }
+  virtual ~ObTableLSExecuteEndTransCb() = default;
+
+  virtual void callback(int cb_param) override;
+  virtual void callback(int cb_param, const transaction::ObTransID &trans_id) override;
+  virtual const char *get_type() const override { return "ObTableLSEndTransCallback"; }
+  virtual sql::ObEndTransCallbackType get_callback_type() const override { return sql::ASYNC_CALLBACK_TYPE; }
+  int assign_ls_execute_result(const table::ObTableLSOpResult &result);
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObTableLSExecuteEndTransCb);
+private:
+  common::ObArenaAllocator allocator_;
+  ObTableSingleOpEntity result_entity_;
+  table::ObTableEntityFactory<table::ObTableSingleOpEntity> entity_factory_;
+  table::ObTableLSOpResult result_;
+  obrpc::ObTableRpcResponseSender<ObTableLSOpResult> response_sender_;
 };
 
 } // end namespace table

@@ -690,6 +690,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set user name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObUserInfo *user_info = NULL;
       if(OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
         SERVER_LOG(WARN, "fail to get user info", K(ret), K(credential_));
@@ -703,6 +704,7 @@ void ObTableApiProcessorBase::end_audit()
     }
 
     { // set database name, ignore ret
+      ret = OB_SUCCESS;
       const share::schema::ObSimpleDatabaseSchema *database_info = NULL;
       if(OB_FAIL(schema_guard.get_database_schema(credential_.tenant_id_, credential_.database_id_, database_info))) {
         SERVER_LOG(WARN, "fail to get database info", K(ret), K(credential_));
@@ -763,6 +765,7 @@ void ObTableApiProcessorBase::end_audit()
     FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
   }
 
+  ret = OB_SUCCESS;
   MTL_SWITCH(credential_.tenant_id_) {
     obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
     if (nullptr == req_manager) {
@@ -863,6 +866,7 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_QUERY_AND_MUTATE> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_EXECUTE_QUERY_SYNC> >;
 template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_DIRECT_LOAD> >;
+template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<OB_TABLE_API_LS_EXECUTE> >;
 
 template<class T>
 int ObTableRpcProcessor<T>::deserialize()
@@ -1013,4 +1017,53 @@ void ObTableRpcProcessor<T>::generate_sql_id()
   checksum = ob_crc64(checksum, &credential_.database_id_, sizeof(credential_.database_id_));
   snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
      "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
+}
+
+// only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot
+int ObTableApiProcessorBase::check_table_has_global_index(uint64_t table_id, bool &exists)
+{
+  int ret = OB_SUCCESS;
+  exists = false;
+  schema::ObSchemaGetterGuard schema_guard;
+  const schema::ObSimpleTableSchemaV2 *table_schema = NULL;
+  if (OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (OB_ISNULL(gctx_.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid schema service", K(ret));
+  } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(credential_.tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_simple_table_schema(credential_.tenant_id_, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("get null table schema", K(ret), K(table_id));
+  } else if (OB_FAIL(schema_guard.check_global_index_exist(credential_.tenant_id_, table_id, exists))) {
+    LOG_WARN("fail to check global index", K(ret), K(table_id));
+  }
+  return ret;
+}
+
+int ObTableApiProcessorBase::get_tablet_id(const ObTabletID &arg_tablet_id, uint64_t table_id, ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  tablet_id = arg_tablet_id;
+  if (!tablet_id.is_valid()) {
+    share::schema::ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *table_schema = NULL;
+    const uint64_t tenant_id = MTL_ID();
+    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id), K(table_schema));
+    } else if (!table_schema->is_partitioned_table()) {
+      tablet_id = table_schema->get_tablet_id();
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partitioned table not pass tablet id");
+      LOG_WARN("partitioned table must pass tablet id", K(ret), K(table_id));
+    }
+  }
+  return ret;
 }

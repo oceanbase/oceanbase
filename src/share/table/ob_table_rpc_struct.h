@@ -379,6 +379,90 @@ public:
   ObString res_content_;
 };
 
+class ObTableLSOpRequest final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableLSOpRequest()
+    : credential_(),
+      entity_type_(),
+      consistency_level_(),
+      ls_op_()
+  {
+  }
+  ~ObTableLSOpRequest() {}
+
+  TO_STRING_KV("credential", common::ObHexStringWrap(credential_),
+               K_(entity_type),
+               K_(consistency_level),
+               K_(ls_op));
+public:
+  ObString credential_;
+  ObTableEntityType entity_type_;  // for optimize purpose
+  ObTableConsistencyLevel consistency_level_;
+  ObTableLSOp ls_op_;
+};
+
+using ObTableSingleOpResult = ObTableOperationResult;
+class ObTableTabletOpResult: public common::ObSEArrayImpl<ObTableSingleOpResult, ObTableTabletOp::COMMON_OPS_SIZE>
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableTabletOpResult()
+      : BaseType("TblTabletOpRes", common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+        entity_factory_(NULL),
+        alloc_(NULL)
+  {}
+  virtual ~ObTableTabletOpResult() = default;
+  ObTableTabletOpResult(const ObTableTabletOpResult& other);
+  void set_entity_factory(ObITableEntityFactory *entity_factory) { entity_factory_ = entity_factory; }
+  ObITableEntityFactory *get_entity_factory() { return entity_factory_; }
+  void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
+  common::ObIAllocator *get_allocator() { return alloc_; }
+  OB_INLINE void assign_properties_names(const ObIArray<ObString> *all_properties_names) {
+    all_properties_names_ = all_properties_names;
+  }
+
+  OB_INLINE void set_all_rowkey_names(const ObIArray<ObString> *all_rowkey_names) {
+    all_rowkey_names_ = all_rowkey_names;
+  }
+private:
+  using BaseType = common::ObSEArrayImpl<ObTableSingleOpResult, ObTableTabletOp::COMMON_OPS_SIZE>;
+  uint64_t reserved_;
+  ObITableEntityFactory *entity_factory_;
+  common::ObIAllocator *alloc_;
+  const ObIArray<ObString>* all_properties_names_;
+  const ObIArray<ObString>* all_rowkey_names_;
+};
+
+class ObTableLSOpResult: public common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableLSOpResult()
+    : BaseType("TblLSOpRes", common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+      entity_factory_(NULL),
+      alloc_(NULL)
+  {}
+  virtual ~ObTableLSOpResult() = default;
+  void set_allocator(common::ObIAllocator *alloc) { alloc_ = alloc; }
+  common::ObIAllocator *get_allocator() { return alloc_; }
+  int assign_properties_names(const ObIArray<ObString>& all_properties_names) {
+    return properties_names_.assign(all_properties_names);
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTableLSOpResult);
+  using BaseType = common::ObSEArrayImpl<ObTableTabletOpResult, ObTableLSOp::COMMON_BATCH_SIZE>;
+  // allways empty
+  ObSEArray<ObString, 1> rowkey_names_;
+  // Only when this batch of operations is read-only is it not empty.
+  ObSEArray<ObString, 4> properties_names_;
+  // do not serialize
+  // ObITableEntityFactory *entity_factory_;
+  ObTableEntityFactory<ObTableSingleOpEntity> *entity_factory_;
+  common::ObIAllocator *alloc_;
+};
+
 } // end namespace table
 } // end namespace oceanbase
 

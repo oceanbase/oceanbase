@@ -131,3 +131,90 @@ OB_DEF_DESERIALIZE(ObTableDirectLoadResult)
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObTableLSOpRequest,
+                    credential_,
+                    entity_type_,
+                    consistency_level_,
+                    ls_op_);
+
+OB_DEF_SERIALIZE(ObTableLSOpResult) {
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE(properties_names_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLSOpResult::BaseType::serialize(buf, buf_len, pos))) {
+      LOG_WARN("failed to serialize", K(ret));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTableLSOpResult) {
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  OB_UNIS_ADD_LEN(properties_names_);
+  len += ObTableLSOpResult::BaseType::get_serialize_size();
+
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObTableLSOpResult, )
+{
+  int ret = OB_SUCCESS;
+  UNF_UNUSED_DES;
+  LST_DO_CODE(OB_UNIS_DECODE, properties_names_);
+
+  int64_t tablet_op_size = 0;
+  OB_UNIS_DECODE(tablet_op_size);
+  ObTableTabletOpResult tablet_op_result;
+  tablet_op_result.assign_properties_names(&properties_names_);
+  tablet_op_result.set_all_rowkey_names(&rowkey_names_);
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_op_size; ++i) {
+    tablet_op_result.set_allocator(alloc_);
+    tablet_op_result.set_entity_factory(entity_factory_);
+    OB_UNIS_DECODE(tablet_op_result);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(push_back(tablet_op_result))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }  // end for
+  return ret;
+}
+
+OB_UNIS_DEF_SERIALIZE((ObTableTabletOpResult, ObTableTabletOpResult::BaseType));
+
+OB_UNIS_DEF_SERIALIZE_SIZE((ObTableTabletOpResult, ObTableTabletOpResult::BaseType));
+
+OB_DEF_DESERIALIZE(ObTableTabletOpResult,)
+{
+  int ret = OB_SUCCESS;
+  UNF_UNUSED_DES;
+  int64_t single_op_size = 0;
+  OB_UNIS_DECODE(single_op_size);
+  ObTableSingleOpResult single_op_result;
+  ObITableEntity *entity = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < single_op_size; ++i) {
+    if (NULL == (entity = entity_factory_->alloc())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      entity->set_dictionary(all_rowkey_names_, all_properties_names_);
+
+      single_op_result.set_entity(*entity);
+      if (OB_FAIL(serialization::decode(buf, data_len, pos, single_op_result))) {
+        LOG_WARN("fail to decode array item", K(ret), K(i), K(single_op_size), K(data_len),
+                  K(pos), K(single_op_result));
+      } else if (OB_FAIL(push_back(single_op_result))) {
+        LOG_WARN("fail to add item to array", K(ret), K(i), K(single_op_size));
+      }
+    }
+  } // end for
+  return ret;
+}
+
+ObTableTabletOpResult::ObTableTabletOpResult(const ObTableTabletOpResult& other)
+  : BaseType(other)
+{
+  reserved_ = other.reserved_;
+}

@@ -68,7 +68,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
               K(has_set_need_rollback_),
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
-    LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
   } else if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
@@ -126,7 +126,7 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
               K(has_set_need_rollback_),
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
-    LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
   } else if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
@@ -178,6 +178,77 @@ int ObTableBatchExecuteEndTransCb::assign_batch_execute_result(ObTableBatchOpera
       LOG_WARN("failed to deep copy result", K(ret));
     } else if (OB_FAIL(result_.push_back(dest_result))) {
       LOG_WARN("failed to push back", K(ret));
+    }
+  } // end for
+  return ret;
+}
+
+void ObTableLSExecuteEndTransCb::callback(int cb_param)
+{
+  int ret = OB_SUCCESS;
+  check_callback_timeout();
+  if (OB_UNLIKELY(!has_set_need_rollback_)) {
+    LOG_ERROR("is_need_rollback_ has not been set",
+              K(has_set_need_rollback_),
+              K(is_need_rollback_));
+  } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
+  } else if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
+  }
+  if (lock_handle_ != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+  }
+  this->handin();
+  CHECK_BALANCE("[table ls execute async callback]");
+  if (cb_param != OB_SUCCESS) {
+    result_.reset();
+  }
+  if (0 >= result_.count()) {
+    ObTableTabletOpResult tablet_result;
+    ObTableSingleOpResult single_op_result;
+    single_op_result.set_entity(result_entity_);
+    single_op_result.set_errno(cb_param);
+    if (OB_FAIL(tablet_result.push_back(single_op_result))) {
+      LOG_WARN("failed to add single result", K(ret));
+    } else if (OB_FAIL(result_.push_back(tablet_result))) {
+      LOG_WARN("failed to add tablet result", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(response_sender_.response(cb_param))) {
+      LOG_WARN("failed to send response", K(ret), K(cb_param));
+    } else {
+      LOG_DEBUG("send ls execute response", K(cb_param));
+    }
+  }
+  this->destroy_cb_if_no_ref();
+}
+
+void ObTableLSExecuteEndTransCb::callback(int cb_param, const transaction::ObTransID &trans_id)
+{
+  UNUSED(trans_id);
+  this->callback(cb_param);
+}
+
+int ObTableLSExecuteEndTransCb::assign_ls_execute_result(const ObTableLSOpResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableSingleOpResult dest_single_result;
+  ObTableTabletOpResult dest_tablet_result;
+  for (int64_t i = 0; OB_SUCC(ret) && i < result.count(); i++) {
+    const ObTableTabletOpResult &tablet_src_result = result.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < result.at(i).count(); j++) {
+      const ObTableSingleOpResult &src_single_result = tablet_src_result.at(j);
+      if (OB_FAIL(dest_single_result.deep_copy(allocator_, entity_factory_, src_single_result))) {
+        LOG_WARN("failed to deep copy result", K(ret));
+      } else if (OB_FAIL(dest_tablet_result.push_back(dest_single_result))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && result_.push_back(dest_tablet_result)) {
+      LOG_WARN("failed to push back tablet result", K(ret));
     }
   } // end for
   return ret;

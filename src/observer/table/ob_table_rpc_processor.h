@@ -157,6 +157,8 @@ protected:
   virtual void audit_on_finish() {}
   virtual void save_request_string() = 0;
   virtual void generate_sql_id() = 0;
+  int check_table_has_global_index(uint64_t table_id, bool &exists);
+  int get_tablet_id(const ObTabletID &arg_tablet_id, const uint64_t table_id, ObTabletID &tablet_id);
 
 private:
   int async_commit_trans(rpc::ObRequest *req, int64_t timeout_ts, table::ObHTableLockHandle *lock_handle = nullptr);
