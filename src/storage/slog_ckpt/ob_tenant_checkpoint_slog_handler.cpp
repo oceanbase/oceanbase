@@ -479,7 +479,7 @@ int ObTenantCheckpointSlogHandler::replay_new_checkpoint(const ObTenantSuperBloc
       std::placeholders::_1,
       std::placeholders::_2,
       std::placeholders::_3,
-      tablet_block_list);
+      std::ref(tablet_block_list));
 
   if (OB_FAIL(ls_ckpt_reader.iter_read_meta_item(
       super_block.ls_meta_entry_, replay_ls_op, ls_block_list))) {
