@@ -535,16 +535,20 @@ void ObSSTablePrinter::print_store_row(
     if (OB_LIKELY(tx_id.get_id() != INT64_MAX)) {
       ObMemAttr mem_attr;
       mem_attr.label_ = "TX_DATA_TABLE";
-      void *p = op_alloc(ObSliceAlloc);
-      common::ObSliceAlloc *slice_allocator = new (p) ObSliceAlloc(storage::TX_DATA_SLICE_SIZE, mem_attr);
+      void *p = op_alloc(ObTenantTxDataAllocator);
+      if (OB_NOT_NULL(p)) {
+        ObTenantTxDataAllocator *tx_data_allocator = new (p) ObTenantTxDataAllocator();
 
-      ObTxData tx_data;
-      tx_data.tx_id_ = tx_id;
-      if (OB_FAIL(tx_data.deserialize(str.ptr(), str.length(), pos, *slice_allocator))) {
-        STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), K(str));
-        hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
-      } else {
-        ObTxData::print_to_stderr(tx_data);
+        ObTxData tx_data;
+        tx_data.tx_id_ = tx_id;
+        if (OB_FAIL(tx_data_allocator->init("PRINT_TX_DATA_SST"))) {
+          STORAGE_LOG(WARN, "init tx data allocator failed", KR(ret), K(str));
+        } else if (OB_FAIL(tx_data.deserialize(str.ptr(), str.length(), pos, *tx_data_allocator))) {
+          STORAGE_LOG(WARN, "deserialize tx data failed", KR(ret), K(str));
+          hex_dump(str.ptr(), str.length(), true, OB_LOG_LEVEL_WARN);
+        } else {
+          ObTxData::print_to_stderr(tx_data);
+        }
       }
     } else {
       // pre-process data for upper trans version calculation

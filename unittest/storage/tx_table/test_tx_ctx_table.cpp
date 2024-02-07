@@ -36,6 +36,29 @@ using namespace storage;
 using namespace blocksstable;
 using namespace share;
 
+namespace share
+{
+int ObTenantTxDataAllocator::init(const char* label)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  if (OB_FAIL(slice_allocator_.init(
+                 storage::TX_DATA_SLICE_SIZE, OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, mem_attr))) {
+    SHARE_LOG(WARN, "init slice allocator failed", KR(ret));
+  } else {
+    slice_allocator_.set_nway(ALLOC_TX_DATA_MAX_CONCURRENCY);
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void *ObTenantTxDataAllocator::alloc(const bool enable_throttle, const int64_t abs_expire_time)
+{
+  void *res = slice_allocator_.alloc();
+  return res;
+}
+};
+
 int storage::ObTenantMetaMemMgr::fetch_tenant_config()
 {
   return OB_SUCCESS;
@@ -166,6 +189,7 @@ public:
   ObTenantMetaMemMgr t3m_;
   ObIMemtableMgr *mt_mgr_;
   ObTxCtxMemtableMgr *ctx_mt_mgr_;
+  ObTenantTxDataAllocator tx_data_allocator_;
 
   ObTenantBase tenant_base_;
 };
@@ -275,7 +299,8 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   ObTxDataTable tx_data_table;
   ObMemAttr attr;
   attr.tenant_id_ = MTL_ID();
-  tx_data_table.slice_allocator_.init(sizeof(ObTxData), OB_MALLOC_NORMAL_BLOCK_SIZE, common::default_blk_alloc, attr);
+  tx_data_allocator_.init("test");
+  tx_data_table.tx_data_allocator_ = &tx_data_allocator_;
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
                            (transaction::ObDupTableLSHandler *)(0x02));

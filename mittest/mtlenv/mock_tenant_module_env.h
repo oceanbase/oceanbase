@@ -85,6 +85,7 @@
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/wrs/ob_tenant_weak_read_service.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"   // ObSharedMemAllocMgr
 #include "logservice/palf/log_define.h"
 #include "storage/access/ob_empty_read_bucket.h"
 #include "storage/high_availability/ob_rebuild_service.h"
@@ -669,6 +670,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
       MTL_BIND2(ObTenantMetaMemMgr::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, share::ObSharedMemAllocMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTransService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, logservice::ObGarbageCollector::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTimestampService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);

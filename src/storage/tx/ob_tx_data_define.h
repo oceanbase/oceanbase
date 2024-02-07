@@ -13,8 +13,8 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_DATA_DEFINE
 #define OCEANBASE_STORAGE_OB_TX_DATA_DEFINE
 
-#include "lib/allocator/ob_slice_alloc.h"
 #include "share/scn.h"
+#include "share/allocator/ob_tx_data_allocator.h"
 #include "lib/objectpool/ob_server_object_pool.h"
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_define.h"
@@ -25,7 +25,6 @@ namespace oceanbase
 
 namespace storage
 {
-
 class ObTxData;
 class ObTxTable;
 class ObTxDataTable;
@@ -38,7 +37,7 @@ class ObTxDataMemtableMgr;
 // avoid memory fragmentation caused by frequent allocation of non-fixed-length memory
 // 2. Avoid dumping failure caused by memory allocation failure
 //
-// The tx data table uses ObSliceAlloc to allocate multiple memory slices. There are three kinds of
+// The tx data table uses ObTenantTxDataAllocator to allocate multiple memory slices. There are three kinds of
 // slice. The first kind of slice is divided into three areas. This kind of slice is used in link
 // hash map of tx data memtable. :
 // 1. HashNodes that ObLinkHashMap needs
@@ -154,7 +153,7 @@ public:
 
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos, share::ObTenantTxDataAllocator &tx_data_allocator);
   int64_t get_serialize_size() const;
   bool is_contain(const  transaction::ObTxSEQ seq_no, int32_t tx_data_state) const;
   void reset()
@@ -166,7 +165,10 @@ public:
 private:
   bool is_contain_(const transaction::ObTxSEQ seq_no) const;
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize_(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize_(const char *buf,
+                   const int64_t data_len,
+                   int64_t &pos,
+                   share::ObTenantTxDataAllocator &tx_data_allocator);
   int64_t get_serialize_size_() const;
 
 public:
@@ -236,7 +238,7 @@ class ObTxData : public ObTxCommitData, public ObTxDataLink
 private:
   const static int64_t UNIS_VERSION = 1;
 public:
-  ObTxData() : ObTxCommitData(), ObTxDataLink(), slice_allocator_(nullptr), ref_cnt_(0), undo_status_list_(), flag_(0) {}
+  ObTxData() : ObTxCommitData(), ObTxDataLink(), tx_data_allocator_(nullptr), ref_cnt_(0), undo_status_list_(), flag_(0) {}
   ObTxData(const ObTxData &rhs);
   ObTxData &operator=(const ObTxData &rhs);
   ObTxData &operator=(const ObTxCommitData &rhs);
@@ -257,7 +259,7 @@ public:
 #ifdef UNITTEST
   return;
 #endif
-    if (nullptr == slice_allocator_) {
+    if (nullptr == tx_data_allocator_) {
       STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
       ob_abort();
     } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
@@ -267,10 +269,10 @@ public:
         while (nullptr != node_ptr) {
           node_to_free = node_ptr;
           node_ptr = node_ptr->next_;
-          slice_allocator_->free(node_to_free);
+          tx_data_allocator_->free(node_to_free);
         }
       }
-      slice_allocator_->free(this);
+      tx_data_allocator_->free(this);
     }
   }
 
@@ -290,7 +292,7 @@ public:
    */
   bool is_valid_in_tx_data_table() const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos, share::ObTenantTxDataAllocator &tx_data_allocator);
   int64_t get_serialize_size() const;
   int64_t size() const;
 
@@ -301,7 +303,10 @@ public:
 
 private:
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize_(const char *buf, const int64_t data_len, int64_t &pos, ObSliceAlloc &slice_allocator);
+  int deserialize_(const char *buf,
+                   const int64_t data_len,
+                   int64_t &pos,
+                   share::ObTenantTxDataAllocator &tx_data_allocator);
   int64_t get_serialize_size_() const;
   bool equals_(ObTxData &rhs);
   int merge_undo_actions_(ObTxDataTable *tx_data_table,
@@ -320,7 +325,7 @@ public:
   }
 
 public:
-  ObSliceAlloc *slice_allocator_;
+  share::ObTenantTxDataAllocator *tx_data_allocator_;
   int64_t ref_cnt_;
   ObUndoStatusList undo_status_list_;
   int64_t flag_;

@@ -36,7 +36,7 @@ namespace transaction
     TRANS_LOG(WARN, "tx table is null", KR(ret), K(ctx_mgr_->get_ls_id()), K(*this)); \
   }
 
-int ObCtxTxData::init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
+int ObCtxTxData::init(const int64_t abs_expire_time, ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx_mgr) || tx_id < 0) {
@@ -51,7 +51,7 @@ int ObCtxTxData::init(ObLSTxCtxMgr *ctx_mgr, int64_t tx_id)
     } else if (OB_ISNULL(tx_table = ctx_mgr_->get_tx_table())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "tx table is null", KR(ret), K(ctx_mgr_->get_ls_id()), K(*this));
-    } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard_))) {
+    } else if (OB_FAIL(tx_table->alloc_tx_data(tx_data_guard_, true, abs_expire_time))) {
       TRANS_LOG(WARN, "get tx data failed", KR(ret), K(ctx_mgr_->get_ls_id()));
     } else if (OB_ISNULL(tx_data_guard_.tx_data())) {
       ret = OB_ERR_UNEXPECTED;
@@ -156,25 +156,6 @@ int ObCtxTxData::deep_copy_tx_data_out(ObTxDataGuard &tmp_tx_data_guard)
     } else if (OB_ISNULL(tmp_tx_data_guard.tx_data())) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "copied tmp tx data is null", KR(ret), K(*this));
-    }
-  }
-
-  return ret;
-}
-
-int ObCtxTxData::alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data_guard)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-
-  if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table)
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tx_table->alloc_tx_data(tmp_tx_data_guard))) {
-      TRANS_LOG(WARN, "alloc tx data failed", K(ret));
     }
   }
 

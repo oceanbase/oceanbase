@@ -592,13 +592,13 @@ void ObTxTable::destroy()
   is_inited_ = false;
 }
 
-int ObTxTable::alloc_tx_data(ObTxDataGuard &tx_data_guard)
+int ObTxTable::alloc_tx_data(ObTxDataGuard &tx_data_guard, const bool enable_throttle, const int64_t abs_expire_time)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret));
-  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data_guard))) {
+  } else if (OB_FAIL(tx_data_table_.alloc_tx_data(tx_data_guard, enable_throttle, abs_expire_time))) {
     LOG_WARN("allocate tx data from tx data table fail.", KR(ret));
   }
   return ret;

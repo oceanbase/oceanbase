@@ -174,7 +174,7 @@ int ObMemtable::init(const ObITable::TableKey &table_key,
   } else if (FALSE_IT(set_max_schema_version(schema_version))) {
   } else if (OB_FAIL(set_freezer(freezer))) {
     TRANS_LOG(WARN, "fail to set freezer", K(ret), KP(freezer));
-  } else if (OB_FAIL(local_allocator_.init(MTL_ID()))) {
+  } else if (OB_FAIL(local_allocator_.init())) {
     TRANS_LOG(WARN, "fail to init memstore allocator", K(ret), "tenant id", MTL_ID());
   } else if (OB_FAIL(query_engine_.init(MTL_ID()))) {
     TRANS_LOG(WARN, "query_engine.init fail", K(ret), "tenant_id", MTL_ID());

@@ -893,6 +893,12 @@ private:
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 
   int parallel_ddl_pre_check_(const uint64_t tenant_id);
+  int check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tx_data_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_mds_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item);
+  int check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

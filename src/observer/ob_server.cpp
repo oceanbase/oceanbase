@@ -41,7 +41,6 @@
 #include "observer/mysql/ob_query_retry_ctrl.h"
 #include "rpc/obrpc/ob_rpc_handler.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
-#include "share/allocator/ob_memstore_allocator_mgr.h"
 #include "share/allocator/ob_tenant_mutil_allocator_mgr.h"
 #include "share/cache/ob_cache_name_define.h"
 #include "share/interrupt/ob_global_interrupt_call.h"
@@ -403,8 +402,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init bl_service_ failed", KR(ret));
     } else if (OB_FAIL(ObDeviceManager::get_instance().init_devices_env())) {
       LOG_ERROR("init device manager failed", KR(ret));
-    } else if (OB_FAIL(ObMemstoreAllocatorMgr::get_instance().init())) {
-      LOG_ERROR("init ObMemstoreAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObTenantMutilAllocatorMgr::get_instance().init())) {
       LOG_ERROR("init ObTenantMutilAllocatorMgr failed", KR(ret));
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
