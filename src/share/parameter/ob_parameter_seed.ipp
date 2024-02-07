@@ -1793,9 +1793,9 @@ DEF_INT(_iut_max_entries, OB_TENANT_PARAMETER, "30000", "[0,]",
         "maximum of index entries to be monitoring.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
 
-DEF_STR_WITH_CHECKER(_iut_stat_collection_type, OB_TENANT_PARAMETER, "SAMPLE",
+DEF_STR_WITH_CHECKER(_iut_stat_collection_type, OB_TENANT_PARAMETER, "SAMPLED",
     common::ObConfigIndexStatsModeChecker,
-    "specify index table usage stat collection type, values: SAMPLE, ALL",
+    "specify index table usage stat collection type, values: SAMPLED, ALL",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(optimizer_index_cost_adj, OB_TENANT_PARAMETER, "0", "[0,100]",
