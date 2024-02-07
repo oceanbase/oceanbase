@@ -146,7 +146,7 @@ int ObExprOracleToChar::calc_result_typeN(ObExprResType &type,
   }
   if (OB_SUCC(ret) && params_count >= 2) {
     const ObObjTypeClass tc = type_array[0].get_type_class();
-    if (ObStringTC == tc || ObTextTC == tc || ObIntTC == tc || ObUIntTC == tc) {
+    if (ObStringTC == tc || ObTextTC == tc || ObIntTC == tc || ObUIntTC == tc || ObDecimalIntTC == tc) {
       type_array[0].set_calc_type(ObNumberType);
       type_array[0].set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
     }

@@ -211,9 +211,17 @@ int ObExprSubstr::calc_result_typeN(ObExprResType &type,
                                                 PREFER_VAR_LEN_CHAR));
     OZ(deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), type, str_params));
 
-    for (int i = 1; OB_SUCC(ret) && i < param_num; i++) {
-      types_array[i].set_calc_type(ObNumberType);
-      types_array[i].set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
+    bool all_decint_params = true;
+    for (int i = 1; all_decint_params && i < param_num; i++) {
+      all_decint_params = (types_array[i].get_type() == ObDecimalIntType);
+    }
+    if (all_decint_params) {
+      // do nothing
+    } else {
+      for (int i = 1; OB_SUCC(ret) && i < param_num; i++) {
+        types_array[i].set_calc_type(ObNumberType);
+        types_array[i].set_calc_scale(NUMBER_SCALE_UNKNOWN_YET);
+      }
     }
     OZ(calc_result_length_oracle(types_array, param_num, type, len));
     CK(len <= INT32_MAX);
@@ -631,8 +639,8 @@ int ObExprSubstr::eval_substr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_
       int64_t pos = 0;
       int64_t len = input.length();
       if (lib::is_oracle_mode()) {
-        if (OB_FAIL(ObExprUtil::trunc_num2int64(*pos_datum, pos))
-            || (NULL != len_datum && OB_FAIL(ObExprUtil::trunc_num2int64(*len_datum, len)))) {
+        if (OB_FAIL(ora_get_integer(*pos_datum, *expr.args_[1], pos))
+            || (NULL != len_datum && OB_FAIL(ora_get_integer(*len_datum, *expr.args_[2], len)))) {
           LOG_WARN("get integer value failed", K(ret));
         }
       } else {
@@ -739,8 +747,8 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
         }
       } else {
         if (is_oracle_mode()) {
-          if (OB_FAIL(ObExprUtil::trunc_num2int64(*pos_datum, pos))
-              || (NULL != len_datum && OB_FAIL(ObExprUtil::trunc_num2int64(*len_datum, len)))) {
+          if (OB_FAIL(ora_get_integer(*pos_datum, *expr.args_[1], pos))
+              || (NULL != len_datum && OB_FAIL(ora_get_integer(*len_datum, *expr.args_[2], len)))) {
             LOG_WARN("get integer value failed", K(ret));
           }
         } else {
@@ -801,5 +809,23 @@ int ObExprSubstr::eval_substr_batch(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
+int ObExprSubstr::ora_get_integer(const ObDatum &int_datum, const ObExpr &expr, int64_t &v)
+{
+  int ret = OB_SUCCESS;
+  if (ob_is_decimal_int(expr.datum_meta_.type_)) {
+    if (OB_FAIL(ObExprUtil::trunc_decint2int64(
+          int_datum.get_decimal_int(), int_datum.get_int_bytes(), expr.datum_meta_.scale_, v))) {
+      LOG_WARN("get integer failed", K(ret));
+    }
+  } else if (ob_is_number_tc(expr.datum_meta_.type_)) {
+    if (OB_FAIL(ObExprUtil::trunc_num2int64(int_datum, v))) {
+      LOG_WARN("get integer failed", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected datum", K(int_datum), K(expr));
+  }
+  return ret;
+}
 } /* sql */
 } /* oceanbase */

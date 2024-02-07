@@ -781,11 +781,24 @@ int ObTypeLibSysVar::check_update_type(const ObSetVar &set_var, const ObObj &val
   } else if (false == ob_is_integer_type(val.get_type())
              && false == ob_is_string_type(val.get_type())) {
     ret = OB_ERR_WRONG_TYPE_FOR_VAR;
-    if (is_oracle_mode() && ObNumberType == val.get_type()) {
-      number::ObNumber num = val.get_number();
-      if (num.is_valid_int()) {
-        ret = OB_SUCCESS;
-        LOG_DEBUG("number is valid int", K(val), K(num));
+    if (is_oracle_mode()) {
+      if (ObNumberType == val.get_type()) {
+        number::ObNumber num = val.get_number();
+        if (num.is_valid_int()) {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("number is valid int", K(val), K(num));
+        }
+      } else if (ob_is_decimal_int(val.get_type())) {
+        int tmp_ret = ret;
+        bool is_valid_int64 = false;
+        int64_t res_v = 0;
+        if (OB_FAIL(wide::check_range_valid_int64(val.get_decimal_int(), val.get_int_bytes(),
+                                                  is_valid_int64, res_v))) {
+          LOG_WARN("check valid int64 failed", K(ret));
+        } else if (is_valid_int64) {
+          ret = OB_SUCCESS;
+          LOG_DEBUG("decimal int is valid int", K(val), K(res_v));
+        }
       }
     }
     if (OB_SUCCESS != ret) {
@@ -929,6 +942,23 @@ int ObTypeLibSysVar::do_check_and_convert(ObExecContext &ctx,
     } else {
       ret = OB_ERR_WRONG_TYPE_FOR_VAR;
       LOG_WARN("not valid int value for var on oracle mode", K(in_val));
+    }
+  } else if (is_oracle_mode() && ob_is_decimal_int(in_val.get_type())) {
+    int64_t res_v = 0;
+    bool is_valid_int64 = false;
+    if (OB_FAIL(wide::check_range_valid_int64(in_val.get_decimal_int(), in_val.get_int_bytes(),
+                                              is_valid_int64, res_v))) {
+      LOG_WARN("check int64 range failed", K(ret));
+    } else if (is_valid_int64) {
+      if (res_v < 0 || res_v >= type_lib_.count_) {
+        ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+        int log_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (log_ret = log_err_wrong_value_for_var(ret, in_val))) {
+          LOG_ERROR("fail to log error", K(ret), K(log_ret), K(in_val));
+        }
+      } else {
+        out_val.set_int(res_v);
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

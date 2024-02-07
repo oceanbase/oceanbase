@@ -2082,7 +2082,9 @@ public:
     :is_date_unit_(false),
      is_literal_bool_(false),
      is_batch_stmt_parameter_(false),/*: precalc_expr_(NULL)*/
-     array_param_group_id_(-1)
+     array_param_group_id_(-1),
+     is_dynamic_eval_questionmark_(false),
+     orig_questionmark_type_()
   { ObRawExpr::set_expr_class(ObRawExpr::EXPR_CONST); }
   ObConstRawExpr(common::ObIAllocator &alloc)
     : ObIRawExpr(alloc),
@@ -2091,7 +2093,9 @@ public:
       is_date_unit_(false),
       is_literal_bool_(false),
       is_batch_stmt_parameter_(false),
-      array_param_group_id_(-1)
+      array_param_group_id_(-1),
+      is_dynamic_eval_questionmark_(false),
+      orig_questionmark_type_()
   { ObIRawExpr::set_expr_class(ObIRawExpr::EXPR_CONST); }
   ObConstRawExpr(const oceanbase::common::ObObj &val, ObItemType expr_type = T_INVALID)
     : ObIRawExpr(expr_type),
@@ -2100,7 +2104,9 @@ public:
       is_date_unit_(false),
       is_literal_bool_(false),
       is_batch_stmt_parameter_(false),
-      array_param_group_id_(-1)
+      array_param_group_id_(-1),
+      is_dynamic_eval_questionmark_(false),
+      orig_questionmark_type_()
   {
     set_value(val);
     set_expr_class(ObIRawExpr::EXPR_CONST);
@@ -2132,6 +2138,10 @@ public:
   bool is_batch_stmt_parameter() { return is_batch_stmt_parameter_; }
   void set_array_param_group_id(int64_t id) { array_param_group_id_ = id; }
   int64_t get_array_param_group_id() const { return array_param_group_id_; }
+  int set_dynamic_eval_questionmark(const ObExprResType &dst_type);
+
+  bool is_dynamic_eval_questionmark() const { return is_dynamic_eval_questionmark_; }
+  const ObExprResType &get_orig_qm_type() const { return orig_questionmark_type_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 private:
@@ -2144,6 +2154,9 @@ private:
   // Indicates that the current parameter is the batch parameter
   bool is_batch_stmt_parameter_;
   int64_t array_param_group_id_;
+
+  bool is_dynamic_eval_questionmark_;
+  ObExprResType orig_questionmark_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConstRawExpr);
 };

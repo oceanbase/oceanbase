@@ -139,6 +139,9 @@ private:
   int adjust_cast_as_signed_unsigned(ObSysFunRawExpr &expr);
 
   bool ignore_scale_adjust_for_decimal_int(const ObItemType expr_type);
+  int try_replace_casts_with_questionmarks_ora(ObRawExpr *row_expr);
+
+  int try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx);
 private:
   const sql::ObSQLSessionInfo *my_session_;
   common::ObArenaAllocator alloc_;

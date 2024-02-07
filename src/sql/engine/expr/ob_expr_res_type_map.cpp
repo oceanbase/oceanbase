@@ -137,7 +137,7 @@ int ObArithResultTypeMap::define_rules()
   OZ (new_rules(ObIntervalTC, ObOTimestampTC, ADD).result_as(C::SECOND).cast_param1_as(C::FIRST).get_ret());
   OZ (new_rules(ObIntervalYMType, ObIntervalYMType, ADD|SUB).result_as(ObIntervalYMType).get_ret());
   OZ (new_rules(ObIntervalDSType, ObIntervalDSType, ADD|SUB).result_as(ObIntervalDSType).get_ret());
-  OZ (new_rules(ObIntervalTC, ObDecimalIntType, MUL).result_as(C::FIRST).cast_param2_as(ObNumberType).get_ret());
+  OZ (new_rules(ObIntervalTC, ObDecimalIntType, MUL|DIV).result_as(C::FIRST).cast_param2_as(ObNumberType).get_ret());
 
   // DECIMAL_INT op others
   OZ (new_rules(ObDecimalIntType, ObNullTC, ADD|SUB|MUL|NANVL|DIV|MOD).result_as(ObNumberType).cast_param2_as(C::SECOND).get_ret());

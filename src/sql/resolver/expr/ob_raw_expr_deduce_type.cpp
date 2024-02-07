@@ -3424,6 +3424,15 @@ int ObRawExprDeduceType::add_implicit_cast(ObOpRawExpr &parent,
                         const_cast<ObExprResType *>(&input_types.at(idx)), ele_cnt),
                       cast_mode))) {
             LOG_WARN("add_implicit_cast_for_op_row failed", K(ret));
+          } else if (lib::is_oracle_mode()
+                     && (parent.get_expr_type() == T_OP_IN
+                         || parent.get_expr_type() == T_OP_NOT_IN)) {
+            // try replace cast expr with questionmark
+            if (OB_FAIL(try_replace_casts_with_questionmarks_ora(child_ptr))) {
+              LOG_WARN("replace casts with questionmarks failed", K(ret));
+            } else {
+              parent.get_param_expr(child_idx) = child_ptr;
+            }
           } else {
             parent.get_param_expr(child_idx) = child_ptr;
           }
@@ -3732,6 +3741,66 @@ bool ObRawExprDeduceType::ignore_scale_adjust_for_decimal_int(const ObItemType e
     break;
   }
   return bret;
+}
+
+int ObRawExprDeduceType::try_replace_casts_with_questionmarks_ora(ObRawExpr *row_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(row_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret));
+  } else if (row_expr->get_expr_type() == T_OP_ROW && row_expr->get_param_count() > 0) {
+    if (row_expr->get_param_expr(0)->get_expr_type() != T_OP_ROW) {
+      for (int i = 0; OB_SUCC(ret) && i < row_expr->get_param_count(); i++) {
+        if (OB_FAIL(try_replace_cast_with_questionmark_ora(*row_expr, row_expr->get_param_expr(i), i))) {
+          LOG_WARN("try replacing failed", K(ret));
+        }
+      }
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < row_expr->get_param_count(); i++) {
+        if (OB_FAIL(try_replace_casts_with_questionmarks_ora(row_expr->get_param_expr(i)))) {
+          LOG_WARN("try replacing failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprDeduceType::try_replace_cast_with_questionmark_ora(ObRawExpr &parent, ObRawExpr *cast_expr, int param_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cast_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(cast_expr));
+  } else if (cast_expr->get_expr_type() == T_FUN_SYS_CAST
+             && cast_expr->has_flag(IS_INNER_ADDED_EXPR)
+             && cast_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+    if (OB_UNLIKELY(cast_expr->get_param_count() != 2) || OB_ISNULL(cast_expr->get_param_expr(0))
+        || OB_ISNULL(cast_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected cast expr", K(ret));
+    } else {
+      ObRawExpr *param_expr = cast_expr->get_param_expr(0);
+      bool is_decint2nmb = param_expr->get_result_type().is_decimal_int() && cast_expr->get_result_type().is_number();
+      bool is_nmb2decint = param_expr->get_result_type().is_number() && cast_expr->get_result_type().is_decimal_int();
+      bool is_decint2decint = param_expr->get_result_type().is_decimal_int() && cast_expr->get_result_type().is_decimal_int();
+      if (param_expr->is_static_const_expr() && param_expr->get_expr_type() == T_QUESTIONMARK
+          && (is_decint2nmb || is_nmb2decint || is_decint2decint)) {
+        ObExprResType res_type = cast_expr->get_result_type();
+        res_type.add_cast_mode(cast_expr->get_extra());
+        ret = static_cast<ObConstRawExpr *>(param_expr)->set_dynamic_eval_questionmark(res_type);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("set dynamic eval question mark failed", K(ret));
+        } else {
+          parent.get_param_expr(param_idx) = param_expr;
+        }
+      }
+      LOG_DEBUG("replace cast with questionmark", K(*cast_expr), K(is_decint2nmb), K(is_nmb2decint),
+                K(is_decint2decint));
+    }
+  }
+  return ret;
 }
 }  // namespace sql
 }  // namespace oceanbase

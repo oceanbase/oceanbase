@@ -1157,6 +1157,7 @@ private :
                               const ObExprResType &dst_type,
                               ObSysFunRawExpr *&func_expr,
                               const ObSQLSessionInfo *session_info);
+  static int ora_cmp_integer(const ObConstRawExpr &const_expr, const int64_t v, int &cmp_ret);
   ObRawExprUtils();
   virtual ~ObRawExprUtils();
   // disallow copy
