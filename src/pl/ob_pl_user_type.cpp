@@ -4344,12 +4344,13 @@ int ObPLAssocArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool
   if (OB_SUCC(ret) && src->get_count() > 0) {
     ObPLAssocArray *src_aa = static_cast<ObPLAssocArray*>(src);
     CK (OB_NOT_NULL(src_aa));
-    if (NULL != src_aa->get_key() && NULL != src_aa->get_sort()) {
-      CK(OB_NOT_NULL(get_allocator()));
-      CK (OB_NOT_NULL(key
-          = static_cast<ObObj*>(get_allocator()->alloc(src->get_count() * sizeof(ObObj)))));
-      CK (OB_NOT_NULL(sort
-          = static_cast<int64_t*>(get_allocator()->alloc(src->get_count() * sizeof(int64_t)))));
+    if (OB_FAIL(ret)) {
+    } else if (NULL != src_aa->get_key() && NULL != src_aa->get_sort()) {
+      CK (OB_NOT_NULL(get_allocator()));
+      OX (key = static_cast<ObObj*>(get_allocator()->alloc(src->get_count() * sizeof(ObObj))));
+      OV (OB_NOT_NULL(key), OB_ALLOCATE_MEMORY_FAILED);
+      OX (sort = static_cast<int64_t*>(get_allocator()->alloc(src->get_count() * sizeof(int64_t))));
+      OV (OB_NOT_NULL(sort), OB_ALLOCATE_MEMORY_FAILED);
       for (int64_t i = 0; OB_SUCC(ret) && i < src->get_count(); ++i) {
         OZ (deep_copy_obj(*get_allocator(), *(src_aa->get_key(i)), key[i]));
         OX (sort[i] = src_aa->get_sort(i));
