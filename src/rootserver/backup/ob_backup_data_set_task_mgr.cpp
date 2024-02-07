@@ -491,14 +491,7 @@ int ObBackupSetTaskMgr::backup_user_meta_()
   } else if (OB_FAIL(do_backup_root_key_())) {
     LOG_WARN("[DATA_BACKUP]failed to do backup root key", K(ret));
   } else if (ls_task.count() == finish_cnt) {
-    ROOTSERVICE_EVENT_ADD("backup_data",
-                          "before_backup_data",
-                          "tenant_id",
-                          job_attr_->tenant_id_,
-                          "job_id",
-                          job_attr_->job_id_,
-                          "task_id",
-                          set_task_attr_.task_id_);
+    ROOTSERVICE_EVENT_ADD("backup_data", "before_backup_data");
     share::SCN consistent_scn;
     bool need_change_meta_turn = false;
     if (OB_FAIL(check_need_change_meta_turn_(ls_task, need_change_meta_turn))) {
@@ -549,7 +542,6 @@ int ObBackupSetTaskMgr::calc_consistent_scn_(ObIArray<share::ObBackupLSTaskAttr>
 {
   int ret = OB_SUCCESS;
   consistent_scn.set_min();
-  DEBUG_SYNC(BEFORE_CALC_CONSISTENT_SCN);
   // let consistent_scn be the biggest max_tablet_checkpoint_scn_ of all the ls and the cur gts.
   if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, job_attr_->tenant_id_, true, consistent_scn))) {
     LOG_WARN("failed to get backup scn", K(ret), "tenant_id", job_attr_->tenant_id_);
@@ -745,14 +737,7 @@ int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const share::SCN &consistent_sc
   } else if (OB_FAIL(generate_ls_tasks_(ls_ids, type))) {
     LOG_WARN("failed to generate ls tasks", K(ret), K(ls_ids), K(type));
   } else {
-    ROOTSERVICE_EVENT_ADD("backup_data",
-                          "after_backup_consistent_scn",
-                          "tenant_id",
-                          job_attr_->tenant_id_,
-                          "job_id",
-                          job_attr_->job_id_,
-                          "task_id",
-                          set_task_attr_.task_id_);
+    ROOTSERVICE_EVENT_ADD("backup_data", "after_backup_consistent_scn");
   }
   if (trans_.is_started()) {
     int tmp_ret = OB_SUCCESS;
