@@ -35,7 +35,7 @@ int ObLSSwitchChecker::check_online(ObLS *ls)
   return ret;
 }
 
-int ObLSSwitchChecker::check_ls_switch_state(ObLS *ls, bool &online_state)
+int ObLSSwitchChecker::check_ls_switch_state(ObLS *ls, bool &is_online)
 {
   int ret = OB_SUCCESS;
   ls_ = ls;
@@ -44,21 +44,24 @@ int ObLSSwitchChecker::check_ls_switch_state(ObLS *ls, bool &online_state)
   } else {
     record_switch_epoch_ = ATOMIC_LOAD(&(ls_->switch_epoch_));
     if (!(record_switch_epoch_ & 1)) {
-      online_state = false;
+      is_online = false;
     } else {
-      online_state = true;
+      is_online = true;
     }
   }
   return ret;
 }
 
-int ObLSSwitchChecker::double_check_epoch() const
+int ObLSSwitchChecker::double_check_epoch(bool &is_online) const
 {
   int ret = OB_SUCCESS;
+  int64_t switch_state = 0;
   if (OB_ISNULL(ls_)) {
     ret = OB_NOT_INIT;
-  } else if (record_switch_epoch_ != ATOMIC_LOAD(&(ls_->switch_epoch_))) {
+  } else if (FALSE_IT(switch_state = ATOMIC_LOAD(&(ls_->switch_epoch_)))) {
+  } else if (OB_UNLIKELY(record_switch_epoch_ != switch_state)) {
     ret = OB_VERSION_NOT_MATCH;
+    is_online = (switch_state & 1) ? false : true;
   }
   return ret;
 }
