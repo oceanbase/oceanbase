@@ -3765,11 +3765,11 @@ int ObUnitManager::get_tenant_alive_servers_non_block(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
-    bool get_succ = false;
     ObArray<ObUnit> tenant_units;
     uint64_t valid_tnt_id = is_meta_tenant(tenant_id) ? gen_user_tenant_id(tenant_id) : tenant_id;
-    // STEP 1: try lock and get units from inmemory data
+    // Try lock and get units from inmemory data. If lock failed, get from inner table.
     if (lock_.try_rdlock()) {
+      // Get from inmemory data
       ObArray<share::ObResourcePool *> *pools = nullptr;
       if (OB_FAIL(get_pools_by_tenant_(valid_tnt_id, pools))) {
         LOG_WARN("failed to get pools by tenant", KR(ret), K(valid_tnt_id));
@@ -3802,12 +3802,9 @@ int ObUnitManager::get_tenant_alive_servers_non_block(const uint64_t tenant_id,
           }
         }
       }
-      get_succ = OB_SUCC(ret);
       lock_.unlock();
-    }
-
-    // STEP 2: try to get units from inner_table
-    if (OB_SUCC(ret) && !get_succ) {
+    } else {
+      // Get from inner_table
       tenant_units.reuse();
       if (OB_FAIL(ut_operator_.get_units_by_tenant(valid_tnt_id, tenant_units))) {
         LOG_WARN("fail to get_units_by_tenant from inner_table",
@@ -3815,7 +3812,7 @@ int ObUnitManager::get_tenant_alive_servers_non_block(const uint64_t tenant_id,
       }
     }
 
-    // STEP 3: filter alive servers
+    // Filter alive servers
     if (OB_SUCC(ret)) {
       servers.reuse();
       FOREACH_X(unit, tenant_units, OB_SUCC(ret)) {
@@ -3823,7 +3820,9 @@ int ObUnitManager::get_tenant_alive_servers_non_block(const uint64_t tenant_id,
         if (OB_FAIL(SVR_TRACER.check_server_alive(unit->server_, is_alive))) {
           LOG_WARN("check_server_alive failed", KR(ret), K(unit->server_));
         } else if (is_alive) {
-          if (OB_FAIL(servers.push_back(unit->server_))) {
+          if (has_exist_in_array(servers, unit->server_)) {
+            // server exist
+          } else if (OB_FAIL(servers.push_back(unit->server_))) {
             LOG_WARN("push_back failed", KR(ret), K(unit->server_));
           }
         }
@@ -3832,7 +3831,9 @@ int ObUnitManager::get_tenant_alive_servers_non_block(const uint64_t tenant_id,
         } else if (OB_FAIL(SVR_TRACER.check_server_alive(unit->migrate_from_server_, is_alive))) {
           LOG_WARN("check_server_alive failed", KR(ret), K(unit->migrate_from_server_));
         } else if (is_alive) {
-          if (OB_FAIL(servers.push_back(unit->migrate_from_server_))) {
+          if (has_exist_in_array(servers, unit->migrate_from_server_)) {
+            // server exist
+          } else if (OB_FAIL(servers.push_back(unit->migrate_from_server_))) {
             LOG_WARN("push_back failed", KR(ret), K(unit->migrate_from_server_));
           }
         }
@@ -4800,19 +4801,14 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
   if (!check_inner_stat()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("check_inner_stat failed", K(ret), K(inited_), K(loaded_));
-  } else if (!is_valid_tenant_id(tenant_id)) {
-    // do nothing, unit not granted
   } else if (OB_FAIL(SVR_TRACER.check_server_alive(unit.server_, is_alive))) {
     LOG_WARN("fail to get server_info", KR(ret), K(unit.server_));
-  } else if (!is_alive) {
-    if (is_delete || skip_offline_server) {
-      // do nothing
-      LOG_INFO("ignore not alive server when is_delete or skip_offline_server is true",
-               "server", unit.server_, K(is_delete), K(skip_offline_server));
-    } else {
-      ret = OB_SERVER_NOT_ALIVE;
-      LOG_WARN("destination server not alive", KR(ret), K(unit.server_));
-    }
+  } else if (!is_alive && (is_delete || skip_offline_server)) {
+    // do nothing
+    LOG_INFO("ignore not alive server when is_delete or skip_offline_server is true",
+              "server", unit.server_, K(is_delete), K(skip_offline_server));
+  } else if (!is_valid_tenant_id(tenant_id)) {
+    // do nothing, unit not granted
   } else {
     // STEP 1: Get and init notifying arg
     obrpc::TenantServerUnitConfig tenant_unit_server_config;
@@ -4833,7 +4829,7 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     } else if (OB_FAIL(do_notify_unit_resource_(
                 unit.server_, tenant_unit_server_config, notify_proxy))) {
       LOG_WARN("failed to do_notify_unit_resource", "dst", unit.server_, K(tenant_unit_server_config));
-      if (!is_delete && OB_TENANT_EXIST == ret) {
+      if (OB_TENANT_EXIST == ret) {
         ret = OB_TENANT_RESOURCE_UNIT_EXIST;
         LOG_USER_ERROR(OB_TENANT_RESOURCE_UNIT_EXIST, tenant_id, to_cstring(unit.server_));
       }
@@ -4882,13 +4878,14 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
   } else if (OB_FAIL(rpc_arg.init(tenant_id,
                                   unit.unit_id_,
                                   compat_mode,
-#ifdef OB_BUILD_TDE_SECURITY
-                                  root_key,
-#endif
                                   *unit_config,
                                   ObReplicaType::REPLICA_TYPE_FULL,
                                   if_not_grant,
-                                  is_delete))) {
+                                  is_delete
+#ifdef OB_BUILD_TDE_SECURITY
+                                  , root_key
+#endif
+                                  ))) {
     LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
   }
   return ret;
@@ -8137,7 +8134,7 @@ int ObUnitManager::do_revoke_pools_(
       LOG_WARN("failed to commit shrinking pools in revoking", KR(ret), K(tenant_id));
     }
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(notify_proxy.wait()) && OB_TENANT_NOT_IN_SERVER != tmp_ret) {
+    if (OB_TMP_FAIL(notify_proxy.wait())) {
       LOG_WARN("fail to wait notify resource", KR(ret), K(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
     } else if (OB_SUCC(ret)) {
