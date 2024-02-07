@@ -956,7 +956,7 @@ void ObBlockManager::mark_and_sweep()
         LOG_WARN("fail to get pending free blocks", K(ret));
       } else if (0 == (alloc_num = ATOMIC_SET(&alloc_num_, 0)) && 0 == mark_info.count()) {
         skip_mark = true;
-        LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
+        LOG_INFO("no block alloc/free, no need to mark blocks", K(ret), K(mark_info.count()));
       } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
         LOG_WARN("fail to mark macro blocks", K(ret));
       }
@@ -981,12 +981,26 @@ void ObBlockManager::mark_and_sweep()
           } else {
             update_marker_status(tmp_status);
           }
+        } else {
+          update_partial_status(tmp_status);
         }
       }
-      FLOG_INFO("finish once mark and sweep", K(ret), K(alloc_num), K_(marker_status), "map_cnt", block_map_.count());
+      FLOG_INFO("finish once mark and sweep", K(ret), K(alloc_num), K(mark_info.count()), K_(marker_status), "map_cnt", block_map_.count());
     }
   }
   macro_id_set.destroy();
+}
+
+void ObBlockManager::update_partial_status(const ObMacroBlockMarkerStatus &tmp_status)
+{
+  SpinWLockGuard guard(marker_lock_);
+  marker_status_.pending_free_count_ = tmp_status.pending_free_count_;
+  marker_status_.last_end_time_ = ObTimeUtility::fast_current_time();
+  marker_status_.mark_cost_time_ = tmp_status.mark_cost_time_;
+  marker_status_.sweep_cost_time_ = 0;
+  marker_status_.start_time_ = tmp_status.start_time_;
+  marker_status_.hold_count_ = tmp_status.hold_count_;
+  marker_status_.free_count_ = get_free_macro_block_count();
 }
 
 int ObBlockManager::mark_macro_blocks(
