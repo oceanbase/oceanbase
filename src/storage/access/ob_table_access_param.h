@@ -141,6 +141,8 @@ public:
   { return pd_storage_flag_.set_use_column_store(true); }
   OB_INLINE void set_not_use_column_store()
   { return pd_storage_flag_.set_use_column_store(false); }
+  OB_INLINE void set_table_param(const ObGetTableParam *get_table_param)
+  { get_table_param_ = get_table_param; }
   OB_INLINE bool use_uniform_format() const
   {
     return op_->enable_rich_format_ &&
@@ -159,6 +161,7 @@ public:
   uint32_t cg_idx_;
   const ObITableReadInfo *read_info_;
   const ObITableReadInfo *rowkey_read_info_;
+  const ObGetTableParam *get_table_param_;
   ObCGReadInfoHandle cg_read_info_handle_;
   //TODO(huronghui.hrh):temp solution
   const ObColumnParam *cg_col_param_;

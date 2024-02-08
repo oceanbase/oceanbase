@@ -294,9 +294,7 @@ int ObIndexBlockDataTransformer::get_reader(
 /******************             ObIndexBlockIterParam              **********************/
 ObIndexBlockIterParam::ObIndexBlockIterParam()
   : sstable_(nullptr),
-    tablet_(nullptr),
-    ls_id_(),
-    tablet_id_()
+    tablet_(nullptr)
 {
 }
 
@@ -309,8 +307,6 @@ ObIndexBlockIterParam &ObIndexBlockIterParam::operator=(const ObIndexBlockIterPa
 {
   sstable_ = other.sstable_;
   tablet_ = other.tablet_;
-  ls_id_ = other.ls_id_;
-  tablet_id_ = other.tablet_id_;
   return *this;
 }
 
@@ -319,8 +315,6 @@ int ObIndexBlockIterParam::assign(const ObIndexBlockIterParam &other)
   int ret = OB_SUCCESS;
   sstable_ = other.sstable_;
   tablet_ = other.tablet_;
-  ls_id_ = other.ls_id_;
-  tablet_id_ = other.tablet_id_;
   return ret;
 }
 
@@ -328,13 +322,11 @@ void ObIndexBlockIterParam::reset()
 {
   sstable_ = nullptr;
   tablet_ = nullptr;
-  ls_id_.reset();
-  tablet_id_.reset();
 }
 
 bool ObIndexBlockIterParam::is_valid() const
 {
-  return OB_NOT_NULL(sstable_) && ((ls_id_.is_valid() && tablet_id_.is_valid()) || OB_NOT_NULL(tablet_));
+  return OB_NOT_NULL(sstable_) && OB_NOT_NULL(tablet_);
 }
 
 /******************             ObIndexBlockRowIterator              **********************/
@@ -1564,13 +1556,9 @@ int ObIndexBlockRowScanner::get_next(
 }
 
 void ObIndexBlockRowScanner::set_iter_param(const blocksstable::ObSSTable *sstable,
-                                            const share::ObLSID &ls_id,
-                                            const common::ObTabletID &tablet_id,
                                             const ObTablet *tablet)
 {
   iter_param_.sstable_ = sstable;
-  iter_param_.ls_id_ = ls_id;
-  iter_param_.tablet_id_ = tablet_id;
   iter_param_.tablet_ = tablet;
 }
 
@@ -1806,6 +1794,7 @@ const ObDatumRowkey &ObIndexBlockRowScanner::get_end_key() const
 }
 
 void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
+                                            const ObTablet *tablet,
                                             const ObStorageDatumUtils &datum_utils,
                                             ObTableAccessContext &access_ctx)
 {
@@ -1815,9 +1804,7 @@ void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
   is_reverse_scan_ = access_ctx.query_flag_.is_reverse_scan();
   is_normal_query_ = !access_ctx.query_flag_.is_daily_merge() && !access_ctx.query_flag_.is_multi_version_minor_merge();
   iter_param_.sstable_ = &sstable;
-  iter_param_.ls_id_ = access_ctx.ls_id_;
-  iter_param_.tablet_id_ = access_ctx.tablet_id_;
-  iter_param_.tablet_ = nullptr;
+  iter_param_.tablet_ = tablet;
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
     ObStorageDatumUtils *switch_datum_utils = const_cast<ObStorageDatumUtils *>(datum_utils_);

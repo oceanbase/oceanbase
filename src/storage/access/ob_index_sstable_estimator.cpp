@@ -90,8 +90,6 @@ int ObIndexBlockScanEstimator::estimate_row_count(ObPartitionEst &part_est)
     STORAGE_LOG(WARN, "Failed to get index tree root", K(ret));
   } else if (context_.sstable_.is_ddl_merge_sstable()) {
     index_block_row_scanner_.set_iter_param(&context_.sstable_,
-                                            context_.tablet_handle_.get_obj()->get_ls_id(),
-                                            context_.tablet_handle_.get_obj()->get_tablet_id(),
                                             context_.tablet_handle_.get_obj());
   }
   if (OB_FAIL(ret)) {

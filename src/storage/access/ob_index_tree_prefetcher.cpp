@@ -119,7 +119,13 @@ int ObIndexTreePrefetcher::init_basic_info(
     index_tree_height_ = sstable_meta_handle_.get_sstable_meta().get_index_tree_height(sstable.is_ddl_merge_sstable() && is_normal_query);
 
     if (index_scanner_.is_valid()) {
-      index_scanner_.switch_context(sstable, *datum_utils_, *access_ctx_);
+      if (OB_ISNULL(iter_param_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
+      } else {
+        const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+        index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+      }
     } else if (OB_FAIL(init_index_scanner(index_scanner_))) {
       LOG_WARN("Fail to init index_scanner", K(ret));
     }
@@ -269,8 +275,12 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
       sstable_->get_macro_offset(),
       sstable_->is_normal_cg_sstable()))) {
     LOG_WARN("init index scanner fail", K(ret), KPC(sstable_), KP(sstable_));
+  } else if (OB_ISNULL(iter_param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
   } else {
-    index_scanner.set_iter_param(sstable_, access_ctx_->ls_id_, access_ctx_->tablet_id_);
+    const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+    index_scanner.set_iter_param(sstable_, cur_tablet);
   }
   return ret;
 }
@@ -775,7 +785,13 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::s
   if (OB_SUCC(ret)) {
     for (int64_t level = 0; OB_SUCC(ret) && level < index_tree_height_; level++) {
       if (tree_handles_[level].index_scanner_.is_valid()) {
-        tree_handles_[level].index_scanner_.switch_context(sstable, *datum_utils_, *access_ctx_);
+        if (OB_ISNULL(iter_param_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid iter param", K(ret), KPC(iter_param_), K(lbt()));
+        } else {
+          const ObTablet *cur_tablet = OB_ISNULL(iter_param_->get_table_param_) ? nullptr : iter_param_->get_table_param_->tablet_iter_.get_tablet();
+          tree_handles_[level].index_scanner_.switch_context(sstable, cur_tablet, *datum_utils_, *access_ctx_);
+        }
       } else if (OB_FAIL(init_index_scanner(tree_handles_[level].index_scanner_))) {
         LOG_WARN("Fail to init index_scanner", K(ret), K(level));
       }

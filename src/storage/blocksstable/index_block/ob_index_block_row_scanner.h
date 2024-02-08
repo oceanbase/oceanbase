@@ -117,14 +117,11 @@ public:
   int assign(const ObIndexBlockIterParam &other);
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(KP(sstable_), KP(tablet_), K(ls_id_), K(tablet_id_));
+  TO_STRING_KV(KP(sstable_), KP(tablet_));
 
 public:
   const ObSSTable *sstable_;
-  // pass ls_id + table_id or directly pass tablet
   const ObTablet *tablet_;
-  share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
 };
 
 class ObIndexBlockRowIterator
@@ -189,7 +186,7 @@ public:
     return OB_SUCCESS;
   }
   bool is_inited() { return is_inited_; }
-  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K(iter_step_), K(idx_row_parser_), KPC(datum_utils_));
+  VIRTUAL_TO_STRING_KV(K(is_inited_), K(is_reverse_scan_), K(iter_step_), KPC(datum_utils_));
 
 protected:
   bool is_inited_;
@@ -351,9 +348,7 @@ public:
       ObMicroIndexInfo &idx_block_row,
       const bool is_multi_check = false);
   void set_iter_param(const ObSSTable *sstable,
-                      const share::ObLSID &ls_id,
-                      const common::ObTabletID &tablet_id,
-                      const ObTablet *tablet = nullptr);
+                      const ObTablet *tablet);
   bool end_of_block() const;
   bool is_ddl_merge_type() const;
   int get_index_row_count(int64_t &index_row_count) const;
@@ -376,6 +371,7 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_ddl_merge_scan() const { return index_format_ == ObIndexFormat::DDL_MERGE; }
   void switch_context(const ObSSTable &sstable,
+                      const ObTablet *tablet,
                       const ObStorageDatumUtils &datum_utils,
                       ObTableAccessContext &access_ctx);
   TO_STRING_KV(K_(index_format), KP_(raw_iter), KP_(transformed_iter), KP_(ddl_iter), KP_(ddl_merge_iter),
