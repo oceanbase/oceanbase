@@ -26,6 +26,7 @@ namespace blocksstable
 ObDDLIndexBlockRowIterator::ObDDLIndexBlockRowIterator()
   : is_iter_start_(false),
     is_iter_finish_(true),
+    is_normal_cg_(false),
     btree_iter_(),
     block_meta_tree_(nullptr),
     cur_tree_value_(nullptr)
@@ -43,6 +44,7 @@ void ObDDLIndexBlockRowIterator::reset()
   ObIndexBlockRowIterator::reset();
   is_iter_finish_ = true;
   is_iter_start_ = false;
+  is_normal_cg_ = false;
   btree_iter_.reset();
   block_meta_tree_ = nullptr;
   cur_tree_value_ = nullptr;
@@ -52,6 +54,7 @@ void ObDDLIndexBlockRowIterator::reuse()
 {
   is_iter_finish_ = true;
   is_iter_start_ = false;
+  is_normal_cg_ = false;
   btree_iter_.reset();
   block_meta_tree_ = nullptr;
   cur_tree_value_ = nullptr;
@@ -73,6 +76,7 @@ int ObDDLIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
     is_reverse_scan_ = is_reverse_scan;
     iter_step_ = is_reverse_scan_ ? -1 : 1;
     datum_utils_ = datum_utils;
+    is_normal_cg_ = iter_param.is_valid() ? iter_param.sstable_->is_normal_cg_sstable() : false;
     is_inited_ = true;
   }
   return ret;
@@ -81,6 +85,7 @@ int ObDDLIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
 int ObDDLIndexBlockRowIterator::set_iter_param(const ObStorageDatumUtils *datum_utils,
                                                bool is_reverse_scan,
                                                const storage::ObBlockMetaTree *block_meta_tree,
+                                               const bool is_normal_cg,
                                                const int64_t iter_step)
 {
   int ret = OB_SUCCESS;
@@ -92,6 +97,7 @@ int ObDDLIndexBlockRowIterator::set_iter_param(const ObStorageDatumUtils *datum_
     is_reverse_scan_ = is_reverse_scan;
     iter_step_ = iter_step == INT64_MAX ? (is_reverse_scan_ ? -1 : 1) : iter_step;
     datum_utils_ = datum_utils;
+    is_normal_cg_ = is_normal_cg;
     is_inited_ = true;
   }
   return ret;
@@ -255,7 +261,7 @@ int ObDDLIndexBlockRowIterator::get_next(const ObIndexBlockRowHeader *&idx_row_h
       cur_tree_value_ = tmp_tree_value;
     }
     if (OB_SUCC(ret)) {
-      row_offset = idx_row_parser_.get_row_offset();
+      row_offset = is_normal_cg_ ?  0 : endkey->datums_[0].get_int();
       is_scan_left_border = is_reverse_scan_ ? is_end_key : is_start_key;
       is_scan_right_border = is_reverse_scan_ ? is_start_key : is_end_key;
     }
@@ -427,13 +433,21 @@ int ObDDLSStableAllRangeIterator::init(const ObMicroBlockData &idx_block_data,
     }
 
     if (OB_SUCC(ret)) {
-      rowkey_read_info_ = &cur_tablet->get_rowkey_read_info();
-      iter_param_ = iter_param;
+      if (iter_param.sstable_->is_normal_cg_sstable()) {
+        if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(rowkey_read_info_))) {
+          LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret));
+        }
+      } else {
+        rowkey_read_info_ = &cur_tablet->get_rowkey_read_info();
+      }
+      if (OB_SUCC(ret)) {
+        iter_param_ = iter_param;
 
-      is_reverse_scan_ = is_reverse_scan;
-      iter_step_ = is_reverse_scan_ ? -1 : 1;
-      datum_utils_ = datum_utils;
-      is_inited_ = true;
+        is_reverse_scan_ = is_reverse_scan;
+        iter_step_ = is_reverse_scan_ ? -1 : 1;
+        datum_utils_ = datum_utils;
+        is_inited_ = true;
+      }
     }
   }
   return ret;
