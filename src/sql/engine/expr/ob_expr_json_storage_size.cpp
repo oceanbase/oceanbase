@@ -68,6 +68,19 @@ int ObExprJsonStorageSize::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta
     LOG_WARN("invalid input type", K(type));
   } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
     LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
+  } else if (ob_is_json(type)) {
+    // json use lob storage, so no need read full data to get length
+    ObString j_str = data.get_string();
+    ObLobLocatorV2 locator(j_str, has_lob_header);
+    int64_t size = 0;
+    if (OB_FAIL(locator.get_lob_data_byte_len(size))) {
+      LOG_WARN("get lob data byte length failed", K(ret), K(locator));
+    } else if (size > INT32_MAX) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("size overflow", K(ret), K(size), K(locator));
+    } else {
+      res.set_int32(size);
+    }
   } else {
     uint64_t size = 0;
     common::ObString j_str = data.get_string();
