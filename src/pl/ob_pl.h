@@ -47,6 +47,7 @@ namespace sql
 {
 class ObPsCache;
 class ObSQLSessionInfo;
+class ObAlterRoutineResolver;
 }
 namespace jit
 {
@@ -1078,6 +1079,7 @@ struct PlTransformTreeCtx
 
 class ObPL
 {
+  friend class sql::ObAlterRoutineResolver;
 public:
   ObPL() :
     sql_proxy_(NULL),
