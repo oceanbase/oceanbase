@@ -30,6 +30,7 @@ namespace sql
 {
 
 struct ObExprRegexpSessionVariables {
+  TO_STRING_KV(K_(regexp_stack_limit), K_(regexp_time_limit));
   ObExprRegexpSessionVariables():
     regexp_stack_limit_(0),
     regexp_time_limit_(0)
