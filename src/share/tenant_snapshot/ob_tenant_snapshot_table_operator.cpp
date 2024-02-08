@@ -879,7 +879,8 @@ int ObTenantSnapshotTableOperator::delete_tenant_snap_item(const ObTenantSnapsho
     LOG_WARN("splice delete sql failed", KR(ret));
   } else if (OB_FAIL(proxy_->write(gen_meta_tenant_id(user_tenant_id_), sql.ptr(), affected_rows))) {
     LOG_WARN("exec sql failed", KR(ret), K(gen_meta_tenant_id(user_tenant_id_)), K(sql));
-  } else if (!is_single_row(affected_rows)) {
+  } else if (!is_zero_row(affected_rows)
+             && !is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected rows", KR(ret), K(affected_rows));
   }
