@@ -13342,16 +13342,16 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
   if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (skip_locked &&
-      top->is_distributed() &&
-      OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
-    LOG_WARN("fail to allocate exchange op", K(ret), K(skip_locked));
   } else if (OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                     *top,
                                                     index_dml_infos,
                                                     is_multi_part_dml,
                                                     is_result_local))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));
+  } else if (((skip_locked && top->is_distributed())
+              || (!is_multi_part_dml && is_result_local && top->is_sharding()))
+              && OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+    LOG_WARN("fail to allocate exchange op", K(ret), K(skip_locked));
   } else if (OB_FAIL(allocate_for_update_as_top(top,
                                                 is_multi_part_dml,
                                                 index_dml_infos,
