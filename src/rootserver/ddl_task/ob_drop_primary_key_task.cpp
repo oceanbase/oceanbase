@@ -45,7 +45,7 @@ int ObDropPrimaryKeyTask::init(const ObTableSchema* src_table_schema, const ObTa
                                const int64_t task_status,const int64_t snapshot_version )
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, task_id, ddl_type, parallelism, consumer_group_id,
+  if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, 0, task_id, ddl_type, parallelism, consumer_group_id,
                                             sub_task_trace_id, alter_table_arg, tenant_data_version, task_status, snapshot_version))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {

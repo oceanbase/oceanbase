@@ -59,7 +59,7 @@ int ObRecoverRestoreTableTask::init(
   } else if (OB_UNLIKELY(ObDDLType::DDL_TABLE_RESTORE != ddl_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ddl_type), KPC(src_table_schema), KPC(dst_table_schema));
-  } else if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, task_id, ddl_type, parallelism, consumer_group_id,
+  } else if (OB_FAIL(ObTableRedefinitionTask::init(src_table_schema, dst_table_schema, 0, task_id, ddl_type, parallelism, consumer_group_id,
                                                    sub_task_trace_id, alter_table_arg, tenant_data_version, task_status, 0/*snapshot*/))) {
     LOG_WARN("fail to init ObDropPrimaryKeyTask", K(ret));
   } else {

@@ -34,6 +34,7 @@ public:
   int init(
       const ObTableSchema* src_table_schema,
       const ObTableSchema* dst_table_schema,
+      const int64_t parent_task_id,
       const int64_t task_id,
       const share::ObDDLType &ddl_type,
       const int64_t parallelism,
