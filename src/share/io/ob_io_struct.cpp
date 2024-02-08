@@ -3223,10 +3223,10 @@ void ObIOFaultDetector::handle(void *task)
         }
         if (OB_SUCC(ret) && !is_retry_succ) {
           const int64_t current_ts = ObTimeUtility::fast_current_time();
-          if (current_ts >= error_ts) {
+          if (current_ts >= error_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_ERROR_TIMES)) {
             set_device_error();
             LOG_WARN("ObIOManager::detect IO retry timeout, device error", K(ret), K(current_ts), K(error_ts), K(retry_task->io_info_));
-          } else if (current_ts >= warn_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_TIMES)) {
+          } else if (current_ts >= warn_ts || (sys_io_errno != 0 && fs_error_times >= MAX_DETECT_READ_WARN_TIMES)) {
             set_device_warning();
             LOG_WARN("ObIOManager::detect IO retry reach limit, device warning", K(ret), K(sys_io_errno), K(current_ts), K(current_ts), K(fs_error_times), K(retry_task->io_info_));
           }
@@ -3296,7 +3296,7 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     retry_task->io_info_.fd_.second_id_ = second_id;
     retry_task->io_info_.offset_ = 0;
     retry_task->io_info_.callback_ = nullptr;
-    retry_task->timeout_ms_ = 5000L; // 5s
+    retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
       LOG_WARN("io fault detector push task failed", K(ret), KP(retry_task));
     }
@@ -3332,7 +3332,7 @@ void ObIOFaultDetector::record_io_timeout(const ObIOResult &result, ObIORequest 
       retry_task->io_info_.size_ = result.size_;
       retry_task->io_info_.offset_ = static_cast<int64_t>(result.offset_);
       retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
-      retry_task->timeout_ms_ = 5000L; // 5s
+      retry_task->timeout_ms_ = io_config_.data_storage_warning_tolerance_time_; // default 5s
       if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {
         LOG_WARN("io fault detector push task failed", K(ret), KPC(retry_task));
       }
