@@ -305,10 +305,11 @@ template <typename FakeAllocator, typename... Args>
 template <typename ALLOCATOR>
 void ObShareResourceThrottleTool<FakeAllocator, Args...>::update_throttle_config(const int64_t resource_limit,
                                                                                  const int64_t trigger_percentage,
-                                                                                 const int64_t max_duration)
+                                                                                 const int64_t max_duration,
+                                                                                 bool &config_changed)
 {
   ACQUIRE_THROTTLE_UNIT(ALLOCATOR, throttle_unit);
-  (void)throttle_unit.update_throttle_config(resource_limit, trigger_percentage, max_duration);
+  (void)throttle_unit.update_throttle_config(resource_limit, trigger_percentage, max_duration, config_changed);
 }
 
 #undef ACQUIRE_THROTTLE_UNIT

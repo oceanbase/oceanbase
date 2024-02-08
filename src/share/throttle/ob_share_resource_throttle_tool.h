@@ -109,7 +109,8 @@ public:
   template <typename ALLOCATOR>
   void update_throttle_config(const int64_t resource_limit,
                               const int64_t trigger_percentage,
-                              const int64_t max_duration);
+                              const int64_t max_duration,
+                              bool &config_changed);
 
   template <typename ALLOCATOR>
   void enable_adaptive_limit();

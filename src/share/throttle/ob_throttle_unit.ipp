@@ -474,8 +474,10 @@ void ObThrottleUnit<ALLOCATOR>::set_throttle_max_duration(const int64_t value)
 template <typename ALLOCATOR>
 void ObThrottleUnit<ALLOCATOR>::update_throttle_config(const int64_t resource_limit,
                                                        const int64_t throttle_trigger_percentage,
-                                                       const int64_t throttle_max_duration)
+                                                       const int64_t throttle_max_duration,
+                                                       bool &config_changed)
 {
+  config_changed = false;
   if (resource_limit < 0 || throttle_trigger_percentage <= 0 || throttle_trigger_percentage > 100 ||
       throttle_max_duration <= 0) {
     int ret = OB_INVALID_ARGUMENT;
@@ -484,7 +486,10 @@ void ObThrottleUnit<ALLOCATOR>::update_throttle_config(const int64_t resource_li
               K(resource_limit),
               K(throttle_trigger_percentage),
               K(throttle_max_duration));
-  } else {
+  } else if (config_specify_resource_limit_ != resource_limit ||
+             throttle_trigger_percentage_ != throttle_trigger_percentage ||
+             throttle_max_duration_ != throttle_max_duration) {
+    config_changed = true;
     throttle_trigger_percentage_ = throttle_trigger_percentage;
     throttle_max_duration_ = throttle_max_duration;
     (void)inner_set_resource_limit_(resource_limit);
