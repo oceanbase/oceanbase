@@ -36,6 +36,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
@@ -208,6 +209,37 @@ int ObDDLTableMergeTask::init(const ObDDLTableMergeDagParam &ddl_dag_param, cons
   return ret;
 }
 
+int wait_lob_tablet_major_exist(ObLSHandle &ls_handle, ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  ObTabletBindingMdsUserData ddl_data;
+  const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
+  ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
+  ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
+  ObDDLTableMergeDagParam param;
+  bool is_major_sstable_exist = false;
+  if (OB_FAIL(tablet.ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_meta));
+  } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+    ObTabletHandle lob_tablet_handle;
+    const ObTabletID lob_tablet_id = ddl_data.lob_meta_tablet_id_;
+    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, lob_tablet_id, lob_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+      LOG_WARN("get lob tablet handle failed", K(ret), K(lob_tablet_id));
+    } else {
+      bool is_major_sstable_exist = lob_tablet_handle.get_obj()->get_major_table_count() > 0
+        || lob_tablet_handle.get_obj()->get_tablet_meta().table_store_flag_.with_major_sstable();
+      if (!is_major_sstable_exist) {
+        ret = OB_EAGAIN;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(compaction::ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ls_handle.get_ls()->get_ls_id(), lob_tablet_handle))) {
+          LOG_WARN("schedule ddl major merge for lob tablet failed", K(tmp_ret), K(lob_tablet_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLTableMergeTask::process()
 {
   int ret = OB_SUCCESS;
@@ -286,6 +318,12 @@ int ObDDLTableMergeTask::process()
       LOG_WARN("get tablet direct load mgr failed", K(ret), K(merge_param_));
     } else if (OB_FAIL(tablet_mgr_hdl.get_full_obj()->prepare_major_merge_param(ddl_param))) {
       LOG_WARN("preare full direct load sstable param failed", K(ret));
+    } else if (merge_param_.is_commit_ && OB_FAIL(wait_lob_tablet_major_exist(ls_handle, *tablet_handle.get_obj()))) {
+      if (OB_EAGAIN != ret) {
+        LOG_WARN("wait lob tablet major sstable exist faild", K(ret), K(merge_param_));
+      } else {
+        LOG_INFO("need wait lob tablet major sstable exist", K(ret), K(merge_param_));
+      }
     } else if (merge_param_.start_scn_ > SCN::min_scn() && merge_param_.start_scn_ < ddl_param.start_scn_) {
       ret = OB_TASK_EXPIRED;
       LOG_INFO("ddl merge task expired, do nothing", K(merge_param_), "new_start_scn", ddl_param.start_scn_);
