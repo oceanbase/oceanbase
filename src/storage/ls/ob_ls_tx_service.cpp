@@ -385,6 +385,20 @@ int ObLSTxService::iterate_tx_obj_lock_op(ObLockOpIterator &iter) const
   return ret;
 }
 
+int ObLSTxService::iterate_tx_ctx(ObLSTxCtxIterator &iter) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else if (OB_FAIL(iter.set_ready(mgr_))) {
+    TRANS_LOG(WARN, "get tx obj lock op iter failed", K(ret), K_(ls_id));
+  } else {
+    TRANS_LOG(INFO, "iter set ready success", K(ret), K_(ls_id));
+  }
+  return ret;
+}
+
 int ObLSTxService::replay(const void *buffer,
                           const int64_t nbytes,
                           const palf::LSN &lsn,
