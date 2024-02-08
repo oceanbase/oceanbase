@@ -1474,8 +1474,6 @@ int ObBasicSessionInfo::get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const
       LOG_ERROR("influence plan system var is NULL", K(i), K(ret));
     } else if (OB_FAIL(sys_vars.push_back(sys_vars_[index]->get_value()))) {
       LOG_WARN("influence plan system variables push failed", K(ret));
-    } else {
-      LOG_WARN("luofan test get_influence_plan_sys_var", KPC(sys_vars_[index]));
     }
   }
   return ret;
