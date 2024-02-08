@@ -1729,11 +1729,21 @@ const ObDatumRowkey &ObIndexBlockRowScanner::get_end_key() const
   return *tmp_key;
 }
 
-void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable, const ObStorageDatumUtils &datum_utils)
+void ObIndexBlockRowScanner::switch_context(const ObSSTable &sstable,
+                                            const ObStorageDatumUtils &datum_utils,
+                                            const common::ObQueryFlag &query_flag,
+                                            const share::ObLSID &ls_id,
+                                            const common::ObTabletID &tablet_id)
 {
   nested_offset_ = sstable.get_macro_offset();
   datum_utils_ = &datum_utils;
   is_normal_cg_ = sstable.is_normal_cg_sstable();
+  is_reverse_scan_ = query_flag.is_reverse_scan();
+  is_normal_query_ = !query_flag.is_daily_merge() && !query_flag.is_multi_version_minor_merge();
+  iter_param_.sstable_ = &sstable;
+  iter_param_.ls_id_ = ls_id;
+  iter_param_.tablet_id_ = tablet_id;
+  iter_param_.tablet_ = nullptr;
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(iter_)) {
     ObStorageDatumUtils *switch_datum_utils = const_cast<ObStorageDatumUtils *>(datum_utils_);

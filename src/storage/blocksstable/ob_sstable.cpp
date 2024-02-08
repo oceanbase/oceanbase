@@ -1688,6 +1688,7 @@ int ObSSTable::get_index_tree_root(
   }
   if (OB_SUCC(ret) && is_ddl_merge_sstable()) {
     index_data.type_ = ObMicroBlockData::DDL_MERGE_INDEX_BLOCK;
+    LOG_INFO("empty ddl merge sstable", K(index_data));
   }
   return ret;
 }
