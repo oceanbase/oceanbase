@@ -43,7 +43,7 @@ enum ObStorageCRCAlgorithm
   OB_CRC32_ALGO = 1,
 };
 
-enum ObStorageObjectType
+enum ObStorageObjectMetaType
 {
   OB_OBJ_INVALID = 0,
   OB_OBJ_NORMAL = 1,
@@ -70,7 +70,7 @@ struct ObStorageObjectMetaBase
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObStorageObjectMetaBase() : type_(ObStorageObjectType::OB_OBJ_INVALID) { reset(); }
+  ObStorageObjectMetaBase() : type_(ObStorageObjectMetaType::OB_OBJ_INVALID) { reset(); }
   ~ObStorageObjectMetaBase() { reset(); }
 
   void reset() { is_exist_ = false; length_ = -1; }
@@ -79,7 +79,7 @@ public:
 
   bool is_exist_;
   int64_t length_;
-  ObStorageObjectType type_;
+  ObStorageObjectMetaType type_;
 };
 
 // Each fragment meta corresponds to a normal object in a 'dir'.
@@ -144,10 +144,10 @@ public:
 
   bool is_object_file_type() const
   {
-    return (type_ == ObStorageObjectType::OB_OBJ_NORMAL) ||
-           (type_ == ObStorageObjectType::OB_FS_FILE);
+    return (type_ == ObStorageObjectMetaType::OB_OBJ_NORMAL) ||
+           (type_ == ObStorageObjectMetaType::OB_FS_FILE);
   }
-  bool is_simulate_append_type() const { return type_ == ObStorageObjectType::OB_OBJ_SIMULATE_APPEND; }
+  bool is_simulate_append_type() const { return type_ == ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND; }
 
   static bool fragment_meta_cmp_func(const ObAppendableFragmentMeta &left, const ObAppendableFragmentMeta &right);
 
