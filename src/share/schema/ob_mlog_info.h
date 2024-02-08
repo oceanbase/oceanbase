@@ -76,6 +76,9 @@ public:
                             const uint64_t mlog_id);
   static int fetch_mlog_info(ObISQLClient &sql_client, uint64_t tenant_id, uint64_t mlog_id,
                              ObMLogInfo &mlog_info, bool for_update = false, bool nowait = false);
+  static int batch_fetch_mlog_ids(ObISQLClient &sql_client, uint64_t tenant_id,
+                                  uint64_t last_mlog_id, ObIArray<uint64_t> &mlog_ids,
+                                  int64_t limit = -1);
 
   TO_STRING_KV(K_(tenant_id),
                K_(mlog_id),
