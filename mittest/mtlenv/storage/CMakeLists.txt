@@ -33,5 +33,6 @@ storage_dml_unittest(test_ls_tablet_info_writer_and_reader test_ls_tablet_info_w
 
 add_subdirectory(checkpoint)
 add_subdirectory(blocksstable)
+add_subdirectory(tenant_snapshot)
 
 target_link_libraries(test_memtable PUBLIC mock_tx_ctx mock_tx_log_adapter)
