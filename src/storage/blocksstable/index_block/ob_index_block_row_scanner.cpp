@@ -404,6 +404,7 @@ void ObRAWIndexBlockRowIterator::reuse()
   current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   end_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  idx_row_parser_.reset();
 }
 
 int ObRAWIndexBlockRowIterator::init(const ObMicroBlockData &idx_block_data,
