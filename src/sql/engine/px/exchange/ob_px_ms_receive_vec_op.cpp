@@ -939,8 +939,6 @@ int ObPxMSReceiveVecOp::get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_c
                                      const_cast<ObCompactRow **>(stored_compact_rows_)))) {
                     LOG_WARN("temp row store add batch failed", K(ret));
                   } else {
-                    last_store_row = stored_compact_rows_[0];
-                    last_store_row_array.at(got_channel_idx) = last_store_row;
                     start_idx = cur_idx;
                   }
                 }
@@ -974,7 +972,7 @@ int ObPxMSReceiveVecOp::get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_c
                                      const_cast<ObCompactRow **>(stored_compact_rows_)))) {
                 LOG_WARN("temp row store add batch failed", K(ret));
               } else {
-                last_store_row = stored_compact_rows_[0];
+                last_store_row = stored_compact_rows_[cur_idx - start_idx - 1];
                 last_store_row_array.at(got_channel_idx) = last_store_row;
               }
             }
