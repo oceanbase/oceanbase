@@ -288,6 +288,15 @@ void ObThrottleUnit<ALLOCATOR>::advance_clock(const int64_t holding_size)
     const int64_t clock = ATOMIC_LOAD(&clock_);
     const int64_t cur_seq = ATOMIC_LOAD(&sequence_num_);
     ATOMIC_SET(&clock_, min(cur_seq, clock + avaliable_resource));
+    if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL/* 1 second */)) {
+      SHARE_LOG(INFO,
+                "[Throttling] Advance Clock",
+                K(avaliable_resource),
+                K(clock),
+                K(clock_),
+                K(cur_seq),
+                THROTTLE_UNIT_INFO);
+    }
   }
 }
 

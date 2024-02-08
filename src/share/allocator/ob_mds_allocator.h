@@ -20,6 +20,12 @@ namespace oceanbase {
 
 namespace share {
 
+OB_INLINE int64_t &mds_throttled_alloc()
+{
+  RLOCAL_INLINE(int64_t, mds_throttled_alloc);
+  return mds_throttled_alloc;
+}
+
 class ObTenantMdsAllocator : public ObIAllocator {
 private:
   static const int64_t MDS_ALLOC_CONCURRENCY = 32;
@@ -53,6 +59,18 @@ struct ObTenantBufferCtxAllocator : public ObIAllocator// for now, it is just a 
   virtual void *alloc(const int64_t size, const ObMemAttr &attr) override;
   virtual void free(void *ptr) override;
   virtual void set_attr(const ObMemAttr &) override {}
+};
+
+class ObMdsThrottleGuard
+{
+public:
+  ObMdsThrottleGuard(const bool for_replay, const int64_t abs_expire_time);
+  ~ObMdsThrottleGuard();
+
+private:
+  bool for_replay_;
+  int64_t abs_expire_time_;
+  share::TxShareThrottleTool *throttle_tool_;
 };
 
 }  // namespace share

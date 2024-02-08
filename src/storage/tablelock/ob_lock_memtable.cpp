@@ -149,6 +149,7 @@ int ObLockMemtable::lock_(
   do {
     // retry if there is lock conflict at part trans ctx.
     need_retry = false;
+
     {
       succ_step = STEP_BEGIN;
       lock_exist = false;
