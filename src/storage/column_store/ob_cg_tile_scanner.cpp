@@ -256,7 +256,7 @@ int ObCGTileScanner::get_next_rows(uint64_t &count, const uint64_t capacity)
       if (OB_ISNULL(cg_scanner = cg_scanners_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null cg scanner", K(ret), K(i));
-      } else if (OB_CG_ROW_SCANNER == cg_scanner->get_type()) {
+      } else if (is_valid_cg_row_scanner(cg_scanner->get_type())) {
         ret = get_next_aligned_rows(static_cast<ObCGRowScanner*>(cg_scanner), count);
       } else {
         ret = cg_scanner->get_next_rows(count, capacity);
