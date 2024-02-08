@@ -134,7 +134,7 @@ public:
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
-                               bool set_record_null = true) const;
+                               bool set_null = true) const;
 };
 
 class ObPLFunctionBase
