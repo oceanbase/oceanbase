@@ -29,12 +29,6 @@ class ObNewRow;
 namespace sql
 {
 struct ObDASTabletLoc;
-class ObDMLOpUniqueRowChecker
-{
-public:
-  virtual int check_rowkey_distinct(const ObExprPtrIArray &row, bool &is_distinct) = 0;
-};
-
 class ObExecContext;
 
 // 单个分区的新引擎数据缓存器
@@ -42,22 +36,18 @@ class ObPDMLOpRowIterator
 {
 public:
     friend class ObPDMLOpBatchRowCache;
-    ObPDMLOpRowIterator() : eval_ctx_(nullptr), uniq_row_checker_(nullptr) {}
+    ObPDMLOpRowIterator() : eval_ctx_(nullptr) {}
     virtual ~ObPDMLOpRowIterator() = default;
     // 获得row_store_it_中的下一行数据
     // 返回的数据是对应存储数据的exprs
     int get_next_row(const ObExprPtrIArray &row);
-    void set_uniq_row_checker(ObDMLOpUniqueRowChecker *uniq_row_checker)
-    { uniq_row_checker_ = uniq_row_checker; }
-    void close()
-    { row_store_it_.reset(); }
+    void close() { row_store_it_.reset(); }
 private:
     int init_data_source(ObChunkDatumStore &row_datum_store,
                          ObEvalCtx *eval_ctx);
 private:
   ObChunkDatumStore::Iterator row_store_it_;
   ObEvalCtx *eval_ctx_;
-  ObDMLOpUniqueRowChecker *uniq_row_checker_;
   DISALLOW_COPY_AND_ASSIGN(ObPDMLOpRowIterator);
 };
 
@@ -132,7 +122,8 @@ public:
   // 一般来说，分区id存储在行中的一个伪列里
   virtual int read_row(ObExecContext &ctx,
                        const ObExprPtrIArray *&row,
-                       common::ObTabletID &tablet_id) = 0;
+                       common::ObTabletID &tablet_id,
+                       bool &is_skipped) = 0;
 };
 
 class ObDMLOpDataWriter

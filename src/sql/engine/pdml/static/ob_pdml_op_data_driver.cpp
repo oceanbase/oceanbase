@@ -35,7 +35,6 @@ int ObPDMLOpDataDriver::init(const ObTableModifySpec &spec,
                              ObDMLBaseRtDef &dml_rtdef,
                              ObDMLOpDataReader *reader,
                              ObDMLOpDataWriter *writer,
-                             ObDMLOpUniqueRowChecker *uniq_checker,
                              const bool is_heap_table_insert,
                              const bool with_barrier/*false*/)
 {
@@ -53,7 +52,6 @@ int ObPDMLOpDataDriver::init(const ObTableModifySpec &spec,
   } else {
     reader_ = reader;
     writer_ = writer;
-    uniq_checker_ = uniq_checker;
     dml_rtdef_ = &dml_rtdef;
     is_heap_table_insert_ = is_heap_table_insert;
     with_barrier_ = with_barrier;
@@ -179,13 +177,16 @@ int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecCont
     do {
       const ObExprPtrIArray *row = nullptr;
       ObTabletID tablet_id;
-      if (OB_FAIL(reader_->read_row(ctx, row, tablet_id))) {
+      bool is_skipped = false;
+      if (OB_FAIL(reader_->read_row(ctx, row, tablet_id, is_skipped))) {
         if (OB_ITER_END == ret) {
           // 当前reader的数据已经读取结束
           // do nothing
         } else {
           LOG_WARN("failed to read row from reader", K(ret));
         }
+      } else if (is_skipped) {
+        //need to skip this row
       } else if (is_heap_table_insert_ && OB_FAIL(set_heap_table_hidden_pk(row, tablet_id))) {
         LOG_WARN("fail to set heap table hidden pk", K(ret), K(*row), K(tablet_id));
       } else if (OB_FAIL(cache_.add_row(*row, tablet_id))) {
@@ -247,8 +248,6 @@ int ObPDMLOpDataDriver::write_partitions(ObExecContext &ctx)
         LOG_WARN("fail get row iterator", K(tablet_id), K(ret));
       } else if (OB_FAIL(DAS_CTX(ctx).extended_tablet_loc(*table_loc, tablet_id, tablet_loc))) {
         LOG_WARN("extended tablet location failed", K(ret));
-      } else if (FALSE_IT(row_iter->set_uniq_row_checker(uniq_checker_))) {
-        // nop
       } else if (OB_FAIL(writer_->write_rows(ctx, tablet_loc, *row_iter))) {
         LOG_WARN("fail write rows", K(tablet_id), K(ret));
       }
@@ -392,7 +391,6 @@ int ObPDMLOpDataDriver::switch_row_iter_to_next_partition()
     LOG_WARN("failed to get next partition iterator", K(ret),
         "part_id", returning_ctx_.tablet_id_array_.at(next_idx), K(next_idx));
   } else {
-    returning_ctx_.row_iter_->set_uniq_row_checker(nullptr);
     returning_ctx_.next_idx_++;
   }
   return ret;
