@@ -15,7 +15,7 @@
 #include "lib/ob_define.h"
 #include "isa-l/crc64.h"
 #include "isa-l/crc.h"
-#if defined(__powerpc64__) 
+#if defined(__powerpc64__)  /* add crc32c_ppc.h only used by powerpc, needn't add #else branch for other platform here*/ 
 #include <crc32c_ppc.h>
 #endif
 
@@ -1117,7 +1117,7 @@ uint64_t fast_crc64_sse42_manually(uint64_t crc, const char *buf, int64_t len)
   return crc;
 }
 
-#if defined(__x86_64__)
+#if defined(__x86_64__)  /* used by x86_64 only*/
 //If the CPU is intel, ISA-L library for CRC can be used
 uint64_t ob_crc64_isal(uint64_t uCRC64, const char* buf, int64_t cb)
 {
