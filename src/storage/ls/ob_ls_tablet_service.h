@@ -483,11 +483,7 @@ private:
   public:
     explicit ObUpdateDDLCommitSCN(const share::SCN ddl_commit_scn) : ddl_commit_scn_(ddl_commit_scn) {}
     virtual ~ObUpdateDDLCommitSCN() = default;
-    virtual int modify_tablet_meta(ObTabletMeta &meta) override
-    {
-      meta.ddl_commit_scn_ = ddl_commit_scn_;
-      return OB_SUCCESS;
-    }
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
   private:
     const share::SCN ddl_commit_scn_;
     DISALLOW_COPY_AND_ASSIGN(ObUpdateDDLCommitSCN);

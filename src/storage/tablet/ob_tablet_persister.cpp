@@ -404,6 +404,8 @@ int ObTabletPersister::modify_and_fill_tablet(
   } else if (FALSE_IT(new_handle.get_obj()->set_next_tablet_guard(old_tablet.next_tablet_guard_))) {
   } else if (OB_FAIL(modifier.modify_tablet_meta(new_handle.get_obj()->tablet_meta_))) {
     LOG_WARN("fail to modify tablet meta", K(ret), KPC(new_handle.get_obj()));
+  } else if (OB_FAIL(new_handle.get_obj()->check_ready_for_read_if_need(old_tablet))) {
+    LOG_WARN("fail to check ready for read if need", K(ret), K(old_tablet), K(new_handle));
   } else {
     time_stats->click("transform_and_modify");
   }

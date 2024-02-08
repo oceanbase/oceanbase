@@ -7423,5 +7423,38 @@ int ObTablet::get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&h
   return ret;
 }
 
+int ObTablet::get_ready_for_read_param(ObReadyForReadParam &param) const
+{
+  int ret = OB_SUCCESS;
+  param.ddl_commit_scn_ = tablet_meta_.ddl_commit_scn_;
+  param.clog_checkpoint_scn_ = tablet_meta_.clog_checkpoint_scn_;
+  return ret;
+}
+
+int ObTablet::check_ready_for_read_if_need(const ObTablet &old_tablet)
+{
+  int ret = OB_SUCCESS;
+  ObReadyForReadParam old_param;
+  ObReadyForReadParam new_param;
+  if (OB_FAIL(old_tablet.get_ready_for_read_param(old_param))) {
+    LOG_WARN("fail to get ready for read param", K(ret), K(old_tablet));
+  } else if (OB_FAIL(get_ready_for_read_param(new_param))) {
+    LOG_WARN("fail to get ready for read param", K(ret), KPC(this));
+  } else if (old_param == new_param) {
+    // no change, nothing to do
+  } else if (table_store_addr_.is_memory_object()) {
+    if (OB_FAIL(table_store_addr_.get_ptr()->check_ready_for_read(new_param))) {
+      if (OB_SIZE_OVERFLOW == ret) {
+        ObTabletTableStore::diagnose_table_count_unsafe(*this);
+      } else {
+        LOG_WARN("table store check ready for read failed", K(ret), KPC(this));
+      }
+    }
+  } else {
+    // invalid the cache to force reload table store from disk, for updating the ready_for_read flag
+    table_store_addr_.addr_.inc_seq();
+  }
+  return ret;
+}
 } // namespace storage
 } // namespace oceanbase
