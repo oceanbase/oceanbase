@@ -4745,9 +4745,13 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
       } else if (udf->need_add_dependency()) {
         uint64_t dep_obj_id = view_ref_id_;
         uint64_t dep_db_id = database_id;
-        OZ (udf->get_schema_object_version(table_version));
-        OZ (stmt->add_global_dependency_table(table_version));
-        OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
+        ObArray<ObSchemaObjVersion> vers;
+        OZ (udf->get_schema_object_version(*schema_guard, vers));
+        for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
+          table_version = vers.at(i);
+          OZ (stmt->add_global_dependency_table(table_version));
+          OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, table_version, *allocator_));
+        }
       }
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= !udf->is_parallel_enable());
     } else if (OB_SUCC(ret) && function_table_expr->is_sys_func_expr()) {
@@ -11283,9 +11287,12 @@ int ObDMLResolver::collect_schema_version(ObRawExpr *expr)
       if (OB_SUCC(ret) && udf_expr->need_add_dependency()) {
         uint64_t dep_obj_id = view_ref_id_;
         uint64_t dep_db_id = database_id;
-        OZ (udf_expr->get_schema_object_version(udf_version));
-        OZ (stmt->add_global_dependency_table(udf_version));
-        OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, udf_version, *allocator_));
+        ObArray<ObSchemaObjVersion> vers;
+        OZ (udf_expr->get_schema_object_version(*schema_guard, vers));
+        for (int64_t i = 0; OB_SUCC(ret) && i < vers.count(); ++i) {
+          OZ (stmt->add_global_dependency_table(vers.at(i)));
+          OZ (stmt->add_ref_obj_version(dep_obj_id, dep_db_id, ObObjectType::VIEW, vers.at(i), *allocator_));
+        }
         //for udf without params, we just set called_in_sql = true,
         //if this expr go through pl :: build_raw_expr later,
         //the flag will change to false;
