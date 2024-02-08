@@ -2041,42 +2041,24 @@ int ObDelUpdLogPlan::generate_index_column_exprs(const uint64_t table_id,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_modify_key || ObBinlogRowImage::FULL == binlog_row_image) {
-        //modify rowkey, need add all columns in schema
-        ObTableSchema::const_column_iterator iter = index_schema.column_begin();
-        ObTableSchema::const_column_iterator end = index_schema.column_end();
-        for (; OB_SUCC(ret) && iter != end; ++iter) {
-          const ObColumnSchemaV2 *column = *iter;
-          // skip all rowkeys
-          if (OB_ISNULL(column)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column schema", K(column));
-          } else if (column->is_rowkey_column()) {
-            // do nothing
-          } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*stmt, table_id,
-                                                                                   column->get_column_id(),
-                                                                                   OB_INVALID_ID, true))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get column item by id failed", K(ret), K(table_id), K(column->get_column_id()));
-          } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
-            LOG_WARN("store column expr to column exprs failed", K(ret));
-          }
-        }
-      } else {
-        //没有修改主键，只添加自己被修改的列及主表的rowkey
-        for (int64_t i = 0; OB_SUCC(ret) && i < assignments.count(); ++i) {
-          col_expr = const_cast<ObColumnRefRawExpr*>(assignments.at(i).column_expr_);
-          if (OB_ISNULL(col_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("assignment column expr is null");
-          } else if (OB_ISNULL(index_schema.get_column_schema(col_expr->get_column_id()))) {
-            //该列不存在于该表的schema中，忽略掉
-          } else if (OB_FAIL(column_exprs.push_back(col_expr))) {
-            LOG_WARN("store column expr to column exprs failed", K(ret));
-          }
-        }
-        if (FAILEDx(append_array_no_dup(column_exprs, spk_related_columns))) {
-          LOG_WARN("failed to append array no dup", K(ret));
+      //modify rowkey, need add all columns in schema
+      ObTableSchema::const_column_iterator iter = index_schema.column_begin();
+      ObTableSchema::const_column_iterator end = index_schema.column_end();
+      for (; OB_SUCC(ret) && iter != end; ++iter) {
+        const ObColumnSchemaV2 *column = *iter;
+        // skip all rowkeys
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid column schema", K(column));
+        } else if (column->is_rowkey_column()) {
+          // do nothing
+        } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*stmt, table_id,
+                                                                                 column->get_column_id(),
+                                                                                 OB_INVALID_ID, true))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get column item by id failed", K(ret), K(table_id), K(column->get_column_id()));
+        } else if (OB_FAIL(column_exprs.push_back(col_item->expr_))) {
+          LOG_WARN("store column expr to column exprs failed", K(ret));
         }
       }
     }
